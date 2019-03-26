@@ -1,4 +1,4 @@
-# NeuraAxle Pipelines
+# NeurAxle Pipelines
 
 > Code Machine Learning Pipelines - The Right Way. 
 
