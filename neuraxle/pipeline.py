@@ -55,11 +55,11 @@ class Pipeline(BaseStep):
             all_hyperparams.update(step.get_default_hyperparams())
         return all_hyperparams
 
-    def fit_transform(self, data_inputs, expected_outputs):
+    def fit_transform(self, data_inputs, expected_outputs=None):
         return self.pipeline_runner.set_steps(self.named_pipeline_steps).fit_transform(data_inputs, expected_outputs)
 
-    def fit(self, data_inputs, expected_outputs):
-        self.pipeline_runner.set_steps(self.named_pipeline_steps).fit(data_inputs)
+    def fit(self, data_inputs, expected_outputs=None):
+        self.pipeline_runner.set_steps(self.named_pipeline_steps).fit(data_inputs, expected_outputs)
         return self
 
     def transform(self, data_inputs):

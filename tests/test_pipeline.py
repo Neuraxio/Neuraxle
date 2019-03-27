@@ -39,7 +39,6 @@ steps_lists = [
         ("some_step_3", SomeStep())
     ]
 ]
-
 pipeline_runners = [BlockPipelineRunner]  # TODO: streaming pipeline runner
 
 
