@@ -21,7 +21,7 @@ AN_EXPECTED_OUTPUT = "I am an expected output"
 
 
 class SomeStep(BaseStep):
-    def get_default_hyperparams(self):
+    def get_hyperparams_space(self):
         return dict()
 
     def fit_one(self, data_input, expected_output=None):
@@ -65,3 +65,128 @@ def test_pipeline_fit_then_transform(steps_list, pipeline_runner):
     result = p.transform(data_input_)
 
     assert tuple(result) == tuple(expected_output_)
+
+
+def test_pipeline_slicing_before():
+    p = Pipeline([
+        ("a", SomeStep()),
+        ("b", SomeStep()),
+        ("c", SomeStep())
+    ])
+
+    r = p["b":]
+
+    assert "a" not in r
+    assert "b" in r
+    assert "c" in r
+
+
+def test_pipeline_slicing_after():
+    p = Pipeline([
+        ("a", SomeStep()),
+        ("b", SomeStep()),
+        ("c", SomeStep())
+    ])
+
+    r = p[:"c"]
+
+    assert "a" in r
+    assert "b" in r
+    assert "c" not in r
+
+
+def test_pipeline_slicing_both():
+    p = Pipeline([
+        ("a", SomeStep()),
+        ("b", SomeStep()),
+        ("c", SomeStep())
+    ])
+
+    r = p["b":"c"]
+
+    assert "a" not in r
+    assert "b" in r
+    assert "c" not in r
+
+
+def test_pipeline_set_one_hyperparam_level_one_flat():
+    p = Pipeline([
+        ("a", SomeStep()),
+        ("b", SomeStep()),
+        ("c", SomeStep())
+    ])
+
+    p.set_hyperparams({
+        "a.learning_rate": 7
+    }, flat=True)
+
+    assert p["a"].hyperparams["learning_rate"] == 7
+    assert p["b"].hyperparams == dict()
+    assert p["c"].hyperparams == dict()
+
+
+def test_pipeline_set_one_hyperparam_level_one_dict():
+    p = Pipeline([
+        ("a", SomeStep()),
+        ("b", SomeStep()),
+        ("c", SomeStep())
+    ])
+
+    p.set_hyperparams({
+        "b": {
+            "learning_rate": 7
+        }
+    })
+
+    assert p["a"].hyperparams == dict()
+    assert p["b"].hyperparams["learning_rate"] == 7
+    assert p["c"].hyperparams == dict()
+
+
+def test_pipeline_set_one_hyperparam_level_two_flat():
+    p = Pipeline([
+        ("a", SomeStep()),
+        ("b", Pipeline([
+            ("a", SomeStep()),
+            ("b", SomeStep()),
+            ("c", SomeStep())
+        ])),
+        ("c", SomeStep())
+    ])
+
+    p.set_hyperparams({
+        "b.a.learning_rate": 7
+    }, flat=True)
+    print(p.get_hyperparams())
+
+    assert p["b"]["a"].hyperparams["learning_rate"] == 7
+    assert p["b"]["c"].hyperparams == dict()
+    assert p["b"].hyperparams == dict()
+    assert p["c"].hyperparams == dict()
+
+
+def test_pipeline_set_one_hyperparam_level_two_dict():
+    p = Pipeline([
+        ("a", SomeStep()),
+        ("b", Pipeline([
+            ("a", SomeStep()),
+            ("b", SomeStep()),
+            ("c", SomeStep())
+        ])),
+        ("c", SomeStep())
+    ])
+
+    p.set_hyperparams({
+        "b": {
+            "a": {
+                "learning_rate": 7
+            },
+            "learning_rate": 9
+        }
+    })
+    print(p.get_hyperparams())
+
+    assert p["b"]["a"].hyperparams["learning_rate"] == 7
+    assert p["b"]["c"].hyperparams == dict()
+    assert p["b"].hyperparams["learning_rate"] == 9
+    assert p["c"].hyperparams == dict()

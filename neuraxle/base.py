@@ -13,22 +13,29 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import List, Tuple
+from collections import OrderedDict
+from copy import copy
+from typing import Tuple
+
+from neuraxle.hyperparams import flat_to_dict, dict_to_flat
+from neuraxle.typing import NamedTupleList, DictHyperparams, FlatHyperparams
 
 
 class BaseStep(ABC):
 
-    def __init__(self, **hyperparams):
-        self.hyperparams: dict = hyperparams
+    def __init__(
+            self,
+            hyperparams: DictHyperparams = dict(),
+            hyperparams_space: FlatHyperparams = dict()
+    ):
+        self.hyperparams: FlatHyperparams = hyperparams
+        self.hyperparams_space: FlatHyperparams = hyperparams_space
 
-    def set_hyperparams(self, **hyperparams):
-        self.hyperparams: dict = hyperparams
+    def set_hyperparams(self, hyperparams: FlatHyperparams):
+        self.hyperparams = hyperparams
 
-    def get_hyperparams(self) -> dict:
+    def get_hyperparams(self) -> FlatHyperparams:
         return self.hyperparams
-
-    def get_default_hyperparams(self) -> dict:
-        return dict()
 
     def fit_transform(self, data_inputs, expected_outputs=None):
         return self.fit(data_inputs, expected_outputs).transform(data_inputs)
@@ -56,7 +63,126 @@ class BaseStep(ABC):
         raise NotImplementedError("TODO")
 
 
-NamedTupleList = List[Tuple[str, BaseStep]]
+class TruncableSteps(BaseStep, ABC):
+
+    def __init__(
+            self,
+            steps_as_tuple: NamedTupleList,
+            hyperparams: FlatHyperparams = dict(),
+            hyperparams_space: FlatHyperparams = dict()
+    ):
+        super().__init__(hyperparams, hyperparams_space)
+        self.steps_as_tuple: NamedTupleList = steps_as_tuple
+        self.steps: OrderedDict = OrderedDict(steps_as_tuple)
+        assert isinstance(self, BaseStep), "Classes that inherit from TruncableMixin must also inherit from BaseStep."
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+
+            self_shallow_copy = copy(self)
+
+            start = key.start
+            stop = key.stop
+            step = key.step
+            if step is not None or (start is None and stop is None):
+                raise KeyError("Invalid range: '{}'.".format(key))
+            new_steps_as_tuple = []
+
+            if start is None:
+                if stop not in self.steps.keys():
+                    raise KeyError("Stop '{}' not found in '{}'.".format(stop, self.steps.keys()))
+                for key, val in self.steps_as_tuple:
+                    if stop == key:
+                        break
+                    new_steps_as_tuple.append((key, val))
+            elif stop is None:
+                if start not in self.steps.keys():
+                    raise KeyError("Start '{}' not found in '{}'.".format(stop, self.steps.keys()))
+                for key, val in reversed(self.steps_as_tuple):
+                    new_steps_as_tuple.append((key, val))
+                    if start == key:
+                        break
+                new_steps_as_tuple = list(reversed(new_steps_as_tuple))
+            else:
+                started = False
+                if stop not in self.steps.keys() or start not in self.steps.keys():
+                    raise KeyError(
+                        "Start or stop ('{}' or '{}') not found in '{}'.".format(start, stop, self.steps.keys()))
+                for key, val in self.steps_as_tuple:
+                    if stop == key:
+                        break
+                    if not started and start == key:
+                        started = True
+                    if started:
+                        new_steps_as_tuple.append((key, val))
+
+            self_shallow_copy.steps_as_tuple = new_steps_as_tuple
+            self_shallow_copy.steps = OrderedDict(new_steps_as_tuple)
+            return self_shallow_copy
+        else:
+            return self.steps[key]
+
+    def __contains__(self, item):
+        return item in self.steps.keys()  # or item in self.steps.values()
+
+    def items(self):
+        return self.steps.items()
+
+    def keys(self):
+        return self.steps.keys()
+
+    def values(self):
+        return self.steps.values()
+
+    def append(self, item: Tuple[str, 'BaseStep']):
+        self.steps_as_tuple.append(item)
+        self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
+
+    def pop(self) -> 'BaseStep':
+        return self.popitem()[-1]
+
+    def popitem(self, key=None) -> Tuple[str, 'BaseStep']:
+        if key is None:
+            item = self.steps_as_tuple.pop()
+            self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
+        else:
+            item = key, self.steps.pop(key)
+            self.steps_as_tuple = list(self.steps.items())
+        return item
+
+    def popfront(self) -> 'BaseStep':
+        return self.popfrontitem()[-1]
+
+    def popfrontitem(self) -> Tuple[str, 'BaseStep']:
+        item = self.steps_as_tuple.pop(0)
+        self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
+        return item
+
+    def set_hyperparams(self, hyperparams, flat=False):
+        if flat:
+            hyperparams: DictHyperparams = flat_to_dict(hyperparams)
+
+        remainders = dict()
+        for name, hparams in hyperparams.items():
+            if name in self.steps.keys():
+                self.steps[name].set_hyperparams(hparams)
+            else:
+                remainders[name] = hparams
+        self.hyperparams = remainders
+
+    def get_hyperparams(self, flat=False) -> DictHyperparams:
+        ret = dict()
+
+        for k, v in self.steps.items():
+            hparams = v.get_hyperparams()  # TODO: diamond problem.
+            if hasattr(v, "hyparparams"):
+                hparams.update(v.hyperparams)
+            if len(hparams) > 0:
+                ret[k] = hparams
+
+        if flat:
+            ret = dict_to_flat(ret)
+        return ret
 
 
 class BaseBarrier(ABC):
@@ -78,10 +204,10 @@ class PipelineRunner(BaseStep, ABC):
 
     def __init__(self, **pipeline_hyperparams):
         BaseStep.__init__(self, **pipeline_hyperparams)
-        self.named_pipeline_steps: NamedTupleList = None
+        self.steps_as_tuple: NamedTupleList = None
 
-    def set_steps(self, named_pipeline_steps: NamedTupleList) -> 'PipelineRunner':
-        self.named_pipeline_steps: NamedTupleList = named_pipeline_steps
+    def set_steps(self, steps_as_tuple: NamedTupleList) -> 'PipelineRunner':
+        self.steps_as_tuple: NamedTupleList = steps_as_tuple
         return self
 
     @abstractmethod

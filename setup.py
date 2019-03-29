@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 with open('README.md') as _f:
     _README_MD = _f.read()
@@ -64,7 +64,7 @@ setup(
     download_url='https://github.com/Neuraxio/Neuraxle/tarball/{}'.format(_VERSION),
     author='Neuraxio Inc.',
     author_email='guillaume.chevalier@neuraxio.com',
-    packages=['neuraxle'],
+    packages=find_packages(include=['neuraxle*']),
     test_suite="testing",
     setup_requires=["pytest-runner"],
     tests_require=["pytest", "pytest-cov"],

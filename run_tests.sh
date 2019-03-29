@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-py.test --cov=neuraxle/ tests/
+py.test --cov=neuraxle/ testing/
