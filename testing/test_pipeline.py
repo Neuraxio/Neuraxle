@@ -191,4 +191,39 @@ def test_pipeline_set_one_hyperparam_level_two_dict():
     assert p["b"].hyperparams["learning_rate"] == 9
     assert p["c"].hyperparams == dict()
 
+
+def test_pipeline_barrier...():
+    # TODO:
+    redis = RedisCheckpointBarrier("ip", "port", "charset")
+
+    p = Pipeline([
+        ("a", SomeStep()),
+        # CheckpointBarrier("name1", redis),
+        # NoBarrier(),
+        ("b", Pipeline([
+            ("a", SomeStep()),
+            ("b", SomeStep()),
+            # CheckpointBarrier("name2", redis),
+            ("c", SomeStep())
+        ])),
+        ("c", SomeStep())
+    ], barrier_list=[redis, parallel_one])
+
+    # p.resume_fit(X, redis)
+
+    p.set_hyperparams({
+        "b": {
+            "a": {
+                "learning_rate": 7
+            },
+            "learning_rate": 9
+        }
+    })
+    print(p.get_hyperparams())
+
+    assert p["b"]["a"].hyperparams["learning_rate"] == 7
+    assert p["b"]["c"].hyperparams == dict()
+    assert p["b"].hyperparams["learning_rate"] == 9
+    assert p["c"].hyperparams == dict()
+
 # TODO: test the "patch_missing_names" method.
