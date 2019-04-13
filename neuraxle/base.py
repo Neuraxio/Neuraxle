@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
-from typing import Tuple
+from typing import Tuple, List
 
 from neuraxle.hyperparams import flat_to_dict, dict_to_flat
 from neuraxle.typing import NamedTupleList, DictHyperparams, FlatHyperparams
@@ -62,6 +63,17 @@ class BaseStep(ABC):
         # return processed_output
         raise NotImplementedError("TODO")
 
+    def predict(self, data_input):
+        return self.transform(data_input)
+
+
+class NonFittableMixin:
+    def fit(self, data_inputs, expected_outputs=None):
+        return self
+
+    def fit_one(self, data_input, expected_output=None):
+        return self
+
 
 class TruncableSteps(BaseStep, ABC):
 
@@ -72,9 +84,35 @@ class TruncableSteps(BaseStep, ABC):
             hyperparams_space: FlatHyperparams = dict()
     ):
         super().__init__(hyperparams, hyperparams_space)
-        self.steps_as_tuple: NamedTupleList = steps_as_tuple
-        self.steps: OrderedDict = OrderedDict(steps_as_tuple)
+        self.steps_as_tuple: NamedTupleList = self.patch_missing_names(steps_as_tuple)
+        self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
         assert isinstance(self, BaseStep), "Classes that inherit from TruncableMixin must also inherit from BaseStep."
+
+    def patch_missing_names(self, steps_as_tuple: List) -> NamedTupleList:
+        names_yet = set()
+        patched = []
+        for step in steps_as_tuple:
+
+            class_name = step.__class__.__name__
+            if isinstance(step, tuple):
+                class_name = step[0]
+                step = step[1]
+                if class_name in names_yet:
+                    warnings.warn(
+                        "Named pipeline tuples must be unique. "
+                        "Will rename '{}' because it already exists.".format(class_name))
+
+            # Add suffix number to name if it is already used to ensure name uniqueness.
+            _name = class_name
+            i = 1
+            while _name in names_yet:
+                _name = class_name + str(i)
+                i += 1
+
+            step = (_name, step)
+            names_yet.add(step[0])
+            patched.append(step)
+        return patched
 
     def __getitem__(self, key):
         if isinstance(key, slice):

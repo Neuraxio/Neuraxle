@@ -190,3 +190,5 @@ def test_pipeline_set_one_hyperparam_level_two_dict():
     assert p["b"]["c"].hyperparams == dict()
     assert p["b"].hyperparams["learning_rate"] == 9
     assert p["c"].hyperparams == dict()
+
+# TODO: test the "patch_missing_names" method.

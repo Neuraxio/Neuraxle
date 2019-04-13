@@ -22,13 +22,13 @@ class BlockPipelineRunner(PipelineRunner):
 
     def fit_transform(self, data_inputs, expected_outputs=None):
         for step_name, step in self.steps_as_tuple[:-1]:
-            data_inputs = step.fit_transform(data_inputs, None)
+            data_inputs = step.fit_transform(data_inputs, expected_outputs)
         processed_outputs = self.steps_as_tuple[-1][-1].fit_transform(data_inputs, expected_outputs)
         return processed_outputs
 
     def fit(self, data_inputs, expected_outputs=None):
         for step_name, step in self.steps_as_tuple[:-1]:
-            data_inputs = step.fit_transform(data_inputs, None)
+            data_inputs = step.fit_transform(data_inputs, expected_outputs)
         processed_outputs = self.steps_as_tuple[-1][-1].fit(data_inputs, expected_outputs)
         return processed_outputs
 
