@@ -11,7 +11,42 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from neuraxle.steps.numpy import *
 
 
 def test_flatten_datum():
-    raise NotImplementedError()
+    flat = NumpyFlattenDatum()
+    data = np.random.random((10, 4, 5, 2))  # 4D array (could be ND with N>=2).
+    expected_data = np.copy(data).reshape(10, 4 * 5 * 2)  # 2D array.
+
+    received_data = flat.fit_transform(data)
+
+    assert (expected_data == received_data).all()
+
+
+def test_concat_features():
+    concat = NumpyConcatenateInnerFeatures()
+    # ND arrays
+    data1 = np.random.random((10, 4, 5, 2))
+    data2 = np.random.random((10, 4, 5, 10))
+    expected_all_data = np.concatenate([data1, data2], axis=-1)
+
+    received_all_data = concat.fit_transform([data1, data2])
+
+    assert tuple(expected_all_data.shape) == tuple(received_all_data.shape)
+    assert (expected_all_data == received_all_data).all()
+
+
+def test_numpy_transpose():
+    tr = NumpyTranspose()
+    data = np.random.random((10, 7))
+    expected_data = np.copy(data).transpose()
+
+    received_data = tr.fit_transform(data)
+
+    assert (expected_data == received_data).all()
+
+
+def test_numpy_shape_printer():
+    pr = NumpyShapePrinter()
+    pr.fit_transform(np.ones((10, 11)))
