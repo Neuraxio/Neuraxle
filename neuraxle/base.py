@@ -77,23 +77,11 @@ class BaseStep(ABC):
             self.p: Union[BaseStep, TruncableSteps] = neuraxle_step
 
         def set_params(self, **params):
-            new_param_dict = dict()
-            for k, v in params.items():
-                # Unescape params:
-                k = k.replace("_\\_", "__")
-                new_param_dict[k] = v
-
-            self.p.set_hyperparams(dict_to_flat(new_param_dict))
+            self.p.set_hyperparams(dict_to_flat(params))
 
         def get_params(self, deep=True):
             neuraxle_params = dict_to_flat(self.p.get_hyperparams())
-
-            new_param_dict = dict()
-            for k, v in neuraxle_params.items():
-                # Escape params:
-                k = k.replace("__", "_\\_")
-                new_param_dict[k] = v
-            return new_param_dict
+            return neuraxle_params
 
         def fit(self, **args):
             return self.p.fit(**args)
@@ -240,9 +228,8 @@ class TruncableSteps(BaseStep, ABC):
         self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
         return item
 
-    def set_hyperparams(self, hyperparams, flat=False):
-        if flat:
-            hyperparams: DictHyperparams = flat_to_dict(hyperparams)
+    def set_hyperparams(self, hyperparams):
+        hyperparams: DictHyperparams = flat_to_dict(hyperparams)
 
         remainders = dict()
         for name, hparams in hyperparams.items():

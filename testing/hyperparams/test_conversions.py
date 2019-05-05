@@ -22,7 +22,7 @@ from neuraxle.typing import FlatHyperparams, DictHyperparams
 hyperparams_flat_and_dict_pairs = [
     # Pair 1:
     ({
-         "a.learning_rate": 7
+         "a__learning_rate": 7
      }, {
          "a": {
              "learning_rate": 7
@@ -30,8 +30,8 @@ hyperparams_flat_and_dict_pairs = [
      }),
     # Pair 2:
     ({
-         "b.a.learning_rate": 7,
-         "b.learning_rate": 9
+         "b__a__learning_rate": 7,
+         "b__learning_rate": 9
      }, {
          "b": {
              "a": {

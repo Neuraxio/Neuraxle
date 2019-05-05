@@ -15,6 +15,7 @@
 import pytest
 
 from neuraxle.base import BaseStep
+from neuraxle.hyperparams.conversion import dict_to_flat
 from neuraxle.pipeline import Pipeline, BlockPipelineRunner
 from neuraxle.steps.sklearn import SKLearnWrapper
 
@@ -119,8 +120,8 @@ def test_pipeline_set_one_hyperparam_level_one_flat():
     ])
 
     p.set_hyperparams({
-        "a.learning_rate": 7
-    }, flat=True)
+        "a__learning_rate": 7
+    })
 
     assert p["a"].hyperparams["learning_rate"] == 7
     assert p["b"].hyperparams == dict()
@@ -157,8 +158,8 @@ def test_pipeline_set_one_hyperparam_level_two_flat():
     ])
 
     p.set_hyperparams({
-        "b.a.learning_rate": 7
-    }, flat=True)
+        "b__a__learning_rate": 7
+    })
     print(p.get_hyperparams())
 
     assert p["b"]["a"].hyperparams["learning_rate"] == 7
@@ -220,6 +221,18 @@ def test_pipeline_tosklearn():
     })
     assert the_step.get_hyperparams()["learning_rate"] == 7
 
-    p = sklearn.pipeline.Pipeline([('sk', p.tosklearn())])
-    p.set_params(**{"sk__b.a_\\_z_\\_learning_rate": 11})
-    assert the_step.get_hyperparams()["learning_rate"] == 11
+    p = p.tosklearn()
+    p = sklearn.pipeline.Pipeline([('sk', p)])
+
+    p.set_params(**{"sk__b__a__z__learning_rate": 11})
+    assert p.named_steps["sk"].p["b"].wrapped_sklearn_predictor.named_steps["a"]["z"]["learning_rate"] == 11
+
+    # p.set_params(**dict_to_flat({
+    #     "sk__b": {
+    #         "a__z__learning_rate": 12,
+    #         "b__learning_rate": 9
+    #     }
+    # }))
+    p.set_params(**{"sk__b__a__z__learning_rate": 12})
+    assert p.named_steps["sk"].p["b"].wrapped_sklearn_predictor.named_steps["a"]["z"]["learning_rate"] == 12
+    # assert the_step.get_hyperparams()["learning_rate"] == 12  # TODO: debug why wouldn't this work

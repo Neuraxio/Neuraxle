@@ -35,6 +35,7 @@ from collections import OrderedDict
 
 from neuraxle.typing import DictHyperparams, FlatHyperparams
 
+PARAMS_SPLIT_SEQ = "__"
 
 def dict_to_flat(hyperparams: DictHyperparams, dict_ctor=OrderedDict) -> FlatHyperparams:
     """
@@ -49,7 +50,7 @@ def dict_to_flat(hyperparams: DictHyperparams, dict_ctor=OrderedDict) -> FlatHyp
         if isinstance(v, dict) or isinstance(v, OrderedDict) or isinstance(v, dict_ctor):
             _ret = dict_to_flat(v)
             for key, val in _ret.items():
-                ret[k + "." + key] = val
+                ret[k + PARAMS_SPLIT_SEQ + key] = val
         else:
             ret[k] = v
     return ret
@@ -66,7 +67,7 @@ def flat_to_dict(hyperparams: FlatHyperparams, dict_ctor=OrderedDict) -> DictHyp
     pre_ret = dict_ctor()
     ret = dict_ctor()
     for k, v in hyperparams.items():
-        k, _, key = k.partition(".")
+        k, _, key = k.partition(PARAMS_SPLIT_SEQ)
         if len(key) > 0:
             if k not in pre_ret.keys():
                 pre_ret[k] = dict_ctor()
