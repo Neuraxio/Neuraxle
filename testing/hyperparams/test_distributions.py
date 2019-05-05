@@ -66,17 +66,6 @@ def test_quantized_uniform():
     assert max(samples) <= 10.0
 
 
-def test_uniform():
-    hd = Uniform(-10, 10)
-
-    samples = get_many_samples_for(hd)
-
-    samples_mean = np.abs(np.mean(samples))
-    assert samples_mean < 1.0
-    assert min(samples) >= -10.0
-    assert max(samples) <= 10.0
-
-
 def test_randint():
     hd = RandInt(-10, 10)
 
@@ -84,6 +73,17 @@ def test_randint():
 
     for s in samples:
         assert type(s) == int
+    samples_mean = np.abs(np.mean(samples))
+    assert samples_mean < 1.0
+    assert min(samples) >= -10.0
+    assert max(samples) <= 10.0
+
+
+def test_uniform():
+    hd = Uniform(-10, 10)
+
+    samples = get_many_samples_for(hd)
+
     samples_mean = np.abs(np.mean(samples))
     assert samples_mean < 1.0
     assert min(samples) >= -10.0
@@ -127,10 +127,10 @@ non_abstract_distributions = [
     Boolean(),
     Choice([0, 1, False, "Test"]),
     Quantized(Uniform(-10, 10)),
-    Uniform(-10, 10),
     RandInt(-10, 10),
+    Uniform(-10, 10),
     LogUniform(0.001, 10),
-    Normal(mean=0.0, std=1.0),
+    Normal(0.0, 1.0),
     LogNormal(0.0, 2.0)
 ]
 
@@ -142,3 +142,24 @@ def test_can_restore_each_distributions(hd):
     reduced = reduced.narrow_space_from_best_guess(1, 0.5)
 
     assert reduced.unnarrow() == hd
+
+
+def test_choice_threshold_narrowing():
+    hd = Choice([0, 1, False, "Test"])
+
+    hd = hd.narrow_space_from_best_guess(False, 1.0)
+    assert isinstance(hd, Choice)
+
+    hd = hd.narrow_space_from_best_guess(False, 0.5)
+    assert isinstance(hd, Choice)
+
+    hd = hd.narrow_space_from_best_guess(False, 0.5)
+    assert isinstance(hd, FixedHyperparameter)
+
+    hd = hd.narrow_space_from_best_guess(False, 0.5)
+    assert isinstance(hd, FixedHyperparameter)
+    assert hd.get_current_narrowing_value() == 0.5 ** 3
+
+    hd = hd.unnarrow()
+    assert isinstance(hd, Choice)
+    assert hd.get_current_narrowing_value() == 1.0

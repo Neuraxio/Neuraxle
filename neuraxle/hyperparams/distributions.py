@@ -54,9 +54,11 @@ class HyperparameterDistribution(metaclass=ABCMeta):
         :param original_hp: The original HyperparameterDistribution, which will be kept in a private variable for an eventual restore.
         :return: self.
         """
-        if not hasattr(self, 'kept_space_ratio_trace'):
-            self.kept_space_ratio_trace: float = 1.0
-        self.kept_space_ratio_trace *= kept_space_ratio
+        self.kept_space_ratio_trace = (
+                self.get_current_narrowing_value() *
+                kept_space_ratio *
+                original_hp.get_current_narrowing_value()
+        )
         self.original_hp: HyperparameterDistribution = original_hp.unnarrow()
         return self
 
@@ -221,45 +223,6 @@ class Quantized(WrappedHyperparameterDistributions):
         ).was_narrowed_from(kept_space_ratio, self)
 
 
-class Uniform(HyperparameterDistribution):
-    """Get a uniform distribution."""
-
-    def __init__(self, min_included: int, max_included: int):
-        """
-        Create a random uniform distribution.
-        A random float between the two values somehow inclusively will be returned.
-
-        :param min_included: minimum integer, included.
-        :param max_included: maximum integer, might be included - for more info, see https://docs.python.org/2/library/random.html#random.uniform
-        """
-        self.min_included = min_included
-        self.max_included = max_included
-        super(Uniform, self).__init__()
-
-    def rvs(self) -> float:
-        """
-        Will return a float value in the specified range as specified at creation.
-
-        :return: a float.
-        """
-        return random.random() * (self.max_included - self.min_included) + self.min_included
-
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
-        """
-        Will narrow the underlying distribution towards the best guess.
-
-        :param best_guess: the value towards which we want to narrow down the space. Should be between 0.0 and 1.0.
-        :param kept_space_ratio: what proportion of the space is kept. Default is to keep half the space (0.5).
-        :return: a new HyperparameterDistribution that has been narrowed down.
-        """
-        lost_space_ratio = 1.0 - kept_space_ratio
-        new_min_included = self.min_included * kept_space_ratio + best_guess * lost_space_ratio
-        new_max_included = self.max_included * kept_space_ratio + best_guess * lost_space_ratio
-        if new_max_included <= new_min_included or kept_space_ratio == 0.0:
-            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
-        return Uniform(new_min_included, new_max_included).was_narrowed_from(kept_space_ratio, self)
-
-
 class RandInt(HyperparameterDistribution):
     """Get a random integer within a range"""
 
@@ -297,6 +260,45 @@ class RandInt(HyperparameterDistribution):
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
             return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
         return RandInt(new_min_included, new_max_included).was_narrowed_from(kept_space_ratio, self)
+
+
+class Uniform(HyperparameterDistribution):
+    """Get a uniform distribution."""
+
+    def __init__(self, min_included: int, max_included: int):
+        """
+        Create a random uniform distribution.
+        A random float between the two values somehow inclusively will be returned.
+
+        :param min_included: minimum integer, included.
+        :param max_included: maximum integer, might be included - for more info, see https://docs.python.org/2/library/random.html#random.uniform
+        """
+        self.min_included = min_included
+        self.max_included = max_included
+        super(Uniform, self).__init__()
+
+    def rvs(self) -> float:
+        """
+        Will return a float value in the specified range as specified at creation.
+
+        :return: a float.
+        """
+        return random.random() * (self.max_included - self.min_included) + self.min_included
+
+    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
+        """
+        Will narrow the underlying distribution towards the best guess.
+
+        :param best_guess: the value towards which we want to narrow down the space. Should be between 0.0 and 1.0.
+        :param kept_space_ratio: what proportion of the space is kept. Default is to keep half the space (0.5).
+        :return: a new HyperparameterDistribution that has been narrowed down.
+        """
+        lost_space_ratio = 1.0 - kept_space_ratio
+        new_min_included = self.min_included * kept_space_ratio + best_guess * lost_space_ratio
+        new_max_included = self.max_included * kept_space_ratio + best_guess * lost_space_ratio
+        if new_max_included <= new_min_included or kept_space_ratio == 0.0:
+            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
+        return Uniform(new_min_included, new_max_included).was_narrowed_from(kept_space_ratio, self)
 
 
 class LogUniform(HyperparameterDistribution):
