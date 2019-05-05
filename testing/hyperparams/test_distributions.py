@@ -135,7 +135,7 @@ non_abstract_distributions = [
 ]
 
 
-@pytest.mark.parametrize("hd", non_abstract_distributions)
+@pytest.mark.parametrize("hd", copy.deepcopy(non_abstract_distributions))
 def test_can_restore_each_distributions(hd):
     print(hd.__dict__)
     reduced = hd.narrow_space_from_best_guess(1, 0.5)

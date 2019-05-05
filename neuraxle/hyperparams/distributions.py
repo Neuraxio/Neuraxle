@@ -73,8 +73,8 @@ class HyperparameterDistribution(metaclass=ABCMeta):
         :return: the original HyperparameterDistribution before narrowing, or else self if the distribution is virgin.
         """
         if not hasattr(self, 'original_hp'):
-            return self
-        return copy.copy(self.original_hp)
+            return copy.deepcopy(self)
+        return copy.deepcopy(self.original_hp.unnarrow())
 
     def __eq__(self, other):
         return self.first_id == other.first_id
@@ -156,6 +156,16 @@ class Choice(HyperparameterDistribution):
         return random.choice(self.choice_list)
 
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.0) -> HyperparameterDistribution:
+        """
+        Will narrow the space. If the cumulative kept_space_ratio gets to be under or equal to 1/len(choice_list),
+        then the list is crunched to a single item as a FixedHyperparameter to reflect this narrowing.
+        So once a small enough kept_space_ratio is reached, the list becomes a fixed unique item from the best guess.
+        Otherwise, a deepcopy of self is returned.
+
+        :param best_guess:
+        :param kept_space_ratio:
+        :return: a deepcopy of self, or else a FixedHyperparameter.
+        """
         if len(self.choice_list) == 0 or len(self.choice_list) == 1:
             return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
 
@@ -164,7 +174,7 @@ class Choice(HyperparameterDistribution):
         if new_narrowing <= min_threshold_for_fixed:
             return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
 
-        return copy.copy(self).was_narrowed_from(kept_space_ratio, self)
+        return copy.deepcopy(self).was_narrowed_from(kept_space_ratio, self)
 
 
 class WrappedHyperparameterDistributions(HyperparameterDistribution):
@@ -376,7 +386,8 @@ class Normal(HyperparameterDistribution):
         :return: a new HyperparameterDistribution that has been narrowed down.
         """
         lost_space_ratio = 1.0 - kept_space_ratio
-        print(self.mean, kept_space_ratio, best_guess, lost_space_ratio)
+        if isinstance(self.mean, tuple):
+            self.mean = self.mean[0]
         new_mean = self.mean * kept_space_ratio + best_guess * lost_space_ratio
         new_std = self.std * kept_space_ratio
         if new_std <= 0.0:
