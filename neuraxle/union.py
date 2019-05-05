@@ -1,5 +1,5 @@
 from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin
-from neuraxle.numpy.numpy import NumpyConcatenateInnerFeatures
+from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 from neuraxle.typing import NamedTupleList
 
 

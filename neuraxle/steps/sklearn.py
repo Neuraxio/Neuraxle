@@ -1,7 +1,7 @@
 from sklearn.linear_model import Ridge
 
 from neuraxle.base import BaseStep
-from neuraxle.numpy.numpy import NumpyTranspose
+from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.typing import FlatHyperparams
 from neuraxle.union import ModelStacking
 

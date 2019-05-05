@@ -18,15 +18,15 @@ from sklearn.metrics import r2_score
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 
-from neuraxle.numpy.numpy import NumpyTranspose, NumpyShapePrinter
 from neuraxle.pipeline import Pipeline
-from neuraxle.sklearn.sklearn import SKLearnWrapper
+from neuraxle.steps.numpy import NumpyTranspose, NumpyShapePrinter
+from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.union import AddFeatures, FeatureUnion, Identity
 
 boston = load_boston()
 X, y = shuffle(boston.data, boston.target, random_state=13)
 X = X.astype(np.float32)
-X_train, X_test, y_train, y_test = train_test_split(X, y)
+X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False)
 
 p = Pipeline([
     NumpyShapePrinter(),
