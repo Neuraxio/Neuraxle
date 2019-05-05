@@ -240,7 +240,6 @@ class PriorityChoice(HyperparameterDistribution):
         self.choice_list = [best_guess] + self.choice_list
 
         # Narrowing of the list.
-        print("new_size:", new_size)
         maybe_reduced_list = self.choice_list[:new_size]
         return PriorityChoice(maybe_reduced_list).was_narrowed_from(kept_space_ratio, self)
 

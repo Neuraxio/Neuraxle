@@ -140,7 +140,7 @@ class HyperparameterSpace(HyperparameterSamples):
     """Wraps an hyperparameter nested dict or flat dict, and offer a few more functions to process
     all contained HyperparameterDistribution.
 
-    This can be set on a Pipeline with the method `set_hyperparams_space`. # TODO
+    This can be set on a Pipeline with the method `set_hyperparams_space`.
 
     Calling `.rvs()` on an HyperparameterSpace results in HyperparameterSamples."""
 
