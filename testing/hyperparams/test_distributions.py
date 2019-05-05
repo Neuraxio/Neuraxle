@@ -126,6 +126,7 @@ def test_lognormal():
 non_abstract_distributions = [
     Boolean(),
     Choice([0, 1, False, "Test"]),
+    PriorityChoice([0, 1, False, "Test"]),
     Quantized(Uniform(-10, 10)),
     RandInt(-10, 10),
     Uniform(-10, 10),
@@ -149,9 +150,11 @@ def test_choice_threshold_narrowing():
 
     hd = hd.narrow_space_from_best_guess(False, 1.0)
     assert isinstance(hd, Choice)
+    assert len(hd) == 4
 
     hd = hd.narrow_space_from_best_guess(False, 0.5)
     assert isinstance(hd, Choice)
+    assert len(hd) == 4
 
     hd = hd.narrow_space_from_best_guess(False, 0.5)
     assert isinstance(hd, FixedHyperparameter)
@@ -162,4 +165,31 @@ def test_choice_threshold_narrowing():
 
     hd = hd.unnarrow()
     assert isinstance(hd, Choice)
+    assert len(hd) == 4
+    assert hd.get_current_narrowing_value() == 1.0
+
+
+def test_priority_choice_threshold_narrowing():
+    hd = PriorityChoice([0, 1, False, "Test"])
+
+    hd = hd.narrow_space_from_best_guess(False, 1.0)
+    assert False == hd.choice_list[0]
+    assert isinstance(hd, PriorityChoice)
+    assert len(hd) == 4
+
+    hd = hd.narrow_space_from_best_guess(False, 0.75)
+    assert False == hd.choice_list[0]
+    assert isinstance(hd, PriorityChoice)
+    assert len(hd) == 3
+
+    hd = hd.narrow_space_from_best_guess(False, 0.5)
+    assert isinstance(hd, FixedHyperparameter)
+
+    hd = hd.narrow_space_from_best_guess(False, 0.5)
+    assert isinstance(hd, FixedHyperparameter)
+    assert hd.get_current_narrowing_value() == 0.75 * 0.5 ** 2
+
+    hd = hd.unnarrow()
+    assert isinstance(hd, PriorityChoice)
+    assert len(hd) == 4
     assert hd.get_current_narrowing_value() == 1.0

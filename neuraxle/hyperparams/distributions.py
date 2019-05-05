@@ -138,7 +138,12 @@ class Boolean(HyperparameterDistribution):
 
 
 class Choice(HyperparameterDistribution):
-    """Get a random value from a choice list of possible value for this hyperparameter."""
+    """Get a random value from a choice list of possible value for this hyperparameter.
+
+    When narrowed, the choice will only collapse to a single element when narrowed enough.
+    For example, if there are 4 items in the list, only at a narrowing value of 0.25 that
+    the first item will be kept alone.
+    """
 
     def __init__(self, choice_list: List):
         """
@@ -164,19 +169,88 @@ class Choice(HyperparameterDistribution):
         So once a small enough kept_space_ratio is reached, the list becomes a fixed unique item from the best guess.
         Otherwise, a deepcopy of self is returned.
 
-        :param best_guess:
-        :param kept_space_ratio:
-        :return: a deepcopy of self, or else a FixedHyperparameter.
+        :param best_guess: the best item of the list to keep if truly narrowing.
+        :param kept_space_ratio: the ratio of the space to keep.
+        :return: a deepcopy of self, or else a FixedHyperparameter of the best_guess.
         """
-        if len(self.choice_list) == 0 or len(self.choice_list) == 1:
-            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
-
         new_narrowing = self.get_current_narrowing_value() * kept_space_ratio
-        min_threshold_for_fixed = 1.0 / len(self.choice_list)
-        if new_narrowing <= min_threshold_for_fixed:
+
+        if len(self.choice_list) == 0 or len(self.choice_list) == 1 or new_narrowing <= 1.0 / len(self.choice_list):
             return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
 
         return copy.deepcopy(self).was_narrowed_from(kept_space_ratio, self)
+
+    def __len__(self):
+        """
+        Return the number of choices.
+
+        :return: the number of choices.
+        """
+        return len(self.choice_list)
+
+
+class PriorityChoice(HyperparameterDistribution):
+    """Get a random value from a choice list of possible value for this hyperparameter.
+
+    The first parameters are kept until the end when the list is narrowed (it is narrowed progressively),
+    unless there is a best guess that surpasses some of the top choices.
+    """
+
+    def __init__(self, choice_list: List):
+        """
+        Create a random choice hyperparameter from the given list (choice_list).
+        The first parameters in the choice_list will be kept longer when narrowing the space.
+
+        :param choice_list: a list of values to sample from. First placed, first kept when space is narrowed.
+        """
+        self.choice_list = choice_list
+        super(PriorityChoice, self).__init__()
+
+    def rvs(self):
+        """
+        Get one of the items randomly.
+
+        :return: one of the items of the list.
+        """
+        return random.choice(self.choice_list)
+
+    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.0) -> HyperparameterDistribution:
+        """
+        Will narrow the space. If the cumulative kept_space_ratio gets to be under or equal to 1-1/len(choice_list),
+        then the list is crunched to discard the last items to reflect this narrowing.
+        After a few narrowing (or a big one), the list may become a FixedHyperparameter.
+        Otherwise if the list is unchanged, a deepcopy of self is returned.
+
+        :param best_guess: the best item of the list, which will be brought back as the first item.
+        :param kept_space_ratio: the ratio of the space to keep.
+        :return: a deepcopy of self, or a subchoice of self, or else a FixedHyperparameter of the best_guess.
+        """
+        new_size = int(len(self) * kept_space_ratio + sys.float_info.epsilon)
+        if (
+                len(self.choice_list) == 0
+                or len(self.choice_list) == 1
+                or new_size <= 1
+                or kept_space_ratio <= 1.0 / len(self.choice_list)
+        ):
+            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
+
+        # Bring best_guess to front
+        idx = self.choice_list.index(best_guess)
+        del self.choice_list[idx]
+        self.choice_list = [best_guess] + self.choice_list
+
+        # Narrowing of the list.
+        print("new_size:", new_size)
+        maybe_reduced_list = self.choice_list[:new_size]
+        return PriorityChoice(maybe_reduced_list).was_narrowed_from(kept_space_ratio, self)
+
+    def __len__(self):
+        """
+        Return the number of choices.
+
+        :return: the number of choices.
+        """
+        return len(self.choice_list)
 
 
 class WrappedHyperparameterDistributions(HyperparameterDistribution):
