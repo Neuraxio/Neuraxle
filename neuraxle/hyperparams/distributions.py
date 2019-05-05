@@ -134,7 +134,7 @@ class Uniform(HyperparameterDistribution):
 
         :return: a float.
         """
-        return random.random(self.min_included, self.max_included)
+        return random.random() * (self.max_included - self.min_included) + self.min_included
 
 
 class RandInt(HyperparameterDistribution):
@@ -165,7 +165,7 @@ class LogUniform(HyperparameterDistribution):
 
     For example, this is good for neural networks' learning rates: that vary exponentially."""
 
-    def __init__(self, min_included: int, max_included: int):
+    def __init__(self, min_included: float, max_included: float):
         """
         Create a quantized random log uniform distribution.
         A random float between the two values inclusively will be returned.
@@ -210,6 +210,7 @@ class Normal(HyperparameterDistribution):
         :return: a float.
         """
         result = np.random.normal(self.mean, self.std)
+        # TODO: replace hard_clip with malleable max and min?
         if self.hard_clip_max is not None:
             result = min(result, self.hard_clip_max)
         if self.hard_clip_min is not None:
