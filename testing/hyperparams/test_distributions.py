@@ -14,6 +14,8 @@
 
 from collections import Counter
 
+import pytest
+
 from neuraxle.hyperparams.distributions import *
 
 NUM_TRIALS = 50000
@@ -119,3 +121,24 @@ def test_lognormal():
     assert 0.9 < samples_median < 1.1
     samples_std = np.std(samples)
     assert 5 < samples_std < 7
+
+
+non_abstract_distributions = [
+    Boolean(),
+    Choice([0, 1, False, "Test"]),
+    Quantized(Uniform(-10, 10)),
+    Uniform(-10, 10),
+    RandInt(-10, 10),
+    LogUniform(0.001, 10),
+    Normal(mean=0.0, std=1.0),
+    LogNormal(0.0, 2.0)
+]
+
+
+@pytest.mark.parametrize("hd", non_abstract_distributions)
+def test_can_restore_each_distributions(hd):
+    print(hd.__dict__)
+    reduced = hd.narrow_space_from_best_guess(1, 0.5)
+    reduced = reduced.narrow_space_from_best_guess(1, 0.5)
+
+    assert reduced.unnarrow() == hd
