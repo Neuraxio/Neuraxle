@@ -7,11 +7,12 @@ from neuraxle.union import ModelStacking
 
 
 class SKLearnWrapper(BaseStep):
-    def __init__(self, wrapped_sklearn_predictor):
+    def __init__(self, wrapped_sklearn_predictor, return_all_sklearn_default_params_on_get=False):
         # TODO: throw if not initialized (e.g.: class type passed)
         self.wrapped_sklearn_predictor = wrapped_sklearn_predictor
         params = wrapped_sklearn_predictor.get_params()
         super().__init__(params, params)
+        self.return_all_sklearn_default_params_on_get = return_all_sklearn_default_params_on_get
 
     def fit(self, data_inputs, expected_outputs=None):
         self.wrapped_sklearn_predictor.fit(data_inputs, expected_outputs)
@@ -25,6 +26,12 @@ class SKLearnWrapper(BaseStep):
     def set_hyperparams(self, hyperparams: FlatHyperparams):
         super().set_hyperparams(hyperparams)
         self.wrapped_sklearn_predictor.set_params(**hyperparams)
+
+    def get_hyperparams(self):
+        if self.return_all_sklearn_default_params_on_get:
+            return self.wrapped_sklearn_predictor.get_params()
+        else:
+            return super(SKLearnWrapper, self).get_hyperparams()
 
     def __repr__(self):
         return self.__str__()

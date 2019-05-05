@@ -26,7 +26,7 @@ from neuraxle.union import AddFeatures, FeatureUnion, Identity
 boston = load_boston()
 X, y = shuffle(boston.data, boston.target, random_state=13)
 X = X.astype(np.float32)
-X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffle=False)
 
 p = Pipeline([
     NumpyShapePrinter(),

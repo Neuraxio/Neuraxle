@@ -67,8 +67,13 @@ setup(
     packages=find_packages(include=['neuraxle*']),
     test_suite="testing",
     setup_requires=["pytest-runner"],
+    install_requires=['numpy', 'scipy', 'matplotlib', 'scikit-learn', 'keras'],  # , 'tensorflow'],
     tests_require=["pytest", "pytest-cov"],
     include_package_data=True,
     license='Apache 2.0',
     keywords='pipeline pipelines data science machine learning deep learning'
 )
+
+print("")
+print("--- If tensorflow isn't already installed, you must install it manually if you plan on using it in Neuraxle.")
+print("")

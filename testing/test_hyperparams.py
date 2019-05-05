@@ -1,4 +1,4 @@
-# Copyright 2019, The NeurAxle Authors
+# Copyright 2019, The Neuraxle Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ from pprint import pprint
 
 import pytest
 
-from neuraxle.hyperparams import dict_to_flat, flat_to_dict
+from neuraxle.hyperparams.conversion import flat_to_dict, dict_to_flat
 from neuraxle.typing import FlatHyperparams, DictHyperparams
 
 hyperparams_flat_and_dict_pairs = [

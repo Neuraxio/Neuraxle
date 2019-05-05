@@ -1,4 +1,4 @@
-# Copyright 2019, The NeurAxle Authors
+# Copyright 2019, The Neuraxle Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ from collections import OrderedDict
 from copy import copy
 from typing import Tuple, List
 
-from neuraxle.hyperparams import flat_to_dict, dict_to_flat
+from neuraxle.hyperparams.conversion import dict_to_flat, flat_to_dict
 from neuraxle.typing import NamedTupleList, DictHyperparams, FlatHyperparams
 
 
@@ -26,9 +26,13 @@ class BaseStep(ABC):
 
     def __init__(
             self,
-            hyperparams: DictHyperparams = dict(),
-            hyperparams_space: FlatHyperparams = dict()
+            hyperparams: DictHyperparams = None,
+            hyperparams_space: FlatHyperparams = None
     ):
+        if hyperparams is None:
+            hyperparams = dict()
+        if hyperparams_space is None:
+            hyperparams_space = dict()
         self.hyperparams: FlatHyperparams = hyperparams
         self.hyperparams_space: FlatHyperparams = hyperparams_space
 
