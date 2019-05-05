@@ -2,7 +2,6 @@ from sklearn.linear_model import Ridge
 
 from neuraxle.base import BaseStep
 from neuraxle.steps.numpy import NumpyTranspose
-from neuraxle.typing import FlatHyperparams
 from neuraxle.union import ModelStacking
 
 
@@ -23,9 +22,9 @@ class SKLearnWrapper(BaseStep):
             return self.wrapped_sklearn_predictor.predict(data_inputs)
         return self.wrapped_sklearn_predictor.transform(data_inputs)
 
-    def set_hyperparams(self, hyperparams: FlatHyperparams):
-        super().set_hyperparams(hyperparams)
-        self.wrapped_sklearn_predictor.set_params(**hyperparams)
+    def set_hyperparams(self, flat_hyperparams: dict):
+        super().set_hyperparams(flat_hyperparams)
+        self.wrapped_sklearn_predictor.set_params(**flat_hyperparams)
 
     def get_hyperparams(self):
         if self.return_all_sklearn_default_params_on_get:

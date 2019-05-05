@@ -15,7 +15,6 @@
 import pytest
 
 from neuraxle.base import BaseStep
-from neuraxle.hyperparams.conversion import dict_to_flat
 from neuraxle.pipeline import Pipeline, BlockPipelineRunner
 from neuraxle.steps.sklearn import SKLearnWrapper
 

@@ -18,31 +18,34 @@ from collections import OrderedDict
 from copy import copy
 from typing import Tuple, List, Union
 
-from sklearn.base import BaseEstimator as be
-
-from neuraxle.hyperparams.conversion import dict_to_flat, flat_to_dict
-from neuraxle.typing import NamedTupleList, DictHyperparams, FlatHyperparams
+from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
 
 class BaseStep(ABC):
 
     def __init__(
             self,
-            hyperparams: DictHyperparams = None,
-            hyperparams_space: FlatHyperparams = None
+            hyperparams: HyperparameterSamples = None,
+            hyperparams_space: HyperparameterSpace = None
     ):
         if hyperparams is None:
             hyperparams = dict()
         if hyperparams_space is None:
             hyperparams_space = dict()
-        self.hyperparams: FlatHyperparams = hyperparams
-        self.hyperparams_space: FlatHyperparams = hyperparams_space
+        self.hyperparams: HyperparameterSamples = hyperparams
+        self.hyperparams_space: HyperparameterSpace = hyperparams_space
 
-    def set_hyperparams(self, hyperparams: FlatHyperparams):
+    def set_hyperparams(self, hyperparams: HyperparameterSamples):
         self.hyperparams = hyperparams
 
-    def get_hyperparams(self) -> FlatHyperparams:
+    def get_hyperparams(self) -> HyperparameterSamples:
         return self.hyperparams
+
+    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace):
+        self.hyperparams_space = hyperparams_space
+
+    def get_hyperparams_space(self) -> HyperparameterSpace:
+        return self.hyperparams_space
 
     def fit_transform(self, data_inputs, expected_outputs=None):
         return self.fit(data_inputs, expected_outputs).transform(data_inputs)
@@ -72,31 +75,37 @@ class BaseStep(ABC):
     def predict(self, data_input):
         return self.transform(data_input)
 
-    class NeuraxleToSKLearnPipelineWrapper(be):
-        def __init__(self, neuraxle_step):
-            self.p: Union[BaseStep, TruncableSteps] = neuraxle_step
+    def tosklearn(self) -> 'NeuraxleToSKLearnPipelineWrapper':
+        from sklearn.base import BaseEstimator as be
 
-        def set_params(self, **params):
-            self.p.set_hyperparams(dict_to_flat(params))
+        class NeuraxleToSKLearnPipelineWrapper(be):
+            def __init__(self, neuraxle_step):
+                self.p: Union[BaseStep, TruncableSteps] = neuraxle_step
 
-        def get_params(self, deep=True):
-            neuraxle_params = dict_to_flat(self.p.get_hyperparams())
-            return neuraxle_params
+            def set_params(self, **params):
+                self.p.set_hyperparams(HyperparameterSpace(params))
 
-        def fit(self, **args):
-            return self.p.fit(**args)
+            def get_params(self, deep=True):
+                neuraxle_params = HyperparameterSamples(self.p.get_hyperparams()).to_flat_as_dict_primitive()
+                return neuraxle_params
 
-        def transform(self, **args):
-            return self.p.transform(**args)
+            def get_params_space(self, deep=True):
+                neuraxle_params = HyperparameterSpace(self.p.get_hyperparams_space()).to_flat_as_dict_primitive()
+                return neuraxle_params
 
-        def fit_transform(self, **args):
-            return self.p.fit_transform(**args)
+            def fit(self, **args):
+                return self.p.fit(**args)
 
-        def predict(self, **args):
-            return self.p.transform(**args)
+            def transform(self, **args):
+                return self.p.transform(**args)
 
-    def tosklearn(self) -> NeuraxleToSKLearnPipelineWrapper:
-        return self.NeuraxleToSKLearnPipelineWrapper(self)
+            def fit_transform(self, **args):
+                return self.p.fit_transform(**args)
+
+            def predict(self, **args):
+                return self.p.transform(**args)
+
+        return NeuraxleToSKLearnPipelineWrapper(self)
 
 
 class NonFittableMixin:
@@ -107,13 +116,16 @@ class NonFittableMixin:
         return self
 
 
+NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
+
+
 class TruncableSteps(BaseStep, ABC):
 
     def __init__(
             self,
             steps_as_tuple: NamedTupleList,
-            hyperparams: FlatHyperparams = dict(),
-            hyperparams_space: FlatHyperparams = dict()
+            hyperparams: HyperparameterSamples = dict(),
+            hyperparams_space: HyperparameterSpace = dict()
     ):
         super().__init__(hyperparams, hyperparams_space)
         self.steps_as_tuple: NamedTupleList = self.patch_missing_names(steps_as_tuple)
@@ -228,8 +240,8 @@ class TruncableSteps(BaseStep, ABC):
         self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
         return item
 
-    def set_hyperparams(self, hyperparams):
-        hyperparams: DictHyperparams = flat_to_dict(hyperparams)
+    def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]):
+        hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
 
         remainders = dict()
         for name, hparams in hyperparams.items():
@@ -239,18 +251,43 @@ class TruncableSteps(BaseStep, ABC):
                 remainders[name] = hparams
         self.hyperparams = remainders
 
-    def get_hyperparams(self, flat=False) -> DictHyperparams:
+    def get_hyperparams(self, flat=False) -> HyperparameterSamples:
         ret = dict()
 
         for k, v in self.steps.items():
-            hparams = v.get_hyperparams()  # TODO: diamond problem.
+            hparams = v.get_hyperparams()  # TODO: oop diamond problem?
             if hasattr(v, "hyparparams"):
                 hparams.update(v.hyperparams)
             if len(hparams) > 0:
                 ret[k] = hparams
 
         if flat:
-            ret = dict_to_flat(ret)
+            ret = HyperparameterSamples(ret)
+        return ret
+
+    def set_hyperparams_space(self, hyperparams_space: Union[HyperparameterSpace, OrderedDict, dict]):
+        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space)
+
+        remainders = dict()
+        for name, hparams in hyperparams_space.items():
+            if name in self.steps.keys():
+                self.steps[name].set_hyperparams_space(hparams)
+            else:
+                remainders[name] = hparams
+        self.hyperparams = remainders
+
+    def get_hyperparams_space(self, flat=False) -> HyperparameterSpace:
+        ret = dict()
+
+        for k, v in self.steps.items():
+            hparams = v.get_hyperparams_space()  # TODO: oop diamond problem?
+            if hasattr(v, "hyperparams_space"):
+                hparams.update(v.hyperparams_space)
+            if len(hparams) > 0:
+                ret[k] = hparams
+
+        if flat:
+            ret = HyperparameterSpace(ret)
         return ret
 
 

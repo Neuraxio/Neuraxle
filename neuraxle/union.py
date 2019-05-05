@@ -1,6 +1,5 @@
-from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin
+from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin, NamedTupleList
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
-from neuraxle.typing import NamedTupleList
 
 
 class ModelStacking(TruncableSteps):

@@ -37,8 +37,9 @@ def test_boolean_distribution():
     assert falses > NUM_TRIALS * 0.4
 
 
-def test_choice():
-    hd = Choice([0, 1, False, "Test"])
+@pytest.mark.parametrize("ctor", [Choice, PriorityChoice])
+def test_choice_and_priority_choice(ctor):
+    hd = ctor([0, 1, False, "Test"])
 
     samples = get_many_samples_for(hd)
     z0 = Counter(samples).get(0)
@@ -120,10 +121,10 @@ def test_lognormal():
     samples_median = np.median(samples)
     assert 0.9 < samples_median < 1.1
     samples_std = np.std(samples)
-    assert 5 < samples_std < 7
+    assert 5 < samples_std < 8
 
 
-non_abstract_distributions = [
+@pytest.mark.parametrize("hd", [
     Boolean(),
     Choice([0, 1, False, "Test"]),
     PriorityChoice([0, 1, False, "Test"]),
@@ -133,10 +134,7 @@ non_abstract_distributions = [
     LogUniform(0.001, 10),
     Normal(0.0, 1.0),
     LogNormal(0.0, 2.0)
-]
-
-
-@pytest.mark.parametrize("hd", copy.deepcopy(non_abstract_distributions))
+])
 def test_can_restore_each_distributions(hd):
     print(hd.__dict__)
     reduced = hd.narrow_space_from_best_guess(1, 0.5)

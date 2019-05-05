@@ -16,8 +16,7 @@ from pprint import pprint
 
 import pytest
 
-from neuraxle.hyperparams.conversion import flat_to_dict, dict_to_flat
-from neuraxle.typing import FlatHyperparams, DictHyperparams
+from neuraxle.hyperparams.space import flat_to_nested_dict, nested_dict_to_flat
 
 hyperparams_flat_and_dict_pairs = [
     # Pair 1:
@@ -44,15 +43,15 @@ hyperparams_flat_and_dict_pairs = [
 
 
 @pytest.mark.parametrize("flat,expected_dic", hyperparams_flat_and_dict_pairs)
-def test_flat_to_dict_hyperparams(flat: FlatHyperparams, expected_dic: DictHyperparams):
-    dic = flat_to_dict(flat)
+def test_flat_to_dict_hyperparams(flat: dict, expected_dic: dict):
+    dic = flat_to_nested_dict(flat)
 
     assert dict(dic) == dict(expected_dic)
 
 
 @pytest.mark.parametrize("expected_flat,dic", hyperparams_flat_and_dict_pairs)
-def test_dict_to_flat_hyperparams(expected_flat: FlatHyperparams, dic: DictHyperparams):
-    flat = dict_to_flat(dic)
+def test_dict_to_flat_hyperparams(expected_flat: dict, dic: dict):
+    flat = nested_dict_to_flat(dic)
 
     pprint(dict(flat))
     pprint(expected_flat)

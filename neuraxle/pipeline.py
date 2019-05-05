@@ -15,8 +15,7 @@
 from collections import OrderedDict
 from copy import copy
 
-from neuraxle.base import BaseStep, PipelineRunner, TruncableSteps, BaseBarrier
-from neuraxle.typing import NamedTupleList
+from neuraxle.base import BaseStep, PipelineRunner, TruncableSteps, BaseBarrier, NamedTupleList
 
 
 class BlockPipelineRunner(PipelineRunner):
