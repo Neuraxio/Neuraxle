@@ -16,7 +16,9 @@ import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
-from typing import Tuple, List
+from typing import Tuple, List, Union
+
+from sklearn.base import BaseEstimator as be
 
 from neuraxle.hyperparams.conversion import dict_to_flat, flat_to_dict
 from neuraxle.typing import NamedTupleList, DictHyperparams, FlatHyperparams
@@ -69,6 +71,44 @@ class BaseStep(ABC):
 
     def predict(self, data_input):
         return self.transform(data_input)
+
+    class NeuraxleToSKLearnPipelineWrapper(be):
+        def __init__(self, neuraxle_step):
+            self.p: Union[BaseStep, TruncableSteps] = neuraxle_step
+
+        def set_params(self, **params):
+            new_param_dict = dict()
+            for k, v in params.items():
+                # Unescape params:
+                k = k.replace("_\\_", "__")
+                new_param_dict[k] = v
+
+            self.p.set_hyperparams(dict_to_flat(new_param_dict))
+
+        def get_params(self, deep=True):
+            neuraxle_params = dict_to_flat(self.p.get_hyperparams())
+
+            new_param_dict = dict()
+            for k, v in neuraxle_params.items():
+                # Escape params:
+                k = k.replace("__", "_\\_")
+                new_param_dict[k] = v
+            return new_param_dict
+
+        def fit(self, **args):
+            return self.p.fit(**args)
+
+        def transform(self, **args):
+            return self.p.transform(**args)
+
+        def fit_transform(self, **args):
+            return self.p.fit_transform(**args)
+
+        def predict(self, **args):
+            return self.p.transform(**args)
+
+    def tosklearn(self) -> NeuraxleToSKLearnPipelineWrapper:
+        return self.NeuraxleToSKLearnPipelineWrapper(self)
 
 
 class NonFittableMixin:

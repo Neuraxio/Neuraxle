@@ -47,3 +47,4 @@ class SKLearnWrapper(BaseStep):
 class RidgeModelStacking(ModelStacking):
     def __init__(self, brothers):
         super().__init__(brothers, SKLearnWrapper(Ridge()), NumpyTranspose())
+

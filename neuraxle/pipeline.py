@@ -78,7 +78,8 @@ class ResumablePipelineRunner(PipelineRunner):
     def resume_transform_entry_point(self, dos, steps_as_tuple):
         steps = copy(steps_as_tuple)
         for step_name, step in reversed(steps_as_tuple):
-            if isinstance(step, BaseBarrier) or isinstance(step, Pipeline):  # TODO: maybe change to: if hasattr(step, 'should_resume'):
+            if isinstance(step, BaseBarrier) or isinstance(step,
+                                                           Pipeline):  # TODO: maybe change to: if hasattr(step, 'should_resume'):
                 if step.should_resume(dos):
                     if isinstance(step, Pipeline):  # TODO: maybe change to: if hasattr(step, 'trim_for_resume'):
                         step = step.trim_for_resume(dos)
