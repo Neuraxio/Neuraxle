@@ -441,13 +441,15 @@ class Normal(HyperparameterDistribution):
 
         :return: a float.
         """
-        result = np.random.normal(self.mean, self.std)
+        result = float(np.random.normal(self.mean, self.std))
+        if not math.isfinite(result):
+            return self.rvs()
         # TODO: replace hard_clip with malleable max and min? also remove in doc if so (search for "hard clip").
         if self.hard_clip_max is not None:
             result = min(result, self.hard_clip_max)
         if self.hard_clip_min is not None:
             result = max(result, self.hard_clip_min)
-        return result
+        return float(result)
 
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
         """
@@ -498,12 +500,14 @@ class LogNormal(HyperparameterDistribution):
 
         :return: a float.
         """
-        result = 2 ** np.random.normal(self.log2_space_mean, self.log2_space_std)
+        result = 2 ** float(np.random.normal(self.log2_space_mean, self.log2_space_std))
+        if not math.isfinite(result):
+            return self.rvs()
         if self.hard_clip_max is not None:
             result = min(result, self.hard_clip_max)
         if self.hard_clip_min is not None:
             result = max(result, self.hard_clip_min)
-        return result
+        return float(result)
 
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
         """
