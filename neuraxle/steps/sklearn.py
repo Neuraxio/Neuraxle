@@ -1,16 +1,24 @@
+from sklearn.base import BaseEstimator
 from sklearn.linear_model import Ridge
 
 from neuraxle.base import BaseStep
+from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.union import ModelStacking
 
 
 class SKLearnWrapper(BaseStep):
-    def __init__(self, wrapped_sklearn_predictor, return_all_sklearn_default_params_on_get=False):
-        # TODO: throw if not initialized (e.g.: class type passed)
+    def __init__(
+            self,
+            wrapped_sklearn_predictor,
+            hyperparams_space: HyperparameterSpace,
+            return_all_sklearn_default_params_on_get=False
+    ):
+        if not isinstance(wrapped_sklearn_predictor, BaseEstimator):
+            raise ValueError("The wrapped_sklearn_predictor must be an instance of scikit-learn's BaseEstimator.")
         self.wrapped_sklearn_predictor = wrapped_sklearn_predictor
         params = wrapped_sklearn_predictor.get_params()
-        super().__init__(params, params)
+        super().__init__(params, hyperparams_space)
         self.return_all_sklearn_default_params_on_get = return_all_sklearn_default_params_on_get
 
     def fit(self, data_inputs, expected_outputs=None):
@@ -46,4 +54,3 @@ class SKLearnWrapper(BaseStep):
 class RidgeModelStacking(ModelStacking):
     def __init__(self, brothers):
         super().__init__(brothers, SKLearnWrapper(Ridge()), NumpyTranspose())
-

@@ -125,6 +125,7 @@ def test_lognormal():
 
 
 @pytest.mark.parametrize("hd", [
+    FixedHyperparameter(0),
     Boolean(),
     Choice([0, 1, False, "Test"]),
     PriorityChoice([0, 1, False, "Test"]),
