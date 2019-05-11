@@ -49,7 +49,6 @@ p = Pipeline([
 
 print("Fitting on train:")
 p.fit(X_train, y_train)
-# p.meta_fit(X_train, y_train)
 print("")
 
 print("Transforming test:")

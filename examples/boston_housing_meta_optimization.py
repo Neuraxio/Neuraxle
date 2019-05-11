@@ -17,9 +17,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.numpy import NumpyTranspose, NumpyShapePrinter
+from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
-from neuraxle.union import AddFeatures, FeatureUnion, Identity
+from neuraxle.union import AddFeatures, FeatureUnion
 
 boston = load_boston()
 X, y = shuffle(boston.data, boston.target, random_state=13)
@@ -27,27 +27,21 @@ X = X.astype(np.float32)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffle=False)
 
 p = Pipeline([
-    NumpyShapePrinter(),
     AddFeatures([
         SKLearnWrapper(PCA(n_components=2)),
         SKLearnWrapper(FastICA(n_components=2)),
     ]),
-    NumpyShapePrinter(),
     FeatureUnion([
         SKLearnWrapper(GradientBoostingRegressor()),
         SKLearnWrapper(GradientBoostingRegressor(n_estimators=500)),
         SKLearnWrapper(GradientBoostingRegressor(max_depth=5)),
         SKLearnWrapper(KMeans()),
     ], joiner=NumpyTranspose()),
-    NumpyShapePrinter(),
     SKLearnWrapper(Ridge()),
-    NumpyShapePrinter(),
-    Identity()  # This step simply does nothing.
 ])
 
-print("Fitting on train:")
-p.fit(X_train, y_train)
-# p.meta_fit(X_train, y_train)
+print("Meta-fitting on train:")
+p.meta_fit(X_train, y_train)
 print("")
 
 print("Transforming test:")
