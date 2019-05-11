@@ -11,7 +11,7 @@ class SKLearnWrapper(BaseStep):
     def __init__(
             self,
             wrapped_sklearn_predictor,
-            hyperparams_space: HyperparameterSpace,
+            hyperparams_space: HyperparameterSpace=None,
             return_all_sklearn_default_params_on_get=False
     ):
         if not isinstance(wrapped_sklearn_predictor, BaseEstimator):

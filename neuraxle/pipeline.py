@@ -15,7 +15,8 @@
 from collections import OrderedDict
 from copy import copy
 
-from neuraxle.base import BaseStep, PipelineRunner, TruncableSteps, BaseBarrier, NamedTupleList
+from neuraxle.base import BaseStep, PipelineRunner, TruncableSteps, BaseBarrier, NamedTupleList, \
+    ReversibleTruncableSteps
 
 
 class BlockPipelineRunner(PipelineRunner):
@@ -87,7 +88,7 @@ class ResumablePipelineRunner(PipelineRunner):
                     return steps
 
 
-class Pipeline(TruncableSteps):
+class Pipeline(ReversibleTruncableSteps):
 
     def __init__(
             self,
@@ -98,18 +99,16 @@ class Pipeline(TruncableSteps):
         TruncableSteps.__init__(self, steps)
         self.pipeline_runner: PipelineRunner = pipeline_runner
 
-    def get_hyperparams_space(self):
-        all_hyperparams = OrderedDict()
-        for step_name, step in self.steps_as_tuple:
-            all_hyperparams.update(step.get_hyperparams_space())
-        return all_hyperparams
-
-    def fit_transform(self, data_inputs, expected_outputs=None):
-        return self.pipeline_runner.set_steps(self.steps_as_tuple).fit_transform(data_inputs, expected_outputs)
-
     def fit(self, data_inputs, expected_outputs=None):
         self.pipeline_runner.set_steps(self.steps_as_tuple).fit(data_inputs, expected_outputs)
         return self
 
     def transform(self, data_inputs):
         return self.pipeline_runner.transform(data_inputs)
+
+    def fit_transform(self, data_inputs, expected_outputs=None):
+        return self.pipeline_runner.set_steps(self.steps_as_tuple).fit_transform(data_inputs, expected_outputs)
+
+    def inverse_transform(self, processed_outputs):
+        reversed_steps_as_tuple = list(reversed(self))
+        return self.pipeline_runner.set_steps(reversed_steps_as_tuple).transform(processed_outputs)
