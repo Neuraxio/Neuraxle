@@ -291,4 +291,38 @@ def test_pipeline_nested_mutate_inverse_transform():
 
     p.transform(np.ones((1, 1)))  # will add reversed(range(1, 8)) to tape.
 
+    print(expected_tape)
+    print(tape.get_name_tape())
+    assert expected_tape == tape.get_name_tape()
+
+
+def test_pipeline_nested_mutate_inverse_transform_without_identities():
+    """
+    This test was required for a strange bug at the border of the pipelines
+    that happened when the identities were not used.
+    """
+    expected_tape = ["1", "2", "3", "4", "5", "6", "7", "7", "6", "5", "4", "3", "2", "1"]
+    tape = TapeCallbackFunction()
+
+    p = Pipeline([
+        TransformCallbackStep(tape.callback, ["1"]),
+        TransformCallbackStep(tape.callback, ["2"]),
+        Pipeline([
+            TransformCallbackStep(tape.callback, ["3"]),
+            TransformCallbackStep(tape.callback, ["4"]),
+            TransformCallbackStep(tape.callback, ["5"]),
+        ]),
+        TransformCallbackStep(tape.callback, ["6"]),
+        TransformCallbackStep(tape.callback, ["7"]),
+    ])
+
+    p.fit_transform(np.ones((1, 1)))  # will add range(1, 8) to tape.
+
+    print("[mutating]")
+    p = p.mutate(new_method="inverse_transform", method_to_assign_to="transform")
+
+    p.transform(np.ones((1, 1)))  # will add reversed(range(1, 8)) to tape.
+
+    print(expected_tape)
+    print(tape.get_name_tape())
     assert expected_tape == tape.get_name_tape()
