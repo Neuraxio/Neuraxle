@@ -29,6 +29,18 @@ Notice that if you have a `SKLearnWrapper` on a sklearn Pipeline object, the hyp
 double underscores "__" as a separator rather than a dot in flat dictionaries, and in nested dictionaries the
 sklearn params will appear as a flat past the sklearn wrapper, which is fine.
 
+By default, hyperparameters are stored inside a HyperparameterSpace or inside a HyperparameterSamples object, which
+offers methods to do the conversions above, and also using ordered dicts (OrderedDict) to store parameters in-order.
+
+A HyperparameterSpace can be sampled by calling the `.rvs()` method on it, which will recursively call `.rvs()` on all
+the HyperparameterSpace and HyperparameterDistribution that it contains. It will return a HyperparameterSamples object.
+A HyperparameterSpace can also be narrowed towards an better, finer subspace, which is itself a HyperparameterSpace.
+This can be done by calling the `.narrow_space_from_best_guess` method of the HyperparameterSpace which will also
+recursively apply the changes to its contained HyperparameterSpace and to all its contained HyperparameterDistribution.
+
+The HyperparameterSamples contains sampled hyperparameter, that is, a valued point in the possible space. This is
+ready to be sent to an instance of the pipeline to try and score it, for example.
+
 """
 
 from collections import OrderedDict

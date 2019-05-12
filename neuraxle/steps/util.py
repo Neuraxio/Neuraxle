@@ -1,3 +1,9 @@
+"""
+Util Pipeline Steps
+====================================
+You can find here misc. pipeline steps, for example, callbacks.
+"""
+
 from typing import List
 
 from neuraxle.base import BaseStep, NonFittableMixin
