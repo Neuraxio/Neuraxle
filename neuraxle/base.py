@@ -90,16 +90,22 @@ class BaseStep(ABC):
         pending_new_base_step, pending_new_method, pending_method_to_assign_to = self.pending_mutate
 
         # Use everything that is pending if they are not none (ternaries).
-        new_base_step = pending_new_base_step if pending_new_base_step is not None else self
+        new_base_step = pending_new_base_step if pending_new_base_step is not None else copy(self)
         new_method = pending_new_method if pending_new_method is not None else new_method
         method_to_assign_to = pending_method_to_assign_to if pending_method_to_assign_to is not None else method_to_assign_to
 
+        # We set "new_method" in place of "method_to_affect" to a copy of self:
         try:
-            new_method = getattr(self, new_method)
+            # 1. get new method's reference
+            new_method = getattr(new_base_step, new_method)
 
-            # We set "new_method" in place of "method_to_affect" to a copy of self:
-            if id(self) == id(new_base_step):
-                new_base_step = copy(self)  # shallow copy if the new_base_step is self.
+            # 2. delete old method
+            try:
+                delattr(new_base_step, method_to_assign_to)
+            except AttributeError as e:
+                pass
+
+            # 3. assign new method to old method
             setattr(new_base_step, method_to_assign_to, new_method)
 
         except AttributeError as e:
@@ -153,15 +159,15 @@ class BaseStep(ABC):
 
     def fit_one(self, data_input, expected_output=None):
         # return self
-        raise NotImplementedError("TODO")
+        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
     def transform_one(self, data_input):
         # return processed_output
-        raise NotImplementedError("TODO")
+        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
     def inverse_transform_one(self, data_output):
         # return data_input
-        raise NotImplementedError("TODO")
+        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
     def tosklearn(self) -> 'NeuraxleToSKLearnPipelineWrapper':
         from sklearn.base import BaseEstimator as be
@@ -200,11 +206,77 @@ class BaseStep(ABC):
 
 
 class NonFittableMixin:
+    """A pipeline step that requires no fitting: fitting just returns self when called to do no action.
+
+    Note: fit methods are not implemented"""
+
     def fit(self, data_inputs, expected_outputs=None):
+        """
+        Don't fit.
+
+        :param data_inputs: the data that would normally be fitted on.
+        :param expected_outputs: the data that would normally be fitted on.
+        :return: self
+        """
         return self
 
     def fit_one(self, data_input, expected_output=None):
+        """
+        Don't fit.
+
+        :param data_input: the data that would normally be fitted on.
+        :param expected_output: the data that would normally be fitted on.
+        :return: self
+        """
         return self
+
+
+class NonTransformableMixin:
+    """A pipeline step that has no effect at all but to return the same data without changes.
+
+    Note: fit methods are not implemented"""
+
+    def __init__(self):
+        """
+        Create an Identity BaseStep that is also a NonFittableMixin (doesn't require fitting).
+        """
+        BaseStep.__init__(self)
+
+    def transform(self, data_inputs):
+        """
+        Do nothing - return the same data.
+
+        :param data_inputs: the data to process
+        :return: the `data_inputs`, unchanged.
+        """
+        return data_inputs
+
+    def transform_one(self, data_input):
+        """
+        Do nothing - return the same data.
+
+        :param data_input: the data to process
+        :return: the `data_input`, unchanged.
+        """
+        return data_input
+
+    def inverse_transform(self, processed_outputs):
+        """
+        Do nothing - return the same data.
+
+        :param processed_outputs: the data to process
+        :return: the `processed_outputs`, unchanged.
+        """
+        return processed_outputs
+
+    def inverse_transform_one(self, processed_output):
+        """
+        Do nothing - return the same data.
+
+        :param processed_output: the data to process
+        :return: the `data_output`, unchanged.
+        """
+        return processed_output
 
 
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
@@ -312,8 +384,21 @@ class TruncableSteps(BaseStep, ABC):
         :param warn: (verbose) wheter or not to warn about the inexistence of the method.
         :return: self, a copy of self, or even perhaps a new or different BaseStep object.
         """
-        self.steps_as_tuple = [(k, v.mutate(new_method, method_to_assign_to, warn)) for k, v in self.steps_as_tuple]
-        self._refresh_steps()
+        if self.pending_mutate[0] is None:
+            new_base_step = self
+            self.pending_mutate = (new_base_step, self.pending_mutate[1], self.pending_mutate[2])
+
+            new_base_step.steps_as_tuple = [
+                (
+                    k,
+                    v.mutate(new_method, method_to_assign_to, warn)
+                )
+                for k, v in new_base_step.steps_as_tuple
+            ]
+            new_base_step._refresh_steps()
+            return super().mutate(new_method, method_to_assign_to, warn)
+        else:
+            return super().mutate(new_method, method_to_assign_to, warn)
 
     def __getitem__(self, key):
         if isinstance(key, slice):
@@ -418,18 +503,6 @@ class TruncableSteps(BaseStep, ABC):
         :return: len(self.steps_as_tuple)
         """
         return len(self.steps_as_tuple)
-
-
-class ReversibleTruncableSteps(TruncableSteps, ABC):
-    """Inherit from this to make a `TruncableSteps` class that is reversible (such as for doing inverse_transform)."""
-
-    def __reversed__(self):
-        """
-        Iterate the steps in reverse order.
-
-        :return: an iterator for which every item is a tuple of (step_name, base_step), in reverse order.
-        """
-        return reversed(self.steps_as_tuple)
 
 
 class BaseBarrier(ABC):

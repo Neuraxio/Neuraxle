@@ -12,11 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import OrderedDict
 from copy import copy
 
-from neuraxle.base import BaseStep, PipelineRunner, TruncableSteps, BaseBarrier, NamedTupleList, \
-    ReversibleTruncableSteps
+from neuraxle.base import BaseStep, PipelineRunner, TruncableSteps, BaseBarrier, NamedTupleList
 
 
 class BlockPipelineRunner(PipelineRunner):
@@ -88,7 +86,7 @@ class ResumablePipelineRunner(PipelineRunner):
                     return steps
 
 
-class Pipeline(ReversibleTruncableSteps):
+class Pipeline(TruncableSteps):
 
     def __init__(
             self,
@@ -110,5 +108,5 @@ class Pipeline(ReversibleTruncableSteps):
         return self.pipeline_runner.set_steps(self.steps_as_tuple).fit_transform(data_inputs, expected_outputs)
 
     def inverse_transform(self, processed_outputs):
-        reversed_steps_as_tuple = list(reversed(self))
+        reversed_steps_as_tuple = list(reversed(self.steps_as_tuple))
         return self.pipeline_runner.set_steps(reversed_steps_as_tuple).transform(processed_outputs)

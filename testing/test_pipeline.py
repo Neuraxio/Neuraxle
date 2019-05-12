@@ -11,12 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import numpy as np
 import pytest
 
 from neuraxle.base import BaseStep
+from neuraxle.hyperparams.space import nested_dict_to_flat
 from neuraxle.pipeline import Pipeline, BlockPipelineRunner
 from neuraxle.steps.sklearn import SKLearnWrapper
+from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
+from neuraxle.union import Identity
 
 AN_INPUT = "I am an input"
 AN_EXPECTED_OUTPUT = "I am an expected output"
@@ -226,12 +229,66 @@ def test_pipeline_tosklearn():
     p.set_params(**{"sk__b__a__z__learning_rate": 11})
     assert p.named_steps["sk"].p["b"].wrapped_sklearn_predictor.named_steps["a"]["z"]["learning_rate"] == 11
 
-    # p.set_params(**dict_to_flat({
-    #     "sk__b": {
-    #         "a__z__learning_rate": 12,
-    #         "b__learning_rate": 9
-    #     }
-    # }))
-    p.set_params(**{"sk__b__a__z__learning_rate": 12})
+    p.set_params(**nested_dict_to_flat({
+        "sk__b": {
+            "a__z__learning_rate": 12,
+            "b__learning_rate": 9
+        }
+    }))
+    # p.set_params(**{"sk__b__a__z__learning_rate": 12})
     assert p.named_steps["sk"].p["b"].wrapped_sklearn_predictor.named_steps["a"]["z"]["learning_rate"] == 12
+    print(the_step.get_hyperparams())
     # assert the_step.get_hyperparams()["learning_rate"] == 12  # TODO: debug why wouldn't this work
+
+
+def test_pipeline_simple_mutate_inverse_transform():
+    expected_tape = ["1", "2", "3", "4", "4", "3", "2", "1"]
+    tape = TapeCallbackFunction()
+
+    p = Pipeline([
+        Identity(),
+        TransformCallbackStep(tape.callback, ["1"]),
+        TransformCallbackStep(tape.callback, ["2"]),
+        TransformCallbackStep(tape.callback, ["3"]),
+        TransformCallbackStep(tape.callback, ["4"]),
+        Identity()
+    ])
+
+    p.fit_transform(np.ones((1, 1)))
+
+    print("[mutating]")
+    p = p.mutate(new_method="inverse_transform", method_to_assign_to="transform")
+
+    p.transform(np.ones((1, 1)))
+
+    assert expected_tape == tape.get_name_tape()
+
+
+def test_pipeline_nested_mutate_inverse_transform():
+    expected_tape = ["1", "2", "3", "4", "5", "6", "7", "7", "6", "5", "4", "3", "2", "1"]
+    tape = TapeCallbackFunction()
+
+    p = Pipeline([
+        Identity(),
+        TransformCallbackStep(tape.callback, ["1"]),
+        TransformCallbackStep(tape.callback, ["2"]),
+        Pipeline([
+            Identity(),
+            TransformCallbackStep(tape.callback, ["3"]),
+            TransformCallbackStep(tape.callback, ["4"]),
+            TransformCallbackStep(tape.callback, ["5"]),
+            Identity()
+        ]),
+        TransformCallbackStep(tape.callback, ["6"]),
+        TransformCallbackStep(tape.callback, ["7"]),
+        Identity()
+    ])
+
+    p.fit_transform(np.ones((1, 1)))  # will add range(1, 8) to tape.
+
+    print("[mutating]")
+    p = p.mutate(new_method="inverse_transform", method_to_assign_to="transform")
+
+    p.transform(np.ones((1, 1)))  # will add reversed(range(1, 8)) to tape.
+
+    assert expected_tape == tape.get_name_tape()

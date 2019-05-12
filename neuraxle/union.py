@@ -1,4 +1,4 @@
-from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin, NamedTupleList
+from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin, NamedTupleList, NonTransformableMixin
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
@@ -51,53 +51,12 @@ class FeatureUnion(TruncableSteps):
         return results
 
 
-class Identity(NonFittableMixin, BaseStep):
-    """A pipeline step that has no effect.
+class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
+    """A pipeline step that has no effect at all but to return the same data without changes.
 
     This can be useful to concatenate new features to existing features, such as what AddFeatures do.
     """
-
-    def __init__(self):
-        """
-        Create an Identity BaseStep that is also a NonFittableMixin (doesn't require fitting).
-        """
-        BaseStep.__init__(self)
-
-    def transform(self, data_inputs):
-        """
-        Do nothing - return the same data.
-
-        :param data_inputs:
-        :return: the `data_inputs`, unchanged.
-        """
-        return data_inputs
-
-    def transform_one(self, data_input):
-        """
-        Do nothing - return the same data.
-
-        :param data_input:
-        :return: the `data_input`, unchanged.
-        """
-        return data_input
-
-    def inverse_transform(self, processed_outputs):
-        """
-        Do nothing - return the same data.
-
-        :param processed_outputs:
-        :return: the `processed_outputs`, unchanged.
-        """
-        return processed_outputs
-
-    def inverse_transform_one(self, data_output):
-        """
-        Do nothing - return the same data.
-
-        :param data_output:
-        :return: the `data_output`, unchanged.
-        """
-        return data_output
+    pass  # Multi-class inheritance does the job here! See inside those other classes for more info.
 
 
 class AddFeatures(FeatureUnion):
