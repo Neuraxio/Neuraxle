@@ -293,7 +293,7 @@ class TruncableSteps(BaseStep, ABC):
         self.hyperparams = remainders
 
     def get_hyperparams_space(self, flat=False):
-        all_hyperparams = OrderedDict()
+        all_hyperparams = HyperparameterSpace()
         for step_name, step in self.steps_as_tuple:
             all_hyperparams.update(
                 step.get_hyperparams_space(flat=flat)

@@ -24,7 +24,8 @@ hyperparams_flat_and_dict_pairs = [
     # Pair 1:
     ({
          "a__learning_rate": 7
-     }, {
+     },
+     {
          "a": {
              "learning_rate": 7
          }
@@ -33,7 +34,8 @@ hyperparams_flat_and_dict_pairs = [
     ({
          "b__a__learning_rate": 7,
          "b__learning_rate": 9
-     }, {
+     },
+     {
          "b": {
              "a": {
                  "learning_rate": 7
@@ -60,19 +62,35 @@ def test_dict_to_flat_hyperparams(expected_flat: dict, dic: dict):
     assert dict(flat) == dict(expected_flat)
 
 
+@pytest.mark.parametrize("flat,expected_dic", hyperparams_flat_and_dict_pairs)
+def test_flat_to_dict_hyperparams_with_hyperparameter_space(flat: dict, expected_dic: dict):
+    dic = HyperparameterSpace(flat).to_nested_dict_as_dict_primitive()
+
+    assert dict(dic) == dict(expected_dic)
+
+
+@pytest.mark.parametrize("expected_flat,dic", hyperparams_flat_and_dict_pairs)
+def test_dict_to_flat_hyperparams_with_hyperparameter_space(expected_flat: dict, dic: dict):
+    flat = HyperparameterSpace(dic).to_flat_as_dict_primitive()
+
+    pprint(dict(flat))
+    pprint(expected_flat)
+    assert dict(flat) == dict(expected_flat)
+
+
 HYPE_SPACE = HyperparameterSpace({
-    "a": Boolean(),
-    "a__b": Choice([0, 1, False, "Test"]),
+    "a__test": Boolean(),
+    "a__lr": Choice([0, 1, False, "Test"]),
     "a__b__c": PriorityChoice([0, 1, False, "Test"]),
     "a__b__q": Quantized(Uniform(-10, 10)),
-    "d": RandInt(-10, 10),
+    "d__param": RandInt(-10, 10),
     "d__u": Uniform(-10, 10),
-    "e": LogUniform(0.001, 10),
-    "e__f": Normal(0.0, 1.0),
+    "e__other": LogUniform(0.001, 10),
+    "e__alpha": Normal(0.0, 1.0),
     "e__f__g": LogNormal(0.0, 2.0),
-    "other_nondistribution_params": "hey",
-    "could_also_be_as_fixed": FixedHyperparameter("heyyy"),
-    "its_over_nein_thousands": 9000
+    "p__other_nondistribution_params": "hey",
+    "p__could_also_be_as_fixed": FixedHyperparameter("also hey"),
+    "p__its_over_9k": 9001
 })
 
 
@@ -86,25 +104,26 @@ HYPE_SPACE = HyperparameterSpace({
     "to_nested_dict_as_ordered_dict_primitive"])
 def test_hyperparams_space_round_robin(to_nested_dict_func_name, to_flat_func_name):
     orig_space = copy.deepcopy(HYPE_SPACE)
+    print(orig_space.keys())
 
     nestened = HyperparameterSpace(getattr(
         orig_space,
         to_nested_dict_func_name
     )())
+    print(nestened)
     flattened = HyperparameterSpace(getattr(
         nestened,
         to_flat_func_name
     )())
 
-    print(orig_space.to_flat_as_dict_primitive().keys())
-    print(flattened.to_flat_as_dict_primitive().keys())
+    print(flattened.keys())
     assert flattened.to_flat_as_dict_primitive() == orig_space.to_flat_as_dict_primitive()
 
 
 def test_hyperparams_space_rvs_outputs_samples():
-    space = copy.deepcopy(HYPE_SPACE).to_nested_dict()
+    space = copy.deepcopy(HYPE_SPACE).to_flat()
 
-    samples = space.to_nested_dict().rvs().to_flat()
+    samples = space.rvs()
 
     assert isinstance(samples, HyperparameterSamples)
     assert len(samples) == len(space)
