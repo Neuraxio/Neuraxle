@@ -50,6 +50,14 @@ class FeatureUnion(TruncableSteps):
         results = self.joiner.transform(results)
         return results
 
+    def reverse(self) -> 'BaseStep':
+        """
+        A feature union is not reversed when reverse is called.
+
+        :return: self.
+        """
+        return self
+
 
 class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
     """A pipeline step that has no effect at all but to return the same data without changes.

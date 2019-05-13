@@ -14,10 +14,10 @@
 
 from copy import copy
 
-from neuraxle.base import BaseStep, PipelineRunner, TruncableSteps, BaseBarrier, NamedTupleList
+from neuraxle.base import BaseStep, BasePipelineRunner, TruncableSteps, BaseBarrier, NamedTupleList
 
 
-class BlockPipelineRunner(PipelineRunner):
+class BlockPipelineRunner(BasePipelineRunner):
 
     def fit_transform(self, data_inputs, expected_outputs=None):
         for step_name, step in self.steps_as_tuple:
@@ -48,7 +48,7 @@ class DataObject:
             return hash((self.i, self.x))
 
 
-class ResumablePipelineRunner(PipelineRunner):
+class ResumablePipelineRunner(BasePipelineRunner):
 
     def fit_transform(self, data_inputs, expected_outputs=None):
         for step_name, step in self.steps_as_tuple[:-1]:
@@ -92,11 +92,11 @@ class Pipeline(TruncableSteps):
     def __init__(
             self,
             steps: NamedTupleList,
-            pipeline_runner: PipelineRunner = BlockPipelineRunner(),
+            pipeline_runner: BasePipelineRunner = BlockPipelineRunner(),
     ):
         BaseStep.__init__(self)
         TruncableSteps.__init__(self, steps)
-        self.pipeline_runner: PipelineRunner = pipeline_runner
+        self.pipeline_runner: BasePipelineRunner = pipeline_runner
 
     def fit(self, data_inputs, expected_outputs=None):
         self.pipeline_runner.set_steps(self.steps_as_tuple).fit(data_inputs, expected_outputs)
@@ -109,5 +109,9 @@ class Pipeline(TruncableSteps):
         return self.pipeline_runner.set_steps(self.steps_as_tuple).fit_transform(data_inputs, expected_outputs)
 
     def inverse_transform(self, processed_outputs):
+        if self.transform != self.inverse_transform:
+            raise BrokenPipeError("Don't call inverse_transform on a pipeline before having mutated it inversely or "
+                                  "before having called the `.reverse()` or `reversed(.)` on it.")
+
         reversed_steps_as_tuple = list(reversed(self.steps_as_tuple))
         return self.pipeline_runner.set_steps(reversed_steps_as_tuple).transform(processed_outputs)

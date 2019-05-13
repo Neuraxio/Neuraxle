@@ -3,14 +3,22 @@ Util Pipeline Steps
 ====================================
 You can find here misc. pipeline steps, for example, callbacks.
 """
-
+from abc import ABC
 from typing import List
 
-from neuraxle.base import BaseStep, NonFittableMixin
+from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin
 
 
-class CallbackStep(BaseStep):
-    def __init__(self, callback_function, more_arguments: List):
+class BaseCallbackStep(BaseStep, ABC):
+    """Base class for callback steps."""
+
+    def __init__(self, callback_function, more_arguments: List = tuple()):
+        """
+        Create the callback step with a function and extra arguments to send to the function
+
+        :param callback_function: The function that will be called on events.
+        :param more_arguments: Extra arguments that will be sent to the callback after the processed data (optional).
+        """
         super().__init__()
         self.callback_function = callback_function
         self.more_arguments = more_arguments
@@ -26,7 +34,8 @@ class CallbackStep(BaseStep):
         self.callback_function(data, *self.more_arguments)
 
 
-class FitCallbackStep(CallbackStep):
+class FitCallbackStep(NonTransformableMixin, BaseCallbackStep):
+    """Call a callback method on fit."""
 
     def fit(self, data_inputs, expected_outputs=None):
         """
@@ -53,7 +62,8 @@ class FitCallbackStep(CallbackStep):
         self._callback((data_input, expected_output))
 
 
-class TransformCallbackStep(NonFittableMixin, CallbackStep):
+class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
+    """Call a callback method on transform and inverse transform."""
 
     def transform(self, data_inputs):
         """

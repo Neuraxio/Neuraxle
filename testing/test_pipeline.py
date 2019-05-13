@@ -318,10 +318,8 @@ def test_pipeline_nested_mutate_inverse_transform_without_identities():
 
     p.fit_transform(np.ones((1, 1)))  # will add range(1, 8) to tape.
 
-    print("[mutating]")
-    p = p.mutate(new_method="inverse_transform", method_to_assign_to="transform")
-
-    p.transform(np.ones((1, 1)))  # will add reversed(range(1, 8)) to tape.
+    print("[mutating, inversing, and calling each inverse_transform]")
+    reversed(p).transform(np.ones((1, 1)))  # will add reversed(range(1, 8)) to tape, calling inverse_transforms.
 
     print(expected_tape)
     print(tape.get_name_tape())

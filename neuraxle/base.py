@@ -197,12 +197,34 @@ class BaseStep(ABC):
                 return self.p.fit_transform(**args)
 
             def inverse_transform(self, **args):
-                return self.p.inverse_transform(**args)
+                return self.p.reverse().transform(**args)
 
             def predict(self, **args):
                 return self.p.transform(**args)
 
         return NeuraxleToSKLearnPipelineWrapper(self)
+
+    def reverse(self) -> 'BaseStep':
+        """
+        The object will mutate itself such that the `.transform` method (and of all its underlying objects
+        if applicable) be replaced by the `.inverse_transform` method.
+
+        Note: the reverse may fail if there is a pending mutate that was set earlier with `.will_mutate_to`.
+
+        :return: a copy of self, reversed. Each contained object will also have been reversed if self is a pipeline.
+        """
+        return self.mutate(new_method="inverse_transform", method_to_assign_to="transform")
+
+    def __reversed__(self) -> 'BaseStep':
+        """
+        The object will mutate itself such that the `.transform` method (and of all its underlying objects
+        if applicable) be replaced by the `.inverse_transform` method.
+
+        Note: the reverse may fail if there is a pending mutate that was set earlier with `.will_mutate_to`.
+
+        :return: a copy of self, reversed. Each contained object will also have been reversed if self is a pipeline.
+        """
+        return self.reverse()
 
 
 class NonFittableMixin:
@@ -520,13 +542,13 @@ class BaseStreamingBarrier(BaseBarrier, ABC):
     pass
 
 
-class PipelineRunner(BaseStep, ABC):
+class BasePipelineRunner(BaseStep, ABC):
 
     def __init__(self, **pipeline_hyperparams):
         BaseStep.__init__(self, **pipeline_hyperparams)
         self.steps_as_tuple: NamedTupleList = None
 
-    def set_steps(self, steps_as_tuple: NamedTupleList) -> 'PipelineRunner':
+    def set_steps(self, steps_as_tuple: NamedTupleList) -> 'BasePipelineRunner':
         self.steps_as_tuple: NamedTupleList = steps_as_tuple
         return self
 
