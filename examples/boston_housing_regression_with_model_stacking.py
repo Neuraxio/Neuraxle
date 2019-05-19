@@ -21,7 +21,7 @@ from sklearn.utils import shuffle
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyTranspose, NumpyShapePrinter
 from neuraxle.steps.sklearn import SKLearnWrapper
-from neuraxle.union import AddFeatures, FeatureUnion, Identity
+from neuraxle.union import AddFeatures, ModelStacking
 
 boston = load_boston()
 X, y = shuffle(boston.data, boston.target, random_state=13)
@@ -35,16 +35,16 @@ p = Pipeline([
         SKLearnWrapper(FastICA(n_components=2)),
     ]),
     NumpyShapePrinter(),
-    FeatureUnion([
+    ModelStacking([
         SKLearnWrapper(GradientBoostingRegressor()),
         SKLearnWrapper(GradientBoostingRegressor(n_estimators=500)),
         SKLearnWrapper(GradientBoostingRegressor(max_depth=5)),
         SKLearnWrapper(KMeans()),
-    ], joiner=NumpyTranspose()),
+    ],
+        joiner=NumpyTranspose(),
+        judge=SKLearnWrapper(Ridge()),
+    ),
     NumpyShapePrinter(),
-    SKLearnWrapper(Ridge()),
-    NumpyShapePrinter(),
-    Identity()  # This step simply does nothing.
 ])
 
 print("Fitting on train:")

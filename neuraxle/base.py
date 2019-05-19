@@ -49,7 +49,13 @@ class BaseStep(ABC):
         return self.hyperparams_space
 
     def fit_transform(self, data_inputs, expected_outputs=None):
-        return self.fit(data_inputs, expected_outputs).transform(data_inputs)
+        self2 = self.fit(data_inputs, expected_outputs)
+        if id(self) != id(self2):
+            # dynamically replace self if self changed:
+            self.__dict__.update(self2.__dict__)
+        self = self2
+
+        return self.transform(data_inputs)
 
     def fit_transform_one(self, data_input, expected_output=None):
         return self.fit_one(data_input, expected_output).transform_one(data_input)
