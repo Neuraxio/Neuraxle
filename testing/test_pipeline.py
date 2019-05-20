@@ -11,23 +11,27 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import numpy as np
 import pytest
 
 from neuraxle.base import BaseStep
-from neuraxle.hyperparams.space import nested_dict_to_flat
+from neuraxle.hyperparams.distributions import RandInt, LogUniform
+from neuraxle.hyperparams.space import nested_dict_to_flat, HyperparameterSpace
 from neuraxle.pipeline import Pipeline, BlockPipelineRunner
+from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
-from neuraxle.union import Identity
+from neuraxle.union import Identity, AddFeatures, ModelStacking
 
 AN_INPUT = "I am an input"
 AN_EXPECTED_OUTPUT = "I am an expected output"
 
 
 class SomeStep(BaseStep):
-    def get_hyperparams_space(self):
-        return dict()
+
+    def __init__(self, hyperparams_space: HyperparameterSpace = None):
+        super().__init__(None, hyperparams_space)
 
     def fit_one(self, data_input, expected_output=None):
         return self
@@ -324,3 +328,36 @@ def test_pipeline_nested_mutate_inverse_transform_without_identities():
     print(expected_tape)
     print(tape.get_name_tape())
     assert expected_tape == tape.get_name_tape()
+
+
+def test_hyperparam_space():
+    p = Pipeline([
+        AddFeatures([
+            SomeStep(hyperparams_space=HyperparameterSpace({"n_components": RandInt(1, 5)})),
+            SomeStep(hyperparams_space=HyperparameterSpace({"n_components": RandInt(1, 5)}))
+        ]),
+        ModelStacking([
+            SomeStep(hyperparams_space=HyperparameterSpace({"n_estimators": RandInt(1, 1000)})),
+            SomeStep(hyperparams_space=HyperparameterSpace({"n_estimators": RandInt(1, 1000)})),
+            SomeStep(hyperparams_space=HyperparameterSpace({"max_depth": RandInt(1, 100)})),
+            SomeStep(hyperparams_space=HyperparameterSpace({"max_depth": RandInt(1, 100)}))
+        ],
+            joiner=NumpyTranspose(),
+            judge=SomeStep(hyperparams_space=HyperparameterSpace({"alpha": LogUniform(0.1, 10.0)}))
+        )
+    ])
+
+    rvsed = p.get_hyperparams_space()
+    p.set_hyperparams(rvsed)
+
+    hyperparams = p.get_hyperparams()
+
+    assert "AddFeatures" in hyperparams.keys()
+    assert "SomeStep" in hyperparams["AddFeatures"]
+    assert "n_components" in hyperparams["AddFeatures"]["SomeStep"]
+    assert "SomeStep1" in hyperparams["AddFeatures"]
+    assert "n_components" in hyperparams["AddFeatures"]["SomeStep1"]
+    assert "SomeStep" in hyperparams["ModelStacking"]
+    assert "n_estimators" in hyperparams["ModelStacking"]["SomeStep"]
+    assert "SomeStep1" in hyperparams["ModelStacking"]
+    assert "max_depth" in hyperparams["ModelStacking"]["SomeStep2"]

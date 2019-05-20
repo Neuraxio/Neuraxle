@@ -45,7 +45,7 @@ class BaseStep(ABC):
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace):
         self.hyperparams_space = hyperparams_space
 
-    def get_hyperparams_space(self) -> HyperparameterSpace:
+    def get_hyperparams_space(self, flat=False) -> HyperparameterSpace:
         return self.hyperparams_space
 
     def fit_transform(self, data_inputs, expected_outputs=None):
@@ -77,6 +77,26 @@ class BaseStep(ABC):
 
     def predict(self, data_input):
         return self.transform(data_input)
+
+    def meta_fit(self, X_train, y_train, metastep: 'MetaStepMixin'):
+        """
+        Uses a meta optimization technique (AutoML) to find the best hyperparameters in the given
+        hyperparameter space.
+
+        Usage: `p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
+            n_iter=10, scoring_function=r2_score, higher_score_is_better=True))`
+
+        Call `.mutate(new_method="inverse_transform", method_to_assign_to="transform")`, and the
+        current estimator will become
+
+        :param X_train: data_inputs.
+        :param y_train: expected_outputs.
+        :param metastep: a metastep, that is, a step that can sift through the hyperparameter space of another estimator.
+        :return: your best self.
+        """
+        metastep.set_step(self).fit(X_train, y_train)
+        best_step = metastep.get_best_model()
+        return best_step
 
     def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
         """
@@ -233,6 +253,17 @@ class BaseStep(ABC):
         return self.reverse()
 
 
+class MetaStepMixin:
+    """A class to represent a meta step which is used to optimize another step."""
+
+    def set_step(self, step: BaseStep) -> BaseStep:
+        self.step = step
+        return self
+
+    def get_best_model(self) -> BaseStep:
+        return self.best_model
+
+
 class NonFittableMixin:
     """A pipeline step that requires no fitting: fitting just returns self when called to do no action.
 
@@ -361,7 +392,7 @@ class TruncableSteps(BaseStep, ABC):
 
         for k, v in self.steps.items():
             hparams = v.get_hyperparams()  # TODO: oop diamond problem?
-            if hasattr(v, "hyparparams"):
+            if hasattr(v, "hyperparams"):
                 hparams.update(v.hyperparams)
             if len(hparams) > 0:
                 ret[k] = hparams
@@ -382,7 +413,7 @@ class TruncableSteps(BaseStep, ABC):
         self.hyperparams = remainders
 
     def set_hyperparams_space(self, hyperparams_space: Union[HyperparameterSpace, OrderedDict, dict]):
-        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space)
+        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
 
         remainders = dict()
         for name, hparams in hyperparams_space.items():
@@ -395,12 +426,17 @@ class TruncableSteps(BaseStep, ABC):
     def get_hyperparams_space(self, flat=False):
         all_hyperparams = HyperparameterSpace()
         for step_name, step in self.steps_as_tuple:
-            all_hyperparams.update(
-                step.get_hyperparams_space(flat=flat)
-            )
+            hspace = step.get_hyperparams_space(flat=flat)
+            all_hyperparams.update({
+                step_name: hspace
+            })
         all_hyperparams.update(
             super().get_hyperparams_space()
         )
+        if flat:
+            all_hyperparams = all_hyperparams.to_flat()
+        else:
+            all_hyperparams = all_hyperparams.to_nested_dict()
         return all_hyperparams
 
     def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':

@@ -51,8 +51,14 @@ print("Fitting on train:")
 p.fit(X_train, y_train)
 print("")
 
-print("Transforming test:")
+print("Transforming train and test:")
+y_train_predicted = p.transform(X_train)
 y_test_predicted = p.transform(X_test)
+print("")
+
+print("Evaluating transformed train:")
+score = r2_score(y_train_predicted , y_train)
+print('R2 regression score:', score)
 print("")
 
 print("Evaluating transformed test:")

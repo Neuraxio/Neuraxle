@@ -28,7 +28,7 @@ class FeatureUnion(TruncableSteps):
         :param backend: The type of parallelization to do with `joblib.Parallel`. Possible values: "loky", "multiprocessing", "threading", "dask" if you use dask, and more.
         """
         super().__init__(steps_as_tuple)
-        self.joiner = joiner  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class.
+        self.joiner = joiner  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
         self.n_jobs = n_jobs
         self.backend = backend
 
@@ -124,7 +124,7 @@ class ModelStacking(FeatureUnion):
         :param kwargs: Other arguments to send to `FeatureUnion`.
         """
         super().__init__(steps_as_tuple, **kwargs)
-        self.judge: BaseStep = judge
+        self.judge: BaseStep = judge  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
 
     def fit(self, data_inputs, expected_outputs=None):
         """
