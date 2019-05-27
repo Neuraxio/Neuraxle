@@ -32,18 +32,22 @@ class BaseStep(ABC):
             hyperparams = dict()
         if hyperparams_space is None:
             hyperparams_space = dict()
+
         self.hyperparams: HyperparameterSamples = hyperparams
         self.hyperparams_space: HyperparameterSpace = hyperparams_space
+
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
 
-    def set_hyperparams(self, hyperparams: HyperparameterSamples):
-        self.hyperparams = hyperparams
+    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
+        self.hyperparams = HyperparameterSamples(hyperparams)
+        return self
 
     def get_hyperparams(self) -> HyperparameterSamples:
         return self.hyperparams
 
-    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace):
-        self.hyperparams_space = hyperparams_space
+    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
+        self.hyperparams_space = HyperparameterSpace(hyperparams_space)
+        return self
 
     def get_hyperparams_space(self, flat=False) -> HyperparameterSpace:
         return self.hyperparams_space
@@ -183,7 +187,7 @@ class BaseStep(ABC):
 
         return self
 
-    def fit_one(self, data_input, expected_output=None):
+    def fit_one(self, data_input, expected_output=None) -> 'BaseStep':
         # return self
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
@@ -401,7 +405,7 @@ class TruncableSteps(BaseStep, ABC):
             ret = HyperparameterSamples(ret)
         return ret
 
-    def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]):
+    def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
         hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
 
         remainders = dict()
@@ -412,7 +416,9 @@ class TruncableSteps(BaseStep, ABC):
                 remainders[name] = hparams
         self.hyperparams = remainders
 
-    def set_hyperparams_space(self, hyperparams_space: Union[HyperparameterSpace, OrderedDict, dict]):
+        return self
+
+    def set_hyperparams_space(self, hyperparams_space: Union[HyperparameterSpace, OrderedDict, dict]) -> BaseStep:
         hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
 
         remainders = dict()
@@ -422,6 +428,8 @@ class TruncableSteps(BaseStep, ABC):
             else:
                 remainders[name] = hparams
         self.hyperparams = remainders
+
+        return self
 
     def get_hyperparams_space(self, flat=False):
         all_hyperparams = HyperparameterSpace()
@@ -580,7 +588,7 @@ class BaseBlockBarrier(BaseBarrier, ABC):
 
 
 class BaseStreamingBarrier(BaseBarrier, ABC):
-    # TODO: a block barrier forces using the "_one" functions past that barrier.
+    # TODO: a streaming barrier forces using the "_one" functions past that barrier.
     pass
 
 

@@ -15,7 +15,8 @@ class FeatureUnion(TruncableSteps):
 
     def __init__(
             self,
-            steps_as_tuple: NamedTupleList, joiner: NonFittableMixin = NumpyConcatenateInnerFeatures(),
+            steps_as_tuple: NamedTupleList,
+            joiner: NonFittableMixin = NumpyConcatenateInnerFeatures(),
             n_jobs: int = None,
             backend: str = "threading"
     ):

@@ -7,6 +7,19 @@ This example solves a regression problem using a pipeline with the following ste
 - The model stacking using a ridge regression.
 This example also prints the shapes of the objects between the pipeline elements.
 """
+# Copyright 2019, The Neuraxle Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import numpy as np
 from sklearn.cluster import KMeans
@@ -20,7 +33,7 @@ from sklearn.utils import shuffle
 
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyTranspose, NumpyShapePrinter
-from neuraxle.steps.sklearn import SKLearnWrapper
+from neuraxle.steps.sklearn import SKLearnWrapper, RidgeModelStacking
 from neuraxle.union import AddFeatures, ModelStacking
 
 boston = load_boston()
@@ -35,15 +48,12 @@ p = Pipeline([
         SKLearnWrapper(FastICA(n_components=2)),
     ]),
     NumpyShapePrinter(),
-    ModelStacking([
+    RidgeModelStacking([
         SKLearnWrapper(GradientBoostingRegressor()),
         SKLearnWrapper(GradientBoostingRegressor(n_estimators=500)),
         SKLearnWrapper(GradientBoostingRegressor(max_depth=5)),
         SKLearnWrapper(KMeans()),
-    ],
-        joiner=NumpyTranspose(),
-        judge=SKLearnWrapper(Ridge()),
-    ),
+    ]),
     NumpyShapePrinter(),
 ])
 

@@ -31,9 +31,13 @@ class RandomSearch(MetaStepMixin, BaseStep):
             generated_outputs = step.fit_transform(data_inputs, expected_outputs)
             score = self.scoring_function(generated_outputs, expected_outputs)
 
-            if not started or score > self.score:
+            if not started or score > self.score:  # TODO: use `self.higher_score_is_better`.
                 started = True
                 self.score = score
                 self.best_model = step
 
         return self
+
+    def transform(self, data_inputs):
+        # TODO: check this again to be sure.
+        return self.best_model.transform(data_inputs)

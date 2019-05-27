@@ -2,7 +2,8 @@ from sklearn.base import BaseEstimator
 from sklearn.linear_model import Ridge
 
 from neuraxle.base import BaseStep
-from neuraxle.hyperparams.space import HyperparameterSpace
+from neuraxle.hyperparams.distributions import LogUniform, Boolean
+from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.union import ModelStacking
 
@@ -11,13 +12,13 @@ class SKLearnWrapper(BaseStep):
     def __init__(
             self,
             wrapped_sklearn_predictor,
-            hyperparams_space: HyperparameterSpace=None,
+            hyperparams_space: HyperparameterSpace = None,
             return_all_sklearn_default_params_on_get=False
     ):
         if not isinstance(wrapped_sklearn_predictor, BaseEstimator):
             raise ValueError("The wrapped_sklearn_predictor must be an instance of scikit-learn's BaseEstimator.")
         self.wrapped_sklearn_predictor = wrapped_sklearn_predictor
-        params = wrapped_sklearn_predictor.get_params()
+        params: HyperparameterSamples = wrapped_sklearn_predictor.get_params()
         super().__init__(params, hyperparams_space)
         self.return_all_sklearn_default_params_on_get = return_all_sklearn_default_params_on_get
 
@@ -30,9 +31,10 @@ class SKLearnWrapper(BaseStep):
             return self.wrapped_sklearn_predictor.predict(data_inputs)
         return self.wrapped_sklearn_predictor.transform(data_inputs)
 
-    def set_hyperparams(self, flat_hyperparams: dict):
+    def set_hyperparams(self, flat_hyperparams: dict) -> BaseStep:
         super().set_hyperparams(flat_hyperparams)
         self.wrapped_sklearn_predictor.set_params(**flat_hyperparams)
+        return self
 
     def get_hyperparams(self):
         if self.return_all_sklearn_default_params_on_get:
@@ -53,4 +55,11 @@ class SKLearnWrapper(BaseStep):
 
 class RidgeModelStacking(ModelStacking):
     def __init__(self, brothers):
-        super().__init__(brothers, SKLearnWrapper(Ridge()), NumpyTranspose())
+        super().__init__(
+            brothers,
+            SKLearnWrapper(
+                Ridge(),
+                HyperparameterSpace({"alpha": LogUniform(0.1, 10.0), "fit_intercept": Boolean()})
+            ),
+            joiner=NumpyTranspose()
+        )
