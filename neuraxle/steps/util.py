@@ -183,7 +183,7 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
         self.step: List[BaseStep] = [copy.deepcopy(self.step) for _ in range(len(data_inputs))]
 
         # Fit them all.
-        self.step = [self.step[i].fit(di) for i, di in enumerate(data_inputs)]
+        self.step = [self.step[i].fit(di, eo) for i, (di, eo) in enumerate(zip(data_inputs, expected_outputs))]
 
         return self
 
