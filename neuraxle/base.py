@@ -259,9 +259,10 @@ class BaseStep(ABC):
 
 class MetaStepMixin:
     """A class to represent a meta step which is used to optimize another step."""
+    # TODO: how to set_params on contained step?
 
     def set_step(self, step: BaseStep) -> BaseStep:
-        self.step = step
+        self.step: BaseStep = step
         return self
 
     def get_best_model(self) -> BaseStep:

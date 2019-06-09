@@ -3,10 +3,11 @@ Util Pipeline Steps
 ====================================
 You can find here misc. pipeline steps, for example, callbacks.
 """
+import copy
 from abc import ABC
 from typing import List
 
-from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin
+from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, MetaStepMixin
 
 
 class BaseCallbackStep(BaseStep, ABC):
@@ -168,3 +169,30 @@ class TapeCallbackFunction:
         :return: The list of names.
         """
         return self.name_tape
+
+
+class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
+    def __init__(self, wrapped: BaseStep):
+        # TODO: set params on wrapped.
+        BaseStep.__init__(self)
+        MetaStepMixin.__init__(self)
+        self.set_step(wrapped)
+
+    def fit(self, data_inputs: List, expected_outputs: List = None) -> BaseStep:
+        # One copy of step per data input:
+        self.step: List[BaseStep] = [copy.deepcopy(self.step) for _ in range(len(data_inputs))]
+
+        # Fit them all.
+        self.step = [self.step[i].fit(di, eo) for i, (di, eo) in enumerate(zip(data_inputs, expected_outputs))]
+
+        return self
+
+    def transform(self, data_inputs: List) -> List:
+        # As many data inputs than we have cloned steps: each transforms the one it has.
+        assert len(data_inputs) <= len(self.step), "Can't have more data_inputs than cloned steps to process them."
+
+        return [self.step[i].transform(di) for i, di in enumerate(data_inputs)]
+
+
+class DataShuffler:
+    pass  # TODO.
