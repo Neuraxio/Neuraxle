@@ -22,7 +22,7 @@ class SKLearnWrapper(BaseStep):
         super().__init__(params, hyperparams_space)
         self.return_all_sklearn_default_params_on_get = return_all_sklearn_default_params_on_get
 
-    def fit(self, data_inputs, expected_outputs=None):
+    def fit(self, data_inputs, expected_outputs=None) -> 'SKLearnWrapper':
         self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs, expected_outputs)
         return self
 

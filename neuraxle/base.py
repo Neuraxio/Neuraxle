@@ -16,7 +16,7 @@ import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Any
 
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
@@ -52,18 +52,15 @@ class BaseStep(ABC):
     def get_hyperparams_space(self, flat=False) -> HyperparameterSpace:
         return self.hyperparams_space
 
-    def fit_transform(self, data_inputs, expected_outputs=None):
-        # TODO: two return types involves no self2.
-        self2 = self.fit(data_inputs, expected_outputs)
-        if id(self) != id(self2):
-            # dynamically replace self if self changed:
-            self.__dict__.update(self2.__dict__)
-        self = self2
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+        new_self = self.fit(data_inputs, expected_outputs)
+        out = new_self.transform(data_inputs)
+        return new_self, out
 
-        return self.transform(data_inputs)
-
-    def fit_transform_one(self, data_input, expected_output=None):
-        return self.fit_one(data_input, expected_output).transform_one(data_input)
+    def fit_transform_one(self, data_input, expected_output=None) -> ('BaseStep', Any):
+        new_self = self.fit_one(data_input, expected_output)
+        out = new_self.transform_one(data_input)
+        return new_self, out
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
         if expected_outputs is None:
@@ -202,14 +199,15 @@ class BaseStep(ABC):
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
     def tosklearn(self) -> 'NeuraxleToSKLearnPipelineWrapper':
-        from sklearn.base import BaseEstimator as be
+        from sklearn.base import BaseEstimator
 
-        class NeuraxleToSKLearnPipelineWrapper(be):
+        class NeuraxleToSKLearnPipelineWrapper(BaseEstimator):
             def __init__(self, neuraxle_step):
                 self.p: Union[BaseStep, TruncableSteps] = neuraxle_step
 
-            def set_params(self, **params):
+            def set_params(self, **params) -> BaseEstimator:
                 self.p.set_hyperparams(HyperparameterSpace(params))
+                return self
 
             def get_params(self, deep=True):
                 neuraxle_params = HyperparameterSamples(self.p.get_hyperparams()).to_flat_as_dict_primitive()
@@ -219,15 +217,17 @@ class BaseStep(ABC):
                 neuraxle_params = HyperparameterSpace(self.p.get_hyperparams_space()).to_flat_as_dict_primitive()
                 return neuraxle_params
 
-            def fit(self, **args):
+            def fit(self, **args) -> BaseEstimator:
                 self.p = self.p.fit(**args)
                 return self
 
             def transform(self, **args):
                 return self.p.transform(**args)
 
-            def fit_transform(self, **args):
-                return self.p.fit_transform(**args)  # TODO: two return values.
+            def fit_transform(self, **args) -> Any:
+                self.p, out = self.p.fit_transform(**args)
+                # Careful: 1 return value.
+                return out
 
             def inverse_transform(self, **args):
                 return self.p.reverse().transform(**args)
@@ -291,7 +291,7 @@ class NonFittableMixin:
 
     Note: fit methods are not implemented"""
 
-    def fit(self, data_inputs, expected_outputs=None):
+    def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
         """
         Don't fit.
 
@@ -301,7 +301,7 @@ class NonFittableMixin:
         """
         return self
 
-    def fit_one(self, data_input, expected_output=None):
+    def fit_one(self, data_input, expected_output=None) -> 'NonFittableMixin':
         """
         Don't fit.
 
@@ -610,11 +610,11 @@ class BaseStreamingBarrier(BaseBarrier, ABC):
 class BasePipelineRunner(MetaStepsMixin, BaseStep, ABC):
 
     @abstractmethod
-    def fit_transform(self, data_inputs, expected_outputs=None):
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BasePipelineRunner', Any):
         pass
 
     @abstractmethod
-    def fit(self, data_inputs, expected_outputs=None):
+    def fit(self, data_inputs, expected_outputs=None) -> 'BasePipelineRunner':
         pass
 
     @abstractmethod

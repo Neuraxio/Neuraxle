@@ -38,7 +38,7 @@ class BaseCallbackStep(BaseStep, ABC):
 class FitCallbackStep(NonTransformableMixin, BaseCallbackStep):
     """Call a callback method on fit."""
 
-    def fit(self, data_inputs, expected_outputs=None):
+    def fit(self, data_inputs, expected_outputs=None) -> 'FitCallbackStep':
         """
         Will call the self._callback() with the data being processed and the extra arguments specified.
         Note that here, the data to process is packed into a tuple of (data_inputs, expected_outputs).
@@ -50,7 +50,7 @@ class FitCallbackStep(NonTransformableMixin, BaseCallbackStep):
         """
         self._callback((data_inputs, expected_outputs))
 
-    def fit_one(self, data_input, expected_output=None):
+    def fit_one(self, data_input, expected_output=None) -> 'FitCallbackStep':
         """
         Will call the self._callback() with the data being processed and the extra arguments specified.
         Note that here, the data to process is packed into a tuple of (data_input, expected_output).
@@ -178,29 +178,29 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self)
         self.set_step(wrapped)
+        self.steps: List[BaseStep] = []
 
-    def fit(self, data_inputs: List, expected_outputs: List = None) -> BaseStep:
+    def fit(self, data_inputs: List, expected_outputs: List = None) -> 'StepClonerForEachDataInput':
         # One copy of step per data input:
-        self.step: List[BaseStep] = [copy.deepcopy(self.step) for _ in range(len(data_inputs))]
+        self.steps = [copy.deepcopy(self.step) for _ in range(len(data_inputs))]
 
         # Fit them all.
-        self.step = [self.step[i].fit(di, eo) for i, (di, eo) in enumerate(zip(data_inputs, expected_outputs))]
+        self.steps = [self.steps[i].fit(di, eo) for i, (di, eo) in enumerate(zip(data_inputs, expected_outputs))]
 
         return self
 
     def transform(self, data_inputs: List) -> List:
         # As many data inputs than we have cloned steps: each transforms the one it has.
-        assert len(data_inputs) <= len(self.step), "Can't have more data_inputs than cloned steps to process them."
+        assert len(data_inputs) <= len(self.steps), "Can't have more data_inputs than cloned steps to process them."
 
-        return [self.step[i].transform(di) for i, di in enumerate(data_inputs)]
+        return [self.steps[i].transform(di) for i, di in enumerate(data_inputs)]
 
     def inverse_transform(self, data_output):
         # As many data outputs than we have cloned steps: each transforms the one it has.
-        assert len(data_output) <= len(self.step), "Can't have more data_outputs than cloned steps to process them."
+        assert len(data_output) <= len(self.steps), "Can't have more data_outputs than cloned steps to process them."
 
-        return [self.step[i].inverse_transform(di) for i, di in enumerate(data_output)]
+        return [self.steps[i].inverse_transform(di) for i, di in enumerate(data_output)]
 
 
 class DataShuffler:
     pass  # TODO.
-

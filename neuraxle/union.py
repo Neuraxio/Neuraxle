@@ -33,7 +33,7 @@ class FeatureUnion(TruncableSteps):
         self.n_jobs = n_jobs
         self.backend = backend
 
-    def fit(self, data_inputs, expected_outputs=None):
+    def fit(self, data_inputs, expected_outputs=None) -> 'FeatureUnion':
         """
         Fit the parallel steps on the data. It will make use of some parallel processing.
 
@@ -127,7 +127,7 @@ class ModelStacking(FeatureUnion):
         super().__init__(steps_as_tuple, **kwargs)
         self.judge: BaseStep = judge  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
 
-    def fit(self, data_inputs, expected_outputs=None):
+    def fit(self, data_inputs, expected_outputs=None) -> 'ModelStacking':
         """
         Fit the parallel steps on the data. It will make use of some parallel processing.
         Also, fit the judge on the result of the parallel steps.
@@ -139,7 +139,7 @@ class ModelStacking(FeatureUnion):
         super().fit(data_inputs, expected_outputs)
         results = super().transform(data_inputs)
 
-        self.judge.fit(results, expected_outputs)
+        self.judge = self.judge.fit(results, expected_outputs)
         return self
 
     def transform(self, data_inputs):

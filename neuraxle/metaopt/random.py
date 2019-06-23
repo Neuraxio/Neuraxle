@@ -34,7 +34,7 @@ class BaseCrossValidation(MetaStepMixin, BaseStep, ABC):
         super().__init__()
         self.k_fold = k_fold
 
-    def fit(self, data_inputs, expected_outputs=None) -> BaseStep:
+    def fit(self, data_inputs, expected_outputs=None) -> 'BaseCrossValidation':
         # TODO: assert that set_step was called.
         data_inputs, expected_outputs = self.split(data_inputs, expected_outputs)
         self.step = StepClonerForEachDataInput(self.step)

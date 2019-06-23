@@ -33,7 +33,7 @@ class SomeStep(BaseStep):
     def __init__(self, hyperparams_space: HyperparameterSpace = None):
         super().__init__(None, hyperparams_space)
 
-    def fit_one(self, data_input, expected_output=None):
+    def fit_one(self, data_input, expected_output=None) -> 'SomeStep':
         return self
 
     def transform_one(self, data_input):
@@ -58,7 +58,7 @@ def test_pipeline_fit_transform(steps_list, pipeline_runner):
     expected_output_ = [AN_EXPECTED_OUTPUT]
     p = Pipeline(steps_list, pipeline_runner=pipeline_runner())
 
-    result = p.fit_transform(data_input_, expected_output_)
+    p, result = p.fit_transform(data_input_, expected_output_)
 
     assert tuple(result) == tuple(expected_output_)
 
@@ -258,7 +258,7 @@ def test_pipeline_simple_mutate_inverse_transform():
         Identity()
     ])
 
-    p.fit_transform(np.ones((1, 1)))
+    p, _ = p.fit_transform(np.ones((1, 1)))
 
     print("[mutating]")
     p = p.mutate(new_method="inverse_transform", method_to_assign_to="transform")
@@ -288,7 +288,7 @@ def test_pipeline_nested_mutate_inverse_transform():
         Identity()
     ])
 
-    p.fit_transform(np.ones((1, 1)))  # will add range(1, 8) to tape.
+    p, _ = p.fit_transform(np.ones((1, 1)))  # will add range(1, 8) to tape.
 
     print("[mutating]")
     p = p.mutate(new_method="inverse_transform", method_to_assign_to="transform")
@@ -320,7 +320,7 @@ def test_pipeline_nested_mutate_inverse_transform_without_identities():
         TransformCallbackStep(tape.callback, ["7"]),
     ])
 
-    p.fit_transform(np.ones((1, 1)))  # will add range(1, 8) to tape.
+    p, _ = p.fit_transform(np.ones((1, 1)))  # will add range(1, 8) to tape.
 
     print("[mutating, inversing, and calling each inverse_transform]")
     reversed(p).transform(np.ones((1, 1)))  # will add reversed(range(1, 8)) to tape, calling inverse_transforms.
