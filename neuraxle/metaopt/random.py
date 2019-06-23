@@ -2,7 +2,23 @@
 Random
 ====================================
 Meta steps for hyperparameter tuning, such as random search.
+
+..
+   Copyright 2019, The Neuraxle Authors
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
 """
+
 import copy
 from abc import ABC, abstractmethod
 from typing import List
@@ -11,7 +27,7 @@ from neuraxle.base import MetaStepMixin, BaseStep
 from neuraxle.steps.util import StepClonerForEachDataInput
 
 
-class BaseCrossValidation(MetaStepMixin, MetaStepMixin, BaseStep, ABC):
+class BaseCrossValidation(MetaStepMixin, BaseStep, ABC):
     # TODO: assert that set_step was called.
 
     def __init__(self, k_fold=3):
@@ -20,7 +36,7 @@ class BaseCrossValidation(MetaStepMixin, MetaStepMixin, BaseStep, ABC):
 
     def fit(self, data_inputs, expected_outputs=None) -> BaseStep:
         # TODO: assert that set_step was called.
-        data_inputs = self.split(data_inputs)
+        data_inputs, expected_outputs = self.split(data_inputs, expected_outputs)
         self.step = StepClonerForEachDataInput(self.step)
         self.step.fit(data_inputs, expected_outputs)
         return self
@@ -30,15 +46,39 @@ class BaseCrossValidation(MetaStepMixin, MetaStepMixin, BaseStep, ABC):
         return self.step.transform(data_inputs)
 
     @abstractmethod
-    def split(self, data_inputs) -> List:
+    def split(self, data_inputs, expected_outputs=None) -> List:
         # return a list if size k
         raise NotImplementedError("TODO")  # TODO.
 
 
 class KFoldCrossValidation(BaseCrossValidation):
 
-    def split(self, data_inputs) -> List:
-        raise NotImplementedError("TODO")  # TODO.
+    def split(self, data_inputs, expected_outputs=None) -> List:
+        splitted_data_inputs = self._split(data_inputs)
+        if expected_outputs is not None:
+            splitted_expected_outputs = self._split(expected_outputs)
+            return splitted_data_inputs, splitted_expected_outputs
+        return splitted_data_inputs
+
+    def _split(self, data_inputs):
+        splitted_data_inputs = []
+        step = len(data_inputs) / float(self.k_fold)
+        for i in range(self.k_fold):
+            a = int(step * i)
+            b = int(step * (i + 1))
+            if i >= self.k_fold - 1:
+                b = len(data_inputs)
+
+            slice = data_inputs[a:b]
+            splitted_data_inputs.append(slice)
+        print(len(data_inputs), [len(s) for s in splitted_data_inputs])
+        return splitted_data_inputs
+
+    def merge(self, data_inputs, expected_outputs=None):
+        if expected_outputs is None:
+            return sum(data_inputs, [])
+        else:
+            return sum(data_inputs, []), sum(expected_outputs, [])
 
 
 class RandomSearch(MetaStepMixin, BaseStep):
