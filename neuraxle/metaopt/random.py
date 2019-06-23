@@ -111,7 +111,7 @@ class RandomSearch(MetaStepMixin, BaseStep):
 
             step = copy.copy(self.cross_validation_technique).set_step(step)
 
-            generated_outputs = step.fit_transform(data_inputs, expected_outputs)
+            step, generated_outputs = step.fit_transform(data_inputs, expected_outputs)
             score = self.scoring_function(generated_outputs, expected_outputs)
 
             if not started or self.higher_score_is_better == (score > self.score):
