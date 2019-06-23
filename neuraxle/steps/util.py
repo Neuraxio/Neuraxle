@@ -194,6 +194,13 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
 
         return [self.step[i].transform(di) for i, di in enumerate(data_inputs)]
 
+    def inverse_transform(self, data_output):
+        # As many data outputs than we have cloned steps: each transforms the one it has.
+        assert len(data_output) <= len(self.step), "Can't have more data_outputs than cloned steps to process them."
+
+        return [self.step[i].inverse_transform(di) for i, di in enumerate(data_output)]
+
 
 class DataShuffler:
     pass  # TODO.
+
