@@ -1,29 +1,27 @@
 """
 Hyperparameter Dictionary Conversions
-====================================
+=====================================
 Ways to convert from a nested dictionary of hyperparameters to a flat dictionary, and vice versa.
 
 Here is a nested dictionary:
 
-```python
-{
-    "b": {
-        "a": {
-            "learning_rate": 7
-        },
-        "learning_rate": 9
+.. highlight:: python
+    {
+        "b": {
+            "a": {
+                "learning_rate": 7
+            },
+            "learning_rate": 9
+        }
     }
-}
-```
 
 Here is an equivalent flat dictionary for the previous nested one:
 
-```python
-{
-    "b.a.learning_rate": 7,
-    "b.learning_rate": 9
-}
-```
+.. highlight:: python
+    {
+        "b.a.learning_rate": 7,
+        "b.learning_rate": 9
+    }
 
 Notice that if you have a `SKLearnWrapper` on a sklearn Pipeline object, the hyperparameters past that point will use
 double underscores "__" as a separator rather than a dot in flat dictionaries, and in nested dictionaries the
@@ -40,6 +38,21 @@ recursively apply the changes to its contained HyperparameterSpace and to all it
 
 The HyperparameterSamples contains sampled hyperparameter, that is, a valued point in the possible space. This is
 ready to be sent to an instance of the pipeline to try and score it, for example.
+
+..
+    Copyright 2019, The Neuraxle Authors
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
 
 """
 
