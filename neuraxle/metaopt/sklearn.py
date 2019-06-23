@@ -9,7 +9,7 @@ class MetaSKLearnWrapper(MetaStepMixin, BaseStep):
         super().__init__()
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
-        self.wrapped_sklearn_metaestimator.fit(data_inputs, expected_outputs)
+        self.wrapped_sklearn_metaestimator = self.wrapped_sklearn_metaestimator.fit(data_inputs, expected_outputs)
         return self
 
     def transform(self, data_inputs):

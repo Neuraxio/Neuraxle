@@ -38,7 +38,7 @@ class BaseCrossValidation(MetaStepMixin, BaseStep, ABC):
         # TODO: assert that set_step was called.
         data_inputs, expected_outputs = self.split(data_inputs, expected_outputs)
         self.step = StepClonerForEachDataInput(self.step)
-        self.step.fit(data_inputs, expected_outputs)
+        self.step = self.step.fit(data_inputs, expected_outputs)
         return self
 
     def transform(self, data_inputs):

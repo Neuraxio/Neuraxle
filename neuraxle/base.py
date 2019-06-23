@@ -53,6 +53,7 @@ class BaseStep(ABC):
         return self.hyperparams_space
 
     def fit_transform(self, data_inputs, expected_outputs=None):
+        # TODO: two return types involves no self2.
         self2 = self.fit(data_inputs, expected_outputs)
         if id(self) != id(self2):
             # dynamically replace self if self changed:
@@ -98,7 +99,8 @@ class BaseStep(ABC):
         :param metastep: a metastep, that is, a step that can sift through the hyperparameter space of another estimator.
         :return: your best self.
         """
-        metastep.set_step(self).fit(X_train, y_train)
+        metastep.set_step(self)
+        metastep = metastep.fit(X_train, y_train)
         best_step = metastep.get_best_model()
         return best_step
 
@@ -166,13 +168,13 @@ class BaseStep(ABC):
             Identity().will_mutate_to(new_base_step=ClassifierThatWillBeUsedOnlyAfterThePretraining)
         )
         # Pre-train the pipeline
-        p.fit(X_pretrain, y=None)
+        p = p.fit(X_pretrain, y=None)
 
         # This will leave `SomePreprocessing()` untouched and will affect the two other steps.
-        p.mutate(new_method="transform", method_to_affect="transform")
+        p = p.mutate(new_method="transform", method_to_affect="transform")
 
         # Pre-train the pipeline
-        p.fit(X_train, y_train)  # Then fit the classifier and other new things
+        p = p.fit(X_train, y_train)  # Then fit the classifier and other new things
         ```
 
         :param new_base_step: if it is not None, upon calling `mutate`, the object it will mutate to will be this provided new_base_step.
@@ -218,13 +220,14 @@ class BaseStep(ABC):
                 return neuraxle_params
 
             def fit(self, **args):
-                return self.p.fit(**args)
+                self.p = self.p.fit(**args)
+                return self
 
             def transform(self, **args):
                 return self.p.transform(**args)
 
             def fit_transform(self, **args):
-                return self.p.fit_transform(**args)
+                return self.p.fit_transform(**args)  # TODO: two return values.
 
             def inverse_transform(self, **args):
                 return self.p.reverse().transform(**args)
@@ -259,6 +262,7 @@ class BaseStep(ABC):
 
 class MetaStepMixin:
     """A class to represent a meta step which is used to optimize another step."""
+
     # TODO: how to set_params on contained step?
 
     def set_step(self, step: BaseStep) -> BaseStep:
@@ -267,6 +271,19 @@ class MetaStepMixin:
 
     def get_best_model(self) -> BaseStep:
         return self.best_model
+
+
+NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
+
+
+class MetaStepsMixin:
+    def __init__(self, **pipeline_hyperparams):
+        BaseStep.__init__(self, **pipeline_hyperparams)
+        self.steps_as_tuple: NamedTupleList = None
+
+    def set_steps(self, steps_as_tuple: NamedTupleList) -> 'BasePipelineRunner':
+        self.steps_as_tuple: NamedTupleList = steps_as_tuple
+        return self
 
 
 class NonFittableMixin:
@@ -341,9 +358,6 @@ class NonTransformableMixin:
         :return: the `data_output`, unchanged.
         """
         return processed_output
-
-
-NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
 
 
 class TruncableSteps(BaseStep, ABC):
@@ -593,15 +607,7 @@ class BaseStreamingBarrier(BaseBarrier, ABC):
     pass
 
 
-class BasePipelineRunner(BaseStep, ABC):
-
-    def __init__(self, **pipeline_hyperparams):
-        BaseStep.__init__(self, **pipeline_hyperparams)
-        self.steps_as_tuple: NamedTupleList = None
-
-    def set_steps(self, steps_as_tuple: NamedTupleList) -> 'BasePipelineRunner':
-        self.steps_as_tuple: NamedTupleList = steps_as_tuple
-        return self
+class BasePipelineRunner(MetaStepsMixin, BaseStep, ABC):
 
     @abstractmethod
     def fit_transform(self, data_inputs, expected_outputs=None):

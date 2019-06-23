@@ -52,12 +52,14 @@ class ResumablePipelineRunner(BasePipelineRunner):
 
     def fit_transform(self, data_inputs, expected_outputs=None):
         for step_name, step in self.steps_as_tuple[:-1]:
+            # TODO: overwrite step's self return value on fitting.
             data_inputs = step.fit_transform(data_inputs, expected_outputs)
         processed_outputs = self.steps_as_tuple[-1][-1].fit_transform(data_inputs, expected_outputs)
         return processed_outputs
 
     def fit(self, data_inputs, expected_outputs=None):
         for step_name, step in self.steps_as_tuple[:-1]:
+            # TODO: overwrite step's self return value on fitting.
             data_inputs = step.fit_transform(data_inputs, expected_outputs)
         processed_outputs = self.steps_as_tuple[-1][-1].fit(data_inputs, expected_outputs)
         return processed_outputs
@@ -99,6 +101,7 @@ class Pipeline(TruncableSteps):
         self.pipeline_runner: BasePipelineRunner = pipeline_runner
 
     def fit(self, data_inputs, expected_outputs=None):
+        # TODO: overwrite steps?
         self.pipeline_runner.set_steps(self.steps_as_tuple).fit(data_inputs, expected_outputs)
         return self
 

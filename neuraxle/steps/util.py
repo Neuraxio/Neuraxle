@@ -174,6 +174,7 @@ class TapeCallbackFunction:
 class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
     def __init__(self, wrapped: BaseStep):
         # TODO: set params on wrapped.
+        # TODO: use MetaStep*s*Mixin (plural) and review.
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self)
         self.set_step(wrapped)

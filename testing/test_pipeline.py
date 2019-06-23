@@ -70,7 +70,7 @@ def test_pipeline_fit_then_transform(steps_list, pipeline_runner):
     expected_output_ = [AN_EXPECTED_OUTPUT]
     p = Pipeline(steps_list, pipeline_runner=pipeline_runner())
 
-    p.fit(data_input_, expected_output_)
+    p = p.fit(data_input_, expected_output_)
     result = p.transform(data_input_)
 
     assert tuple(result) == tuple(expected_output_)
