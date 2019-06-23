@@ -22,7 +22,7 @@ Tests for Util Steps
 import numpy as np
 
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.util import TapeCallbackFunction, TransformCallbackStep
+from neuraxle.steps.util import TapeCallbackFunction, TransformCallbackStep, StepClonerForEachDataInput, FitCallbackStep
 from neuraxle.union import Identity, AddFeatures
 
 
@@ -44,4 +44,18 @@ def test_tape_callback():
     ])
     p.fit_transform(np.ones((1, 1)))
 
-    assert expected_tape == tape.get_name_tape()
+    assert tape.get_name_tape() == expected_tape
+
+
+def test_step_cloner():
+    tape = TapeCallbackFunction()
+    data = [[1], [2], [3]]
+
+    sc = StepClonerForEachDataInput(FitCallbackStep(tape.callback, ["-"]))
+    sc.fit_transform(data, data)
+
+    print(tape)
+    print(tape.get_name_tape())
+    print(tape.get_data())
+    assert tape.get_data() == data
+    assert tape.get_name_tape() == ["-"] * 3

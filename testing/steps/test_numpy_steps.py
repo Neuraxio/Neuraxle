@@ -29,7 +29,7 @@ def test_flatten_datum():
 
     flat, received_data = flat.fit_transform(data)
 
-    assert (expected_data == received_data).all()
+    assert (received_data == expected_data).all()
 
 
 def test_concat_features():
@@ -41,8 +41,8 @@ def test_concat_features():
 
     concat, received_all_data = concat.fit_transform([data1, data2])
 
-    assert tuple(expected_all_data.shape) == tuple(received_all_data.shape)
-    assert (expected_all_data == received_all_data).all()
+    assert tuple(received_all_data.shape) == tuple(expected_all_data.shape)
+    assert (received_all_data == expected_all_data).all()
 
 
 def test_numpy_transpose():
@@ -52,7 +52,7 @@ def test_numpy_transpose():
 
     tr, received_data = tr.fit_transform(data)
 
-    assert (expected_data == received_data).all()
+    assert (received_data == expected_data).all()
 
 
 def test_numpy_shape_printer():

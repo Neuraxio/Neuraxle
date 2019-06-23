@@ -325,12 +325,6 @@ class NonTransformableMixin:
 
     Note: fit methods are not implemented"""
 
-    def __init__(self):
-        """
-        Create an Identity BaseStep that is also a NonFittableMixin (doesn't require fitting).
-        """
-        BaseStep.__init__(self)
-
     def transform(self, data_inputs):
         """
         Do nothing - return the same data.
