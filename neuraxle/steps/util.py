@@ -135,26 +135,26 @@ class TapeCallbackFunction:
 
     Example usage:
 
-    ```
-    expected_tape = ["1", "2", "3", "a", "b", "4"]
-    tape = TapeCallbackFunction()
+    .. highlight:: python
+        expected_tape = ["1", "2", "3", "a", "b", "4"]
+        tape = TapeCallbackFunction()
 
-    p = Pipeline([
-        Identity(),
-        TransformCallbackStep(tape.callback, ["1"]),
-        TransformCallbackStep(tape.callback, ["2"]),
-        TransformCallbackStep(tape.callback, ["3"]),
-        AddFeatures([
-            TransformCallbackStep(tape.callback, ["a"]),
-            TransformCallbackStep(tape.callback, ["b"]),
-        ]),
-        TransformCallbackStep(tape.callback, ["4"]),
-        Identity()
-    ])
-    p.fit_transform(np.ones((1, 1)))
+        p = Pipeline([
+            Identity(),
+            TransformCallbackStep(tape.callback, ["1"]),
+            TransformCallbackStep(tape.callback, ["2"]),
+            TransformCallbackStep(tape.callback, ["3"]),
+            AddFeatures([
+                TransformCallbackStep(tape.callback, ["a"]),
+                TransformCallbackStep(tape.callback, ["b"]),
+            ]),
+            TransformCallbackStep(tape.callback, ["4"]),
+            Identity()
+        ])
+        p.fit_transform(np.ones((1, 1)))
 
-    assert expected_tape == tape.get_name_tape()
-    ```
+        assert expected_tape == tape.get_name_tape()
+
     """
 
     def __init__(self):

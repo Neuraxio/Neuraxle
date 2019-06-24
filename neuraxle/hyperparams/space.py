@@ -23,17 +23,17 @@ Here is an equivalent flat dictionary for the previous nested one:
         "b.learning_rate": 9
     }
 
-Notice that if you have a `SKLearnWrapper` on a sklearn Pipeline object, the hyperparameters past that point will use
-double underscores "__" as a separator rather than a dot in flat dictionaries, and in nested dictionaries the
+Notice that if you have a ``SKLearnWrapper`` on a sklearn Pipeline object, the hyperparameters past that point will use
+double underscores ``__`` as a separator rather than a dot in flat dictionaries, and in nested dictionaries the
 sklearn params will appear as a flat past the sklearn wrapper, which is fine.
 
 By default, hyperparameters are stored inside a HyperparameterSpace or inside a HyperparameterSamples object, which
 offers methods to do the conversions above, and also using ordered dicts (OrderedDict) to store parameters in-order.
 
-A HyperparameterSpace can be sampled by calling the `.rvs()` method on it, which will recursively call `.rvs()` on all
+A HyperparameterSpace can be sampled by calling the ``.rvs()`` method on it, which will recursively call ``.rvs()`` on all
 the HyperparameterSpace and HyperparameterDistribution that it contains. It will return a HyperparameterSamples object.
 A HyperparameterSpace can also be narrowed towards an better, finer subspace, which is itself a HyperparameterSpace.
-This can be done by calling the `.narrow_space_from_best_guess` method of the HyperparameterSpace which will also
+This can be done by calling the ``.narrow_space_from_best_guess`` method of the HyperparameterSpace which will also
 recursively apply the changes to its contained HyperparameterSpace and to all its contained HyperparameterDistribution.
 
 The HyperparameterSamples contains sampled hyperparameter, that is, a valued point in the possible space. This is
@@ -68,7 +68,7 @@ def nested_dict_to_flat(nested_hyperparams, dict_ctor=OrderedDict):
     Convert a nested hyperparameter dictionary to a flat one.
 
     :param nested_hyperparams: a nested hyperparameter dictionary.
-    :param dict_ctor: `OrderedDict` by default. Will use this as a class to create the new returned dict.
+    :param dict_ctor: ``OrderedDict`` by default. Will use this as a class to create the new returned dict.
     :return: a flat hyperparameter dictionary.
     """
     ret = dict_ctor()
@@ -87,7 +87,7 @@ def flat_to_nested_dict(flat_hyperparams, dict_ctor=OrderedDict):
     Convert a flat hyperparameter dictionary to a nested one.
 
     :param flat_hyperparams: a flat hyperparameter dictionary.
-    :param dict_ctor: `OrderedDict` by default. Will use this as a class to create the new returned dict.
+    :param dict_ctor: ``OrderedDict`` by default. Will use this as a class to create the new returned dict.
     :return: a nested hyperparameter dictionary.
     """
     pre_ret = dict_ctor()
@@ -108,9 +108,9 @@ def flat_to_nested_dict(flat_hyperparams, dict_ctor=OrderedDict):
 class HyperparameterSamples(OrderedDict):
     """Wraps an hyperparameter nested dict or flat dict, and offer a few more functions.
 
-    This can be set on a Pipeline with the method `set_hyperparams`.
+    This can be set on a Pipeline with the method ``set_hyperparams``.
 
-    HyperparameterSamples are often the result of calling `.rvs()` on an HyperparameterSpace."""
+    HyperparameterSamples are often the result of calling ``.rvs()`` on an HyperparameterSpace."""
 
     def to_flat(self) -> 'HyperparameterSamples':
         """
@@ -165,9 +165,9 @@ class HyperparameterSpace(HyperparameterSamples):
     """Wraps an hyperparameter nested dict or flat dict, and offer a few more functions to process
     all contained HyperparameterDistribution.
 
-    This can be set on a Pipeline with the method `set_hyperparams_space`.
+    This can be set on a Pipeline with the method ``set_hyperparams_space``.
 
-    Calling `.rvs()` on an HyperparameterSpace results in HyperparameterSamples."""
+    Calling ``.rvs()`` on an ``HyperparameterSpace`` results in ``HyperparameterSamples``."""
 
     def rvs(self) -> 'HyperparameterSpace':
         """

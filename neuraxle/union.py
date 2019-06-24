@@ -40,9 +40,9 @@ class FeatureUnion(TruncableSteps):
         Create a feature union.
 
         :param steps_as_tuple: the NamedTupleList of steps to process in parallel and to join.
-        :param joiner: What will be used to join the features. For example, `NumpyConcatenateInnerFeatures()`.
-        :param n_jobs: The number of jobs for the parallelized `joblib.Parallel` loop in fit and in transform.
-        :param backend: The type of parallelization to do with `joblib.Parallel`. Possible values: "loky", "multiprocessing", "threading", "dask" if you use dask, and more.
+        :param joiner: What will be used to join the features. For example, ``NumpyConcatenateInnerFeatures()``.
+        :param n_jobs: The number of jobs for the parallelized ``joblib.Parallel`` loop in fit and in transform.
+        :param backend: The type of parallelization to do with ``joblib.Parallel``. Possible values: "loky", "multiprocessing", "threading", "dask" if you use dask, and more.
         """
         super().__init__(steps_as_tuple)
         self.joiner = joiner  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
@@ -103,8 +103,8 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
 
     This can be useful to concatenate new features to existing features, such as what AddFeatures do.
 
-    Identity inherits from `NonTransformableMixin` and from `NonFittableMixin` which makes it a class that has no effect
-    in the pipeline: it doesn't require fitting, and at transform-time, it returns the same data it received.
+    Identity inherits from ``NonTransformableMixin`` and from ``NonFittableMixin`` which makes it a class that has no
+    effect in the pipeline: it doesn't require fitting, and at transform-time, it returns the same data it received.
     """
     pass  # Multi-class inheritance does the job here! See inside those other classes for more info.
 
@@ -114,17 +114,17 @@ class AddFeatures(FeatureUnion):
 
     def __init__(self, steps_as_tuple: NamedTupleList, **kwargs):
         """
-        Create a `FeatureUnion` where `Identity` is the first step so as to also keep
+        Create a ``FeatureUnion`` where ``Identity`` is the first step so as to also keep
         the inputs to concatenate them to the outputs.
 
-        :param steps_as_tuple: The steps to be sent to the `FeatureUnion`. `Identity()` is prepended.
-        :param kwargs: Other arguments to send to `FeatureUnion`.
+        :param steps_as_tuple: The steps to be sent to the ``FeatureUnion``. ``Identity()`` is prepended.
+        :param kwargs: Other arguments to send to ``FeatureUnion``.
         """
         super().__init__([Identity()] + steps_as_tuple, **kwargs)
 
 
 class ModelStacking(FeatureUnion):
-    """Performs a `FeatureUnion` of steps, and then send the joined result to the above judge step."""
+    """Performs a ``FeatureUnion`` of steps, and then send the joined result to the above judge step."""
 
     def __init__(
             self,
@@ -138,7 +138,7 @@ class ModelStacking(FeatureUnion):
 
         :param steps_as_tuple: the NamedTupleList of steps to process in parallel and to join.
         :param judge: a BaseStep that will learn to judge the best answer and who to trust out of every parallel steps.
-        :param kwargs: Other arguments to send to `FeatureUnion`.
+        :param kwargs: Other arguments to send to ``FeatureUnion``.
         """
         super().__init__(steps_as_tuple, **kwargs)
         self.judge: BaseStep = judge  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.

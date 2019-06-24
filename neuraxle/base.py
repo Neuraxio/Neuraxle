@@ -93,10 +93,10 @@ class BaseStep(ABC):
         Uses a meta optimization technique (AutoML) to find the best hyperparameters in the given
         hyperparameter space.
 
-        Usage: `p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
-            n_iter=10, scoring_function=r2_score, higher_score_is_better=True))`
+        Usage: ``p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
+            n_iter=10, scoring_function=r2_score, higher_score_is_better=True))``
 
-        Call `.mutate(new_method="inverse_transform", method_to_assign_to="transform")`, and the
+        Call ``.mutate(new_method="inverse_transform", method_to_assign_to="transform")``, and the
         current estimator will become
 
         :param X_train: data_inputs.
@@ -112,15 +112,15 @@ class BaseStep(ABC):
     def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
         """
         Replace the "method_to_assign_to" method by the "new_method" method, IF the present object has no pending calls to
-        `.will_mutate_to()` waiting to be applied. If there is a pending call, the pending call will override the
+        ``.will_mutate_to()`` waiting to be applied. If there is a pending call, the pending call will override the
         methods specified in the present call. If the change fails (such as if the new_method doesn't exist), then
-        a warning is printed (optional). By default, there is no pending `will_mutate_to` call.
+        a warning is printed (optional). By default, there is no pending ``will_mutate_to`` call.
 
-        This could for example be useful within a pipeline to apply `inverse_transform` to every pipeline steps, or
-        to assign `predict_probas` to `predict`, or to assign "inverse_transform" to "transform" to a reversed pipeline.
+        This could for example be useful within a pipeline to apply ``inverse_transform`` to every pipeline steps, or
+        to assign ``predict_probas`` to ``predict``, or to assign "inverse_transform" to "transform" to a reversed pipeline.
 
-        :param new_method: the method to replace transform with, if there is no pending `will_mutate_to` call.
-        :param method_to_assign_to: the method to which the new method will be assigned to, if there is no pending `will_mutate_to` call.
+        :param new_method: the method to replace transform with, if there is no pending ``will_mutate_to`` call.
+        :param method_to_assign_to: the method to which the new method will be assigned to, if there is no pending ``will_mutate_to`` call.
         :param warn: (verbose) wheter or not to warn about the inexistence of the method.
         :return: self, a copy of self, or even perhaps a new or different BaseStep object.
         """
@@ -156,35 +156,34 @@ class BaseStep(ABC):
             self, new_base_step: 'BaseStep' = None, new_method: str = None, method_to_assign_to: str = None
     ) -> 'BaseStep':
         """
-        This will change the behavior of `self.mutate(<...>)` such that when mutating, it will return the
-        presently provided new_base_step BaseStep (can be left to None for self), and the `.mutate` method
-        will also apply the `new_method` and the  `method_to_affect`, if they are not None, and after changing
+        This will change the behavior of ``self.mutate(<...>)`` such that when mutating, it will return the
+        presently provided new_base_step BaseStep (can be left to None for self), and the ``.mutate`` method
+        will also apply the ``new_method`` and the  ``method_to_affect``, if they are not None, and after changing
         the object to new_base_step.
 
         This can be useful if your pipeline requires unsupervised pretraining. For example:
 
-        ```
-        X_pretrain = ...
-        X_train = ...
+        .. highlight:: python
+            X_pretrain = ...
+            X_train = ...
 
-        p = Pipeline(
-            SomePreprocessing(),
-            SomePretrainingStep().will_mutate_to(new_base_step=SomeStepThatWillUseThePretrainingStep),
-            Identity().will_mutate_to(new_base_step=ClassifierThatWillBeUsedOnlyAfterThePretraining)
-        )
-        # Pre-train the pipeline
-        p = p.fit(X_pretrain, y=None)
+            p = Pipeline(
+                SomePreprocessing(),
+                SomePretrainingStep().will_mutate_to(new_base_step=SomeStepThatWillUseThePretrainingStep),
+                Identity().will_mutate_to(new_base_step=ClassifierThatWillBeUsedOnlyAfterThePretraining)
+            )
+            # Pre-train the pipeline
+            p = p.fit(X_pretrain, y=None)
 
-        # This will leave `SomePreprocessing()` untouched and will affect the two other steps.
-        p = p.mutate(new_method="transform", method_to_affect="transform")
+            # This will leave `SomePreprocessing()` untouched and will affect the two other steps.
+            p = p.mutate(new_method="transform", method_to_affect="transform")
 
-        # Pre-train the pipeline
-        p = p.fit(X_train, y_train)  # Then fit the classifier and other new things
-        ```
+            # Pre-train the pipeline
+            p = p.fit(X_train, y_train)  # Then fit the classifier and other new things
 
-        :param new_base_step: if it is not None, upon calling `mutate`, the object it will mutate to will be this provided new_base_step.
-        :param method_to_assign_to: if it is not None, upon calling `mutate`, the method_to_affect will be the one that is used on the provided new_base_step.
-        :param new_method: if it is not None, upon calling `mutate`, the new_method will be the one that is used on the provided new_base_step.
+        :param new_base_step: if it is not None, upon calling ``mutate``, the object it will mutate to will be this provided new_base_step.
+        :param method_to_assign_to: if it is not None, upon calling ``mutate``, the method_to_affect will be the one that is used on the provided new_base_step.
+        :param new_method: if it is not None, upon calling ``mutate``, the new_method will be the one that is used on the provided new_base_step.
         :return: self
         """
         if new_method is None or method_to_assign_to is None:
@@ -247,10 +246,10 @@ class BaseStep(ABC):
 
     def reverse(self) -> 'BaseStep':
         """
-        The object will mutate itself such that the `.transform` method (and of all its underlying objects
-        if applicable) be replaced by the `.inverse_transform` method.
+        The object will mutate itself such that the ``.transform`` method (and of all its underlying objects
+        if applicable) be replaced by the ``.inverse_transform`` method.
 
-        Note: the reverse may fail if there is a pending mutate that was set earlier with `.will_mutate_to`.
+        Note: the reverse may fail if there is a pending mutate that was set earlier with ``.will_mutate_to``.
 
         :return: a copy of self, reversed. Each contained object will also have been reversed if self is a pipeline.
         """
@@ -258,10 +257,10 @@ class BaseStep(ABC):
 
     def __reversed__(self) -> 'BaseStep':
         """
-        The object will mutate itself such that the `.transform` method (and of all its underlying objects
-        if applicable) be replaced by the `.inverse_transform` method.
+        The object will mutate itself such that the ``.transform`` method (and of all its underlying objects
+        if applicable) be replaced by the ``.inverse_transform`` method.
 
-        Note: the reverse may fail if there is a pending mutate that was set earlier with `.will_mutate_to`.
+        Note: the reverse may fail if there is a pending mutate that was set earlier with ``.will_mutate_to``.
 
         :return: a copy of self, reversed. Each contained object will also have been reversed if self is a pipeline.
         """
@@ -330,7 +329,7 @@ class NonTransformableMixin:
         Do nothing - return the same data.
 
         :param data_inputs: the data to process
-        :return: the `data_inputs`, unchanged.
+        :return: the ``data_inputs``, unchanged.
         """
         return data_inputs
 
@@ -339,7 +338,7 @@ class NonTransformableMixin:
         Do nothing - return the same data.
 
         :param data_input: the data to process
-        :return: the `data_input`, unchanged.
+        :return: the ``data_input``, unchanged.
         """
         return data_input
 
@@ -348,7 +347,7 @@ class NonTransformableMixin:
         Do nothing - return the same data.
 
         :param processed_outputs: the data to process
-        :return: the `processed_outputs`, unchanged.
+        :return: the ``processed_outputs``, unchanged.
         """
         return processed_outputs
 
@@ -357,7 +356,7 @@ class NonTransformableMixin:
         Do nothing - return the same data.
 
         :param processed_output: the data to process
-        :return: the `data_output`, unchanged.
+        :return: the ``data_output``, unchanged.
         """
         return processed_output
 
@@ -403,8 +402,8 @@ class TruncableSteps(BaseStep, ABC):
 
     def _refresh_steps(self):
         """
-        Private method to refresh inner state after having edited `self.steps_as_tuple`
-        (recreate `self.steps` from `self.steps_as_tuple`).
+        Private method to refresh inner state after having edited ``self.steps_as_tuple``
+        (recreate ``self.steps`` from ``self.steps_as_tuple``).
         """
         self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
 
@@ -570,7 +569,7 @@ class TruncableSteps(BaseStep, ABC):
 
     def __contains__(self, item):
         """
-        Check wheter the `item` key or value (or key value tuple pair) is found in self.
+        Check wheter the ``item`` key or value (or key value tuple pair) is found in self.
 
         :param item: The key or value to check if is in self's keys or values.
         :return: True or False
