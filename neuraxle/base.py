@@ -163,7 +163,8 @@ class BaseStep(ABC):
 
         This can be useful if your pipeline requires unsupervised pretraining. For example:
 
-        .. highlight:: python
+        .. code-block:: python
+
             X_pretrain = ...
             X_train = ...
 

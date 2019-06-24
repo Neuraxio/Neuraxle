@@ -136,6 +136,7 @@ class TapeCallbackFunction:
     Example usage:
 
     .. highlight:: python
+
         expected_tape = ["1", "2", "3", "a", "b", "4"]
         tape = TapeCallbackFunction()
 
