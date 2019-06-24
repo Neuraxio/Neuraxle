@@ -7,4 +7,5 @@ Neuraxle is a Machine Learning (ML) library for building neat pipelines, providi
 
 ## Contributors
 
-- Guillaume Chevalier: https://github.com/guillaume-chevalier
+- Guillaume Chevalier: [https://github.com/guillaume-chevalier](https://github.com/guillaume-chevalier)
+- Alexandre Brillant: [https://github.com/alexbrillant](https://github.com/alexbrillant)
