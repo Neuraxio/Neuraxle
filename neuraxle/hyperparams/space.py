@@ -5,7 +5,7 @@ Ways to convert from a nested dictionary of hyperparameters to a flat dictionary
 
 Here is a nested dictionary:
 
-.. highlight:: python
+.. code-block:: python
 
     {
         "b": {
@@ -18,10 +18,12 @@ Here is a nested dictionary:
 
 Here is an equivalent flat dictionary for the previous nested one:
 
->>> {
->>>     "b.a.learning_rate": 7,
->>>     "b.learning_rate": 9
->>> }
+.. code-block:: python
+
+    {
+        "b.a.learning_rate": 7,
+        "b.learning_rate": 9
+    }
 
 Notice that if you have a ``SKLearnWrapper`` on a sklearn Pipeline object, the hyperparameters past that point will use
 double underscores ``__`` as a separator rather than a dot in flat dictionaries, and in nested dictionaries the
