@@ -66,6 +66,7 @@ class FitCallbackStep(NonTransformableMixin, BaseCallbackStep):
         :return: self
         """
         self._callback((data_inputs, expected_outputs))
+        return self
 
     def fit_one(self, data_input, expected_output=None) -> 'FitCallbackStep':
         """
@@ -78,6 +79,7 @@ class FitCallbackStep(NonTransformableMixin, BaseCallbackStep):
         :return: self
         """
         self._callback((data_input, expected_output))
+        return self
 
 
 class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
@@ -160,7 +162,10 @@ class TapeCallbackFunction:
         self.data: List = []
         self.name_tape: List[str] = []
 
-    def callback(self, data, name: str):
+    def __call__(self, *args, **kwargs):
+        return self.callback(*args, **kwargs)
+
+    def callback(self, data, name: str = ""):
         """
         Will stick the data and name to the tape.
 
@@ -189,19 +194,22 @@ class TapeCallbackFunction:
 
 
 class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
-    def __init__(self, wrapped: BaseStep):
+    def __init__(self, wrapped: BaseStep, copy_op=copy.deepcopy):
         # TODO: set params on wrapped.
         # TODO: use MetaStep*s*Mixin (plural) and review.
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self)
         self.set_step(wrapped)
         self.steps: List[BaseStep] = []
+        self.copy_op = copy_op
 
     def fit(self, data_inputs: List, expected_outputs: List = None) -> 'StepClonerForEachDataInput':
         # One copy of step per data input:
-        self.steps = [copy.deepcopy(self.step) for _ in range(len(data_inputs))]
+        self.steps = [self.copy_op(self.step) for _ in range(len(data_inputs))]
 
         # Fit them all.
+        if expected_outputs is None:
+            expected_outputs = [None] * len(data_inputs)
         self.steps = [self.steps[i].fit(di, eo) for i, (di, eo) in enumerate(zip(data_inputs, expected_outputs))]
 
         return self

@@ -19,10 +19,12 @@ Tests for Util Steps
 
 """
 
+import copy
+
 import numpy as np
 
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.util import TapeCallbackFunction, TransformCallbackStep, StepClonerForEachDataInput, FitCallbackStep
+from neuraxle.steps.util import TapeCallbackFunction, TransformCallbackStep, StepClonerForEachDataInput
 from neuraxle.union import Identity, AddFeatures
 
 
@@ -51,8 +53,8 @@ def test_step_cloner():
     tape = TapeCallbackFunction()
     data = [[1], [2], [3]]
 
-    sc = StepClonerForEachDataInput(FitCallbackStep(tape.callback, ["-"]))
-    sc.fit_transform(data, data)
+    sc = StepClonerForEachDataInput(TransformCallbackStep(tape, ["-"]), copy_op=copy.copy)
+    sc.fit_transform(data)
 
     print(tape)
     print(tape.get_name_tape())
