@@ -5,7 +5,8 @@ Ways to convert from a nested dictionary of hyperparameters to a flat dictionary
 
 Here is a nested dictionary:
 
-.. highlight:: python
+.. code-block:: python
+
     {
         "b": {
             "a": {
@@ -17,7 +18,8 @@ Here is a nested dictionary:
 
 Here is an equivalent flat dictionary for the previous nested one:
 
-.. highlight:: python
+.. code-block:: python
+
     {
         "b.a.learning_rate": 7,
         "b.learning_rate": 9
