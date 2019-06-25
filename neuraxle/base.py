@@ -93,8 +93,7 @@ class BaseStep(ABC):
         Uses a meta optimization technique (AutoML) to find the best hyperparameters in the given
         hyperparameter space.
 
-        Usage: ``p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
-            n_iter=10, scoring_function=r2_score, higher_score_is_better=True))``
+        Usage: ``p = p.meta_fit(X_train, y_train, metastep=RandomSearch(n_iter=10, scoring_function=r2_score, higher_score_is_better=True))``
 
         Call ``.mutate(new_method="inverse_transform", method_to_assign_to="transform")``, and the
         current estimator will become
