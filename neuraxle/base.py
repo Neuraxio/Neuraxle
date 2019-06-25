@@ -1,22 +1,30 @@
-# Copyright 2019, The Neuraxle Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+"""
+Neuraxle's Base Classes
+====================================
+This is the core of Neuraxle. Most pipeline steps derive (inherit) from those classes. They are worth noticing.
+
+..
+    Copyright 2019, The Neuraxle Authors
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+"""
 
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Any
 
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
@@ -52,17 +60,15 @@ class BaseStep(ABC):
     def get_hyperparams_space(self, flat=False) -> HyperparameterSpace:
         return self.hyperparams_space
 
-    def fit_transform(self, data_inputs, expected_outputs=None):
-        self2 = self.fit(data_inputs, expected_outputs)
-        if id(self) != id(self2):
-            # dynamically replace self if self changed:
-            self.__dict__.update(self2.__dict__)
-        self = self2
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+        new_self = self.fit(data_inputs, expected_outputs)
+        out = new_self.transform(data_inputs)
+        return new_self, out
 
-        return self.transform(data_inputs)
-
-    def fit_transform_one(self, data_input, expected_output=None):
-        return self.fit_one(data_input, expected_output).transform_one(data_input)
+    def fit_transform_one(self, data_input, expected_output=None) -> ('BaseStep', Any):
+        new_self = self.fit_one(data_input, expected_output)
+        out = new_self.transform_one(data_input)
+        return new_self, out
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
         if expected_outputs is None:
@@ -87,10 +93,9 @@ class BaseStep(ABC):
         Uses a meta optimization technique (AutoML) to find the best hyperparameters in the given
         hyperparameter space.
 
-        Usage: `p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
-            n_iter=10, scoring_function=r2_score, higher_score_is_better=True))`
+        Usage: ``p = p.meta_fit(X_train, y_train, metastep=RandomSearch(n_iter=10, scoring_function=r2_score, higher_score_is_better=True))``
 
-        Call `.mutate(new_method="inverse_transform", method_to_assign_to="transform")`, and the
+        Call ``.mutate(new_method="inverse_transform", method_to_assign_to="transform")``, and the
         current estimator will become
 
         :param X_train: data_inputs.
@@ -98,22 +103,23 @@ class BaseStep(ABC):
         :param metastep: a metastep, that is, a step that can sift through the hyperparameter space of another estimator.
         :return: your best self.
         """
-        metastep.set_step(self).fit(X_train, y_train)
+        metastep.set_step(self)
+        metastep = metastep.fit(X_train, y_train)
         best_step = metastep.get_best_model()
         return best_step
 
     def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
         """
         Replace the "method_to_assign_to" method by the "new_method" method, IF the present object has no pending calls to
-        `.will_mutate_to()` waiting to be applied. If there is a pending call, the pending call will override the
+        ``.will_mutate_to()`` waiting to be applied. If there is a pending call, the pending call will override the
         methods specified in the present call. If the change fails (such as if the new_method doesn't exist), then
-        a warning is printed (optional). By default, there is no pending `will_mutate_to` call.
+        a warning is printed (optional). By default, there is no pending ``will_mutate_to`` call.
 
-        This could for example be useful within a pipeline to apply `inverse_transform` to every pipeline steps, or
-        to assign `predict_probas` to `predict`, or to assign "inverse_transform" to "transform" to a reversed pipeline.
+        This could for example be useful within a pipeline to apply ``inverse_transform`` to every pipeline steps, or
+        to assign ``predict_probas`` to ``predict``, or to assign "inverse_transform" to "transform" to a reversed pipeline.
 
-        :param new_method: the method to replace transform with, if there is no pending `will_mutate_to` call.
-        :param method_to_assign_to: the method to which the new method will be assigned to, if there is no pending `will_mutate_to` call.
+        :param new_method: the method to replace transform with, if there is no pending ``will_mutate_to`` call.
+        :param method_to_assign_to: the method to which the new method will be assigned to, if there is no pending ``will_mutate_to`` call.
         :param warn: (verbose) wheter or not to warn about the inexistence of the method.
         :return: self, a copy of self, or even perhaps a new or different BaseStep object.
         """
@@ -149,35 +155,35 @@ class BaseStep(ABC):
             self, new_base_step: 'BaseStep' = None, new_method: str = None, method_to_assign_to: str = None
     ) -> 'BaseStep':
         """
-        This will change the behavior of `self.mutate(<...>)` such that when mutating, it will return the
-        presently provided new_base_step BaseStep (can be left to None for self), and the `.mutate` method
-        will also apply the `new_method` and the  `method_to_affect`, if they are not None, and after changing
+        This will change the behavior of ``self.mutate(<...>)`` such that when mutating, it will return the
+        presently provided new_base_step BaseStep (can be left to None for self), and the ``.mutate`` method
+        will also apply the ``new_method`` and the  ``method_to_affect``, if they are not None, and after changing
         the object to new_base_step.
 
         This can be useful if your pipeline requires unsupervised pretraining. For example:
 
-        ```
-        X_pretrain = ...
-        X_train = ...
+        .. code-block:: python
 
-        p = Pipeline(
-            SomePreprocessing(),
-            SomePretrainingStep().will_mutate_to(new_base_step=SomeStepThatWillUseThePretrainingStep),
-            Identity().will_mutate_to(new_base_step=ClassifierThatWillBeUsedOnlyAfterThePretraining)
-        )
-        # Pre-train the pipeline
-        p.fit(X_pretrain, y=None)
+            X_pretrain = ...
+            X_train = ...
 
-        # This will leave `SomePreprocessing()` untouched and will affect the two other steps.
-        p.mutate(new_method="transform", method_to_affect="transform")
+            p = Pipeline(
+                SomePreprocessing(),
+                SomePretrainingStep().will_mutate_to(new_base_step=SomeStepThatWillUseThePretrainingStep),
+                Identity().will_mutate_to(new_base_step=ClassifierThatWillBeUsedOnlyAfterThePretraining)
+            )
+            # Pre-train the pipeline
+            p = p.fit(X_pretrain, y=None)
 
-        # Pre-train the pipeline
-        p.fit(X_train, y_train)  # Then fit the classifier and other new things
-        ```
+            # This will leave `SomePreprocessing()` untouched and will affect the two other steps.
+            p = p.mutate(new_method="transform", method_to_affect="transform")
 
-        :param new_base_step: if it is not None, upon calling `mutate`, the object it will mutate to will be this provided new_base_step.
-        :param method_to_assign_to: if it is not None, upon calling `mutate`, the method_to_affect will be the one that is used on the provided new_base_step.
-        :param new_method: if it is not None, upon calling `mutate`, the new_method will be the one that is used on the provided new_base_step.
+            # Pre-train the pipeline
+            p = p.fit(X_train, y_train)  # Then fit the classifier and other new things
+
+        :param new_base_step: if it is not None, upon calling ``mutate``, the object it will mutate to will be this provided new_base_step.
+        :param method_to_assign_to: if it is not None, upon calling ``mutate``, the method_to_affect will be the one that is used on the provided new_base_step.
+        :param new_method: if it is not None, upon calling ``mutate``, the new_method will be the one that is used on the provided new_base_step.
         :return: self
         """
         if new_method is None or method_to_assign_to is None:
@@ -200,14 +206,15 @@ class BaseStep(ABC):
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
     def tosklearn(self) -> 'NeuraxleToSKLearnPipelineWrapper':
-        from sklearn.base import BaseEstimator as be
+        from sklearn.base import BaseEstimator
 
-        class NeuraxleToSKLearnPipelineWrapper(be):
+        class NeuraxleToSKLearnPipelineWrapper(BaseEstimator):
             def __init__(self, neuraxle_step):
                 self.p: Union[BaseStep, TruncableSteps] = neuraxle_step
 
-            def set_params(self, **params):
+            def set_params(self, **params) -> BaseEstimator:
                 self.p.set_hyperparams(HyperparameterSpace(params))
+                return self
 
             def get_params(self, deep=True):
                 neuraxle_params = HyperparameterSamples(self.p.get_hyperparams()).to_flat_as_dict_primitive()
@@ -217,14 +224,17 @@ class BaseStep(ABC):
                 neuraxle_params = HyperparameterSpace(self.p.get_hyperparams_space()).to_flat_as_dict_primitive()
                 return neuraxle_params
 
-            def fit(self, **args):
-                return self.p.fit(**args)
+            def fit(self, **args) -> BaseEstimator:
+                self.p = self.p.fit(**args)
+                return self
 
             def transform(self, **args):
                 return self.p.transform(**args)
 
-            def fit_transform(self, **args):
-                return self.p.fit_transform(**args)
+            def fit_transform(self, **args) -> Any:
+                self.p, out = self.p.fit_transform(**args)
+                # Careful: 1 return value.
+                return out
 
             def inverse_transform(self, **args):
                 return self.p.reverse().transform(**args)
@@ -236,10 +246,10 @@ class BaseStep(ABC):
 
     def reverse(self) -> 'BaseStep':
         """
-        The object will mutate itself such that the `.transform` method (and of all its underlying objects
-        if applicable) be replaced by the `.inverse_transform` method.
+        The object will mutate itself such that the ``.transform`` method (and of all its underlying objects
+        if applicable) be replaced by the ``.inverse_transform`` method.
 
-        Note: the reverse may fail if there is a pending mutate that was set earlier with `.will_mutate_to`.
+        Note: the reverse may fail if there is a pending mutate that was set earlier with ``.will_mutate_to``.
 
         :return: a copy of self, reversed. Each contained object will also have been reversed if self is a pipeline.
         """
@@ -247,10 +257,10 @@ class BaseStep(ABC):
 
     def __reversed__(self) -> 'BaseStep':
         """
-        The object will mutate itself such that the `.transform` method (and of all its underlying objects
-        if applicable) be replaced by the `.inverse_transform` method.
+        The object will mutate itself such that the ``.transform`` method (and of all its underlying objects
+        if applicable) be replaced by the ``.inverse_transform`` method.
 
-        Note: the reverse may fail if there is a pending mutate that was set earlier with `.will_mutate_to`.
+        Note: the reverse may fail if there is a pending mutate that was set earlier with ``.will_mutate_to``.
 
         :return: a copy of self, reversed. Each contained object will also have been reversed if self is a pipeline.
         """
@@ -260,12 +270,27 @@ class BaseStep(ABC):
 class MetaStepMixin:
     """A class to represent a meta step which is used to optimize another step."""
 
+    # TODO: how to set_params on contained step?
+
     def set_step(self, step: BaseStep) -> BaseStep:
-        self.step = step
+        self.step: BaseStep = step
         return self
 
     def get_best_model(self) -> BaseStep:
         return self.best_model
+
+
+NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
+
+
+class MetaStepsMixin:
+    def __init__(self, **pipeline_hyperparams):
+        BaseStep.__init__(self, **pipeline_hyperparams)
+        self.steps_as_tuple: NamedTupleList = None
+
+    def set_steps(self, steps_as_tuple: NamedTupleList) -> 'BasePipelineRunner':
+        self.steps_as_tuple: NamedTupleList = steps_as_tuple
+        return self
 
 
 class NonFittableMixin:
@@ -273,7 +298,7 @@ class NonFittableMixin:
 
     Note: fit methods are not implemented"""
 
-    def fit(self, data_inputs, expected_outputs=None):
+    def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
         """
         Don't fit.
 
@@ -283,7 +308,7 @@ class NonFittableMixin:
         """
         return self
 
-    def fit_one(self, data_input, expected_output=None):
+    def fit_one(self, data_input, expected_output=None) -> 'NonFittableMixin':
         """
         Don't fit.
 
@@ -299,18 +324,12 @@ class NonTransformableMixin:
 
     Note: fit methods are not implemented"""
 
-    def __init__(self):
-        """
-        Create an Identity BaseStep that is also a NonFittableMixin (doesn't require fitting).
-        """
-        BaseStep.__init__(self)
-
     def transform(self, data_inputs):
         """
         Do nothing - return the same data.
 
         :param data_inputs: the data to process
-        :return: the `data_inputs`, unchanged.
+        :return: the ``data_inputs``, unchanged.
         """
         return data_inputs
 
@@ -319,7 +338,7 @@ class NonTransformableMixin:
         Do nothing - return the same data.
 
         :param data_input: the data to process
-        :return: the `data_input`, unchanged.
+        :return: the ``data_input``, unchanged.
         """
         return data_input
 
@@ -328,7 +347,7 @@ class NonTransformableMixin:
         Do nothing - return the same data.
 
         :param processed_outputs: the data to process
-        :return: the `processed_outputs`, unchanged.
+        :return: the ``processed_outputs``, unchanged.
         """
         return processed_outputs
 
@@ -337,12 +356,9 @@ class NonTransformableMixin:
         Do nothing - return the same data.
 
         :param processed_output: the data to process
-        :return: the `data_output`, unchanged.
+        :return: the ``data_output``, unchanged.
         """
         return processed_output
-
-
-NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
 
 
 class TruncableSteps(BaseStep, ABC):
@@ -386,8 +402,8 @@ class TruncableSteps(BaseStep, ABC):
 
     def _refresh_steps(self):
         """
-        Private method to refresh inner state after having edited `self.steps_as_tuple`
-        (recreate `self.steps` from `self.steps_as_tuple`).
+        Private method to refresh inner state after having edited ``self.steps_as_tuple``
+        (recreate ``self.steps`` from ``self.steps_as_tuple``).
         """
         self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
 
@@ -553,7 +569,7 @@ class TruncableSteps(BaseStep, ABC):
 
     def __contains__(self, item):
         """
-        Check wheter the `item` key or value (or key value tuple pair) is found in self.
+        Check wheter the ``item`` key or value (or key value tuple pair) is found in self.
 
         :param item: The key or value to check if is in self's keys or values.
         :return: True or False
@@ -592,22 +608,14 @@ class BaseStreamingBarrier(BaseBarrier, ABC):
     pass
 
 
-class BasePipelineRunner(BaseStep, ABC):
-
-    def __init__(self, **pipeline_hyperparams):
-        BaseStep.__init__(self, **pipeline_hyperparams)
-        self.steps_as_tuple: NamedTupleList = None
-
-    def set_steps(self, steps_as_tuple: NamedTupleList) -> 'BasePipelineRunner':
-        self.steps_as_tuple: NamedTupleList = steps_as_tuple
-        return self
+class BasePipelineRunner(MetaStepsMixin, BaseStep, ABC):
 
     @abstractmethod
-    def fit_transform(self, data_inputs, expected_outputs=None):
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BasePipelineRunner', Any):
         pass
 
     @abstractmethod
-    def fit(self, data_inputs, expected_outputs=None):
+    def fit(self, data_inputs, expected_outputs=None) -> 'BasePipelineRunner':
         pass
 
     @abstractmethod

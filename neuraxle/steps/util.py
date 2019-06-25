@@ -1,12 +1,30 @@
 """
 Util Pipeline Steps
 ====================================
-You can find here misc. pipeline steps, for example, callbacks.
+You can find here misc. pipeline steps, for example, callbacks useful for debugging, and a step cloner.
+
+..
+    Copyright 2019, The Neuraxle Authors
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
 """
+
+import copy
 from abc import ABC
 from typing import List
 
-from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin
+from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, MetaStepMixin
 
 
 class BaseCallbackStep(BaseStep, ABC):
@@ -37,7 +55,7 @@ class BaseCallbackStep(BaseStep, ABC):
 class FitCallbackStep(NonTransformableMixin, BaseCallbackStep):
     """Call a callback method on fit."""
 
-    def fit(self, data_inputs, expected_outputs=None):
+    def fit(self, data_inputs, expected_outputs=None) -> 'FitCallbackStep':
         """
         Will call the self._callback() with the data being processed and the extra arguments specified.
         Note that here, the data to process is packed into a tuple of (data_inputs, expected_outputs).
@@ -48,8 +66,9 @@ class FitCallbackStep(NonTransformableMixin, BaseCallbackStep):
         :return: self
         """
         self._callback((data_inputs, expected_outputs))
+        return self
 
-    def fit_one(self, data_input, expected_output=None):
+    def fit_one(self, data_input, expected_output=None) -> 'FitCallbackStep':
         """
         Will call the self._callback() with the data being processed and the extra arguments specified.
         Note that here, the data to process is packed into a tuple of (data_input, expected_output).
@@ -60,6 +79,7 @@ class FitCallbackStep(NonTransformableMixin, BaseCallbackStep):
         :return: self
         """
         self._callback((data_input, expected_output))
+        return self
 
 
 class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
@@ -115,26 +135,27 @@ class TapeCallbackFunction:
 
     Example usage:
 
-    ```
-    expected_tape = ["1", "2", "3", "a", "b", "4"]
-    tape = TapeCallbackFunction()
+    .. code-block:: python
 
-    p = Pipeline([
-        Identity(),
-        TransformCallbackStep(tape.callback, ["1"]),
-        TransformCallbackStep(tape.callback, ["2"]),
-        TransformCallbackStep(tape.callback, ["3"]),
-        AddFeatures([
-            TransformCallbackStep(tape.callback, ["a"]),
-            TransformCallbackStep(tape.callback, ["b"]),
-        ]),
-        TransformCallbackStep(tape.callback, ["4"]),
-        Identity()
-    ])
-    p.fit_transform(np.ones((1, 1)))
+        expected_tape = ["1", "2", "3", "a", "b", "4"]
+        tape = TapeCallbackFunction()
 
-    assert expected_tape == tape.get_name_tape()
-    ```
+        p = Pipeline([
+            Identity(),
+            TransformCallbackStep(tape.callback, ["1"]),
+            TransformCallbackStep(tape.callback, ["2"]),
+            TransformCallbackStep(tape.callback, ["3"]),
+            AddFeatures([
+                TransformCallbackStep(tape.callback, ["a"]),
+                TransformCallbackStep(tape.callback, ["b"]),
+            ]),
+            TransformCallbackStep(tape.callback, ["4"]),
+            Identity()
+        ])
+        p.fit_transform(np.ones((1, 1)))
+
+        assert expected_tape == tape.get_name_tape()
+
     """
 
     def __init__(self):
@@ -142,7 +163,10 @@ class TapeCallbackFunction:
         self.data: List = []
         self.name_tape: List[str] = []
 
-    def callback(self, data, name: str):
+    def __call__(self, *args, **kwargs):
+        return self.callback(*args, **kwargs)
+
+    def callback(self, data, name: str = ""):
         """
         Will stick the data and name to the tape.
 
@@ -168,3 +192,41 @@ class TapeCallbackFunction:
         :return: The list of names.
         """
         return self.name_tape
+
+
+class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
+    def __init__(self, wrapped: BaseStep, copy_op=copy.deepcopy):
+        # TODO: set params on wrapped.
+        # TODO: use MetaStep*s*Mixin (plural) and review.
+        BaseStep.__init__(self)
+        MetaStepMixin.__init__(self)
+        self.set_step(wrapped)
+        self.steps: List[BaseStep] = []
+        self.copy_op = copy_op
+
+    def fit(self, data_inputs: List, expected_outputs: List = None) -> 'StepClonerForEachDataInput':
+        # One copy of step per data input:
+        self.steps = [self.copy_op(self.step) for _ in range(len(data_inputs))]
+
+        # Fit them all.
+        if expected_outputs is None:
+            expected_outputs = [None] * len(data_inputs)
+        self.steps = [self.steps[i].fit(di, eo) for i, (di, eo) in enumerate(zip(data_inputs, expected_outputs))]
+
+        return self
+
+    def transform(self, data_inputs: List) -> List:
+        # As many data inputs than we have cloned steps: each transforms the one it has.
+        assert len(data_inputs) <= len(self.steps), "Can't have more data_inputs than cloned steps to process them."
+
+        return [self.steps[i].transform(di) for i, di in enumerate(data_inputs)]
+
+    def inverse_transform(self, data_output):
+        # As many data outputs than we have cloned steps: each transforms the one it has.
+        assert len(data_output) <= len(self.steps), "Can't have more data_outputs than cloned steps to process them."
+
+        return [self.steps[i].inverse_transform(di) for i, di in enumerate(data_output)]
+
+
+class DataShuffler:
+    pass  # TODO.
