@@ -92,23 +92,29 @@ p = Pipeline([
     )
 ])
 
-print("Meta-fitting on train:")
-p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
-    # TODO: cross-validation to avoid overfitting, or evaluate on validation set.
-    n_iter=15, scoring_function=r2_score, higher_score_is_better=True
-))
-print("")
 
-print("Transforming train and test:")
-y_train_predicted = p.transform(X_train)
-y_test_predicted = p.transform(X_test)
-print("")
+# TODO: finish cross-validation and add auto ml algorithms below.
 
-print("Evaluating transformed train:")
-score = r2_score(y_train_predicted, y_train)
-print('R2 regression score:', score)
-print("")
+def todo(p):
+    print("Meta-fitting on train:")
+    p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
+        n_iter=15, scoring_function=r2_score, higher_score_is_better=True
+    ))
+    print("")
 
-print("Evaluating transformed test:")
-score = r2_score(y_test_predicted, y_test)
-print('R2 regression score:', score)
+    print("Transforming train and test:")
+    y_train_predicted = p.transform(X_train)
+    y_test_predicted = p.transform(X_test)
+    print("")
+
+    print("Evaluating transformed train:")
+    score = r2_score(y_train_predicted, y_train)
+    print('R2 regression score:', score)
+    print("")
+
+    print("Evaluating transformed test:")
+    score = r2_score(y_test_predicted, y_test)
+    print('R2 regression score:', score)
+
+
+pass

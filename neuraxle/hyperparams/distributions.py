@@ -424,13 +424,13 @@ class LogUniform(HyperparameterDistribution):
         :param kept_space_ratio: what proportion of the space is kept. Default is to keep half the space (0.5).
         :return: a new HyperparameterDistribution that has been narrowed down.
         """
+        log2_best_guess = math.log2(best_guess)
         lost_space_ratio = 1.0 - kept_space_ratio
-        eps = sys.float_info.epsilon
-        new_min_included = max(self.log2_min_included * kept_space_ratio + best_guess * lost_space_ratio, eps)
-        new_max_included = self.log2_max_included * kept_space_ratio + best_guess * lost_space_ratio
+        new_min_included = self.log2_min_included * kept_space_ratio + log2_best_guess * lost_space_ratio
+        new_max_included = self.log2_max_included * kept_space_ratio + log2_best_guess * lost_space_ratio
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
             return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
-        return LogUniform(new_min_included, new_max_included).was_narrowed_from(kept_space_ratio, self)
+        return LogUniform(2 ** new_min_included, 2 ** new_max_included).was_narrowed_from(kept_space_ratio, self)
 
 
 class Normal(HyperparameterDistribution):
@@ -536,8 +536,9 @@ class LogNormal(HyperparameterDistribution):
         :param kept_space_ratio: what proportion of the space is kept. Default is to keep half the space (0.5).
         :return: a new HyperparameterDistribution that has been narrowed down.
         """
+        log2_best_guess = math.log2(best_guess)
         lost_space_ratio = 1.0 - kept_space_ratio
-        new_mean = self.log2_space_mean * kept_space_ratio + best_guess * lost_space_ratio
+        new_mean = self.log2_space_mean * kept_space_ratio + log2_best_guess * lost_space_ratio
         new_std = self.log2_space_std * kept_space_ratio
         if new_std <= 0.0:
             return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
