@@ -153,27 +153,12 @@ to accept http requests).
 Installation
 ------------
 
-Using ``python3`` for example:
+Simply do: 
 
 .. code:: bash
 
-    git clone https://github.com/Neuraxio/Neuraxle.git
-    cd Neuraxle
-    python3 setup.py install
+    pip install neuraxle
 
-If you need to add Neuraxle to a ``requirements.txt`` file, you can add
-a line as such, specifying the precise commit to download and install:
-
-::
-
-    -e git://github.com/Neuraxio/Neuraxle.git@771f5128039c6b9f4d4c38e05ab8116c94700038#egg=neuraxle
-
-If installing Neuraxle via a requirements.txt file as directly above, it
-is recommended to use a virtual environment because it will be installed
-in editable mode: thus deinstallation can be done only manually and as a
-consequence it's probably easier to just get rid of a virtualenv to
-uninstall Neuraxle. This limitation is temporary, and in the future
-Neuraxle will be easy to install and uninstall once fully published.
 
 Quickstart
 ----------
