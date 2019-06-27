@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
-with open('README.md') as _f:
-    _README_MD = _f.read()
+with open('README.rst') as _f:
+    _README = _f.read()
 
 _VERSION = '0.1.0'
 
@@ -10,7 +10,7 @@ setup(
     version=_VERSION,
     description='Neuraxle is a Machine Learning (ML) library for building neat pipelines, providing the right '
                 'abstractions to both ease research, development, and deployment of your ML applications.',
-    long_description=_README_MD,
+    long_description=_README,
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
