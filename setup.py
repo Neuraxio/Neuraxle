@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 with open('README.md') as _f:
     _README_MD = _f.read()
 
-_VERSION = '0.1'
+_VERSION = '0.1.0'
 
 setup(
     name='neuraxle',

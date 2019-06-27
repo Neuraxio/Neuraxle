@@ -95,7 +95,7 @@ p = Pipeline([
 
 # TODO: finish cross-validation and add auto ml algorithms below.
 
-def todo():
+def todo(p):
     print("Meta-fitting on train:")
     p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
         n_iter=15, scoring_function=r2_score, higher_score_is_better=True
