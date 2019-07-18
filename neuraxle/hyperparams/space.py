@@ -42,7 +42,7 @@ The HyperparameterSamples contains sampled hyperparameter, that is, a valued poi
 ready to be sent to an instance of the pipeline to try and score it, for example.
 
 ..
-    Copyright 2019, The Neuraxle Authors
+    Copyright 2019, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.

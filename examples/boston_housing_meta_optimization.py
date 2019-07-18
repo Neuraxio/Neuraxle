@@ -7,7 +7,7 @@ Not only a pipeline is defined, but also an hyperparameter space is defined for 
 performed to find the best possible combination of hyperparameters by sampling randomly in the hyperparameter space.
 
 ..
-    Copyright 2019, The Neuraxle Authors
+    Copyright 2019, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -96,7 +96,7 @@ print("Meta-fitting on train:")
 p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
     n_iter=10,
     higher_score_is_better=True,
-    validation_technique=KFoldCrossValidation(scoring_function=r2_score, k_fold=4)
+    validation_technique=KFoldCrossValidation(scoring_function=r2_score, k_fold=10)
 ))
 # Here is an alternative way to do it, more "pipeliney":
 # p = RandomSearch(
