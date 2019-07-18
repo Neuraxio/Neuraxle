@@ -4,7 +4,7 @@ Pipeline Steps Based on NumPy
 Those steps works with NumPy (np) arrays.
 
 ..
-    Copyright 2019, The Neuraxle Authors
+    Copyright 2019, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -50,6 +50,21 @@ class NumpyConcatenateInnerFeatures(NonFittableMixin, BaseStep):
 
     def _concat(self, data_inputs):
         return np.concatenate(data_inputs, axis=-1)
+
+
+class NumpyConcatenateOuterBatch(NonFittableMixin, BaseStep):
+    def __init__(self):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+
+    def transform(self, data_inputs):
+        return self._concat(data_inputs)
+
+    def transform_one(self, data_inputs):
+        return self._concat(data_inputs)
+
+    def _concat(self, data_inputs):
+        return np.concatenate(data_inputs, axis=0)
 
 
 class NumpyTranspose(NonFittableMixin, BaseStep):

@@ -4,7 +4,7 @@ Neuraxle's Pipeline Classes
 This is the core of Neuraxle's pipelines. You can chain steps to call them one after an other.
 
 ..
-    Copyright 2019, The Neuraxle Authors
+    Copyright 2019, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.

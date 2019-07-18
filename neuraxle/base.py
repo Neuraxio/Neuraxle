@@ -4,7 +4,7 @@ Neuraxle's Base Classes
 This is the core of Neuraxle. Most pipeline steps derive (inherit) from those classes. They are worth noticing.
 
 ..
-    Copyright 2019, The Neuraxle Authors
+    Copyright 2019, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
