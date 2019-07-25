@@ -187,10 +187,10 @@ class WalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
         for i in range(number_step):
             # first slice index is always 0 for walk forward cross validation
             a = 0
-            b = int((self.initial_window_number + i) * self.window_size) - 1
+            b = int((self.initial_window_number + i) * self.window_size)
 
-            if b > len(data_inputs):
-                b = len(data_inputs)
+            if b > data_inputs.shape[1]:
+                b = data_inputs.shape[1]
 
             # TODO: Do we need to add a slicer. Does the data always come as numpy array with time series in axis=1.
             slice = data_inputs[:, a:b]
@@ -205,8 +205,8 @@ class WalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
             a = int(validation_start + i * self.window_size)
             b = int(a + self.window_size)
 
-            if b > len(data_inputs):
-                b = len(data_inputs)
+            if b > data_inputs.shape[1]:
+                b = data_inputs.shape[1]
 
             # TODO: Do we need to add a slicer. Does the data always come as numpy array with time series in axis=1.
             slice = data_inputs[:, a:b]
