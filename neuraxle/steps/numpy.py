@@ -51,6 +51,19 @@ class NumpyConcatenateInnerFeatures(NonFittableMixin, BaseStep):
     def _concat(self, data_inputs):
         return np.concatenate(data_inputs, axis=-1)
 
+class NumpyConcatenateOnTimeStep(NonFittableMixin, BaseStep):
+    def __init__(self):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+
+    def transform(self, data_inputs):
+        return self._concat(data_inputs)
+
+    def transform_one(self, data_inputs):
+        return self._concat(data_inputs)
+
+    def _concat(self, data_inputs):
+        return np.concatenate(data_inputs, axis=1)
 
 class NumpyConcatenateOuterBatch(NonFittableMixin, BaseStep):
     def __init__(self):
