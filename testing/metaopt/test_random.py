@@ -23,14 +23,18 @@ from neuraxle.metaopt.random import WalkForwardTimeSeriesCrossValidation
 
 
 def test_walkforward_crossvalidation_split():
+    # Arrange
     # set random seed
     np.random.seed(10)
     data_inputs = np.random.randint(0, high=1, size=(7, 20, 2)).astype(np.float)
     expected_outputs = np.random.randint(0, high=1, size=(7, 20, 2)).astype(np.float)
     step = WalkForwardTimeSeriesCrossValidation(window_size=3, initial_window_number=3, window_delay_size=2)
+
+    # Act
     train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = \
         step.split(data_inputs, expected_outputs)
 
+    # Assert
     assert (len(train_data_inputs), len(train_expected_outputs),
             len(validation_data_inputs), len(validation_expected_outputs)
             ) == (3, 3, 3, 3)
