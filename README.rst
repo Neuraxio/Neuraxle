@@ -202,7 +202,7 @@ such:
 
     # Once it learned, the pipeline can process new and
     # unseen data for making predictions.
-    y_train_predicted = p.transform(X_train)
+    y_test_predicted = p.transform(X_test)
 
 Visit the
 `examples <https://www.neuraxle.neuraxio.com/stable/examples/index.html>`__
