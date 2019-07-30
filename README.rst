@@ -153,7 +153,7 @@ to accept http requests).
 Installation
 ------------
 
-Simply do: 
+Simply do:
 
 .. code:: bash
 
@@ -212,7 +212,7 @@ Community
 ---------
 
 Join our `Slack
-workspace <https://join.slack.com/t/neuraxio-open-source/shared_invite/enQtNjc0NzM1NTI5MTczLWUwZmI5NjhkMzRmYzc1MGE5ZTE0YWRkYWI3NWIzZjc1YTRlM2Y1MzRmYzFmM2FiNWNhNGZlZDhhMzkyMTQ1ZTQ>`__!
+workspace <https://join.slack.com/t/neuraxio-open-source/shared_invite/enQtNjc0NzM1NTI5MTczLWUwZmI5NjhkMzRmYzc1MGE5ZTE0YWRkYWI3NWIzZjc1YTRlM2Y1MzRmYzFmM2FiNWNhNGZlZDhhMzkyMTQ1ZTQ>`__ and our `Gitter <https://gitter.im/Neuraxle/community>`__!
 We <3 collaborators.
 
 For **technical questions**, we recommend posting them on
@@ -296,4 +296,3 @@ We thank these organisations for generously supporting the project:
 
 -  Neuraxio Inc.: https://github.com/Neuraxio
 -  Umanéo Technologies Inc.: https://umaneo.com
-
