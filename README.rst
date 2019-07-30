@@ -282,6 +282,18 @@ license <https://github.com/Neuraxio/Neuraxle/blob/master/LICENSE>`__.
 Contributors
 ~~~~~~~~~~~~
 
--  Neuraxio Inc.: https://github.com/Neuraxio
+Thanks to everyone who contributed to the project:
+
 -  Guillaume Chevalier: https://github.com/guillaume-chevalier
 -  Alexandre Brillant: https://github.com/alexbrillant
+-  Éric Hamel: https://github.com/Eric2Hamel
+-  Jérôme Blanchet: https://github.com/JeromeBlanchet
+
+Supported By
+~~~~~~~~~~~~
+
+We thank these organisations for generously supporting the project:
+
+-  Neuraxio Inc.: https://github.com/Neuraxio
+-  Umanéo Technologies Inc.: https://umaneo.com
+
