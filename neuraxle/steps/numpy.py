@@ -37,8 +37,9 @@ class NumpyFlattenDatum(NonFittableMixin, BaseStep):
         return data_inputs.flatten()
 
 
-class NumpyConcatenateInnerFeatures(NonFittableMixin, BaseStep):
-    def __init__(self):
+class NumpyConcatenateOnCustomAxis(NonFittableMixin, BaseStep):
+    def __init__(self, axis):
+        self.axis = axis
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
 
@@ -49,35 +50,16 @@ class NumpyConcatenateInnerFeatures(NonFittableMixin, BaseStep):
         return self._concat(data_inputs)
 
     def _concat(self, data_inputs):
-        return np.concatenate(data_inputs, axis=-1)
+        return np.concatenate(data_inputs, axis=self.axis)
 
-class NumpyConcatenateOnTimeStep(NonFittableMixin, BaseStep):
+class NumpyConcatenateInnerFeatures(NumpyConcatenateOnCustomAxis):
     def __init__(self):
-        BaseStep.__init__(self)
-        NonFittableMixin.__init__(self)
+        # The concatenate is on the inner features so axis = -1.
+        super().__init__(axis=-1)
 
-    def transform(self, data_inputs):
-        return self._concat(data_inputs)
-
-    def transform_one(self, data_inputs):
-        return self._concat(data_inputs)
-
-    def _concat(self, data_inputs):
-        return np.concatenate(data_inputs, axis=1)
-
-class NumpyConcatenateOuterBatch(NonFittableMixin, BaseStep):
+class NumpyConcatenateOuterBatch(NumpyConcatenateOnCustomAxis):
     def __init__(self):
-        BaseStep.__init__(self)
-        NonFittableMixin.__init__(self)
-
-    def transform(self, data_inputs):
-        return self._concat(data_inputs)
-
-    def transform_one(self, data_inputs):
-        return self._concat(data_inputs)
-
-    def _concat(self, data_inputs):
-        return np.concatenate(data_inputs, axis=0)
+        super().__init__(axis=0)
 
 
 class NumpyTranspose(NonFittableMixin, BaseStep):
