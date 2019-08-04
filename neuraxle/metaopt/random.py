@@ -125,16 +125,20 @@ class WalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
     where the start and end will increase in the same manner toward the end. Each validation split start after a certain
     time delay (if padding is set) after their corresponding training split.
 
-    Note: The time series supported by this cross validation is nd.array of shape = (batch, timeSeries, ...) .
+    The difference in start position between two consecutive validation split are equal to one `validation_window_size`.
+
+    Notes: The data supported by this cross validation is nd.array of shape = (batch, timeSeries, ...) .
     The array can have an arbitrary number of dimension, but the time series axis is currently limited to `axis=1`.
+    Recommended format for the data is an numpy array of shape [batch_size, total_time_steps, n_features].
 
     :param validation_window_size: the window size of each validation split and
         also the time step taken between each forward roll, by default 3.
-    :param minimum_training_size: the window size of training split by default None
-        If None : It takes the value `window_size`.
+    :param training_window_size: the window size of training split by default None.
+        If None : It takes the value `validation_window_size`.
     :param padding_between_training_and_validation: the size of the padding between the end of the training split
         and the start of the validation split, by default 0.
-    :param drop_remainder: if the last split should be drop if this does not coincide with a full window_size, by default False.
+    :param drop_remainder: drop the last split if the last validation split does not coincide
+        with a full validation_window_size, by default False.
     :param scoring_function: scoring function use to validate performance if it is not None, by default r2_score,
     :param joiner the joiner callable that can join the different result together.
     :return: WalkForwardTimeSeriesCrossValidation instance.
@@ -153,13 +157,15 @@ class WalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
     def split(self, data_inputs, expected_outputs):
         """
         Split the data into train inputs, train expected outputs, validation inputs, validation expected outputs.
-        Note: The data supported by this cross validation is nd.array of shape = (batch, timeSeries, ...) .
+
+        Notes: The data supported by this cross validation is nd.array of shape = (batch, timeSeries, ...) .
         The array can have an arbitrary number of dimension, but the time series axis is currently limited to `axis=1`.
+        Recommended format for the data is an numpy array of shape [batch_size, total_time_steps, n_features].
+
         :param data_inputs: data to perform walk forward cross validation into.
         :param expected_outputs: the expected target/label that will be used during walk forward cross validation.
         :return: train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
         """
-        # TODO: Verify that we need to split into training and validation or into inputs and expected_outputs.
         validation_data_inputs, validation_expected_outputs = self.validation_split(
             data_inputs, expected_outputs)
 
@@ -171,8 +177,11 @@ class WalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
     def train_split(self, data_inputs, expected_outputs=None) -> (List, List):
         """
         Split the data into train inputs, train expected outputs
-        Note: The data supported by this cross validation is nd.array of shape = (batch, timeSeries, ...) .
+
+        Notes: The data supported by this cross validation is nd.array of shape = (batch, timeSeries, ...) .
         The array can have an arbitrary number of dimension, but the time series axis is currently limited to `axis=1`.
+        Recommended format for the data is an numpy array of shape [batch_size, total_time_steps, n_features].
+
         :param data_inputs: data to perform walk forward cross validation into.
         :param expected_outputs: the expected target*label that will be used during walk forward cross validation.
         :return: train_data_inputs, train_expected_outputs
@@ -185,8 +194,11 @@ class WalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
     def validation_split(self, data_inputs, expected_outputs=None) -> List:
         """
         Split the data into validation inputs, validation expected outputs.
-        Note: The data supported by this cross validation is nd.array of shape = (batch, timeSeries, ...) .
+
+        Notes: The data supported by this cross validation is nd.array of shape = (batch, timeSeries, ...) .
         The array can have an arbitrary number of dimension, but the time series axis is currently limited to `axis=1`.
+        Recommended format for the data is an numpy array of shape [batch_size, total_time_steps, n_features].
+
         :param data_inputs: data to perform walk forward cross validation into.
         :param expected_outputs: the expected target*label that will be used during walk forward cross validation.
         :return: validation_data_inputs, validation_expected_outputs
@@ -209,7 +221,7 @@ class WalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
             if b > data_inputs.shape[1]:
                 b = data_inputs.shape[1]
 
-            # TODO: Do we need to add a slicer. Does the data always come as numpy array with time series in axis=1.
+            # TODO: The slicer could a inverse_transform of the joiner. A len method should also be defined.
             slice = data_inputs[:, a:b]
             splitted_data_inputs.append(slice)
         return splitted_data_inputs
@@ -224,7 +236,7 @@ class WalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
             if b > data_inputs.shape[1]:
                 b = data_inputs.shape[1]
 
-            # TODO: Do we need to add a slicer. Does the data always come as numpy array with time series in axis=1.
+            # TODO: The slicer could a inverse_transform of the joiner. A len method should also be defined.
             slice = data_inputs[:, a:b]
             splitted_data_inputs.append(slice)
         return splitted_data_inputs
@@ -248,25 +260,31 @@ class AnchoredWalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
     the end at each forward split. For the validation split it will start after a certain time delay (if padding is set)
     after their corresponding training split.
 
-    Note: The time series supported by this cross validation is nd.array of shape = (batch, timeSeries, ...) .
-    The array can have an arbitrary number of dimension, but the time series axis is currently limited to `axis=1`.
+    The size of the validation split is defined by `validation_window_size`.
+    The difference in start position between two consecutive validation split is also equal to `validation_window_size`.
 
-    :param window_size: the size of the time step taken between each forward roll, by default 3.
+    Notes: The data supported by this cross validation is nd.array of shape = (batch, timeSeries, ...) .
+    The array can have an arbitrary number of dimension, but the time series axis is currently limited to `axis=1`.
+    Recommended format for the data is an numpy array of shape [batch_size, total_time_steps, n_features].
+
+    :param validation_window_size: the size of the validation split and
+        the time step taken between each forward roll.
     :param minimum_training_size: the size of the smallest training split by default None
-        If None : It takes the value `window_size`.
+        If None : It takes the value `validation_window_size`.
     :param padding_between_training_and_validation: the size of the padding between the end of the training split
         and the start of the validation split, by default 0.
-    :param drop_remainder: if the last split should be drop if this does not coincide with a full window_size, by default False.
+    :param drop_remainder: drop the last split if the last validation split does not coincide
+        with a full validation_window_size, by default False.
     :param scoring_function: scoring function use to validate performance if it is not None, by default r2_score,
     :param joiner the joiner callable that can join the different result together.
     :return: WalkForwardTimeSeriesCrossValidation instance.
     """
 
-    def __init__(self, window_size, minimum_training_size=None, padding_between_training_and_validation=0, drop_remainder=False,
-                 scoring_function=r2_score, joiner=NumpyConcatenateOnCustomAxis(axis=1)):
-        self.window_size = window_size
+    def __init__(self, validation_window_size, minimum_training_size=None, padding_between_training_and_validation=0,
+                 drop_remainder=False, scoring_function=r2_score, joiner=NumpyConcatenateOnCustomAxis(axis=1)):
+        self.validation_window_size = validation_window_size
         # If minimum_training_size is None, we give the same value as window_size.
-        self.minimum_training_size = minimum_training_size or self.window_size
+        self.minimum_training_size = minimum_training_size or self.validation_window_size
         self.padding_between_training_and_validation = padding_between_training_and_validation
         self.drop_remainder = drop_remainder
         self._validation_initial_start = self.minimum_training_size + self.padding_between_training_and_validation
@@ -275,13 +293,15 @@ class AnchoredWalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
     def split(self, data_inputs, expected_outputs):
         """
         Split the data into train inputs, train expected outputs, validation inputs, validation expected outputs.
-        Note: The data supported by this cross validation is nd.array of shape = (batch, timeSeries, ...) .
+
+        Notes: The data supported by this cross validation is nd.array of shape = (batch, timeSeries, ...) .
         The array can have an arbitrary number of dimension, but the time series axis is currently limited to `axis=1`.
+        Recommended format for the data is an numpy array of shape [batch_size, total_time_steps, n_features].
+
         :param data_inputs: data to perform walk forward cross validation into.
         :param expected_outputs: the expected target/label that will be used during walk forward cross validation.
         :return: train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
         """
-        # TODO: Verify that we need to split into training and validation or into inputs and expected_outputs.
         validation_data_inputs, validation_expected_outputs = self.validation_split(
             data_inputs, expected_outputs)
 
@@ -293,8 +313,11 @@ class AnchoredWalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
     def train_split(self, data_inputs, expected_outputs=None) -> (List, List):
         """
         Split the data into train inputs, train expected outputs
-        Note: The data supported by this cross validation is nd.array of shape = (batch, timeSeries, ...) .
+
+        Notes: The data supported by this cross validation is nd.array of shape = (batch, timeSeries, ...) .
         The array can have an arbitrary number of dimension, but the time series axis is currently limited to `axis=1`.
+        Recommended format for the data is an numpy array of shape [batch_size, total_time_steps, n_features].
+
         :param data_inputs: data to perform walk forward cross validation into.
         :param expected_outputs: the expected target*label that will be used during walk forward cross validation.
         :return: train_data_inputs, train_expected_outputs
@@ -307,8 +330,11 @@ class AnchoredWalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
     def validation_split(self, data_inputs, expected_outputs=None) -> List:
         """
         Split the data into validation inputs, validation expected outputs.
-        Note: The data supported by this cross validation is nd.array of shape = (batch, timeSeries, ...) .
+
+        Notes: The data supported by this cross validation is nd.array of shape = (batch, timeSeries, ...) .
         The array can have an arbitrary number of dimension, but the time series axis is currently limited to `axis=1`.
+        Recommended format for the data is an numpy array of shape [batch_size, total_time_steps, n_features].
+
         :param data_inputs: data to perform walk forward cross validation into.
         :param expected_outputs: the expected target*label that will be used during walk forward cross validation.
         :return: validation_data_inputs, validation_expected_outputs
@@ -326,12 +352,12 @@ class AnchoredWalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
         for i in range(number_step):
             # first slice index is always 0 for anchored walk forward cross validation.
             a = 0
-            b = int(self.minimum_training_size + i * self.window_size)
+            b = int(self.minimum_training_size + i * self.validation_window_size)
 
             if b > data_inputs.shape[1]:
                 b = data_inputs.shape[1]
 
-            # TODO: Do we need to add a slicer. Does the data always come as numpy array with time series in axis=1.
+            # TODO: The slicer could a inverse_transform of the joiner. A len method should also be defined.
             slice = data_inputs[:, a:b]
             splitted_data_inputs.append(slice)
         return splitted_data_inputs
@@ -340,22 +366,26 @@ class AnchoredWalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
         splitted_data_inputs = []
         number_step = self._get_number_fold(data_inputs)
         for i in range(number_step):
-            a = int(self._validation_initial_start + i * self.window_size)
-            b = int(a + self.window_size)
+            a = int(self._validation_initial_start + i * self.validation_window_size)
+            b = int(a + self.validation_window_size)
 
             if b > data_inputs.shape[1]:
                 b = data_inputs.shape[1]
 
-            # TODO: Do we need to add a slicer. Does the data always come as numpy array with time series in axis=1.
+            # TODO: The slicer could a inverse_transform of the joiner. A len method should also be defined.
             slice = data_inputs[:, a:b]
             splitted_data_inputs.append(slice)
         return splitted_data_inputs
 
     def _get_number_fold(self, data_inputs):
         if self.drop_remainder:
-            number_step = math.floor((data_inputs.shape[1] - self._validation_initial_start) / float(self.window_size))
+            number_step = math.floor(
+                (data_inputs.shape[1] - self._validation_initial_start) / float(self.validation_window_size)
+            )
         else:
-            number_step = math.ceil((data_inputs.shape[1] - self._validation_initial_start) / float(self.window_size))
+            number_step = math.ceil(
+                (data_inputs.shape[1] - self._validation_initial_start) / float(self.validation_window_size)
+            )
         return number_step
 
 

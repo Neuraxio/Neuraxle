@@ -23,7 +23,6 @@ import math
 import numpy as np
 from neuraxle.metaopt.random import WalkForwardTimeSeriesCrossValidation, AnchoredWalkForwardTimeSeriesCrossValidation
 
-
 classic_walforward_parameters = {
     # (validation_size,training_size, padding_between_training_and_validation, drop_remainder)
 
@@ -80,7 +79,7 @@ def test_classic_walkforward_crossvalidation_split(validation_window_size: int, 
 
     # Initialize the inputs.
     data_inputs = np.random.randint(low=0, high=1, size=(batch_size, time_series_size, features_size)).astype(np.float)
-    expected_outputs = np.random.randint(low=0, high=1, size=(batch_size, time_series_size, features_size))\
+    expected_outputs = np.random.randint(low=0, high=1, size=(batch_size, time_series_size, features_size)) \
         .astype(np.float)
 
     # Initialize the class to test.
@@ -113,9 +112,9 @@ def test_classic_walkforward_crossvalidation_split(validation_window_size: int, 
 
     if drop_remainder:
         assert train_data_inputs[-1].shape == (
-        batch_size, training_size_temp, features_size)
+            batch_size, training_size_temp, features_size)
         assert train_expected_outputs[-1].shape == (
-        batch_size, training_size_temp, features_size)
+            batch_size, training_size_temp, features_size)
         assert validation_data_inputs[-1].shape == (batch_size, validation_window_size, features_size)
         assert validation_expected_outputs[-1].shape == (batch_size, validation_window_size, features_size)
     else:
@@ -127,10 +126,8 @@ def test_classic_walkforward_crossvalidation_split(validation_window_size: int, 
         assert validation_expected_outputs[-1].shape == (batch_size, remainder_size, features_size)
 
 
-
-
 anchored_walforward_parameters = {
-    # (window_size, minimum_training_size, padding_between_training_and_validation, drop_remainder)
+    # (validation_window_size, minimum_training_size, padding_between_training_and_validation, drop_remainder)
 
     # Pair 1:
     (3, 9, 1, False),
@@ -146,9 +143,11 @@ anchored_walforward_parameters = {
     (2, None, 0, False),
 }
 
-@pytest.mark.parametrize("window_size, minimum_training_size, padding_between_training_and_validation, drop_remainder",
-                         anchored_walforward_parameters)
-def test_anchored_walkforward_crossvalidation_split(window_size: int, minimum_training_size: int,
+
+@pytest.mark.parametrize(
+    "validation_window_size, minimum_training_size, padding_between_training_and_validation, drop_remainder",
+    anchored_walforward_parameters)
+def test_anchored_walkforward_crossvalidation_split(validation_window_size: int, minimum_training_size: int,
                                                     padding_between_training_and_validation: int, drop_remainder: bool):
     # Arrange
     # set random seed
@@ -162,33 +161,35 @@ def test_anchored_walkforward_crossvalidation_split(window_size: int, minimum_tr
     minimum_training_size_temp = minimum_training_size
 
     if minimum_training_size is None:
-        minimum_training_size_temp = window_size
+        minimum_training_size_temp = validation_window_size
 
     if drop_remainder:
         # We have one less number of fold if we drop remainder.
         number_of_fold = math.floor(
-            (time_series_size - minimum_training_size_temp - padding_between_training_and_validation) / window_size
+            (time_series_size - minimum_training_size_temp - padding_between_training_and_validation) /
+            validation_window_size
         )
     else:
         number_of_fold = math.ceil(
-            (time_series_size - minimum_training_size_temp - padding_between_training_and_validation) / window_size
+            (time_series_size - minimum_training_size_temp - padding_between_training_and_validation) /
+            validation_window_size
         )
 
     # Calculate the size of the remainder
     remainder_size = (time_series_size - minimum_training_size_temp - padding_between_training_and_validation) % \
-                     window_size
+                     validation_window_size
     if remainder_size == 0:
-        # Remainder of 0 means the data perfecftly fits in the number of fold and remainder should window_size instead.
-        remainder_size = window_size
+        # Remainder of 0 means the data perfectly fits in the number of fold and remainder should window_size instead.
+        remainder_size = validation_window_size
 
     # Initialize the inputs.
     data_inputs = np.random.randint(low=0, high=1, size=(batch_size, time_series_size, features_size)).astype(np.float)
-    expected_outputs = np.random.randint(low=0, high=1, size=(batch_size, time_series_size, features_size))\
+    expected_outputs = np.random.randint(low=0, high=1, size=(batch_size, time_series_size, features_size)) \
         .astype(np.float)
 
     # Initialize the class to test.
     step = AnchoredWalkForwardTimeSeriesCrossValidation(
-        window_size=window_size,
+        validation_window_size=validation_window_size,
         minimum_training_size=minimum_training_size,
         padding_between_training_and_validation=padding_between_training_and_validation,
         drop_remainder=drop_remainder
@@ -206,21 +207,23 @@ def test_anchored_walkforward_crossvalidation_split(window_size: int, minimum_tr
 
     assert train_data_inputs[0].shape == (batch_size, minimum_training_size_temp, features_size)
     assert train_expected_outputs[0].shape == (batch_size, minimum_training_size_temp, features_size)
-    assert validation_data_inputs[0].shape == (batch_size, window_size, features_size)
-    assert validation_expected_outputs[0].shape == (batch_size, window_size, features_size)
+    assert validation_data_inputs[0].shape == (batch_size, validation_window_size, features_size)
+    assert validation_expected_outputs[0].shape == (batch_size, validation_window_size, features_size)
 
-    assert train_data_inputs[1].shape == (batch_size, minimum_training_size_temp + window_size, features_size)
-    assert train_expected_outputs[1].shape == (batch_size, minimum_training_size_temp + window_size, features_size)
-    assert validation_data_inputs[1].shape == (batch_size, window_size, features_size)
-    assert validation_expected_outputs[1].shape == (batch_size, window_size, features_size)
+    assert train_data_inputs[1].shape == (batch_size, minimum_training_size_temp + validation_window_size,
+                                          features_size)
+    assert train_expected_outputs[1].shape == (batch_size, minimum_training_size_temp + validation_window_size,
+                                               features_size)
+    assert validation_data_inputs[1].shape == (batch_size, validation_window_size, features_size)
+    assert validation_expected_outputs[1].shape == (batch_size, validation_window_size, features_size)
 
     if drop_remainder:
         assert train_data_inputs[-1].shape == (
-        batch_size, minimum_training_size_temp + (number_of_fold - 1) * window_size, features_size)
+            batch_size, minimum_training_size_temp + (number_of_fold - 1) * validation_window_size, features_size)
         assert train_expected_outputs[-1].shape == (
-        batch_size, minimum_training_size_temp + (number_of_fold - 1) * window_size, features_size)
-        assert validation_data_inputs[-1].shape == (batch_size, window_size, features_size)
-        assert validation_expected_outputs[-1].shape == (batch_size, window_size, features_size)
+            batch_size, minimum_training_size_temp + (number_of_fold - 1) * validation_window_size, features_size)
+        assert validation_data_inputs[-1].shape == (batch_size, validation_window_size, features_size)
+        assert validation_expected_outputs[-1].shape == (batch_size, validation_window_size, features_size)
     else:
         assert train_data_inputs[-1].shape == (
             batch_size, time_series_size - remainder_size - padding_between_training_and_validation, features_size)
