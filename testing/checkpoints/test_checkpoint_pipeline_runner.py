@@ -87,6 +87,70 @@ tape_checkpoint_saved_after_last_step_test_arguments = (
     ],
     [])
 
+tape_checkpoint_saved_inside_subpipeline_last_step = (
+    [
+        ("a", TransformCallbackStep(tape.callback, ["1"])),
+        Pipeline([
+            ("b", TransformCallbackStep(tape.callback, ["2"])),
+            ("d", SomeCheckpointStep(
+                checkpoint_data_inputs=data_inputs,
+                checkpoint_expected_outputs=expected_outputs)
+             ),
+        ]),
+        ("e", TransformCallbackStep(tape.callback, ["3"])),
+        ("f", TransformCallbackStep(tape.callback, ["4"])),
+    ],
+    ["3", "4"])
+
+tape_checkpoint_saved_inside_subpipeline_first_step = (
+    [
+        ("a", TransformCallbackStep(tape.callback, ["1"])),
+        Pipeline([
+            ("d", SomeCheckpointStep(
+                checkpoint_data_inputs=data_inputs,
+                checkpoint_expected_outputs=expected_outputs)
+             ),
+            ("b", TransformCallbackStep(tape.callback, ["2"])),
+        ]),
+        ("e", TransformCallbackStep(tape.callback, ["3"])),
+        ("f", TransformCallbackStep(tape.callback, ["4"])),
+    ],
+    ["2", "3", "4"])
+
+tape_checkpoint_saved_inside_subpipeline_step_in_the_middle = (
+    [
+        ("a", TransformCallbackStep(tape.callback, ["1"])),
+        Pipeline([
+            ("b", TransformCallbackStep(tape.callback, ["2"])),
+            ("d", SomeCheckpointStep(
+                checkpoint_data_inputs=data_inputs,
+                checkpoint_expected_outputs=expected_outputs)
+             ),
+            ("e", TransformCallbackStep(tape.callback, ["3"])),
+        ]),
+        ("f", TransformCallbackStep(tape.callback, ["4"])),
+    ],
+    ["3", "4"])
+
+tape_checkpoint_saved_inside_subpipeline_of_subpipeline = (
+    [
+        ("a", TransformCallbackStep(tape.callback, ["1"])),
+        Pipeline([
+            ("b", TransformCallbackStep(tape.callback, ["2"])),
+            Pipeline([
+                ("e", TransformCallbackStep(tape.callback, ["3"])),
+                ("d", SomeCheckpointStep(
+                    checkpoint_data_inputs=data_inputs,
+                    checkpoint_expected_outputs=expected_outputs)
+                 ),
+                ("f", TransformCallbackStep(tape.callback, ["4"])),
+            ]),
+            ("g", TransformCallbackStep(tape.callback, ["5"])),
+        ]),
+        ("h", TransformCallbackStep(tape.callback, ["6"])),
+    ],
+    ["4", "5", "6"])
+
 
 @pytest.mark.parametrize("steps,expected_tape", [
     tape_without_checkpoint_test_arguments,
@@ -94,6 +158,10 @@ tape_checkpoint_saved_after_last_step_test_arguments = (
     tape_checkpoint_saved_after_first_step_test_arguments,
     tape_checkpoint_saved_after_second_step_test_arguments,
     tape_checkpoint_saved_after_last_step_test_arguments,
+    tape_checkpoint_saved_inside_subpipeline_first_step,
+    tape_checkpoint_saved_inside_subpipeline_last_step,
+    tape_checkpoint_saved_inside_subpipeline_step_in_the_middle,
+    tape_checkpoint_saved_inside_subpipeline_of_subpipeline,
 ])
 def test_fit_transform(steps, expected_tape):
     tape.data = []
@@ -117,6 +185,10 @@ def test_fit_transform(steps, expected_tape):
     tape_checkpoint_saved_after_first_step_test_arguments,
     tape_checkpoint_saved_after_second_step_test_arguments,
     tape_checkpoint_saved_after_last_step_test_arguments,
+    tape_checkpoint_saved_inside_subpipeline_first_step,
+    tape_checkpoint_saved_inside_subpipeline_last_step,
+    tape_checkpoint_saved_inside_subpipeline_step_in_the_middle,
+    tape_checkpoint_saved_inside_subpipeline_of_subpipeline,
 ])
 def test_should_fit_each_steps(steps, expected_tape):
     tape.data = []
@@ -139,6 +211,10 @@ def test_should_fit_each_steps(steps, expected_tape):
     tape_checkpoint_saved_after_first_step_test_arguments,
     tape_checkpoint_saved_after_second_step_test_arguments,
     tape_checkpoint_saved_after_last_step_test_arguments,
+    tape_checkpoint_saved_inside_subpipeline_first_step,
+    tape_checkpoint_saved_inside_subpipeline_last_step,
+    tape_checkpoint_saved_inside_subpipeline_step_in_the_middle,
+    tape_checkpoint_saved_inside_subpipeline_of_subpipeline,
 ])
 def test_should_transform_each_steps(steps, expected_tape):
     pipeline = Pipeline(
