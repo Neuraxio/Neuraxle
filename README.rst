@@ -288,6 +288,7 @@ Thanks to everyone who contributed to the project:
 -  Alexandre Brillant: https://github.com/alexbrillant
 -  Éric Hamel: https://github.com/Eric2Hamel
 -  Jérôme Blanchet: https://github.com/JeromeBlanchet
+-  Michaël Lévesque-Dion: https://github.com/mlevesquedion
 
 Supported By
 ~~~~~~~~~~~~
@@ -296,3 +297,4 @@ We thank these organisations for generously supporting the project:
 
 -  Neuraxio Inc.: https://github.com/Neuraxio
 -  Umanéo Technologies Inc.: https://umaneo.com
+
