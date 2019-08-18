@@ -1,9 +1,9 @@
+from neuraxle import __version__ as _VERSION
 from setuptools import setup, find_packages
 
 with open('README.rst') as _f:
     _README = _f.read()
 
-_VERSION = '0.1.0'
 
 setup(
     name='neuraxle',
@@ -61,7 +61,8 @@ setup(
         "Typing :: Typed"
     ],
     url='https://github.com/Neuraxio/Neuraxle',
-    download_url='https://github.com/Neuraxio/Neuraxle/tarball/{}'.format(_VERSION),
+    download_url='https://github.com/Neuraxio/Neuraxle/tarball/{}'.format(
+        _VERSION),
     author='Neuraxio Inc.',
     author_email='guillaume.chevalier@neuraxio.com',
     packages=find_packages(include=['neuraxle*']),
