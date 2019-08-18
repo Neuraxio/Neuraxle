@@ -37,34 +37,64 @@ class NumpyFlattenDatum(NonFittableMixin, BaseStep):
         return data_inputs.flatten()
 
 
-class NumpyConcatenateInnerFeatures(NonFittableMixin, BaseStep):
-    def __init__(self):
+class NumpyConcatenateOnCustomAxis(NonFittableMixin, BaseStep):
+    """
+    Numpy concetenation step where the concatenation is performed along the specified custom axis.
+    """
+
+    def __init__(self, axis):
+        """
+        Create a numpy concatenate on custom axis object.
+        :param axis: the axis where the concatenation is performed.
+        :return: NumpyConcatenateOnCustomAxis instance.
+        """
+        self.axis = axis
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
 
     def transform(self, data_inputs):
+        """
+        Apply the concatenation transformation along the specified axis.
+        :param data_inputs:
+        :return: Numpy array
+        """
         return self._concat(data_inputs)
 
     def transform_one(self, data_inputs):
+        """
+        Apply the concatenation transformation along the specified axis
+        :param data_inputs:
+        :return: Numpy array
+        """
         return self._concat(data_inputs)
 
     def _concat(self, data_inputs):
-        return np.concatenate(data_inputs, axis=-1)
+        return np.concatenate(data_inputs, axis=self.axis)
 
+class NumpyConcatenateInnerFeatures(NumpyConcatenateOnCustomAxis):
+    """
+    Numpy concetenation step where the concatenation is performed along `axis=-1`.
+    """
 
-class NumpyConcatenateOuterBatch(NonFittableMixin, BaseStep):
     def __init__(self):
-        BaseStep.__init__(self)
-        NonFittableMixin.__init__(self)
+        """
+        Create a numpy concatenate inner features object.
+        :return: NumpyConcatenateOnCustomAxis instance.
+        """
+        # The concatenate is on the inner features so axis = -1.
+        super().__init__(axis=-1)
 
-    def transform(self, data_inputs):
-        return self._concat(data_inputs)
+class NumpyConcatenateOuterBatch(NumpyConcatenateOnCustomAxis):
+    """
+    Numpy concetenation step where the concatenation is performed along `axis=0`.
+    """
 
-    def transform_one(self, data_inputs):
-        return self._concat(data_inputs)
-
-    def _concat(self, data_inputs):
-        return np.concatenate(data_inputs, axis=0)
+    def __init__(self):
+        """
+        Create a numpy concetenate outer batch object.
+        :return: NumpyConcatenateOnCustomAxis instance which is inherited by base step.
+        """
+        super().__init__(axis=0)
 
 
 class NumpyTranspose(NonFittableMixin, BaseStep):
