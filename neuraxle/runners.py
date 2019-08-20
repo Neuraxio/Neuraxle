@@ -204,7 +204,7 @@ class CheckpointPipelineRunner(BasePipelineRunner):
 
         for index, (step_name, step) in enumerate(reversed(steps_as_tuple)):
             if isinstance(step, BaseCheckpointStep):
-                checkpoint_new_data_inputs, checkpoint_new_expected_outputs = self.load_checkpoint(step)
+                checkpoint_new_data_inputs, checkpoint_new_expected_outputs = step.load_checkpoint()
 
             if isinstance(step, TruncableSteps) or isinstance(step, MetaStepsMixin):
                 checkpoint_new_data_inputs, checkpoint_new_expected_outputs = self.load_checkpoint_recursive(
@@ -226,22 +226,6 @@ class CheckpointPipelineRunner(BasePipelineRunner):
                 return (new_data_inputs, new_expected_outputs), new_starting_step_index
 
         return (new_data_inputs, new_expected_outputs), new_starting_step_index
-
-    def load_checkpoint(self, step):
-        """
-        Recursively find new starting step and data inputs for a step that contains other steps
-        :param step: checkpoint step
-        :return: tuple(tuple(data_inputs, expected_outputs), step_index) tuple for the starting step data inputs-outputs
-        """
-        checkpoint_data_inputs, checkpoint_expected_data_inputs = step.load_checkpoint()
-
-        if checkpoint_data_inputs is not None:
-            new_data_inputs = checkpoint_data_inputs
-            new_expected_outputs = checkpoint_expected_data_inputs
-
-            return new_data_inputs, new_expected_outputs
-
-        return None, None
 
     def load_checkpoint_recursive(self, steps_as_tuple: NamedTupleList, data_inputs, expected_outputs=None):
         """
