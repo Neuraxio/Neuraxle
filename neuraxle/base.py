@@ -244,6 +244,17 @@ class BaseStep(ABC):
 
         return NeuraxleToSKLearnPipelineWrapper(self)
 
+    def is_resumable(self) -> bool:
+        """
+        The object will mutate itself such that the ``.transform`` method (and of all its underlying objects
+        if applicable) be replaced by the ``.inverse_transform`` method.
+
+        Note: the reverse may fail if there is a pending mutate that was set earlier with ``.will_mutate_to``.
+
+        :return: a copy of self, reversed. Each contained object will also have been reversed if self is a pipeline.
+        """
+        return False
+
     def reverse(self) -> 'BaseStep':
         """
         The object will mutate itself such that the ``.transform`` method (and of all its underlying objects

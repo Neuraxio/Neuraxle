@@ -2,6 +2,7 @@ import os
 import pickle
 
 import numpy as np
+from py._path.local import LocalPath
 
 from neuraxle.checkpoints import PickleCheckpointStep
 from neuraxle.pipeline import Pipeline
@@ -12,7 +13,7 @@ data_inputs = np.ones((1, 1))
 expected_outputs = np.ones((2, 2))
 
 
-def test_should_save_checkpoint_pickle(tmpdir: str):
+def test_should_save_checkpoint_pickle(tmpdir: LocalPath):
     tape = TapeCallbackFunction()
     pickle_checkpoint_step = PickleCheckpointStep('1', tmpdir)
     pipeline = Pipeline(
@@ -34,7 +35,7 @@ def test_should_save_checkpoint_pickle(tmpdir: str):
     assert os.path.exists(pickle_checkpoint_step.get_expected_ouputs_file_name())
 
 
-def test_should_load_checkpoint_pickle(tmpdir: str):
+def test_should_load_checkpoint_pickle(tmpdir: LocalPath):
     tape = TapeCallbackFunction()
     force_checkpoint_name = 'checkpoint_a'
     pickle_checkpoint_step = PickleCheckpointStep(
