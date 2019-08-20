@@ -57,7 +57,7 @@ class BaseCheckpointStep(BaseStep, ABC):
 
     def set_checkpoint_name(self, checkpoint_name) -> 'BaseCheckpointStep':
         """
-        Set checkpoint name.
+        Set checkpoint name unless otherwhise forced.
         :param checkpoint_name: str for checkpoint name
         :return: tuple(data_inputs, expected_outputs)
         """
@@ -135,7 +135,7 @@ class PickleCheckpointStep(BaseCheckpointStep):
             pickle.dump(data_inputs, file)
 
     def get_expected_ouputs_file_name(self):
-        return '{0}/{1}_expected_outputs'.format(self.checkpoint_folder, self.checkpoint_name)
+        return os.path.join(self.checkpoint_folder, '{0}_expected_outputs'.format(self.checkpoint_name))
 
     def get_data_inputs_checkpoint_file_name(self):
-        return '{0}/{1}_data_inputs'.format(self.checkpoint_folder, self.checkpoint_name)
+        return os.path.join(self.checkpoint_folder, '{0}_data_inputs'.format(self.checkpoint_name))
