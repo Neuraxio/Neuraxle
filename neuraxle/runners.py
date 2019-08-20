@@ -14,9 +14,9 @@ The runner classes execute the pipeline steps.
     See the License for the specific language governing permissions and
     limitations under the License.
 """
-from typing import Any
+from typing import Any, Tuple, List
 
-from neuraxle.base import BasePipelineRunner, NamedTupleList, TruncableSteps, MetaStepsMixin
+from neuraxle.base import BasePipelineRunner, NamedTupleList, TruncableSteps, MetaStepsMixin, BaseStep
 from neuraxle.checkpoints import BaseCheckpointStep
 
 
@@ -76,7 +76,8 @@ class CheckpointPipelineRunner(BasePipelineRunner):
 
         return new_steps_as_tuple, data_inputs
 
-    def fit_transform_steps_left_to_do(self, data_inputs, expected_outputs, steps_left_to_do):
+    def fit_transform_steps_left_to_do(self, data_inputs, expected_outputs,
+                                       steps_left_to_do: List[Tuple[str, BaseStep]]):
         """
         After loading the last checkpoint, fit transform each pipeline steps left to do
         :param data_inputs: the data input to fit on
@@ -92,7 +93,7 @@ class CheckpointPipelineRunner(BasePipelineRunner):
 
         return new_steps_as_tuple, data_inputs
 
-    def fit_transform_step(self, data_inputs, expected_outputs, step):
+    def fit_transform_step(self, data_inputs, expected_outputs, step: BaseStep):
         """
         After loading the last checkpoint, fit transform step
         :param data_inputs: the data input to fit on
@@ -150,7 +151,7 @@ class CheckpointPipelineRunner(BasePipelineRunner):
 
         return data_inputs
 
-    def transform_steps_left_to_do(self, data_inputs, steps_left_to_do):
+    def transform_steps_left_to_do(self, data_inputs, steps_left_to_do: List[Tuple[str, BaseStep]]):
         """
         After loading the last checkpoint, transform each pipeline steps left to do
         :param data_inputs: the data input to transform on
@@ -184,7 +185,7 @@ class CheckpointPipelineRunner(BasePipelineRunner):
 
         return step.transform(data_inputs)
 
-    def find_starting_step_and_data_inputs(self, steps_as_tuple, data_inputs, expected_outputs=None):
+    def find_starting_step_and_data_inputs(self, steps_as_tuple: List[Tuple[str, BaseStep]], data_inputs, expected_outputs=None):
         """
         Find the starting step index, and its corresponding data inputs using the checkpoint steps.
         If the checkpoint is inside another step, the starting step will be step that contains the checkpoint
@@ -241,7 +242,7 @@ class CheckpointPipelineRunner(BasePipelineRunner):
 
         return None, None
 
-    def load_checkpoint_recursive(self, steps_as_tuple, data_inputs, expected_outputs=None):
+    def load_checkpoint_recursive(self, steps_as_tuple: List[Tuple[str, BaseStep]], data_inputs, expected_outputs=None):
         """
         Recursively find new starting step and data inputs for a step that contains other steps
         :param steps_as_tuple: steps of the current step being searched for a checkpoint
@@ -257,7 +258,7 @@ class CheckpointPipelineRunner(BasePipelineRunner):
 
         return None, None
 
-    def create_checkpoint_names(self, steps_as_tuple):
+    def create_checkpoint_names(self, steps_as_tuple: List[Tuple[str, BaseStep]]):
         """
         Recursively create checkpoint step names based on their paths
         :param steps_as_tuple: steps of the current step being searched for a checkpoint

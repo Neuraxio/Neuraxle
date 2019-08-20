@@ -1,6 +1,10 @@
+import string
+from typing import List
+
 import numpy as np
 import pytest
 
+from neuraxle.base import BaseStep
 from neuraxle.checkpoints import BaseCheckpointStep
 from neuraxle.pipeline import Pipeline
 from neuraxle.runners import CheckpointPipelineRunner
@@ -163,7 +167,7 @@ tape_checkpoint_saved_inside_subpipeline_of_subpipeline = (
     tape_checkpoint_saved_inside_subpipeline_step_in_the_middle,
     tape_checkpoint_saved_inside_subpipeline_of_subpipeline,
 ])
-def test_fit_transform(steps, expected_tape):
+def test_fit_transform(steps: List[BaseStep], expected_tape: List[str]):
     tape.data = []
     tape.name_tape = []
     pipeline = Pipeline(
@@ -190,7 +194,7 @@ def test_fit_transform(steps, expected_tape):
     tape_checkpoint_saved_inside_subpipeline_step_in_the_middle,
     tape_checkpoint_saved_inside_subpipeline_of_subpipeline,
 ])
-def test_should_fit_each_steps(steps, expected_tape):
+def test_should_fit_each_steps(steps: List[BaseStep], expected_tape: List[str]):
     tape.data = []
     tape.name_tape = []
     pipeline = Pipeline(
@@ -216,7 +220,7 @@ def test_should_fit_each_steps(steps, expected_tape):
     tape_checkpoint_saved_inside_subpipeline_step_in_the_middle,
     tape_checkpoint_saved_inside_subpipeline_of_subpipeline,
 ])
-def test_should_transform_each_steps(steps, expected_tape):
+def test_should_transform_each_steps(steps: List[BaseStep], expected_tape: List[str]):
     pipeline = Pipeline(
         steps=steps,
         pipeline_runner=CheckpointPipelineRunner()

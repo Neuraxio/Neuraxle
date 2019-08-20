@@ -28,7 +28,7 @@ class BaseCheckpointStep(BaseStep, ABC):
     to eventually be able to load them using the checkpoint pipeline runner.
     """
 
-    def __init__(self, force_checkpoint_name=None):
+    def __init__(self, force_checkpoint_name: str = None):
         super().__init__()
         self.force_checkpoint_name = force_checkpoint_name
         self.checkpoint_name = force_checkpoint_name
@@ -96,7 +96,7 @@ class PickleCheckpointStep(BaseCheckpointStep):
     to eventually be able to load them using the checkpoint pipeline runner.
     """
 
-    def __init__(self, force_checkpoint_name=None, checkpoint_folder=DEFAULT_CACHE_FOLDER):
+    def __init__(self, force_checkpoint_name: str = None, checkpoint_folder: str = DEFAULT_CACHE_FOLDER):
         super().__init__(force_checkpoint_name)
         self.checkpoint_folder = checkpoint_folder
 
