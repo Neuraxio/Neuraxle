@@ -25,7 +25,8 @@ import pytest
 from neuraxle.base import BaseStep
 from neuraxle.hyperparams.distributions import RandInt, LogUniform
 from neuraxle.hyperparams.space import nested_dict_to_flat, HyperparameterSpace
-from neuraxle.pipeline import Pipeline, BlockPipelineRunner
+from neuraxle.pipeline import Pipeline
+from neuraxle.runners import CheckpointPipelineRunner
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
@@ -55,7 +56,7 @@ steps_lists = [
         ("some_step_3", SomeStep())
     ]
 ]
-pipeline_runners = [BlockPipelineRunner]  # TODO: streaming pipeline runner
+pipeline_runners = [CheckpointPipelineRunner]  # TODO: streaming pipeline runner
 
 
 @pytest.mark.parametrize("steps_list", steps_lists)
