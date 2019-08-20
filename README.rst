@@ -153,7 +153,7 @@ to accept http requests).
 Installation
 ------------
 
-Simply do: 
+Simply do:
 
 .. code:: bash
 
@@ -202,7 +202,7 @@ such:
 
     # Once it learned, the pipeline can process new and
     # unseen data for making predictions.
-    y_train_predicted = p.transform(X_train)
+    y_test_predicted = p.transform(X_test)
 
 Visit the
 `examples <https://www.neuraxle.neuraxio.com/stable/examples/index.html>`__
@@ -212,7 +212,7 @@ Community
 ---------
 
 Join our `Slack
-workspace <https://join.slack.com/t/neuraxio-open-source/shared_invite/enQtNjc0NzM1NTI5MTczLWUwZmI5NjhkMzRmYzc1MGE5ZTE0YWRkYWI3NWIzZjc1YTRlM2Y1MzRmYzFmM2FiNWNhNGZlZDhhMzkyMTQ1ZTQ>`__!
+workspace <https://join.slack.com/t/neuraxio-open-source/shared_invite/enQtNjc0NzM1NTI5MTczLWUwZmI5NjhkMzRmYzc1MGE5ZTE0YWRkYWI3NWIzZjc1YTRlM2Y1MzRmYzFmM2FiNWNhNGZlZDhhMzkyMTQ1ZTQ>`__ and our `Gitter <https://gitter.im/Neuraxle/community>`__!
 We <3 collaborators.
 
 For **technical questions**, we recommend posting them on
@@ -282,6 +282,19 @@ license <https://github.com/Neuraxio/Neuraxle/blob/master/LICENSE>`__.
 Contributors
 ~~~~~~~~~~~~
 
--  Neuraxio Inc.: https://github.com/Neuraxio
+Thanks to everyone who contributed to the project:
+
 -  Guillaume Chevalier: https://github.com/guillaume-chevalier
 -  Alexandre Brillant: https://github.com/alexbrillant
+-  Éric Hamel: https://github.com/Eric2Hamel
+-  Jérôme Blanchet: https://github.com/JeromeBlanchet
+-  Michaël Lévesque-Dion: https://github.com/mlevesquedion
+
+Supported By
+~~~~~~~~~~~~
+
+We thank these organisations for generously supporting the project:
+
+-  Neuraxio Inc.: https://github.com/Neuraxio
+-  Umanéo Technologies Inc.: https://umaneo.com
+
