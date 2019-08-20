@@ -3,9 +3,9 @@ import pickle
 
 import numpy as np
 
-from neuraxle.checkpoints.checkpoint_pipeline_runner import CheckpointPipelineRunner
-from neuraxle.checkpoints.pickle_checkpoint_step import PickleCheckpointStep
+from neuraxle.checkpoints import PickleCheckpointStep
 from neuraxle.pipeline import Pipeline
+from neuraxle.runners import CheckpointPipelineRunner
 from neuraxle.steps.util import TapeCallbackFunction, TransformCallbackStep
 
 data_inputs = np.ones((1, 1))

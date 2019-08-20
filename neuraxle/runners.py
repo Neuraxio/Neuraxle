@@ -1,7 +1,7 @@
 """
-Neuraxle's Checkpoint Pipeline Runner
+Neuraxle's Runner Classes
 ====================================
-This is the runner that loads and save checkpoint steps.
+The runner classes execute the pipeline steps.
 ..
     Copyright 2019, Neuraxio Inc.
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@ This is the runner that loads and save checkpoint steps.
 from typing import Any
 
 from neuraxle.base import BasePipelineRunner, NamedTupleList, TruncableSteps, MetaStepsMixin
-from neuraxle.checkpoints.base_checkpoint_step import BaseCheckpointStep
+from neuraxle.checkpoints import BaseCheckpointStep
 
 
 class CheckpointPipelineRunner(BasePipelineRunner):

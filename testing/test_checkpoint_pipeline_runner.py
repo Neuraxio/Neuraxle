@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from neuraxle.checkpoints.base_checkpoint_step import BaseCheckpointStep
-from neuraxle.checkpoints.checkpoint_pipeline_runner import CheckpointPipelineRunner
+from neuraxle.checkpoints import BaseCheckpointStep
 from neuraxle.pipeline import Pipeline
+from neuraxle.runners import CheckpointPipelineRunner
 from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
 
 
