@@ -171,7 +171,7 @@ class HyperparameterSpace(HyperparameterSamples):
 
     Calling ``.rvs()`` on an ``HyperparameterSpace`` results in ``HyperparameterSamples``."""
 
-    def rvs(self) -> 'HyperparameterSpace':
+    def rvs(self) -> 'HyperparameterSamples':
         """
         Sample the space of random variables.
 
@@ -182,7 +182,7 @@ class HyperparameterSpace(HyperparameterSamples):
             if isinstance(v, HyperparameterDistribution) or isinstance(v, HyperparameterSpace):
                 v = v.rvs()
             new_items.append((k, v))
-        return HyperparameterSpace(new_items)
+        return HyperparameterSamples(new_items)
 
     def narrow_space_from_best_guess(
             self, best_guesses: 'HyperparameterSpace', kept_space_ratio: float = 0.5

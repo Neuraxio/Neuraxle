@@ -41,8 +41,8 @@ class BaseStep(ABC):
         if hyperparams_space is None:
             hyperparams_space = dict()
 
-        self.hyperparams: HyperparameterSamples = hyperparams
-        self.hyperparams_space: HyperparameterSpace = hyperparams_space
+        self.hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams)
+        self.hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space)
 
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
 
@@ -57,7 +57,7 @@ class BaseStep(ABC):
         self.hyperparams_space = HyperparameterSpace(hyperparams_space)
         return self
 
-    def get_hyperparams_space(self, flat=False) -> HyperparameterSpace:
+    def get_hyperparams_space(self) -> HyperparameterSpace:
         return self.hyperparams_space
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
@@ -407,19 +407,22 @@ class TruncableSteps(BaseStep, ABC):
         """
         self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
 
-    def get_hyperparams(self, flat=False) -> HyperparameterSamples:
-        ret = dict()
+    def get_hyperparams(self, flat=True) -> HyperparameterSamples:
+        hyperparams = dict()
 
         for k, v in self.steps.items():
             hparams = v.get_hyperparams()  # TODO: oop diamond problem?
             if hasattr(v, "hyperparams"):
                 hparams.update(v.hyperparams)
             if len(hparams) > 0:
-                ret[k] = hparams
+                hyperparams[k] = hparams
 
+        hyperparams = HyperparameterSamples(hyperparams)
         if flat:
-            ret = HyperparameterSamples(ret)
-        return ret
+            hyperparams = hyperparams.to_flat()
+        else:
+            hyperparams = hyperparams.to_nested_dict()
+        return hyperparams
 
     def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
         hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
@@ -447,10 +450,10 @@ class TruncableSteps(BaseStep, ABC):
 
         return self
 
-    def get_hyperparams_space(self, flat=False):
+    def get_hyperparams_space(self, flat=True):
         all_hyperparams = HyperparameterSpace()
         for step_name, step in self.steps_as_tuple:
-            hspace = step.get_hyperparams_space(flat=flat)
+            hspace = step.get_hyperparams_space()
             all_hyperparams.update({
                 step_name: hspace
             })
