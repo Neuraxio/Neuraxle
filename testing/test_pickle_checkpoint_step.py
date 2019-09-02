@@ -6,7 +6,6 @@ from py._path.local import LocalPath
 
 from neuraxle.checkpoints import PickleCheckpointStep
 from neuraxle.pipeline import Pipeline
-from neuraxle.runners import CheckpointPipelineRunner
 from neuraxle.steps.util import TapeCallbackFunction, TransformCallbackStep
 
 data_inputs = np.ones((1, 1))
@@ -22,8 +21,7 @@ def test_should_save_checkpoint_pickle(tmpdir: LocalPath):
             pickle_checkpoint_step,
             TransformCallbackStep(tape.callback, ["2"]),
             TransformCallbackStep(tape.callback, ["3"])
-        ],
-        pipeline_runner=CheckpointPipelineRunner()
+        ]
     )
 
     pipeline, actual_data_inputs = pipeline.fit_transform(data_inputs, expected_outputs)
@@ -40,7 +38,7 @@ def test_should_load_checkpoint_pickle(tmpdir: LocalPath):
     force_checkpoint_name = 'checkpoint_a'
     pickle_checkpoint_step = PickleCheckpointStep(
         force_checkpoint_name=force_checkpoint_name,
-        checkpoint_folder=tmpdir
+        checkpoint_path=tmpdir
     )
     with open(pickle_checkpoint_step.get_data_inputs_checkpoint_file_name(), 'wb') as file:
         pickle.dump(data_inputs, file)
@@ -52,8 +50,7 @@ def test_should_load_checkpoint_pickle(tmpdir: LocalPath):
             ('b', TransformCallbackStep(tape.callback, ["2"])),
             (force_checkpoint_name, pickle_checkpoint_step),
             ('c', TransformCallbackStep(tape.callback, ["3"]))
-        ],
-        pipeline_runner=CheckpointPipelineRunner()
+        ]
     )
 
     pipeline, actual_data_inputs = pipeline.fit_transform(data_inputs, expected_outputs)

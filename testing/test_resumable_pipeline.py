@@ -7,7 +7,6 @@ import pytest
 from neuraxle.base import BaseStep
 from neuraxle.checkpoints import BaseCheckpointStep
 from neuraxle.pipeline import Pipeline
-from neuraxle.runners import CheckpointPipelineRunner
 from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
 
 
@@ -20,7 +19,10 @@ class SomeCheckpointStep(BaseCheckpointStep):
         self.data_inputs_checkpoint = None
         self.expected_outputs_checkpoint = None
 
-    def load_checkpoint(self):
+    def set_checkpoint_path(self, path):
+        pass
+
+    def read_checkpoint(self):
         return self.checkpoint_data_inputs, self.checkpoint_expected_outputs
 
     def save_checkpoint(self, data_inputs, expected_outputs=None):
@@ -171,8 +173,7 @@ def test_fit_transform(steps: List[BaseStep], expected_tape: List[str]):
     tape.data = []
     tape.name_tape = []
     pipeline = Pipeline(
-        steps=steps,
-        pipeline_runner=CheckpointPipelineRunner()
+        steps=steps
     )
 
     actual_pipeline, actual_data_inputs = pipeline.fit_transform(data_inputs, expected_outputs)
@@ -198,8 +199,7 @@ def test_should_fit_each_steps(steps: List[BaseStep], expected_tape: List[str]):
     tape.data = []
     tape.name_tape = []
     pipeline = Pipeline(
-        steps=steps,
-        pipeline_runner=CheckpointPipelineRunner()
+        steps=steps
     )
 
     actual_pipeline = pipeline.fit(data_inputs, expected_outputs)
@@ -222,8 +222,7 @@ def test_should_fit_each_steps(steps: List[BaseStep], expected_tape: List[str]):
 ])
 def test_should_transform_each_steps(steps: List[BaseStep], expected_tape: List[str]):
     pipeline = Pipeline(
-        steps=steps,
-        pipeline_runner=CheckpointPipelineRunner()
+        steps=steps
     )
     pipeline = pipeline.fit(data_inputs)
     tape.data = []

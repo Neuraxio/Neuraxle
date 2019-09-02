@@ -21,7 +21,7 @@ This is the core of Neuraxle. Most pipeline steps derive (inherit) from those cl
 """
 
 import warnings
-from abc import ABC, abstractmethod
+from abc import ABC
 from collections import OrderedDict
 from copy import copy
 from typing import Tuple, List, Union, Any
@@ -294,16 +294,6 @@ class MetaStepMixin:
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
 
 
-class MetaStepsMixin:
-    def __init__(self, **pipeline_hyperparams):
-        BaseStep.__init__(self, **pipeline_hyperparams)
-        self.steps_as_tuple: NamedTupleList = None
-
-    def set_steps(self, steps_as_tuple: NamedTupleList) -> 'BasePipelineRunner':
-        self.steps_as_tuple: NamedTupleList = steps_as_tuple
-        return self
-
-
 class NonFittableMixin:
     """A pipeline step that requires no fitting: fitting just returns self when called to do no action.
 
@@ -474,6 +464,15 @@ class TruncableSteps(BaseStep, ABC):
             all_hyperparams = all_hyperparams.to_nested_dict()
         return all_hyperparams
 
+    def fit_from(self, index, data_inputs, expected_outputs):
+        pass
+
+    def transform_from(self, index, data_inputs):
+        steps = self.steps_as_tuple[index:]
+
+    def fit_transform_from(self, index, data_inputs, expected_outputs):
+        pass
+
     def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
         """
         Call mutate on every steps the the present truncable step contains.
@@ -602,33 +601,3 @@ class TruncableSteps(BaseStep, ABC):
         :return: len(self.steps_as_tuple)
         """
         return len(self.steps_as_tuple)
-
-
-class BaseBarrier(ABC):
-    # TODO: a barrier is between steps and manages how they interact (e.g.: a checkpoint).
-    pass
-
-
-class BaseBlockBarrier(BaseBarrier, ABC):
-    # TODO: a block barrier forces not using any "_one" functions past that barrier.
-    pass
-
-
-class BaseStreamingBarrier(BaseBarrier, ABC):
-    # TODO: a streaming barrier forces using the "_one" functions past that barrier.
-    pass
-
-
-class BasePipelineRunner(MetaStepsMixin, BaseStep, ABC):
-
-    @abstractmethod
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BasePipelineRunner', Any):
-        pass
-
-    @abstractmethod
-    def fit(self, data_inputs, expected_outputs=None) -> 'BasePipelineRunner':
-        pass
-
-    @abstractmethod
-    def transform(self, data_inputs):
-        pass

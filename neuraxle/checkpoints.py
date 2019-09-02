@@ -19,24 +19,26 @@ from neuraxle.base import BaseStep
 import os
 import pickle
 
+from neuraxle.pipeline import ResumableStep
+
 DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
 
 
-class BaseCheckpointStep(BaseStep, ABC):
+class BaseCheckpointStep(ResumableStep):
     """
     Base class for a checkpoint step that can persists the received data inputs, and expected_outputs
     to eventually be able to load them using the checkpoint pipeline runner.
     """
 
     def __init__(self, force_checkpoint_name: str = None):
-        super().__init__()
+        ResumableStep.__init__(self)
         self.force_checkpoint_name = force_checkpoint_name
-        self.checkpoint_name = force_checkpoint_name
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseCheckpointStep':
         """
         Save checkpoint for data inputs and expected outputs so that it can
         be loaded by the checkpoint pipeline runner on the next pipeline run
+        :param expected_outputs: initial expected outputs of pipeline to load checkpoint from
         :param data_inputs: data inputs to save
         :return: self
         """
@@ -55,25 +57,31 @@ class BaseCheckpointStep(BaseStep, ABC):
 
         return data_inputs
 
-    def set_checkpoint_name(self, checkpoint_name) -> 'BaseCheckpointStep':
-        """
-        Set checkpoint name unless otherwhise forced.
-        :param checkpoint_name: str for checkpoint name
-        :return: tuple(data_inputs, expected_outputs)
-        """
-        if self.force_checkpoint_name is None:
-            self.checkpoint_name = checkpoint_name
-        else:
-            self.checkpoint_name = self.force_checkpoint_name
-
-        return self
-
-    @abstractmethod
-    def load_checkpoint(self):
+    def load_checkpoint(self, data_inputs, expected_outputs=None):
         """
         Load checkpoint to get the data inputs and expected output.
-        Note: This method is called by the checkpoint pipeline runner
-        to start at the latest checkpoint
+        :param data_inputs: initial data inputs to load checkpoint from
+        :param expected_outputs: initial expected outputs of pipeline to load checkpoint from
+        :return: tuple(data_inputs, expected_outputs)
+        """
+        checkpoint_data_inputs, checkpoint_expected_outputs = self.read_checkpoint()
+        if expected_outputs is not None and checkpoint_expected_outputs is None:
+            return (None, None), 0
+
+        return (checkpoint_data_inputs, checkpoint_expected_outputs), 0
+
+    @abstractmethod
+    def set_checkpoint_path(self, path):
+        """
+        Set checkpoint Path
+        :param path: checkpoint path
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def read_checkpoint(self):
+        """
+        Read checkpoint data to get the data inputs and expected output.
         :return: tuple(data_inputs, expected_outputs)
         """
         raise NotImplementedError()
@@ -96,11 +104,11 @@ class PickleCheckpointStep(BaseCheckpointStep):
     to eventually be able to load them using the checkpoint pipeline runner.
     """
 
-    def __init__(self, force_checkpoint_name: str = None, checkpoint_folder: str = DEFAULT_CACHE_FOLDER):
+    def __init__(self, force_checkpoint_name: str = None, checkpoint_path: str = DEFAULT_CACHE_FOLDER):
         super().__init__(force_checkpoint_name)
-        self.checkpoint_folder = checkpoint_folder
+        self.checkpoint_path = checkpoint_path
 
-    def load_checkpoint(self):
+    def read_checkpoint(self):
         """
         Read pickle files for data inputs and expected outputs checkpoint
         :return: tuple(data_inputs, expected_outputs
@@ -132,10 +140,17 @@ class PickleCheckpointStep(BaseCheckpointStep):
             pickle.dump(data_inputs, file)
 
         with open(self.get_expected_ouputs_file_name(), 'wb') as file:
-            pickle.dump(data_inputs, file)
+            pickle.dump(expected_outputs, file)
+
+    """
+    Set checkpoint path inside the cache folder (ex: cache_folder/pipeline_name/checkpoint_name.pickle)
+    :param path: checkpoint path
+    """
+    def set_checkpoint_path(self, path):
+        self.checkpoint_path = os.path.join(DEFAULT_CACHE_FOLDER, path)
 
     def get_expected_ouputs_file_name(self):
-        return os.path.join(self.checkpoint_folder, '{0}_expected_outputs'.format(self.checkpoint_name))
+        return os.path.join(self.checkpoint_path, '{0}_expected_outputs'.format(self.force_checkpoint_name))
 
     def get_data_inputs_checkpoint_file_name(self):
-        return os.path.join(self.checkpoint_folder, '{0}_data_inputs'.format(self.checkpoint_name))
+        return os.path.join(self.checkpoint_path, '{0}_data_inputs'.format(self.force_checkpoint_name))
