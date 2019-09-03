@@ -244,17 +244,6 @@ class BaseStep(ABC):
 
         return NeuraxleToSKLearnPipelineWrapper(self)
 
-    def is_resumable(self) -> bool:
-        """
-        The object will mutate itself such that the ``.transform`` method (and of all its underlying objects
-        if applicable) be replaced by the ``.inverse_transform`` method.
-
-        Note: the reverse may fail if there is a pending mutate that was set earlier with ``.will_mutate_to``.
-
-        :return: a copy of self, reversed. Each contained object will also have been reversed if self is a pipeline.
-        """
-        return False
-
     def reverse(self) -> 'BaseStep':
         """
         The object will mutate itself such that the ``.transform`` method (and of all its underlying objects
@@ -281,7 +270,23 @@ class BaseStep(ABC):
 class MetaStepMixin:
     """A class to represent a meta step which is used to optimize another step."""
 
-    # TODO: how to set_params on contained step?
+    # TODO: remove equal None, and fix random search at the same time ?
+    def __init__(self, wrapped: BaseStep = None):
+        self.wrapped: BaseStep = wrapped
+
+    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
+        self.wrapped = self.wrapped.set_hyperparams(hyperparams)
+        return self
+
+    def get_hyperparams(self) -> HyperparameterSamples:
+        return self.wrapped.get_hyperparams()
+
+    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
+        self.wrapped = self.wrapped.set_hyperparams_space(hyperparams_space)
+        return self
+
+    def get_hyperparams_space(self, flat=False) -> HyperparameterSpace:
+        return self.wrapped.get_hyperparams_space()
 
     def set_step(self, step: BaseStep) -> BaseStep:
         self.step: BaseStep = step
@@ -601,3 +606,12 @@ class TruncableSteps(BaseStep, ABC):
         :return: len(self.steps_as_tuple)
         """
         return len(self.steps_as_tuple)
+
+
+class OutputTransformerWrapper(MetaStepMixin, BaseStep):
+    def __init__(self, wrapped: BaseStep):
+        MetaStepMixin.__init__(self, wrapped)
+
+    def transform(self, data_inputs):
+        data_inputs, expected_outputs = data_inputs
+        return self.wrapped.transform(list(zip(data_inputs, expected_outputs)))

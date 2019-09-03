@@ -29,8 +29,7 @@ def test_should_save_checkpoint_pickle(tmpdir: LocalPath):
     actual_tape = tape.get_name_tape()
     assert actual_data_inputs == data_inputs
     assert actual_tape == ["1", "2", "3"]
-    assert os.path.exists(pickle_checkpoint_step.get_data_inputs_checkpoint_file_name())
-    assert os.path.exists(pickle_checkpoint_step.get_expected_ouputs_file_name())
+    assert os.path.exists(pickle_checkpoint_step.get_checkpoint_file_path(data_inputs))
 
 
 def test_should_load_checkpoint_pickle(tmpdir: LocalPath):
@@ -38,12 +37,12 @@ def test_should_load_checkpoint_pickle(tmpdir: LocalPath):
     force_checkpoint_name = 'checkpoint_a'
     pickle_checkpoint_step = PickleCheckpointStep(
         force_checkpoint_name=force_checkpoint_name,
-        checkpoint_path=tmpdir
+        cache_folder=tmpdir
     )
-    with open(pickle_checkpoint_step.get_data_inputs_checkpoint_file_name(), 'wb') as file:
+    pickle_checkpoint_step.set_checkpoint_path(force_checkpoint_name)
+    with open(pickle_checkpoint_step.get_checkpoint_file_path(data_inputs), 'wb') as file:
         pickle.dump(data_inputs, file)
-    with open(pickle_checkpoint_step.get_expected_ouputs_file_name(), 'wb') as file:
-        pickle.dump(expected_outputs, file)
+
     pipeline = Pipeline(
         steps=[
             ('a', TransformCallbackStep(tape.callback, ["1"])),
