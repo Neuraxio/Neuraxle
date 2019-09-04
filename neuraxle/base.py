@@ -469,15 +469,6 @@ class TruncableSteps(BaseStep, ABC):
             all_hyperparams = all_hyperparams.to_nested_dict()
         return all_hyperparams
 
-    def fit_from(self, index, data_inputs, expected_outputs):
-        pass
-
-    def transform_from(self, index, data_inputs):
-        steps = self.steps_as_tuple[index:]
-
-    def fit_transform_from(self, index, data_inputs, expected_outputs):
-        pass
-
     def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
         """
         Call mutate on every steps the the present truncable step contains.
