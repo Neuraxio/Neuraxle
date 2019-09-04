@@ -65,7 +65,7 @@ class BasePipeline(TruncableSteps, ABC):
         return self.inverse_transform_processed_outputs(processed_outputs)
 
 
-class Pipeline(BasePipeline, BaseStep, ResumableStepMixin):
+class Pipeline(BasePipeline, ResumableStepMixin):
     """
     Fits and transform steps after latest checkpoint
     """
@@ -152,8 +152,7 @@ class Pipeline(BasePipeline, BaseStep, ResumableStepMixin):
         """
         Find the starting step index that has the latest checkpoint (or 0 if there is no checkpoint)
         :param data_inputs: the data input to fit on
-        :return: index, (data_inputs, expected_outputs) tuple for the starting step data inputs-outputs
-         and the starting step index
+        :return: index
         """
         for index, (step_name, step) in enumerate(reversed(self.steps_as_tuple)):
             if isinstance(step, ResumableStepMixin) and step.should_resume(data_inputs):
