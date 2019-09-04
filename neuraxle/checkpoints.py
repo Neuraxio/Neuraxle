@@ -32,6 +32,7 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
 
     def __init__(self, force_checkpoint_name: str = None):
         ResumableStepMixin.__init__(self)
+        BaseStep.__init__(self)
         self.force_checkpoint_name = force_checkpoint_name
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseCheckpointStep':
