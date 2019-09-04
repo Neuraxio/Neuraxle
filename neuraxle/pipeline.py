@@ -22,7 +22,8 @@ This is the core of Neuraxle's pipelines. You can chain steps to call them one a
 from abc import ABC, abstractmethod
 from typing import Any, Tuple
 
-from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList
+from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin
+from neuraxle.checkpoints import BaseCheckpointStep
 
 
 class DataObject:
@@ -64,26 +65,7 @@ class BasePipeline(TruncableSteps, ABC):
         return self.inverse_transform_processed_outputs(processed_outputs)
 
 
-class ResumableStep(BaseStep):
-    """
-    A step that can be resumed, for example a checkpoint on disk.
-    """
-
-    """
-    Load Pipeline Checkpoint
-    :param data_inputs: initial data inputs
-    :return: steps_left_to_do, data_inputs
-    """
-    @abstractmethod
-    def load_checkpoint(self, data_inputs) -> Tuple[list, Any]:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def should_resume(self, data_inputs) -> bool:
-        raise NotImplementedError()
-
-
-class Pipeline(BasePipeline, ResumableStep):
+class Pipeline(BasePipeline, BaseStep, ResumableStepMixin):
     """
     Fits and transform steps after latest checkpoint
     """
@@ -121,7 +103,7 @@ class Pipeline(BasePipeline, ResumableStep):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        steps_left_to_do, data_inputs = self.load_checkpoint(data_inputs)
+        steps_left_to_do, data_inputs = self.read_checkpoint(data_inputs)
 
         new_steps_as_tuple: NamedTupleList = []
         for step_name, step in steps_left_to_do:
@@ -139,7 +121,7 @@ class Pipeline(BasePipeline, ResumableStep):
         :param data_inputs: the data input to fit on
         :return: transformed data inputs
         """
-        steps_left_to_do, data_inputs = self.load_checkpoint(data_inputs)
+        steps_left_to_do, data_inputs = self.read_checkpoint(data_inputs)
         for step_name, step in steps_left_to_do:
             data_inputs = step.transform(data_inputs)
 
@@ -155,27 +137,28 @@ class Pipeline(BasePipeline, ResumableStep):
             processed_outputs = step.transform(processed_outputs)
         return processed_outputs
 
-    def load_checkpoint(self, data_inputs, expected_outputs=None):
+    def read_checkpoint(self, data_inputs) -> Tuple[list, Any]:
+        new_data_inputs = data_inputs
+        new_starting_step_index = self.find_starting_step_index(data_inputs)
+
+        step = self.steps_as_tuple[new_starting_step_index]
+        if isinstance(step, BaseCheckpointStep):
+            checkpoint = step.read_checkpoint(data_inputs)
+            new_data_inputs = checkpoint
+
+        return self.steps_as_tuple[new_starting_step_index:], new_data_inputs
+
+    def find_starting_step_index(self, data_inputs) -> int:
         """
-        Find the starting step index, and its corresponding data inputs using the checkpoint steps.
-        If the checkpoint is inside another step, the starting step will be step that contains the checkpoint
-        :param expected_outputs: expected outputs to fit on
+        Find the starting step index that has the latest checkpoint (or 0 if there is no checkpoint)
         :param data_inputs: the data input to fit on
         :return: index, (data_inputs, expected_outputs) tuple for the starting step data inputs-outputs
          and the starting step index
         """
-        new_data_inputs = data_inputs
-        new_starting_step_index = 0
-        found_checkpoint = False
-
         for index, (step_name, step) in enumerate(reversed(self.steps_as_tuple)):
-            if not found_checkpoint and isinstance(step, ResumableStep) and step.should_resume(data_inputs):
-                _, checkpoint = step.load_checkpoint(data_inputs)
-                new_starting_step_index = len(self.steps_as_tuple) - index - 1
-                new_data_inputs = checkpoint
-                found_checkpoint = True
-
-        return self.steps_as_tuple[new_starting_step_index:], new_data_inputs
+            if isinstance(step, ResumableStepMixin) and step.should_resume(data_inputs):
+                return len(self.steps_as_tuple) - index - 1
+        return 0
 
     def should_resume(self, data_inputs) -> bool:
         """
@@ -183,9 +166,7 @@ class Pipeline(BasePipeline, ResumableStep):
         :param data_inputs: the data input to fit on
         :return: boolean
         """
-        should_resume = False
         for index, (step_name, step) in enumerate(reversed(self.steps_as_tuple)):
-            if isinstance(step, ResumableStep) and step.should_resume(data_inputs):
-                should_resume = True
-
-        return should_resume
+            if isinstance(step, ResumableStepMixin) and step.should_resume(data_inputs):
+                return True
+        return False

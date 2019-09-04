@@ -21,7 +21,7 @@ This is the core of Neuraxle. Most pipeline steps derive (inherit) from those cl
 """
 
 import warnings
-from abc import ABC
+from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from typing import Tuple, List, Union, Any
@@ -606,3 +606,13 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
     def transform(self, data_inputs):
         data_inputs, expected_outputs = data_inputs
         return self.wrapped.transform(list(zip(data_inputs, expected_outputs)))
+
+
+class ResumableStepMixin:
+    """
+    A step that can be resumed, for example a checkpoint on disk.
+    """
+
+    @abstractmethod
+    def should_resume(self, data_inputs) -> bool:
+        raise NotImplementedError()

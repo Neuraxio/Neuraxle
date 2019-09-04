@@ -14,24 +14,24 @@ The checkpoint classes used by the checkpoint pipeline runner
     See the License for the specific language governing permissions and
     limitations under the License.
 """
-from abc import abstractmethod
 import os
 import pickle
-from typing import Tuple, Any
+from abc import abstractmethod
+from typing import Any
 
-from neuraxle.pipeline import ResumableStep
+from neuraxle.base import ResumableStepMixin, BaseStep
 
 DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
 
 
-class BaseCheckpointStep(ResumableStep):
+class BaseCheckpointStep(ResumableStepMixin, BaseStep):
     """
     Base class for a checkpoint step that can persists the received data inputs, and expected_outputs
     to eventually be able to load them using the checkpoint pipeline runner.
     """
 
     def __init__(self, force_checkpoint_name: str = None):
-        ResumableStep.__init__(self)
+        ResumableStepMixin.__init__(self)
         self.force_checkpoint_name = force_checkpoint_name
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseCheckpointStep':
@@ -57,16 +57,6 @@ class BaseCheckpointStep(ResumableStep):
 
         return data_inputs
 
-    def load_checkpoint(self, data_inputs) -> Tuple[list, Any]:
-        """
-        Load the checkpoint step data inputs.
-        There is no steps left to do when we are loading an actual checkpoint
-        instead of a pipeline that can contain checkpoints.
-        :param data_inputs:
-        :return: steps_left_to_do, data_inputs_checkpoint
-        """
-        return [], self.read_checkpoint()
-
     @abstractmethod
     def set_checkpoint_path(self, path):
         """
@@ -76,10 +66,10 @@ class BaseCheckpointStep(ResumableStep):
         raise NotImplementedError()
 
     @abstractmethod
-    def read_checkpoint(self):
+    def read_checkpoint(self, data_inputs) -> Any:
         """
         Read checkpoint data to get the data inputs and expected output.
-        :return: tuple(data_inputs, expected_outputs)
+        :return: data_inputs_checkpoint
         """
         raise NotImplementedError()
 
@@ -105,7 +95,7 @@ class PickleCheckpointStep(BaseCheckpointStep):
         self.cache_folder = cache_folder
         self.force_checkpoint_name = force_checkpoint_name
 
-    def read_checkpoint(self):
+    def read_checkpoint(self, data_inputs):
         """
         Read pickle files for data inputs and expected outputs checkpoint
         :return: tuple(data_inputs, expected_outputs
