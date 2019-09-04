@@ -292,7 +292,23 @@ class BaseStep(ABC):
 class MetaStepMixin:
     """A class to represent a meta step which is used to optimize another step."""
 
-    # TODO: how to set_params on contained step?
+    # TODO: remove equal None, and fix random search at the same time ?
+    def __init__(self, wrapped: BaseStep = None):
+        self.wrapped: BaseStep = wrapped
+
+    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
+        self.wrapped = self.wrapped.set_hyperparams(hyperparams)
+        return self
+
+    def get_hyperparams(self) -> HyperparameterSamples:
+        return self.wrapped.get_hyperparams()
+
+    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
+        self.wrapped = self.wrapped.set_hyperparams_space(hyperparams_space)
+        return self
+
+    def get_hyperparams_space(self, flat=False) -> HyperparameterSpace:
+        return self.wrapped.get_hyperparams_space()
 
     def set_step(self, step: BaseStep) -> BaseStep:
         self.step: BaseStep = step
@@ -303,16 +319,6 @@ class MetaStepMixin:
 
 
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
-
-
-class MetaStepsMixin:
-    def __init__(self, **pipeline_hyperparams):
-        BaseStep.__init__(self, **pipeline_hyperparams)
-        self.steps_as_tuple: NamedTupleList = None
-
-    def set_steps(self, steps_as_tuple: NamedTupleList) -> 'BasePipelineRunner':
-        self.steps_as_tuple: NamedTupleList = steps_as_tuple
-        return self
 
 
 class NonFittableMixin:
@@ -619,31 +625,20 @@ class TruncableSteps(BaseStep, ABC):
         return len(self.steps_as_tuple)
 
 
-class BaseBarrier(ABC):
-    # TODO: a barrier is between steps and manages how they interact (e.g.: a checkpoint).
-    pass
+class OutputTransformerWrapper(MetaStepMixin, BaseStep):
+    def __init__(self, wrapped: BaseStep):
+        MetaStepMixin.__init__(self, wrapped)
 
-
-class BaseBlockBarrier(BaseBarrier, ABC):
-    # TODO: a block barrier forces not using any "_one" functions past that barrier.
-    pass
-
-
-class BaseStreamingBarrier(BaseBarrier, ABC):
-    # TODO: a streaming barrier forces using the "_one" functions past that barrier.
-    pass
-
-
-class BasePipelineRunner(MetaStepsMixin, BaseStep, ABC):
-
-    @abstractmethod
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BasePipelineRunner', Any):
-        pass
-
-    @abstractmethod
-    def fit(self, data_inputs, expected_outputs=None) -> 'BasePipelineRunner':
-        pass
-
-    @abstractmethod
     def transform(self, data_inputs):
-        pass
+        data_inputs, expected_outputs = data_inputs
+        return self.wrapped.transform(list(zip(data_inputs, expected_outputs)))
+
+
+class ResumableStepMixin:
+    """
+    A step that can be resumed, for example a checkpoint on disk.
+    """
+
+    @abstractmethod
+    def should_resume(self, data_inputs) -> bool:
+        raise NotImplementedError()
