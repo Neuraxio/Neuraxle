@@ -34,17 +34,39 @@ class BaseStep(ABC):
     def __init__(
             self,
             hyperparams: HyperparameterSamples = None,
-            hyperparams_space: HyperparameterSpace = None
+            hyperparams_space: HyperparameterSpace = None,
+            name: str = None
     ):
         if hyperparams is None:
             hyperparams = dict()
         if hyperparams_space is None:
             hyperparams_space = dict()
+        if name is None:
+            name = self.__class__.__name__
 
         self.hyperparams: HyperparameterSamples = hyperparams
         self.hyperparams_space: HyperparameterSpace = hyperparams_space
+        self.name: str = name
 
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
+
+    def set_name(self, name: str):
+        """
+        Set the name of the pipeline step.
+
+        :param name: a string.
+        :return: self
+        """
+        self.name = name
+        return self
+
+    def get_name(self) -> str:
+        """
+        Get the name of the pipeline step.
+
+        :return: the name, a string.
+        """
+        return self.name
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
         self.hyperparams = HyperparameterSamples(hyperparams)
@@ -385,21 +407,25 @@ class TruncableSteps(BaseStep, ABC):
         patched = []
         for step in steps_as_tuple:
 
-            class_name = step.__class__.__name__
             if isinstance(step, tuple):
                 class_name = step[0]
                 step = step[1]
-                if class_name in names_yet:
-                    warnings.warn(
-                        "Named pipeline tuples must be unique. "
-                        "Will rename '{}' because it already exists.".format(class_name))
+            else:
+                class_name = step.get_name()
 
-            # Add suffix number to name if it is already used to ensure name uniqueness.
             _name = class_name
-            i = 1
-            while _name in names_yet:
-                _name = class_name + str(i)
-                i += 1
+            if class_name in names_yet:
+                warnings.warn(
+                    "Named pipeline tuples must be unique. "
+                    "Will rename '{}' because it already exists.".format(class_name))
+
+                # Add suffix number to name if it is already used to ensure name uniqueness.
+                i = 1
+                while _name in names_yet:
+                    _name = class_name + str(i)
+                    i += 1
+
+                step.set_name(_name)
 
             step = (_name, step)
             names_yet.add(step[0])
