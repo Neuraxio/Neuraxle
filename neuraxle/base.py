@@ -29,14 +29,38 @@ from typing import Tuple, List, Union, Any
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
 
-class BaseStep(ABC):
+class Hasher(ABC):
+    @abstractmethod
+    def hash(self, data_inputs: Any):
+        return hash(data_inputs)
 
+    @abstractmethod
+    def rehash(self, ids, data_inputs: Any):
+        return self.hash(data_inputs)
+
+
+class NullHasher(Hasher):
+    def hash(self, data_inputs: Any):
+        pass
+
+    def rehash(self, ids, data_inputs: Any):
+        return ids
+
+
+class HasherByIndex(Hasher):
+    def hash(self, data_inputs: Any):
+        return range(len(data_inputs))
+
+
+class BaseStep(ABC):
     def __init__(
             self,
             hyperparams: HyperparameterSamples = None,
             hyperparams_space: HyperparameterSpace = None,
-            name: str = None
+            name: str = None,
+            hasher: Hasher = NullHasher()
     ):
+        self.hasher = hasher
         if hyperparams is None:
             hyperparams = dict()
         if hyperparams_space is None:
@@ -81,6 +105,20 @@ class BaseStep(ABC):
 
     def get_hyperparams_space(self, flat=False) -> HyperparameterSpace:
         return self.hyperparams_space
+
+    @abstractmethod
+    def handle_fit_transform(self, ids, data_inputs, expected_outputs) -> ('BaseStep', Any):
+        return self.fit_transform(data_inputs, expected_outputs)
+
+    @abstractmethod
+    def handle_transform(self, ids, data_inputs) -> Any:
+        return self.transform(data_inputs)
+
+    def hash(self, data_inputs: Any):
+        return self.hasher.hash(data_inputs)
+
+    def rehash(self, ids, data_inputs: Any):
+        return self.hasher.rehash(ids, data_inputs)
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
         new_self = self.fit(data_inputs, expected_outputs)

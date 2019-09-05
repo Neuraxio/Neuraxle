@@ -22,23 +22,13 @@ This is the core of Neuraxle's pipelines. You can chain steps to call them one a
 from abc import ABC, abstractmethod
 from typing import Any, Tuple
 
-from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin
+from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, HasherByIndex, Hasher
 from neuraxle.checkpoints import BaseCheckpointStep
 
 
-class DataObject:
-    def __init__(self, i, x):
-        self.i = i
-        self.x = x
-
-        def __hash__(self):
-            return hash((self.i, self.x))
-
-
 class BasePipeline(TruncableSteps, ABC):
-
-    def __init__(self, steps: NamedTupleList):
-        BaseStep.__init__(self)
+    def __init__(self, steps: NamedTupleList, hasher: Hasher = HasherByIndex()):
+        BaseStep.__init__(self, None, None, None, hasher)
         TruncableSteps.__init__(self, steps)
 
     @abstractmethod
@@ -103,11 +93,13 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        steps_left_to_do, data_inputs = self.read_checkpoint(data_inputs)
+        steps_left_to_do, ids, data_inputs = self.resume_pipeline(data_inputs)
 
         new_steps_as_tuple: NamedTupleList = []
+
         for step_name, step in steps_left_to_do:
-            step, data_inputs = step.fit_transform(data_inputs, expected_outputs)
+            step, data_inputs = step.handle_fit_transform(ids, data_inputs, expected_outputs)
+            ids = step.rehash(ids, data_inputs)
             new_steps_as_tuple.append((step_name, step))
 
         self.steps_as_tuple = self.steps_as_tuple[:len(self.steps_as_tuple) - len(steps_left_to_do)] + \
@@ -121,9 +113,11 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         :param data_inputs: the data input to fit on
         :return: transformed data inputs
         """
-        steps_left_to_do, data_inputs = self.read_checkpoint(data_inputs)
+        steps_left_to_do, ids, data_inputs = self.resume_pipeline(data_inputs)
+
         for step_name, step in steps_left_to_do:
-            data_inputs = step.transform(data_inputs)
+            data_inputs = step.handle_transform(ids, data_inputs)
+            ids = step.rehash(data_inputs)
 
         return data_inputs
 
@@ -137,16 +131,17 @@ class Pipeline(BasePipeline, ResumableStepMixin):
             processed_outputs = step.transform(processed_outputs)
         return processed_outputs
 
-    def read_checkpoint(self, data_inputs) -> Tuple[list, Any]:
+    def resume_pipeline(self, data_inputs) -> Tuple[NamedTupleList, iter, Any]:
         new_data_inputs = data_inputs
         new_starting_step_index = self.find_starting_step_index(data_inputs)
+        ids = self.hash(data_inputs)
 
         step = self.steps_as_tuple[new_starting_step_index]
         if isinstance(step, BaseCheckpointStep):
             checkpoint = step.read_checkpoint(data_inputs)
-            new_data_inputs = checkpoint
+            ids, new_data_inputs = checkpoint
 
-        return self.steps_as_tuple[new_starting_step_index:], new_data_inputs
+        return self.steps_as_tuple[new_starting_step_index:], ids, new_data_inputs
 
     def find_starting_step_index(self, data_inputs) -> int:
         """

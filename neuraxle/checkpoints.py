@@ -35,6 +35,14 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
         BaseStep.__init__(self)
         self.force_checkpoint_name = force_checkpoint_name
 
+    def handle_transform(self, ids, data_inputs) -> Any:
+        self.save_checkpoint(ids, data_inputs)
+        return data_inputs
+
+    def handle_fit_transform(self, ids, data_inputs, expected_outputs) -> ('BaseStep', Any):
+        self.save_checkpoint(ids, data_inputs)
+        return self, data_inputs
+
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseCheckpointStep':
         """
         Save checkpoint for data inputs and expected outputs so that it can
@@ -43,8 +51,6 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
         :param data_inputs: data inputs to save
         :return: self
         """
-        self.save_checkpoint(data_inputs)
-
         return self
 
     def transform(self, data_inputs):
@@ -54,8 +60,6 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
         :param data_inputs: data inputs to save
         :return: data_inputs
         """
-        self.save_checkpoint(data_inputs)
-
         return data_inputs
 
     @abstractmethod
@@ -67,18 +71,20 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
         raise NotImplementedError()
 
     @abstractmethod
-    def read_checkpoint(self, data_inputs) -> Any:
+    def read_checkpoint(self, data_inputs: Any) -> Any:
         """
         Read checkpoint data to get the data inputs and expected output.
+        :param data_inputs: data inputs to save
         :return: data_inputs_checkpoint
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def save_checkpoint(self, data_inputs):
+    def save_checkpoint(self, ids, data_inputs: Any):
         """
         Save checkpoint for data inputs and expected outputs so that it can
         be loaded by the checkpoint pipeline runner on the next pipeline run
+        :param ids: data inputs ids
         :param data_inputs: data inputs to save
         :return:
         """
@@ -103,14 +109,15 @@ class PickleCheckpointStep(BaseCheckpointStep):
         """
         data_inputs_checkpoint_file_name = self.checkpoint_path
         with open(self.get_checkpoint_file_path(data_inputs_checkpoint_file_name), 'rb') as file:
-            data_inputs = pickle.load(file)
+            checkpoint = pickle.load(file)
 
-        return data_inputs
+        return checkpoint
 
-    def save_checkpoint(self, data_inputs):
+    def save_checkpoint(self, ids, data_inputs):
         """
         Save pickle files for data inputs and expected output
         to create a checkpoint
+        :param ids: data inputs ids
         :param data_inputs: data inputs to be saved in a pickle file
         :return:
         """
