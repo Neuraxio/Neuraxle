@@ -22,14 +22,14 @@ This is the core of Neuraxle's pipelines. You can chain steps to call them one a
 from abc import ABC, abstractmethod
 from typing import Any, Tuple
 
-from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, HasherByIndex, Hasher
+from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, HasherByIndex, Hasher, \
+    DataContainer
 from neuraxle.checkpoints import BaseCheckpointStep
 
 
 class BasePipeline(TruncableSteps, ABC):
-    def __init__(self, steps: NamedTupleList, hasher: Hasher = HasherByIndex()):
-        BaseStep.__init__(self, None, None, None, hasher)
-        TruncableSteps.__init__(self, steps)
+    def __init__(self, steps: NamedTupleList, hasher: Hasher):
+        TruncableSteps.__init__(self, steps_as_tuple=steps, hasher=hasher)
 
     @abstractmethod
     def fit(self, data_inputs, expected_outputs=None) -> 'BasePipeline':
@@ -60,8 +60,23 @@ class Pipeline(BasePipeline, ResumableStepMixin):
     Fits and transform steps after latest checkpoint
     """
 
-    def __init__(self, steps: NamedTupleList):
-        super().__init__(steps)
+    def __init__(self, steps: NamedTupleList, hasher=HasherByIndex()):
+        if hasher is None:
+            raise ValueError('Pipeline hasher cannot be None')
+
+        BasePipeline.__init__(self, steps=steps, hasher=hasher)
+
+    def transform(self, data_inputs: Any):
+        """
+        After loading the last checkpoint, transform each pipeline steps
+        :param data_inputs: the data input to transform
+        :return: transformed data inputs
+        """
+        ids = self.hasher.hash(self.hyperparams, data_inputs)
+        data_container = DataContainer(ids=ids, data_inputs=data_inputs)
+        data_container = self._transform_core(data_container)
+
+        return data_container.data_inputs
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('Pipeline', Any):
         """
@@ -70,10 +85,11 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        new_self, data_inputs = self.fit_transform_steps(data_inputs, expected_outputs)
-        processed_outputs = data_inputs
+        ids = self.hasher.hash(self.hyperparams, data_inputs)
+        data_container = DataContainer(ids=ids, data_inputs=data_inputs, expected_outputs=expected_outputs)
+        new_self, data_container = self._fit_transform_core(data_container)
 
-        return new_self, processed_outputs
+        return new_self, data_container.data_inputs
 
     def fit(self, data_inputs, expected_outputs=None) -> 'Pipeline':
         """
@@ -82,44 +98,11 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        new_self, _ = self.fit_transform_steps(data_inputs, expected_outputs)
+        ids = self.hasher.hash(self.hyperparams, data_inputs)
+        data_container = DataContainer(ids=ids, data_inputs=data_inputs, expected_outputs=expected_outputs)
+        new_self, _ = self._fit_transform_core(data_container)
 
         return new_self
-
-    def fit_transform_steps(self, data_inputs, expected_outputs):
-        """
-        After loading the last checkpoint, fit transform each pipeline steps
-        :param data_inputs: the data input to fit on
-        :param expected_outputs: the expected data output to fit on
-        :return: the pipeline itself
-        """
-        steps_left_to_do, ids, data_inputs = self.resume_pipeline(data_inputs)
-
-        new_steps_as_tuple: NamedTupleList = []
-
-        for step_name, step in steps_left_to_do:
-            step, data_inputs = step.handle_fit_transform(ids, data_inputs, expected_outputs)
-            ids = step.rehash(ids, data_inputs)
-            new_steps_as_tuple.append((step_name, step))
-
-        self.steps_as_tuple = self.steps_as_tuple[:len(self.steps_as_tuple) - len(steps_left_to_do)] + \
-                              new_steps_as_tuple
-
-        return self, data_inputs
-
-    def transform(self, data_inputs):
-        """
-        After loading the last checkpoint, transform each pipeline steps
-        :param data_inputs: the data input to fit on
-        :return: transformed data inputs
-        """
-        steps_left_to_do, ids, data_inputs = self.resume_pipeline(data_inputs)
-
-        for step_name, step in steps_left_to_do:
-            data_inputs = step.handle_transform(ids, data_inputs)
-            ids = step.rehash(data_inputs)
-
-        return data_inputs
 
     def inverse_transform_processed_outputs(self, processed_outputs) -> Any:
         """
@@ -131,36 +114,98 @@ class Pipeline(BasePipeline, ResumableStepMixin):
             processed_outputs = step.transform(processed_outputs)
         return processed_outputs
 
-    def resume_pipeline(self, data_inputs) -> Tuple[NamedTupleList, iter, Any]:
-        new_data_inputs = data_inputs
-        new_starting_step_index = self.find_starting_step_index(data_inputs)
-        ids = self.hash(data_inputs)
+    def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', Any):
+        """
+        Fit transform then rehash ids with hyperparams and transformed data inputs
+        :param data_container: data container to fit transform
+        :return: tuple(fitted pipeline, transformed data container)
+        """
+        new_self, data_container = self._fit_transform_core(data_container)
+
+        ids = self.hasher.rehash(data_container.ids, self.hyperparams, data_container.data_inputs)
+        data_container.set_ids(ids)
+
+        return new_self, data_container
+
+    def handle_transform(self, data_container: DataContainer) -> Any:
+        """
+        Transform then rehash ids with hyperparams and transformed data inputs
+        :param data_container: data container to transform
+        :return: tuple(fitted pipeline, transformed data container)
+        """
+        data_container = self._transform_core(data_container)
+
+        ids = self.hasher.rehash(data_container.ids, self.hyperparams, data_container.data_inputs)
+        data_container.set_ids(ids)
+
+        return data_container
+
+    def _fit_transform_core(self, data_container) -> ('Pipeline', DataContainer):
+        """
+        After loading the last checkpoint, fit transform each pipeline steps
+        :param data_container: the data container to fit transform on
+        :return: tuple(pipeline, data_container)
+        """
+        steps_left_to_do, data_container = self._load_pipeline_checkpoint(data_container)
+
+        new_steps_as_tuple: NamedTupleList = []
+
+        for step_name, step in steps_left_to_do:
+            ids, data_container = step.handle_fit_transform(data_container)
+            new_steps_as_tuple.append((step_name, step))
+
+        self.steps_as_tuple = self.steps_as_tuple[:len(self.steps_as_tuple) - len(steps_left_to_do)] + \
+                              new_steps_as_tuple
+
+        return self, data_container
+
+    def _transform_core(self, data_container: DataContainer):
+        """
+        After loading the last checkpoint, transform each pipeline steps
+        :param data_container: the data container to transform
+        :return: transformed data container
+        """
+        steps_left_to_do, data_container = self._load_pipeline_checkpoint(data_container)
+
+        for step_name, step in steps_left_to_do:
+            data_container = step.handle_transform(data_container)
+
+        return data_container
+
+    def _load_pipeline_checkpoint(self, data_container: DataContainer) -> Tuple[NamedTupleList, DataContainer]:
+        """
+        Find the steps left to do, and load the latest checkpoint step data container
+        :param data_container: the data container to resume
+        :return: tuple(steps left to do, last checkpoint data container)
+        """
+        new_starting_step_index = self._find_starting_step_index(data_container)
 
         step = self.steps_as_tuple[new_starting_step_index]
         if isinstance(step, BaseCheckpointStep):
-            checkpoint = step.read_checkpoint(data_inputs)
-            ids, new_data_inputs = checkpoint
+            data_container = step.read_checkpoint(data_container)
 
-        return self.steps_as_tuple[new_starting_step_index:], ids, new_data_inputs
+        return self.steps_as_tuple[new_starting_step_index:], data_container
 
-    def find_starting_step_index(self, data_inputs) -> int:
+    def _find_starting_step_index(self, data_container: DataContainer) -> int:
         """
-        Find the starting step index that has the latest checkpoint (or 0 if there is no checkpoint)
-        :param data_inputs: the data input to fit on
-        :return: index
+        Find the index of the latest step that can be resumed
+        :param data_container: the data container to resume
+        :return: int index latest resumable step
         """
         for index, (step_name, step) in enumerate(reversed(self.steps_as_tuple)):
-            if isinstance(step, ResumableStepMixin) and step.should_resume(data_inputs):
+            if isinstance(step, ResumableStepMixin) and step.should_resume(data_container):
                 return len(self.steps_as_tuple) - index - 1
+
         return 0
 
-    def should_resume(self, data_inputs) -> bool:
+    def should_resume(self, data_container: DataContainer) -> bool:
         """
-        Return True if the pipeline has a step that can be resumed (another pipeline or a checkpoint step).
-        :param data_inputs: the data input to fit on
-        :return: boolean
+        Return True if the pipeline has a saved checkpoint that it can resume from
+        :param data_container: the data container to resume
+        :return: bool
         """
         for index, (step_name, step) in enumerate(reversed(self.steps_as_tuple)):
-            if isinstance(step, ResumableStepMixin) and step.should_resume(data_inputs):
+            if isinstance(step, ResumableStepMixin) and step.should_resume(data_container):
                 return True
+
         return False

@@ -4,37 +4,37 @@ from typing import List
 import numpy as np
 import pytest
 
-from neuraxle.base import BaseStep
+from neuraxle.base import BaseStep, DataContainer
 from neuraxle.checkpoints import BaseCheckpointStep
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
 
 
 class SomeCheckpointStep(BaseCheckpointStep):
-
-    def __init__(self, checkpoint_data_inputs):
+    def __init__(self, data_container: DataContainer = None):
         super().__init__()
-        self.checkpoint_data_inputs = checkpoint_data_inputs
+        self.data_container = data_container
         self.saved = False
-        self.saved_data_inputs_checkpoint = None
+        self.saved_data_container = None
 
     def set_checkpoint_path(self, path):
         pass
 
-    def read_checkpoint(self):
-        return self.checkpoint_data_inputs
+    def read_checkpoint(self, data_container: DataContainer):
+        return self.data_container
 
-    def save_checkpoint(self, data_inputs):
-        self.saved_data_inputs_checkpoint = data_inputs
+    def save_checkpoint(self, data_container: DataContainer):
+        self.saved_data_container = data_container
         self.saved = True
 
-    def should_resume(self, data_inputs) -> bool:
-        return self.checkpoint_data_inputs is not None
+    def should_resume(self, data_container) -> bool:
+        return self.data_container is not None
 
 
 data_inputs = np.ones((1, 1))
 expected_outputs = np.ones((1, 1))
-chekpoint = SomeCheckpointStep(data_inputs)
+dc = DataContainer(ids=range(len(data_inputs)), data_inputs=data_inputs, expected_outputs=expected_outputs)
+chekpoint = SomeCheckpointStep(dc)
 chekpoint_not_saved = SomeCheckpointStep(None)
 tape = TapeCallbackFunction()
 
@@ -49,7 +49,7 @@ tape_without_checkpoint_test_arguments = (
 tape_checkpoint_not_saved_test_arguments = (
     [
         ("a", TransformCallbackStep(tape.callback, ["1"])),
-        ("b", SomeCheckpointStep(checkpoint_data_inputs=None)
+        ("b", SomeCheckpointStep(data_container=None)
          ),
         ("c", TransformCallbackStep(tape.callback, ["2"])),
         ("d", TransformCallbackStep(tape.callback, ["3"]))
@@ -59,7 +59,7 @@ tape_checkpoint_not_saved_test_arguments = (
 tape_checkpoint_saved_after_first_step_test_arguments = (
     [
         ("a", TransformCallbackStep(tape.callback, ["1"])),
-        ("b", SomeCheckpointStep(checkpoint_data_inputs=data_inputs)
+        ("b", SomeCheckpointStep(data_container=dc)
          ),
         ("c", TransformCallbackStep(tape.callback, ["2"])),
         ("d", TransformCallbackStep(tape.callback, ["3"]))
@@ -70,7 +70,7 @@ tape_checkpoint_saved_after_second_step_test_arguments = (
     [
         ("a", TransformCallbackStep(tape.callback, ["1"])),
         ("b", TransformCallbackStep(tape.callback, ["2"])),
-        ("c", SomeCheckpointStep(checkpoint_data_inputs=data_inputs)
+        ("c", SomeCheckpointStep(data_container=dc)
          ),
         ("d", TransformCallbackStep(tape.callback, ["3"]))
     ],
@@ -81,7 +81,7 @@ tape_checkpoint_saved_after_last_step_test_arguments = (
         ("a", TransformCallbackStep(tape.callback, ["1"])),
         ("b", TransformCallbackStep(tape.callback, ["2"])),
         ("c", TransformCallbackStep(tape.callback, ["3"])),
-        ("d", SomeCheckpointStep(checkpoint_data_inputs=data_inputs)
+        ("d", SomeCheckpointStep(data_container=dc)
          ),
     ],
     [])
@@ -91,7 +91,7 @@ tape_checkpoint_saved_inside_subpipeline_last_step = (
         ("a", TransformCallbackStep(tape.callback, ["1"])),
         Pipeline([
             ("b", TransformCallbackStep(tape.callback, ["2"])),
-            ("d", SomeCheckpointStep(checkpoint_data_inputs=data_inputs)
+            ("d", SomeCheckpointStep(data_container=dc)
              ),
         ]),
         ("e", TransformCallbackStep(tape.callback, ["3"])),
@@ -103,7 +103,7 @@ tape_checkpoint_saved_inside_subpipeline_first_step = (
     [
         ("a", TransformCallbackStep(tape.callback, ["1"])),
         Pipeline([
-            ("d", SomeCheckpointStep(checkpoint_data_inputs=data_inputs)
+            ("d", SomeCheckpointStep(data_container=dc)
              ),
             ("b", TransformCallbackStep(tape.callback, ["2"])),
         ]),
@@ -117,7 +117,7 @@ tape_checkpoint_saved_inside_subpipeline_step_in_the_middle = (
         ("a", TransformCallbackStep(tape.callback, ["1"])),
         Pipeline([
             ("b", TransformCallbackStep(tape.callback, ["2"])),
-            ("d", SomeCheckpointStep(checkpoint_data_inputs=data_inputs)
+            ("d", SomeCheckpointStep(data_container=dc)
              ),
             ("e", TransformCallbackStep(tape.callback, ["3"])),
         ]),
@@ -132,7 +132,7 @@ tape_checkpoint_saved_inside_subpipeline_of_subpipeline = (
             ("b", TransformCallbackStep(tape.callback, ["2"])),
             Pipeline([
                 ("e", TransformCallbackStep(tape.callback, ["3"])),
-                ("d", SomeCheckpointStep(checkpoint_data_inputs=data_inputs)
+                ("d", SomeCheckpointStep(data_container=dc)
                  ),
                 ("f", TransformCallbackStep(tape.callback, ["4"])),
             ]),

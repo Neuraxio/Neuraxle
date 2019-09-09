@@ -30,26 +30,39 @@ from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSample
 
 
 class Hasher(ABC):
-    @abstractmethod
-    def hash(self, data_inputs: Any):
+    def hash(self, hyperparameters: HyperparameterSamples, data_inputs: Any):
         return hash(data_inputs)
 
     @abstractmethod
-    def rehash(self, ids, data_inputs: Any):
-        return self.hash(data_inputs)
-
-
-class NullHasher(Hasher):
-    def hash(self, data_inputs: Any):
-        pass
-
-    def rehash(self, ids, data_inputs: Any):
-        return ids
+    def rehash(self, ids, hyperparameters: HyperparameterSamples, data_inputs: Any):
+        raise NotImplementedError()
 
 
 class HasherByIndex(Hasher):
-    def hash(self, data_inputs: Any):
+    def hash(self, hyperparameters, data_inputs: Any):
         return range(len(data_inputs))
+
+    def rehash(self, ids, hyperparameters: HyperparameterSamples, data_inputs: Any):
+        return self.hash(hyperparameters, data_inputs)
+
+
+class IDHasher(Hasher):
+    def rehash(self, ids, hyperparameters: HyperparameterSamples, data_inputs: Any):
+        return ids
+
+
+class DataContainer:
+    def __init__(self, ids, data_inputs: Any, expected_outputs: Any = None):
+        self.original_ids = ids
+        self.ids = ids
+        self.data_inputs = data_inputs
+        self.expected_outputs = expected_outputs
+
+    def set_data_inputs(self, data_inputs: Any):
+        self.data_inputs = data_inputs
+
+    def set_ids(self, ids: Any):
+        self.ids = ids
 
 
 class BaseStep(ABC):
@@ -58,9 +71,13 @@ class BaseStep(ABC):
             hyperparams: HyperparameterSamples = None,
             hyperparams_space: HyperparameterSpace = None,
             name: str = None,
-            hasher: Hasher = NullHasher()
+            hasher: Hasher = None
     ):
         self.hasher = hasher
+
+        if self.hasher is None and hyperparams is not None and hyperparams != {}:
+            self.raise_hyperparams_without_hasher_exception()
+
         if hyperparams is None:
             hyperparams = dict()
         if hyperparams_space is None:
@@ -93,6 +110,9 @@ class BaseStep(ABC):
         return self.name
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
+        if self.hasher is None and hyperparams != {}:
+            self.raise_hyperparams_without_hasher_exception()
+
         self.hyperparams = HyperparameterSamples(hyperparams)
         return self
 
@@ -100,41 +120,54 @@ class BaseStep(ABC):
         return self.hyperparams
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
+        if self.hasher is None and hyperparams_space != {}:
+            self.raise_hyperparams_without_hasher_exception()
+
         self.hyperparams_space = HyperparameterSpace(hyperparams_space)
         return self
+
+    def raise_hyperparams_without_hasher_exception(self):
+        raise ValueError('Steps with hyperparams must have an hasher function(see BaseStep constructor). Step '
+                         'name : {0}'.format(self.name))
 
     def get_hyperparams_space(self, flat=False) -> HyperparameterSpace:
         return self.hyperparams_space
 
-    @abstractmethod
-    def handle_fit_transform(self, ids, data_inputs, expected_outputs) -> ('BaseStep', Any):
-        return self.fit_transform(data_inputs, expected_outputs)
+    def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', Any):
+        """
+        Update the data inputs inside DataContainer after fit transform.
+        :param data_container: the data container to transform
+        :return: tuple(fitted pipeline, data_container)
+        """
+        new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
+        data_container.set_data_inputs(out)
 
-    @abstractmethod
-    def handle_transform(self, ids, data_inputs) -> Any:
-        return self.transform(data_inputs)
+        return new_self, data_container
 
-    def hash(self, data_inputs: Any):
-        return self.hasher.hash(data_inputs)
+    def handle_transform(self, data_container: DataContainer) -> Any:
+        """
+        Update the data inputs inside DataContainer after transform.
+        :param data_container: the data container to transform
+        :return: transformed data container
+        """
+        out = self.transform(data_container.data_inputs)
+        data_container.set_data_inputs(out)
 
-    def rehash(self, ids, data_inputs: Any):
-        return self.hasher.rehash(ids, data_inputs)
+        return data_container
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
         new_self = self.fit(data_inputs, expected_outputs)
         out = new_self.transform(data_inputs)
-        return new_self, out
 
-    def fit_transform_one(self, data_input, expected_output=None) -> ('BaseStep', Any):
-        new_self = self.fit_one(data_input, expected_output)
-        out = new_self.transform_one(data_input)
         return new_self, out
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
         if expected_outputs is None:
             expected_outputs = [None] * len(data_inputs)
+
         for data_input, expected_output in zip(data_inputs, expected_outputs):
             self.fit_one(data_input, expected_output)
+
         return self
 
     def transform(self, data_inputs):
@@ -144,6 +177,18 @@ class BaseStep(ABC):
     def inverse_transform(self, processed_outputs):
         data_inputs = [self.inverse_transform_one(data_output) for data_output in processed_outputs]
         return data_inputs
+
+    def fit_one(self, data_input, expected_output=None) -> 'BaseStep':
+        # return self
+        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
+
+    def transform_one(self, data_input):
+        # return processed_output
+        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
+
+    def inverse_transform_one(self, data_output):
+        # return data_input
+        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
     def predict(self, data_input):
         return self.transform(data_input)
@@ -252,18 +297,6 @@ class BaseStep(ABC):
         self.pending_mutate = (new_base_step, new_method, method_to_assign_to)
 
         return self
-
-    def fit_one(self, data_input, expected_output=None) -> 'BaseStep':
-        # return self
-        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
-
-    def transform_one(self, data_input):
-        # return processed_output
-        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
-
-    def inverse_transform_one(self, data_output):
-        # return data_input
-        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
     def tosklearn(self) -> 'NeuraxleToSKLearnPipelineWrapper':
         from sklearn.base import BaseEstimator
@@ -399,15 +432,6 @@ class NonTransformableMixin:
         """
         return data_inputs
 
-    def transform_one(self, data_input):
-        """
-        Do nothing - return the same data.
-
-        :param data_input: the data to process
-        :return: the ``data_input``, unchanged.
-        """
-        return data_input
-
     def inverse_transform(self, processed_outputs):
         """
         Do nothing - return the same data.
@@ -417,15 +441,6 @@ class NonTransformableMixin:
         """
         return processed_outputs
 
-    def inverse_transform_one(self, processed_output):
-        """
-        Do nothing - return the same data.
-
-        :param processed_output: the data to process
-        :return: the ``data_output``, unchanged.
-        """
-        return processed_output
-
 
 class TruncableSteps(BaseStep, ABC):
 
@@ -433,9 +448,10 @@ class TruncableSteps(BaseStep, ABC):
             self,
             steps_as_tuple: NamedTupleList,
             hyperparams: HyperparameterSamples = dict(),
-            hyperparams_space: HyperparameterSpace = dict()
+            hyperparams_space: HyperparameterSpace = dict(),
+            hasher: Hasher = None
     ):
-        super().__init__(hyperparams, hyperparams_space)
+        super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space, hasher=hasher)
         self.steps_as_tuple: NamedTupleList = self.patch_missing_names(steps_as_tuple)
         self._refresh_steps()
         assert isinstance(self, BaseStep), "Classes that inherit from TruncableMixin must also inherit from BaseStep."
@@ -678,5 +694,5 @@ class ResumableStepMixin:
     """
 
     @abstractmethod
-    def should_resume(self, data_inputs) -> bool:
+    def should_resume(self, data_container) -> bool:
         raise NotImplementedError()
