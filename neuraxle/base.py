@@ -51,6 +51,19 @@ class IDHasher(Hasher):
         return ids
 
 
+class HasherByHyperparameters(Hasher):
+    def rehash(self,
+               ids, hyperparameters: HyperparameterSamples,
+               data_inputs: Any
+               ):
+        current_hyperparameters_hash = hash(frozenset(hyperparameters.to_flat()))
+
+        return [
+            hash((data_input_id, current_hyperparameters_hash))
+            for data_input_id in ids
+        ]
+
+
 class DataContainer:
     def __init__(self, ids, data_inputs: Any, expected_outputs: Any = None):
         self.original_ids = ids
