@@ -30,14 +30,14 @@ from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, Met
 class BaseCallbackStep(BaseStep, ABC):
     """Base class for callback steps."""
 
-    def __init__(self, callback_function, more_arguments: List = tuple()):
+    def __init__(self, callback_function, more_arguments: List = tuple(), hyperparams = None):
         """
         Create the callback step with a function and extra arguments to send to the function
 
         :param callback_function: The function that will be called on events.
         :param more_arguments: Extra arguments that will be sent to the callback after the processed data (optional).
         """
-        super().__init__()
+        super().__init__(hyperparams=hyperparams)
         self.callback_function = callback_function
         self.more_arguments = more_arguments
 

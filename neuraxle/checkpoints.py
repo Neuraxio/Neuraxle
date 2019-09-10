@@ -35,6 +35,9 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
         BaseStep.__init__(self)
         self.force_checkpoint_name = force_checkpoint_name
 
+    def setup(self, step_path: str, setup_arguments: dict):
+        self.set_checkpoint_path(step_path)
+
     def handle_transform(self, data_container: DataContainer) -> Any:
         self.save_checkpoint(data_container)
         return data_container
@@ -84,7 +87,6 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
         """
         Save checkpoint for data inputs and expected outputs so that it can
         be loaded by the checkpoint pipeline runner on the next pipeline run
-        :param ids: data inputs ids
         :param data_container: data inputs to save
         :return:
         """
@@ -97,20 +99,36 @@ class PickleCheckpointStep(BaseCheckpointStep):
     to eventually be able to load them using the checkpoint pipeline runner.
     """
 
-    def __init__(self, force_checkpoint_name: str = None, cache_folder: str = DEFAULT_CACHE_FOLDER):
-        super().__init__(force_checkpoint_name)
+    def __init__(self, cache_folder: str = DEFAULT_CACHE_FOLDER):
+        super().__init__()
         self.cache_folder = cache_folder
-        self.force_checkpoint_name = force_checkpoint_name
 
     def read_checkpoint(self, data_container: DataContainer):
         """
         Read pickle files for data inputs and expected outputs checkpoint
         :return: tuple(data_inputs, expected_outputs
         """
-        with open(self.get_checkpoint_file_path(data_container), 'rb') as file:
-            checkpoint = pickle.load(file)
+        checkpoint_data_container = DataContainer(
+            current_ids=[],
+            data_inputs=[],
+            expected_outputs=None
+        )
 
-        return checkpoint
+        for current_id, data_input, expected_output in zip(
+                data_container.current_ids,
+                data_container.data_inputs,
+                data_container.expected_outputs
+        ):
+            with open(self.get_checkpoint_file_path(current_id), 'wb') as file:
+                (checkpoint_current_id, checkpoint_data_input, checkpoint_expected_output) = \
+                    pickle.load(file)
+                checkpoint_data_container.append(
+                    current_id=checkpoint_current_id,
+                    data_input=checkpoint_data_input,
+                    expected_output=checkpoint_expected_output
+                )
+
+        return checkpoint_data_container
 
     def save_checkpoint(self, data_container: DataContainer):
         """
@@ -119,18 +137,22 @@ class PickleCheckpointStep(BaseCheckpointStep):
         :param data_container: data inputs to be saved in a pickle file
         :return:
         """
-        self.set_checkpoint_path(self.force_checkpoint_name)
-        with open(self.get_checkpoint_file_path(data_container), 'wb') as file:
-            pickle.dump(data_container, file)
+        for current_id, data_input, expected_output in zip(
+                data_container.current_ids,
+                data_container.data_inputs,
+                data_container.expected_outputs
+        ):
+            with open(self.get_checkpoint_file_path(current_id), 'wb') as file:
+                pickle.dump(
+                    (current_id, data_input, expected_output),
+                    file
+                )
 
     def set_checkpoint_path(self, path):
         """
-        Set checkpoint path inside the cache folder (ex: cache_folder/pipeline_name/force_checkpoint_name/data_inputs.pickle)
+        Set checkpoint path inside the cache folder (ex: cache_folder/pipeline/step_a/id_rehashed.pickle)
         :param path: checkpoint path
         """
-        if path is None:
-            path = self.name
-
         self.checkpoint_path = os.path.join(self.cache_folder, path)
         if not os.path.exists(self.checkpoint_path):
             os.makedirs(self.checkpoint_path)
@@ -139,8 +161,14 @@ class PickleCheckpointStep(BaseCheckpointStep):
         return self.checkpoint_exists(data_container)
 
     def checkpoint_exists(self, data_container: DataContainer) -> bool:
-        self.set_checkpoint_path(self.force_checkpoint_name)
-        return os.path.exists(self.get_checkpoint_file_path(data_container))
+        for current_id in data_container.current_ids:
+            if not os.path.exists(self.get_checkpoint_file_path(current_id)):
+                return False
 
-    def get_checkpoint_file_path(self, data_container: DataContainer):
-        return os.path.join(self.checkpoint_path, 'data_inputs.pickle')
+        return True
+
+    def get_checkpoint_file_path(self, current_id):
+        return os.path.join(
+            self.checkpoint_path,
+            '{0}.pickle'.format(current_id)
+        )

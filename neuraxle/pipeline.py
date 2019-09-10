@@ -22,14 +22,13 @@ This is the core of Neuraxle's pipelines. You can chain steps to call them one a
 from abc import ABC, abstractmethod
 from typing import Any, Tuple
 
-from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, HasherByIndex, Hasher, \
-    DataContainer
+from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, DataContainer
 from neuraxle.checkpoints import BaseCheckpointStep
 
 
 class BasePipeline(TruncableSteps, ABC):
-    def __init__(self, steps: NamedTupleList, hasher: Hasher):
-        TruncableSteps.__init__(self, steps_as_tuple=steps, hasher=hasher)
+    def __init__(self, steps: NamedTupleList):
+        TruncableSteps.__init__(self, steps_as_tuple=steps)
 
     @abstractmethod
     def fit(self, data_inputs, expected_outputs=None) -> 'BasePipeline':
@@ -60,11 +59,8 @@ class Pipeline(BasePipeline, ResumableStepMixin):
     Fits and transform steps after latest checkpoint
     """
 
-    def __init__(self, steps: NamedTupleList, hasher=HasherByIndex()):
-        if hasher is None:
-            raise ValueError('Pipeline hasher cannot be None')
-
-        BasePipeline.__init__(self, steps=steps, hasher=hasher)
+    def __init__(self, steps: NamedTupleList):
+        BasePipeline.__init__(self, steps=steps)
 
     def transform(self, data_inputs: Any):
         """
@@ -72,9 +68,17 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         :param data_inputs: the data input to transform
         :return: transformed data inputs
         """
-        ids = self.hasher.hash(self.hyperparams, data_inputs)
-        data_container = DataContainer(ids=ids, data_inputs=data_inputs)
+        self.setup()
+
+        current_ids = self.hasher.hash(
+            current_ids=None,
+            hyperparameters=self.hyperparams,
+            data_inputs=data_inputs
+        )
+        data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
         data_container = self._transform_core(data_container)
+
+        self.teardown()
 
         return data_container.data_inputs
 
@@ -85,9 +89,21 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        ids = self.hasher.hash(self.hyperparams, data_inputs)
-        data_container = DataContainer(ids=ids, data_inputs=data_inputs, expected_outputs=expected_outputs)
+        self.setup()
+
+        current_ids = self.hasher.hash(
+            current_ids=None,
+            hyperparameters=self.hyperparams,
+            data_inputs=data_inputs
+        )
+        data_container = DataContainer(
+            current_ids=current_ids,
+            data_inputs=data_inputs,
+            expected_outputs=expected_outputs
+        )
         new_self, data_container = self._fit_transform_core(data_container)
+
+        self.teardown()
 
         return new_self, data_container.data_inputs
 
@@ -98,9 +114,21 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        ids = self.hasher.hash(self.hyperparams, data_inputs)
-        data_container = DataContainer(ids=ids, data_inputs=data_inputs, expected_outputs=expected_outputs)
+        self.setup()
+
+        current_ids = self.hasher.hash(
+            current_ids=None,
+            hyperparameters=self.hyperparams,
+            data_inputs=data_inputs
+        )
+        data_container = DataContainer(
+            current_ids=current_ids,
+            data_inputs=data_inputs,
+            expected_outputs=expected_outputs
+        )
         new_self, _ = self._fit_transform_core(data_container)
+
+        self.teardown()
 
         return new_self
 
@@ -110,7 +138,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         :param processed_outputs: the forward transformed data input
         :return: backward transformed processed outputs
         """
-        for step_name, step in list(reversed(self.steps_as_tuple)):
+        for step_name, step in list(reversed(self.items())):
             processed_outputs = step.transform(processed_outputs)
         return processed_outputs
 
@@ -122,8 +150,8 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         """
         new_self, data_container = self._fit_transform_core(data_container)
 
-        ids = self.hasher.rehash(data_container.ids, self.hyperparams, data_container.data_inputs)
-        data_container.set_ids(ids)
+        ids = self.hasher.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        data_container.set_current_ids(ids)
 
         return new_self, data_container
 
@@ -135,8 +163,8 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         """
         data_container = self._transform_core(data_container)
 
-        ids = self.hasher.rehash(data_container.ids, self.hyperparams, data_container.data_inputs)
-        data_container.set_ids(ids)
+        ids = self.hasher.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        data_container.set_current_ids(ids)
 
         return data_container
 
@@ -192,7 +220,11 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         :param data_container: the data container to resume
         :return: int index latest resumable step
         """
-        for index, (step_name, step) in enumerate(reversed(self.steps_as_tuple)):
+        for index, (step_name, step) in enumerate(self.items()):
+            current_ids = step.hash(current_ids=data_container.current_ids, hyperparameters=step.hyperparams)
+            data_container.set_current_ids(current_ids)
+
+        for index, (step_name, step) in enumerate(reversed(self.items())):
             if isinstance(step, ResumableStepMixin) and step.should_resume(data_container):
                 return len(self.steps_as_tuple) - index - 1
 
@@ -204,7 +236,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         :param data_container: the data container to resume
         :return: bool
         """
-        for index, (step_name, step) in enumerate(reversed(self.steps_as_tuple)):
+        for index, (step_name, step) in enumerate(reversed(self.items())):
             if isinstance(step, ResumableStepMixin) and step.should_resume(data_container):
                 return True
 

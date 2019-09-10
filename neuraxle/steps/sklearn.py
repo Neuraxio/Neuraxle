@@ -23,7 +23,7 @@ Those steps works with scikit-learn (sklearn) transformers and estimators.
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import Ridge
 
-from neuraxle.base import BaseStep, IDHasher, Hasher
+from neuraxle.base import BaseStep
 from neuraxle.hyperparams.distributions import LogUniform, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 from neuraxle.steps.numpy import NumpyTranspose
@@ -35,14 +35,13 @@ class SKLearnWrapper(BaseStep):
             self,
             wrapped_sklearn_predictor,
             hyperparams_space: HyperparameterSpace = None,
-            return_all_sklearn_default_params_on_get=False,
-            hasher: Hasher = IDHasher()
+            return_all_sklearn_default_params_on_get=False
     ):
         if not isinstance(wrapped_sklearn_predictor, BaseEstimator):
             raise ValueError("The wrapped_sklearn_predictor must be an instance of scikit-learn's BaseEstimator.")
         self.wrapped_sklearn_predictor = wrapped_sklearn_predictor
         params: HyperparameterSamples = wrapped_sklearn_predictor.get_params()
-        super().__init__(hyperparams=params, hyperparams_space=hyperparams_space, hasher=hasher)
+        super().__init__(hyperparams=params, hyperparams_space=hyperparams_space)
         self.return_all_sklearn_default_params_on_get = return_all_sklearn_default_params_on_get
 
     def fit(self, data_inputs, expected_outputs=None) -> 'SKLearnWrapper':

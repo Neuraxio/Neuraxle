@@ -1,4 +1,3 @@
-import string
 from typing import List
 
 import numpy as np
@@ -13,29 +12,28 @@ from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
 class SomeCheckpointStep(BaseCheckpointStep):
     def __init__(self, data_container: DataContainer = None):
         super().__init__()
-        self.data_container = data_container
         self.saved = False
-        self.saved_data_container = None
+        self.saved_data_container = data_container
+        self.checkpoint_path = None
 
     def set_checkpoint_path(self, path):
+        self.checkpoint_path = path
         pass
 
     def read_checkpoint(self, data_container: DataContainer):
-        return self.data_container
+        return self.saved_data_container
 
     def save_checkpoint(self, data_container: DataContainer):
         self.saved_data_container = data_container
         self.saved = True
 
     def should_resume(self, data_container) -> bool:
-        return self.data_container is not None
+        return self.saved_data_container is not None
 
 
 data_inputs = np.ones((1, 1))
 expected_outputs = np.ones((1, 1))
-dc = DataContainer(ids=range(len(data_inputs)), data_inputs=data_inputs, expected_outputs=expected_outputs)
-chekpoint = SomeCheckpointStep(dc)
-chekpoint_not_saved = SomeCheckpointStep(None)
+dc = DataContainer(current_ids=range(len(data_inputs)), data_inputs=data_inputs, expected_outputs=expected_outputs)
 tape = TapeCallbackFunction()
 
 tape_without_checkpoint_test_arguments = (

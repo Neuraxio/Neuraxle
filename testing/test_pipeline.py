@@ -22,7 +22,7 @@ Tests for Pipelines
 import numpy as np
 import pytest
 
-from neuraxle.base import BaseStep, HasherByIndex
+from neuraxle.base import BaseStep, RangeHasher
 from neuraxle.hyperparams.distributions import RandInt, LogUniform
 from neuraxle.hyperparams.space import nested_dict_to_flat, HyperparameterSpace
 from neuraxle.pipeline import Pipeline
@@ -36,7 +36,7 @@ AN_EXPECTED_OUTPUT = "I am an expected output"
 
 
 class SomeStep(BaseStep):
-    def __init__(self, hyperparams_space: HyperparameterSpace = None, hasher=HasherByIndex()):
+    def __init__(self, hyperparams_space: HyperparameterSpace = None, hasher=RangeHasher()):
         super().__init__(hyperparams=None, hyperparams_space=hyperparams_space, hasher=hasher)
 
     def fit_one(self, data_input, expected_output=None) -> 'SomeStep':
@@ -54,6 +54,8 @@ steps_lists = [
         ("some_step_3", SomeStep())
     ]
 ]
+
+
 @pytest.mark.parametrize("steps_list", steps_lists)
 def test_pipeline_fit_transform(steps_list):
     data_input_ = [AN_INPUT]

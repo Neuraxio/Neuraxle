@@ -20,6 +20,7 @@ This is the core of Neuraxle. Most pipeline steps derive (inherit) from those cl
 
 """
 
+import os
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
@@ -29,53 +30,46 @@ from typing import Tuple, List, Union, Any
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
 
-class Hasher(ABC):
-    def hash(self, hyperparameters: HyperparameterSamples, data_inputs: Any):
-        return hash(data_inputs)
-
+class BaseHasher(ABC):
     @abstractmethod
-    def rehash(self, ids, hyperparameters: HyperparameterSamples, data_inputs: Any):
+    def hash(self, current_ids, hyperparameters: HyperparameterSamples, data_inputs: Any):
         raise NotImplementedError()
 
-
-class HasherByIndex(Hasher):
-    def hash(self, hyperparameters, data_inputs: Any):
-        return range(len(data_inputs))
-
-    def rehash(self, ids, hyperparameters: HyperparameterSamples, data_inputs: Any):
-        return self.hash(hyperparameters, data_inputs)
+    def _hash_hyperparameters(self, hyperparams: HyperparameterSamples):
+        return hash(frozenset(hyperparams.to_flat()))
 
 
-class IDHasher(Hasher):
-    def rehash(self, ids, hyperparameters: HyperparameterSamples, data_inputs: Any):
-        return ids
+class RangeHasher(BaseHasher):
+    def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
+        if isinstance(hyperparameters, dict):
+            hyperparameters = HyperparameterSamples(hyperparameters)
+        if current_ids is None:
+            current_ids = list(range(len(data_inputs)))
 
-
-class HasherByHyperparameters(Hasher):
-    def rehash(self,
-               ids, hyperparameters: HyperparameterSamples,
-               data_inputs: Any
-               ):
-        current_hyperparameters_hash = hash(frozenset(hyperparameters.to_flat()))
+        current_hyperparameters_hash = self._hash_hyperparameters(hyperparameters)
 
         return [
-            hash((data_input_id, current_hyperparameters_hash))
-            for data_input_id in ids
+            hash((current_id, current_hyperparameters_hash))
+            for current_id in current_ids
         ]
 
 
 class DataContainer:
-    def __init__(self, ids, data_inputs: Any, expected_outputs: Any = None):
-        self.original_ids = ids
-        self.ids = ids
+    def __init__(self, current_ids, data_inputs: Any, expected_outputs: Any = None):
+        self.current_ids = current_ids
         self.data_inputs = data_inputs
         self.expected_outputs = expected_outputs
 
     def set_data_inputs(self, data_inputs: Any):
         self.data_inputs = data_inputs
 
-    def set_ids(self, ids: Any):
-        self.ids = ids
+    def set_current_ids(self, current_ids: Any):
+        self.current_ids = current_ids
+
+    def append(self, current_id, data_input, expected_output):
+        self.current_ids.append(current_id)
+        self.data_inputs.append(data_input)
+        self.expected_outputs.append(expected_output)
 
 
 class BaseStep(ABC):
@@ -84,25 +78,30 @@ class BaseStep(ABC):
             hyperparams: HyperparameterSamples = None,
             hyperparams_space: HyperparameterSpace = None,
             name: str = None,
-            hasher: Hasher = None
+            hasher: BaseHasher = None
     ):
-        self.hasher = hasher
-
-        if self.hasher is None and hyperparams is not None and hyperparams != {}:
-            self.raise_hyperparams_without_hasher_exception()
 
         if hyperparams is None:
             hyperparams = dict()
         if hyperparams_space is None:
             hyperparams_space = dict()
+        if hasher is None:
+            hasher = RangeHasher()
         if name is None:
             name = self.__class__.__name__
 
+        self.hasher = hasher
         self.hyperparams: HyperparameterSamples = hyperparams
         self.hyperparams_space: HyperparameterSpace = hyperparams_space
         self.name: str = name
 
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
+
+    def setup(self, step_path: str, setup_arguments: dict):
+        pass
+
+    def teardown(self):
+        pass
 
     def set_name(self, name: str):
         """
@@ -123,9 +122,6 @@ class BaseStep(ABC):
         return self.name
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
-        if self.hasher is None and hyperparams != {}:
-            self.raise_hyperparams_without_hasher_exception()
-
         self.hyperparams = HyperparameterSamples(hyperparams)
         return self
 
@@ -133,15 +129,12 @@ class BaseStep(ABC):
         return self.hyperparams
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
-        if self.hasher is None and hyperparams_space != {}:
-            self.raise_hyperparams_without_hasher_exception()
-
         self.hyperparams_space = HyperparameterSpace(hyperparams_space)
         return self
 
-    def raise_hyperparams_without_hasher_exception(self):
-        raise ValueError('Steps with hyperparams must have an hasher function(see BaseStep constructor). Step '
-                         'name : {0}'.format(self.name))
+    def set_hasher(self, hasher: BaseHasher) -> 'BaseStep':
+        self.hasher = hasher
+        return self
 
     def get_hyperparams_space(self, flat=False) -> HyperparameterSpace:
         return self.hyperparams_space
@@ -155,6 +148,9 @@ class BaseStep(ABC):
         new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
         data_container.set_data_inputs(out)
 
+        current_ids = self.hasher.hash(data_container.current_ids, self.hyperparams, out)
+        data_container.set_current_ids(current_ids)
+
         return new_self, data_container
 
     def handle_transform(self, data_container: DataContainer) -> Any:
@@ -165,6 +161,9 @@ class BaseStep(ABC):
         """
         out = self.transform(data_container.data_inputs)
         data_container.set_data_inputs(out)
+
+        current_ids = self.hasher.hash(data_container.current_ids, self.hyperparams, out)
+        data_container.set_current_ids(current_ids)
 
         return data_container
 
@@ -462,12 +461,36 @@ class TruncableSteps(BaseStep, ABC):
             steps_as_tuple: NamedTupleList,
             hyperparams: HyperparameterSamples = dict(),
             hyperparams_space: HyperparameterSpace = dict(),
-            hasher: Hasher = None
+            hasher: BaseHasher = None
     ):
         super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space, hasher=hasher)
         self.steps_as_tuple: NamedTupleList = self.patch_missing_names(steps_as_tuple)
         self._refresh_steps()
+        self.is_initialized = False
+
         assert isinstance(self, BaseStep), "Classes that inherit from TruncableMixin must also inherit from BaseStep."
+
+    def setup(self, step_path: str = None, setup_arguments: dict = None):
+        if self.is_initialized:
+            return
+
+        if step_path is None:
+            step_path = self.name
+
+        if setup_arguments is None:
+            setup_arguments = {}
+
+        for step_name, step in self.steps_as_tuple:
+            step.setup(
+                step_path=os.path.join(step_path, step_name),
+                setup_arguments=setup_arguments
+            )
+
+        self.is_initialized = True
+
+    def teardown(self):
+        for step_name, step in self.steps_as_tuple:
+            step.teardown()
 
     def patch_missing_names(self, steps_as_tuple: List) -> NamedTupleList:
         names_yet = set()
@@ -486,18 +509,21 @@ class TruncableSteps(BaseStep, ABC):
                     "Named pipeline tuples must be unique. "
                     "Will rename '{}' because it already exists.".format(class_name))
 
-                # Add suffix number to name if it is already used to ensure name uniqueness.
-                i = 1
-                while _name in names_yet:
-                    _name = class_name + str(i)
-                    i += 1
-
+                _name = self.rename_step(step_name=_name, class_name=class_name, names_yet=names_yet)
                 step.set_name(_name)
 
             step = (_name, step)
             names_yet.add(step[0])
             patched.append(step)
         return patched
+
+    def rename_step(self, step_name, class_name, names_yet):
+        # Add suffix number to name if it is already used to ensure name uniqueness.
+        i = 1
+        while step_name in names_yet:
+            step_name = class_name + str(i)
+            i += 1
+        return step_name
 
     def _refresh_steps(self):
         """
