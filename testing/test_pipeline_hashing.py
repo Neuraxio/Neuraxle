@@ -7,12 +7,13 @@ from neuraxle.base import NamedTupleList, BaseHasher
 from neuraxle.checkpoints import BaseCheckpointStep
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.util import TransformCallbackStep
-from testing.test_resumable_pipeline import SomeCheckpointStep, tape
+from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
+from testing.test_resumable_pipeline import SomeCheckpointStep
 
 
 class ResumablePipelineTestCase:
-    def __init__(self, steps: NamedTupleList, expected_tape: List[str], di, eo=None, expected_rehashed_ids=None):
+    def __init__(self, tape, steps: NamedTupleList, expected_tape: List[str], di, eo=None, expected_rehashed_ids=None):
+        self.tape = tape
         self.expected_outputs = eo
         self.data_inputs = di
         self.steps = steps
@@ -26,10 +27,10 @@ class MockHasher(BaseHasher):
             current_ids = list(range(len(data_inputs)))
             current_ids = [str(c) for c in current_ids]
 
-        if isinstance(hyperparameters, dict):
-            hyperparameters = HyperparameterSamples(hyperparameters)
-
-        items = ",".join([str(value) for prop, value in hyperparameters.to_flat().items()])
+        if hyperparameters == {}:
+            return current_ids
+        else:
+            items = ",".join([str(value) for prop, value in hyperparameters.to_flat().items()])
 
         return [
             ",".join([str(current_id), items])
@@ -41,7 +42,7 @@ def create_callback_step(tape_step_name, hyperparams):
     step = (
         tape_step_name,
         TransformCallbackStep(
-            callback_function=tape.callback,
+            callback_function=TapeCallbackFunction().callback,
             more_arguments=[tape_step_name],
             hyperparams=HyperparameterSamples(hyperparams)
         )
@@ -68,139 +69,149 @@ def set_hasher(steps, hasher):
     return None
 
 
-one_step_with_empty_hyperparameters = ResumablePipelineTestCase(
-    steps=[
-        create_callback_step("a", {}),
-        ("checkpoint", SomeCheckpointStep()),
-    ],
-    di=np.array([1, 2]),
-    eo=np.array([1, 2]),
-    expected_tape=["a"],
-    expected_rehashed_ids=['0,,', '1,,'],
-)
-
-steps_with_empty_hyperparameters = ResumablePipelineTestCase(
-    steps=[
-        create_callback_step("a", {}),
-        create_callback_step("b", {}),
-        ("checkpoint", SomeCheckpointStep()),
-    ],
-    di=np.array([1, 2]),
-    eo=np.array([1, 2]),
-    expected_tape=["a", "b"],
-    expected_rehashed_ids=['0,,,', '1,,,'],
-)
-
-steps_with_empty_hyperparameters_sub_pipeline = ResumablePipelineTestCase(
-    steps=[
-        create_callback_step("a", {}),
-        create_callback_step("b", {}),
-        Pipeline([
-            create_callback_step("c", {}),
-            create_callback_step("d", {}),
+def create_test_cases():
+    one_step_with_empty_hyperparameters = ResumablePipelineTestCase(
+        tape=TapeCallbackFunction(),
+        steps=[
+            create_callback_step("a", {}),
             ("checkpoint", SomeCheckpointStep()),
-        ])
-    ],
-    di=np.array([1, 2]),
-    eo=np.array([1, 2]),
-    expected_tape=["a", "b"],
-    expected_rehashed_ids=['0,,,,,,', '1,,,,,,'],
-)
+        ],
+        di=np.array([1, 2]),
+        eo=np.array([1, 2]),
+        expected_tape=["a"],
+        expected_rehashed_ids=['0', '1'],
+    )
 
-one_step_with_hyperparameters = ResumablePipelineTestCase(
-    steps=[
-        create_callback_step("a", {"a__learning_rate": 1}),
-        ("checkpoint", SomeCheckpointStep()),
-    ],
-    di=np.array([1, 2]),
-    eo=np.array([1, 2]),
-    expected_tape=["a"],
-    expected_rehashed_ids=['0,,1', '1,,1'],
-)
-
-steps_with_hyperparameters = ResumablePipelineTestCase(
-    steps=[
-        create_callback_step("a", {"a__learning_rate": 1}),
-        create_callback_step("b", {"b__learning_rate": 2}),
-        ("checkpoint", SomeCheckpointStep()),
-    ],
-    di=np.array([1, 2]),
-    eo=np.array([1, 2]),
-    expected_tape=["a", "b"],
-    expected_rehashed_ids=['0,,1,2', '1,,1,2'],
-)
-
-steps_with_hyperparameters_sub_pipeline = ResumablePipelineTestCase(
-    steps=[
-        create_callback_step("a", {"a__learning_rate": 1}),
-        create_callback_step("b", {"b__learning_rate": 2}),
-        Pipeline([
-            create_callback_step("c", {"c__learning_rate": 3}),
-            create_callback_step("d", {"d__learning_rate": 4}),
+    steps_with_empty_hyperparameters = ResumablePipelineTestCase(
+        tape=TapeCallbackFunction(),
+        steps=[
+            create_callback_step("a", {}),
+            create_callback_step("b", {}),
             ("checkpoint", SomeCheckpointStep()),
-        ])
-    ],
-    di=np.array([1, 2]),
-    eo=np.array([1, 2]),
-    expected_tape=["a", "b"],
-    expected_rehashed_ids=['0,,1,2,3,4,', '1,,1,2,3,4,'],
-)
+        ],
+        di=np.array([1, 2]),
+        eo=np.array([1, 2]),
+        expected_tape=["a", "b"],
+        expected_rehashed_ids=['0', '1'],
+    )
 
-one_step_with_nested_hyperparameters = ResumablePipelineTestCase(
-    steps=[
-        create_callback_step("a", {"a": {"learning_rate": 1}}),
-        ("checkpoint", SomeCheckpointStep()),
-    ],
-    di=np.array([1, 2]),
-    eo=np.array([1, 2]),
-    expected_tape=["a"],
-    expected_rehashed_ids=['0,,1', '1,,1'],
-)
+    steps_with_empty_hyperparameters_sub_pipeline = ResumablePipelineTestCase(
+        tape=TapeCallbackFunction(),
+        steps=[
+            create_callback_step("a", {}),
+            create_callback_step("b", {}),
+            Pipeline([
+                create_callback_step("c", {}),
+                create_callback_step("d", {}),
+                ("checkpoint", SomeCheckpointStep()),
+            ])
+        ],
+        di=np.array([1, 2]),
+        eo=np.array([1, 2]),
+        expected_tape=["a", "b"],
+        expected_rehashed_ids=['0', '1'],
+    )
 
-steps_with_nested_hyperparameters = ResumablePipelineTestCase(
-    steps=[
-        create_callback_step("a", {"a": {"learning_rate": 1}}),
-        create_callback_step("b", {"b": {"learning_rate": 2}}),
-        ("checkpoint", SomeCheckpointStep()),
-    ],
-    di=np.array([1, 2]),
-    eo=np.array([1, 2]),
-    expected_tape=["a", "b"],
-    expected_rehashed_ids=['0,,1,2', '1,,1,2'],
-)
-
-steps_with_nested_hyperparameters_sub_pipeline = ResumablePipelineTestCase(
-    steps=[
-        create_callback_step("a", {"a": {"learning_rate": 1}}),
-        create_callback_step("b", {"b": {"learning_rate": 2}}),
-        Pipeline([
-            create_callback_step("c", {"c": {"learning_rate": 3}}),
-            create_callback_step("d", {"d": {"learning_rate": 4}}),
+    one_step_with_hyperparameters = ResumablePipelineTestCase(
+        tape=TapeCallbackFunction(),
+        steps=[
+            create_callback_step("a", {"a__learning_rate": 1}),
             ("checkpoint", SomeCheckpointStep()),
-        ])
-    ],
-    di=np.array([1, 2]),
-    eo=np.array([1, 2]),
-    expected_tape=["a", "b"],
-    expected_rehashed_ids=['0,,1,2,3,4,', '1,,1,2,3,4,'],
-)
+        ],
+        di=np.array([1, 2]),
+        eo=np.array([1, 2]),
+        expected_tape=["a"],
+        expected_rehashed_ids=['0,1', '1,1'],
+    )
+
+    steps_with_hyperparameters = ResumablePipelineTestCase(
+        tape=TapeCallbackFunction(),
+        steps=[
+            create_callback_step("a", {"a__learning_rate": 1}),
+            create_callback_step("b", {"b__learning_rate": 2}),
+            ("checkpoint", SomeCheckpointStep()),
+        ],
+        di=np.array([1, 2]),
+        eo=np.array([1, 2]),
+        expected_tape=["a", "b"],
+        expected_rehashed_ids=['0,1,2', '1,1,2'],
+    )
+
+    steps_with_hyperparameters_sub_pipeline = ResumablePipelineTestCase(
+        tape=TapeCallbackFunction(),
+        steps=[
+            create_callback_step("a", {"a__learning_rate": 1}),
+            create_callback_step("b", {"b__learning_rate": 2}),
+            Pipeline([
+                create_callback_step("c", {"c__learning_rate": 3}),
+                create_callback_step("d", {"d__learning_rate": 4}),
+                ("checkpoint", SomeCheckpointStep()),
+            ])
+        ],
+        di=np.array([1, 2]),
+        eo=np.array([1, 2]),
+        expected_tape=["a", "b"],
+        expected_rehashed_ids=['0,1,2,3,4', '1,1,2,3,4'],
+    )
+
+    one_step_with_nested_hyperparameters = ResumablePipelineTestCase(
+        tape=TapeCallbackFunction(),
+        steps=[
+            create_callback_step("a", {"a": {"learning_rate": 1}}),
+            ("checkpoint", SomeCheckpointStep()),
+        ],
+        di=np.array([1, 2]),
+        eo=np.array([1, 2]),
+        expected_tape=["a"],
+        expected_rehashed_ids=['0,1', '1,1'],
+    )
+
+    steps_with_nested_hyperparameters = ResumablePipelineTestCase(
+        tape=TapeCallbackFunction(),
+        steps=[
+            create_callback_step("a", {"a": {"learning_rate": 1}}),
+            create_callback_step("b", {"b": {"learning_rate": 2}}),
+            ("checkpoint", SomeCheckpointStep()),
+        ],
+        di=np.array([1, 2]),
+        eo=np.array([1, 2]),
+        expected_tape=["a", "b"],
+        expected_rehashed_ids=['0,1,2', '1,1,2'],
+    )
+
+    steps_with_nested_hyperparameters_sub_pipeline = ResumablePipelineTestCase(
+        tape=TapeCallbackFunction(),
+        steps=[
+            create_callback_step("a", {"a": {"learning_rate": 1}}),
+            create_callback_step("b", {"b": {"learning_rate": 2}}),
+            Pipeline([
+                create_callback_step("c", {"c": {"learning_rate": 3}}),
+                create_callback_step("d", {"d": {"learning_rate": 4}}),
+                ("checkpoint", SomeCheckpointStep()),
+            ])
+        ],
+        di=np.array([1, 2]),
+        eo=np.array([1, 2]),
+        expected_tape=["a", "b"],
+        expected_rehashed_ids=['0,1,2,3,4', '1,1,2,3,4'],
+    )
+
+    return [
+        one_step_with_empty_hyperparameters,
+        steps_with_empty_hyperparameters,
+        steps_with_empty_hyperparameters_sub_pipeline,
+        one_step_with_hyperparameters,
+        steps_with_hyperparameters,
+        steps_with_hyperparameters_sub_pipeline,
+        one_step_with_nested_hyperparameters,
+        steps_with_nested_hyperparameters,
+        steps_with_nested_hyperparameters_sub_pipeline
+    ]
 
 
-@pytest.mark.parametrize("test_case", [
-    one_step_with_empty_hyperparameters,
-    steps_with_empty_hyperparameters,
-    steps_with_empty_hyperparameters_sub_pipeline,
-    one_step_with_hyperparameters,
-    steps_with_hyperparameters,
-    steps_with_hyperparameters_sub_pipeline,
-    one_step_with_nested_hyperparameters,
-    steps_with_nested_hyperparameters,
-    steps_with_nested_hyperparameters_sub_pipeline
-])
+@pytest.mark.parametrize("test_case", create_test_cases())
 def test_transform_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase):
     pipeline = Pipeline(steps=test_case.steps)
-    tape.data = []
-    tape.name_tape = []
     pipeline.set_hasher(MockHasher())
     set_hasher(pipeline.steps_as_tuple, MockHasher())
 
@@ -211,18 +222,9 @@ def test_transform_should_rehash_hyperparameters_for_each_steps(test_case: Resum
     assert actual_rehashed_ids == test_case.expected_rehashed_ids
 
 
-@pytest.mark.parametrize("test_case", [
-    one_step_with_empty_hyperparameters,
-    steps_with_empty_hyperparameters,
-    steps_with_empty_hyperparameters_sub_pipeline,
-    one_step_with_hyperparameters,
-    steps_with_hyperparameters,
-    steps_with_hyperparameters_sub_pipeline
-])
+@pytest.mark.parametrize("test_case", create_test_cases())
 def test_fit_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase):
     pipeline = Pipeline(steps=test_case.steps)
-    tape.data = []
-    tape.name_tape = []
     pipeline.set_hasher(MockHasher())
     set_hasher(pipeline.steps_as_tuple, MockHasher())
 
@@ -233,18 +235,9 @@ def test_fit_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePi
     assert actual_rehashed_ids == test_case.expected_rehashed_ids
 
 
-@pytest.mark.parametrize("test_case", [
-    one_step_with_empty_hyperparameters,
-    steps_with_empty_hyperparameters,
-    steps_with_empty_hyperparameters_sub_pipeline,
-    one_step_with_hyperparameters,
-    steps_with_hyperparameters,
-    steps_with_hyperparameters_sub_pipeline
-])
+@pytest.mark.parametrize("test_case", create_test_cases())
 def test_fit_transform_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase):
     pipeline = Pipeline(steps=test_case.steps)
-    tape.data = []
-    tape.name_tape = []
     pipeline.set_hasher(MockHasher())
     set_hasher(pipeline.steps_as_tuple, MockHasher())
 

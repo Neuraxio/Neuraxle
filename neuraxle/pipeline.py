@@ -179,7 +179,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         new_steps_as_tuple: NamedTupleList = []
 
         for step_name, step in steps_left_to_do:
-            ids, data_container = step.handle_fit_transform(data_container)
+            step, data_container = step.handle_fit_transform(data_container)
             new_steps_as_tuple.append((step_name, step))
 
         self.steps_as_tuple = self.steps_as_tuple[:len(self.steps_as_tuple) - len(steps_left_to_do)] + \
@@ -220,13 +220,22 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         :param data_container: the data container to resume
         :return: int index latest resumable step
         """
+        initial_current_ids = data_container.current_ids
+
         for index, (step_name, step) in enumerate(self.items()):
-            current_ids = step.hash(current_ids=data_container.current_ids, hyperparameters=step.hyperparams)
+            current_ids = step.hasher.hash(
+                current_ids=data_container.current_ids,
+                hyperparameters=step.hyperparams,
+                data_inputs=data_container.data_inputs
+            )
             data_container.set_current_ids(current_ids)
 
         for index, (step_name, step) in enumerate(reversed(self.items())):
             if isinstance(step, ResumableStepMixin) and step.should_resume(data_container):
                 return len(self.steps_as_tuple) - index - 1
+
+        # if checkpoint was not found, reset the current ids to their initial values
+        data_container.set_current_ids(initial_current_ids)
 
         return 0
 

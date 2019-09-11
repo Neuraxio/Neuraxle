@@ -26,6 +26,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from typing import Tuple, List, Union, Any
+import hashlib
 
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
@@ -36,22 +37,29 @@ class BaseHasher(ABC):
         raise NotImplementedError()
 
     def _hash_hyperparameters(self, hyperparams: HyperparameterSamples):
-        return hash(frozenset(hyperparams.to_flat()))
+        hyperperams_dict = hyperparams.to_flat_as_dict_primitive()
+        return hashlib.md5(str.encode(str(hyperperams_dict))).hexdigest()
 
 
 class RangeHasher(BaseHasher):
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
-        if isinstance(hyperparameters, dict):
-            hyperparameters = HyperparameterSamples(hyperparameters)
         if current_ids is None:
             current_ids = list(range(len(data_inputs)))
+            current_ids = [str(c) for c in current_ids]
+
+        if hyperparameters == {}:
+            return current_ids
 
         current_hyperparameters_hash = self._hash_hyperparameters(hyperparameters)
 
-        return [
-            hash((current_id, current_hyperparameters_hash))
-            for current_id in current_ids
-        ]
+        new_current_ids = []
+        for current_id in current_ids:
+            m = hashlib.md5()
+            m.update(str.encode(current_id))
+            m.update(str.encode(current_hyperparameters_hash))
+            new_current_ids.append(m.hexdigest())
+
+        return new_current_ids
 
 
 class DataContainer:
