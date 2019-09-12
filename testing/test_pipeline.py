@@ -352,7 +352,7 @@ def test_hyperparam_space():
     rvsed = p.get_hyperparams_space()
     p.set_hyperparams(rvsed)
 
-    hyperparams = p.get_hyperparams()
+    hyperparams = p.get_hyperparams(flat=False)
 
     assert "AddFeatures" in hyperparams.keys()
     assert "SomeStep" in hyperparams["AddFeatures"]
