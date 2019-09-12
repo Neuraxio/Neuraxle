@@ -23,12 +23,12 @@ the distribution.
 """
 
 import copy
-import math
 import random
 import sys
 from abc import abstractmethod, ABCMeta
 from typing import List
 
+import math
 import numpy as np
 
 
@@ -355,7 +355,7 @@ class RandInt(HyperparameterDistribution):
 class Uniform(HyperparameterDistribution):
     """Get a uniform distribution."""
 
-    def __init__(self, min_included: int, max_included: int):
+    def __init__(self, min_included: float, max_included: float):
         """
         Create a random uniform distribution.
         A random float between the two values somehow inclusively will be returned.
@@ -363,8 +363,8 @@ class Uniform(HyperparameterDistribution):
         :param min_included: minimum integer, included.
         :param max_included: maximum integer, might be included - for more info, see https://docs.python.org/2/library/random.html#random.uniform
         """
-        self.min_included = min_included
-        self.max_included = max_included
+        self.min_included: float = min_included
+        self.max_included: float = max_included
         super(Uniform, self).__init__()
 
     def rvs(self) -> float:

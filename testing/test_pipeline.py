@@ -25,7 +25,7 @@ import pytest
 from neuraxle.base import BaseStep
 from neuraxle.hyperparams.distributions import RandInt, LogUniform
 from neuraxle.hyperparams.space import nested_dict_to_flat, HyperparameterSpace
-from neuraxle.pipeline import Pipeline, BlockPipelineRunner
+from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
@@ -55,15 +55,11 @@ steps_lists = [
         ("some_step_3", SomeStep())
     ]
 ]
-pipeline_runners = [BlockPipelineRunner]  # TODO: streaming pipeline runner
-
-
 @pytest.mark.parametrize("steps_list", steps_lists)
-@pytest.mark.parametrize("pipeline_runner", pipeline_runners)
-def test_pipeline_fit_transform(steps_list, pipeline_runner):
+def test_pipeline_fit_transform(steps_list):
     data_input_ = [AN_INPUT]
     expected_output_ = [AN_EXPECTED_OUTPUT]
-    p = Pipeline(steps_list, pipeline_runner=pipeline_runner())
+    p = Pipeline(steps_list)
 
     p, result = p.fit_transform(data_input_, expected_output_)
 
@@ -71,11 +67,10 @@ def test_pipeline_fit_transform(steps_list, pipeline_runner):
 
 
 @pytest.mark.parametrize("steps_list", steps_lists)
-@pytest.mark.parametrize("pipeline_runner", pipeline_runners)
-def test_pipeline_fit_then_transform(steps_list, pipeline_runner):
+def test_pipeline_fit_then_transform(steps_list):
     data_input_ = [AN_INPUT]
     expected_output_ = [AN_EXPECTED_OUTPUT]
-    p = Pipeline(steps_list, pipeline_runner=pipeline_runner())
+    p = Pipeline(steps_list)
 
     p = p.fit(data_input_, expected_output_)
     result = p.transform(data_input_)

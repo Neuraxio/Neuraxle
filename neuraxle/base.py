@@ -34,17 +34,39 @@ class BaseStep(ABC):
     def __init__(
             self,
             hyperparams: HyperparameterSamples = None,
-            hyperparams_space: HyperparameterSpace = None
+            hyperparams_space: HyperparameterSpace = None,
+            name: str = None
     ):
         if hyperparams is None:
             hyperparams = dict()
         if hyperparams_space is None:
             hyperparams_space = dict()
+        if name is None:
+            name = self.__class__.__name__
 
         self.hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams)
         self.hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space)
+        self.name: str = name
 
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
+
+    def set_name(self, name: str):
+        """
+        Set the name of the pipeline step.
+
+        :param name: a string.
+        :return: self
+        """
+        self.name = name
+        return self
+
+    def get_name(self) -> str:
+        """
+        Get the name of the pipeline step.
+
+        :return: the name, a string.
+        """
+        return self.name
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
         self.hyperparams = HyperparameterSamples(hyperparams)
@@ -270,7 +292,23 @@ class BaseStep(ABC):
 class MetaStepMixin:
     """A class to represent a meta step which is used to optimize another step."""
 
-    # TODO: how to set_params on contained step?
+    # TODO: remove equal None, and fix random search at the same time ?
+    def __init__(self, wrapped: BaseStep = None):
+        self.wrapped: BaseStep = wrapped
+
+    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
+        self.wrapped = self.wrapped.set_hyperparams(hyperparams)
+        return self
+
+    def get_hyperparams(self) -> HyperparameterSamples:
+        return self.wrapped.get_hyperparams()
+
+    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
+        self.wrapped = self.wrapped.set_hyperparams_space(hyperparams_space)
+        return self
+
+    def get_hyperparams_space(self, flat=False) -> HyperparameterSpace:
+        return self.wrapped.get_hyperparams_space()
 
     def set_step(self, step: BaseStep) -> BaseStep:
         self.step: BaseStep = step
@@ -281,16 +319,6 @@ class MetaStepMixin:
 
 
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
-
-
-class MetaStepsMixin:
-    def __init__(self, **pipeline_hyperparams):
-        BaseStep.__init__(self, **pipeline_hyperparams)
-        self.steps_as_tuple: NamedTupleList = None
-
-    def set_steps(self, steps_as_tuple: NamedTupleList) -> 'BasePipelineRunner':
-        self.steps_as_tuple: NamedTupleList = steps_as_tuple
-        return self
 
 
 class NonFittableMixin:
@@ -379,21 +407,25 @@ class TruncableSteps(BaseStep, ABC):
         patched = []
         for step in steps_as_tuple:
 
-            class_name = step.__class__.__name__
             if isinstance(step, tuple):
                 class_name = step[0]
                 step = step[1]
-                if class_name in names_yet:
-                    warnings.warn(
-                        "Named pipeline tuples must be unique. "
-                        "Will rename '{}' because it already exists.".format(class_name))
+            else:
+                class_name = step.get_name()
 
-            # Add suffix number to name if it is already used to ensure name uniqueness.
             _name = class_name
-            i = 1
-            while _name in names_yet:
-                _name = class_name + str(i)
-                i += 1
+            if class_name in names_yet:
+                warnings.warn(
+                    "Named pipeline tuples must be unique. "
+                    "Will rename '{}' because it already exists.".format(class_name))
+
+                # Add suffix number to name if it is already used to ensure name uniqueness.
+                i = 1
+                while _name in names_yet:
+                    _name = class_name + str(i)
+                    i += 1
+
+                step.set_name(_name)
 
             step = (_name, step)
             names_yet.add(step[0])
@@ -596,31 +628,20 @@ class TruncableSteps(BaseStep, ABC):
         return len(self.steps_as_tuple)
 
 
-class BaseBarrier(ABC):
-    # TODO: a barrier is between steps and manages how they interact (e.g.: a checkpoint).
-    pass
+class OutputTransformerWrapper(MetaStepMixin, BaseStep):
+    def __init__(self, wrapped: BaseStep):
+        MetaStepMixin.__init__(self, wrapped)
 
-
-class BaseBlockBarrier(BaseBarrier, ABC):
-    # TODO: a block barrier forces not using any "_one" functions past that barrier.
-    pass
-
-
-class BaseStreamingBarrier(BaseBarrier, ABC):
-    # TODO: a streaming barrier forces using the "_one" functions past that barrier.
-    pass
-
-
-class BasePipelineRunner(MetaStepsMixin, BaseStep, ABC):
-
-    @abstractmethod
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BasePipelineRunner', Any):
-        pass
-
-    @abstractmethod
-    def fit(self, data_inputs, expected_outputs=None) -> 'BasePipelineRunner':
-        pass
-
-    @abstractmethod
     def transform(self, data_inputs):
-        pass
+        data_inputs, expected_outputs = data_inputs
+        return self.wrapped.transform(list(zip(data_inputs, expected_outputs)))
+
+
+class ResumableStepMixin:
+    """
+    A step that can be resumed, for example a checkpoint on disk.
+    """
+
+    @abstractmethod
+    def should_resume(self, data_inputs) -> bool:
+        raise NotImplementedError()
