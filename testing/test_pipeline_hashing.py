@@ -27,7 +27,7 @@ class MockHasher(BaseHasher):
             current_ids = list(range(len(data_inputs)))
             current_ids = [str(c) for c in current_ids]
 
-        if hyperparameters == {}:
+        if len(hyperparameters) == 0:
             return current_ids
         else:
             items = ",".join([str(value) for prop, value in hyperparameters.to_flat().items()])

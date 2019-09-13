@@ -20,6 +20,7 @@ This is the core of Neuraxle's pipelines. You can chain steps to call them one a
 
 """
 from abc import ABC, abstractmethod
+from copy import copy
 from typing import Any, Tuple
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, DataContainer
@@ -220,24 +221,23 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         :param data_container: the data container to resume
         :return: int index latest resumable step
         """
-        initial_current_ids = data_container.current_ids
+        new_data_container = copy(data_container)
+        index_latest_checkpoint = 0
 
         for index, (step_name, step) in enumerate(self.items()):
+            if isinstance(step, ResumableStepMixin) and step.should_resume(new_data_container):
+                data_container.set_current_ids(new_data_container.current_ids)
+                index_latest_checkpoint = index
+
             current_ids = step.hasher.hash(
-                current_ids=data_container.current_ids,
+                current_ids=new_data_container.current_ids,
                 hyperparameters=step.hyperparams,
-                data_inputs=data_container.data_inputs
+                data_inputs=new_data_container.data_inputs
             )
-            data_container.set_current_ids(current_ids)
 
-        for index, (step_name, step) in enumerate(reversed(self.items())):
-            if isinstance(step, ResumableStepMixin) and step.should_resume(data_container):
-                return len(self.steps_as_tuple) - index - 1
+            new_data_container.set_current_ids(current_ids)
 
-        # if checkpoint was not found, reset the current ids to their initial values
-        data_container.set_current_ids(initial_current_ids)
-
-        return 0
+        return index_latest_checkpoint
 
     def should_resume(self, data_container: DataContainer) -> bool:
         """

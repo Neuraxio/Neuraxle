@@ -39,12 +39,10 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
         self.set_checkpoint_path(step_path)
 
     def handle_transform(self, data_container: DataContainer) -> Any:
-        self.save_checkpoint(data_container)
-        return data_container
+        return self.save_checkpoint(data_container)
 
     def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', Any):
-        self.save_checkpoint(data_container)
-        return self, data_container
+        return self, self.save_checkpoint(data_container)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseCheckpointStep':
         """
@@ -78,17 +76,17 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
         """
         Read checkpoint data to get the data inputs and expected output.
         :param data_container: data inputs to save
-        :return: data_inputs_checkpoint
+        :return: checkpoint data container
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def save_checkpoint(self, data_container: DataContainer):
+    def save_checkpoint(self, data_container: DataContainer) -> DataContainer:
         """
         Save checkpoint for data inputs and expected outputs so that it can
         be loaded by the checkpoint pipeline runner on the next pipeline run
         :param data_container: data inputs to save
-        :return:
+        :return: saved data container
         """
         raise NotImplementedError()
 
@@ -114,11 +112,7 @@ class PickleCheckpointStep(BaseCheckpointStep):
             expected_outputs=None
         )
 
-        for current_id, data_input, expected_output in zip(
-                data_container.current_ids,
-                data_container.data_inputs,
-                data_container.expected_outputs
-        ):
+        for current_id, data_input, expected_output in data_container:
             with open(self.get_checkpoint_file_path(current_id), 'wb') as file:
                 (checkpoint_current_id, checkpoint_data_input, checkpoint_expected_output) = \
                     pickle.load(file)
@@ -134,23 +128,21 @@ class PickleCheckpointStep(BaseCheckpointStep):
         """
         Save pickle files for data inputs and expected output
         to create a checkpoint
-        :param data_container: data inputs to be saved in a pickle file
+        :param data_container: data to resume
         :return:
         """
-        for current_id, data_input, expected_output in zip(
-                data_container.current_ids,
-                data_container.data_inputs,
-                data_container.expected_outputs
-        ):
+        for current_id, data_input, expected_output in data_container:
             with open(self.get_checkpoint_file_path(current_id), 'wb') as file:
                 pickle.dump(
                     (current_id, data_input, expected_output),
                     file
                 )
 
+        return data_container
+
     def set_checkpoint_path(self, path):
         """
-        Set checkpoint path inside the cache folder (ex: cache_folder/pipeline/step_a/id_rehashed.pickle)
+        Set checkpoint path inside the cache folder (ex: cache_folder/pipeline/step_a/current_id.pickle)
         :param path: checkpoint path
         """
         self.checkpoint_path = os.path.join(self.cache_folder, path)
@@ -158,9 +150,19 @@ class PickleCheckpointStep(BaseCheckpointStep):
             os.makedirs(self.checkpoint_path)
 
     def should_resume(self, data_container: DataContainer) -> bool:
-        return self.checkpoint_exists(data_container)
+        """
+        Whether or not we should resume the pipeline (if the checkpoint exists)
+        :param data_container: data to resume
+        :return:
+        """
+        return self._checkpoint_exists(data_container)
 
-    def checkpoint_exists(self, data_container: DataContainer) -> bool:
+    def _checkpoint_exists(self, data_container: DataContainer) -> bool:
+        """
+        Returns True if the checkpoints for each data input id exists
+        :param data_container:
+        :return:
+        """
         for current_id in data_container.current_ids:
             if not os.path.exists(self.get_checkpoint_file_path(current_id)):
                 return False
@@ -168,6 +170,11 @@ class PickleCheckpointStep(BaseCheckpointStep):
         return True
 
     def get_checkpoint_file_path(self, current_id):
+        """
+        Returns the checkpoint file path for a data input id
+        :param current_id:
+        :return:
+        """
         return os.path.join(
             self.checkpoint_path,
             '{0}.pickle'.format(current_id)

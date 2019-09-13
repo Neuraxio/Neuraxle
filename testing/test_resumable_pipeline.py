@@ -24,6 +24,7 @@ class SomeCheckpointStep(BaseCheckpointStep):
     def save_checkpoint(self, data_container: DataContainer):
         self.saved_data_container = data_container
         self.saved = True
+        return data_container
 
     def should_resume(self, data_container) -> bool:
         return self.saved_data_container is not None

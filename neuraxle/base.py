@@ -20,13 +20,13 @@ This is the core of Neuraxle. Most pipeline steps derive (inherit) from those cl
 
 """
 
+import hashlib
 import os
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from typing import Tuple, List, Union, Any
-import hashlib
 
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
@@ -44,10 +44,9 @@ class BaseHasher(ABC):
 class RangeHasher(BaseHasher):
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
         if current_ids is None:
-            current_ids = list(range(len(data_inputs)))
-            current_ids = [str(c) for c in current_ids]
+            current_ids = [str(i) for i in range(len(data_inputs))]
 
-        if hyperparameters == {}:
+        if len(hyperparameters) == 0:
             return current_ids
 
         current_hyperparameters_hash = self._hash_hyperparameters(hyperparameters)
@@ -63,7 +62,11 @@ class RangeHasher(BaseHasher):
 
 
 class DataContainer:
-    def __init__(self, current_ids, data_inputs: Any, expected_outputs: Any = None):
+    def __init__(self,
+                 current_ids,
+                 data_inputs: Any,
+                 expected_outputs: Any = None
+                 ):
         self.current_ids = current_ids
         self.data_inputs = data_inputs
         self.expected_outputs = expected_outputs
@@ -78,6 +81,20 @@ class DataContainer:
         self.current_ids.append(current_id)
         self.data_inputs.append(data_input)
         self.expected_outputs.append(expected_output)
+
+    def __iter__(self):
+        current_ids = self.current_ids
+        if self.current_ids is None:
+            current_ids = [None] * len(self.data_inputs)
+
+        expected_outputs = self.expected_outputs
+        if self.expected_outputs is None:
+            expected_outputs = [None] * len(self.data_inputs)
+
+        return zip(current_ids, self.data_inputs, expected_outputs)
+
+    def __len__(self):
+        return len(self.data_inputs)
 
 
 class BaseStep(ABC):
@@ -104,12 +121,26 @@ class BaseStep(ABC):
         self.name: str = name
 
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
+        self.is_initialized = False
 
-    def setup(self, step_path: str, setup_arguments: dict):
-        pass
+    def setup(self, step_path: str, setup_arguments: dict) -> 'BaseStep':
+        """
+        Initialize step before it runs
+        :param step_path: pipeline step path ex: pipeline/step_name/
+        :param setup_arguments: any setup arguments
+        that need to be passed to the setup method of one of the pipeline step
+        :return: self
+        """
+        self.is_initialized = True
+        return self
 
     def teardown(self):
-        pass
+        """
+        Teardown step after program execution
+        :return:
+        """
+        self.is_initialized = False
+        return self
 
     def set_name(self, name: str):
         """
@@ -149,7 +180,8 @@ class BaseStep(ABC):
 
     def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', Any):
         """
-        Update the data inputs inside DataContainer after fit transform.
+        Update the data inputs inside DataContainer after fit transform,
+         and update its current_ids.
         :param data_container: the data container to transform
         :return: tuple(fitted pipeline, data_container)
         """
@@ -387,7 +419,21 @@ class MetaStepMixin:
     def __init__(self, wrapped: BaseStep = None):
         self.wrapped: BaseStep = wrapped
 
-    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
+    def setup(self, step_path: str, setup_arguments: dict = None) -> BaseStep:
+        name__ = MetaStepMixin.__name__
+
+        self.wrapped.setup(
+            step_path=os.path.join(step_path, '{0}({1})'.format(self.wrapped.name, name__)),
+            setup_arguments=setup_arguments
+        )
+
+        return self
+
+    @abstractmethod
+    def get_name(self):
+        return '{0}({1})'.format(self.wrapped.name,  MetaStepMixin.__name__)
+
+    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
         self.wrapped = self.wrapped.set_hyperparams(hyperparams)
         return self
 
@@ -474,13 +520,12 @@ class TruncableSteps(BaseStep, ABC):
         super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space, hasher=hasher)
         self.steps_as_tuple: NamedTupleList = self.patch_missing_names(steps_as_tuple)
         self._refresh_steps()
-        self.is_initialized = False
 
         assert isinstance(self, BaseStep), "Classes that inherit from TruncableMixin must also inherit from BaseStep."
 
-    def setup(self, step_path: str = None, setup_arguments: dict = None):
+    def setup(self, step_path: str = None, setup_arguments: dict = None) -> 'BaseStep':
         if self.is_initialized:
-            return
+            return self
 
         if step_path is None:
             step_path = self.name
@@ -496,9 +541,13 @@ class TruncableSteps(BaseStep, ABC):
 
         self.is_initialized = True
 
-    def teardown(self):
+        return self
+
+    def teardown(self) -> 'BaseStep':
         for step_name, step in self.steps_as_tuple:
             step.teardown()
+
+        return self
 
     def patch_missing_names(self, steps_as_tuple: List) -> NamedTupleList:
         names_yet = set()
@@ -517,7 +566,7 @@ class TruncableSteps(BaseStep, ABC):
                     "Named pipeline tuples must be unique. "
                     "Will rename '{}' because it already exists.".format(class_name))
 
-                _name = self.rename_step(step_name=_name, class_name=class_name, names_yet=names_yet)
+                _name = self._rename_step(step_name=_name, class_name=class_name, names_yet=names_yet)
                 step.set_name(_name)
 
             step = (_name, step)
@@ -525,7 +574,15 @@ class TruncableSteps(BaseStep, ABC):
             patched.append(step)
         return patched
 
-    def rename_step(self, step_name, class_name, names_yet):
+    def _rename_step(self, step_name, class_name, names_yet):
+        """
+        Rename step by adding a number suffix after the class name.
+        Ensure uniqueness with the names yet parameter.
+        :param step_name:
+        :param class_name:
+        :param names_yet:
+        :return:
+        """
         # Add suffix number to name if it is already used to ensure name uniqueness.
         i = 1
         while step_name in names_yet:
