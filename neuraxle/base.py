@@ -93,6 +93,9 @@ class DataContainer:
 
         return zip(current_ids, self.data_inputs, expected_outputs)
 
+    def __str__(self):
+        return ';'.join(self.current_ids)
+
     def __len__(self):
         return len(self.data_inputs)
 
@@ -126,6 +129,13 @@ class BaseStep(ABC):
 
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
         self.is_initialized = False
+        self.parent_step = None
+
+    def set_parent(self, parent_step: 'BaseStep'):
+        self.parent_step = parent_step
+
+    def save(self, data_container: DataContainer):
+        self.parent_step.save(data_container)
 
     def setup(self, step_path: str, setup_arguments: dict) -> 'BaseStep':
         """
@@ -427,8 +437,6 @@ class MetaStepMixin:
         self.wrapped: BaseStep = wrapped
 
     def setup(self, step_path: str, setup_arguments: dict = None) -> BaseStep:
-        name__ = MetaStepMixin.__name__
-
         self.wrapped.setup(
             step_path=os.path.join(step_path, self.name),
             setup_arguments=setup_arguments

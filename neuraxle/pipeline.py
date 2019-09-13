@@ -19,9 +19,14 @@ This is the core of Neuraxle's pipelines. You can chain steps to call them one a
     limitations under the License.
 
 """
+import dis
+import glob
+import os
 from abc import ABC, abstractmethod
 from copy import copy
 from typing import Any, Tuple
+
+from joblib import load, dump
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, DataContainer
 from neuraxle.checkpoints import BaseCheckpointStep
@@ -55,13 +60,73 @@ class BasePipeline(TruncableSteps, ABC):
         return self.inverse_transform_processed_outputs(processed_outputs)
 
 
+class PipelineRepository(ABC):
+    def __init__(self, cache_folder, pipeline_cache_list_file_name='pipeline_cache_list.txt'):
+        self.pipeline_cache_list_file_name = pipeline_cache_list_file_name
+        self.cache_folder = cache_folder
+
+    def save(self, pipeline: 'Pipeline', data_container: DataContainer):
+        pipeline_cache_folder = os.path.join(self.cache_folder, pipeline.name)
+
+        if not os.path.exists(pipeline_cache_folder):
+            os.makedirs(pipeline_cache_folder)
+
+        with open(os.path.join(pipeline_cache_folder, self.pipeline_cache_list_file_name), mode='a') as file:
+            next_cached_pipeline_path = self._create_next_cached_pipeline_path(pipeline_cache_folder)
+
+            file.write(str(data_container))
+            file.write(next_cached_pipeline_path)
+
+            dump(pipeline, next_cached_pipeline_path)
+
+        return pipeline
+
+    def load(self, pipeline: 'Pipeline', data_container: DataContainer):
+        pipeline_cache_folder = os.path.join(self.cache_folder, pipeline.name)
+        pipeline_cache_list_file_name_path = os.path.join(pipeline_cache_folder, self.pipeline_cache_list_file_name)
+        if not os.path.exists(pipeline_cache_list_file_name_path):
+            return pipeline
+
+        with open(pipeline_cache_list_file_name_path, mode='r') as file:
+            found_cached_pipeline = False
+            for line in file.readlines():
+                if found_cached_pipeline:
+                    return load(line)
+
+                if str(data_container) == line:
+                    found_cached_pipeline = True
+
+        return pipeline
+
+    def _create_next_cached_pipeline_path(self, pipeline_cache_folder):
+        cached_pipeline_paths = [path for path in glob.glob(os.path.join(pipeline_cache_folder, '*'))]
+        pipeline_file_name_index = 0
+
+        while self._create_cached_pipeline_path(pipeline_cache_folder,
+                                                pipeline_file_name_index) in cached_pipeline_paths:
+            pipeline_file_name_index += 1
+
+        return self._create_cached_pipeline_path(pipeline_cache_folder, pipeline_file_name_index)
+
+    def _create_cached_pipeline_path(self, pipeline_cache_folder, pipeline_file_name_index):
+        return os.path.join(pipeline_cache_folder,
+                            '{0}.joblib'.format(str(pipeline_file_name_index)))
+
+
 class Pipeline(BasePipeline, ResumableStepMixin):
     """
     Fits and transform steps after latest checkpoint
     """
 
-    def __init__(self, steps: NamedTupleList):
+    def __init__(self, steps: NamedTupleList, pipeline_repository: PipelineRepository):
         BasePipeline.__init__(self, steps=steps)
+        self.pipeline_repository = pipeline_repository
+
+    def save(self, data_container: DataContainer):
+        if self.parent_step is None:
+            self.pipeline_repository.save(self, data_container)
+        else:
+            self.parent_step.save(data_container)
 
     def transform(self, data_inputs: Any):
         """
@@ -187,6 +252,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         new_steps_as_tuple: NamedTupleList = []
 
         for step_name, step in steps_left_to_do:
+            step.set_parent(self)
             step, data_container = step.handle_fit_transform(data_container)
             new_steps_as_tuple.append((step_name, step))
 
@@ -205,6 +271,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         steps_left_to_do, data_container = self._load_pipeline_checkpoint(data_container)
 
         for step_name, step in steps_left_to_do:
+            step.set_parent(self)
             data_container = step.handle_transform(data_container)
 
         return data_container
@@ -217,6 +284,10 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         :return: tuple(steps left to do, last checkpoint data container)
         """
         new_starting_step_index = self._find_starting_step_index(data_container)
+
+        if self.parent_step is None:
+            pipeline_cache = self.pipeline_repository.load(self, data_container)
+            self._load_pipeline_cache(pipeline_cache, new_starting_step_index)
 
         step = self.steps_as_tuple[new_starting_step_index]
         if isinstance(step, BaseCheckpointStep):
@@ -248,6 +319,20 @@ class Pipeline(BasePipeline, ResumableStepMixin):
             new_data_container.set_current_ids(current_ids)
 
         return index_latest_checkpoint
+
+    def _load_pipeline_cache(self, pipeline: 'Pipeline', new_starting_step_index):
+        steps_before_checkpoint_changed = False
+        for index, (step_name, step) in enumerate(self[:new_starting_step_index + 1]):
+            bytecode_current_step = dis.dis(step)
+            bytecode_cached_step = dis.dis(pipeline.steps[index])
+            if bytecode_current_step != bytecode_cached_step:
+                steps_before_checkpoint_changed = True
+
+        if not steps_before_checkpoint_changed:
+            self.set_hyperparams(pipeline.get_hyperparams())
+            self.set_hyperparams_space(pipeline.get_hyperparams_space())
+            self.steps = pipeline.steps[:new_starting_step_index] + \
+                         self[new_starting_step_index:]
 
     def should_resume(self, data_container: DataContainer) -> bool:
         """
