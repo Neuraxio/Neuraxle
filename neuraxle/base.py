@@ -115,10 +115,10 @@ class BaseStep(ABC):
         if name is None:
             name = self.__class__.__name__
 
-        self.hasher = hasher
-        self.hyperparams: HyperparameterSamples = hyperparams
-        self.hyperparams_space: HyperparameterSpace = hyperparams_space
         self.name: str = name
+        self.hasher = hasher
+        self.hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams)
+        self.hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space)
 
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
         self.is_initialized = False
@@ -175,7 +175,7 @@ class BaseStep(ABC):
         self.hasher = hasher
         return self
 
-    def get_hyperparams_space(self, flat=False) -> HyperparameterSpace:
+    def get_hyperparams_space(self) -> HyperparameterSpace:
         return self.hyperparams_space
 
     def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', Any):
@@ -444,7 +444,7 @@ class MetaStepMixin:
         self.wrapped = self.wrapped.set_hyperparams_space(hyperparams_space)
         return self
 
-    def get_hyperparams_space(self, flat=False) -> HyperparameterSpace:
+    def get_hyperparams_space(self) -> HyperparameterSpace:
         return self.wrapped.get_hyperparams_space()
 
     def set_step(self, step: BaseStep) -> BaseStep:
@@ -597,19 +597,19 @@ class TruncableSteps(BaseStep, ABC):
         """
         self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
 
-    def get_hyperparams(self, flat=False) -> HyperparameterSamples:
-        ret = dict()
+    def get_hyperparams(self) -> HyperparameterSamples:
+        hyperparams = dict()
 
         for k, v in self.steps.items():
             hparams = v.get_hyperparams()  # TODO: oop diamond problem?
             if hasattr(v, "hyperparams"):
                 hparams.update(v.hyperparams)
             if len(hparams) > 0:
-                ret[k] = hparams
+                hyperparams[k] = hparams
 
-        if flat:
-            ret = HyperparameterSamples(ret)
-        return ret
+        hyperparams = HyperparameterSamples(hyperparams)
+
+        return hyperparams.to_flat()
 
     def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
         hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
@@ -637,21 +637,18 @@ class TruncableSteps(BaseStep, ABC):
 
         return self
 
-    def get_hyperparams_space(self, flat=False):
+    def get_hyperparams_space(self):
         all_hyperparams = HyperparameterSpace()
         for step_name, step in self.steps_as_tuple:
-            hspace = step.get_hyperparams_space(flat=flat)
+            hspace = step.get_hyperparams_space()
             all_hyperparams.update({
                 step_name: hspace
             })
         all_hyperparams.update(
             super().get_hyperparams_space()
         )
-        if flat:
-            all_hyperparams = all_hyperparams.to_flat()
-        else:
-            all_hyperparams = all_hyperparams.to_nested_dict()
-        return all_hyperparams
+
+        return all_hyperparams.to_flat()
 
     def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
         """
