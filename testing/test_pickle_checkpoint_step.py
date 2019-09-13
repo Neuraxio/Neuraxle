@@ -16,23 +16,11 @@ expected_outputs = np.array([2, 3])
 expected_rehashed_data_inputs = ['44f9d6dd8b6ccae571ca04525c3eaffa', '898a67b2f5eeae6393ca4b3162ba8e3d']
 
 
-def create_pipeline_without_hyperparams(pickle_checkpoint_step, tape):
-    pipeline = Pipeline(
-        steps=[
-            ('a', TransformCallbackStep(tape.callback, ["1"])),
-            ('pickle_checkpoint', pickle_checkpoint_step),
-            ('c', TransformCallbackStep(tape.callback, ["2"])),
-            ('d', TransformCallbackStep(tape.callback, ["3"]))
-        ]
-    )
-    return pipeline
-
-
-def create_pipeline_with_hyperparams(pickle_checkpoint_step, tape):
+def create_pipeline(pickle_checkpoint_step, tape, hyperparameters = None):
     pipeline = Pipeline(
         steps=[
             ('a',
-             TransformCallbackStep(tape.callback, ["1"], hyperparams=HyperparameterSamples({"a__learning_rate": 1}))),
+             TransformCallbackStep(tape.callback, ["1"], hyperparams=hyperparameters)),
             ('pickle_checkpoint', pickle_checkpoint_step),
             ('c', TransformCallbackStep(tape.callback, ["2"])),
             ('d', TransformCallbackStep(tape.callback, ["3"]))
@@ -44,7 +32,7 @@ def create_pipeline_with_hyperparams(pickle_checkpoint_step, tape):
 def test_when_no_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
     tape = TapeCallbackFunction()
     pickle_checkpoint_step = create_pickle_checkpoint_step(tmpdir)
-    pipeline = create_pipeline_without_hyperparams(pickle_checkpoint_step, tape)
+    pipeline = create_pipeline(pickle_checkpoint_step, tape)
 
     pipeline, actual_data_inputs = pipeline.fit_transform(data_inputs, expected_outputs)
 
@@ -58,7 +46,7 @@ def test_when_no_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
 def test_when_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
     tape = TapeCallbackFunction()
     pickle_checkpoint_step = create_pickle_checkpoint_step(tmpdir)
-    pipeline = create_pipeline_with_hyperparams(pickle_checkpoint_step, tape)
+    pipeline = create_pipeline(pickle_checkpoint_step, tape, HyperparameterSamples({"a__learning_rate": 1}))
 
     pipeline, actual_data_inputs = pipeline.fit_transform(data_inputs, expected_outputs)
 
@@ -84,7 +72,7 @@ def test_when_no_hyperparams_should_load_checkpoint_pickle(tmpdir: LocalPath):
         expected_output=expected_outputs[1],
         pickle_checkpoint_step=pickle_checkpoint_step
     )
-    pipeline = create_pipeline_without_hyperparams(pickle_checkpoint_step, tape)
+    pipeline = create_pipeline(pickle_checkpoint_step, tape)
 
     pipeline, actual_data_inputs = pipeline.fit_transform(data_inputs, expected_outputs)
 
@@ -109,7 +97,7 @@ def test_when_hyperparams_should_load_checkpoint_pickle(tmpdir: LocalPath):
         pickle_checkpoint_step=pickle_checkpoint_step
     )
 
-    pipeline = create_pipeline_with_hyperparams(pickle_checkpoint_step, tape)
+    pipeline = create_pipeline(pickle_checkpoint_step, tape, HyperparameterSamples({"a__learning_rate": 1}))
 
     pipeline, actual_data_inputs = pipeline.fit_transform(data_inputs, expected_outputs)
 

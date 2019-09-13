@@ -203,6 +203,20 @@ def create_test_cases():
         ],
         ["3"])
 
+    tape11 = TapeCallbackFunction()
+    tape_multiple_checkpoint_in_a_row = ResumablePipelineTestCase(
+        tape11,
+        data_inputs,
+        expected_outputs,
+        [
+            ("a", TransformCallbackStep(tape11.callback, ["1"])),
+            ("pickle_1", SomeCheckpointStep(data_container=dc)),
+            ("pickle_2", SomeCheckpointStep(data_container=dc)),
+            ("c", TransformCallbackStep(tape11.callback, ["2"])),
+            ("d", TransformCallbackStep(tape11.callback, ["3"]))
+        ],
+        ["2", "3"])
+
     return [
         tape_without_checkpoint_test_arguments,
         tape_checkpoint_not_saved_test_arguments,
@@ -213,7 +227,8 @@ def create_test_cases():
         tape_checkpoint_saved_inside_subpipeline_last_step,
         tape_checkpoint_saved_inside_subpipeline_step_in_the_middle,
         tape_checkpoint_saved_inside_subpipeline_of_subpipeline,
-        tape_saved_checkpoint_after_another_saved_checkpoint
+        tape_saved_checkpoint_after_another_saved_checkpoint,
+        tape_multiple_checkpoint_in_a_row
     ]
 
 
