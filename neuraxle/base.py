@@ -126,9 +126,9 @@ class BaseStep(ABC):
     def setup(self, step_path: str, setup_arguments: dict) -> 'BaseStep':
         """
         Initialize step before it runs
+
         :param step_path: pipeline step path ex: pipeline/step_name/
-        :param setup_arguments: any setup arguments
-        that need to be passed to the setup method of one of the pipeline step
+        :param setup_arguments: any setup arguments that need to be passed to the setup method of one of the pipeline step
         :return: self
         """
         self.is_initialized = True
@@ -137,6 +137,7 @@ class BaseStep(ABC):
     def teardown(self):
         """
         Teardown step after program execution
+
         :return:
         """
         self.is_initialized = False
@@ -181,7 +182,8 @@ class BaseStep(ABC):
     def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', Any):
         """
         Update the data inputs inside DataContainer after fit transform,
-         and update its current_ids.
+        and update its current_ids.
+
         :param data_container: the data container to transform
         :return: tuple(fitted pipeline, data_container)
         """
@@ -196,6 +198,7 @@ class BaseStep(ABC):
     def handle_transform(self, data_container: DataContainer) -> Any:
         """
         Update the data inputs inside DataContainer after transform.
+
         :param data_container: the data container to transform
         :return: transformed data container
         """

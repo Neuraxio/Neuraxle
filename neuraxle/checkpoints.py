@@ -48,6 +48,7 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
         """
         Save checkpoint for data inputs and expected outputs so that it can
         be loaded by the checkpoint pipeline runner on the next pipeline run
+
         :param expected_outputs: initial expected outputs of pipeline to load checkpoint from
         :param data_inputs: data inputs to save
         :return: self
@@ -58,6 +59,7 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
         """
         Save checkpoint for data inputs and expected outputs so that it can
         be loaded by the checkpoint pipeline runner on the next pipeline run
+
         :param data_inputs: data inputs to save
         :return: data_inputs
         """
@@ -67,6 +69,7 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
     def set_checkpoint_path(self, path):
         """
         Set checkpoint Path
+
         :param path: checkpoint path
         """
         raise NotImplementedError()
@@ -75,6 +78,7 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
     def read_checkpoint(self, data_container: DataContainer) -> DataContainer:
         """
         Read checkpoint data to get the data inputs and expected output.
+
         :param data_container: data inputs to save
         :return: checkpoint data container
         """
@@ -85,6 +89,7 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
         """
         Save checkpoint for data inputs and expected outputs so that it can
         be loaded by the checkpoint pipeline runner on the next pipeline run
+
         :param data_container: data inputs to save
         :return: saved data container
         """
@@ -104,6 +109,7 @@ class PickleCheckpointStep(BaseCheckpointStep):
     def read_checkpoint(self, data_container: DataContainer):
         """
         Read pickle files for data inputs and expected outputs checkpoint
+
         :return: tuple(data_inputs, expected_outputs
         """
         checkpoint_data_container = DataContainer(
@@ -126,8 +132,8 @@ class PickleCheckpointStep(BaseCheckpointStep):
 
     def save_checkpoint(self, data_container: DataContainer):
         """
-        Save pickle files for data inputs and expected output
-        to create a checkpoint
+        Save pickle files for data inputs and expected output to create a checkpoint
+
         :param data_container: data to resume
         :return:
         """
@@ -143,6 +149,7 @@ class PickleCheckpointStep(BaseCheckpointStep):
     def set_checkpoint_path(self, path):
         """
         Set checkpoint path inside the cache folder (ex: cache_folder/pipeline/step_a/current_id.pickle)
+
         :param path: checkpoint path
         """
         self.checkpoint_path = os.path.join(self.cache_folder, path)
@@ -152,6 +159,7 @@ class PickleCheckpointStep(BaseCheckpointStep):
     def should_resume(self, data_container: DataContainer) -> bool:
         """
         Whether or not we should resume the pipeline (if the checkpoint exists)
+
         :param data_container: data to resume
         :return:
         """
@@ -172,6 +180,7 @@ class PickleCheckpointStep(BaseCheckpointStep):
     def get_checkpoint_file_path(self, current_id):
         """
         Returns the checkpoint file path for a data input id
+
         :param current_id:
         :return:
         """

@@ -66,6 +66,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
     def transform(self, data_inputs: Any):
         """
         After loading the last checkpoint, transform each pipeline steps
+
         :param data_inputs: the data input to transform
         :return: transformed data inputs
         """
@@ -86,6 +87,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('Pipeline', Any):
         """
         After loading the last checkpoint, fit transform each pipeline steps
+
         :param data_inputs: the data input to fit on
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
@@ -111,6 +113,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
     def fit(self, data_inputs, expected_outputs=None) -> 'Pipeline':
         """
         After loading the last checkpoint, fit each pipeline steps
+
         :param data_inputs: the data input to fit on
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
@@ -136,6 +139,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
     def inverse_transform_processed_outputs(self, processed_outputs) -> Any:
         """
         After transforming all data inputs, and obtaining a prediction, we can inverse transform the processed outputs
+
         :param processed_outputs: the forward transformed data input
         :return: backward transformed processed outputs
         """
@@ -146,6 +150,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
     def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', Any):
         """
         Fit transform then rehash ids with hyperparams and transformed data inputs
+
         :param data_container: data container to fit transform
         :return: tuple(fitted pipeline, transformed data container)
         """
@@ -159,6 +164,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
     def handle_transform(self, data_container: DataContainer) -> Any:
         """
         Transform then rehash ids with hyperparams and transformed data inputs
+
         :param data_container: data container to transform
         :return: tuple(fitted pipeline, transformed data container)
         """
@@ -172,6 +178,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
     def _fit_transform_core(self, data_container) -> ('Pipeline', DataContainer):
         """
         After loading the last checkpoint, fit transform each pipeline steps
+
         :param data_container: the data container to fit transform on
         :return: tuple(pipeline, data_container)
         """
@@ -191,6 +198,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
     def _transform_core(self, data_container: DataContainer):
         """
         After loading the last checkpoint, transform each pipeline steps
+
         :param data_container: the data container to transform
         :return: transformed data container
         """
@@ -204,6 +212,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
     def _load_pipeline_checkpoint(self, data_container: DataContainer) -> Tuple[NamedTupleList, DataContainer]:
         """
         Find the steps left to do, and load the latest checkpoint step data container
+
         :param data_container: the data container to resume
         :return: tuple(steps left to do, last checkpoint data container)
         """
@@ -218,6 +227,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
     def _find_starting_step_index(self, data_container: DataContainer) -> int:
         """
         Find the index of the latest step that can be resumed
+
         :param data_container: the data container to resume
         :return: int index latest resumable step
         """
@@ -242,6 +252,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
     def should_resume(self, data_container: DataContainer) -> bool:
         """
         Return True if the pipeline has a saved checkpoint that it can resume from
+
         :param data_container: the data container to resume
         :return: bool
         """
