@@ -179,7 +179,7 @@ class BaseStep(ABC):
     def get_hyperparams_space(self) -> HyperparameterSpace:
         return self.hyperparams_space
 
-    def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', Any):
+    def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
         """
         Update the data inputs inside DataContainer after fit transform,
         and update its current_ids.
@@ -195,7 +195,7 @@ class BaseStep(ABC):
 
         return new_self, data_container
 
-    def handle_transform(self, data_container: DataContainer) -> Any:
+    def handle_transform(self, data_container: DataContainer) -> DataContainer:
         """
         Update the data inputs inside DataContainer after transform.
 
@@ -798,5 +798,5 @@ class ResumableStepMixin:
     """
 
     @abstractmethod
-    def should_resume(self, data_container) -> bool:
+    def should_resume(self, data_container: DataContainer) -> bool:
         raise NotImplementedError()

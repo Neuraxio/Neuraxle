@@ -147,7 +147,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
             processed_outputs = step.transform(processed_outputs)
         return processed_outputs
 
-    def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', Any):
+    def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
         """
         Fit transform then rehash ids with hyperparams and transformed data inputs
 
@@ -161,7 +161,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
 
         return new_self, data_container
 
-    def handle_transform(self, data_container: DataContainer) -> Any:
+    def handle_transform(self, data_container: DataContainer) -> DataContainer:
         """
         Transform then rehash ids with hyperparams and transformed data inputs
 
@@ -195,7 +195,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
 
         return self, data_container
 
-    def _transform_core(self, data_container: DataContainer):
+    def _transform_core(self, data_container: DataContainer) -> DataContainer:
         """
         After loading the last checkpoint, transform each pipeline steps
 
