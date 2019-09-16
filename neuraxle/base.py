@@ -117,8 +117,12 @@ class BaseStep(ABC):
 
         self.name: str = name
         self.hasher = hasher
+
         self.hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams)
+        self.hyperparams = self.hyperparams.to_flat()
+
         self.hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space)
+        self.hyperparams_space = self.hyperparams_space.to_flat()
 
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
         self.is_initialized = False
@@ -162,14 +166,14 @@ class BaseStep(ABC):
         return self.name
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
-        self.hyperparams = HyperparameterSamples(hyperparams)
+        self.hyperparams = HyperparameterSamples(hyperparams).to_flat()
         return self
 
     def get_hyperparams(self) -> HyperparameterSamples:
         return self.hyperparams
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
-        self.hyperparams_space = HyperparameterSpace(hyperparams_space)
+        self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
         return self
 
     def set_hasher(self, hasher: BaseHasher) -> 'BaseStep':
@@ -435,14 +439,14 @@ class MetaStepMixin:
         return self
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
-        self.wrapped = self.wrapped.set_hyperparams(hyperparams)
+        self.wrapped = self.wrapped.set_hyperparams(hyperparams.to_flat())
         return self
 
     def get_hyperparams(self) -> HyperparameterSamples:
         return self.wrapped.get_hyperparams()
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
-        self.wrapped = self.wrapped.set_hyperparams_space(hyperparams_space)
+        self.wrapped = self.wrapped.set_hyperparams_space(hyperparams_space.to_flat())
         return self
 
     def get_hyperparams_space(self) -> HyperparameterSpace:
@@ -610,7 +614,7 @@ class TruncableSteps(BaseStep, ABC):
 
         hyperparams = HyperparameterSamples(hyperparams)
 
-        return hyperparams.to_flat()
+        return hyperparams
 
     def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
         hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
@@ -649,7 +653,7 @@ class TruncableSteps(BaseStep, ABC):
             super().get_hyperparams_space()
         )
 
-        return all_hyperparams.to_flat()
+        return all_hyperparams
 
     def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
         """

@@ -355,10 +355,12 @@ def test_hyperparam_space():
 
     hyperparams = p.get_hyperparams()
 
-    assert 'AddFeatures__SomeStep1__n_components' in hyperparams.keys()
-    assert 'AddFeatures__SomeStep__n_components' in hyperparams.keys()
-    assert 'AddFeatures__SomeStep1__n_components' in hyperparams.keys()
-    assert 'ModelStacking__SomeStep__n_estimators' in hyperparams.keys()
-    assert 'ModelStacking__SomeStep1__n_estimators' in hyperparams.keys()
-    assert 'ModelStacking__SomeStep2__max_depth' in hyperparams.keys()
-    assert 'ModelStacking__SomeStep3__max_depth' in hyperparams.keys()
+    assert "AddFeatures" in hyperparams.keys()
+    assert "SomeStep" in hyperparams["AddFeatures"]
+    assert "n_components" in hyperparams["AddFeatures"]["SomeStep"]
+    assert "SomeStep1" in hyperparams["AddFeatures"]
+    assert "n_components" in hyperparams["AddFeatures"]["SomeStep1"]
+    assert "SomeStep" in hyperparams["ModelStacking"]
+    assert "n_estimators" in hyperparams["ModelStacking"]["SomeStep"]
+    assert "SomeStep1" in hyperparams["ModelStacking"]
+    assert "max_depth" in hyperparams["ModelStacking"]["SomeStep2"]
