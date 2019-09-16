@@ -426,15 +426,13 @@ class MetaStepMixin:
         name__ = MetaStepMixin.__name__
 
         self.wrapped.setup(
-            step_path=os.path.join(step_path, '{0}({1})'.format(self.wrapped.name, name__)),
+            step_path=os.path.join(step_path, self.name),
             setup_arguments=setup_arguments
         )
 
-        return self
+        self.is_initialized = True
 
-    @abstractmethod
-    def get_name(self):
-        return '{0}({1})'.format(self.wrapped.name,  MetaStepMixin.__name__)
+        return self
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
         self.wrapped = self.wrapped.set_hyperparams(hyperparams)
