@@ -531,10 +531,19 @@ class TruncableSteps(BaseStep, ABC):
             hasher: BaseHasher = None
     ):
         super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space, hasher=hasher)
-        self.steps_as_tuple: NamedTupleList = self.patch_missing_names(steps_as_tuple)
-        self._refresh_steps()
+        self.set_steps(steps_as_tuple)
 
         assert isinstance(self, BaseStep), "Classes that inherit from TruncableMixin must also inherit from BaseStep."
+
+    def set_steps(self, steps_as_tuple: NamedTupleList):
+        """
+        Set pipeline steps
+
+        :param steps_as_tuple: List[Tuple[str, BaseStep]] list of tuple containing step name and step
+        :return:
+        """
+        self.steps_as_tuple = self.patch_missing_names(steps_as_tuple)
+        self._refresh_steps()
 
     def setup(self, step_path: str = None, setup_arguments: dict = None) -> 'BaseStep':
         if self.is_initialized:
