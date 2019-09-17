@@ -515,7 +515,7 @@ class TruncableSteps(BaseStep, ABC):
             hyperparams_space: HyperparameterSpace = dict()
     ):
         super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space)
-        self.set_steps(steps_as_tuple)
+        self._set_steps(steps_as_tuple)
 
         assert isinstance(self, BaseStep), "Classes that inherit from TruncableMixin must also inherit from BaseStep."
 
@@ -546,9 +546,11 @@ class TruncableSteps(BaseStep, ABC):
         """
         self.set_hyperparams(other.get_hyperparams())
         self.set_hyperparams_space(other.get_hyperparams_space())
-        self.set_steps(other.steps_as_tuple[:index] + self.steps_as_tuple[index:])
 
-    def set_steps(self, steps_as_tuple: NamedTupleList):
+        new_truncable_steps = other[:index] + self[index:]
+        self._set_steps(new_truncable_steps.steps_as_tuple)
+
+    def _set_steps(self, steps_as_tuple: NamedTupleList):
         """
         Set pipeline steps
 
@@ -710,13 +712,29 @@ class TruncableSteps(BaseStep, ABC):
         else:
             return super().mutate(new_method, method_to_assign_to, warn)
 
+    def _step_name_to_index(self, step_name):
+        for index, (current_step_name, step) in self.steps_as_tuple:
+            if current_step_name == step_name:
+                return index
+
+    def _step_index_to_name(self, step_index):
+        name, _ = self.steps_as_tuple[step_index]
+        return name
+
     def __getitem__(self, key):
         if isinstance(key, slice):
-
             self_shallow_copy = copy(self)
 
-            start = key.start
-            stop = key.stop
+            if isinstance(key.start, int):
+                start = self._step_index_to_name(key.start)
+            else:
+                start = key.start
+
+            if isinstance(key.stop, int):
+                stop = self._step_index_to_name(key.stop)
+            else:
+                stop = key.stop
+
             step = key.step
             if step is not None or (start is None and stop is None):
                 raise KeyError("Invalid range: '{}'.".format(key))
@@ -754,7 +772,14 @@ class TruncableSteps(BaseStep, ABC):
             self_shallow_copy.steps = OrderedDict(new_steps_as_tuple)
             return self_shallow_copy
         else:
+            if isinstance(key, int):
+                key = self._step_index_to_name(key)
+
             return self.steps[key]
+
+    def __add__(self, other: 'TruncableSteps') -> 'TruncableSteps':
+        self._set_steps(self.steps_as_tuple + other.steps_as_tuple)
+        return self
 
     def items(self):
         return self.steps.items()
