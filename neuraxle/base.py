@@ -32,36 +32,6 @@ from typing import Tuple, List, Union, Any
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
 
-class BaseHasher(ABC):
-    @abstractmethod
-    def hash(self, current_ids, hyperparameters: HyperparameterSamples, data_inputs: Any):
-        raise NotImplementedError()
-
-    def _hash_hyperparameters(self, hyperparams: HyperparameterSamples):
-        hyperperams_dict = hyperparams.to_flat_as_dict_primitive()
-        return hashlib.md5(str.encode(str(hyperperams_dict))).hexdigest()
-
-
-class RangeHasher(BaseHasher):
-    def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
-        if current_ids is None:
-            current_ids = [str(i) for i in range(len(data_inputs))]
-
-        if len(hyperparameters) == 0:
-            return current_ids
-
-        current_hyperparameters_hash = self._hash_hyperparameters(hyperparameters)
-
-        new_current_ids = []
-        for current_id in current_ids:
-            m = hashlib.md5()
-            m.update(str.encode(current_id))
-            m.update(str.encode(current_hyperparameters_hash))
-            new_current_ids.append(m.hexdigest())
-
-        return new_current_ids
-
-
 class DataContainer:
     def __init__(self,
                  current_ids,
@@ -106,21 +76,17 @@ class BaseStep(ABC):
             self,
             hyperparams: HyperparameterSamples = None,
             hyperparams_space: HyperparameterSpace = None,
-            name: str = None,
-            hasher: BaseHasher = None
+            name: str = None
     ):
 
         if hyperparams is None:
             hyperparams = dict()
         if hyperparams_space is None:
             hyperparams_space = dict()
-        if hasher is None:
-            hasher = RangeHasher()
         if name is None:
             name = self.__class__.__name__
 
         self.name: str = name
-        self.hasher = hasher
 
         self.hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams)
         self.hyperparams = self.hyperparams.to_flat()
@@ -131,6 +97,28 @@ class BaseStep(ABC):
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
         self.is_initialized = False
         self.parent_step = None
+
+    def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
+        if current_ids is None:
+            current_ids = [str(i) for i in range(len(data_inputs))]
+
+        if len(hyperparameters) == 0:
+            return current_ids
+
+        current_hyperparameters_hash = self._hash_hyperparameters(hyperparameters)
+
+        new_current_ids = []
+        for current_id in current_ids:
+            m = hashlib.md5()
+            m.update(str.encode(current_id))
+            m.update(str.encode(current_hyperparameters_hash))
+            new_current_ids.append(m.hexdigest())
+
+        return new_current_ids
+
+    def _hash_hyperparameters(self, hyperparams: HyperparameterSamples):
+        hyperperams_dict = hyperparams.to_flat_as_dict_primitive()
+        return hashlib.md5(str.encode(str(hyperperams_dict))).hexdigest()
 
     def set_parent(self, parent_step: 'BaseStep'):
         self.parent_step = parent_step
@@ -187,10 +175,6 @@ class BaseStep(ABC):
         self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
         return self
 
-    def set_hasher(self, hasher: BaseHasher) -> 'BaseStep':
-        self.hasher = hasher
-        return self
-
     def get_hyperparams_space(self) -> HyperparameterSpace:
         return self.hyperparams_space
 
@@ -205,7 +189,7 @@ class BaseStep(ABC):
         new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
         data_container.set_data_inputs(out)
 
-        current_ids = self.hasher.hash(data_container.current_ids, self.hyperparams, out)
+        current_ids = self.hash(data_container.current_ids, self.hyperparams, out)
         data_container.set_current_ids(current_ids)
 
         return new_self, data_container
@@ -220,7 +204,7 @@ class BaseStep(ABC):
         out = self.transform(data_container.data_inputs)
         data_container.set_data_inputs(out)
 
-        current_ids = self.hasher.hash(data_container.current_ids, self.hyperparams, out)
+        current_ids = self.hash(data_container.current_ids, self.hyperparams, out)
         data_container.set_current_ids(current_ids)
 
         return data_container
@@ -528,10 +512,9 @@ class TruncableSteps(BaseStep, ABC):
             self,
             steps_as_tuple: NamedTupleList,
             hyperparams: HyperparameterSamples = dict(),
-            hyperparams_space: HyperparameterSpace = dict(),
-            hasher: BaseHasher = None
+            hyperparams_space: HyperparameterSpace = dict()
     ):
-        super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space, hasher=hasher)
+        super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         self.set_steps(steps_as_tuple)
 
         assert isinstance(self, BaseStep), "Classes that inherit from TruncableMixin must also inherit from BaseStep."

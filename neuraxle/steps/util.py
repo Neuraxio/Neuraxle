@@ -234,6 +234,9 @@ class DataShuffler:
 
 
 class IdentityPipelineSaver(PipelineSaver):
+    def can_load(self, pipeline: 'Pipeline', data_container: DataContainer) -> bool:
+        return True
+
     def save(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
         return pipeline
 

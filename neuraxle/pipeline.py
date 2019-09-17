@@ -235,7 +235,7 @@ class Pipeline(BasePipeline):
         """
         self.setup()
 
-        current_ids = self.hasher.hash(
+        current_ids = self.hash(
             current_ids=None,
             hyperparameters=self.hyperparams,
             data_inputs=data_inputs
@@ -257,7 +257,7 @@ class Pipeline(BasePipeline):
         """
         self.setup()
 
-        current_ids = self.hasher.hash(
+        current_ids = self.hash(
             current_ids=None,
             hyperparameters=self.hyperparams,
             data_inputs=data_inputs
@@ -283,7 +283,7 @@ class Pipeline(BasePipeline):
         """
         self.setup()
 
-        current_ids = self.hasher.hash(
+        current_ids = self.hash(
             current_ids=None,
             hyperparameters=self.hyperparams,
             data_inputs=data_inputs
@@ -319,7 +319,7 @@ class Pipeline(BasePipeline):
         """
         new_self, data_container = self._fit_transform_core(data_container)
 
-        ids = self.hasher.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
         data_container.set_current_ids(ids)
 
         return new_self, data_container
@@ -333,7 +333,7 @@ class Pipeline(BasePipeline):
         """
         data_container = self._transform_core(data_container)
 
-        ids = self.hasher.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
         data_container.set_current_ids(ids)
 
         return data_container
@@ -478,7 +478,7 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
                 index_latest_checkpoint = index
                 starting_step_data_container = copy(current_data_container)
 
-            current_ids = step.hasher.hash(
+            current_ids = step.hash(
                 current_ids=current_data_container.current_ids,
                 hyperparameters=step.hyperparams,
                 data_inputs=current_data_container.data_inputs
