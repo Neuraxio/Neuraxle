@@ -21,6 +21,7 @@ This is the core of Neuraxle. Most pipeline steps derive (inherit) from those cl
 """
 
 import hashlib
+import inspect
 import os
 import warnings
 from abc import ABC, abstractmethod
@@ -94,7 +95,7 @@ class DataContainer:
         return zip(current_ids, self.data_inputs, expected_outputs)
 
     def __str__(self):
-        return ';'.join(self.current_ids)
+        return self.__class__.__name__ + "(current_ids=" + repr(list(self.current_ids)) + ", ...)"
 
     def __len__(self):
         return len(self.data_inputs)
@@ -534,6 +535,35 @@ class TruncableSteps(BaseStep, ABC):
         self.set_steps(steps_as_tuple)
 
         assert isinstance(self, BaseStep), "Classes that inherit from TruncableMixin must also inherit from BaseStep."
+
+    def compare_other_truncable_steps_before_index(self, other: 'TruncableSteps', index):
+        """
+        Returns true if other steps source code before passed index is identical
+        :param other: other truncable steps to compare
+        :param index: max step index to compare
+        :return: bool
+        """
+        for index, (step_name, step) in enumerate(self.steps_as_tuple[:index + 1]):
+            source_current_step = inspect.getsource(step.__class__)
+            source_cached_step = inspect.getsource(other.steps_as_tuple[index][1].__class__)
+
+            if source_current_step != source_cached_step:
+                return False
+
+        return True
+
+    def load_other_truncable_steps_before_index(self, other: 'TruncableSteps', index: int):
+        """
+        Load the cached pipeline steps
+        before the index into the current steps
+
+        :param other:
+        :param index:
+        :return:
+        """
+        self.set_hyperparams(other.get_hyperparams())
+        self.set_hyperparams_space(other.get_hyperparams_space())
+        self.set_steps(other.steps_as_tuple[:index] + self.steps_as_tuple[index:])
 
     def set_steps(self, steps_as_tuple: NamedTupleList):
         """
