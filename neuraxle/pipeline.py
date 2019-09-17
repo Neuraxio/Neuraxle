@@ -380,15 +380,15 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
         :return: tuple(steps left to do, last checkpoint data container)
         """
         new_starting_step_index, starting_step_data_container = \
-            self._get_starting_step_index_and_data_container(data_container)
+            self._get_starting_step_info(data_container)
 
         if self.parent_step is None:
-            loaded_pipeline = self._try_loading_pipeline_checkpoint(
+            loaded_saved_pipeline = self._load_saved_pipeline(
                 starting_step_data_container,
                 new_starting_step_index
             )
 
-            if not loaded_pipeline:
+            if not loaded_saved_pipeline:
                 return self.steps_as_tuple, data_container
 
         step = self.steps_as_tuple[new_starting_step_index]
@@ -397,7 +397,7 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
 
         return self.steps_as_tuple[new_starting_step_index:], starting_step_data_container
 
-    def _try_loading_pipeline_checkpoint(
+    def _load_saved_pipeline(
             self,
             starting_step_data_container: DataContainer,
             new_starting_step_index
@@ -415,12 +415,12 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
             return False
 
         if self.compare_other_truncable_steps_before_index(cached_pipeline, new_starting_step_index):
-            self.load_other_truncable_steps_before_index(cached_pipeline, new_starting_step_index,)
+            self.load_other_truncable_steps_before_index(cached_pipeline, new_starting_step_index)
             return True
 
         return False
 
-    def _get_starting_step_index_and_data_container(self, data_container: DataContainer) -> Tuple[int, DataContainer]:
+    def _get_starting_step_info(self, data_container: DataContainer) -> Tuple[int, DataContainer]:
         """
         Find the index of the latest step that can be resumed
 
