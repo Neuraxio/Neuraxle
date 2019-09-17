@@ -41,7 +41,7 @@ class SKLearnWrapper(BaseStep):
             raise ValueError("The wrapped_sklearn_predictor must be an instance of scikit-learn's BaseEstimator.")
         self.wrapped_sklearn_predictor = wrapped_sklearn_predictor
         params: HyperparameterSamples = wrapped_sklearn_predictor.get_params()
-        super().__init__(params, hyperparams_space)
+        super().__init__(hyperparams=params, hyperparams_space=hyperparams_space)
         self.return_all_sklearn_default_params_on_get = return_all_sklearn_default_params_on_get
 
     def fit(self, data_inputs, expected_outputs=None) -> 'SKLearnWrapper':

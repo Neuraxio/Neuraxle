@@ -22,7 +22,7 @@ Tests for Pipelines
 import numpy as np
 import pytest
 
-from neuraxle.base import BaseStep
+from neuraxle.base import BaseStep, RangeHasher
 from neuraxle.hyperparams.distributions import RandInt, LogUniform
 from neuraxle.hyperparams.space import nested_dict_to_flat, HyperparameterSpace
 from neuraxle.pipeline import Pipeline
@@ -36,9 +36,8 @@ AN_EXPECTED_OUTPUT = "I am an expected output"
 
 
 class SomeStep(BaseStep):
-
-    def __init__(self, hyperparams_space: HyperparameterSpace = None):
-        super().__init__(None, hyperparams_space)
+    def __init__(self, hyperparams_space: HyperparameterSpace = None, hasher=RangeHasher()):
+        super().__init__(hyperparams=None, hyperparams_space=hyperparams_space, hasher=hasher)
 
     def fit_one(self, data_input, expected_output=None) -> 'SomeStep':
         return self
@@ -55,6 +54,8 @@ steps_lists = [
         ("some_step_3", SomeStep())
     ]
 ]
+
+
 @pytest.mark.parametrize("steps_list", steps_lists)
 def test_pipeline_fit_transform(steps_list):
     data_input_ = [AN_INPUT]
@@ -352,14 +353,12 @@ def test_hyperparam_space():
     rvsed = p.get_hyperparams_space()
     p.set_hyperparams(rvsed)
 
-    hyperparams = p.get_hyperparams(flat=False)
+    hyperparams = p.get_hyperparams()
 
-    assert "AddFeatures" in hyperparams.keys()
-    assert "SomeStep" in hyperparams["AddFeatures"]
-    assert "n_components" in hyperparams["AddFeatures"]["SomeStep"]
-    assert "SomeStep1" in hyperparams["AddFeatures"]
-    assert "n_components" in hyperparams["AddFeatures"]["SomeStep1"]
-    assert "SomeStep" in hyperparams["ModelStacking"]
-    assert "n_estimators" in hyperparams["ModelStacking"]["SomeStep"]
-    assert "SomeStep1" in hyperparams["ModelStacking"]
-    assert "max_depth" in hyperparams["ModelStacking"]["SomeStep2"]
+    assert 'AddFeatures__SomeStep1__n_components' in hyperparams.keys()
+    assert 'AddFeatures__SomeStep__n_components' in hyperparams.keys()
+    assert 'AddFeatures__SomeStep1__n_components' in hyperparams.keys()
+    assert 'ModelStacking__SomeStep__n_estimators' in hyperparams.keys()
+    assert 'ModelStacking__SomeStep1__n_estimators' in hyperparams.keys()
+    assert 'ModelStacking__SomeStep2__max_depth' in hyperparams.keys()
+    assert 'ModelStacking__SomeStep3__max_depth' in hyperparams.keys()
