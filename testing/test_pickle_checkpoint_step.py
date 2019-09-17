@@ -7,9 +7,9 @@ from py._path.local import LocalPath
 from neuraxle.base import NonFittableMixin
 from neuraxle.checkpoints import PickleCheckpointStep
 from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.pipeline import ResumablePipeline, JoblibPipelineRepository
+from neuraxle.pipeline import ResumablePipeline, JoblibPipelineSaver
 from neuraxle.steps.util import TapeCallbackFunction, TransformCallbackStep, BaseCallbackStep, \
-    IdentityPipelineRepository
+    IdentityPipelineSaver
 
 EXPECTED_TAPE_AFTER_CHECKPOINT = ["2", "3"]
 
@@ -29,9 +29,9 @@ class DifferentCallbackStep(NonFittableMixin, BaseCallbackStep):
 
 
 def create_pipeline(tmpdir, pickle_checkpoint_step, tape, hyperparameters=None, different=False, save_pipeline=True):
-    pipeline_repository = JoblibPipelineRepository(tmpdir)
+    pipeline_repository = JoblibPipelineSaver(tmpdir)
     if not save_pipeline:
-        pipeline_repository = IdentityPipelineRepository()
+        pipeline_repository = IdentityPipelineSaver()
 
     if different:
         pipeline = ResumablePipeline(
@@ -41,7 +41,7 @@ def create_pipeline(tmpdir, pickle_checkpoint_step, tape, hyperparameters=None, 
                 ('pickle_checkpoint', pickle_checkpoint_step),
                 ('c', TransformCallbackStep(tape.callback, ["2"])),
                 ('d', TransformCallbackStep(tape.callback, ["3"]))
-            ], pipeline_repository=pipeline_repository
+            ], pipeline_saver=pipeline_repository
         )
     else:
         pipeline = ResumablePipeline(
@@ -51,7 +51,7 @@ def create_pipeline(tmpdir, pickle_checkpoint_step, tape, hyperparameters=None, 
                 ('pickle_checkpoint', pickle_checkpoint_step),
                 ('c', TransformCallbackStep(tape.callback, ["2"])),
                 ('d', TransformCallbackStep(tape.callback, ["3"]))
-            ], pipeline_repository=pipeline_repository
+            ], pipeline_saver=pipeline_repository
         )
     return pipeline
 

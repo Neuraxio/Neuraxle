@@ -4,7 +4,7 @@ import pytest
 from neuraxle.base import DataContainer
 from neuraxle.checkpoints import BaseCheckpointStep
 from neuraxle.pipeline import Pipeline, ResumablePipeline
-from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction, IdentityPipelineRepository
+from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction, IdentityPipelineSaver
 
 
 class SomeCheckpointStep(BaseCheckpointStep):
@@ -128,7 +128,7 @@ def create_test_cases():
                 ("b", TransformCallbackStep(tape6.callback, ["2"])),
                 ("d", SomeCheckpointStep(data_container=dc)
                  ),
-            ], pipeline_repository=IdentityPipelineRepository()),
+            ], pipeline_saver=IdentityPipelineSaver()),
             ("e", TransformCallbackStep(tape6.callback, ["3"])),
             ("f", TransformCallbackStep(tape6.callback, ["4"])),
         ],
@@ -145,7 +145,7 @@ def create_test_cases():
                 ("d", SomeCheckpointStep(data_container=dc)
                  ),
                 ("b", TransformCallbackStep(tape7.callback, ["2"])),
-            ], pipeline_repository=IdentityPipelineRepository()),
+            ], pipeline_saver=IdentityPipelineSaver()),
             ("e", TransformCallbackStep(tape7.callback, ["3"])),
             ("f", TransformCallbackStep(tape7.callback, ["4"])),
         ],
@@ -163,7 +163,7 @@ def create_test_cases():
                 ("d", SomeCheckpointStep(data_container=dc)
                  ),
                 ("e", TransformCallbackStep(tape8.callback, ["3"])),
-            ], pipeline_repository=IdentityPipelineRepository()),
+            ], pipeline_saver=IdentityPipelineSaver()),
             ("f", TransformCallbackStep(tape8.callback, ["4"])),
         ],
         ["3", "4"])
@@ -182,9 +182,9 @@ def create_test_cases():
                     ("d", SomeCheckpointStep(data_container=dc)
                      ),
                     ("f", TransformCallbackStep(tape9.callback, ["4"])),
-                ], pipeline_repository=IdentityPipelineRepository()),
+                ], pipeline_saver=IdentityPipelineSaver()),
                 ("g", TransformCallbackStep(tape9.callback, ["5"])),
-            ], pipeline_repository=IdentityPipelineRepository()),
+            ], pipeline_saver=IdentityPipelineSaver()),
             ("h", TransformCallbackStep(tape9.callback, ["6"])),
         ],
         ["4", "5", "6"])
@@ -236,7 +236,7 @@ def create_test_cases():
 def test_should_fit_transform_each_steps(test_case: ResumablePipelineTestCase):
     pipeline = ResumablePipeline(
         steps=test_case.steps,
-        pipeline_repository=IdentityPipelineRepository()
+        pipeline_saver=IdentityPipelineSaver()
     )
 
     actual_pipeline, actual_data_inputs = pipeline.fit_transform(test_case.data_inputs, test_case.expected_outputs)
@@ -251,7 +251,7 @@ def test_should_fit_transform_each_steps(test_case: ResumablePipelineTestCase):
 def test_should_fit_each_steps(test_case: ResumablePipelineTestCase):
     pipeline = ResumablePipeline(
         steps=test_case.steps,
-        pipeline_repository=IdentityPipelineRepository()
+        pipeline_saver=IdentityPipelineSaver()
     )
 
     actual_pipeline = pipeline.fit(test_case.data_inputs, test_case.expected_outputs)
@@ -265,7 +265,7 @@ def test_should_fit_each_steps(test_case: ResumablePipelineTestCase):
 def test_should_transform_each_steps(test_case: ResumablePipelineTestCase):
     pipeline = ResumablePipeline(
         steps=test_case.steps,
-        pipeline_repository=IdentityPipelineRepository()
+        pipeline_saver=IdentityPipelineSaver()
     )
 
     actual_data_inputs = pipeline.transform(test_case.data_inputs)

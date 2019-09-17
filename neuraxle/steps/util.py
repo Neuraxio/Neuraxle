@@ -25,7 +25,7 @@ from abc import ABC
 from typing import List
 
 from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, MetaStepMixin, DataContainer
-from neuraxle.pipeline import PipelineRepository
+from neuraxle.pipeline import PipelineSaver
 
 
 class BaseCallbackStep(BaseStep, ABC):
@@ -233,7 +233,7 @@ class DataShuffler:
     pass  # TODO.
 
 
-class IdentityPipelineRepository(PipelineRepository):
+class IdentityPipelineSaver(PipelineSaver):
     def save(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
         return pipeline
 

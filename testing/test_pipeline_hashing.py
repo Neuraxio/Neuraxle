@@ -7,7 +7,7 @@ from neuraxle.base import NamedTupleList, BaseHasher
 from neuraxle.checkpoints import BaseCheckpointStep
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline, ResumablePipeline
-from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction, IdentityPipelineRepository
+from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction, IdentityPipelineSaver
 from testing.test_resumable_pipeline import SomeCheckpointStep
 
 
@@ -211,7 +211,7 @@ def create_test_cases():
 
 @pytest.mark.parametrize("test_case", create_test_cases())
 def test_transform_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase):
-    pipeline = ResumablePipeline(steps=test_case.steps, pipeline_repository=IdentityPipelineRepository())
+    pipeline = ResumablePipeline(steps=test_case.steps, pipeline_saver=IdentityPipelineSaver())
     pipeline.set_hasher(MockHasher())
     set_hasher(pipeline.steps_as_tuple, MockHasher())
 
@@ -224,7 +224,7 @@ def test_transform_should_rehash_hyperparameters_for_each_steps(test_case: Resum
 
 @pytest.mark.parametrize("test_case", create_test_cases())
 def test_fit_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase):
-    pipeline = ResumablePipeline(steps=test_case.steps, pipeline_repository=IdentityPipelineRepository())
+    pipeline = ResumablePipeline(steps=test_case.steps, pipeline_saver=IdentityPipelineSaver())
     pipeline.set_hasher(MockHasher())
     set_hasher(pipeline.steps_as_tuple, MockHasher())
 
@@ -237,7 +237,7 @@ def test_fit_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePi
 
 @pytest.mark.parametrize("test_case", create_test_cases())
 def test_fit_transform_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase):
-    pipeline = ResumablePipeline(steps=test_case.steps, pipeline_repository=IdentityPipelineRepository())
+    pipeline = ResumablePipeline(steps=test_case.steps, pipeline_saver=IdentityPipelineSaver())
     pipeline.set_hasher(MockHasher())
     set_hasher(pipeline.steps_as_tuple, MockHasher())
 
