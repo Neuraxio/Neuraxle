@@ -75,6 +75,17 @@ class PipelineSaver(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def can_load(self, pipeline: 'Pipeline', data_container: DataContainer) -> bool:
+        """
+        Returns True if the pipeline can be loaded with the passed data container
+
+        :param pipeline:
+        :param data_container:
+        :return: pipeline
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
         """
         Load pipeline for current data container
@@ -120,6 +131,24 @@ class JoblibPipelineSaver(PipelineSaver):
 
         return pipeline
 
+    def can_load(self, pipeline: 'Pipeline', data_container: DataContainer) -> bool:
+        """
+        Returns True if the pipeline can be loaded with the passed data container
+
+        :param pipeline:
+        :param data_container:
+        :return: pipeline
+        """
+        pipeline_cache_folder = os.path.join(self.cache_folder, pipeline.name)
+        pipeline_cache_list_file_name_path = os.path.join(pipeline_cache_folder, self.pipeline_cache_list_file_name)
+        if not os.path.exists(pipeline_cache_list_file_name_path):
+            return False
+
+        with open(pipeline_cache_list_file_name_path, mode='r') as file:
+            lines = file.readlines()
+            pipeline_path_line_index = self._find_saved_pipeline_path_line_index(data_container, lines)
+            return pipeline_path_line_index != -1
+
     def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> Optional['Pipeline']:
         """
         Load pipeline for current data container
@@ -130,19 +159,31 @@ class JoblibPipelineSaver(PipelineSaver):
         """
         pipeline_cache_folder = os.path.join(self.cache_folder, pipeline.name)
         pipeline_cache_list_file_name_path = os.path.join(pipeline_cache_folder, self.pipeline_cache_list_file_name)
-        if not os.path.exists(pipeline_cache_list_file_name_path):
-            return None
 
         with open(pipeline_cache_list_file_name_path, mode='r') as file:
-            found_cached_pipeline = False
-            for line in file.readlines():
-                if found_cached_pipeline:
-                    return load(line.strip())
+            lines = file.readlines()
 
-                if str(data_container) == line.strip():
-                    found_cached_pipeline = True
+            pipeline_path_line_index = self._find_saved_pipeline_path_line_index(
+                data_container=data_container,
+                lines=lines
+            )
+            saved_pipeline_path = lines[pipeline_path_line_index].strip()
 
-        return None
+            return load(saved_pipeline_path)
+
+    @staticmethod
+    def _find_saved_pipeline_path_line_index(data_container, lines):
+        """
+        Find saved pipeline path line
+
+        :param data_container:
+        :param lines:
+        :return:
+        """
+        for index, line in enumerate(lines):
+            if str(data_container) == line.strip():
+                return index + 1
+        return -1
 
     def _create_next_cached_pipeline_path(self, pipeline_cache_folder) -> str:
         """
@@ -410,9 +451,10 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
         :param new_starting_step_index:
         :return: true if loading succeeded
         """
-        cached_pipeline = self.pipeline_saver.load(self, starting_step_data_container)
-        if cached_pipeline is None:
+        if not self.pipeline_saver.can_load(self, starting_step_data_container):
             return False
+
+        cached_pipeline = self.pipeline_saver.load(self, starting_step_data_container)
 
         if self.compare_other_truncable_steps_before_index(cached_pipeline, new_starting_step_index):
             self.load_other_truncable_steps_before_index(cached_pipeline, new_starting_step_index)

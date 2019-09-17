@@ -121,7 +121,7 @@ class PickleCheckpointStep(BaseCheckpointStep):
             expected_outputs=None
         )
 
-        for current_id, data_input, expected_output in data_container:
+        for current_id, data_input, expected_output, *_ in data_container:
             with open(self.get_checkpoint_file_path(current_id), 'wb') as file:
                 (checkpoint_current_id, checkpoint_data_input, checkpoint_expected_output) = \
                     pickle.load(file)
@@ -174,7 +174,7 @@ class PickleCheckpointStep(BaseCheckpointStep):
         :param data_container:
         :return:
         """
-        for current_id, _, _ in data_container:
+        for current_id, *_ in data_container:
             if not os.path.exists(self.get_checkpoint_file_path(current_id)):
                 return False
 
