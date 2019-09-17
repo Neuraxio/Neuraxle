@@ -614,7 +614,7 @@ class TruncableSteps(BaseStep, ABC):
 
         hyperparams = HyperparameterSamples(hyperparams)
 
-        return hyperparams
+        return hyperparams.to_flat()
 
     def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
         hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
@@ -653,7 +653,7 @@ class TruncableSteps(BaseStep, ABC):
             super().get_hyperparams_space()
         )
 
-        return all_hyperparams
+        return all_hyperparams.to_flat()
 
     def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
         """
