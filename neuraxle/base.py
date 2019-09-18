@@ -74,6 +74,9 @@ class DataContainer:
     def set_data_inputs(self, data_inputs: Any):
         self.data_inputs = data_inputs
 
+    def set_expected_outputs(self, expected_outputs: Any):
+        self.expected_outputs = expected_outputs
+
     def set_current_ids(self, current_ids: Any):
         self.current_ids = current_ids
 
@@ -423,12 +426,17 @@ class MetaStepMixin:
     """A class to represent a meta step which is used to optimize another step."""
 
     # TODO: remove equal None, and fix random search at the same time ?
-    def __init__(self, wrapped: BaseStep = None):
+    def __init__(
+        self,
+        wrapped: BaseStep = None,
+        hyperparams: HyperparameterSamples = dict(),
+        hyperparams_space: HyperparameterSpace = dict(),
+    ):
+        self.hyperparams = hyperparams
+        self.hyperparams_space = hyperparams_space
         self.wrapped: BaseStep = wrapped
 
     def setup(self, step_path: str, setup_arguments: dict = None) -> BaseStep:
-        name__ = MetaStepMixin.__name__
-
         self.wrapped.setup(
             step_path=os.path.join(step_path, self.name),
             setup_arguments=setup_arguments
@@ -783,15 +791,6 @@ class TruncableSteps(BaseStep, ABC):
         :return: len(self.steps_as_tuple)
         """
         return len(self.steps_as_tuple)
-
-
-class OutputTransformerWrapper(MetaStepMixin, BaseStep):
-    def __init__(self, wrapped: BaseStep):
-        MetaStepMixin.__init__(self, wrapped)
-
-    def transform(self, data_inputs):
-        data_inputs, expected_outputs = data_inputs
-        return self.wrapped.transform(list(zip(data_inputs, expected_outputs)))
 
 
 class ResumableStepMixin:
