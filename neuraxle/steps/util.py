@@ -235,14 +235,12 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
         return self
 
     def transform(self, data_inputs: List) -> List:
-        # As many data inputs than we have cloned steps: each transforms the one it has.
-        assert len(data_inputs) >= len(self.steps), "Can't have more data_inputs than cloned steps to process them."
+        assert len(data_inputs) >= len(self.steps)
 
         return [self.steps[i].transform(di) for i, di in enumerate(data_inputs)]
 
     def inverse_transform(self, data_output):
-        # As many data outputs than we have cloned steps: each transforms the one it has.
-        assert len(data_output) >= len(self.steps), "Can't have more data_outputs than cloned steps to process them."
+        assert len(data_output) >= len(self.steps)
 
         return [self.steps[i].inverse_transform(di) for i, di in enumerate(data_output)]
 
@@ -259,6 +257,30 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
 
     def get_hyperparams_space(self) -> HyperparameterSpace:
         return self.step.get_hyperparams_space()
+
+    def reverse(self) -> 'BaseStep':
+        """
+        The object will mutate itself such that the ``.transform`` method (and of all its underlying objects
+        if applicable) be replaced by the ``.inverse_transform`` method.
+
+        Note: the reverse may fail if there is a pending mutate that was set earlier with ``.will_mutate_to``.
+
+        :return: a copy of self, reversed. Each contained object will also have been reversed if self is a pipeline.
+        """
+        for step in self.steps:
+            step.mutate(new_method="inverse_transform", method_to_assign_to="transform")
+        return self
+
+    def __reversed__(self) -> 'BaseStep':
+        """
+        The object will mutate itself such that the ``.transform`` method (and of all its underlying objects
+        if applicable) be replaced by the ``.inverse_transform`` method.
+
+        Note: the reverse may fail if there is a pending mutate that was set earlier with ``.will_mutate_to``.
+
+        :return: a copy of self, reversed. Each contained object will also have been reversed if self is a pipeline.
+        """
+        return self.reverse()
 
 
 class DataShuffler:
