@@ -19,8 +19,7 @@ This is the core of Neuraxle's pipelines. You can chain steps to call them one a
     limitations under the License.
 
 """
-import inspect
-import glob
+import hashlib
 import os
 from abc import ABC, abstractmethod
 from copy import copy
@@ -119,15 +118,8 @@ class JoblibPipelineSaver(PipelineSaver):
         if not os.path.exists(pipeline_cache_folder):
             os.makedirs(pipeline_cache_folder)
 
-        with open(os.path.join(pipeline_cache_folder, self.pipeline_cache_list_file_name), mode='a') as file_:
-            next_cached_pipeline_path = self._create_next_cached_pipeline_path(pipeline_cache_folder)
-
-            file_.write(str(data_container))
-            file_.write('\n')
-            file_.write(next_cached_pipeline_path)
-            file_.write('\n')
-
-            dump(pipeline, next_cached_pipeline_path)
+        next_cached_pipeline_path = self._create_next_cached_pipeline_path(pipeline_cache_folder, data_container)
+        dump(pipeline, next_cached_pipeline_path)
 
         return pipeline
 
@@ -140,16 +132,15 @@ class JoblibPipelineSaver(PipelineSaver):
         :return: pipeline
         """
         pipeline_cache_folder = os.path.join(self.cache_folder, pipeline.name)
-        pipeline_cache_list_file_name_path = os.path.join(pipeline_cache_folder, self.pipeline_cache_list_file_name)
-        if not os.path.exists(pipeline_cache_list_file_name_path):
-            return False
 
-        with open(pipeline_cache_list_file_name_path, mode='r') as file:
-            lines = file.readlines()
-            pipeline_path_line_index = self._find_saved_pipeline_path_line_index(data_container, lines)
-            return pipeline_path_line_index != -1
+        return os.path.exists(
+            self._create_next_cached_pipeline_path(
+                pipeline_cache_folder,
+                data_container
+            )
+        )
 
-    def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> Optional['Pipeline']:
+    def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
         """
         Load pipeline for current data container
 
@@ -158,52 +149,31 @@ class JoblibPipelineSaver(PipelineSaver):
         :return: pipeline
         """
         pipeline_cache_folder = os.path.join(self.cache_folder, pipeline.name)
-        pipeline_cache_list_file_name_path = os.path.join(pipeline_cache_folder, self.pipeline_cache_list_file_name)
 
-        with open(pipeline_cache_list_file_name_path, mode='r') as file:
-            lines = file.readlines()
-
-            pipeline_path_line_index = self._find_saved_pipeline_path_line_index(
-                data_container=data_container,
-                lines=lines
+        return load(
+            self._create_next_cached_pipeline_path(
+                pipeline_cache_folder,
+                data_container
             )
-            saved_pipeline_path = lines[pipeline_path_line_index].strip()
+        )
 
-            return load(saved_pipeline_path)
-
-    @staticmethod
-    def _find_saved_pipeline_path_line_index(data_container, lines):
-        """
-        Find saved pipeline path line
-
-        :param data_container:
-        :param lines:
-        :return:
-        """
-        for index, line in enumerate(lines):
-            if str(data_container) == line.strip():
-                return index + 1
-        return -1
-
-    def _create_next_cached_pipeline_path(self, pipeline_cache_folder) -> str:
+    def _create_next_cached_pipeline_path(self, pipeline_cache_folder, data_container: 'DataContainer') -> str:
         """
         Create next cached pipeline path by incrementing a suffix
 
-        :param pipeline_cache_folder:
+        :type data_container: DataContainer
+        :param pipeline_cache_folder: str
         :return: path string
         """
-        cached_pipeline_paths = [path for path in glob.glob(os.path.join(pipeline_cache_folder, '*'))]
-        pipeline_file_name_index = 0
+        all_current_ids_hash = None
+        for current_id, *_ in data_container:
+            m = hashlib.md5()
+            m.update(str.encode(current_id))
+            if all_current_ids_hash is not None:
+                m.update(str.encode(all_current_ids_hash))
+            all_current_ids_hash = m.hexdigest()
 
-        while self._create_cached_pipeline_path(pipeline_cache_folder,
-                                                pipeline_file_name_index) in cached_pipeline_paths:
-            pipeline_file_name_index += 1
-
-        return self._create_cached_pipeline_path(pipeline_cache_folder, pipeline_file_name_index)
-
-    def _create_cached_pipeline_path(self, pipeline_cache_folder, pipeline_file_name_index):
-        return os.path.join(pipeline_cache_folder,
-                            '{0}.joblib'.format(str(pipeline_file_name_index)))
+        return os.path.join(pipeline_cache_folder, '{0}.joblib'.format(str(all_current_ids_hash)))
 
 
 class Pipeline(BasePipeline):
