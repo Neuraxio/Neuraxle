@@ -21,17 +21,22 @@ You can find here misc. pipeline steps, for example, callbacks useful for debugg
 """
 
 import copy
+import hashlib
+import os
+import pickle
 from abc import ABC
 from typing import List
 
 from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, MetaStepMixin, DataContainer
-from neuraxle.pipeline import PipelineSaver
+from neuraxle.pipeline import PipelineSaver, DEFAULT_CACHE_FOLDER
+
+VALUE_CACHING = 'value_caching'
 
 
 class BaseCallbackStep(BaseStep, ABC):
     """Base class for callback steps."""
 
-    def __init__(self, callback_function, more_arguments: List = tuple(), hyperparams = None):
+    def __init__(self, callback_function, more_arguments: List = tuple(), hyperparams=None):
         """
         Create the callback step with a function and extra arguments to send to the function
 
@@ -242,3 +247,77 @@ class IdentityPipelineSaver(PipelineSaver):
 
     def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
         return pipeline
+
+
+class ValueCachingWrapper(MetaStepMixin, BaseStep):
+    """
+    Value caching wrapper wraps a step that inherits OutputTransformerMixin,
+    """
+
+    def __init__(self, wrapped: BaseStep, cache_folder: str = DEFAULT_CACHE_FOLDER):
+        BaseStep.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
+        self.cache_folder = cache_folder
+
+    def setup(self, step_path: str, setup_arguments: dict = None):
+        self.checkpoint_path = os.path.join(self.cache_folder, step_path)
+        path_join = os.path.join(self.checkpoint_path, VALUE_CACHING)
+        if not os.path.exists(path_join):
+            os.makedirs(VALUE_CACHING)
+
+    def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
+        """
+        Update the data inputs inside DataContainer after fit transform,
+        and update its current_ids.
+
+        :param data_container: the data container to transform
+        :return: tuple(fitted pipeline, data_container)
+        """
+        self._flush_cache()
+        new_self, out = self.fit_transform(data_container.data_inputs)
+
+        data_container.set_data_inputs(out)
+
+        current_ids = self.hash(data_container.current_ids, self.hyperparams, out)
+        data_container.set_current_ids(current_ids)
+
+        return new_self, data_container
+
+    def handle_transform(self, data_container: DataContainer) -> DataContainer:
+        """
+        Update the data inputs inside DataContainer after transform.
+
+        :param data_container: the data container to transform
+        :return: transformed data container
+        """
+        out = []
+        for current_id, data_input, expected_output in data_container:
+            if self._contains_cache_for(data_input):
+                out.append(self._read_cache(data_input))
+            else:
+                out.append(self.transform([data_input]))
+
+        data_container.set_data_inputs(out)
+
+        current_ids = self.hash(data_container.current_ids, self.hyperparams, out)
+        data_container.set_current_ids(current_ids)
+
+        return data_container
+
+    def _read_cache(self, data_input):
+        hash_value = self._hash_value(data_input)
+        return pickle.load(hash_value)
+
+    def _contains_cache_for(self, data_input) -> bool:
+        hash_value = self._hash_value(data_input)
+
+        return os.path.exists(self._get_cache_for(hash_value))
+
+    def _get_cache_for(self, hash_value):
+        return os.path.join(self.checkpoint_path, '{0}.pickle'.format(hash_value))
+
+    def _hash_value(self, data_input):
+        m = hashlib.md5()
+        m.update(str.encode(data_input))
+
+        return m.hexdigest()
