@@ -114,11 +114,11 @@ class PickleCheckpointStep(BaseCheckpointStep):
         checkpoint_data_container = DataContainer(
             current_ids=[],
             data_inputs=[],
-            expected_outputs=None
+            expected_outputs=[]
         )
 
         for current_id, data_input, expected_output in data_container:
-            with open(self.get_checkpoint_file_path(current_id), 'wb') as file:
+            with open(self.get_checkpoint_file_path(current_id), 'rb') as file:
                 (checkpoint_current_id, checkpoint_data_input, checkpoint_expected_output) = \
                     pickle.load(file)
                 checkpoint_data_container.append(
