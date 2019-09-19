@@ -402,7 +402,7 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
             if not loaded_saved_pipeline:
                 return self.steps_as_tuple, data_container
 
-        step = self.steps_as_tuple[new_starting_step_index]
+        step = self[new_starting_step_index]
         if isinstance(step, BaseCheckpointStep):
             starting_step_data_container = step.read_checkpoint(starting_step_data_container)
 
