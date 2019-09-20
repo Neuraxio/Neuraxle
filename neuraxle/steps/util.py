@@ -202,8 +202,6 @@ class TapeCallbackFunction:
 
 class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
     def __init__(self, wrapped: BaseStep, copy_op=copy.deepcopy):
-        # TODO: set params on wrapped.
-        # TODO: use MetaStep*s*Mixin (plural) and review.
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         self.set_step(wrapped)
@@ -212,7 +210,7 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
         # One copy of step per data input:
-        self.steps = [self.copy_op(self.step) for _ in range(len(data_inputs))]
+        self.steps = [self.copy_op(self.wrapped) for _ in range(len(data_inputs))]
 
         if expected_outputs is None:
             expected_outputs = [None] * len(data_inputs)
@@ -225,7 +223,7 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
 
     def fit(self, data_inputs: List, expected_outputs: List = None) -> 'StepClonerForEachDataInput':
         # One copy of step per data input:
-        self.steps = [self.copy_op(self.step) for _ in range(len(data_inputs))]
+        self.steps = [self.copy_op(self.wrapped) for _ in range(len(data_inputs))]
 
         # Fit them all.
         if expected_outputs is None:
@@ -243,20 +241,6 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
         assert len(data_output) >= len(self.steps)
 
         return [self.steps[i].inverse_transform(di) for i, di in enumerate(data_output)]
-
-    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
-        self.step = self.step.set_hyperparams(hyperparams.to_flat())
-        return self
-
-    def get_hyperparams(self) -> HyperparameterSamples:
-        return self.step.get_hyperparams()
-
-    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
-        self.step = self.step.set_hyperparams_space(hyperparams_space.to_flat())
-        return self
-
-    def get_hyperparams_space(self) -> HyperparameterSpace:
-        return self.step.get_hyperparams_space()
 
     def reverse(self) -> 'BaseStep':
         """

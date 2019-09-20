@@ -517,7 +517,7 @@ class MetaStepMixin:
         ).to_flat()
 
     def set_step(self, step: BaseStep) -> BaseStep:
-        self.step: BaseStep = step
+        self.wrapped: BaseStep = step
         return self
 
     def get_best_model(self) -> BaseStep:
