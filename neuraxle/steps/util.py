@@ -205,7 +205,7 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
         # TODO: set params on wrapped.
         # TODO: use MetaStep*s*Mixin (plural) and review.
         BaseStep.__init__(self)
-        MetaStepMixin.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
         self.set_step(wrapped)
         self.steps: List[BaseStep] = []
         self.copy_op = copy_op
