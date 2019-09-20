@@ -447,18 +447,74 @@ class MetaStepMixin:
         return self
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
-        self.wrapped = self.wrapped.set_hyperparams(hyperparams.to_flat())
+        """
+        Set meta step and wrapped step hyperparams using the given hyperparams.
+
+        :param hyperparams: ordered dict containing all hyperparameters
+        :type hyperparams: HyperparameterSamples
+
+        :return:
+        """
+        hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
+
+        remainders = dict()
+        for name, hparams in hyperparams.items():
+            if name == self.wrapped.name:
+                self.wrapped.set_hyperparams(hparams)
+            else:
+                remainders[name] = hparams
+
+        self.hyperparams = HyperparameterSamples(remainders)
+
         return self
 
     def get_hyperparams(self) -> HyperparameterSamples:
-        return self.wrapped.get_hyperparams()
+        """
+        Get meta step and wrapped step hyperparams as a flat hyperparameter samples
+
+        :return: hyperparameters
+        """
+        return HyperparameterSamples(
+            dict(
+                self.hyperparams.to_flat_as_dict_primitive(),
+                **{self.wrapped.name: self.wrapped.hyperparams.to_flat_as_dict_primitive()}
+            )
+        ).to_flat()
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
-        self.wrapped = self.wrapped.set_hyperparams_space(hyperparams_space.to_flat())
+        """
+        Set meta step and wrapped step hyperparams space using the given hyperparams space.
+
+        :param hyperparams_space: ordered dict containing all hyperparameter spaces
+        :type hyperparams_space: HyperparameterSpace
+
+        :return: self
+        """
+        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space.to_nested_dict())
+
+        remainders = dict()
+        for name, hparams in hyperparams_space.items():
+            if name == self.wrapped.name:
+                self.wrapped.set_hyperparams_space(hparams)
+            else:
+                remainders[name] = hparams
+
+        self.hyperparams_space = HyperparameterSpace(remainders)
+
         return self
 
     def get_hyperparams_space(self) -> HyperparameterSpace:
-        return self.wrapped.get_hyperparams_space()
+        """
+        Get meta step and wrapped step hyperparams as a flat hyperparameter space
+
+        :return: hyperparameters_space
+        """
+        return HyperparameterSpace(
+            dict(
+                self.hyperparams_space.to_flat_as_dict_primitive(),
+                **{self.wrapped.name: self.wrapped.hyperparams_space.to_flat_as_dict_primitive()}
+            )
+        ).to_flat()
 
     def set_step(self, step: BaseStep) -> BaseStep:
         self.step: BaseStep = step
