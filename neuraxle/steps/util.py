@@ -37,8 +37,8 @@ VALUE_CACHING = 'value_caching'
 class BaseCallbackStep(BaseStep, ABC):
     """Base class for callback steps."""
 
-    def __init__(self, callback_function, fit_callback_function=None, transform_function=None,
-                 more_arguments: List = tuple(), hyperparams=None):
+    def __init__(self, callback_function, more_arguments: List = tuple(),
+                 hyperparams=None, fit_callback_function=None, transform_function=None):
         """
         Create the callback step with a function and extra arguments to send to the function
 
