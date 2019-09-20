@@ -221,7 +221,7 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         """
         new_starting_step_index = self._find_starting_step_index(data_container)
 
-        step = self.steps_as_tuple[new_starting_step_index]
+        _, step = self.steps_as_tuple[new_starting_step_index]
         if isinstance(step, BaseCheckpointStep):
             data_container = step.read_checkpoint(data_container)
 

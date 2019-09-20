@@ -2,7 +2,7 @@ from typing import Tuple, Any
 
 from neuraxle.base import DataContainer
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.output_transformer_wrapper import OutputTransformerWrapper, OutputTransformerMixin
+from neuraxle.steps.util import OutputTransformerMixin, OutputTransformerWrapper
 from testing.test_pipeline import SomeStep
 
 
@@ -12,7 +12,7 @@ class MultiplyBy2OutputTransformer(OutputTransformerMixin, SomeStep):
         eos = []
         for di, eo in zip(data_inputs, expected_outputs):
             dis.append(di*2)
-            eos.append(eo * 2)
+            eos.append(eo*2)
 
         return dis, eos
 
