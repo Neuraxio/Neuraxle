@@ -18,6 +18,10 @@ This is the core of Neuraxle. Most pipeline steps derive (inherit) from those cl
     See the License for the specific language governing permissions and
     limitations under the License.
 
+..
+    Thanks to Umaneo for their contributions to this Machine Learning 
+    project, visit https://www.umaneo.com/ for more information on Umaneo
+
 """
 
 import hashlib

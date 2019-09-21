@@ -49,6 +49,9 @@ class HyperparameterDistribution(metaclass=ABCMeta):
         :return: The randomly sampled value.
         """
         pass
+    
+    def nullify(self):
+        return self.null_default_value
 
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.0) -> 'HyperparameterDistribution':
         """
@@ -316,7 +319,7 @@ class Quantized(WrappedHyperparameterDistributions):
 class RandInt(HyperparameterDistribution):
     """Get a random integer within a range"""
 
-    def __init__(self, min_included: int, max_included: int):
+    def __init__(self, min_included: int, max_included: int, null_default_value=0):
         """
         Create a quantized random uniform distribution.
         A random integer between the two values inclusively will be returned.
@@ -326,7 +329,7 @@ class RandInt(HyperparameterDistribution):
         """
         self.min_included = min_included
         self.max_included = max_included
-        super(RandInt, self).__init__()
+        super(RandInt, self).__init__(null_default_value)
 
     def rvs(self) -> int:
         """
