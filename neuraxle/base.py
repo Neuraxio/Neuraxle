@@ -82,6 +82,42 @@ class DataContainer:
         self.data_inputs.append(data_input)
         self.expected_outputs.append(expected_output)
 
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            start = key.start
+            stop = key.stop
+            step = key.step
+            if step is not None or (start is None and stop is None):
+                raise KeyError("Invalid range: '{}'.".format(key))
+
+            if start is None:
+                return DataContainer(
+                    data_inputs=self.data_inputs[:stop],
+                    current_ids=self.current_ids[:stop],
+                    expected_outputs=self.expected_outputs[:stop],
+                )
+            elif stop is None:
+                return DataContainer(
+                    data_inputs=self.data_inputs[start:],
+                    current_ids=self.current_ids[start:],
+                    expected_outputs=self.expected_outputs[start:],
+                )
+            else:
+                return DataContainer(
+                    data_inputs=self.data_inputs[start:stop],
+                    current_ids=self.current_ids[start:stop],
+                    expected_outputs=self.expected_outputs[start:stop],
+                )
+        else:
+            return self.current_ids[key], self.data_inputs[key], self.expected_outputs[key]
+
+    def __reversed__(self):
+        return DataContainer(
+            data_inputs=list(reversed(self.data_inputs)),
+            current_ids=list(reversed(self.current_ids)),
+            expected_outputs=list(reversed(self.expected_outputs)),
+        )
+
     def __iter__(self):
         current_ids = self.current_ids
         if self.current_ids is None:
