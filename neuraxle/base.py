@@ -689,7 +689,7 @@ class TruncableSteps(BaseStep, ABC):
                 self.steps[name].set_hyperparams(hparams)
             else:
                 remainders[name] = hparams
-        self.hyperparams = remainders
+        self.hyperparams = HyperparameterSamples(remainders)
 
         return self
 
@@ -702,7 +702,7 @@ class TruncableSteps(BaseStep, ABC):
                 self.steps[name].set_hyperparams_space(hparams)
             else:
                 remainders[name] = hparams
-        self.hyperparams = remainders
+        self.hyperparams = HyperparameterSpace(remainders)
 
         return self
 
