@@ -234,11 +234,14 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
 
     def transform(self, data_inputs: List) -> List:
         assert len(data_inputs) >= len(self.steps)
+        assert len(data_inputs) >= len(self.steps), (
+            "Can't have more data_inputs than cloned steps to process them.")
 
         return [self.steps[i].transform(di) for i, di in enumerate(data_inputs)]
 
     def inverse_transform(self, data_output):
-        assert len(data_output) >= len(self.steps)
+        assert len(data_output) >= len(self.steps), (
+            "Can't have more data_inputs than cloned steps to process them.")
 
         return [self.steps[i].inverse_transform(di) for i, di in enumerate(data_output)]
 
