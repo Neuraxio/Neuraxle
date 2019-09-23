@@ -271,31 +271,10 @@ class DataShuffler:
     pass  # TODO.
 
 
-class OutputTransformerMixin:
+class BaseOutputTransformerStep(BaseStep):
     """
-    Mixin to be able to modify expected_outputs inside a step
+    Base output transformer step that can modify data inputs, expected_outputs at the same time.
     """
-
-    @abstractmethod
-    def transform_input_output(self, data_inputs, expected_outputs=None) -> Tuple[Any, Any]:
-        """
-        Transform data inputs, and expected outputs at the same time
-
-        :param data_inputs:
-        :param expected_outputs:
-        :return: tuple(data_inputs, expected_outputs)
-        """
-        raise NotImplementedError()
-
-
-class OutputTransformerWrapper(MetaStepMixin, BaseStep):
-    """
-    Output transformer wrapper wraps a step that inherits OutputTransformerMixin,
-    and updates the data inputs, and expected outputs for each transform.
-    """
-    def __init__(self, wrapped: BaseStep):
-        BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, wrapped)
 
     def handle_transform(self, data_container: DataContainer) -> DataContainer:
         """
@@ -304,7 +283,7 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
         :param data_container:
         :return:
         """
-        new_data_inputs, new_expected_outputs = self.wrapped.transform_input_output(
+        new_data_inputs, new_expected_outputs = self.transform_input_output(
             data_inputs=data_container.data_inputs, expected_outputs=data_container.expected_outputs
         )
         data_container.set_data_inputs(new_data_inputs)
@@ -323,8 +302,19 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
         :param data_container:
         :return:
         """
-        new_self = self.wrapped.fit(data_container.data_inputs, data_container.expected_outputs)
+        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
 
         data_container = self.handle_transform(data_container)
 
         return new_self, data_container
+
+    @abstractmethod
+    def transform_input_output(self, data_inputs, expected_outputs=None) -> Tuple[Any, Any]:
+        """
+        Transform data inputs, and expected outputs at the same time
+
+        :param data_inputs:
+        :param expected_outputs:
+        :return: tuple(data_inputs, expected_outputs)
+        """
+        raise NotImplementedError()
