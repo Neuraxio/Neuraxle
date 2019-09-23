@@ -406,13 +406,22 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
             self._get_starting_step_info(data_container)
 
         if self.parent_step is None:
-            loaded_saved_pipeline = self._load_saved_pipeline(
-                starting_step_data_container,
-                new_starting_step_index
-            )
-
-            if not loaded_saved_pipeline:
+            if not self.pipeline_saver.can_load(self, starting_step_data_container):
                 return self.steps_as_tuple, data_container
+
+            saved_pipeline = self.pipeline_saver.load(self, starting_step_data_container)
+
+            if not self._can_load_saved_pipeline(
+                    saved_pipeline=saved_pipeline,
+                    starting_step_data_container=starting_step_data_container,
+                    new_starting_step_index=new_starting_step_index
+            ):
+                return self.steps_as_tuple, data_container
+
+            self._load_saved_pipeline_steps_before_index(
+                saved_pipeline=saved_pipeline,
+                index=new_starting_step_index
+            )
 
         step = self[new_starting_step_index]
         if isinstance(step, BaseCheckpointStep):
@@ -420,26 +429,26 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
 
         return self.steps_as_tuple[new_starting_step_index:], starting_step_data_container
 
-    def _load_saved_pipeline(
+    def _can_load_saved_pipeline(
             self,
+            saved_pipeline: Pipeline,
             starting_step_data_container: DataContainer,
             new_starting_step_index
     ) -> bool:
         """
-        Load persisted pipeline steps before checkpoint
-        if the steps before the latest checkpoint have not changed
+        Returns True if the saved pipeline steps before passed starting step index
+        are the same as current pipeline steps before starting step index.
 
+        :param saved_pipeline: loaded saved pipeline
         :param starting_step_data_container: loaded cached pipeline
         :param new_starting_step_index:
-        :return: true if loading succeeded
+
+        :return bool
         """
         if not self.pipeline_saver.can_load(self, starting_step_data_container):
             return False
 
-        cached_pipeline = self.pipeline_saver.load(self, starting_step_data_container)
-
-        if self.are_steps_before_index_the_same(cached_pipeline, new_starting_step_index):
-            self.load_other_truncable_steps_before_index(cached_pipeline, new_starting_step_index)
+        if self.are_steps_before_index_the_same(saved_pipeline, new_starting_step_index):
             return True
 
         return False

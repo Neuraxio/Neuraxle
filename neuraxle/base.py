@@ -545,19 +545,19 @@ class TruncableSteps(BaseStep, ABC):
 
         return True
 
-    def load_other_truncable_steps_before_index(self, other: 'TruncableSteps', index: int):
+    def _load_saved_pipeline_steps_before_index(self, saved_pipeline: 'TruncableSteps', index: int):
         """
         Load the cached pipeline steps
         before the index into the current steps
 
-        :param other:
+        :param saved_pipeline:
         :param index:
         :return:
         """
-        self.set_hyperparams(other.get_hyperparams())
-        self.set_hyperparams_space(other.get_hyperparams_space())
+        self.set_hyperparams(saved_pipeline.get_hyperparams())
+        self.set_hyperparams_space(saved_pipeline.get_hyperparams_space())
 
-        new_truncable_steps = other[:index] + self[index:]
+        new_truncable_steps = saved_pipeline[:index] + self[index:]
         self._set_steps(new_truncable_steps.steps_as_tuple)
 
     def _set_steps(self, steps_as_tuple: NamedTupleList):
