@@ -118,7 +118,7 @@ class JoblibPipelineSaver(PipelineSaver):
         if not os.path.exists(pipeline_cache_folder):
             os.makedirs(pipeline_cache_folder)
 
-        next_cached_pipeline_path = self._create_next_cached_pipeline_path(pipeline_cache_folder, data_container)
+        next_cached_pipeline_path = self._create_cached_pipeline_path(pipeline_cache_folder, data_container)
         dump(pipeline, next_cached_pipeline_path)
 
         return pipeline
@@ -134,7 +134,7 @@ class JoblibPipelineSaver(PipelineSaver):
         pipeline_cache_folder = os.path.join(self.cache_folder, pipeline.name)
 
         return os.path.exists(
-            self._create_next_cached_pipeline_path(
+            self._create_cached_pipeline_path(
                 pipeline_cache_folder,
                 data_container
             )
@@ -151,19 +151,32 @@ class JoblibPipelineSaver(PipelineSaver):
         pipeline_cache_folder = os.path.join(self.cache_folder, pipeline.name)
 
         return load(
-            self._create_next_cached_pipeline_path(
+            self._create_cached_pipeline_path(
                 pipeline_cache_folder,
                 data_container
             )
         )
 
-    def _create_next_cached_pipeline_path(self, pipeline_cache_folder, data_container: 'DataContainer') -> str:
+    def _create_cached_pipeline_path(self, pipeline_cache_folder, data_container: 'DataContainer') -> str:
         """
-        Create next cached pipeline path by incrementing a suffix
+        Create cached pipeline path with data container, and pipeline cache folder.
 
         :type data_container: DataContainer
         :param pipeline_cache_folder: str
+
         :return: path string
+        """
+        all_current_ids_hash = self._hash_data_container(data_container)
+        return os.path.join(pipeline_cache_folder, '{0}.joblib'.format(str(all_current_ids_hash)))
+
+    def _hash_data_container(self, data_container):
+        """
+        Hash data container current ids with md5.
+
+        :param data_container: data container
+        :type data_container: DataContainer
+
+        :return: str hexdigest of all of the current ids hashed together.
         """
         all_current_ids_hash = None
         for current_id, *_ in data_container:
@@ -172,8 +185,7 @@ class JoblibPipelineSaver(PipelineSaver):
             if all_current_ids_hash is not None:
                 m.update(str.encode(all_current_ids_hash))
             all_current_ids_hash = m.hexdigest()
-
-        return os.path.join(pipeline_cache_folder, '{0}.joblib'.format(str(all_current_ids_hash)))
+        return all_current_ids_hash
 
 
 class Pipeline(BasePipeline):
