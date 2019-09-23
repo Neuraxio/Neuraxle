@@ -1,9 +1,9 @@
-from neuraxle import __version__ as _VERSION
 from setuptools import setup, find_packages
+
+from neuraxle import __version__ as _VERSION
 
 with open('README.rst') as _f:
     _README = _f.read()
-
 
 setup(
     name='neuraxle',
@@ -68,14 +68,9 @@ setup(
     packages=find_packages(include=['neuraxle*']),
     test_suite="testing",
     setup_requires=["pytest-runner"],
-    install_requires=['numpy', 'scipy', 'matplotlib', 'scikit-learn>=0.20.3', 'keras',
-                      'joblib>=0.13.2'],  # , 'tensorflow'],
+    install_requires=['numpy', 'scipy', 'matplotlib', 'scikit-learn>=0.20.3', 'joblib>=0.13.2'],  # , 'tensorflow'],
     tests_require=["pytest", "pytest-cov"],
     include_package_data=True,
     license='Apache 2.0',
     keywords='pipeline pipelines data science machine learning deep learning'
 )
-
-print("")
-print("--- If tensorflow isn't already installed, you must install it manually if you plan on using it in Neuraxle.")
-print("")
