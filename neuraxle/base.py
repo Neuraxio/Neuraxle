@@ -69,6 +69,8 @@ class DataContainer:
                  ):
         self.current_ids = current_ids
         self.data_inputs = data_inputs
+        if expected_outputs is None:
+            expected_outputs = [None] * len(self.current_ids)
         self.expected_outputs = expected_outputs
 
     def set_data_inputs(self, data_inputs: Any):
@@ -77,7 +79,7 @@ class DataContainer:
     def set_current_ids(self, current_ids: Any):
         self.current_ids = current_ids
 
-    def append(self, current_id, data_input, expected_output):
+    def append(self, current_id, data_input, expected_output=None):
         self.current_ids.append(current_id)
         self.data_inputs.append(data_input)
         self.expected_outputs.append(expected_output)
@@ -123,11 +125,7 @@ class DataContainer:
         if self.current_ids is None:
             current_ids = [None] * len(self.data_inputs)
 
-        expected_outputs = self.expected_outputs
-        if self.expected_outputs is None:
-            expected_outputs = [None] * len(self.data_inputs)
-
-        return zip(current_ids, self.data_inputs, expected_outputs)
+        return zip(current_ids, self.data_inputs, self.expected_outputs)
 
     def __len__(self):
         return len(self.data_inputs)
