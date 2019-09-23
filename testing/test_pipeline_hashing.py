@@ -213,7 +213,7 @@ def test_transform_should_rehash_hyperparameters_for_each_steps(test_case: Resum
 
     mocked_checkpoint = find_checkpoint(pipeline.steps_as_tuple)
     actual_rehashed_ids = mocked_checkpoint.saved_data_container.current_ids
-    assert actual_rehashed_ids == test_case.expected_rehashed_ids
+    assert np.array_equal(actual_rehashed_ids,  test_case.expected_rehashed_ids)
 
 
 @pytest.mark.parametrize("test_case", create_test_cases())
@@ -224,7 +224,7 @@ def test_fit_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePi
 
     mocked_checkpoint = find_checkpoint(pipeline.steps_as_tuple)
     actual_rehashed_ids = mocked_checkpoint.saved_data_container.current_ids
-    assert actual_rehashed_ids == test_case.expected_rehashed_ids
+    assert np.array_equal(actual_rehashed_ids, test_case.expected_rehashed_ids)
 
 
 @pytest.mark.parametrize("test_case", create_test_cases())
@@ -235,4 +235,4 @@ def test_fit_transform_should_rehash_hyperparameters_for_each_steps(test_case: R
 
     mocked_checkpoint = find_checkpoint(pipeline.steps_as_tuple)
     actual_rehashed_ids = mocked_checkpoint.saved_data_container.current_ids
-    assert actual_rehashed_ids == test_case.expected_rehashed_ids
+    assert np.array_equal(actual_rehashed_ids, test_case.expected_rehashed_ids)
