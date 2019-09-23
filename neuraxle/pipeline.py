@@ -426,7 +426,7 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
 
         cached_pipeline = self.pipeline_saver.load(self, starting_step_data_container)
 
-        if self.compare_other_truncable_steps_before_index(cached_pipeline, new_starting_step_index):
+        if self.are_steps_before_index_the_same(cached_pipeline, new_starting_step_index):
             self.load_other_truncable_steps_before_index(cached_pipeline, new_starting_step_index)
             return True
 
