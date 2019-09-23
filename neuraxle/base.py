@@ -470,7 +470,7 @@ class MetaStepMixin:
 
     def get_hyperparams(self) -> HyperparameterSamples:
         """
-        Get meta step and wrapped step hyperparams as a flat hyperparameter samples
+        Get meta step and wrapped step hyperparams as a flat hyperparameter samples.
 
         :return: hyperparameters
         """
