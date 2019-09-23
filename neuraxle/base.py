@@ -536,9 +536,9 @@ class TruncableSteps(BaseStep, ABC):
 
         :return: bool
         """
-        for index, (step_name, step) in enumerate(self[:index + 1]):
+        for current_index, (step_name, step) in enumerate(self[:index]):
             source_current_step = inspect.getsource(step.__class__)
-            source_cached_step = inspect.getsource(other[index].__class__)
+            source_cached_step = inspect.getsource(other[current_index].__class__)
 
             if source_current_step != source_cached_step:
                 return False
