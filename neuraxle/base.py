@@ -51,7 +51,9 @@ class DataContainer:
     def append(self, current_id, data_input, expected_output):
         self.current_ids.append(current_id)
         self.data_inputs.append(data_input)
-        self.expected_outputs.append(expected_output)
+
+        if self.expected_outputs is None:
+            self.expected_outputs = [expected_output]
 
     def __iter__(self):
         current_ids = self.current_ids
