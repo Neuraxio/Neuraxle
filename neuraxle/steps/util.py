@@ -245,30 +245,6 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
 
         return [self.steps[i].inverse_transform(di) for i, di in enumerate(data_output)]
 
-    def reverse(self) -> 'BaseStep':
-        """
-        The object will mutate itself such that the ``.transform`` method (and of all its underlying objects
-        if applicable) be replaced by the ``.inverse_transform`` method.
-
-        Note: the reverse may fail if there is a pending mutate that was set earlier with ``.will_mutate_to``.
-
-        :return: a copy of self, reversed. Each contained object will also have been reversed if self is a pipeline.
-        """
-        for step in self.steps:
-            step.mutate(new_method="inverse_transform", method_to_assign_to="transform")
-        return self
-
-    def __reversed__(self) -> 'BaseStep':
-        """
-        The object will mutate itself such that the ``.transform`` method (and of all its underlying objects
-        if applicable) be replaced by the ``.inverse_transform`` method.
-
-        Note: the reverse may fail if there is a pending mutate that was set earlier with ``.will_mutate_to``.
-
-        :return: a copy of self, reversed. Each contained object will also have been reversed if self is a pipeline.
-        """
-        return self.reverse()
-
 
 class DataShuffler:
     pass  # TODO.
