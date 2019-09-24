@@ -142,7 +142,7 @@ class JoblibPipelineSaver(PipelineSaver):
 
     def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
         """
-        Load pipeline for current data container
+        Load pipeline for current data container.
 
         :param pipeline:
         :param data_container:

@@ -233,7 +233,7 @@ class DataShuffler:
     pass  # TODO.
 
 
-class IdentityPipelineSaver(PipelineSaver):
+class NullPipelineSaver(PipelineSaver):
     def can_load(self, pipeline: 'Pipeline', data_container: DataContainer) -> bool:
         return True
 
