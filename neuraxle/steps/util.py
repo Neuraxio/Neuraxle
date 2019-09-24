@@ -208,6 +208,16 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
         self.steps: List[BaseStep] = []
         self.copy_op = copy_op
 
+    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
+        super().set_hyperparams(hyperparams)
+        self.steps = [s.set_hyperparams(self.wrapped.hyperparams) for s in self.steps]
+        return self
+
+    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
+        super().set_hyperparams_space(hyperparams_space)
+        self.steps = [s.set_hyperparams_space(self.wrapped.hyperparams_space) for s in self.steps]
+        return self
+
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
         # One copy of step per data input:
         self.steps = [self.copy_op(self.wrapped) for _ in range(len(data_inputs))]
@@ -233,7 +243,6 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
         return self
 
     def transform(self, data_inputs: List) -> List:
-        assert len(data_inputs) >= len(self.steps)
         assert len(data_inputs) >= len(self.steps), (
             "Can't have more data_inputs than cloned steps to process them.")
 
