@@ -294,10 +294,11 @@ class ForEachDataInputs(TruncableSteps):
 
         new_steps_as_tuple: NamedTupleList = []
 
-        for di, eo in zip(data_inputs, expected_outputs):
-            for name, step in self.items():
+        for name, step in self.items():
+            for di, eo in zip(data_inputs, expected_outputs):
                 step = step.fit(di, eo)
                 new_steps_as_tuple.append(step)
+            data_inputs = data_inputs
 
         self.steps_as_tuple = new_steps_as_tuple
 
@@ -310,15 +311,14 @@ class ForEachDataInputs(TruncableSteps):
         :param data_inputs:
         :return: self
         """
-        outputs = []
         for name, step in self.items():
             current_outputs = []
             for di in data_inputs:
-                step, output = step.transform(di)
+                output = step.transform(di)
                 current_outputs.append(output)
             data_inputs = current_outputs
 
-        return outputs
+        return data_inputs
 
     def fit_transform(self, data_inputs, expected_outputs=None):
         """
@@ -331,20 +331,19 @@ class ForEachDataInputs(TruncableSteps):
         if expected_outputs is None:
             expected_outputs = [None] * len(data_inputs)
 
-        outputs = []
         new_steps_as_tuple: NamedTupleList = []
 
-        for di, eo in zip(data_inputs, expected_outputs):
+        for name, step in self.items():
             current_outputs = []
-            for name, step in self.items():
+            for di, eo in zip(data_inputs, expected_outputs):
                 step, output = step.fit_transform(di, eo)
-                current_outputs.append(output)
                 new_steps_as_tuple.append(step)
-            outputs.append(current_outputs)
+                current_outputs.append(output)
+            data_inputs = current_outputs
 
         self.steps_as_tuple = new_steps_as_tuple
 
-        return self, outputs
+        return self, data_inputs
 
 
 class DataShuffler:
