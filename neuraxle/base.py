@@ -680,18 +680,33 @@ class TruncableSteps(BaseStep, ABC):
         else:
             return super().mutate(new_method, method_to_assign_to, warn)
 
+    def _step_name_to_index(self, step_name):
+        for index, (current_step_name, step) in self.steps_as_tuple:
+            if current_step_name == step_name:
+                return index
+
+    def _step_index_to_name(self, step_index):
+        name, _ = self.steps_as_tuple[step_index]
+        return name
+
     def __getitem__(self, key):
         if isinstance(key, slice):
-
             self_shallow_copy = copy(self)
 
-            start = key.start
-            stop = key.stop
+            if isinstance(key.start, int):
+                start = self._step_index_to_name(key.start)
+            else:
+                start = key.start
+
+            if isinstance(key.stop, int):
+                stop = self._step_index_to_name(key.stop)
+            else:
+                stop = key.stop
+
             step = key.step
             if step is not None or (start is None and stop is None):
                 raise KeyError("Invalid range: '{}'.".format(key))
             new_steps_as_tuple = []
-
             if start is None:
                 if stop not in self.steps.keys():
                     raise KeyError("Stop '{}' not found in '{}'.".format(stop, self.steps.keys()))
@@ -719,11 +734,13 @@ class TruncableSteps(BaseStep, ABC):
                         started = True
                     if started:
                         new_steps_as_tuple.append((key, val))
-
             self_shallow_copy.steps_as_tuple = new_steps_as_tuple
             self_shallow_copy.steps = OrderedDict(new_steps_as_tuple)
             return self_shallow_copy
         else:
+            if isinstance(key, int):
+                key = self._step_index_to_name(key)
+
             return self.steps[key]
 
     def items(self):

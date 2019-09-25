@@ -20,7 +20,6 @@ This demonstrates an easy way to deploy your Neuraxle model or pipeline to a RES
     limitations under the License.
 
 """
-from typing import List
 
 import numpy as np
 from sklearn.cluster import KMeans
@@ -41,7 +40,7 @@ X, y = shuffle(boston.data, boston.target, random_state=13)
 X = X.astype(np.float32)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffle=False)
 
-p = Pipeline([
+pipeline = Pipeline([
     AddFeatures([
         SKLearnWrapper(PCA(n_components=2)),
         SKLearnWrapper(FastICA(n_components=2)),
@@ -53,12 +52,12 @@ p = Pipeline([
 ])
 
 print("Fitting on train:")
-p = p.fit(X_train, y_train)
+pipeline = pipeline.fit(X_train, y_train)
 print("")
 
 print("Transforming train and test:")
-y_train_predicted = p.transform(X_train)
-y_test_predicted = p.transform(X_test)
+y_train_predicted = pipeline.transform(X_train)
+y_test_predicted = pipeline.transform(X_test)
 print("")
 
 print("Evaluating transformed train:")
@@ -76,28 +75,46 @@ print("Deploying the application by routing data to the transform method:")
 class CustomJSONDecoderFor2DArray(JSONDataBodyDecoder):
     """This is a custom JSON decoder class that precedes the pipeline's transformation."""
 
-    def decode(self, data_inputs: dict):
-        values_in_json_2d_arr: List[List[int]] = data_inputs["values"]
-        return np.array(values_in_json_2d_arr)
+    def decode(self, data_inputs):
+        """
+        Transform json object into an np array.
+
+        :param data_inputs: json object
+        :return: np array for data inputs
+        """
+        return np.array(data_inputs)
 
 
 class CustomJSONEncoderOfOutputs(JSONDataResponseEncoder):
     """This is a custom JSON response encoder class for converting the pipeline's transformation outputs."""
 
     def encode(self, data_inputs) -> dict:
+        """
+        Returns the response dict for the flask Response object.
+
+        :param data_inputs:
+        :return:
+        """
         return {
             'predictions': list(data_inputs)
         }
 
 
-app = FlaskRestApiWrapper(
-    json_decoder=CustomJSONDecoderFor2DArray(),
-    wrapped=p,
-    json_encoder=CustomJSONEncoderOfOutputs(),
-).get_app()
+def main():
+    app = FlaskRestApiWrapper(
+        json_decoder=CustomJSONDecoderFor2DArray(),
+        wrapped=pipeline,
+        json_encoder=CustomJSONEncoderOfOutputs()
+    ).get_app()
 
-# Note: uncomment the line below to deploy serve the flask application.
-# app.run(debug=False, port=5000)
+    app.run(debug=False, port=5000)
 
-# TODO: example comments of how to call this REST API with a **json** data input example. A comment is fine here.
-# json_example_input = ...
+    # test_predictictions = requests.post(
+    #     url='http://127.0.0.1:5000/',
+    #     json=X_test.tolist()
+    # )
+    # print(test_predictictions)
+
+
+if __name__ == '__main__':
+    main()

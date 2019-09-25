@@ -4,5 +4,6 @@ pytest-cov==2.6.1
 numpy>=1.16.2
 scikit-learn>=0.20.3
 joblib>=0.13.2
-Flask>=1.1.1
-Flask-RESTful=>0.3.7
+flask>=1.1.1
+flask-restful
+requests
