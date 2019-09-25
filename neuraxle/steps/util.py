@@ -24,14 +24,19 @@ import copy
 from abc import ABC
 from typing import List, Any
 
-from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, MetaStepMixin
+from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, MetaStepMixin, TruncableSteps, \
+    NamedTupleList
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
 
 class BaseCallbackStep(BaseStep, ABC):
     """Base class for callback steps."""
 
-    def __init__(self, callback_function, more_arguments: List = tuple(), hyperparams = None):
+    def __init__(
+            self,
+            callback_function,
+            more_arguments: List = tuple(),
+            hyperparams=None):
         """
         Create the callback step with a function and extra arguments to send to the function
 
@@ -81,6 +86,15 @@ class FitCallbackStep(NonTransformableMixin, BaseCallbackStep):
         """
         self._callback((data_input, expected_output))
         return self
+
+
+class FitTransformCallbackStep(NonFittableMixin, BaseCallbackStep):
+    """Call a callback method on fit transform"""
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+        self._callback(data_inputs)
+
+        return self, data_inputs
 
 
 class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
@@ -217,7 +231,8 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
         if expected_outputs is None:
             expected_outputs = [None] * len(data_inputs)
 
-        fit_transform_result = [self.steps[i].fit_transform(di, eo) for i, (di, eo) in enumerate(zip(data_inputs, expected_outputs))]
+        fit_transform_result = [self.steps[i].fit_transform(di, eo) for i, (di, eo) in
+                                enumerate(zip(data_inputs, expected_outputs))]
         self.steps = [step for step, di in fit_transform_result]
         data_inputs = [di for step, di in fit_transform_result]
 
@@ -259,6 +274,77 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
 
     def get_hyperparams_space(self) -> HyperparameterSpace:
         return self.step.get_hyperparams_space()
+
+
+class ForEachDataInputs(TruncableSteps):
+    """
+    Truncable step that fits/transforms each step for each of the data inputs, and expected outputs.
+    """
+
+    def fit(self, data_inputs, expected_outputs=None):
+        """
+        Fit each step for each data inputs, and expected outputs
+
+        :param data_inputs:
+        :param expected_outputs:
+        :return: self
+        """
+        if expected_outputs is None:
+            expected_outputs = [None] * len(data_inputs)
+
+        new_steps_as_tuple: NamedTupleList = []
+
+        for di, eo in zip(data_inputs, expected_outputs):
+            for name, step in self.items():
+                step = step.fit(di, eo)
+                new_steps_as_tuple.append(step)
+
+        self.steps_as_tuple = new_steps_as_tuple
+
+        return self
+
+    def transform(self, data_inputs):
+        """
+        Transform each step for each data inputs, and expected outputs
+
+        :param data_inputs:
+        :return: self
+        """
+        outputs = []
+        for name, step in self.items():
+            current_outputs = []
+            for di in data_inputs:
+                step, output = step.transform(di)
+                current_outputs.append(output)
+            data_inputs = current_outputs
+
+        return outputs
+
+    def fit_transform(self, data_inputs, expected_outputs=None):
+        """
+        Fit transform each step for each data inputs, and expected outputs
+
+        :param data_inputs:
+        :param expected_outputs:
+        :return: self
+        """
+        if expected_outputs is None:
+            expected_outputs = [None] * len(data_inputs)
+
+        outputs = []
+        new_steps_as_tuple: NamedTupleList = []
+
+        for di, eo in zip(data_inputs, expected_outputs):
+            current_outputs = []
+            for name, step in self.items():
+                step, output = step.fit_transform(di, eo)
+                current_outputs.append(output)
+                new_steps_as_tuple.append(step)
+            outputs.append(current_outputs)
+
+        self.steps_as_tuple = new_steps_as_tuple
+
+        return self, outputs
 
 
 class DataShuffler:
