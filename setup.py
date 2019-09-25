@@ -68,7 +68,10 @@ setup(
     packages=find_packages(include=['neuraxle*']),
     test_suite="testing",
     setup_requires=["pytest-runner"],
-    install_requires=['numpy', 'scipy', 'matplotlib', 'scikit-learn>=0.20.3', 'joblib>=0.13.2'],  # , 'tensorflow'],
+    install_requires=[
+        'numpy', 'scipy', 'matplotlib', 'scikit-learn>=0.20.3', 'joblib>=0.13.2',
+        'Flask>=1.1.1', 'Flask-RESTful=>0.3.7'
+    ],
     tests_require=["pytest", "pytest-cov"],
     include_package_data=True,
     license='Apache 2.0',
