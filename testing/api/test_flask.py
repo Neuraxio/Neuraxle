@@ -31,7 +31,7 @@ def setup_api():
 
         def decode(self, data_inputs):
             """
-            Transform json object into an np array.
+            Transform a JSON list object into an np.array object.
 
             :param data_inputs: json object
             :return: np array for data inputs
@@ -44,7 +44,7 @@ def setup_api():
 
         def encode(self, data_inputs) -> dict:
             """
-            Returns the response dict for the flask Response object.
+            Convert predictions to a dict for creating a JSON Response object.
 
             :param data_inputs:
             :return:
@@ -57,8 +57,11 @@ def setup_api():
         def transform(self, data_inputs):
             return 2 * data_inputs
 
-    app = FlaskRestApiWrapper(json_decoder=Decoder(), wrapped=Multiplier(),
-                              json_encoder=Encoder()).get_app()
+    app = FlaskRestApiWrapper(
+        json_decoder=Decoder(),
+        wrapped=Multiplier(),
+        json_encoder=Encoder()
+    ).get_app()
 
     app.testing = True
 

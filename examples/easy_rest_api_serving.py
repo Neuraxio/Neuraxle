@@ -77,7 +77,7 @@ class CustomJSONDecoderFor2DArray(JSONDataBodyDecoder):
 
     def decode(self, data_inputs):
         """
-        Transform json object into an np array.
+        Transform a JSON list object into an np.array object.
 
         :param data_inputs: json object
         :return: np array for data inputs
@@ -90,7 +90,7 @@ class CustomJSONEncoderOfOutputs(JSONDataResponseEncoder):
 
     def encode(self, data_inputs) -> dict:
         """
-        Returns the response dict for the flask Response object.
+        Convert predictions to a dict for creating a JSON Response object.
 
         :param data_inputs:
         :return:
@@ -100,21 +100,19 @@ class CustomJSONEncoderOfOutputs(JSONDataResponseEncoder):
         }
 
 
-def main():
-    app = FlaskRestApiWrapper(
-        json_decoder=CustomJSONDecoderFor2DArray(),
-        wrapped=pipeline,
-        json_encoder=CustomJSONEncoderOfOutputs()
-    ).get_app()
+app = FlaskRestApiWrapper(
+    json_decoder=CustomJSONDecoderFor2DArray(),
+    wrapped=pipeline,
+    json_encoder=CustomJSONEncoderOfOutputs()
+).get_app()
 
-    app.run(debug=False, port=5000)
+print("Finally, run the app by uncommenting this next line of code:")
+# app.run(debug=False, port=5000)
 
-    # test_predictictions = requests.post(
-    #     url='http://127.0.0.1:5000/',
-    #     json=X_test.tolist()
-    # )
-    # print(test_predictictions)
-
-
-if __name__ == '__main__':
-    main()
+print("You can now call your pipeline over HTTP with a (JSON) REST API.")
+# test_predictictions = requests.post(
+#     url='http://127.0.0.1:5000/',
+#     json=X_test.tolist()
+# )
+# print(test_predictictions)
+# print(test_predictictions.content)
