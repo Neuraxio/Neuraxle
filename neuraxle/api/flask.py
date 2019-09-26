@@ -1,8 +1,7 @@
 """
-TODO: module name docstring
-==============================================
-
-TODO: module description docstring
+Neuraxle's Flask Wrapper classes
+====================================
+The flask wrapper classes are used to easily serve pipeline predictions using a flask rest api.
 
 ..
     Copyright 2019, Neuraxio Inc.
@@ -20,25 +19,23 @@ TODO: module description docstring
     limitations under the License.
 
 """
-from abc import ABC
+from abc import ABC, abstractmethod
+
+from flask import Response
 
 from neuraxle.base import BaseStep, NonFittableMixin
 from neuraxle.pipeline import Pipeline
 
 
-class JSONDataBodyDecoder(NonFittableMixin, BaseStep, ABC):  # TODO: is order of ABC good here
+class JSONDataBodyDecoder(NonFittableMixin, BaseStep, ABC):
     """
     Class to be used within a FlaskRESTApiWrapper to convert input json to actual data (e.g.: arrays)
     """
 
-    # TODO: perhaps have some handle_transform functionnality in the future to pass
-    #  hashes and/or IDs as inputs (ADD ISSUE)
-
     def transform(self, data_inputs):
-        # TODO: you might need to edit this transform method if using `Flask-RESTful`.
-        #  But please make such that `decode` receive json.
         return self.decode(data_inputs)
 
+    @abstractmethod
     def decode(self, data_inputs: dict):
         """
         Will convert data_inputs to a dict or a compatible data structure for jsonification
@@ -49,21 +46,25 @@ class JSONDataBodyDecoder(NonFittableMixin, BaseStep, ABC):  # TODO: is order of
         raise NotImplementedError("TODO: inherit from the `JSONDataBodyDecoder` class and implement this method.")
 
 
-class JSONDataResponseEncoder(NonFittableMixin, BaseStep, ABC):  # TODO: is order of ABC good here?
+class JSONDataResponseEncoder(NonFittableMixin, BaseStep, ABC):
     """
     Base class to be used within a FlaskRESTApiWrapper to convert prediction output to json response.
     """
 
-    # TODO: perhaps have some handle_transform functionnality in the future to allow
-    #  returning hashes and/or IDs as inputs (ADD ISSUE)
+    def transform(self, data_inputs) -> Response:
+        """
+        Transform processed data inputs into a flask response object.
 
-    def transform(self, data_inputs):
+        :param data_inputs:
+        :return: flask response object
+        """
         from flask import jsonify
         return jsonify(self.encode(data_inputs))
 
+    @abstractmethod
     def encode(self, data_inputs) -> dict:
         """
-        Will convert data_inputs to a dict or a compatible data structure for jsonification.
+        Convert data_inputs to a dict or a compatible data structure for jsonification.
 
         :param data_inputs (a data structure outputted by the pipeline after a transform):
         :return: encoded data_inputs (jsonifiable dict)
@@ -108,8 +109,7 @@ class FlaskRestApiWrapper(Pipeline):
             json_decoder: JSONDataBodyDecoder,
             wrapped: BaseStep,
             json_encoder: JSONDataResponseEncoder,
-            route='/',
-    ):  # TODO: auth and https. Might open issue and do this later. I'd see that as optional arguments here in init.
+            route='/'):
         super().__init__([
             json_decoder,
             wrapped,
@@ -128,12 +128,11 @@ class FlaskRestApiWrapper(Pipeline):
 
         app = Flask(__name__)
         api = Api(app)
+        wrapped = self
 
         class RESTfulRes(Resource):
-            def get(self):
-                json_data_inputs = request.get_json()
-                json_data_outputs = self.transform(json_data_inputs)
-                return json_data_outputs
+            def post(self):
+                return wrapped.transform(request.get_json())
 
         api.add_resource(
             RESTfulRes,
@@ -141,5 +140,3 @@ class FlaskRestApiWrapper(Pipeline):
         )
 
         return app
-
-# TODO: all the incomplete docstrings here.
