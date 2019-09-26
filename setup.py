@@ -1,3 +1,25 @@
+"""
+Neuraxle's Base Classes
+====================================
+This is the core of Neuraxle. Most pipeline steps derive (inherit) from those classes. They are worth noticing.
+
+..
+    Copyright 2019, Neuraxio Inc.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+"""
+
 from setuptools import setup, find_packages
 
 from neuraxle import __version__ as _VERSION
@@ -68,7 +90,10 @@ setup(
     packages=find_packages(include=['neuraxle*']),
     test_suite="testing",
     setup_requires=["pytest-runner"],
-    install_requires=['numpy', 'scipy', 'matplotlib', 'scikit-learn>=0.20.3', 'joblib>=0.13.2'],  # , 'tensorflow'],
+    install_requires=[
+        'numpy', 'scipy', 'matplotlib', 'scikit-learn>=0.20.3', 'joblib>=0.13.2',
+        'Flask>=1.1.1', 'Flask-RESTful=>0.3.7'
+    ],
     tests_require=["pytest", "pytest-cov"],
     include_package_data=True,
     license='Apache 2.0',
