@@ -74,7 +74,7 @@ def test_api_wrapper_works():
         [3, 4, 5],
     ]
 
-    json_response = test_client.post('/', json=data_inputs)
+    json_response = test_client.get('/', json=data_inputs)
 
     predictions_np_arr = np.array(json_response.json["predictions"])
     expected_outputs = 2 * np.array(data_inputs)

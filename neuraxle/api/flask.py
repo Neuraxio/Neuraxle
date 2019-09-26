@@ -131,7 +131,7 @@ class FlaskRestApiWrapper(Pipeline):
         wrapped = self
 
         class RESTfulRes(Resource):
-            def post(self):
+            def get(self):
                 return wrapped.transform(request.get_json())
 
         api.add_resource(
