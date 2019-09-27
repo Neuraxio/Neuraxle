@@ -32,6 +32,35 @@ from typing import Tuple, List, Union, Any
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
 
+class BaseHasher(ABC):
+    @abstractmethod
+    def hash(self, current_ids, hyperparameters: HyperparameterSamples, data_inputs: Any):
+        raise NotImplementedError()
+
+    def _hash_hyperparameters(self, hyperparams: HyperparameterSamples):
+        hyperperams_dict = hyperparams.to_flat_as_dict_primitive()
+        return hashlib.md5(str.encode(str(hyperperams_dict))).hexdigest()
+
+
+class RangeHasher(BaseHasher):
+    def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
+        if current_ids is None:
+            current_ids = [str(i) for i in range(len(data_inputs))]
+
+        if len(hyperparameters) == 0:
+            return current_ids
+
+        current_hyperparameters_hash = self._hash_hyperparameters(hyperparameters)
+
+        new_current_ids = []
+        for current_id in current_ids:
+            m = hashlib.md5()
+            m.update(str.encode(current_id))
+            m.update(str.encode(current_hyperparameters_hash))
+            new_current_ids.append(m.hexdigest())
+
+        return new_current_ids
+
 class DataContainer:
     def __init__(self,
                  current_ids,
@@ -45,15 +74,11 @@ class DataContainer:
     def set_data_inputs(self, data_inputs: Any):
         self.data_inputs = data_inputs
 
+    def set_expected_outputs(self, expected_outputs: Any):
+        self.expected_outputs = expected_outputs
+
     def set_current_ids(self, current_ids: Any):
         self.current_ids = current_ids
-
-    def append(self, current_id, data_input, expected_output):
-        self.current_ids.append(current_id)
-        self.data_inputs.append(data_input)
-
-        if self.expected_outputs is None:
-            self.expected_outputs = [expected_output]
 
     def __iter__(self):
         current_ids = self.current_ids
@@ -71,6 +96,18 @@ class DataContainer:
 
     def __len__(self):
         return len(self.data_inputs)
+
+class ListDataContainer(DataContainer):
+    @staticmethod
+    def empty() -> 'ListDataContainer':
+        return ListDataContainer([], [], [])
+
+    def append(self, current_id, data_input, expected_output):
+        self.current_ids.append(current_id)
+        self.data_inputs.append(data_input)
+        self.expected_outputs.append(expected_output)
+
+
 
 
 class BaseStep(ABC):
@@ -420,7 +457,10 @@ class MetaStepMixin:
     """A class to represent a meta step which is used to optimize another step."""
 
     # TODO: remove equal None, and fix random search at the same time ?
-    def __init__(self, wrapped: BaseStep = None):
+    def __init__(
+        self,
+        wrapped: BaseStep = None
+    ):
         self.wrapped: BaseStep = wrapped
 
     def setup(self, step_path: str, setup_arguments: dict = None) -> BaseStep:
@@ -434,21 +474,73 @@ class MetaStepMixin:
         return self
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
-        self.wrapped = self.wrapped.set_hyperparams(hyperparams.to_flat())
+        """
+        Set meta step and wrapped step hyperparams using the given hyperparams.
+
+        :param hyperparams: ordered dict containing all hyperparameters
+        :type hyperparams: HyperparameterSamples
+
+        :return:
+        """
+        hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
+
+        remainders = dict()
+        for name, hparams in hyperparams.items():
+            if name == self.wrapped.name:
+                self.wrapped.set_hyperparams(hparams)
+            else:
+                remainders[name] = hparams
+
+        self.hyperparams = HyperparameterSamples(remainders)
+
         return self
 
     def get_hyperparams(self) -> HyperparameterSamples:
-        return self.wrapped.get_hyperparams()
+        """
+        Get meta step and wrapped step hyperparams as a flat hyperparameter samples.
+
+        :return: hyperparameters
+        """
+        return HyperparameterSamples({
+            **self.hyperparams.to_flat_as_dict_primitive(),
+            self.wrapped.name: self.wrapped.hyperparams.to_flat_as_dict_primitive()
+        }).to_flat()
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
-        self.wrapped = self.wrapped.set_hyperparams_space(hyperparams_space.to_flat())
+        """
+        Set meta step and wrapped step hyperparams space using the given hyperparams space.
+
+        :param hyperparams_space: ordered dict containing all hyperparameter spaces
+        :type hyperparams_space: HyperparameterSpace
+
+        :return: self
+        """
+        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space.to_nested_dict())
+
+        remainders = dict()
+        for name, hparams in hyperparams_space.items():
+            if name == self.wrapped.name:
+                self.wrapped.set_hyperparams_space(hparams)
+            else:
+                remainders[name] = hparams
+
+        self.hyperparams_space = HyperparameterSpace(remainders)
+
         return self
 
     def get_hyperparams_space(self) -> HyperparameterSpace:
-        return self.wrapped.get_hyperparams_space()
+        """
+        Get meta step and wrapped step hyperparams as a flat hyperparameter space
+
+        :return: hyperparameters_space
+        """
+        return HyperparameterSpace({
+            **self.hyperparams_space.to_flat_as_dict_primitive(),
+            self.wrapped.name: self.wrapped.hyperparams_space.to_flat_as_dict_primitive()
+        }).to_flat()
 
     def set_step(self, step: BaseStep) -> BaseStep:
-        self.step: BaseStep = step
+        self.wrapped: BaseStep = step
         return self
 
     def get_best_model(self) -> BaseStep:
@@ -659,7 +751,7 @@ class TruncableSteps(BaseStep, ABC):
                 self.steps[name].set_hyperparams(hparams)
             else:
                 remainders[name] = hparams
-        self.hyperparams = remainders
+        self.hyperparams = HyperparameterSamples(remainders)
 
         return self
 
@@ -672,7 +764,7 @@ class TruncableSteps(BaseStep, ABC):
                 self.steps[name].set_hyperparams_space(hparams)
             else:
                 remainders[name] = hparams
-        self.hyperparams = remainders
+        self.hyperparams = HyperparameterSpace(remainders)
 
         return self
 
@@ -741,7 +833,6 @@ class TruncableSteps(BaseStep, ABC):
             if step is not None or (start is None and stop is None):
                 raise KeyError("Invalid range: '{}'.".format(key))
             new_steps_as_tuple = []
-
             if start is None:
                 if stop not in self.steps.keys():
                     raise KeyError("Stop '{}' not found in '{}'.".format(stop, self.steps.keys()))
@@ -769,7 +860,6 @@ class TruncableSteps(BaseStep, ABC):
                         started = True
                     if started:
                         new_steps_as_tuple.append((key, val))
-
             self_shallow_copy.steps_as_tuple = new_steps_as_tuple
             self_shallow_copy.steps = OrderedDict(new_steps_as_tuple)
             return self_shallow_copy
@@ -840,15 +930,6 @@ class TruncableSteps(BaseStep, ABC):
         :return: len(self.steps_as_tuple)
         """
         return len(self.steps_as_tuple)
-
-
-class OutputTransformerWrapper(MetaStepMixin, BaseStep):
-    def __init__(self, wrapped: BaseStep):
-        MetaStepMixin.__init__(self, wrapped)
-
-    def transform(self, data_inputs):
-        data_inputs, expected_outputs = data_inputs
-        return self.wrapped.transform(list(zip(data_inputs, expected_outputs)))
 
 
 class ResumableStepMixin:

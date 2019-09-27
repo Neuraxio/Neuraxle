@@ -204,9 +204,17 @@ such:
     # unseen data for making predictions.
     y_test_predicted = p.transform(X_test)
 
+    # Easy REST API deployment.
+    app = FlaskRestApiWrapper(
+        json_decoder=CustomJSONDecoderFor2DArray(),
+        wrapped=p,
+        json_encoder=CustomJSONEncoderOfOutputs(),
+    ).get_app()
+    app.run(debug=False, port=5000)
+
 Visit the
 `examples <https://www.neuraxle.neuraxio.com/stable/examples/index.html>`__
-to get more feel of how it works, and inspiration.
+to get more a feeling of how it works, and inspiration.
 
 Community
 ---------
