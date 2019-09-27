@@ -70,18 +70,15 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         :param data_inputs: the data input to transform
         :return: transformed data inputs
         """
-        self.setup()
+        self.setup() # TODO: perhaps, remove this to pass path in context
 
-        try:
-            current_ids = self.hasher.hash(
-                current_ids=None,
-                hyperparameters=self.hyperparams,
-                data_inputs=data_inputs
-            )
-            data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
-            data_container = self._transform_core(data_container)
-        finally:
-            self.teardown()
+        current_ids = self.hasher.hash(
+            current_ids=None,
+            hyperparameters=self.hyperparams,
+            data_inputs=data_inputs
+        )
+        data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
+        data_container = self._transform_core(data_container)
 
         return data_container.data_inputs
 
@@ -93,22 +90,19 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        self.setup()
+        self.setup() # TODO: perhaps, remove this to pass path in context
 
-        try:
-            current_ids = self.hasher.hash(
-                current_ids=None,
-                hyperparameters=self.hyperparams,
-                data_inputs=data_inputs
-            )
-            data_container = DataContainer(
-                current_ids=current_ids,
-                data_inputs=data_inputs,
-                expected_outputs=expected_outputs
-            )
-            new_self, data_container = self._fit_transform_core(data_container)
-        finally:
-            self.teardown()
+        current_ids = self.hasher.hash(
+            current_ids=None,
+            hyperparameters=self.hyperparams,
+            data_inputs=data_inputs
+        )
+        data_container = DataContainer(
+            current_ids=current_ids,
+            data_inputs=data_inputs,
+            expected_outputs=expected_outputs
+        )
+        new_self, data_container = self._fit_transform_core(data_container)
 
         return new_self, data_container.data_inputs
 
@@ -120,22 +114,20 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        self.setup()
+        self.setup() # TODO: perhaps, remove this to pass path in context
 
-        try:
-            current_ids = self.hasher.hash(
-                current_ids=None,
-                hyperparameters=self.hyperparams,
-                data_inputs=data_inputs
-            )
-            data_container = DataContainer(
-                current_ids=current_ids,
-                data_inputs=data_inputs,
-                expected_outputs=expected_outputs
-            )
-            new_self, _ = self._fit_transform_core(data_container)
-        finally:
-            self.teardown()
+        current_ids = self.hasher.hash(
+            current_ids=None,
+            hyperparameters=self.hyperparams,
+            data_inputs=data_inputs
+        )
+        data_container = DataContainer(
+            current_ids=current_ids,
+            data_inputs=data_inputs,
+            expected_outputs=expected_outputs
+        )
+
+        new_self, _ = self._fit_transform_core(data_container)
 
         return new_self
 
@@ -221,11 +213,11 @@ class Pipeline(BasePipeline, ResumableStepMixin):
         """
         new_starting_step_index = self._find_starting_step_index(data_container)
 
-        _, step = self.steps_as_tuple[new_starting_step_index]
+        step = self[new_starting_step_index]
         if isinstance(step, BaseCheckpointStep):
             data_container = step.read_checkpoint(data_container)
 
-        return self.steps_as_tuple[new_starting_step_index:], data_container
+        return self[new_starting_step_index:], data_container
 
     def _find_starting_step_index(self, data_container: DataContainer) -> int:
         """
