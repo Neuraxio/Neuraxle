@@ -21,8 +21,8 @@ You can find here misc. pipeline steps, for example, callbacks useful for debugg
 """
 
 import copy
-from abc import ABC, abstractmethod
-from typing import List, Any, Tuple
+from abc import ABC
+from typing import List, Any
 
 from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, MetaStepMixin, DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
@@ -244,15 +244,9 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
         return self
 
     def transform(self, data_inputs: List) -> List:
-        assert len(data_inputs) >= len(self.steps), (
-            "Can't have more data_inputs than cloned steps to process them.")
-
         return [self.steps[i].transform(di) for i, di in enumerate(data_inputs)]
 
     def inverse_transform(self, data_output):
-        assert len(data_output) >= len(self.steps), (
-            "Can't have more data_inputs than cloned steps to process them.")
-
         return [self.steps[i].inverse_transform(di) for i, di in enumerate(data_output)]
 
 
