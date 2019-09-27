@@ -60,7 +60,6 @@ class RangeHasher(BaseHasher):
 
         return new_current_ids
 
-
 class DataContainer:
     def __init__(self,
                  current_ids,
@@ -80,11 +79,6 @@ class DataContainer:
     def set_current_ids(self, current_ids: Any):
         self.current_ids = current_ids
 
-    def append(self, current_id, data_input, expected_output):
-        self.current_ids.append(current_id)
-        self.data_inputs.append(data_input)
-        self.expected_outputs.append(expected_output)
-
     def __iter__(self):
         current_ids = self.current_ids
         if self.current_ids is None:
@@ -98,6 +92,18 @@ class DataContainer:
 
     def __len__(self):
         return len(self.data_inputs)
+
+class ListDataContainer(DataContainer):
+    @staticmethod
+    def empty() -> 'ListDataContainer':
+        return ListDataContainer([], [], [])
+
+    def append(self, current_id, data_input, expected_output):
+        self.current_ids.append(current_id)
+        self.data_inputs.append(data_input)
+        self.expected_outputs.append(expected_output)
+
+
 
 
 class BaseStep(ABC):
