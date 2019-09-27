@@ -29,8 +29,6 @@ from collections import OrderedDict
 from copy import copy
 from typing import Tuple, List, Union, Any
 
-import numpy as np
-
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
 
@@ -73,7 +71,7 @@ class DataContainer:
         self.current_ids = current_ids
         self.data_inputs = data_inputs
         if expected_outputs is None:
-            self.expected_outputs = np.array([None] * len(current_ids))
+            self.expected_outputs = [None] * len(current_ids)
         else:
             self.expected_outputs = expected_outputs
 
@@ -89,11 +87,11 @@ class DataContainer:
     def __iter__(self):
         current_ids = self.current_ids
         if self.current_ids is None:
-            current_ids = np.array([None] * len(self.data_inputs))
+            current_ids = [None] * len(self.data_inputs)
 
         expected_outputs = self.expected_outputs
         if self.expected_outputs is None:
-            expected_outputs = np.array([None] * len(self.data_inputs))
+            expected_outputs = [None] * len(self.data_inputs)
 
         return zip(current_ids, self.data_inputs, expected_outputs)
 
