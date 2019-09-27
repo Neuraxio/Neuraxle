@@ -9,7 +9,7 @@ from neuraxle.checkpoints import PickleCheckpointStep
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.util import TapeCallbackFunction, TransformCallbackStep
-from testing.steps.test_output_transformer_wrapper import MultiplyBy2BaseOutputTransformer
+from testing.steps.test_output_transformer_wrapper import MultiplyBy2OutputTransformer
 
 EXPECTED_TAPE_AFTER_CHECKPOINT = ["2", "3"]
 
@@ -126,9 +126,9 @@ def test_pickle_checkpoint_step_should_load_data_container(tmpdir: LocalPath):
 
     create_pipeline_output_transformer = lambda: Pipeline(
         [
-            ('output_transformer', MultiplyBy2BaseOutputTransformer()),
+            ('output_transformer', MultiplyBy2OutputTransformer()),
             ('pickle_checkpoint', create_pickle_checkpoint_step(tmpdir)),
-            ('output_transformer', MultiplyBy2BaseOutputTransformer()),
+            ('output_transformer', MultiplyBy2OutputTransformer()),
         ]
     )
 

@@ -31,7 +31,7 @@ from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpac
 class BaseCallbackStep(BaseStep, ABC):
     """Base class for callback steps."""
 
-    def __init__(self, callback_function, more_arguments: List = tuple(), hyperparams = None):
+    def __init__(self, callback_function, more_arguments: List = tuple(), hyperparams=None):
         """
         Create the callback step with a function and extra arguments to send to the function
 
@@ -225,7 +225,8 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
         if expected_outputs is None:
             expected_outputs = [None] * len(data_inputs)
 
-        fit_transform_result = [self.steps[i].fit_transform(di, eo) for i, (di, eo) in enumerate(zip(data_inputs, expected_outputs))]
+        fit_transform_result = [self.steps[i].fit_transform(di, eo) for i, (di, eo) in
+                                enumerate(zip(data_inputs, expected_outputs))]
         self.steps = [step for step, di in fit_transform_result]
         data_inputs = [di for step, di in fit_transform_result]
 
@@ -259,9 +260,9 @@ class DataShuffler:
     pass  # TODO.
 
 
-class BaseOutputTransformerStep(BaseStep):
+class OutputTransformerMixin:
     """
-    Base output transformer step that can modify data inputs, expected_outputs at the same time.
+    Base output transformer step that can modify data inputs, and expected_outputs at the same time.
     """
 
     def handle_transform(self, data_container: DataContainer) -> DataContainer:
@@ -271,9 +272,9 @@ class BaseOutputTransformerStep(BaseStep):
         :param data_container:
         :return:
         """
-        new_data_inputs, new_expected_outputs = self.transform_input_output(
-            data_inputs=data_container.data_inputs, expected_outputs=data_container.expected_outputs
-        )
+        di_eo = (data_container.data_inputs, data_container.expected_outputs)
+        new_data_inputs, new_expected_outputs = self.transform(di_eo)
+
         data_container.set_data_inputs(new_data_inputs)
         data_container.set_expected_outputs(new_expected_outputs)
 
@@ -295,14 +296,3 @@ class BaseOutputTransformerStep(BaseStep):
         data_container = self.handle_transform(data_container)
 
         return new_self, data_container
-
-    @abstractmethod
-    def transform_input_output(self, data_inputs, expected_outputs=None) -> Tuple[Any, Any]:
-        """
-        Transform data inputs, and expected outputs at the same time
-
-        :param data_inputs:
-        :param expected_outputs:
-        :return: tuple(data_inputs, expected_outputs)
-        """
-        raise NotImplementedError()

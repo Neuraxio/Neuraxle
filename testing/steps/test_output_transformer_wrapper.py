@@ -1,27 +1,38 @@
 from typing import Tuple, Any
 
-from neuraxle.base import DataContainer
+from neuraxle.base import DataContainer, BaseStep, BaseHasher, NonFittableMixin
+from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.util import BaseOutputTransformerStep
+from neuraxle.steps.util import OutputTransformerMixin
 
 
-class MultiplyBy2BaseOutputTransformer(BaseOutputTransformerStep):
-    def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
-        return self
+class MultiplyBy2OutputTransformer(NonFittableMixin, OutputTransformerMixin, BaseStep):
+    def __init__(
+            self,
+            hyperparams: HyperparameterSamples = None,
+            hyperparams_space: HyperparameterSpace = None,
+            name: str = None,
+            hasher: BaseHasher = None
+    ):
+        NonFittableMixin.__init__(self)
+        BaseStep.__init__(self, hyperparams, hyperparams_space, name, hasher)
+        OutputTransformerMixin.__init__(self)
 
-    def transform_input_output(self, data_inputs, expected_outputs=None) -> Tuple[Any, Any]:
-        dis = []
-        eos = []
-        for di, eo in zip(data_inputs, expected_outputs):
-            dis.append(di * 2)
-            eos.append(eo * 2)
+    def transform(self, data_inputs) -> Tuple[Any, Any]:
+        dis, eos = data_inputs
 
-        return dis, eos
+        new_dis = []
+        new_eos = []
+        for di, eo in zip(dis, eos):
+            new_dis.append(di * 2)
+            new_eos.append(eo * 2)
+
+        return new_dis, new_eos
 
 
 def test_output_transformer_should_zip_data_input_and_expected_output_in_the_transformed_output():
     pipeline = Pipeline([
-        MultiplyBy2BaseOutputTransformer()
+        MultiplyBy2OutputTransformer()
     ])
 
     pipeline, new_data_container = pipeline.handle_fit_transform(
