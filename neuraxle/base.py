@@ -95,6 +95,9 @@ class DataContainer:
 
         return zip(current_ids, self.data_inputs, expected_outputs)
 
+    def __repr__(self):
+        return str(self)
+
     def __str__(self):
         return self.__class__.__name__ + "(current_ids=" + repr(list(self.current_ids)) + ", ...)"
 
@@ -461,8 +464,8 @@ class MetaStepMixin:
 
     # TODO: remove equal None, and fix random search at the same time ?
     def __init__(
-            self,
-            wrapped: BaseStep = None
+        self,
+        wrapped: BaseStep = None
     ):
         self.wrapped: BaseStep = wrapped
 
