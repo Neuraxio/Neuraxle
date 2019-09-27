@@ -23,7 +23,7 @@ import os
 import pickle
 from abc import abstractmethod
 
-from neuraxle.base import ResumableStepMixin, BaseStep, DataContainer
+from neuraxle.base import ResumableStepMixin, BaseStep, DataContainer, ListDataContainer
 
 DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
 
@@ -116,23 +116,19 @@ class PickleCheckpointStep(BaseCheckpointStep):
 
         :return: tuple(data_inputs, expected_outputs
         """
-        checkpoint_data_container = DataContainer(
-            current_ids=[],
-            data_inputs=[],
-            expected_outputs=None
-        )
+        list_data_container = ListDataContainer.empty()
 
         for current_id, data_input, expected_output in data_container:
-            with open(self.get_checkpoint_file_path(current_id), 'wb') as file:
+            with open(self.get_checkpoint_file_path(current_id), 'rb') as file:
                 (checkpoint_current_id, checkpoint_data_input, checkpoint_expected_output) = \
                     pickle.load(file)
-                checkpoint_data_container.append(
+                list_data_container.append(
                     current_id=checkpoint_current_id,
                     data_input=checkpoint_data_input,
                     expected_output=checkpoint_expected_output
                 )
 
-        return checkpoint_data_container
+        return list_data_container
 
     def save_checkpoint(self, data_container: DataContainer) -> DataContainer:
         """
