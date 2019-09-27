@@ -118,7 +118,7 @@ class JoblibPipelineSaver(PipelineSaver):
         if not os.path.exists(pipeline_cache_folder):
             os.makedirs(pipeline_cache_folder)
 
-        next_cached_pipeline_path = self._create_next_cached_pipeline_path(pipeline_cache_folder, data_container)
+        next_cached_pipeline_path = self._create_cached_pipeline_path(pipeline_cache_folder, data_container)
         dump(pipeline, next_cached_pipeline_path)
 
         return pipeline
@@ -134,7 +134,7 @@ class JoblibPipelineSaver(PipelineSaver):
         pipeline_cache_folder = os.path.join(self.cache_folder, pipeline.name)
 
         return os.path.exists(
-            self._create_next_cached_pipeline_path(
+            self._create_cached_pipeline_path(
                 pipeline_cache_folder,
                 data_container
             )
@@ -142,7 +142,7 @@ class JoblibPipelineSaver(PipelineSaver):
 
     def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
         """
-        Load pipeline for current data container
+        Load pipeline for current data container.
 
         :param pipeline:
         :param data_container:
@@ -151,19 +151,32 @@ class JoblibPipelineSaver(PipelineSaver):
         pipeline_cache_folder = os.path.join(self.cache_folder, pipeline.name)
 
         return load(
-            self._create_next_cached_pipeline_path(
+            self._create_cached_pipeline_path(
                 pipeline_cache_folder,
                 data_container
             )
         )
 
-    def _create_next_cached_pipeline_path(self, pipeline_cache_folder, data_container: 'DataContainer') -> str:
+    def _create_cached_pipeline_path(self, pipeline_cache_folder, data_container: 'DataContainer') -> str:
         """
-        Create next cached pipeline path by incrementing a suffix
+        Create cached pipeline path with data container, and pipeline cache folder.
 
         :type data_container: DataContainer
         :param pipeline_cache_folder: str
+
         :return: path string
+        """
+        all_current_ids_hash = self._hash_data_container(data_container)
+        return os.path.join(pipeline_cache_folder, '{0}.joblib'.format(str(all_current_ids_hash)))
+
+    def _hash_data_container(self, data_container):
+        """
+        Hash data container current ids with md5.
+
+        :param data_container: data container
+        :type data_container: DataContainer
+
+        :return: str hexdigest of all of the current ids hashed together.
         """
         all_current_ids_hash = None
         for current_id, *_ in data_container:
@@ -172,8 +185,7 @@ class JoblibPipelineSaver(PipelineSaver):
             if all_current_ids_hash is not None:
                 m.update(str.encode(all_current_ids_hash))
             all_current_ids_hash = m.hexdigest()
-
-        return os.path.join(pipeline_cache_folder, '{0}.joblib'.format(str(all_current_ids_hash)))
+        return all_current_ids_hash
 
 
 class Pipeline(BasePipeline):
@@ -389,13 +401,22 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
             self._get_starting_step_info(data_container)
 
         if self.parent_step is None:
-            loaded_saved_pipeline = self._load_saved_pipeline(
-                starting_step_data_container,
-                new_starting_step_index
-            )
-
-            if not loaded_saved_pipeline:
+            if not self.pipeline_saver.can_load(self, starting_step_data_container):
                 return self.steps_as_tuple, data_container
+
+            saved_pipeline = self.pipeline_saver.load(self, starting_step_data_container)
+
+            if not self._can_load_saved_pipeline(
+                    saved_pipeline=saved_pipeline,
+                    starting_step_data_container=starting_step_data_container,
+                    new_starting_step_index=new_starting_step_index
+            ):
+                return self.steps_as_tuple, data_container
+
+            self._load_saved_pipeline_steps_before_index(
+                saved_pipeline=saved_pipeline,
+                index=new_starting_step_index
+            )
 
         step = self[new_starting_step_index]
         if isinstance(step, BaseCheckpointStep):
@@ -403,26 +424,26 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
 
         return self[new_starting_step_index:], starting_step_data_container
 
-    def _load_saved_pipeline(
+    def _can_load_saved_pipeline(
             self,
+            saved_pipeline: Pipeline,
             starting_step_data_container: DataContainer,
             new_starting_step_index
     ) -> bool:
         """
-        Load persisted pipeline steps before checkpoint
-        if the steps before the latest checkpoint have not changed
+        Returns True if the saved pipeline steps before passed starting step index
+        are the same as current pipeline steps before starting step index.
 
+        :param saved_pipeline: loaded saved pipeline
         :param starting_step_data_container: loaded cached pipeline
         :param new_starting_step_index:
-        :return: true if loading succeeded
+
+        :return bool
         """
         if not self.pipeline_saver.can_load(self, starting_step_data_container):
             return False
 
-        cached_pipeline = self.pipeline_saver.load(self, starting_step_data_container)
-
-        if self.compare_other_truncable_steps_before_index(cached_pipeline, new_starting_step_index):
-            self.load_other_truncable_steps_before_index(cached_pipeline, new_starting_step_index)
+        if self.are_steps_before_index_the_same(saved_pipeline, new_starting_step_index):
             return True
 
         return False
