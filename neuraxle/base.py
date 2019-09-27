@@ -428,12 +428,8 @@ class MetaStepMixin:
     # TODO: remove equal None, and fix random search at the same time ?
     def __init__(
         self,
-        wrapped: BaseStep = None,
-        hyperparams: HyperparameterSamples = dict(),
-        hyperparams_space: HyperparameterSpace = dict(),
+        wrapped: BaseStep = None
     ):
-        self.hyperparams = hyperparams
-        self.hyperparams_space = hyperparams_space
         self.wrapped: BaseStep = wrapped
 
     def setup(self, step_path: str, setup_arguments: dict = None) -> BaseStep:
@@ -474,12 +470,10 @@ class MetaStepMixin:
 
         :return: hyperparameters
         """
-        return HyperparameterSamples(
-            dict(
-                self.hyperparams.to_flat_as_dict_primitive(),
-                **{self.wrapped.name: self.wrapped.hyperparams.to_flat_as_dict_primitive()}
-            )
-        ).to_flat()
+        return HyperparameterSamples({
+            **self.hyperparams.to_flat_as_dict_primitive(),
+            self.wrapped.name: self.wrapped.hyperparams.to_flat_as_dict_primitive()
+        }).to_flat()
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
         """
@@ -509,12 +503,10 @@ class MetaStepMixin:
 
         :return: hyperparameters_space
         """
-        return HyperparameterSpace(
-            dict(
-                self.hyperparams_space.to_flat_as_dict_primitive(),
-                **{self.wrapped.name: self.wrapped.hyperparams_space.to_flat_as_dict_primitive()}
-            )
-        ).to_flat()
+        return HyperparameterSpace({
+            **self.hyperparams_space.to_flat_as_dict_primitive(),
+            self.wrapped.name: self.wrapped.hyperparams_space.to_flat_as_dict_primitive()
+        }).to_flat()
 
     def set_step(self, step: BaseStep) -> BaseStep:
         self.wrapped: BaseStep = step
