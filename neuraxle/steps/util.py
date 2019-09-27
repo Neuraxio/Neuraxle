@@ -25,6 +25,7 @@ from abc import ABC
 from typing import List, Any
 
 from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, MetaStepMixin, DataContainer
+from neuraxle.pipeline import PipelineSaver
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
 
@@ -254,6 +255,16 @@ class DataShuffler:
     pass  # TODO.
 
 
+class NullPipelineSaver(PipelineSaver):
+    def can_load(self, pipeline: 'Pipeline', data_container: DataContainer) -> bool:
+        return True
+
+    def save(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
+        return pipeline
+
+    def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
+        return pipeline
+
 class OutputTransformerMixin:
     """
     Base output transformer step that can modify data inputs, and expected_outputs at the same time.
@@ -272,7 +283,7 @@ class OutputTransformerMixin:
         data_container.set_data_inputs(new_data_inputs)
         data_container.set_expected_outputs(new_expected_outputs)
 
-        current_ids = self.hasher.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
         data_container.set_current_ids(current_ids)
 
         return data_container

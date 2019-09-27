@@ -1,6 +1,6 @@
 from typing import Tuple, Any
 
-from neuraxle.base import DataContainer, BaseStep, BaseHasher, NonFittableMixin
+from neuraxle.base import DataContainer, BaseStep, NonFittableMixin
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.util import OutputTransformerMixin
@@ -11,11 +11,10 @@ class MultiplyBy2OutputTransformer(NonFittableMixin, OutputTransformerMixin, Bas
             self,
             hyperparams: HyperparameterSamples = None,
             hyperparams_space: HyperparameterSpace = None,
-            name: str = None,
-            hasher: BaseHasher = None
+            name: str = None
     ):
         NonFittableMixin.__init__(self)
-        BaseStep.__init__(self, hyperparams, hyperparams_space, name, hasher)
+        BaseStep.__init__(self, hyperparams, hyperparams_space, name)
         OutputTransformerMixin.__init__(self)
 
     def transform(self, data_inputs) -> Tuple[Any, Any]:
@@ -36,7 +35,11 @@ def test_output_transformer_should_zip_data_input_and_expected_output_in_the_tra
     ])
 
     pipeline, new_data_container = pipeline.handle_fit_transform(
-        DataContainer(current_ids=[0, 1, 2], data_inputs=[1, 2, 3], expected_outputs=[2, 3, 4])
+        DataContainer(
+            current_ids=[0, 1, 2],
+            data_inputs=[1, 2, 3],
+            expected_outputs=[2, 3, 4]
+        )
     )
 
     assert new_data_container.data_inputs == [2, 4, 6]

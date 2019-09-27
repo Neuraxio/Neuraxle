@@ -21,6 +21,7 @@ This is the core of Neuraxle. Most pipeline steps derive (inherit) from those cl
 """
 
 import hashlib
+import inspect
 import os
 import warnings
 from abc import ABC, abstractmethod
@@ -60,6 +61,7 @@ class RangeHasher(BaseHasher):
 
         return new_current_ids
 
+
 class DataContainer:
     def __init__(self,
                  current_ids,
@@ -68,7 +70,10 @@ class DataContainer:
                  ):
         self.current_ids = current_ids
         self.data_inputs = data_inputs
-        self.expected_outputs = expected_outputs
+        if expected_outputs is None:
+            self.expected_outputs = [None] * len(current_ids)
+        else:
+            self.expected_outputs = expected_outputs
 
     def set_data_inputs(self, data_inputs: Any):
         self.data_inputs = data_inputs
@@ -90,8 +95,15 @@ class DataContainer:
 
         return zip(current_ids, self.data_inputs, expected_outputs)
 
+    def __repr__(self):
+        return str(self)
+
+    def __str__(self):
+        return self.__class__.__name__ + "(current_ids=" + repr(list(self.current_ids)) + ", ...)"
+
     def __len__(self):
         return len(self.data_inputs)
+
 
 class ListDataContainer(DataContainer):
     @staticmethod
@@ -104,28 +116,22 @@ class ListDataContainer(DataContainer):
         self.expected_outputs.append(expected_output)
 
 
-
-
 class BaseStep(ABC):
     def __init__(
             self,
             hyperparams: HyperparameterSamples = None,
             hyperparams_space: HyperparameterSpace = None,
-            name: str = None,
-            hasher: BaseHasher = None
+            name: str = None
     ):
 
         if hyperparams is None:
             hyperparams = dict()
         if hyperparams_space is None:
             hyperparams_space = dict()
-        if hasher is None:
-            hasher = RangeHasher()
         if name is None:
             name = self.__class__.__name__
 
         self.name: str = name
-        self.hasher = hasher
 
         self.hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams)
         self.hyperparams = self.hyperparams.to_flat()
@@ -135,6 +141,35 @@ class BaseStep(ABC):
 
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
         self.is_initialized = False
+        self.parent_step = None
+
+    def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
+        if current_ids is None:
+            current_ids = [str(i) for i in range(len(data_inputs))]
+
+        if len(hyperparameters) == 0:
+            return current_ids
+
+        current_hyperparameters_hash = self._hash_hyperparameters(hyperparameters)
+
+        new_current_ids = []
+        for current_id in current_ids:
+            m = hashlib.md5()
+            m.update(str.encode(current_id))
+            m.update(str.encode(current_hyperparameters_hash))
+            new_current_ids.append(m.hexdigest())
+
+        return new_current_ids
+
+    def _hash_hyperparameters(self, hyperparams: HyperparameterSamples):
+        hyperperams_dict = hyperparams.to_flat_as_dict_primitive()
+        return hashlib.md5(str.encode(str(hyperperams_dict))).hexdigest()
+
+    def set_parent(self, parent_step: 'BaseStep'):
+        self.parent_step = parent_step
+
+    def save(self, data_container: DataContainer):
+        self.parent_step.save(data_container)
 
     def setup(self, step_path: str, setup_arguments: dict) -> 'BaseStep':
         """
@@ -185,10 +220,6 @@ class BaseStep(ABC):
         self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
         return self
 
-    def set_hasher(self, hasher: BaseHasher) -> 'BaseStep':
-        self.hasher = hasher
-        return self
-
     def get_hyperparams_space(self) -> HyperparameterSpace:
         return self.hyperparams_space
 
@@ -203,7 +234,7 @@ class BaseStep(ABC):
         new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
         data_container.set_data_inputs(out)
 
-        current_ids = self.hasher.hash(data_container.current_ids, self.hyperparams, out)
+        current_ids = self.hash(data_container.current_ids, self.hyperparams, out)
         data_container.set_current_ids(current_ids)
 
         return new_self, data_container
@@ -218,7 +249,7 @@ class BaseStep(ABC):
         out = self.transform(data_container.data_inputs)
         data_container.set_data_inputs(out)
 
-        current_ids = self.hasher.hash(data_container.current_ids, self.hyperparams, out)
+        current_ids = self.hash(data_container.current_ids, self.hyperparams, out)
         data_container.set_current_ids(current_ids)
 
         return data_container
@@ -581,14 +612,55 @@ class TruncableSteps(BaseStep, ABC):
             self,
             steps_as_tuple: NamedTupleList,
             hyperparams: HyperparameterSamples = dict(),
-            hyperparams_space: HyperparameterSpace = dict(),
-            hasher: BaseHasher = None
+            hyperparams_space: HyperparameterSpace = dict()
     ):
-        super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space, hasher=hasher)
-        self.steps_as_tuple: NamedTupleList = self.patch_missing_names(steps_as_tuple)
-        self._refresh_steps()
+        super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space)
+        self._set_steps(steps_as_tuple)
 
         assert isinstance(self, BaseStep), "Classes that inherit from TruncableMixin must also inherit from BaseStep."
+
+    def are_steps_before_index_the_same(self, other: 'TruncableSteps', index: int):
+        """
+        Returns true if self.steps before index are the same as other.steps before index.
+
+        :param other: other truncable steps to compare
+        :param index: max step index to compare
+
+        :return: bool
+        """
+        for current_index, (step_name, step) in enumerate(self[:index]):
+            source_current_step = inspect.getsource(step.__class__)
+            source_cached_step = inspect.getsource(other[current_index].__class__)
+
+            if source_current_step != source_cached_step:
+                return False
+
+        return True
+
+    def _load_saved_pipeline_steps_before_index(self, saved_pipeline: 'TruncableSteps', index: int):
+        """
+        Load the cached pipeline steps
+        before the index into the current steps
+
+        :param saved_pipeline:
+        :param index:
+        :return:
+        """
+        self.set_hyperparams(saved_pipeline.get_hyperparams())
+        self.set_hyperparams_space(saved_pipeline.get_hyperparams_space())
+
+        new_truncable_steps = saved_pipeline[:index] + self[index:]
+        self._set_steps(new_truncable_steps.steps_as_tuple)
+
+    def _set_steps(self, steps_as_tuple: NamedTupleList):
+        """
+        Set pipeline steps
+
+        :param steps_as_tuple: List[Tuple[str, BaseStep]] list of tuple containing step name and step
+        :return:
+        """
+        self.steps_as_tuple = self.patch_missing_names(steps_as_tuple)
+        self._refresh_steps()
 
     def setup(self, step_path: str = None, setup_arguments: dict = None) -> 'BaseStep':
         if self.is_initialized:
@@ -804,6 +876,10 @@ class TruncableSteps(BaseStep, ABC):
                 key = self._step_index_to_name(key)
 
             return self.steps[key]
+
+    def __add__(self, other: 'TruncableSteps') -> 'TruncableSteps':
+        self._set_steps(self.steps_as_tuple + other.steps_as_tuple)
+        return self
 
     def items(self):
         return self.steps.items()
