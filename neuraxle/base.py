@@ -69,7 +69,10 @@ class DataContainer:
                  ):
         self.current_ids = current_ids
         self.data_inputs = data_inputs
-        self.expected_outputs = expected_outputs
+        if expected_outputs is None:
+            self.expected_outputs = [None] * len(current_ids)
+        else:
+            self.expected_outputs = expected_outputs
 
     def set_data_inputs(self, data_inputs: Any):
         self.data_inputs = data_inputs
@@ -91,11 +94,15 @@ class DataContainer:
 
         return zip(current_ids, self.data_inputs, expected_outputs)
 
+    def __repr__(self):
+        return str(self)
+
     def __str__(self):
         return self.__class__.__name__ + "(current_ids=" + repr(list(self.current_ids)) + ", ...)"
 
     def __len__(self):
         return len(self.data_inputs)
+
 
 class ListDataContainer(DataContainer):
     @staticmethod
@@ -106,8 +113,6 @@ class ListDataContainer(DataContainer):
         self.current_ids.append(current_id)
         self.data_inputs.append(data_input)
         self.expected_outputs.append(expected_output)
-
-
 
 
 class BaseStep(ABC):
@@ -613,35 +618,37 @@ class TruncableSteps(BaseStep, ABC):
 
         assert isinstance(self, BaseStep), "Classes that inherit from TruncableMixin must also inherit from BaseStep."
 
-    def compare_other_truncable_steps_before_index(self, other: 'TruncableSteps', index):
+    def are_steps_before_index_the_same(self, other: 'TruncableSteps', index: int):
         """
-        Returns true if other steps source code before passed index is identical
+        Returns true if self.steps before index are the same as other.steps before index.
+
         :param other: other truncable steps to compare
         :param index: max step index to compare
+
         :return: bool
         """
-        for index, (step_name, step) in enumerate(self.steps_as_tuple[:index + 1]):
+        for current_index, (step_name, step) in enumerate(self[:index]):
             source_current_step = inspect.getsource(step.__class__)
-            source_cached_step = inspect.getsource(other.steps_as_tuple[index][1].__class__)
+            source_cached_step = inspect.getsource(other[current_index].__class__)
 
             if source_current_step != source_cached_step:
                 return False
 
         return True
 
-    def load_other_truncable_steps_before_index(self, other: 'TruncableSteps', index: int):
+    def _load_saved_pipeline_steps_before_index(self, saved_pipeline: 'TruncableSteps', index: int):
         """
         Load the cached pipeline steps
         before the index into the current steps
 
-        :param other:
+        :param saved_pipeline:
         :param index:
         :return:
         """
-        self.set_hyperparams(other.get_hyperparams())
-        self.set_hyperparams_space(other.get_hyperparams_space())
+        self.set_hyperparams(saved_pipeline.get_hyperparams())
+        self.set_hyperparams_space(saved_pipeline.get_hyperparams_space())
 
-        new_truncable_steps = other[:index] + self[index:]
+        new_truncable_steps = saved_pipeline[:index] + self[index:]
         self._set_steps(new_truncable_steps.steps_as_tuple)
 
     def _set_steps(self, steps_as_tuple: NamedTupleList):

@@ -175,7 +175,7 @@ class PickleCheckpointStep(BaseCheckpointStep):
         :param data_container:
         :return:
         """
-        for current_id  in data_container.current_ids:
+        for current_id in data_container.current_ids:
             if not os.path.exists(self.get_checkpoint_file_path(current_id)):
                 return False
 

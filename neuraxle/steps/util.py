@@ -28,12 +28,13 @@ import shutil
 from abc import ABC, abstractmethod
 from typing import Iterable
 
-from neuraxle.pipeline import PipelineSaver, DEFAULT_CACHE_FOLDER
+from neuraxle.pipeline import DEFAULT_CACHE_FOLDER
 
 VALUE_CACHING = 'value_caching'
 from typing import List, Any
 
 from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, MetaStepMixin, DataContainer
+from neuraxle.pipeline import PipelineSaver
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
 
@@ -345,7 +346,7 @@ class DataShuffler:
     pass  # TODO.
 
 
-class IdentityPipelineSaver(PipelineSaver):
+class NullPipelineSaver(PipelineSaver):
     def can_load(self, pipeline: 'Pipeline', data_container: DataContainer) -> bool:
         return True
 
@@ -354,7 +355,6 @@ class IdentityPipelineSaver(PipelineSaver):
 
     def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
         return pipeline
-
 
 class ValueCachingWrapper(MetaStepMixin, BaseStep):
     """
