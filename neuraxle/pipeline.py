@@ -23,7 +23,7 @@ import hashlib
 import os
 from abc import ABC, abstractmethod
 from copy import copy
-from typing import Any, Tuple, Optional
+from typing import Any, Tuple
 
 from joblib import load, dump
 
@@ -203,7 +203,7 @@ class Pipeline(BasePipeline):
         :param data_inputs: the data input to transform
         :return: transformed data inputs
         """
-        self.setup()
+        self.setup() # TODO: perhaps, remove this to pass path in context
 
         current_ids = self.hash(
             current_ids=None,
@@ -212,8 +212,6 @@ class Pipeline(BasePipeline):
         )
         data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
         data_container = self._transform_core(data_container)
-
-        self.teardown()
 
         return data_container.data_inputs
 
@@ -225,7 +223,7 @@ class Pipeline(BasePipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        self.setup()
+        self.setup() # TODO: perhaps, remove this to pass path in context
 
         current_ids = self.hash(
             current_ids=None,
@@ -239,8 +237,6 @@ class Pipeline(BasePipeline):
         )
         new_self, data_container = self._fit_transform_core(data_container)
 
-        self.teardown()
-
         return new_self, data_container.data_inputs
 
     def fit(self, data_inputs, expected_outputs=None) -> 'Pipeline':
@@ -251,7 +247,7 @@ class Pipeline(BasePipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        self.setup()
+        self.setup() # TODO: perhaps, remove this to pass path in context
 
         current_ids = self.hash(
             current_ids=None,
@@ -263,9 +259,8 @@ class Pipeline(BasePipeline):
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         )
-        new_self, _ = self._fit_transform_core(data_container)
 
-        self.teardown()
+        new_self, _ = self._fit_transform_core(data_container)
 
         return new_self
 
@@ -406,7 +401,7 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
         if isinstance(step, BaseCheckpointStep):
             starting_step_data_container = step.read_checkpoint(starting_step_data_container)
 
-        return self.steps_as_tuple[new_starting_step_index:], starting_step_data_container
+        return self[new_starting_step_index:], starting_step_data_container
 
     def _load_saved_pipeline(
             self,

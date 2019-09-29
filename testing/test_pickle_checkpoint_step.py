@@ -1,15 +1,40 @@
+"""
+Tests for pickle checkpoint steps
+========================================
+
+..
+    Copyright 2019, Neuraxio Inc.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+"""
+
 import os
 import pickle
 
 import numpy as np
 from py._path.local import LocalPath
 
+from neuraxle.base import DataContainer
 from neuraxle.base import NonFittableMixin
 from neuraxle.checkpoints import PickleCheckpointStep
 from neuraxle.hyperparams.space import HyperparameterSamples
+from neuraxle.pipeline import Pipeline
 from neuraxle.pipeline import ResumablePipeline, JoblibPipelineSaver
-from neuraxle.steps.util import TapeCallbackFunction, TransformCallbackStep, BaseCallbackStep, \
+from neuraxle.steps.util import BaseCallbackStep, \
     IdentityPipelineSaver
+from neuraxle.steps.util import TapeCallbackFunction, TransformCallbackStep
+from testing.steps.test_output_transformer_wrapper import MultiplyBy2OutputTransformer
 
 EXPECTED_TAPE_AFTER_CHECKPOINT = ["2", "3"]
 
@@ -205,4 +230,28 @@ def setup_pickle_checkpoint(current_id, data_input, expected_output, pickle_chec
 def create_pickle_checkpoint_step(tmpdir):
     pickle_checkpoint_step = PickleCheckpointStep(cache_folder=tmpdir)
     pickle_checkpoint_step.set_checkpoint_path(os.path.join('Pipeline', 'pickle_checkpoint'))
+
     return pickle_checkpoint_step
+
+
+def test_pickle_checkpoint_step_should_load_data_container(tmpdir: LocalPath):
+    initial_data_inputs = [1, 2]
+    initial_expected_outputs = [2, 3]
+
+    create_pipeline_output_transformer = lambda: Pipeline(
+        [
+            ('output_transformer', MultiplyBy2OutputTransformer()),
+            ('pickle_checkpoint', create_pickle_checkpoint_step(tmpdir)),
+            ('output_transformer', MultiplyBy2OutputTransformer()),
+        ]
+    )
+
+    create_pipeline_output_transformer().fit_transform(
+        data_inputs=initial_data_inputs, expected_outputs=initial_expected_outputs
+    )
+    actual_data_container = create_pipeline_output_transformer().handle_transform(
+        DataContainer(current_ids=[0, 1], data_inputs=initial_data_inputs, expected_outputs=initial_expected_outputs)
+    )
+
+    assert np.array_equal(actual_data_container.data_inputs, [4, 8])
+    assert np.array_equal(actual_data_container.expected_outputs, [8, 12])

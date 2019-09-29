@@ -24,16 +24,17 @@ import copy
 import hashlib
 import os
 import pickle
-from abc import ABC
-from typing import List
 import shutil
 from abc import ABC, abstractmethod
-from typing import List, Any, Iterable
+from typing import Iterable
 
-from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, MetaStepMixin, DataContainer
 from neuraxle.pipeline import PipelineSaver, DEFAULT_CACHE_FOLDER
 
 VALUE_CACHING = 'value_caching'
+from typing import List, Any
+
+from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, MetaStepMixin, DataContainer
+from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
 
 class BaseCallbackStep(BaseStep, ABC):
@@ -169,6 +170,11 @@ class FitTransformCallbackStep(BaseCallbackStep):
 class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
     """Call a callback method on transform and inverse transform."""
 
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+        self._callback(data_inputs)
+
+        return self, data_inputs
+
     def transform(self, data_inputs):
         """
         Will call the self._callback() with the data being processed and the extra arguments specified.
@@ -287,17 +293,39 @@ class TapeCallbackFunction:
 
 class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
     def __init__(self, wrapped: BaseStep, copy_op=copy.deepcopy):
-        # TODO: set params on wrapped.
-        # TODO: use MetaStep*s*Mixin (plural) and review.
         BaseStep.__init__(self)
-        MetaStepMixin.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
         self.set_step(wrapped)
         self.steps: List[BaseStep] = []
         self.copy_op = copy_op
 
+    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
+        super().set_hyperparams(hyperparams)
+        self.steps = [s.set_hyperparams(self.wrapped.hyperparams) for s in self.steps]
+        return self
+
+    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
+        super().set_hyperparams_space(hyperparams_space)
+        self.steps = [s.set_hyperparams_space(self.wrapped.hyperparams_space) for s in self.steps]
+        return self
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+        # One copy of step per data input:
+        self.steps = [self.copy_op(self.wrapped) for _ in range(len(data_inputs))]
+
+        if expected_outputs is None:
+            expected_outputs = [None] * len(data_inputs)
+
+        fit_transform_result = [self.steps[i].fit_transform(di, eo) for i, (di, eo) in
+                                enumerate(zip(data_inputs, expected_outputs))]
+        self.steps = [step for step, di in fit_transform_result]
+        data_inputs = [di for step, di in fit_transform_result]
+
+        return self, data_inputs
+
     def fit(self, data_inputs: List, expected_outputs: List = None) -> 'StepClonerForEachDataInput':
         # One copy of step per data input:
-        self.steps = [self.copy_op(self.step) for _ in range(len(data_inputs))]
+        self.steps = [self.copy_op(self.wrapped) for _ in range(len(data_inputs))]
 
         # Fit them all.
         if expected_outputs is None:
@@ -307,15 +335,9 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
         return self
 
     def transform(self, data_inputs: List) -> List:
-        # As many data inputs than we have cloned steps: each transforms the one it has.
-        assert len(data_inputs) <= len(self.steps), "Can't have more data_inputs than cloned steps to process them."
-
         return [self.steps[i].transform(di) for i, di in enumerate(data_inputs)]
 
     def inverse_transform(self, data_output):
-        # As many data outputs than we have cloned steps: each transforms the one it has.
-        assert len(data_output) <= len(self.steps), "Can't have more data_outputs than cloned steps to process them."
-
         return [self.steps[i].inverse_transform(di) for i, di in enumerate(data_output)]
 
 
@@ -487,6 +509,44 @@ class ValueCachingWrapper(MetaStepMixin, BaseStep):
         :return: str for cache path
         """
         raise NotImplementedError()
+
+
+class OutputTransformerMixin:
+    """
+    Base output transformer step that can modify data inputs, and expected_outputs at the same time.
+    """
+
+    def handle_transform(self, data_container: DataContainer) -> DataContainer:
+        """
+        Handle transform by updating the data inputs, and expected outputs inside the data container.
+
+        :param data_container:
+        :return:
+        """
+        di_eo = (data_container.data_inputs, data_container.expected_outputs)
+        new_data_inputs, new_expected_outputs = self.transform(di_eo)
+
+        data_container.set_data_inputs(new_data_inputs)
+        data_container.set_expected_outputs(new_expected_outputs)
+
+        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        data_container.set_current_ids(current_ids)
+
+        return data_container
+
+    def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
+        """
+        Handle transform by fitting the step,
+        and updating the data inputs, and expected outputs inside the data container.
+
+        :param data_container:
+        :return:
+        """
+        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
+
+        data_container = self.handle_transform(data_container)
+
+        return new_self, data_container
 
 
 class PickleValueCachingWrapper(ValueCachingWrapper):
