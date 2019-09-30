@@ -486,3 +486,28 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
                 return True
 
         return False
+
+
+class StreamingPipeline(Pipeline): 
+    # TODO: docstrings and __init__
+
+	def transform(data_inputs): 
+		# TODO: `handle_*` methods... and raise exceptions if the class is not used properly. 
+		for sub_pipeline in self.split(Join): 
+			# TODO: `sub_pipelines` is of type `StreamingPipeline`, like a slice of `self[a:b]` on barriers as split 
+			data_inputs = sub_pipeline._transform(data_inputs)
+		return data_inputs
+
+	def _transform(data_inputs): 
+		outs = []
+		for batch in convolved(data_inputs, kernel_size=self.batch_size):  # set batch_size from constructor argument.
+			# TODO: if convolved is broken, open PR in convolved (I Know it can fail if the kernel size is bigger than the actual number of steps... lol it has a bug, you know it already). 
+			outs.extend(
+				super().transform(data_inputs)
+			)
+		return outs
+
+	def split(type: class) -> List['StreamingPipeline']: 
+		# return .... a new temp object t«hat's a subset of self, but that has same cache folder. Note: that might make things hard for the saver.
+        # note that we might want to implement this method in TruncableSteps and clone self many times (shallow copy) before slicing each clone, this wouldn't change the type of the object.
+        return self  # TODO: joiner later. 
