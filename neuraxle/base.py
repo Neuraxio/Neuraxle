@@ -561,6 +561,9 @@ class NonFittableMixin:
 
     Note: fit methods are not implemented"""
 
+    def handle_fit_transform(self, data_container: DataContainer):
+        return self, self.handle_transform(data_container)
+
     def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
         """
         Don't fit.
@@ -862,12 +865,17 @@ class TruncableSteps(BaseStep, ABC):
                     raise KeyError(
                         "Start or stop ('{}' or '{}') not found in '{}'.".format(start, stop, self.steps.keys()))
                 for key, val in self.steps_as_tuple:
+                    if start == stop == key:
+                        new_steps_as_tuple.append((key, val))
+
                     if stop == key:
                         break
+
                     if not started and start == key:
                         started = True
                     if started:
                         new_steps_as_tuple.append((key, val))
+
             self_shallow_copy.steps_as_tuple = new_steps_as_tuple
             self_shallow_copy.steps = OrderedDict(new_steps_as_tuple)
             return self_shallow_copy
@@ -938,6 +946,32 @@ class TruncableSteps(BaseStep, ABC):
         :return: len(self.steps_as_tuple)
         """
         return len(self.steps_as_tuple)
+
+    def split(self, type_name_to_split_from: str) -> List['TruncableSteps']:
+        """
+        Split truncable steps by a step class name.
+
+        :param type_name_to_split_from: step class name to split from.
+        :return: list of truncable steps containing the splitted steps
+        """
+        sub_pipelines = []
+
+        previous_sub_pipeline_end_index = 0
+        for index, (step_name, step) in enumerate(self.items()):
+            if step.__class__.__name__ == type_name_to_split_from:
+                sub_pipelines.append(
+                    self[previous_sub_pipeline_end_index:index + 1]
+                )
+                previous_sub_pipeline_end_index = index + 1
+
+        sub_pipelines.append(
+            self[previous_sub_pipeline_end_index:-1]
+        )
+
+        return sub_pipelines
+
+    def ends_with_type_name(self, type_name: str):
+        return self[-1].__class__.__name__ == type_name
 
 
 class ResumableStepMixin:
