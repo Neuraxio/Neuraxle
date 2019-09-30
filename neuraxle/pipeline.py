@@ -551,6 +551,45 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         Pipeline.__init__(self, steps)
         self.batch_size = batch_size
 
+    def transform(self, data_inputs: Any):
+        """
+        :param data_inputs: the data input to transform
+        :return: transformed data inputs
+        """
+        self.setup()
+
+        current_ids = self.hash(
+            current_ids=None,
+            hyperparameters=self.hyperparams,
+            data_inputs=data_inputs
+        )
+        data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
+        data_container = self.handle_transform(data_container)
+
+        return data_container.data_inputs
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('Pipeline', Any):
+        """
+        :param data_inputs: the data input to fit on
+        :param expected_outputs: the expected data output to fit on
+        :return: the pipeline itself
+        """
+        self.setup()
+
+        current_ids = self.hash(
+            current_ids=None,
+            hyperparameters=self.hyperparams,
+            data_inputs=data_inputs
+        )
+        data_container = DataContainer(
+            current_ids=current_ids,
+            data_inputs=data_inputs,
+            expected_outputs=expected_outputs
+        )
+        new_self, data_container = self.handle_transform(data_container)
+
+        return new_self, data_container.data_inputs
+
     def handle_transform(self, data_container: DataContainer) -> DataContainer:
         """
         Transform all sub pipelines splitted by the Barrier steps.
