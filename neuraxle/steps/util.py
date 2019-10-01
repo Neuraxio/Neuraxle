@@ -146,8 +146,8 @@ class FitTransformCallbackStep(BaseStep):
         self.transform_callback_function = transform_callback_function
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
-        self.fit_callback_function((data_inputs, expected_outputs))
-        self.transform_callback_function(data_inputs)
+        self.fit_callback_function((data_inputs, expected_outputs), *self.more_arguments)
+        self.transform_callback_function(data_inputs, *self.more_arguments)
 
         return self, data_inputs
 
