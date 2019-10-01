@@ -586,7 +586,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         )
-        new_self, data_container = self.handle_transform(data_container)
+        new_self, data_container = self.handle_fit_transform(data_container)
 
         return new_self, data_container.data_inputs
 
@@ -680,6 +680,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         """
         outputs = []
         for batch in convolved_1d(
+                stride=self.batch_size,
                 iterable=data_inputs,
                 kernel_size=self.batch_size
         ):
@@ -688,19 +689,23 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
 
         return outputs
 
-    def join_fit_transform(self, data_inputs: Iterable) -> Tuple['MiniBatchSequentialPipeline', Iterable]:
+    def join_fit_transform(self, data_inputs: Iterable, expected_outputs: Iterable = None) -> \
+            Tuple['MiniBatchSequentialPipeline', Iterable]:
         """
         Concatenate the fit transform output of each batch of self.batch_size together.
 
-        :param data_inputs:
+        :param data_inputs: data inputs to fit transform on
+        :param expected_outputs: expected outputs to fit
         :return: fitted self, transformed data inputs
         """
         outputs = []
         for batch in convolved_1d(
-                iterable=data_inputs,
+                stride=self.batch_size,
+                iterable=zip(data_inputs, expected_outputs),
                 kernel_size=self.batch_size
         ):
-            _, batch_outputs = super().fit_transform(batch)
+            di_eo_list = list(zip(*batch))
+            _, batch_outputs = super().fit_transform(list(di_eo_list[0]), list(di_eo_list[1]))
             outputs.extend(batch_outputs)  # TODO: use a joiner here
 
         return self, outputs

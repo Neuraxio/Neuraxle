@@ -823,6 +823,9 @@ class TruncableSteps(BaseStep, ABC):
                 return index
 
     def _step_index_to_name(self, step_index):
+        if step_index == len(self.items()):
+            return None
+
         name, _ = self.steps_as_tuple[step_index]
         return name
 
@@ -964,9 +967,10 @@ class TruncableSteps(BaseStep, ABC):
                 )
                 previous_sub_pipeline_end_index = index + 1
 
-        sub_pipelines.append(
-            self[previous_sub_pipeline_end_index:-1]
-        )
+        if previous_sub_pipeline_end_index < len(self.items()):
+            sub_pipelines.append(
+                self[previous_sub_pipeline_end_index:-1]
+            )
 
         return sub_pipelines
 

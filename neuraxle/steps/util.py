@@ -137,6 +137,21 @@ class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
         return processed_output
 
 
+class FitTransformCallbackStep(BaseStep):
+    def __init__(self, transform_callback_function, fit_callback_function, more_arguments: List = tuple(),
+                 hyperparams=None):
+        BaseStep.__init__(self, hyperparams)
+        self.more_arguments = more_arguments
+        self.fit_callback_function = fit_callback_function
+        self.transform_callback_function = transform_callback_function
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+        self.fit_callback_function((data_inputs, expected_outputs))
+        self.transform_callback_function(data_inputs)
+
+        return self, data_inputs
+
+
 class TapeCallbackFunction:
     """This class's purpose is to be sent to the callback to accumulate information.
 
@@ -264,6 +279,7 @@ class NullPipelineSaver(PipelineSaver):
 
     def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
         return pipeline
+
 
 class OutputTransformerMixin:
     """
