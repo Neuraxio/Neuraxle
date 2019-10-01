@@ -544,7 +544,7 @@ class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep):
 
 class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
     """
-    Streaming Pipeline class to create a pipeline for streaming, and batch processing.
+    Mini Batch Sequential Pipeline class to create a pipeline processing data inputs in batch.
     """
 
     def __init__(self, steps: NamedTupleList, batch_size):
