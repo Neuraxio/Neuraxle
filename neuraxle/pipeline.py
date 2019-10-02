@@ -23,13 +23,12 @@ import hashlib
 import os
 from abc import ABC, abstractmethod
 from copy import copy
-from typing import Any, Tuple, List, Iterable
+from typing import Any, Tuple, List
 
-from conv import convolved_1d
 from joblib import load, dump
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, DataContainer, NonFittableMixin, \
-    NonTransformableMixin, Barrier
+    Barrier
 from neuraxle.checkpoints import BaseCheckpointStep
 
 BARRIER_STEP_NAME = 'Barrier'
@@ -569,6 +568,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         :return: data container
         """
         sub_pipelines = self._create_sub_pipelines()
+        index_start = 0
 
         for sub_pipeline in sub_pipelines:
             barrier = sub_pipeline[-1]
@@ -578,6 +578,13 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
             )
             current_ids = self.hash(data_container.current_ids, self.hyperparams)
             data_container.set_current_ids(current_ids)
+
+            new_self = self[:index_start] + sub_pipeline
+            if index_start + len(sub_pipeline) < len(self):
+                new_self += self[index_start + len(sub_pipeline):]
+
+            self.steps_as_tuple = new_self.steps_as_tuple
+            index_start += len(sub_pipeline)
 
         return self, data_container
 
