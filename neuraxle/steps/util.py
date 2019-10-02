@@ -358,7 +358,7 @@ class NullPipelineSaver(PipelineSaver):
 
 class ValueCachingWrapper(MetaStepMixin, BaseStep):
     """
-    Value caching wrapper wraps a step that inherits OutputTransformerMixin,
+    Value caching wrapper wraps a step to cache the values.
     """
 
     def __init__(self, wrapped: BaseStep, cache_folder: str = DEFAULT_CACHE_FOLDER):
