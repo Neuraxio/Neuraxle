@@ -63,7 +63,6 @@ class RangeHasher(BaseHasher):
 
         return new_current_ids
 
-
 class DataContainer:
     def __init__(self,
                  current_ids,

@@ -1,5 +1,5 @@
 """
-Neuraxle's Base Classes
+Neuraxle
 ====================================
 This is the core of Neuraxle. Most pipeline steps derive (inherit) from those classes. They are worth noticing.
 
