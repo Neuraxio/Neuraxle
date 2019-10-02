@@ -974,8 +974,8 @@ class TruncableSteps(BaseStep, ABC):
 
         return sub_pipelines
 
-    def ends_with_type_name(self, type_name: str):
-        return self[-1].__class__.__name__ == type_name
+    def ends_with(self, step_type: type):
+        return type(self[-1]) == step_type
 
 
 class ResumableStepMixin:

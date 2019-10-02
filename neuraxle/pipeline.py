@@ -663,10 +663,9 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         """
         sub_pipelines: List[MiniBatchSequentialPipeline] = self.split(BARRIER_STEP_NAME)
         for sub_pipeline in sub_pipelines:
-            if not sub_pipeline.ends_with_type_name(BARRIER_STEP_NAME):
+            if not sub_pipeline.ends_with(type(Barrier())):
                 raise Exception(
-                    'At least one Barrier step needs to be at the end of a streaming pipeline. '.format(
-                        self.join_type_name)
+                    'At least one Barrier step needs to be at the end of a streaming pipeline.'
                 )
 
         return sub_pipelines
