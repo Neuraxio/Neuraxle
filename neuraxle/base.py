@@ -63,7 +63,6 @@ class RangeHasher(BaseHasher):
 
         return new_current_ids
 
-
 class DataContainer:
     def __init__(self,
                  current_ids,
@@ -577,9 +576,13 @@ NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
 
 
 class NonFittableMixin:
-    """A pipeline step that requires no fitting: fitting just returns self when called to do no action.
+    """
+    A pipeline step that requires no fitting: fitting just returns self when called to do no action.
+    Note: fit methods are not implemented
+    """
 
-    Note: fit methods are not implemented"""
+    def handle_fit_transform(self, data_container: DataContainer):
+        return self, self.handle_transform(data_container)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
         """
