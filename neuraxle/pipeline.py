@@ -29,7 +29,7 @@ from conv import convolved_1d
 from joblib import load, dump
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, DataContainer, NonFittableMixin, \
-    NonTransformableMixin
+    NonTransformableMixin, Barrier
 from neuraxle.checkpoints import BaseCheckpointStep
 
 BARRIER_STEP_NAME = 'Barrier'
@@ -417,7 +417,7 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
             ):
                 return self.steps_as_tuple, data_container
 
-            self._load_saved_pipeline_steps_before_index(
+            self._replace_pipeline_steps_before_index_by_other_pipeline_steps_before_index(
                 saved_pipeline=saved_pipeline,
                 index=new_starting_step_index
             )
@@ -492,56 +492,6 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
         return False
 
 
-"""
-Idea for checkpoints : 
-
-    The streaming pipeline algorithm could go find the optional checkpoint step for each sub pipeline.
-    In the future, a ResumableStreamingPipeline that extends this class should exist to support checkpoints.
-    
-    The Barrier should ideally join the data so that the ram does not blow up (iterable, lazy loading, cache ??)
-    Maybe we can implement a LazyLoadingDataContainer/CachedDataContainer class or something that could be returned.
-    
-    pipeline = Pipeline([
-        MiniBatchSequentialPipeline([
-
-            A(),
-            B(),
-            Barrier(joiner=Joiner()),
-            [Checkpoint()]
-
-            C(),
-            D(),
-            Barrier(joiner=Joiner()),
-            [Checkpoint()]
-
-        ]),
-        Model()
-    ])
-    
-    pipeline = Pipeline([
-        MiniBatchSequentialPipeline([
-            ParallelWrapper([
-                NonFittableA(),
-                NonFittableB(),
-            ])
-            Barrier(joiner=Joiner()),
-            [Checkpoint()]
-
-            C(),
-            D(),
-            Barrier(joiner=Joiner()),
-            [Checkpoint()]
-
-        ]),
-        Model()
-    ])
-"""
-
-
-class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep):
-    pass
-
-
 class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
     """
     Mini Batch Sequential Pipeline class to create a pipeline processing data inputs in batch.
@@ -600,7 +550,13 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         sub_pipelines = self._create_sub_pipelines()
 
         for sub_pipeline in sub_pipelines:
-            data_container = self._handle_transform_sub_pipeline(sub_pipeline, data_container)
+            barrier = sub_pipeline[-1]
+            data_container = barrier.join_transform(
+                step=sub_pipeline,
+                data_container=data_container
+            )
+            current_ids = self.hash(data_container.current_ids, self.hyperparams)
+            data_container.set_current_ids(current_ids)
 
         return data_container
 
@@ -615,43 +571,13 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         sub_pipelines = self._create_sub_pipelines()
 
         for sub_pipeline in sub_pipelines:
-            new_self, data_container = self._handle_fit_transform_sub_pipeline(sub_pipeline, data_container)
-
-        return self, data_container
-
-    def _handle_transform_sub_pipeline(self, sub_pipeline, data_container) -> DataContainer:
-        """
-        Transform sub pipeline using join transform.
-
-        :param sub_pipeline: sub pipeline to be used to transform data container
-        :param data_container: data container to transform
-        :return:
-        """
-        data_inputs = sub_pipeline.join_transform(data_container.data_inputs)
-        data_container.set_data_inputs(data_inputs)
-
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_inputs)
-        data_container.set_current_ids(current_ids)
-
-        return data_container
-
-    def _handle_fit_transform_sub_pipeline(self, sub_pipeline, data_container) -> \
-            Tuple['MiniBatchSequentialPipeline', DataContainer]:
-        """
-        Fit Transform sub pipeline using join fit transform.
-
-        :param sub_pipeline: sub pipeline to be used to transform data container
-        :param data_container: data container to fit transform
-        :return: fitted self, transformed data container
-        """
-        _, data_inputs = sub_pipeline.join_fit_transform(
-            data_inputs=data_container.data_inputs,
-            expected_outputs=data_container.expected_outputs
-        )
-        data_container.set_data_inputs(data_inputs)
-
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_inputs)
-        data_container.set_current_ids(current_ids)
+            barrier = sub_pipeline[-1]
+            sub_pipeline, data_container = barrier.join_fit_transform(
+                step=sub_pipeline,
+                data_container=data_container
+            )
+            current_ids = self.hash(data_container.current_ids, self.hyperparams)
+            data_container.set_current_ids(current_ids)
 
         return self, data_container
 
@@ -661,50 +587,11 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
 
         :return: list of sub pipelines
         """
-        sub_pipelines: List[MiniBatchSequentialPipeline] = self.split(BARRIER_STEP_NAME)
+        sub_pipelines: List[MiniBatchSequentialPipeline] = self.split(Barrier)
         for sub_pipeline in sub_pipelines:
-            if not sub_pipeline.ends_with(type(Barrier())):
+            if not sub_pipeline.ends_with(Barrier):
                 raise Exception(
                     'At least one Barrier step needs to be at the end of a streaming pipeline.'
                 )
 
         return sub_pipelines
-
-    def join_transform(self, data_inputs: Iterable) -> Iterable:
-        """
-        Concatenate the transform output of each batch of self.batch_size together.
-
-        :param data_inputs:
-        :return:
-        """
-        outputs = []
-        for batch in convolved_1d(
-                stride=self.batch_size,
-                iterable=data_inputs,
-                kernel_size=self.batch_size
-        ):
-            batch_outputs = super().transform(batch)
-            outputs.extend(batch_outputs)  # TODO: use a joiner here
-
-        return outputs
-
-    def join_fit_transform(self, data_inputs: Iterable, expected_outputs: Iterable = None) -> \
-            Tuple['MiniBatchSequentialPipeline', Iterable]:
-        """
-        Concatenate the fit transform output of each batch of self.batch_size together.
-
-        :param data_inputs: data inputs to fit transform on
-        :param expected_outputs: expected outputs to fit
-        :return: fitted self, transformed data inputs
-        """
-        outputs = []
-        for batch in convolved_1d(
-                stride=self.batch_size,
-                iterable=zip(data_inputs, expected_outputs),
-                kernel_size=self.batch_size
-        ):
-            di_eo_list = list(zip(*batch))
-            _, batch_outputs = super().fit_transform(list(di_eo_list[0]), list(di_eo_list[1]))
-            outputs.extend(batch_outputs)  # TODO: use a joiner here
-
-        return self, outputs

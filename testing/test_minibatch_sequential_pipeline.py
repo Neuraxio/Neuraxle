@@ -1,5 +1,6 @@
 import numpy as np
 
+from neuraxle.base import Joiner
 from neuraxle.pipeline import MiniBatchSequentialPipeline, Barrier
 from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction, FitTransformCallbackStep
 
@@ -20,10 +21,10 @@ def test_mini_batch_sequential_pipeline_should_transform_steps_sequentially_for_
     p = MiniBatchSequentialPipeline([
         MultiplyBy2TransformCallbackStep(tape1, ["1"]),
         MultiplyBy2TransformCallbackStep(tape2, ["2"]),
-        Barrier(),
+        Joiner(batch_size=10),
         MultiplyBy2TransformCallbackStep(tape3, ["3"]),
         MultiplyBy2TransformCallbackStep(tape4, ["4"]),
-        Barrier()
+        Joiner(batch_size=10)
     ], batch_size=10)
 
     # When
@@ -65,10 +66,10 @@ def test_mini_batch_sequential_pipeline_should_fit_transform_steps_sequentially_
     p = MiniBatchSequentialPipeline([
         MultiplyBy2FitTransformCallbackStep(tape1, tape1_fit, ["1"]),
         MultiplyBy2FitTransformCallbackStep(tape2, tape2_fit, ["2"]),
-        Barrier(),
+        Joiner(batch_size=10),
         MultiplyBy2FitTransformCallbackStep(tape3, tape3_fit, ["3"]),
         MultiplyBy2FitTransformCallbackStep(tape4, tape4_fit, ["4"]),
-        Barrier()
+        Joiner(batch_size=10)
     ], batch_size=10)
 
     # When

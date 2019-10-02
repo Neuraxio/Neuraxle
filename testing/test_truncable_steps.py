@@ -25,7 +25,7 @@ def test_truncable_steps_should_split_by_type():
         SomeStep(),
     ])
 
-    sub_pipelines = pipeline.split('SomeSplitStep')
+    sub_pipelines = pipeline.split(SomeSplitStep)
 
     assert 'SomeStep' in sub_pipelines[0]
     assert 'SomeStep1' in sub_pipelines[0]
