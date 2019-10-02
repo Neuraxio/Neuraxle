@@ -28,7 +28,7 @@ import shutil
 from abc import ABC, abstractmethod
 from typing import Iterable
 
-from neuraxle.pipeline import DEFAULT_CACHE_FOLDER
+from neuraxle.pipeline import DEFAULT_CACHE_FOLDER, Pipeline
 
 VALUE_CACHING = 'value_caching'
 from typing import List, Any
@@ -356,14 +356,39 @@ class NullPipelineSaver(PipelineSaver):
     def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
         return pipeline
 
+
+class BaseValueHasher(ABC):
+    @abstractmethod
+    def hash(self, data_input):
+        raise NotImplementedError()
+
+
+class Md5Hasher(BaseValueHasher):
+    def hash(self, data_input):
+        m = hashlib.md5()
+        m.update(str.encode(str(data_input)))
+
+        return m.hexdigest()
+
+
 class ValueCachingWrapper(MetaStepMixin, BaseStep):
     """
     Value caching wrapper wraps a step to cache the values.
     """
 
-    def __init__(self, wrapped: BaseStep, cache_folder: str = DEFAULT_CACHE_FOLDER):
+    def __init__(
+            self,
+            wrapped: BaseStep,
+            cache_folder: str = DEFAULT_CACHE_FOLDER,
+            value_hasher: BaseValueHasher = None,
+    ):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
+        self.value_hasher = value_hasher
+
+        if self.value_hasher is None:
+            self.value_hasher = Md5Hasher()
+
         self.cache_folder = cache_folder
 
     def setup(self, step_path: str, setup_arguments: dict = None):
@@ -419,10 +444,7 @@ class ValueCachingWrapper(MetaStepMixin, BaseStep):
         return data_container
 
     def _hash_value(self, data_input):
-        m = hashlib.md5()
-        m.update(str.encode(str(data_input)))
-
-        return m.hexdigest()
+        return self.value_hasher.hash(data_input)
 
     def _transform_with_cache(self, data_container: DataContainer) -> Iterable:
         """
@@ -511,6 +533,39 @@ class ValueCachingWrapper(MetaStepMixin, BaseStep):
         raise NotImplementedError()
 
 
+class PickleValueCachingWrapper(ValueCachingWrapper):
+    """
+    Value Caching Wrapper class that caches the wrapped step transformed data inputs using python ``pickle`` library.
+    """
+
+    def create_checkpoint_path(self, step_path: str) -> str:
+        self.checkpoint_path = os.path.join(self.cache_folder, step_path, VALUE_CACHING)
+
+        if not os.path.exists(self.checkpoint_path):
+            os.makedirs(self.checkpoint_path)
+
+        return self.checkpoint_path
+
+    def flush_cache(self):
+        shutil.rmtree(self.checkpoint_path)
+        os.mkdir(self.checkpoint_path)
+
+    def read_cache(self, data_input):
+        with open(self.get_cache_path_for(data_input), 'rb') as file_:
+            return pickle.load(file_)
+
+    def write_cache(self, data_input, output):
+        with open(self.get_cache_path_for(data_input), 'wb') as file_:
+            return pickle.dump(output, file_)
+
+    def contains_cache_for(self, data_input) -> bool:
+        return os.path.exists(self.get_cache_path_for(data_input))
+
+    def get_cache_path_for(self, data_input):
+        hash_value = self._hash_value(data_input)
+        return os.path.join(self.checkpoint_path, '{0}.pickle'.format(hash_value))
+
+
 class OutputTransformerMixin:
     """
     Base output transformer step that can modify data inputs, and expected_outputs at the same time.
@@ -547,36 +602,3 @@ class OutputTransformerMixin:
         data_container = self.handle_transform(data_container)
 
         return new_self, data_container
-
-
-class PickleValueCachingWrapper(ValueCachingWrapper):
-    """
-    Value Caching Wrapper class that caches the wrapped step transformed data inputs using python ``pickle`` library.
-    """
-
-    def create_checkpoint_path(self, step_path: str) -> str:
-        self.checkpoint_path = os.path.join(self.cache_folder, step_path, VALUE_CACHING)
-
-        if not os.path.exists(self.checkpoint_path):
-            os.makedirs(self.checkpoint_path)
-
-        return self.checkpoint_path
-
-    def flush_cache(self):
-        shutil.rmtree(self.checkpoint_path)
-        os.mkdir(self.checkpoint_path)
-
-    def read_cache(self, data_input):
-        with open(self.get_cache_path_for(data_input), 'rb') as file_:
-            return pickle.load(file_)
-
-    def write_cache(self, data_input, output):
-        with open(self.get_cache_path_for(data_input), 'wb') as file_:
-            return pickle.dump(output, file_)
-
-    def contains_cache_for(self, data_input) -> bool:
-        return os.path.exists(self.get_cache_path_for(data_input))
-
-    def get_cache_path_for(self, data_input):
-        hash_value = self._hash_value(data_input)
-        return os.path.join(self.checkpoint_path, '{0}.pickle'.format(hash_value))
