@@ -414,7 +414,7 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
             ):
                 return self.steps_as_tuple, data_container
 
-            self._replace_pipeline_steps_before_index_by_other_pipeline_steps_before_index(
+            self._load_saved_pipeline_steps_before_index(
                 saved_pipeline=saved_pipeline,
                 index=new_starting_step_index
             )

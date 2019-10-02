@@ -657,7 +657,7 @@ class TruncableSteps(BaseStep, ABC):
 
         return True
 
-    def _replace_pipeline_steps_before_index_by_other_pipeline_steps_before_index(self, saved_pipeline: 'TruncableSteps', index: int):
+    def _load_saved_pipeline_steps_before_index(self, saved_pipeline: 'TruncableSteps', index: int):
         """
         Load the cached pipeline steps
         before the index into the current steps
