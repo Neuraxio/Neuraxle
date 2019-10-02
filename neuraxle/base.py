@@ -581,9 +581,6 @@ class NonFittableMixin:
 
     Note: fit methods are not implemented"""
 
-    def handle_fit_transform(self, data_container: DataContainer):
-        return self, self.handle_transform(data_container)
-
     def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
         """
         Don't fit.
