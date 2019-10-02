@@ -31,8 +31,6 @@ from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableSte
     Barrier
 from neuraxle.checkpoints import BaseCheckpointStep
 
-BARRIER_STEP_NAME = 'Barrier'
-
 DEFAULT_CACHE_FOLDER = 'cache'
 
 
