@@ -505,11 +505,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         """
         self.setup()
 
-        current_ids = self.hash(
-            current_ids=None,
-            hyperparameters=self.hyperparams,
-            data_inputs=data_inputs
-        )
+        current_ids = self._create_current_ids(data_inputs)
         data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
         data_container = self.handle_transform(data_container)
 
@@ -523,11 +519,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         """
         self.setup()
 
-        current_ids = self.hash(
-            current_ids=None,
-            hyperparameters=self.hyperparams,
-            data_inputs=data_inputs
-        )
+        current_ids = self._create_current_ids(data_inputs)
         data_container = DataContainer(
             current_ids=current_ids,
             data_inputs=data_inputs,
@@ -536,6 +528,14 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         new_self, data_container = self.handle_fit_transform(data_container)
 
         return new_self, data_container.data_inputs
+
+    def _create_current_ids(self, data_inputs):
+        current_ids = self.hash(
+            current_ids=None,
+            hyperparameters=self.hyperparams,
+            data_inputs=data_inputs
+        )
+        return current_ids
 
     def handle_transform(self, data_container: DataContainer) -> DataContainer:
         """
