@@ -49,19 +49,8 @@ class BasePipeline(TruncableSteps, ABC):
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BasePipeline', Any):
         raise NotImplementedError()
 
-    @abstractmethod
-    def inverse_transform_processed_outputs(self, data_inputs) -> Any:
-        raise NotImplementedError()
 
-    def inverse_transform(self, processed_outputs):
-        if self.transform != self.inverse_transform:
-            raise BrokenPipeError("Don't call inverse_transform on a pipeline before having mutated it inversely or "
-                                  "before having called the `.reverse()` or `reversed(.)` on it.")
-
-        return self.inverse_transform_processed_outputs(processed_outputs)
-
-
-class PipelineSaver(ABC):
+class PipelineSaver(ABC):  # TODO: delete or refactor.
     @abstractmethod
     def save(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
         """
@@ -96,7 +85,7 @@ class PipelineSaver(ABC):
         raise NotImplementedError()
 
 
-class JoblibPipelineSaver(PipelineSaver):
+class JoblibPipelineSaver(PipelineSaver):  # TODO: delete or refactor.
     """
     Pipeline Repository to persist and load pipeline based on a data container
     """
@@ -196,17 +185,6 @@ class Pipeline(BasePipeline):
     def __init__(self, steps: NamedTupleList):
         BasePipeline.__init__(self, steps=steps)
 
-    def save(self, data_container: DataContainer):
-        """
-        Save the fitted parent pipeline with the passed data container
-
-        :param data_container: data container to save pipeline with
-        :return:
-        """
-        if self.parent_step is None:
-            pass  # nothing to do here, we cannot save a pipeline that is not resumable
-        else:
-            self.parent_step.save(data_container)
 
     def transform(self, data_inputs: Any):
         """
@@ -276,7 +254,7 @@ class Pipeline(BasePipeline):
 
         return new_self
 
-    def inverse_transform_processed_outputs(self, processed_outputs) -> Any:
+    def inverse_transform(self, processed_outputs) -> Any:
         """
         After transforming all data inputs, and obtaining a prediction, we can inverse transform the processed outputs
 
@@ -284,7 +262,7 @@ class Pipeline(BasePipeline):
         :return: backward transformed processed outputs
         """
         for step_name, step in list(reversed(self.items())):
-            processed_outputs = step.transform(processed_outputs)
+            processed_outputs = step.inverse_transform(processed_outputs)
         return processed_outputs
 
     def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
@@ -370,23 +348,6 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
 
     def __init__(self, steps: NamedTupleList, pipeline_saver: PipelineSaver = None):
         Pipeline.__init__(self, steps=steps)
-
-        if pipeline_saver is None:
-            self.pipeline_saver = JoblibPipelineSaver(DEFAULT_CACHE_FOLDER)
-        else:
-            self.pipeline_saver = pipeline_saver
-
-    def save(self, data_container: DataContainer):
-        """
-        Save the fitted parent pipeline with the passed data container
-
-        :param data_container: data container to save pipeline with
-        :return:
-        """
-        if self.parent_step is None:
-            self.pipeline_saver.save(self, data_container)
-        else:
-            self.parent_step.save(data_container)
 
     def _load_checkpoint(self, data_container: DataContainer) -> Tuple[NamedTupleList, DataContainer]:
         """

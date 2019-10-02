@@ -23,9 +23,7 @@ import os
 import pickle
 from abc import abstractmethod
 
-from neuraxle.base import ResumableStepMixin, BaseStep, DataContainer, ListDataContainer
-
-DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
+from neuraxle.base import ResumableStepMixin, BaseStep, DataContainer, ListDataContainer, DEFAULT_CACHE_FOLDER
 
 
 class BaseCheckpointStep(ResumableStepMixin, BaseStep):

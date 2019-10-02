@@ -31,6 +31,8 @@ from typing import Tuple, List, Union, Any
 
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
+DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
+
 
 class BaseHasher(ABC):
     @abstractmethod
@@ -116,12 +118,85 @@ class ListDataContainer(DataContainer):
         self.expected_outputs.append(expected_output)
 
 
+class BaseSaver(ABC):
+    """
+    Any saver must inherit from this one. Some savers just save parts of objects, some save it all or what remains.
+    """
+
+    @abstractmethod
+    def save_step(self, step: 'BaseStep', context: 'ExecutionContext'):
+        pass  # TODO doc and things
+
+    @abstractmethod
+    def load_step(self, step: 'BaseStep', context: 'ExecutionContext'):
+        pass  # TODO
+
+
+class JoblibPipelineSaver(BaseSaver):
+    """
+    This saver is a good default saver when the object is
+    already stripped out of things that would make it unserializable.
+    """
+    pass  # TODO.
+
+
+class ExecutionContext:
+    def __init__(self, root: str = DEFAULT_CACHE_FOLDER, stripped_saver: JoblibPipelineSaver = None):
+        self.stripped_saver: BaseSaver = stripped_saver
+        self.root: str = root  # TODO: is "./" notation safe on windows? we should be compatible.
+        self.parents: List[BaseStep] = []  # TODO DOC: first is root, second is nested, and so on. This is like a stack.
+
+    def save_all_unsaved(self):
+        # TODO: might move this method elsewhere.
+        while copy(self).pop():
+            pass
+
+        self.peek().save(self)
+
+    def pop_item(self) -> 'BaseStep':
+        # TODO:
+        return self.parents.pop()
+
+    def pop(self) -> bool:
+        """
+        Pop the context.
+        :return: TODO
+        """
+        if len(self) == 0:
+            return False
+        step: 'BaseStep' = self.pop_item()
+        should_save = step.should_save()
+        return not should_save  # TODO: perhaps not `not should_save`? review which side of bool we should return.
+
+    def push(self, step: 'BaseStep') -> 'ExecutionContext':
+        new_self = copy(self)
+        new_self.parents.append(step)
+        return new_self
+
+    def peek(self):
+        return self.parents[-1]
+
+    def mkdir(self):
+        os.mkdir(self.get_path())
+
+    def get_path(self):
+        parents_with_path = [self.root] + [p.name for p in self.parents]
+        return os.path.join(*parents_with_path)
+
+    def get_names(self):
+        return [p.name for p in self.parents]
+
+    def __len__(self):
+        return len(self.parents)
+
+
 class BaseStep(ABC):
     def __init__(
             self,
             hyperparams: HyperparameterSamples = None,
             hyperparams_space: HyperparameterSpace = None,
-            name: str = None
+            name: str = None,
+            savers: List[BaseSaver] = None
     ):
 
         if hyperparams is None:
@@ -130,8 +205,8 @@ class BaseStep(ABC):
             hyperparams_space = dict()
         if name is None:
             name = self.__class__.__name__
-
-        self.name: str = name
+        if savers is None:
+            savers = []
 
         self.hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams)
         self.hyperparams = self.hyperparams.to_flat()
@@ -139,9 +214,16 @@ class BaseStep(ABC):
         self.hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space)
         self.hyperparams_space = self.hyperparams_space.to_flat()
 
+        self.name: str = name
+
+        self.savers: List[BaseSaver] = savers  # TODO: doc. First is the most stripped.
+
+        # TODO: self.hashers = List[BaseHasher]  # TODO: can chain many hashers in a list, just like savers.
+
+        # misc inits:
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
         self.is_initialized = False
-        self.parent_step = None
+        self.is_invalidated = False
 
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
         if current_ids is None:
@@ -164,12 +246,6 @@ class BaseStep(ABC):
     def _hash_hyperparameters(self, hyperparams: HyperparameterSamples):
         hyperperams_dict = hyperparams.to_flat_as_dict_primitive()
         return hashlib.md5(str.encode(str(hyperperams_dict))).hexdigest()
-
-    def set_parent(self, parent_step: 'BaseStep'):
-        self.parent_step = parent_step
-
-    def save(self, data_container: DataContainer):
-        self.parent_step.save(data_container)
 
     def setup(self, step_path: str, setup_arguments: dict) -> 'BaseStep':
         """
@@ -199,6 +275,7 @@ class BaseStep(ABC):
         :return: self
         """
         self.name = name
+        self.is_invalidated = True
         return self
 
     def get_name(self) -> str:
@@ -210,6 +287,7 @@ class BaseStep(ABC):
         return self.name
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
+        self.is_invalidated = True
         self.hyperparams = HyperparameterSamples(hyperparams).to_flat()
         return self
 
@@ -217,11 +295,20 @@ class BaseStep(ABC):
         return self.hyperparams
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
+        self.is_invalidated = True
         self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
         return self
 
     def get_hyperparams_space(self) -> HyperparameterSpace:
         return self.hyperparams_space
+
+    def handle_fit(self, data_container: DataContainer) -> 'BaseStep':
+        # TODO: is this new method needed? I feel like it might be needed once we'll fix the `Pipeline.fit` methods
+        #   such that they don't call the last transform without reason.
+        self.is_invalidated = True
+
+        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
+        return new_self
 
     def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
         """
@@ -231,6 +318,8 @@ class BaseStep(ABC):
         :param data_container: the data container to transform
         :return: tuple(fitted pipeline, data_container)
         """
+        self.is_invalidated = True
+
         new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
         data_container.set_data_inputs(out)
 
@@ -255,12 +344,16 @@ class BaseStep(ABC):
         return data_container
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+        self.is_invalidated = True
+
         new_self = self.fit(data_inputs, expected_outputs)
         out = new_self.transform(data_inputs)
 
         return new_self, out
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
+        self.is_invalidated = True
+
         if expected_outputs is None:
             expected_outputs = [None] * len(data_inputs)
 
@@ -279,18 +372,55 @@ class BaseStep(ABC):
 
     def fit_one(self, data_input, expected_output=None) -> 'BaseStep':
         # return self
+        # TODO: delete this
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
     def transform_one(self, data_input):
         # return processed_output
+        # TODO: delete this
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
     def inverse_transform_one(self, data_output):
         # return data_input
+        # TODO: delete this
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
     def predict(self, data_input):
         return self.transform(data_input)
+
+    def should_save(self):
+        # TODO: doc
+        return self.is_invalidated
+
+    def save(self, context: ExecutionContext):
+        # TODO: doc
+        if self.is_invalidated and self.is_initialized:
+            self.is_invalidated = False
+
+            context.mkdir()
+            stripped_step = copy(self)
+
+            # A final "visitor" saver will save anything that wasn't saved customly after stripping the rest.
+            savers_with_provided_default_stripped_saver = [context.stripped_saver] + self.savers
+
+            for saver in reversed(savers_with_provided_default_stripped_saver):
+                # Each saver strips the stip a bit more if needs be.
+                stripped_step = saver.save_step(stripped_step, context)
+
+            del stripped_step
+
+    def load(self, context: ExecutionContext):
+        # TODO: doc
+        # A final "visitor" saver might reload anything that wasn't saved customly after stripping the rest.
+        savers_with_provided_default_stripped_saver = [context.stripped_saver] + self.savers
+
+        for saver in savers_with_provided_default_stripped_saver:
+            # Each saver unstrips the step a bit more if needed be.
+            saver.load_step(self)
+            # TODO: read on this because we might want to override self but inside the saver: https://stackoverflow.com/questions/7940470/is-it-possible-to-overwrite-self-to-point-to-another-object-inside-self-method
+
+            # TODO: `if saver.can_load(self): saver.load_step(self); else: break;` ???
+            # TODO: should we print a warning if it can't ??? but without spamming the console?
 
     def meta_fit(self, X_train, y_train, metastep: 'MetaStepMixin'):
         """
@@ -347,6 +477,7 @@ class BaseStep(ABC):
 
             # 3. assign new method to old method
             setattr(new_base_step, method_to_assign_to, new_method)
+            self.is_invalidated = True
 
         except AttributeError as e:
             if warn:
@@ -390,6 +521,8 @@ class BaseStep(ABC):
         :param new_method: if it is not None, upon calling ``mutate``, the new_method will be the one that is used on the provided new_base_step.
         :return: self
         """
+        self.is_invalidated = True
+
         if new_method is None or method_to_assign_to is None:
             new_method = method_to_assign_to = "transform"  # No changes will be applied (transform will stay transform).
 
@@ -464,8 +597,8 @@ class MetaStepMixin:
 
     # TODO: remove equal None, and fix random search at the same time ?
     def __init__(
-        self,
-        wrapped: BaseStep = None
+            self,
+            wrapped: BaseStep = None
     ):
         self.wrapped: BaseStep = wrapped
 
@@ -488,6 +621,8 @@ class MetaStepMixin:
 
         :return:
         """
+        self.is_invalidated = True
+
         hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
 
         remainders = dict()
@@ -521,6 +656,8 @@ class MetaStepMixin:
 
         :return: self
         """
+        self.is_invalidated = True
+
         hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space.to_nested_dict())
 
         remainders = dict()
@@ -546,6 +683,7 @@ class MetaStepMixin:
         }).to_flat()
 
     def set_step(self, step: BaseStep) -> BaseStep:
+        self.is_invalidated = True
         self.wrapped: BaseStep = step
         return self
 
@@ -606,6 +744,33 @@ class NonTransformableMixin:
         return processed_outputs
 
 
+class TruncableJoblibStepCheckpoint(BaseSaver):
+    def save_step(self, step: 'TruncableSteps', context: ExecutionContext):
+        context.mkdir()
+
+        for _, sub_step in step:
+            if sub_step.should_save():
+                subcontext = context.push(sub_step)  # TODO: copy? already done in the push. review this.
+                sub_step.save(subcontext)
+
+        # TODO: delete steps, but keep their __class__ only and their `.name` only to be able
+        #       to load them from their class.
+        step.classes = [(n, s.__class__) for n, s in step.steps_as_tuple]
+        del step.steps
+        del step.steps_as_tuple
+
+    def load_step(self, step: 'TruncableSteps', context: ExecutionContext):
+
+        # TODO: load step.steps and step.steps_as_tuple JUST FROM THEIR CLASS TYPE.
+        for step_name, step_class in step.classes:
+            step.steps = ...
+            step.steps_as_tuple = ...
+
+        for _, sub_step in step.items():
+            subcontext = copy(context).push(sub_step)
+            sub_step.load(subcontext)
+
+
 class TruncableSteps(BaseStep, ABC):
 
     def __init__(
@@ -617,7 +782,8 @@ class TruncableSteps(BaseStep, ABC):
         super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         self._set_steps(steps_as_tuple)
 
-        assert isinstance(self, BaseStep), "Classes that inherit from TruncableMixin must also inherit from BaseStep."
+        # TODO: important, notice that this is prepended.
+        self.savers = [TruncableJoblibStepCheckpoint()] + self.savers
 
     def are_steps_before_index_the_same(self, other: 'TruncableSteps', index: int):
         """
@@ -711,6 +877,7 @@ class TruncableSteps(BaseStep, ABC):
             step = (_name, step)
             names_yet.add(step[0])
             patched.append(step)
+        self.is_invalidated = True
         return patched
 
     def _rename_step(self, step_name, class_name, names_yet):
@@ -727,6 +894,7 @@ class TruncableSteps(BaseStep, ABC):
         while step_name in names_yet:
             step_name = class_name + str(i)
             i += 1
+        self.is_invalidated = True
         return step_name
 
     def _refresh_steps(self):
@@ -734,6 +902,7 @@ class TruncableSteps(BaseStep, ABC):
         Private method to refresh inner state after having edited ``self.steps_as_tuple``
         (recreate ``self.steps`` from ``self.steps_as_tuple``).
         """
+        self.is_invalidated = True
         self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
 
     def get_hyperparams(self) -> HyperparameterSamples:
@@ -751,6 +920,8 @@ class TruncableSteps(BaseStep, ABC):
         return hyperparams.to_flat()
 
     def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
+        self.is_invalidated = True
+
         hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
 
         remainders = dict()
@@ -760,19 +931,6 @@ class TruncableSteps(BaseStep, ABC):
             else:
                 remainders[name] = hparams
         self.hyperparams = HyperparameterSamples(remainders)
-
-        return self
-
-    def set_hyperparams_space(self, hyperparams_space: Union[HyperparameterSpace, OrderedDict, dict]) -> BaseStep:
-        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
-
-        remainders = dict()
-        for name, hparams in hyperparams_space.items():
-            if name in self.steps.keys():
-                self.steps[name].set_hyperparams_space(hparams)
-            else:
-                remainders[name] = hparams
-        self.hyperparams = HyperparameterSpace(remainders)
 
         return self
 
@@ -788,6 +946,29 @@ class TruncableSteps(BaseStep, ABC):
         )
 
         return all_hyperparams.to_flat()
+
+    def set_hyperparams_space(self, hyperparams_space: Union[HyperparameterSpace, OrderedDict, dict]) -> BaseStep:
+        self.is_invalidated = True
+
+        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
+
+        remainders = dict()
+        for name, hparams in hyperparams_space.items():
+            if name in self.steps.keys():
+                self.steps[name].set_hyperparams_space(hparams)
+            else:
+                remainders[name] = hparams
+        self.hyperparams = HyperparameterSpace(remainders)
+
+        return self
+
+    def should_save(self):
+        if self.should_save():
+            return True
+        for _, step in self.items():
+            if step.should_save():
+                return True
+        return False
 
     def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
         """
@@ -948,3 +1129,67 @@ class ResumableStepMixin:
     @abstractmethod
     def should_resume(self, data_container: DataContainer) -> bool:
         raise NotImplementedError()
+
+
+class Barrier(BaseStep, ABC):
+    pass
+
+
+# class Joiner(Barrier):
+#     pass
+
+
+# TODO: review ideas below...
+
+class Checkpoint(Barrier, ABC):
+    pass
+
+
+class StepCheckpoint(Checkpoint, ABC):
+    pass
+
+
+class DataCheckpoint(Checkpoint, ABC):
+    pass
+
+
+# TODO: move classes below elsewhere.
+
+class JoblibStepCheckpoint(StepCheckpoint):
+    def save_previous(self, context: ExecutionContext):
+        # TODO: CTRL+SHIFT+F for "stripped_saver: BaseSaver"
+        context.save_all_unsaved()
+
+    def load_previous(self, context: ExecutionContext):
+        context.load_all_unloaded()  # Should we do this?
+
+
+class PickleDataCheckpoint(DataCheckpoint):
+    # TODO: ...
+    pass
+
+
+"""
+TODO: see ideas below.
+
+BaseStep.save(self, context: Context):
+	stripped_step = Saver.save(step: BaseStep)
+	stripped_step = StrippedSaver.save(stripped_step: BaseStep)
+	self.is_invalidated = False
+
+TruncableSteps.saver
+TruncableSteps.save
+TruncableSteps.load
+BaseStep.should_save()
+
+BaseStep.saver
+BaseStep.save
+BaseStep.load
+BaseStep.should_save()
+
+Context.pop()
+Context.stripped_saver
+
+...
+
+"""
