@@ -390,6 +390,34 @@ class Uniform(HyperparameterDistribution):
             return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
         return Uniform(new_min_included, new_max_included).was_narrowed_from(kept_space_ratio, self)
 
+    def pdf(self, x_value):
+        """
+        Calculate the probability distribution value at position x_value.
+
+        :param x_value: the x value to which we need to evaluate the value of the probability distribution function.
+        :return: the value of the probability distribution function.
+        """
+        if (x_value >= self.min_included) and (x_value <= self.max_included):
+            return 1 / (self.max_included - self.min_included)
+
+        # Manage case where it is outside the probability distribution function.
+        return 0.
+
+    def cdf(self, x_value):
+        """
+        Calculate the cumulative distribution value at position x_value.
+        :param x_value: the x value to which we need to evaluate the value of the probability distribution function.
+        :return: the value of the cumulative distribution function.
+        """
+        if x_value < self.min_included:
+            return 0.
+
+        if (x_value >= self.min_included) and (x_value <= self.max_included):
+            return (x_value - self.min_included) / (self.max_included - self.min_included)
+
+        # Manage the case where x_value > self.max_included
+        return 1.
+
 
 class LogUniform(HyperparameterDistribution):
     """Get a LogUniform distribution.

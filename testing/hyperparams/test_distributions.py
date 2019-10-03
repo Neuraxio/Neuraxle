@@ -96,6 +96,8 @@ def test_uniform():
     assert samples_mean < 1.0
     assert min(samples) >= -10.0
     assert max(samples) <= 10.0
+    assert hd.pdf(0) == 1/(10 + 10)
+    assert hd.cdf(0) ==  (0 + 10) / (10 + 10)
 
 
 def test_loguniform():
