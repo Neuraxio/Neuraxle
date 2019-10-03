@@ -108,66 +108,6 @@ class FitCallbackStep(NonTransformableMixin, BaseCallbackStep):
         return self
 
 
-class FitTransformCallbackStep(BaseCallbackStep):
-    """Call a callback method on transform and inverse transform."""
-
-    def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
-        self._fit_callback(data_inputs, expected_outputs)
-        return self
-
-    def transform(self, data_inputs):
-        """
-        Will call the self._callback() with the data being processed and the extra arguments specified.
-        It has no other effect.
-
-        :param data_inputs: the data to process
-        :return: the same data as input, unchanged (like the Identity class).
-        """
-        self._callback(data_inputs)
-
-        if self.transform_function is not None:
-            return self.transform_function(data_inputs)
-
-        return data_inputs
-
-    def transform_one(self, data_input):
-        """
-        Will call the self._callback() with the data being processed and the extra arguments specified.
-        It has no other effect.
-
-        :param data_input: the data to process
-        :return: the same data as input, unchanged (like the Identity class).
-        """
-        self._callback(data_input)
-
-        if self.transform_function is not None:
-            return self.transform_function([data_input])[0]
-
-        return data_input
-
-    def inverse_transform(self, processed_outputs):
-        """
-        Will call the self._callback() with the data being processed and the extra arguments specified.
-        It has no other effect.
-
-        :param processed_outputs: the data to process
-        :return: the same data as input, unchanged (like the Identity class).
-        """
-        self._callback(processed_outputs)
-        return processed_outputs
-
-    def inverse_transform_one(self, processed_output):
-        """
-        Will call the self._callback() with the data being processed and the extra arguments specified.
-        It has no other effect.
-
-        :param processed_output: the data to process
-        :return: the same data as input, unchanged (like the Identity class).
-        """
-        self._callback(processed_output)
-        return processed_output
-
-
 class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
     """Call a callback method on transform and inverse transform."""
 
@@ -226,6 +166,35 @@ class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
         """
         self._callback(processed_output)
         return processed_output
+
+
+class FitTransformCallbackStep(BaseStep):
+    def __init__(self, transform_callback_function, fit_callback_function, more_arguments: List = tuple(),
+                 transform_function=None,
+                 hyperparams=None):
+        BaseStep.__init__(self, hyperparams)
+        self.transform_function = transform_function
+        self.more_arguments = more_arguments
+        self.fit_callback_function = fit_callback_function
+        self.transform_callback_function = transform_callback_function
+
+    def fit(self, data_inputs, expected_outputs=None):
+        self.fit_callback_function((data_inputs, expected_outputs), *self.more_arguments)
+        return self
+
+    def transform(self, data_inputs):
+        self.transform_callback_function(data_inputs, *self.more_arguments)
+        if self.transform_function is not None:
+            return self.transform_function(data_inputs)
+        return data_inputs
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+        self.fit_callback_function((data_inputs, expected_outputs), *self.more_arguments)
+        self.transform_callback_function(data_inputs, *self.more_arguments)
+        if self.transform_function is not None:
+            return self, self.transform_function(data_inputs)
+
+        return self, data_inputs
 
 
 class TapeCallbackFunction:
