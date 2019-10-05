@@ -459,12 +459,11 @@ class LogUniform(HyperparameterDistribution):
         :param x: value where the probability distribution function is evaluated.
         :return: value of the probability distribution function.
         """
-        if (self.log2_min_included == self.log2_max_included) and x == 2**self.log2_min_included:
+        if (self.log2_min_included == self.log2_max_included) and x == 2 ** self.log2_min_included:
             return 1.
 
-        if (x >= 2**self.log2_min_included) and (x <= 2**self.log2_max_included):
+        if (x >= 2 ** self.log2_min_included) and (x <= 2 ** self.log2_max_included):
             return 1 / (x * math.log(2) * (self.log2_max_included - self.log2_min_included))
-
 
         return 0.
 
@@ -474,13 +473,13 @@ class LogUniform(HyperparameterDistribution):
         :param x: value where the cumulative distribution function is evaluated.
         :return: value of the cumulative distribution function.
         """
-        if x < 2**self.log2_min_included:
+        if x < 2 ** self.log2_min_included:
             return 0.
 
-        if (self.log2_min_included == self.log2_max_included) and x == 2**self.log2_min_included:
+        if (self.log2_min_included == self.log2_max_included) and x == 2 ** self.log2_min_included:
             return 1.
 
-        if (x >= 2**self.log2_min_included) and (x <= 2**self.log2_max_included):
+        if (x >= 2 ** self.log2_min_included) and (x <= 2 ** self.log2_max_included):
             return (math.log2(x) - self.log2_min_included) / (self.log2_max_included - self.log2_min_included)
 
         # Manage the case x > 2**self.log2_max_included
@@ -557,10 +556,7 @@ class Normal(HyperparameterDistribution):
         if self.hard_clip_max is not None and (x > self.hard_clip_max):
             return 0.
 
-        if (self.log2_min_included == self.log2_max_included) and x == 2**self.log2_min_included:
-            return 1.
-
-        return 1/(self.std * math.sqrt(2*math.pi)) * math.exp(-(x-self.mean)**2/(2*self.std**2))
+        return 1 / (self.std * math.sqrt(2 * math.pi)) * math.exp(-(x - self.mean) ** 2 / (2 * self.std ** 2))
 
     def cdf(self, x) -> float:
         """
@@ -653,10 +649,8 @@ class LogNormal(HyperparameterDistribution):
         if self.hard_clip_max is not None and (x > self.hard_clip_max):
             return 0.
 
-        if (self.log2_min_included == self.log2_max_included) and x == 2 ** self.log2_min_included:
-            return 1.
-
-        return 1 / (x * math.log(2) * self.std * math.sqrt(2 * math.pi)) * math.exp(-(math.log2(x) - self.mean) ** 2 / (2 * self.std ** 2))
+        return 1 / (x * math.log(2) * self.log2_space_std * math.sqrt(2 * math.pi)) * math.exp(
+            -(math.log2(x) - self.log2_space_mean) ** 2 / (2 * self.log2_space_std ** 2))
 
     def cdf(self, x) -> float:
         """
