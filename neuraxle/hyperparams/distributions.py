@@ -27,6 +27,7 @@ import random
 import sys
 from abc import abstractmethod, ABCMeta
 from typing import List
+from scipy.stats import norm
 
 import math
 import numpy as np
@@ -405,7 +406,7 @@ class Uniform(HyperparameterDistribution):
         if x < self.min_included:
             return 0.
 
-        if (x >= self.min_included) and (x_value <= self.max_included):
+        if (x >= self.min_included) and (x <= self.max_included):
             return (x - self.min_included) / (self.max_included - self.min_included)
 
         # Manage the case where x_value > self.max_included
@@ -537,6 +538,44 @@ class Normal(HyperparameterDistribution):
             result = max(result, self.hard_clip_min)
         return float(result)
 
+    def pdf(self, x) -> float:
+        """
+        Calculate the Normal probability distribution value at position `x`.
+        :param x: value where the probability distribution function is evaluated.
+        :return: value of the probability distribution function.
+        """
+
+        if self.hard_clip_min is not None and (x < self.hard_clip_min):
+            return 0.
+
+        if self.hard_clip_min is not None and (x == self.hard_clip_min):
+            return norm.cdf(x, loc=self.mean, scale=self.std)
+
+        if self.hard_clip_max is not None and (x == self.hard_clip_max):
+            return 1 - norm.cdf(x, loc=self.mean, scale=self.std)
+
+        if self.hard_clip_max is not None and (x > self.hard_clip_max):
+            return 0.
+
+        if (self.log2_min_included == self.log2_max_included) and x == 2**self.log2_min_included:
+            return 1.
+
+        return 1/(self.std * math.sqrt(2*math.pi)) * math.exp(-(x-self.mean)**2/(2*self.std**2))
+
+    def cdf(self, x) -> float:
+        """
+        Calculate the Normal cumulative distribution value at position `x`.
+        :param x: value where the cumulative distribution function is evaluated.
+        :return: value of the cumulative distribution function.
+        """
+        if self.hard_clip_min is not None and (x < self.hard_clip_min):
+            return 0.
+
+        if self.hard_clip_max is not None and (x >= self.hard_clip_max):
+            return 1.
+
+        return norm.cdf(x, loc=self.mean, scale=self.std)
+
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
         """
         Will narrow the distribution towards the new best_guess.
@@ -594,6 +633,44 @@ class LogNormal(HyperparameterDistribution):
         if self.hard_clip_min is not None:
             result = max(result, self.hard_clip_min)
         return float(result)
+
+    def pdf(self, x) -> float:
+        """
+        Calculate the LogNormal probability distribution value at position `x`.
+        :param x: value where the probability distribution function is evaluated.
+        :return: value of the probability distribution function.
+        """
+
+        if self.hard_clip_min is not None and (x < self.hard_clip_min):
+            return 0.
+
+        if self.hard_clip_min is not None and (x == self.hard_clip_min):
+            return norm.cdf(math.log2(x), loc=self.log2_space_mean, scale=self.log2_space_std)
+
+        if self.hard_clip_max is not None and (x == self.hard_clip_max):
+            return 1 - norm.cdf(math.log2(x), loc=self.log2_space_mean, scale=self.log2_space_std)
+
+        if self.hard_clip_max is not None and (x > self.hard_clip_max):
+            return 0.
+
+        if (self.log2_min_included == self.log2_max_included) and x == 2 ** self.log2_min_included:
+            return 1.
+
+        return 1 / (x * math.log(2) * self.std * math.sqrt(2 * math.pi)) * math.exp(-(math.log2(x) - self.mean) ** 2 / (2 * self.std ** 2))
+
+    def cdf(self, x) -> float:
+        """
+        Calculate the LogNormal cumulative distribution value at position `x`.
+        :param x: value where the cumulative distribution function is evaluated.
+        :return: value of the cumulative distribution function.
+        """
+        if self.hard_clip_min is not None and (x < self.hard_clip_min):
+            return 0.
+
+        if self.hard_clip_max is not None and (x >= self.hard_clip_max):
+            return 1.
+
+        return norm.cdf(math.log2(x), loc=self.log2_space_mean, scale=self.log2_space_std)
 
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
         """
