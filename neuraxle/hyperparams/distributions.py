@@ -375,6 +375,42 @@ class Uniform(HyperparameterDistribution):
         """
         return random.random() * (self.max_included - self.min_included) + self.min_included
 
+    def pdf(self, x):
+        """
+        Calculate the Uniform probability distribution value at position `x`.
+
+        :param x: value where the probability distribution function is evaluated.
+        :return: value of the probability distribution function.
+        """
+
+        if self.min_included == self.max_included and (x == self.min_included):
+            return 1.
+
+        if (x >= self.min_included) and (x <= self.max_included):
+            return 1 / (self.max_included - self.min_included)
+
+        # Manage case where it is outside the probability distribution function.
+        return 0.
+
+    def cdf(self, x):
+        """
+        Calculate the Uniform cumulative distribution value at position `x`.
+        :param x: value where the cumulative distribution function is evaluated.
+        :return: value of the cumulative distribution function.
+        """
+
+        if self.min_included == self.max_included and (x == self.min_included):
+            return 1.
+
+        if x < self.min_included:
+            return 0.
+
+        if (x >= self.min_included) and (x_value <= self.max_included):
+            return (x - self.min_included) / (self.max_included - self.min_included)
+
+        # Manage the case where x_value > self.max_included
+        return 1.
+
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
         """
         Will narrow the underlying distribution towards the best guess.
@@ -389,34 +425,6 @@ class Uniform(HyperparameterDistribution):
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
             return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
         return Uniform(new_min_included, new_max_included).was_narrowed_from(kept_space_ratio, self)
-
-    def pdf(self, x_value):
-        """
-        Calculate the probability distribution value at position x_value.
-
-        :param x_value: the x value to which we need to evaluate the value of the probability distribution function.
-        :return: the value of the probability distribution function.
-        """
-        if (x_value >= self.min_included) and (x_value <= self.max_included):
-            return 1 / (self.max_included - self.min_included)
-
-        # Manage case where it is outside the probability distribution function.
-        return 0.
-
-    def cdf(self, x_value):
-        """
-        Calculate the cumulative distribution value at position x_value.
-        :param x_value: the x value to which we need to evaluate the value of the probability distribution function.
-        :return: the value of the cumulative distribution function.
-        """
-        if x_value < self.min_included:
-            return 0.
-
-        if (x_value >= self.min_included) and (x_value <= self.max_included):
-            return (x_value - self.min_included) / (self.max_included - self.min_included)
-
-        # Manage the case where x_value > self.max_included
-        return 1.
 
 
 class LogUniform(HyperparameterDistribution):
@@ -443,6 +451,39 @@ class LogUniform(HyperparameterDistribution):
         :return: a float.
         """
         return 2 ** random.uniform(self.log2_min_included, self.log2_max_included)
+
+    def pdf(self, x) -> float:
+        """
+        Calculate the logUniform probability distribution value at position `x`.
+        :param x: value where the probability distribution function is evaluated.
+        :return: value of the probability distribution function.
+        """
+        if (self.log2_min_included == self.log2_max_included) and x == 2**self.log2_min_included:
+            return 1.
+
+        if (x >= 2**self.log2_min_included) and (x <= 2**self.log2_max_included):
+            return 1 / (x * math.log(2) * (self.log2_max_included - self.log2_min_included))
+
+
+        return 0.
+
+    def cdf(self, x) -> float:
+        """
+        Calculate the logUniform cumulative distribution value at position `x`.
+        :param x: value where the cumulative distribution function is evaluated.
+        :return: value of the cumulative distribution function.
+        """
+        if x < 2**self.log2_min_included:
+            return 0.
+
+        if (self.log2_min_included == self.log2_max_included) and x == 2**self.log2_min_included:
+            return 1.
+
+        if (x >= 2**self.log2_min_included) and (x <= 2**self.log2_max_included):
+            return (math.log2(x) - self.log2_min_included) / (self.log2_max_included - self.log2_min_included)
+
+        # Manage the case x > 2**self.log2_max_included
+        return 1.
 
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
         """
