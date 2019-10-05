@@ -96,9 +96,12 @@ def test_uniform():
     assert samples_mean < 1.0
     assert min(samples) >= -10.0
     assert max(samples) <= 10.0
+    assert hd.pdf(-10.1) == 0.
     assert hd.pdf(0) == 1/(10 + 10)
-    assert hd.cdf(0) ==  (0 + 10) / (10 + 10)
-
+    assert hd.pdf(10.1) == 0.
+    assert hd.cdf(-10.1) == 0.
+    assert hd.cdf(0) == (0 + 10) / (10 + 10)
+    assert hd.cdf(10.1) == 1.
 
 def test_loguniform():
     hd = LogUniform(0.001, 10)
@@ -109,6 +112,12 @@ def test_loguniform():
     assert samples_mean < 1.15  # if it was just uniform, this assert would break.
     assert min(samples) >= 0.001
     assert max(samples) <= 10.0
+    assert hd.pdf(0.0001) == 0.
+    assert hd.pdf(2) == 0.054286810237906484
+    assert hd.pdf(10.1) == 0.
+    assert hd.cdf(0.0001) == 0.
+    assert hd.cdf(2) == (math.log2(2) - math.log2(0.001)) / (math.log2(10) - math.log2(0.001))
+    assert hd.cdf(10.1) == 1.
 
 
 def test_normal():
@@ -120,6 +129,12 @@ def test_normal():
     assert samples_mean < 0.1
     samples_std = np.std(samples)
     assert 0.9 < samples_std < 1.1
+    assert hd.pdf(-1.) == 0.24197072451914337
+    assert hd.pdf(0.) == 0.3989422804014327
+    assert hd.pdf(1.) == 0.24197072451914337
+    assert hd.cdf(-1.) == 0.15865525393145707
+    assert hd.cdf(0.) == 0.5
+    assert hd.cdf(1.) == 0.8413447460685429
 
 
 def test_lognormal():
@@ -131,6 +146,13 @@ def test_lognormal():
     assert 0.9 < samples_median < 1.1
     samples_std = np.std(samples)
     assert 5 < samples_std < 8
+    assert hd.pdf(0.) == 0.
+    assert hd.pdf(1.) == 0.28777602476804065
+    assert hd.pdf(5.) == 0.029336304593386688
+    assert hd.cdf(0.) == 0.
+    assert hd.cdf(1.) == 0.5
+    assert hd.cdf(5.) == 0.8771717397015799
+
 
 
 @pytest.mark.parametrize("hd", [

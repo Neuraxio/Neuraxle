@@ -515,7 +515,7 @@ class Normal(HyperparameterDistribution):
         :param hard_clip_min: if not none, rvs will return max(result, hard_clip_min).
         :param hard_clip_max: if not none, rvs will return min(result, hard_clip_min).
         """
-        self.mean = mean,
+        self.mean = mean
         self.std = std
         self.hard_clip_min = hard_clip_min
         self.hard_clip_max = hard_clip_max
@@ -649,8 +649,11 @@ class LogNormal(HyperparameterDistribution):
         if self.hard_clip_max is not None and (x > self.hard_clip_max):
             return 0.
 
-        return 1 / (x * math.log(2) * self.log2_space_std * math.sqrt(2 * math.pi)) * math.exp(
-            -(math.log2(x) - self.log2_space_mean) ** 2 / (2 * self.log2_space_std ** 2))
+        if x > 0:
+            return 1 / (x * math.log(2) * self.log2_space_std * math.sqrt(2 * math.pi)) * math.exp(
+                -(math.log2(x) - self.log2_space_mean) ** 2 / (2 * self.log2_space_std ** 2))
+
+        return 0.
 
     def cdf(self, x) -> float:
         """
@@ -664,7 +667,10 @@ class LogNormal(HyperparameterDistribution):
         if self.hard_clip_max is not None and (x >= self.hard_clip_max):
             return 1.
 
-        return norm.cdf(math.log2(x), loc=self.log2_space_mean, scale=self.log2_space_std)
+        if x > 0:
+            return norm.cdf(math.log2(x), loc=self.log2_space_mean, scale=self.log2_space_std)
+
+        return 0.
 
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
         """
