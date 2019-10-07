@@ -27,7 +27,9 @@ import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
-from typing import Tuple, List, Union, Any
+from typing import Tuple, List, Union, Any, Iterable
+
+from conv import convolved_1d
 
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
@@ -61,7 +63,6 @@ class RangeHasher(BaseHasher):
 
         return new_current_ids
 
-
 class DataContainer:
     def __init__(self,
                  current_ids,
@@ -83,6 +84,19 @@ class DataContainer:
 
     def set_current_ids(self, current_ids: Any):
         self.current_ids = current_ids
+
+    def convolved_1d(self, stride, kernel_size) -> Iterable:
+        conv_current_ids = convolved_1d(stride=stride, iterable=self.current_ids, kernel_size=kernel_size)
+        conv_data_inputs = convolved_1d(stride=stride, iterable=self.data_inputs, kernel_size=kernel_size)
+        conv_expected_outputs = convolved_1d(stride=stride, iterable=self.expected_outputs, kernel_size=kernel_size)
+
+        for current_ids, data_inputs, expected_outputs in zip(conv_current_ids, conv_data_inputs,
+                                                              conv_expected_outputs):
+            yield DataContainer(
+                current_ids=current_ids,
+                data_inputs=data_inputs,
+                expected_outputs=expected_outputs
+            )
 
     def __iter__(self):
         current_ids = self.current_ids
@@ -114,6 +128,11 @@ class ListDataContainer(DataContainer):
         self.current_ids.append(current_id)
         self.data_inputs.append(data_input)
         self.expected_outputs.append(expected_output)
+
+    def concat(self, data_container: DataContainer):
+        self.current_ids.extend(data_container.current_ids)
+        self.data_inputs.extend(data_container.data_inputs)
+        self.expected_outputs.extend(data_container.expected_outputs)
 
 
 class BaseStep(ABC):
@@ -444,8 +463,8 @@ class MetaStepMixin:
 
     # TODO: remove equal None, and fix random search at the same time ?
     def __init__(
-        self,
-        wrapped: BaseStep = None
+            self,
+            wrapped: BaseStep = None
     ):
         self.wrapped: BaseStep = wrapped
 
@@ -537,9 +556,13 @@ NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
 
 
 class NonFittableMixin:
-    """A pipeline step that requires no fitting: fitting just returns self when called to do no action.
+    """
+    A pipeline step that requires no fitting: fitting just returns self when called to do no action.
+    Note: fit methods are not implemented
+    """
 
-    Note: fit methods are not implemented"""
+    def handle_fit_transform(self, data_container: DataContainer):
+        return self, self.handle_transform(data_container)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
         """
@@ -790,6 +813,9 @@ class TruncableSteps(BaseStep, ABC):
                 return index
 
     def _step_index_to_name(self, step_index):
+        if step_index == len(self.items()):
+            return None
+
         name, _ = self.steps_as_tuple[step_index]
         return name
 
@@ -832,12 +858,17 @@ class TruncableSteps(BaseStep, ABC):
                     raise KeyError(
                         "Start or stop ('{}' or '{}') not found in '{}'.".format(start, stop, self.steps.keys()))
                 for key, val in self.steps_as_tuple:
+                    if start == stop == key:
+                        new_steps_as_tuple.append((key, val))
+
                     if stop == key:
                         break
+
                     if not started and start == key:
                         started = True
                     if started:
                         new_steps_as_tuple.append((key, val))
+
             self_shallow_copy.steps_as_tuple = new_steps_as_tuple
             self_shallow_copy.steps = OrderedDict(new_steps_as_tuple)
             return self_shallow_copy
@@ -909,6 +940,33 @@ class TruncableSteps(BaseStep, ABC):
         """
         return len(self.steps_as_tuple)
 
+    def split(self, step_type: type) -> List['TruncableSteps']:
+        """
+        Split truncable steps by a step class name.
+
+        :param step_type: step class type to split from.
+        :return: list of truncable steps containing the splitted steps
+        """
+        sub_pipelines = []
+
+        previous_sub_pipeline_end_index = 0
+        for index, (step_name, step) in enumerate(self.items()):
+            if isinstance(step, step_type):
+                sub_pipelines.append(
+                    self[previous_sub_pipeline_end_index:index + 1]
+                )
+                previous_sub_pipeline_end_index = index + 1
+
+        if previous_sub_pipeline_end_index < len(self.items()):
+            sub_pipelines.append(
+                self[previous_sub_pipeline_end_index:-1]
+            )
+
+        return sub_pipelines
+
+    def ends_with(self, step_type: type):
+        return isinstance(self[-1], step_type)
+
 
 class ResumableStepMixin:
     """
@@ -918,3 +976,83 @@ class ResumableStepMixin:
     @abstractmethod
     def should_resume(self, data_container: DataContainer) -> bool:
         raise NotImplementedError()
+
+
+class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
+    """
+    A Barrier step to be used in a minibatch sequential pipeline. It forces all the
+    data inputs to get to the barrier in a sub pipeline before going through to the next sub-pipeline.
+
+
+    ``p = MiniBatchSequentialPipeline([
+        SomeStep(),
+        SomeStep(),
+        Barrier(), # must be a concrete Barrier ex: Joiner()
+        SomeStep(),
+        SomeStep(),
+        Barrier(), # must be a concrete Barrier ex: Joiner()
+    ], batch_size=10)``
+
+    """
+
+    @abstractmethod
+    def join_transform(self, step: BaseStep, data_container: DataContainer) -> DataContainer:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def join_fit_transform(self, step: BaseStep, data_container: DataContainer) -> Tuple['Any', Iterable]:
+        raise NotImplementedError()
+
+
+class Joiner(Barrier):
+    """
+    A Special Barrier step that joins the transformed mini batches together with list.extend method.
+    """
+
+    def __init__(self, batch_size):
+        super().__init__()
+        self.batch_size = batch_size
+
+    def join_transform(self, step: BaseStep, data_container: DataContainer) -> Iterable:
+        """
+        Concatenate the pipeline transform output of each batch of self.batch_size together.
+
+        :param step: pipeline to transform on
+        :param data_container: data container to transform
+        :return:
+        """
+        data_container_batches = data_container.convolved_1d(
+            stride=self.batch_size,
+            kernel_size=self.batch_size
+        )
+
+        output_data_container = ListDataContainer.empty()
+        for data_container_batch in data_container_batches:
+            output_data_container.concat(
+                step._transform_core(data_container_batch)
+            )
+
+        return output_data_container
+
+    def join_fit_transform(self, step: BaseStep, data_container: DataContainer) -> \
+            Tuple['Any', Iterable]:
+        """
+        Concatenate the pipeline fit transform output of each batch of self.batch_size together.
+
+        :param step: pipeline to fit transform on
+        :param data_container: data container to fit transform on
+        :return: fitted self, transformed data inputs
+        """
+        data_container_batches = data_container.convolved_1d(
+            stride=self.batch_size,
+            kernel_size=self.batch_size
+        )
+
+        output_data_container = ListDataContainer.empty()
+        for data_container_batch in data_container_batches:
+            step, data_container_batch = step._fit_transform_core(data_container_batch)
+            output_data_container.concat(
+                data_container_batch
+            )
+
+        return step, output_data_container

@@ -21,7 +21,16 @@ You can find here misc. pipeline steps, for example, callbacks useful for debugg
 """
 
 import copy
-from abc import ABC
+import hashlib
+import os
+import pickle
+import shutil
+from abc import ABC, abstractmethod
+from typing import Iterable
+
+from neuraxle.pipeline import DEFAULT_CACHE_FOLDER, Pipeline
+
+VALUE_CACHING = 'value_caching'
 from typing import List, Any
 
 from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, MetaStepMixin, DataContainer
@@ -32,7 +41,8 @@ from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpac
 class BaseCallbackStep(BaseStep, ABC):
     """Base class for callback steps."""
 
-    def __init__(self, callback_function, more_arguments: List = tuple(), hyperparams=None):
+    def __init__(self, callback_function, more_arguments: List = tuple(),
+                 hyperparams=None, fit_callback_function=None, transform_function=None):
         """
         Create the callback step with a function and extra arguments to send to the function
 
@@ -40,8 +50,22 @@ class BaseCallbackStep(BaseStep, ABC):
         :param more_arguments: Extra arguments that will be sent to the callback after the processed data (optional).
         """
         super().__init__(hyperparams=hyperparams)
+        self.transform_function = transform_function
         self.callback_function = callback_function
+        self.fit_callback_function = fit_callback_function
         self.more_arguments = more_arguments
+
+    def _fit_callback(self, data_inputs, expected_outputs):
+        """
+        Will call the self.fit_callback_function() with the data being processed and the extra arguments specified.
+        It has no other effect.
+
+        :param data_inputs: data inputs to fit
+        :param expected_outputs: expected outputs to fit
+
+        :return: self
+        """
+        self.fit_callback_function((data_inputs, expected_outputs), *self.more_arguments)
 
     def _callback(self, data):
         """
@@ -88,6 +112,9 @@ class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
         :return: the same data as input, unchanged (like the Identity class).
         """
         self._callback(data_inputs)
+        if self.transform_function is not None:
+            return self.transform_function(data_inputs)
+
         return data_inputs
 
     def inverse_transform(self, processed_outputs):
@@ -100,6 +127,35 @@ class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
         """
         self._callback(processed_outputs)
         return processed_outputs
+
+
+class FitTransformCallbackStep(BaseStep):
+    def __init__(self, transform_callback_function, fit_callback_function, more_arguments: List = tuple(),
+                 transform_function=None,
+                 hyperparams=None):
+        BaseStep.__init__(self, hyperparams)
+        self.transform_function = transform_function
+        self.more_arguments = more_arguments
+        self.fit_callback_function = fit_callback_function
+        self.transform_callback_function = transform_callback_function
+
+    def fit(self, data_inputs, expected_outputs=None):
+        self.fit_callback_function((data_inputs, expected_outputs), *self.more_arguments)
+        return self
+
+    def transform(self, data_inputs):
+        self.transform_callback_function(data_inputs, *self.more_arguments)
+        if self.transform_function is not None:
+            return self.transform_function(data_inputs)
+        return data_inputs
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+        self.fit_callback_function((data_inputs, expected_outputs), *self.more_arguments)
+        self.transform_callback_function(data_inputs, *self.more_arguments)
+        if self.transform_function is not None:
+            return self, self.transform_function(data_inputs)
+
+        return self, data_inputs
 
 
 class TapeCallbackFunction:
@@ -230,6 +286,216 @@ class NullPipelineSaver(PipelineSaver):
     def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
         return pipeline
 
+
+class BaseValueHasher(ABC):
+    @abstractmethod
+    def hash(self, data_input):
+        raise NotImplementedError()
+
+
+class Md5Hasher(BaseValueHasher):
+    def hash(self, data_input):
+        m = hashlib.md5()
+        m.update(str.encode(str(data_input)))
+
+        return m.hexdigest()
+
+
+class ValueCachingWrapper(MetaStepMixin, BaseStep):
+    """
+    Value caching wrapper wraps a step to cache the values.
+    """
+
+    def __init__(
+            self,
+            wrapped: BaseStep,
+            cache_folder: str = DEFAULT_CACHE_FOLDER,
+            value_hasher: BaseValueHasher = None,
+    ):
+        BaseStep.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
+        self.value_hasher = value_hasher
+
+        if self.value_hasher is None:
+            self.value_hasher = Md5Hasher()
+
+        self.cache_folder = cache_folder
+
+    def setup(self, step_path: str, setup_arguments: dict = None):
+        """
+        Fit transform data container using value caching.
+
+        :param setup_arguments: optional additional setup arguments
+        :type setup_arguments: dict
+
+        :param step_path: path of the step in the pipeline ex: `̀pipeline/step_name/`̀
+        :type step_path: str
+
+        :return: tuple(fitted pipeline, data_container)
+        """
+        self.create_checkpoint_path(step_path)
+
+    def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
+        """
+        Fit transform data container.
+
+        :param data_container: the data container to transform
+        :type data_container: DataContainer
+
+        :return: tuple(fitted pipeline, data_container)
+        """
+        self.flush_cache()
+        self.wrapped = self.wrapped.fit(data_container.data_inputs, data_container.expected_outputs)
+        outputs = self._transform_with_cache(data_container)
+
+        data_container.set_data_inputs(outputs)
+
+        current_ids = self.hash(data_container.current_ids, self.hyperparams, outputs)
+        data_container.set_current_ids(current_ids)
+
+        return self, data_container
+
+    def handle_transform(self, data_container: DataContainer) -> DataContainer:
+        """
+        Transform data container.
+
+        :param data_container: the data container to transform
+        :type data_container: DataContainer
+
+        :return: transformed data container
+        """
+        outputs = self._transform_with_cache(data_container)
+
+        data_container.set_data_inputs(outputs)
+
+        current_ids = self.hash(data_container.current_ids, self.hyperparams, outputs)
+        data_container.set_current_ids(current_ids)
+
+        return data_container
+
+    def _hash_value(self, data_input):
+        return self.value_hasher.hash(data_input)
+
+    def _transform_with_cache(self, data_container: DataContainer) -> Iterable:
+        """
+        Transform data container using value caching.
+
+        :param data_container: the data container to transform
+        :type data_container: DataContainer
+
+        :return: iterable
+        """
+        outputs = []
+        for current_id, data_input, expected_output in data_container:
+            if self.contains_cache_for(data_input):
+                outputs.extend(self.read_cache(data_input))
+            else:
+                output = self.wrapped.transform([data_input])
+                self.write_cache(data_input, output)
+                outputs.extend(output)
+        return outputs
+
+    @abstractmethod
+    def create_checkpoint_path(self, step_path: str) -> str:
+        """
+        Create checkpoint path.
+
+        :param step_path: step path inside pipeline ex: ``Pipeline/step_name/`` 
+        :type step_path: str
+
+        :return: checkpoint path
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def flush_cache(self):
+        """
+        Flush all cached values
+        :return:
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def read_cache(self, data_input) -> Any:
+        """
+        Read cache for a given data input.
+
+        :param data_input: data input to get cache for
+        :type data_input: Any
+
+        :return:
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def write_cache(self, data_input, output):
+        """
+        Write cache for a given data input and output.
+
+        :param data_input: data input to write cache for
+        :type data_input: Any
+
+        :param output: output to write cache for
+        :type output: Any
+
+        :return:
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def contains_cache_for(self, data_input) -> bool:
+        """
+        Returns true if the data input transform output is cached.
+
+        :param data_input: to get cache from
+        :return: boolean to indicate if a cache is present for the given data input
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_cache_path_for(self, data_input) -> str:
+        """
+        Get the cache path for the given data input.
+
+        :param data_input: data input to get cache path for
+        :return: str for cache path
+        """
+        raise NotImplementedError()
+
+
+class PickleValueCachingWrapper(ValueCachingWrapper):
+    """
+    Value Caching Wrapper class that caches the wrapped step transformed data inputs using python ``pickle`` library.
+    """
+
+    def create_checkpoint_path(self, step_path: str) -> str:
+        self.checkpoint_path = os.path.join(self.cache_folder, step_path, VALUE_CACHING)
+
+        if not os.path.exists(self.checkpoint_path):
+            os.makedirs(self.checkpoint_path)
+
+        return self.checkpoint_path
+
+    def flush_cache(self):
+        shutil.rmtree(self.checkpoint_path)
+        os.mkdir(self.checkpoint_path)
+
+    def read_cache(self, data_input):
+        with open(self.get_cache_path_for(data_input), 'rb') as file_:
+            return pickle.load(file_)
+
+    def write_cache(self, data_input, output):
+        with open(self.get_cache_path_for(data_input), 'wb') as file_:
+            return pickle.dump(output, file_)
+
+    def contains_cache_for(self, data_input) -> bool:
+        return os.path.exists(self.get_cache_path_for(data_input))
+
+    def get_cache_path_for(self, data_input):
+        hash_value = self._hash_value(data_input)
+        return os.path.join(self.checkpoint_path, '{0}.pickle'.format(hash_value))
+
+
 class OutputTransformerMixin:
     """
     Base output transformer step that can modify data inputs, and expected_outputs at the same time.
@@ -261,8 +527,13 @@ class OutputTransformerMixin:
         :param data_container:
         :return:
         """
-        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
+        new_self, (new_data_inputs, new_expected_outputs) = \
+            self.fit_transform((data_container.data_inputs, data_container.expected_outputs), None)
 
-        data_container = self.handle_transform(data_container)
+        data_container.set_data_inputs(new_data_inputs)
+        data_container.set_expected_outputs(new_expected_outputs)
+
+        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        data_container.set_current_ids(current_ids)
 
         return new_self, data_container
