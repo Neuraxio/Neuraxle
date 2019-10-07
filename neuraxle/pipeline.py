@@ -185,7 +185,6 @@ class Pipeline(BasePipeline):
     def __init__(self, steps: NamedTupleList):
         BasePipeline.__init__(self, steps=steps)
 
-
     def transform(self, data_inputs: Any):
         """
         After loading the last checkpoint, transform each pipeline steps
@@ -193,7 +192,7 @@ class Pipeline(BasePipeline):
         :param data_inputs: the data input to transform
         :return: transformed data inputs
         """
-        self.setup() # TODO: perhaps, remove this to pass path in context
+        self.setup()  # TODO: perhaps, remove this to pass path in context
 
         current_ids = self.hash(
             current_ids=None,
@@ -213,7 +212,7 @@ class Pipeline(BasePipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        self.setup() # TODO: perhaps, remove this to pass path in context
+        self.setup()  # TODO: perhaps, remove this to pass path in context
 
         current_ids = self.hash(
             current_ids=None,
@@ -237,7 +236,7 @@ class Pipeline(BasePipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        self.setup() # TODO: perhaps, remove this to pass path in context
+        self.setup()  # TODO: perhaps, remove this to pass path in context
 
         current_ids = self.hash(
             current_ids=None,

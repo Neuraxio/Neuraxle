@@ -44,7 +44,7 @@ class BaseHasher(ABC):
         return hashlib.md5(str.encode(str(hyperperams_dict))).hexdigest()
 
 
-class RangeHasher(BaseHasher):
+class HashlibMd5Hasher:
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
         if current_ids is None:
             current_ids = [str(i) for i in range(len(data_inputs))]
@@ -52,7 +52,8 @@ class RangeHasher(BaseHasher):
         if len(hyperparameters) == 0:
             return current_ids
 
-        current_hyperparameters_hash = self._hash_hyperparameters(hyperparameters)
+        hyperperams_dict = hyperparameters.to_flat_as_dict_primitive()
+        current_hyperparameters_hash = hashlib.md5(str.encode(str(hyperperams_dict))).hexdigest()
 
         new_current_ids = []
         for current_id in current_ids:
@@ -62,6 +63,7 @@ class RangeHasher(BaseHasher):
             new_current_ids.append(m.hexdigest())
 
         return new_current_ids
+
 
 class DataContainer:
     def __init__(self,
@@ -124,11 +126,25 @@ class BaseSaver(ABC):
 
     @abstractmethod
     def save_step(self, step: 'BaseStep', context: 'ExecutionContext'):
-        pass  # TODO doc and things
+        """
+        Save step with context.
+
+        :param step: step to save
+        :param context: execution context
+        :return:
+        """
+        raise NotImplementedError()
 
     @abstractmethod
     def load_step(self, step: 'BaseStep', context: 'ExecutionContext'):
-        pass  # TODO
+        """
+        Load step with context.
+
+        :param step: step to load
+        :param context: execution context to load from
+        :return:
+        """
+        raise NotImplementedError()
 
 
 class JoblibPipelineSaver(BaseSaver):
@@ -136,53 +152,118 @@ class JoblibPipelineSaver(BaseSaver):
     This saver is a good default saver when the object is
     already stripped out of things that would make it unserializable.
     """
-    pass  # TODO.
+
+    def save_step(self, step: 'BaseStep', context: 'ExecutionContext'):
+        """
+        Saved step stripped out of things that would make it unserializable.
+
+        :param step: stripped step to save
+        :param context: execution context to save from
+        :return:
+        """
+        pass
+
+    def load_step(self, step: 'BaseStep', context: 'ExecutionContext'):
+        """
+        Load stripped step.
+
+        :param step: stripped step to load
+        :param context: execution context to load from
+        :return:
+        """
+        pass
 
 
 class ExecutionContext:
+    """
+    Execution context object containing all of the pipeline hierarchy steps.
+    First item in execution context parents is root, second is nested, and so on. This is like a stack.
+    """
+
     def __init__(self, root: str = DEFAULT_CACHE_FOLDER, stripped_saver: JoblibPipelineSaver = None):
         self.stripped_saver: BaseSaver = stripped_saver
-        self.root: str = root  # TODO: is "./" notation safe on windows? we should be compatible.
-        self.parents: List[BaseStep] = []  # TODO DOC: first is root, second is nested, and so on. This is like a stack.
+        self.root: str = root
+        self.parents: List[BaseStep] = []
 
     def save_all_unsaved(self):
-        # TODO: might move this method elsewhere.
-        while copy(self).pop():
-            pass
+        """
+        Save all unsaved steps in the parents of the execution context.
 
-        self.peek().save(self)
+        :return:
+        """
+        copy_self = copy(self)
+        while copy_self.should_save_last_step():
+            self.peek().save(self)
+            copy_self.pop()
+
+    def should_save_last_step(self):
+        """
+        Returns True if the last step should be saved.
+
+        :return:
+        """
+        return self.parents[-1].should_save()
 
     def pop_item(self) -> 'BaseStep':
-        # TODO:
+        """
+        Change the execution context to be the same as the latest parent context.
+
+        :return:
+        """
         return self.parents.pop()
 
     def pop(self) -> bool:
         """
         Pop the context.
-        :return: TODO
+        :return:
         """
         if len(self) == 0:
             return False
-        step: 'BaseStep' = self.pop_item()
-        should_save = step.should_save()
-        return not should_save  # TODO: perhaps not `not should_save`? review which side of bool we should return.
+        self.pop_item()
+        return True
 
     def push(self, step: 'BaseStep') -> 'ExecutionContext':
+        """
+        Pushes a step in the parents of the execution context.
+
+        :param step: step to add to the execution context
+        :return: self
+        """
         new_self = copy(self)
         new_self.parents.append(step)
         return new_self
 
     def peek(self):
+        """
+        Get last parent.
+
+        :return:
+        """
         return self.parents[-1]
 
     def mkdir(self):
+        """
+        Creates the directory to save the last parent step.
+
+        :return:
+        """
         os.mkdir(self.get_path())
 
     def get_path(self):
+        """
+        Creates the directory path for the current execution context.
+
+        :return:
+        """
         parents_with_path = [self.root] + [p.name for p in self.parents]
         return os.path.join(*parents_with_path)
 
     def get_names(self):
+        """
+        Returns a list of the parent names.
+
+        :return:
+        """
         return [p.name for p in self.parents]
 
     def __len__(self):
@@ -190,14 +271,17 @@ class ExecutionContext:
 
 
 class BaseStep(ABC):
+    """
+    Base class for a pipeline step.
+    """
     def __init__(
             self,
             hyperparams: HyperparameterSamples = None,
             hyperparams_space: HyperparameterSpace = None,
             name: str = None,
-            savers: List[BaseSaver] = None
+            savers: List[BaseSaver] = None,
+            hashers: List[BaseHasher] = None
     ):
-
         if hyperparams is None:
             hyperparams = dict()
         if hyperparams_space is None:
@@ -206,6 +290,8 @@ class BaseStep(ABC):
             name = self.__class__.__name__
         if savers is None:
             savers = []
+        if hashers is None:
+            hashers = [HashlibMd5Hasher()]
 
         self.hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams)
         self.hyperparams = self.hyperparams.to_flat()
@@ -216,10 +302,8 @@ class BaseStep(ABC):
         self.name: str = name
 
         self.savers: List[BaseSaver] = savers  # TODO: doc. First is the most stripped.
+        self.hashers: List[BaseHasher] = hashers
 
-        # TODO: self.hashers = List[BaseHasher]  # TODO: can chain many hashers in a list, just like savers.
-
-        # misc inits:
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
         self.is_initialized = False
         self.is_invalidated = False
@@ -301,12 +385,20 @@ class BaseStep(ABC):
     def get_hyperparams_space(self) -> HyperparameterSpace:
         return self.hyperparams_space
 
-    def handle_fit(self, data_container: DataContainer) -> 'BaseStep':
-        # TODO: is this new method needed? I feel like it might be needed once we'll fix the `Pipeline.fit` methods
-        #   such that they don't call the last transform without reason.
+    def handle_fit(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
+        """
+        Perform any needed side effects on the step or the data container before fitting the step.
+
+        :param data_container: the data container to transform
+        :return: tuple(fitted pipeline, data_container)
+        """
+        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
+
+        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        data_container.set_current_ids(current_ids)
+
         self.is_invalidated = True
 
-        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
         return new_self
 
     def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
