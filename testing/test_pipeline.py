@@ -39,11 +39,8 @@ class SomeStep(BaseStep):
     def __init__(self, hyperparams_space: HyperparameterSpace = None):
         super().__init__(hyperparams=None, hyperparams_space=hyperparams_space)
 
-    def fit_one(self, data_input, expected_output=None) -> 'SomeStep':
-        return self
-
-    def transform_one(self, data_input):
-        return AN_EXPECTED_OUTPUT
+    def transform(self, data_inputs):
+        return [AN_EXPECTED_OUTPUT] * len(data_inputs)
 
 
 steps_lists = [

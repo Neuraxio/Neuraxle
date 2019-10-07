@@ -27,7 +27,9 @@ import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
-from typing import Tuple, List, Union, Any
+from typing import Tuple, List, Union, Any, Iterable
+
+from conv import convolved_1d
 
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
@@ -87,6 +89,19 @@ class DataContainer:
     def set_current_ids(self, current_ids: Any):
         self.current_ids = current_ids
 
+    def convolved_1d(self, stride, kernel_size) -> Iterable:
+        conv_current_ids = convolved_1d(stride=stride, iterable=self.current_ids, kernel_size=kernel_size)
+        conv_data_inputs = convolved_1d(stride=stride, iterable=self.data_inputs, kernel_size=kernel_size)
+        conv_expected_outputs = convolved_1d(stride=stride, iterable=self.expected_outputs, kernel_size=kernel_size)
+
+        for current_ids, data_inputs, expected_outputs in zip(conv_current_ids, conv_data_inputs,
+                                                              conv_expected_outputs):
+            yield DataContainer(
+                current_ids=current_ids,
+                data_inputs=data_inputs,
+                expected_outputs=expected_outputs
+            )
+
     def __iter__(self):
         current_ids = self.current_ids
         if self.current_ids is None:
@@ -117,6 +132,11 @@ class ListDataContainer(DataContainer):
         self.current_ids.append(current_id)
         self.data_inputs.append(data_input)
         self.expected_outputs.append(expected_output)
+
+    def concat(self, data_container: DataContainer):
+        self.current_ids.extend(data_container.current_ids)
+        self.data_inputs.extend(data_container.data_inputs)
+        self.expected_outputs.extend(data_container.expected_outputs)
 
 
 class BaseSaver(ABC):
@@ -274,6 +294,7 @@ class BaseStep(ABC):
     """
     Base class for a pipeline step.
     """
+
     def __init__(
             self,
             hyperparams: HyperparameterSamples = None,
@@ -309,26 +330,9 @@ class BaseStep(ABC):
         self.is_invalidated = False
 
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
-        if current_ids is None:
-            current_ids = [str(i) for i in range(len(data_inputs))]
-
-        if len(hyperparameters) == 0:
-            return current_ids
-
-        current_hyperparameters_hash = self._hash_hyperparameters(hyperparameters)
-
-        new_current_ids = []
-        for current_id in current_ids:
-            m = hashlib.md5()
-            m.update(str.encode(current_id))
-            m.update(str.encode(current_hyperparameters_hash))
-            new_current_ids.append(m.hexdigest())
-
-        return new_current_ids
-
-    def _hash_hyperparameters(self, hyperparams: HyperparameterSamples):
-        hyperperams_dict = hyperparams.to_flat_as_dict_primitive()
-        return hashlib.md5(str.encode(str(hyperperams_dict))).hexdigest()
+        for h in self.hashers:
+            current_ids = h.hash(current_ids, hyperparameters, data_inputs)
+        return current_ids
 
     def setup(self, step_path: str, setup_arguments: dict) -> 'BaseStep':
         """
@@ -443,38 +447,13 @@ class BaseStep(ABC):
         return new_self, out
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
-        self.is_invalidated = True
-
-        if expected_outputs is None:
-            expected_outputs = [None] * len(data_inputs)
-
-        for data_input, expected_output in zip(data_inputs, expected_outputs):
-            self.fit_one(data_input, expected_output)
-
         return self
 
     def transform(self, data_inputs):
-        processed_outputs = [self.transform_one(data_input) for data_input in data_inputs]
-        return processed_outputs
+        raise NotImplementedError()
 
     def inverse_transform(self, processed_outputs):
-        data_inputs = [self.inverse_transform_one(data_output) for data_output in processed_outputs]
-        return data_inputs
-
-    def fit_one(self, data_input, expected_output=None) -> 'BaseStep':
-        # return self
-        # TODO: delete this
-        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
-
-    def transform_one(self, data_input):
-        # return processed_output
-        # TODO: delete this
-        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
-
-    def inverse_transform_one(self, data_output):
-        # return data_input
-        # TODO: delete this
-        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
+        raise NotImplementedError()
 
     def predict(self, data_input):
         return self.transform(data_input)
@@ -786,9 +765,13 @@ NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
 
 
 class NonFittableMixin:
-    """A pipeline step that requires no fitting: fitting just returns self when called to do no action.
+    """
+    A pipeline step that requires no fitting: fitting just returns self when called to do no action.
+    Note: fit methods are not implemented
+    """
 
-    Note: fit methods are not implemented"""
+    def handle_fit_transform(self, data_container: DataContainer):
+        return self, self.handle_transform(data_container)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
         """
@@ -796,16 +779,6 @@ class NonFittableMixin:
 
         :param data_inputs: the data that would normally be fitted on.
         :param expected_outputs: the data that would normally be fitted on.
-        :return: self
-        """
-        return self
-
-    def fit_one(self, data_input, expected_output=None) -> 'NonFittableMixin':
-        """
-        Don't fit.
-
-        :param data_input: the data that would normally be fitted on.
-        :param expected_output: the data that would normally be fitted on.
         :return: self
         """
         return self
@@ -1092,6 +1065,9 @@ class TruncableSteps(BaseStep, ABC):
                 return index
 
     def _step_index_to_name(self, step_index):
+        if step_index == len(self.items()):
+            return None
+
         name, _ = self.steps_as_tuple[step_index]
         return name
 
@@ -1134,12 +1110,17 @@ class TruncableSteps(BaseStep, ABC):
                     raise KeyError(
                         "Start or stop ('{}' or '{}') not found in '{}'.".format(start, stop, self.steps.keys()))
                 for key, val in self.steps_as_tuple:
+                    if start == stop == key:
+                        new_steps_as_tuple.append((key, val))
+
                     if stop == key:
                         break
+
                     if not started and start == key:
                         started = True
                     if started:
                         new_steps_as_tuple.append((key, val))
+
             self_shallow_copy.steps_as_tuple = new_steps_as_tuple
             self_shallow_copy.steps = OrderedDict(new_steps_as_tuple)
             return self_shallow_copy
@@ -1210,6 +1191,33 @@ class TruncableSteps(BaseStep, ABC):
         :return: len(self.steps_as_tuple)
         """
         return len(self.steps_as_tuple)
+
+    def split(self, step_type: type) -> List['TruncableSteps']:
+        """
+        Split truncable steps by a step class name.
+
+        :param step_type: step class type to split from.
+        :return: list of truncable steps containing the splitted steps
+        """
+        sub_pipelines = []
+
+        previous_sub_pipeline_end_index = 0
+        for index, (step_name, step) in enumerate(self.items()):
+            if isinstance(step, step_type):
+                sub_pipelines.append(
+                    self[previous_sub_pipeline_end_index:index + 1]
+                )
+                previous_sub_pipeline_end_index = index + 1
+
+        if previous_sub_pipeline_end_index < len(self.items()):
+            sub_pipelines.append(
+                self[previous_sub_pipeline_end_index:-1]
+            )
+
+        return sub_pipelines
+
+    def ends_with(self, step_type: type):
+        return isinstance(self[-1], step_type)
 
 
 class ResumableStepMixin:
@@ -1284,3 +1292,83 @@ Context.stripped_saver
 ...
 
 """
+
+
+class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
+    """
+    A Barrier step to be used in a minibatch sequential pipeline. It forces all the
+    data inputs to get to the barrier in a sub pipeline before going through to the next sub-pipeline.
+
+
+    ``p = MiniBatchSequentialPipeline([
+        SomeStep(),
+        SomeStep(),
+        Barrier(), # must be a concrete Barrier ex: Joiner()
+        SomeStep(),
+        SomeStep(),
+        Barrier(), # must be a concrete Barrier ex: Joiner()
+    ], batch_size=10)``
+
+    """
+
+    @abstractmethod
+    def join_transform(self, step: BaseStep, data_container: DataContainer) -> DataContainer:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def join_fit_transform(self, step: BaseStep, data_container: DataContainer) -> Tuple['Any', Iterable]:
+        raise NotImplementedError()
+
+
+class Joiner(Barrier):
+    """
+    A Special Barrier step that joins the transformed mini batches together with list.extend method.
+    """
+
+    def __init__(self, batch_size):
+        super().__init__()
+        self.batch_size = batch_size
+
+    def join_transform(self, step: BaseStep, data_container: DataContainer) -> Iterable:
+        """
+        Concatenate the pipeline transform output of each batch of self.batch_size together.
+
+        :param step: pipeline to transform on
+        :param data_container: data container to transform
+        :return:
+        """
+        data_container_batches = data_container.convolved_1d(
+            stride=self.batch_size,
+            kernel_size=self.batch_size
+        )
+
+        output_data_container = ListDataContainer.empty()
+        for data_container_batch in data_container_batches:
+            output_data_container.concat(
+                step._transform_core(data_container_batch)
+            )
+
+        return output_data_container
+
+    def join_fit_transform(self, step: BaseStep, data_container: DataContainer) -> \
+            Tuple['Any', Iterable]:
+        """
+        Concatenate the pipeline fit transform output of each batch of self.batch_size together.
+
+        :param step: pipeline to fit transform on
+        :param data_container: data container to fit transform on
+        :return: fitted self, transformed data inputs
+        """
+        data_container_batches = data_container.convolved_1d(
+            stride=self.batch_size,
+            kernel_size=self.batch_size
+        )
+
+        output_data_container = ListDataContainer.empty()
+        for data_container_batch in data_container_batches:
+            step, data_container_batch = step._fit_transform_core(data_container_batch)
+            output_data_container.concat(
+                data_container_batch
+            )
+
+        return step, output_data_container

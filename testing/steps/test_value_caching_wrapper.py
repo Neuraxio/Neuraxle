@@ -1,10 +1,16 @@
 import numpy as np
 
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.util import PickleValueCachingWrapper, TransformCallbackStep, TapeCallbackFunction, \
+from neuraxle.steps.util import PickleValueCachingWrapper, TapeCallbackFunction, \
     FitTransformCallbackStep
 
 EXPECTED_OUTPUTS = [0.0, 0.0, 0.6931471805599453, 0.6931471805599453]
+
+
+class LogFitTransformCallbackStep(FitTransformCallbackStep):
+    def fit_transform(self, data_inputs, expected_outputs=None):
+        super().fit_transform(data_inputs, expected_outputs)
+        return self, np.log(data_inputs)
 
 
 def test_transform_should_use_cache(tmpdir):
@@ -12,9 +18,9 @@ def test_transform_should_use_cache(tmpdir):
     tape_fit = TapeCallbackFunction()
     p = Pipeline([
         PickleValueCachingWrapper(
-            FitTransformCallbackStep(
-                callback_function=tape_transform,
-                fit_callback_function=tape_fit,
+            LogFitTransformCallbackStep(
+                tape_transform,
+                tape_fit,
                 transform_function=np.log),
             tmpdir
         )
@@ -32,9 +38,9 @@ def test_fit_transform_should_fit_then_use_cache(tmpdir):
     tape_fit = TapeCallbackFunction()
     p = Pipeline([
         PickleValueCachingWrapper(
-            FitTransformCallbackStep(
-                callback_function=tape_transform,
-                fit_callback_function=tape_fit,
+            LogFitTransformCallbackStep(
+                tape_transform,
+                tape_fit,
                 transform_function=np.log),
             tmpdir
         )
@@ -51,9 +57,9 @@ def test_should_flush_cache_on_every_fit(tmpdir):
     tape_transform = TapeCallbackFunction()
     tape_fit = TapeCallbackFunction()
     wrapper = PickleValueCachingWrapper(
-        FitTransformCallbackStep(
-            callback_function=tape_transform,
-            fit_callback_function=tape_fit,
+        LogFitTransformCallbackStep(
+            tape_transform,
+            tape_fit,
             transform_function=np.log),
         tmpdir
     )

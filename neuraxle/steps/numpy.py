@@ -33,9 +33,6 @@ class NumpyFlattenDatum(NonFittableMixin, BaseStep):
     def transform(self, data_inputs):
         return data_inputs.reshape(data_inputs.shape[0], -1)
 
-    def transform_one(self, data_inputs):
-        return data_inputs.flatten()
-
 
 class NumpyConcatenateOnCustomAxis(NonFittableMixin, BaseStep):
     """
@@ -55,14 +52,6 @@ class NumpyConcatenateOnCustomAxis(NonFittableMixin, BaseStep):
     def transform(self, data_inputs):
         """
         Apply the concatenation transformation along the specified axis.
-        :param data_inputs:
-        :return: Numpy array
-        """
-        return self._concat(data_inputs)
-
-    def transform_one(self, data_inputs):
-        """
-        Apply the concatenation transformation along the specified axis
         :param data_inputs:
         :return: Numpy array
         """
@@ -105,14 +94,8 @@ class NumpyTranspose(NonFittableMixin, BaseStep):
     def transform(self, data_inputs):
         return self._transpose(data_inputs)
 
-    def transform_one(self, data_input):
-        raise BrokenPipeError("Cannot simply `transform_one` here: transpose must be done at a higher level.")
-
     def inverse_transform(self, data_inputs):
         return self._transpose(data_inputs)
-
-    def inverse_transform_one(self, data_input):
-        raise BrokenPipeError("Cannot simply `inverse_transform_one` here: transpose must be done at a higher level.")
 
     def _transpose(self, data_inputs):
         return np.array(data_inputs).transpose()
@@ -129,15 +112,9 @@ class NumpyShapePrinter(NonFittableMixin, BaseStep):
         self._print(data_inputs)
         return data_inputs
 
-    def transform_one(self, data_input):
-        self._print_one(data_input)
-
     def inverse_transform(self, processed_outputs):
         self._print(processed_outputs)
         return processed_outputs
-
-    def inverse_transform_one(self, processed_output):
-        self._print_one(processed_output)
 
     def _print(self, data_inputs):
         print(self.__class__.__name__ + ":", data_inputs.shape, self.custom_message)
