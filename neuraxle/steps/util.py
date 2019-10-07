@@ -70,19 +70,6 @@ class FitCallbackStep(NonTransformableMixin, BaseCallbackStep):
         self._callback((data_inputs, expected_outputs))
         return self
 
-    def fit_one(self, data_input, expected_output=None) -> 'FitCallbackStep':
-        """
-        Will call the self._callback() with the data being processed and the extra arguments specified.
-        Note that here, the data to process is packed into a tuple of (data_input, expected_output).
-        It has no other effect.
-
-        :param data_input: the data to process
-        :param expected_output: the data to process
-        :return: self
-        """
-        self._callback((data_input, expected_output))
-        return self
-
 
 class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
     """Call a callback method on transform and inverse transform."""
@@ -103,17 +90,6 @@ class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
         self._callback(data_inputs)
         return data_inputs
 
-    def transform_one(self, data_input):
-        """
-        Will call the self._callback() with the data being processed and the extra arguments specified.
-        It has no other effect.
-
-        :param data_input: the data to process
-        :return: the same data as input, unchanged (like the Identity class).
-        """
-        self._callback(data_input)
-        return data_input
-
     def inverse_transform(self, processed_outputs):
         """
         Will call the self._callback() with the data being processed and the extra arguments specified.
@@ -124,17 +100,6 @@ class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
         """
         self._callback(processed_outputs)
         return processed_outputs
-
-    def inverse_transform_one(self, processed_output):
-        """
-        Will call the self._callback() with the data being processed and the extra arguments specified.
-        It has no other effect.
-
-        :param processed_output: the data to process
-        :return: the same data as input, unchanged (like the Identity class).
-        """
-        self._callback(processed_output)
-        return processed_output
 
 
 class TapeCallbackFunction:
