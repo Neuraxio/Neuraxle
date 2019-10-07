@@ -1,10 +1,31 @@
+"""
+Tests for resumable pipelines
+========================================
+
+..
+    Copyright 2019, Neuraxio Inc.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+"""
+
 import numpy as np
 import pytest
 
 from neuraxle.base import DataContainer
 from neuraxle.checkpoints import BaseCheckpointStep
-from neuraxle.pipeline import Pipeline
-from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
+from neuraxle.pipeline import Pipeline, ResumablePipeline
+from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction, NullPipelineSaver
 
 
 class SomeCheckpointStep(BaseCheckpointStep):
@@ -124,11 +145,11 @@ def create_test_cases():
         expected_outputs,
         [
             ("a", TransformCallbackStep(tape6.callback, ["1"])),
-            Pipeline([
+            ResumablePipeline([
                 ("b", TransformCallbackStep(tape6.callback, ["2"])),
                 ("d", SomeCheckpointStep(data_container=dc)
                  ),
-            ]),
+            ], pipeline_saver=NullPipelineSaver()),
             ("e", TransformCallbackStep(tape6.callback, ["3"])),
             ("f", TransformCallbackStep(tape6.callback, ["4"])),
         ],
@@ -141,11 +162,11 @@ def create_test_cases():
         expected_outputs,
         [
             ("a", TransformCallbackStep(tape7.callback, ["1"])),
-            Pipeline([
+            ResumablePipeline([
                 ("d", SomeCheckpointStep(data_container=dc)
                  ),
                 ("b", TransformCallbackStep(tape7.callback, ["2"])),
-            ]),
+            ], pipeline_saver=NullPipelineSaver()),
             ("e", TransformCallbackStep(tape7.callback, ["3"])),
             ("f", TransformCallbackStep(tape7.callback, ["4"])),
         ],
@@ -158,12 +179,12 @@ def create_test_cases():
         expected_outputs,
         [
             ("a", TransformCallbackStep(tape8.callback, ["1"])),
-            Pipeline([
+            ResumablePipeline([
                 ("b", TransformCallbackStep(tape8.callback, ["2"])),
                 ("d", SomeCheckpointStep(data_container=dc)
                  ),
                 ("e", TransformCallbackStep(tape8.callback, ["3"])),
-            ]),
+            ], pipeline_saver=NullPipelineSaver()),
             ("f", TransformCallbackStep(tape8.callback, ["4"])),
         ],
         ["3", "4"])
@@ -175,16 +196,16 @@ def create_test_cases():
         expected_outputs,
         [
             ("a", TransformCallbackStep(tape9.callback, ["1"])),
-            Pipeline([
+            ResumablePipeline([
                 ("b", TransformCallbackStep(tape9.callback, ["2"])),
-                Pipeline([
+                ResumablePipeline([
                     ("e", TransformCallbackStep(tape9.callback, ["3"])),
                     ("d", SomeCheckpointStep(data_container=dc)
                      ),
                     ("f", TransformCallbackStep(tape9.callback, ["4"])),
-                ]),
+                ], pipeline_saver=NullPipelineSaver()),
                 ("g", TransformCallbackStep(tape9.callback, ["5"])),
-            ]),
+            ], pipeline_saver=NullPipelineSaver()),
             ("h", TransformCallbackStep(tape9.callback, ["6"])),
         ],
         ["4", "5", "6"])
@@ -234,8 +255,9 @@ def create_test_cases():
 
 @pytest.mark.parametrize("test_case", create_test_cases())
 def test_should_fit_transform_each_steps(test_case: ResumablePipelineTestCase):
-    pipeline = Pipeline(
-        steps=test_case.steps
+    pipeline = ResumablePipeline(
+        steps=test_case.steps,
+        pipeline_saver=NullPipelineSaver()
     )
 
     actual_pipeline, actual_data_inputs = pipeline.fit_transform(test_case.data_inputs, test_case.expected_outputs)
@@ -248,8 +270,9 @@ def test_should_fit_transform_each_steps(test_case: ResumablePipelineTestCase):
 
 @pytest.mark.parametrize("test_case", create_test_cases())
 def test_should_fit_each_steps(test_case: ResumablePipelineTestCase):
-    pipeline = Pipeline(
-        steps=test_case.steps
+    pipeline = ResumablePipeline(
+        steps=test_case.steps,
+        pipeline_saver=NullPipelineSaver()
     )
 
     actual_pipeline = pipeline.fit(test_case.data_inputs, test_case.expected_outputs)
@@ -261,8 +284,9 @@ def test_should_fit_each_steps(test_case: ResumablePipelineTestCase):
 
 @pytest.mark.parametrize("test_case", create_test_cases())
 def test_should_transform_each_steps(test_case: ResumablePipelineTestCase):
-    pipeline = Pipeline(
-        steps=test_case.steps
+    pipeline = ResumablePipeline(
+        steps=test_case.steps,
+        pipeline_saver=NullPipelineSaver()
     )
 
     actual_data_inputs = pipeline.transform(test_case.data_inputs)

@@ -1,13 +1,34 @@
+"""
+Tests for pipeline hashing
+========================================
+
+..
+    Copyright 2019, Neuraxio Inc.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+"""
+
 from typing import List, Any
 
 import numpy as np
 import pytest
 
-from neuraxle.base import NamedTupleList, BaseHasher
+from neuraxle.base import NamedTupleList
 from neuraxle.checkpoints import BaseCheckpointStep
 from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.pipeline import Pipeline
-from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
+from neuraxle.pipeline import Pipeline, ResumablePipeline
+from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction, NullPipelineSaver
 from testing.test_resumable_pipeline import SomeCheckpointStep
 
 
@@ -21,27 +42,33 @@ class ResumablePipelineTestCase:
         self.expected_rehashed_ids = expected_rehashed_ids
 
 
-class MockHasher(BaseHasher):
-    def hash(self, current_ids, hyperparameters: HyperparameterSamples, data_inputs: Any):
-        if current_ids is None:
-            current_ids = list(range(len(data_inputs)))
-            current_ids = [str(c) for c in current_ids]
+def mock_hasher(current_ids, data_inputs, hyperparameters):
+    if current_ids is None:
+        current_ids = list(range(len(data_inputs)))
+        current_ids = [str(c) for c in current_ids]
+    if len(hyperparameters) == 0:
+        return current_ids
+    else:
+        items = ",".join([str(value) for prop, value in hyperparameters.to_flat().items()])
+    return [
+        ",".join([str(current_id), items])
+        for current_id in current_ids
+    ]
 
-        if len(hyperparameters) == 0:
-            return current_ids
-        else:
-            items = ",".join([str(value) for prop, value in hyperparameters.to_flat().items()])
 
-        return [
-            ",".join([str(current_id), items])
-            for current_id in current_ids
-        ]
+class ResumablePipelineWithMockHasher(ResumablePipeline):
+    def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
+        return mock_hasher(current_ids, data_inputs, hyperparameters)
+
+class TransformCallbackStepWithMockHasher(TransformCallbackStep):
+    def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
+        return mock_hasher(current_ids, data_inputs, hyperparameters)
 
 
 def create_callback_step(tape_step_name, hyperparams):
     step = (
         tape_step_name,
-        TransformCallbackStep(
+        TransformCallbackStepWithMockHasher(
             callback_function=TapeCallbackFunction().callback,
             more_arguments=[tape_step_name],
             hyperparams=HyperparameterSamples(hyperparams)
@@ -54,16 +81,6 @@ def find_checkpoint(steps):
     for name, step in steps:
         if isinstance(step, Pipeline):
             return find_checkpoint(step.steps_as_tuple)
-        if isinstance(step, BaseCheckpointStep):
-            return step
-    return None
-
-
-def set_hasher(steps, hasher):
-    for name, step in steps:
-        step.set_hasher(hasher)
-        if isinstance(step, Pipeline):
-            set_hasher(step.steps_as_tuple, hasher)
         if isinstance(step, BaseCheckpointStep):
             return step
     return None
@@ -196,7 +213,6 @@ def create_test_cases():
         expected_rehashed_ids=['0,1,2,3,4', '1,1,2,3,4'],
     )
 
-
     return [
         one_step_with_empty_hyperparameters,
         steps_with_empty_hyperparameters,
@@ -212,38 +228,32 @@ def create_test_cases():
 
 @pytest.mark.parametrize("test_case", create_test_cases())
 def test_transform_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase):
-    pipeline = Pipeline(steps=test_case.steps)
-    pipeline.set_hasher(MockHasher())
-    set_hasher(pipeline.steps_as_tuple, MockHasher())
+    pipeline = ResumablePipelineWithMockHasher(steps=test_case.steps, pipeline_saver=NullPipelineSaver())
 
     pipeline.transform(test_case.data_inputs)
 
     mocked_checkpoint = find_checkpoint(pipeline.steps_as_tuple)
     actual_rehashed_ids = mocked_checkpoint.saved_data_container.current_ids
-    assert actual_rehashed_ids == test_case.expected_rehashed_ids
+    assert np.array_equal(actual_rehashed_ids,  test_case.expected_rehashed_ids)
 
 
 @pytest.mark.parametrize("test_case", create_test_cases())
 def test_fit_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase):
-    pipeline = Pipeline(steps=test_case.steps)
-    pipeline.set_hasher(MockHasher())
-    set_hasher(pipeline.steps_as_tuple, MockHasher())
+    pipeline = ResumablePipelineWithMockHasher(steps=test_case.steps, pipeline_saver=NullPipelineSaver())
 
     pipeline.fit(test_case.data_inputs, test_case.expected_outputs)
 
     mocked_checkpoint = find_checkpoint(pipeline.steps_as_tuple)
     actual_rehashed_ids = mocked_checkpoint.saved_data_container.current_ids
-    assert actual_rehashed_ids == test_case.expected_rehashed_ids
+    assert np.array_equal(actual_rehashed_ids, test_case.expected_rehashed_ids)
 
 
 @pytest.mark.parametrize("test_case", create_test_cases())
 def test_fit_transform_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase):
-    pipeline = Pipeline(steps=test_case.steps)
-    pipeline.set_hasher(MockHasher())
-    set_hasher(pipeline.steps_as_tuple, MockHasher())
+    pipeline = ResumablePipelineWithMockHasher(steps=test_case.steps, pipeline_saver=NullPipelineSaver())
 
     pipeline.fit_transform(test_case.data_inputs, test_case.expected_outputs)
 
     mocked_checkpoint = find_checkpoint(pipeline.steps_as_tuple)
     actual_rehashed_ids = mocked_checkpoint.saved_data_container.current_ids
-    assert actual_rehashed_ids == test_case.expected_rehashed_ids
+    assert np.array_equal(actual_rehashed_ids, test_case.expected_rehashed_ids)

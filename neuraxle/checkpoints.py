@@ -2,23 +2,28 @@
 Neuraxle's Checkpoint Classes
 ====================================
 The checkpoint classes used by the checkpoint pipeline runner
+
 ..
     Copyright 2019, Neuraxio Inc.
+
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
     You may obtain a copy of the License at
+
         http://www.apache.org/licenses/LICENSE-2.0
+
     Unless required by applicable law or agreed to in writing, software
     distributed under the License is distributed on an "AS IS" BASIS,
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
     See the License for the specific language governing permissions and
     limitations under the License.
+
 """
 import os
 import pickle
 from abc import abstractmethod
 
-from neuraxle.base import ResumableStepMixin, BaseStep, DataContainer
+from neuraxle.base import ResumableStepMixin, BaseStep, DataContainer, ListDataContainer
 
 DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
 
@@ -38,10 +43,14 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
         self.set_checkpoint_path(step_path)
 
     def handle_transform(self, data_container: DataContainer) -> DataContainer:
-        return self.save_checkpoint(data_container)
+        data_container: DataContainer = self.save_checkpoint(data_container)
+        self.save(data_container)
+        return data_container
 
     def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
-        return self, self.save_checkpoint(data_container)
+        data_container: DataContainer = self.save_checkpoint(data_container)
+        self.save(data_container)
+        return self, data_container
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseCheckpointStep':
         """
@@ -111,23 +120,19 @@ class PickleCheckpointStep(BaseCheckpointStep):
 
         :return: tuple(data_inputs, expected_outputs
         """
-        checkpoint_data_container = DataContainer(
-            current_ids=[],
-            data_inputs=[],
-            expected_outputs=None
-        )
+        list_data_container = ListDataContainer.empty()
 
         for current_id, data_input, expected_output in data_container:
-            with open(self.get_checkpoint_file_path(current_id), 'wb') as file:
+            with open(self.get_checkpoint_file_path(current_id), 'rb') as file:
                 (checkpoint_current_id, checkpoint_data_input, checkpoint_expected_output) = \
                     pickle.load(file)
-                checkpoint_data_container.append(
+                list_data_container.append(
                     current_id=checkpoint_current_id,
                     data_input=checkpoint_data_input,
                     expected_output=checkpoint_expected_output
                 )
 
-        return checkpoint_data_container
+        return list_data_container
 
     def save_checkpoint(self, data_container: DataContainer) -> DataContainer:
         """

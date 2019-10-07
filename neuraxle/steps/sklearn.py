@@ -44,12 +44,18 @@ class SKLearnWrapper(BaseStep):
         params: HyperparameterSamples = wrapped_sklearn_predictor.get_params()
         super().__init__(hyperparams=params, hyperparams_space=hyperparams_space)
         self.return_all_sklearn_default_params_on_get = return_all_sklearn_default_params_on_get
+        self.name += "_" + wrapped_sklearn_predictor.__class__.__name__
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
-        self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs, expected_outputs)
 
+        if hasattr(self.wrapped_sklearn_predictor, 'fit_transform'):
+            out = self.wrapped_sklearn_predictor.fit_transform(data_inputs, expected_outputs)
+            return self, out
+
+        self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs, expected_outputs)
         if hasattr(self.wrapped_sklearn_predictor, 'predict'):
-            return self.wrapped_sklearn_predictor.predict(data_inputs)
+            return self, self.wrapped_sklearn_predictor.predict(data_inputs)
+
         return self, self.wrapped_sklearn_predictor.transform(data_inputs)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'SKLearnWrapper':
