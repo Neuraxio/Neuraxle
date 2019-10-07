@@ -11,10 +11,14 @@ def test_fit_for_each_should_fit_all_steps_for_each_data_inputs_expected_outputs
             FitCallbackStep(tape.callback, ["2"]),
         ])
     ])
+    data_inputs = [[0, 1], [1, 2]]
+    expected_outputs = [[2, 3], [4, 5]]
 
-    p = p.fit([[0, 1], [1, 2]])
+    p = p.fit(data_inputs, expected_outputs)
 
+    assert isinstance(p, Pipeline)
     assert tape.get_name_tape() == ["1", "1", "2", "2"]
+    assert tape.data == [([0, 1], [2, 3]), ([1, 2], [4, 5]), ([0, 1], [2, 3]), ([1, 2], [4, 5])]
 
 
 def test_fit_transform_should_fit_transform_all_steps_for_each_data_inputs_expected_outputs():
@@ -26,9 +30,13 @@ def test_fit_transform_should_fit_transform_all_steps_for_each_data_inputs_expec
         ])
     ])
 
-    p, outputs = p.fit_transform([[0, 1], [1, 2]])
+    data_inputs = [[0, 1], [1, 2]]
+    expected_outputs = [[2, 3], [4, 5]]
+
+    p, outputs = p.fit_transform(data_inputs, expected_outputs)
 
     assert tape.get_name_tape() == ["1", "1", "2", "2"]
+    assert tape.data == [([0, 1], [2, 3]), ([1, 2], [4, 5]), ([0, 1], [2, 3]), ([1, 2], [4, 5])]
 
 
 def test_transform_should_transform_all_steps_for_each_data_inputs_expected_outputs():
@@ -39,7 +47,8 @@ def test_transform_should_transform_all_steps_for_each_data_inputs_expected_outp
             TransformCallbackStep(tape.callback, ["2"]),
         ])
     ])
+    data_inputs = [[0, 1], [1, 2]]
 
-    outputs = p.transform([[0, 1], [1, 2]])
+    outputs = p.transform(data_inputs)
 
     assert tape.get_name_tape() == ["1", "1", "2", "2"]
