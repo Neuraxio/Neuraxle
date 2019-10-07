@@ -250,7 +250,7 @@ class Pipeline(BasePipeline):
             expected_outputs=expected_outputs
         )
 
-        new_self, _ = self._fit_transform_core(data_container)
+        new_self, _ = self._fit_core(data_container)
 
         return new_self
 
@@ -293,6 +293,32 @@ class Pipeline(BasePipeline):
 
         return data_container
 
+    def _fit_core(self, data_container) -> ('Pipeline', DataContainer):
+        """
+        After loading the last checkpoint, fit transform each pipeline steps,
+        but only fit the last pipeline step.
+
+        :param data_container: the data container to fit transform on
+        :return: tuple(pipeline, data_container)
+        """
+        steps_left_to_do, data_container = self._load_checkpoint(data_container)
+        index_last_step = len(steps_left_to_do) - 1
+
+        new_steps_as_tuple: NamedTupleList = []
+
+        for index, (step_name, step) in enumerate(steps_left_to_do):
+            if index != index_last_step:
+                step, data_container = step.handle_fit_transform(data_container)
+            else:
+                step, data_container = step.handle_fit(data_container)
+
+            new_steps_as_tuple.append((step_name, step))
+
+        self.steps_as_tuple = self.steps_as_tuple[:len(self.steps_as_tuple) - len(steps_left_to_do)] + \
+                              new_steps_as_tuple
+
+        return self, data_container
+
     def _fit_transform_core(self, data_container) -> ('Pipeline', DataContainer):
         """
         After loading the last checkpoint, fit transform each pipeline steps
@@ -305,7 +331,6 @@ class Pipeline(BasePipeline):
         new_steps_as_tuple: NamedTupleList = []
 
         for step_name, step in steps_left_to_do:
-            step.set_parent(self)
             step, data_container = step.handle_fit_transform(data_container)
             new_steps_as_tuple.append((step_name, step))
 
@@ -324,7 +349,6 @@ class Pipeline(BasePipeline):
         steps_left_to_do, data_container = self._load_checkpoint(data_container)
 
         for step_name, step in steps_left_to_do:
-            step.set_parent(self)
             data_container = step.handle_transform(data_container)
 
         return data_container
