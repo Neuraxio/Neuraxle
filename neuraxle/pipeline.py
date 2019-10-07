@@ -23,11 +23,12 @@ import hashlib
 import os
 from abc import ABC, abstractmethod
 from copy import copy
-from typing import Any, Tuple
+from typing import Any, Tuple, List
 
 from joblib import load, dump
 
-from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, DataContainer
+from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, DataContainer, NonFittableMixin, \
+    Barrier
 from neuraxle.checkpoints import BaseCheckpointStep
 
 DEFAULT_CACHE_FOLDER = 'cache'
@@ -215,7 +216,7 @@ class Pipeline(BasePipeline):
         :param data_inputs: the data input to transform
         :return: transformed data inputs
         """
-        self.setup() # TODO: perhaps, remove this to pass path in context
+        self.setup()  # TODO: perhaps, remove this to pass path in context
 
         current_ids = self.hash(
             current_ids=None,
@@ -235,7 +236,7 @@ class Pipeline(BasePipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        self.setup() # TODO: perhaps, remove this to pass path in context
+        self.setup()  # TODO: perhaps, remove this to pass path in context
 
         current_ids = self.hash(
             current_ids=None,
@@ -259,7 +260,7 @@ class Pipeline(BasePipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        self.setup() # TODO: perhaps, remove this to pass path in context
+        self.setup()  # TODO: perhaps, remove this to pass path in context
 
         current_ids = self.hash(
             current_ids=None,
@@ -486,3 +487,116 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
                 return True
 
         return False
+
+
+class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
+    """
+    Mini Batch Sequential Pipeline class to create a pipeline processing data inputs in batch.
+    """
+
+    def __init__(self, steps: NamedTupleList, batch_size):
+        Pipeline.__init__(self, steps)
+        self.batch_size = batch_size
+
+    def transform(self, data_inputs: Any):
+        """
+        :param data_inputs: the data input to transform
+        :return: transformed data inputs
+        """
+        self.setup()
+
+        current_ids = self._create_current_ids(data_inputs)
+        data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
+        data_container = self.handle_transform(data_container)
+
+        return data_container.data_inputs
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('Pipeline', Any):
+        """
+        :param data_inputs: the data input to fit on
+        :param expected_outputs: the expected data output to fit on
+        :return: the pipeline itself
+        """
+        self.setup()
+
+        current_ids = self._create_current_ids(data_inputs)
+        data_container = DataContainer(
+            current_ids=current_ids,
+            data_inputs=data_inputs,
+            expected_outputs=expected_outputs
+        )
+        new_self, data_container = self.handle_fit_transform(data_container)
+
+        return new_self, data_container.data_inputs
+
+    def _create_current_ids(self, data_inputs):
+        current_ids = self.hash(
+            current_ids=None,
+            hyperparameters=self.hyperparams,
+            data_inputs=data_inputs
+        )
+        return current_ids
+
+    def handle_transform(self, data_container: DataContainer) -> DataContainer:
+        """
+        Transform all sub pipelines splitted by the Barrier steps.
+
+        :param data_container: data container to transform.
+        :return: data container
+        """
+        sub_pipelines = self._create_sub_pipelines()
+
+        for sub_pipeline in sub_pipelines:
+            barrier = sub_pipeline[-1]
+            data_container = barrier.join_transform(
+                step=sub_pipeline,
+                data_container=data_container
+            )
+            current_ids = self.hash(data_container.current_ids, self.hyperparams)
+            data_container.set_current_ids(current_ids)
+
+        return data_container
+
+    def handle_fit_transform(self, data_container: DataContainer) -> \
+            Tuple['MiniBatchSequentialPipeline', DataContainer]:
+        """
+        Transform all sub pipelines splitted by the Barrier steps.
+
+        :param data_container: data container to transform.
+        :return: data container
+        """
+        sub_pipelines = self._create_sub_pipelines()
+        index_start = 0
+
+        for sub_pipeline in sub_pipelines:
+            barrier = sub_pipeline[-1]
+            sub_pipeline, data_container = barrier.join_fit_transform(
+                step=sub_pipeline,
+                data_container=data_container
+            )
+            current_ids = self.hash(data_container.current_ids, self.hyperparams)
+            data_container.set_current_ids(current_ids)
+
+            new_self = self[:index_start] + sub_pipeline
+            if index_start + len(sub_pipeline) < len(self):
+                new_self += self[index_start + len(sub_pipeline):]
+
+            self.steps_as_tuple = new_self.steps_as_tuple
+            index_start += len(sub_pipeline)
+
+        return self, data_container
+
+    def _create_sub_pipelines(self) -> List['MiniBatchSequentialPipeline']:
+        """
+        Create sub pipelines by splitting the steps by the join type name.
+
+        :return: list of sub pipelines
+        """
+        sub_pipelines: List[MiniBatchSequentialPipeline] = self.split(Barrier)
+        for sub_pipeline in sub_pipelines:
+            if not sub_pipeline.ends_with(Barrier):
+                raise Exception(
+                    'At least one Barrier step needs to be at the end of a streaming pipeline.'
+                )
+
+        return sub_pipelines

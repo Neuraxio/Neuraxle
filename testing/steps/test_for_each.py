@@ -23,20 +23,21 @@ def test_fit_for_each_should_fit_all_steps_for_each_data_inputs_expected_outputs
 
 def test_fit_transform_should_fit_transform_all_steps_for_each_data_inputs_expected_outputs():
     tape = TapeCallbackFunction()
+    tape_fit = TapeCallbackFunction()
     p = Pipeline([
         ForEachDataInputs([
-            FitTransformCallbackStep(tape.callback, ["1"]),
-            FitTransformCallbackStep(tape.callback, ["2"]),
+            FitTransformCallbackStep(tape.callback, tape_fit, ["1"]),
+            FitTransformCallbackStep(tape.callback, tape_fit, ["2"]),
         ])
     ])
-
     data_inputs = [[0, 1], [1, 2]]
     expected_outputs = [[2, 3], [4, 5]]
 
     p, outputs = p.fit_transform(data_inputs, expected_outputs)
 
     assert tape.get_name_tape() == ["1", "1", "2", "2"]
-    assert tape.data == [([0, 1], [2, 3]), ([1, 2], [4, 5]), ([0, 1], [2, 3]), ([1, 2], [4, 5])]
+    assert tape_fit.get_name_tape() == ["1", "1", "2", "2"]
+    assert tape_fit.data == [([0, 1], [2, 3]), ([1, 2], [4, 5]), ([0, 1], [2, 3]), ([1, 2], [4, 5])]
 
 
 def test_transform_should_transform_all_steps_for_each_data_inputs_expected_outputs():
