@@ -370,7 +370,7 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
     Fits and transform steps after latest checkpoint
     """
 
-    def __init__(self, steps: NamedTupleList, pipeline_saver: PipelineSaver = None):
+    def __init__(self, steps: NamedTupleList):
         Pipeline.__init__(self, steps=steps)
 
     def _load_checkpoint(self, data_container: DataContainer) -> Tuple[NamedTupleList, DataContainer]:
