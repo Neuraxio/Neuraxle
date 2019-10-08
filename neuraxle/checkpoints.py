@@ -41,6 +41,11 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
     def setup(self, step_path: str, setup_arguments: dict):
         self.set_checkpoint_path(step_path)
 
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        data_container: DataContainer = self.save_checkpoint(data_container)
+        self.save_checkpoint(data_container)
+        return self, data_container
+
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         data_container: DataContainer = self.save_checkpoint(data_container)
         self.save_checkpoint(data_container)

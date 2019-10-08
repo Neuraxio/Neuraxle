@@ -127,7 +127,7 @@ class Pipeline(BasePipeline):
 
         context = ExecutionContext.from_root(self)
 
-        new_self, _ = self._fit_core(data_container, context)
+        new_self, data_container = self._fit_core(data_container, context)
 
         return new_self
 
@@ -141,6 +141,22 @@ class Pipeline(BasePipeline):
         for step_name, step in list(reversed(self.items())):
             processed_outputs = step.inverse_transform(processed_outputs)
         return processed_outputs
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
+        """
+        Fit transform then rehash ids with hyperparams and transformed data inputs
+
+        :param data_container: data container to fit transform
+        :param context: execution context
+        :return: tuple(fitted pipeline, transformed data container)
+        """
+        new_self, data_container = self._fit_core(data_container, context)
+
+        ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        data_container.set_current_ids(ids)
+
+        return new_self, data_container
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
     'BaseStep', DataContainer):
@@ -275,7 +291,11 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
         new_starting_step_index, starting_step_data_container = \
             self._get_starting_step_info(data_container)
 
-        self._load_pipeline(context)
+        loaded_pipeline = self.load(context)
+        if not self.are_steps_before_index_the_same(loaded_pipeline, new_starting_step_index):
+            return self.steps_as_tuple, data_container
+
+        self._load_pipeline(loaded_pipeline)
 
         step = self[new_starting_step_index]
         if isinstance(step, BaseCheckpointStep):
@@ -283,15 +303,7 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
 
         return self[new_starting_step_index:], starting_step_data_container
 
-    def _load_pipeline(self, context: ExecutionContext):
-        """
-        Load steps as tuple, hyperparams, and hyperparams space by loading the pipeline with BaseStep.load(context).
-
-        :param context: context to load from.
-        :return:
-        """
-        loaded_self = self.load(context)
-
+    def _load_pipeline(self, loaded_self):
         self.steps_as_tuple = loaded_self.steps_as_tuple
         self.hyperparams = loaded_self.hyperparams
         self.hyperparams_space = loaded_self.hyperparams_space
