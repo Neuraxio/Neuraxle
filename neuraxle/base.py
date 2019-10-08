@@ -33,6 +33,7 @@ from conv import convolved_1d
 from joblib import dump, load
 
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
+from neuraxle.union import Identity
 
 DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
 
@@ -148,7 +149,7 @@ class BaseSaver(ABC):
     @abstractmethod
     def save_step(self, step: 'BaseStep', context: 'ExecutionContext'):
         """
-        Save step with context.
+        Save step with execution context.
 
         :param step: step to save
         :param context: execution context
@@ -161,13 +162,13 @@ class BaseSaver(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def load_step(self, step: 'BaseStep', context: 'ExecutionContext'):
+    def load_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
         """
-        Load step with context.
+        Load step with execution context.
 
         :param step: step to load
         :param context: execution context to load from
-        :return:
+        :return: loaded base step
         """
         raise NotImplementedError()
 
@@ -194,7 +195,7 @@ class JoblibStepSaver(BaseSaver):
 
         dump(step, self._create_step_path(context, step))
 
-    def load_step(self, step: 'BaseStep', context: 'ExecutionContext'):
+    def load_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
         """
         Load stripped step.
 
@@ -202,15 +203,7 @@ class JoblibStepSaver(BaseSaver):
         :param context: execution context to load from
         :return:
         """
-        if not os.path.exists(context.get_path()):
-            return step
-
-        loaded_step = load(step, self._create_step_path(context, step))
-
-        # Override self pointer
-        # https://stackoverflow.com/questions/7940470/is-it-possible-to-overwrite-self-to-point-to-another-object-inside-self-method
-        step.__class__ = loaded_step.__class__
-        step.__dict__ = loaded_step.__dict__
+        return load(self._create_step_path(context, step))
 
     def _create_step_path(self, context, step):
         """
@@ -236,6 +229,10 @@ class ExecutionContext:
         self.stripped_saver = stripped_saver
         self.root: str = root
         self.parents: List[BaseStep] = []
+
+    @staticmethod
+    def from_root(root: 'BaseStep') -> 'ExecutionContext':
+        return ExecutionContext().push(root)
 
     def save_all_unsaved(self):
         """
@@ -496,7 +493,6 @@ class BaseStep(ABC):
 
         :return: bool
         """
-        # TODO: doc
         return self.is_invalidated
 
     def save(self, context: ExecutionContext):
@@ -522,7 +518,7 @@ class BaseStep(ABC):
 
             del stripped_step
 
-    def load(self, context: ExecutionContext):
+    def load(self, context: ExecutionContext) -> 'BaseStep':
         """
         Load step using the execution context to create the directory of the saved step.
 
@@ -532,13 +528,16 @@ class BaseStep(ABC):
         # A final "visitor" saver might reload anything that wasn't saved customly after stripping the rest.
         savers_with_provided_default_stripped_saver = [context.stripped_saver] + self.savers
 
+        loaded_self = copy(self)
         for saver in savers_with_provided_default_stripped_saver:
             # Each saver unstrips the step a bit more if needed
-            if saver.can_load(self, context):
-                saver.load_step(self, context)
+            if saver.can_load(loaded_self, context):
+                loaded_self = saver.load_step(self, context)
             else:
                 warnings.warn('Cannot Load Step {0} With Step Saver {1}.'.format(self.name, saver.__class__.__name__))
                 break
+
+        return loaded_self
 
     def meta_fit(self, X_train, y_train, metastep: 'MetaStepMixin'):
         """
@@ -855,35 +854,62 @@ class NonTransformableMixin:
         """
         return processed_outputs
 
-
 class TruncableJoblibStepSaver(JoblibStepSaver):
+    """
+    Step saver for a TruncableSteps.
+    TruncableJoblibStepSaver saves, and loads all of the sub steps using their savers.
+    """
     def __init__(self):
         super().__init__()
 
     def save_step(self, step: 'TruncableSteps', context: ExecutionContext):
-        context.mkdir()
+        """
+        Save truncable steps.
 
+        :param step: step to save
+        :param context: execution context
+        :return:
+        """
+        # First, save all of the sub steps with the right execution context.
         for _, sub_step in step:
             if sub_step.should_save():
                 subcontext = copy(context).push(sub_step)
                 sub_step.save(subcontext)
 
+        # Second, set the sub steps savers named tuple list so that they can be loaded
+        # from their name, and savers during load.
         step.sub_steps_savers = [(n, s.savers) for n, s in step.steps_as_tuple]
+
+        # Third, strip the sub steps from truncable steps before saving
         del step.steps
         del step.steps_as_tuple
 
-    def load_step(self, step: 'TruncableSteps', context: ExecutionContext):
+        # Fourth, save using the inherited joblibstep saver step.
+        super().save_step(step, context)
 
-        # TODO: load step.steps and step.steps_as_tuple JUST FROM THEIR CLASS TYPE.
+    def load_step(self, step: 'TruncableSteps', context: ExecutionContext) -> 'TruncableSteps':
+        """
+        Load truncable steps.
 
-        for step_name, step_class in step.classes:
-            step.steps.append(step_class)
-            step.steps_as_tuple.append((step_name, step_class))
+        :param step: step to load
+        :param context: execution context
+        :return:
+        """
+        # First, load truncable steps with stripped steps, and sub steps savers.
+        step = super().load_step(step, context)
 
-        for _, sub_step in step.items():
+        for step_name, savers in step.sub_steps_savers:
+
+            # Second, load each sub step with their savers
+            sub_step = Identity(name=step_name, savers=savers)
             subcontext = copy(context).push(sub_step)
-            sub_step.load(subcontext)
 
+            sub_step = sub_step.load(subcontext)
+            step.steps_as_tuple.append((step_name, sub_step))
+
+        step._refresh_steps()
+
+        return step
 
 class TruncableSteps(BaseStep, ABC):
 
@@ -896,6 +922,7 @@ class TruncableSteps(BaseStep, ABC):
         super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         self._set_steps(steps_as_tuple)
 
+        # TruncableJoblibStepSaver needs to be called first to load all the sub steps properly.
         self.savers = [TruncableJoblibStepSaver()] + self.savers
 
     def are_steps_before_index_the_same(self, other: 'TruncableSteps', index: int):
@@ -1303,18 +1330,21 @@ class DataCheckpoint(Checkpoint, ABC):
 
 # TODO: move classes below elsewhere.
 
-class JoblibStepCheckpoint(StepCheckpoint):
-    def save_previous(self, context: ExecutionContext):
-        # TODO: CTRL+SHIFT+F for "stripped_saver: BaseSaver"
-        context.save_all_unsaved()
+# TODO: talk to guillaume, and make sure he pushed code that compiles
 
-    def load_previous(self, context: ExecutionContext):
-        context.load_all_unloaded()  # Should we do this?
+# class JoblibStepCheckpoint(StepCheckpoint):
+#     def save_previous(self, context: ExecutionContext):
+#         # TODO: CTRL+SHIFT+F for "stripped_saver: BaseSaver"
+#         context.save_all_unsaved()
+#
+#     def load_previous(self, context: ExecutionContext):
+#         context.load_all_unloaded()  # Should we do this?
 
 
-class PickleDataCheckpoint(DataCheckpoint):
-    # TODO: ...
-    pass
+# TODO: talk to guillaume about this
+# class PickleDataCheckpoint(DataCheckpoint):
+#     # TODO: ...
+#     pass
 
 
 """
