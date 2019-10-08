@@ -25,7 +25,8 @@ import numpy as np
 
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.util import TapeCallbackFunction, TransformCallbackStep, StepClonerForEachDataInput
-from neuraxle.union import Identity, AddFeatures
+from neuraxle.union import AddFeatures
+from neuraxle.base import Identity
 
 
 def test_tape_callback():

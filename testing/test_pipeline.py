@@ -22,14 +22,14 @@ Tests for Pipelines
 import numpy as np
 import pytest
 
-from neuraxle.base import BaseStep
+from neuraxle.base import BaseStep, Identity
 from neuraxle.hyperparams.distributions import RandInt, LogUniform
 from neuraxle.hyperparams.space import nested_dict_to_flat, HyperparameterSpace
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
-from neuraxle.union import Identity, AddFeatures, ModelStacking
+from neuraxle.union import AddFeatures, ModelStacking
 
 AN_INPUT = "I am an input"
 AN_EXPECTED_OUTPUT = "I am an expected output"

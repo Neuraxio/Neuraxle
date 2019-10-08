@@ -22,7 +22,7 @@ This module contains steps to perform various feature unions and model stacking,
 
 from joblib import Parallel, delayed
 
-from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin, NamedTupleList, NonTransformableMixin
+from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin, NamedTupleList, Identity
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
@@ -96,17 +96,6 @@ class FeatureUnion(TruncableSteps):
 
         results = self.joiner.transform(results)
         return results
-
-
-class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
-    """A pipeline step that has no effect at all but to return the same data without changes.
-
-    This can be useful to concatenate new features to existing features, such as what AddFeatures do.
-
-    Identity inherits from ``NonTransformableMixin`` and from ``NonFittableMixin`` which makes it a class that has no
-    effect in the pipeline: it doesn't require fitting, and at transform-time, it returns the same data it received.
-    """
-    pass  # Multi-class inheritance does the job here! See inside those other classes for more info.
 
 
 class AddFeatures(FeatureUnion):

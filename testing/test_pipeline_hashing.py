@@ -28,7 +28,7 @@ from neuraxle.base import NamedTupleList
 from neuraxle.checkpoints import BaseCheckpointStep
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline, ResumablePipeline
-from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction, NullPipelineSaver
+from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
 from testing.test_resumable_pipeline import SomeCheckpointStep
 
 
@@ -59,6 +59,7 @@ def mock_hasher(current_ids, data_inputs, hyperparameters):
 class ResumablePipelineWithMockHasher(ResumablePipeline):
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
         return mock_hasher(current_ids, data_inputs, hyperparameters)
+
 
 class TransformCallbackStepWithMockHasher(TransformCallbackStep):
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
@@ -234,7 +235,7 @@ def test_transform_should_rehash_hyperparameters_for_each_steps(test_case: Resum
 
     mocked_checkpoint = find_checkpoint(pipeline.steps_as_tuple)
     actual_rehashed_ids = mocked_checkpoint.saved_data_container.current_ids
-    assert np.array_equal(actual_rehashed_ids,  test_case.expected_rehashed_ids)
+    assert np.array_equal(actual_rehashed_ids, test_case.expected_rehashed_ids)
 
 
 @pytest.mark.parametrize("test_case", create_test_cases())

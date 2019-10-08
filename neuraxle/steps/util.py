@@ -28,13 +28,13 @@ import shutil
 from abc import ABC, abstractmethod
 from typing import Iterable
 
-from neuraxle.pipeline import DEFAULT_CACHE_FOLDER, Pipeline
+from neuraxle.pipeline import DEFAULT_CACHE_FOLDER
 
 VALUE_CACHING = 'value_caching'
 from typing import List, Any
 
-from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, MetaStepMixin, DataContainer
-from neuraxle.pipeline import PipelineSaver
+from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, MetaStepMixin, DataContainer, \
+    ExecutionContext
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
 
@@ -276,17 +276,6 @@ class DataShuffler:
     pass  # TODO.
 
 
-class NullPipelineSaver(PipelineSaver):
-    def can_load(self, pipeline: 'Pipeline', data_container: DataContainer) -> bool:
-        return True
-
-    def save(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
-        return pipeline
-
-    def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
-        return pipeline
-
-
 class BaseValueHasher(ABC):
     @abstractmethod
     def hash(self, data_input):
@@ -335,11 +324,12 @@ class ValueCachingWrapper(MetaStepMixin, BaseStep):
         """
         self.create_checkpoint_path(step_path)
 
-    def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit transform data container.
 
         :param data_container: the data container to transform
+        :param context: execution context
         :type data_container: DataContainer
 
         :return: tuple(fitted pipeline, data_container)
@@ -355,11 +345,12 @@ class ValueCachingWrapper(MetaStepMixin, BaseStep):
 
         return self, data_container
 
-    def handle_transform(self, data_container: DataContainer) -> DataContainer:
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Transform data container.
 
         :param data_container: the data container to transform
+        :param context: execution context
         :type data_container: DataContainer
 
         :return: transformed data container
@@ -501,11 +492,12 @@ class OutputTransformerMixin:
     Base output transformer step that can modify data inputs, and expected_outputs at the same time.
     """
 
-    def handle_transform(self, data_container: DataContainer) -> DataContainer:
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Handle transform by updating the data inputs, and expected outputs inside the data container.
 
-        :param data_container:
+        :param data_container: data container
+        :param context: execution context
         :return:
         """
         di_eo = (data_container.data_inputs, data_container.expected_outputs)
@@ -519,7 +511,7 @@ class OutputTransformerMixin:
 
         return data_container
 
-    def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Handle transform by fitting the step,
         and updating the data inputs, and expected outputs inside the data container.

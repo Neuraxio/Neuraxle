@@ -33,7 +33,6 @@ from conv import convolved_1d
 from joblib import dump, load
 
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
-from neuraxle.union import Identity
 
 DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
 
@@ -418,11 +417,12 @@ class BaseStep(ABC):
     def get_hyperparams_space(self) -> HyperparameterSpace:
         return self.hyperparams_space
 
-    def handle_fit(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Perform any needed side effects on the step or the data container before fitting the step.
 
         :param data_container: the data container to transform
+        :param context: execution context
         :return: tuple(fitted pipeline, data_container)
         """
         new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
@@ -432,14 +432,15 @@ class BaseStep(ABC):
 
         self.is_invalidated = True
 
-        return new_self
+        return new_self, data_container
 
-    def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Update the data inputs inside DataContainer after fit transform,
         and update its current_ids.
 
         :param data_container: the data container to transform
+        :param context: execution context
         :return: tuple(fitted pipeline, data_container)
         """
         self.is_invalidated = True
@@ -452,11 +453,12 @@ class BaseStep(ABC):
 
         return new_self, data_container
 
-    def handle_transform(self, data_container: DataContainer) -> DataContainer:
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Update the data inputs inside DataContainer after transform.
 
         :param data_container: the data container to transform
+        :param context: execution context
         :return: transformed data container
         """
         out = self.transform(data_container.data_inputs)
@@ -817,8 +819,8 @@ class NonFittableMixin:
     Note: fit methods are not implemented
     """
 
-    def handle_fit_transform(self, data_container: DataContainer):
-        return self, self.handle_transform(data_container)
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+        return self, self.handle_transform(data_container, context)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
         """
@@ -1391,11 +1393,11 @@ class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
     """
 
     @abstractmethod
-    def join_transform(self, step: BaseStep, data_container: DataContainer) -> DataContainer:
+    def join_transform(self, step: BaseStep, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         raise NotImplementedError()
 
     @abstractmethod
-    def join_fit_transform(self, step: BaseStep, data_container: DataContainer) -> Tuple['Any', Iterable]:
+    def join_fit_transform(self, step: BaseStep, data_container: DataContainer, context: ExecutionContext) -> Tuple['Any', Iterable]:
         raise NotImplementedError()
 
 
@@ -1408,12 +1410,13 @@ class Joiner(Barrier):
         super().__init__()
         self.batch_size = batch_size
 
-    def join_transform(self, step: BaseStep, data_container: DataContainer) -> Iterable:
+    def join_transform(self, step: BaseStep, data_container: DataContainer, context: ExecutionContext) -> Iterable:
         """
         Concatenate the pipeline transform output of each batch of self.batch_size together.
 
         :param step: pipeline to transform on
         :param data_container: data container to transform
+        :param context: execution context
         :return:
         """
         data_container_batches = data_container.convolved_1d(
@@ -1424,18 +1427,19 @@ class Joiner(Barrier):
         output_data_container = ListDataContainer.empty()
         for data_container_batch in data_container_batches:
             output_data_container.concat(
-                step._transform_core(data_container_batch)
+                step._transform_core(data_container_batch, context)
             )
 
         return output_data_container
 
-    def join_fit_transform(self, step: BaseStep, data_container: DataContainer) -> \
+    def join_fit_transform(self, step: BaseStep, data_container: DataContainer, context: ExecutionContext) -> \
             Tuple['Any', Iterable]:
         """
         Concatenate the pipeline fit transform output of each batch of self.batch_size together.
 
         :param step: pipeline to fit transform on
         :param data_container: data container to fit transform on
+        :param context: execution context
         :return: fitted self, transformed data inputs
         """
         data_container_batches = data_container.convolved_1d(
@@ -1445,9 +1449,20 @@ class Joiner(Barrier):
 
         output_data_container = ListDataContainer.empty()
         for data_container_batch in data_container_batches:
-            step, data_container_batch = step._fit_transform_core(data_container_batch)
+            step, data_container_batch = step._fit_transform_core(data_container_batch, context)
             output_data_container.concat(
                 data_container_batch
             )
 
         return step, output_data_container
+
+
+class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
+    """A pipeline step that has no effect at all but to return the same data without changes.
+
+    This can be useful to concatenate new features to existing features, such as what AddFeatures do.
+
+    Identity inherits from ``NonTransformableMixin`` and from ``NonFittableMixin`` which makes it a class that has no
+    effect in the pipeline: it doesn't require fitting, and at transform-time, it returns the same data it received.
+    """
+    pass  # Multi-class inheritance does the job here! See inside those other classes for more info.

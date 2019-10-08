@@ -1,6 +1,6 @@
 from typing import Tuple, Any
 
-from neuraxle.base import DataContainer, BaseStep, NonFittableMixin
+from neuraxle.base import DataContainer, BaseStep, NonFittableMixin, ExecutionContext
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.util import OutputTransformerMixin
@@ -39,7 +39,8 @@ def test_output_transformer_should_zip_data_input_and_expected_output_in_the_tra
             current_ids=[0, 1, 2],
             data_inputs=[1, 2, 3],
             expected_outputs=[2, 3, 4]
-        )
+        ),
+        ExecutionContext.from_root(pipeline)
     )
 
     assert new_data_container.data_inputs == [2, 4, 6]
