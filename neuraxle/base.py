@@ -295,7 +295,7 @@ class ExecutionContext:
 
         :return:
         """
-        os.mkdir(self.get_path())
+        os.makedirs(self.get_path())
 
     def get_path(self):
         """
@@ -1105,7 +1105,7 @@ class TruncableSteps(BaseStep, ABC):
         return self
 
     def should_save(self):
-        if self.should_save():
+        if super().should_save():
             return True
         for _, step in self.items():
             if step.should_save():
