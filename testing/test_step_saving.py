@@ -29,7 +29,7 @@ def create_some_step3_path(tmpdir, create_dir=False):
 def create_some_step2_path(tmpdir, create_dir=False):
     p = os.path.join(tmpdir, ROOT, PIPELINE_2, SOME_STEP_2, '{0}.joblib'.format(SOME_STEP_2))
     if create_dir:
-       os.makedirs(os.path.join(tmpdir, ROOT, PIPELINE_2, SOME_STEP_2))
+        os.makedirs(os.path.join(tmpdir, ROOT, PIPELINE_2, SOME_STEP_2))
     return p
 
 
@@ -87,8 +87,94 @@ def test_resumable_pipeline_fit_transform_should_save_all_pipeline_steps(tmpdir:
     assert os.path.exists(create_some_step3_path(tmpdir))
 
 
+def test_resumable_pipeline_transform_should_save_all_pipeline_steps(tmpdir: LocalPath):
+    p = ResumablePipeline([
+        (SOME_STEP_1, MultiplyBy(multiply_by=2)),
+        (PIPELINE_2, ResumablePipeline([
+            (SOME_STEP_2, MultiplyBy(multiply_by=4)),
+            (CHECKPOINT, PickleCheckpointStep(cache_folder=tmpdir)),
+            (SOME_STEP_3, MultiplyBy(multiply_by=6)),
+        ]))
+    ], cache_folder=tmpdir)
+    p.name = ROOT
+
+    outputs = p.transform(
+        np.array(range(10))
+    )
+
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+    assert os.path.exists(create_root_path(tmpdir))
+    assert os.path.exists(create_some_step1_path(tmpdir))
+    assert os.path.exists(create_pipeline2_path(tmpdir))
+    assert os.path.exists(create_some_step2_path(tmpdir))
+    assert os.path.exists(create_some_step3_path(tmpdir))
+
+
+def test_resumable_pipeline_fit_should_save_all_pipeline_steps(tmpdir: LocalPath):
+    p = ResumablePipeline([
+        (SOME_STEP_1, MultiplyBy(multiply_by=2)),
+        (PIPELINE_2, ResumablePipeline([
+            (SOME_STEP_2, MultiplyBy(multiply_by=4)),
+            (CHECKPOINT, PickleCheckpointStep(cache_folder=tmpdir)),
+            (SOME_STEP_3, MultiplyBy(multiply_by=6)),
+        ]))
+    ], cache_folder=tmpdir)
+    p.name = ROOT
+
+    p = p.fit(
+        np.array(range(10)),
+        np.array(range(10))
+    )
+
+    assert os.path.exists(create_root_path(tmpdir))
+    assert os.path.exists(create_some_step1_path(tmpdir))
+    assert os.path.exists(create_pipeline2_path(tmpdir))
+    assert os.path.exists(create_some_step2_path(tmpdir))
+    assert os.path.exists(create_some_step3_path(tmpdir))
+
+
 def test_resumable_pipeline_fit_transform_should_load_all_pipeline_steps(tmpdir: LocalPath):
     # Given
+    p = given_saved_pipeline(tmpdir)
+
+    # When
+    p, outputs = p.fit_transform(
+        np.array(range(10)),
+        np.array(range(10))
+    )
+
+    # Then
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+
+
+def test_resumable_pipeline_transform_should_load_all_pipeline_steps(tmpdir: LocalPath):
+    # Given
+    p = given_saved_pipeline(tmpdir)
+
+    # When
+    outputs = p.transform(
+        np.array(range(10))
+    )
+
+    # Then
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+
+
+def test_resumable_pipeline_fit_should_load_all_pipeline_steps(tmpdir: LocalPath):
+    # Given
+    p = given_saved_pipeline(tmpdir)
+
+    # When
+    p = p.fit(
+        np.array(range(10)),
+        np.array(range(10))
+    )
+
+    # Then
+    # TODO: assert something here
+
+
+def given_saved_pipeline(tmpdir):
     root = ResumablePipeline([])
     root.sub_steps_savers = [
         (SOME_STEP_1, []),
@@ -118,11 +204,4 @@ def test_resumable_pipeline_fit_transform_should_load_all_pipeline_steps(tmpdir:
     ], cache_folder=tmpdir)
     p.name = ROOT
 
-    # When
-    p, outputs = p.fit_transform(
-        np.array(range(10)),
-        np.array(range(10))
-    )
-
-    # Then
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+    return p
