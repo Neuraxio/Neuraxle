@@ -52,8 +52,9 @@ class Pipeline(BasePipeline):
     Fits and transform steps
     """
 
-    def __init__(self, steps: NamedTupleList):
+    def __init__(self, steps: NamedTupleList, cache_folder=DEFAULT_CACHE_FOLDER):
         BasePipeline.__init__(self, steps=steps)
+        self.cache_folder = cache_folder
 
     def transform(self, data_inputs: Any):
         """
@@ -71,7 +72,7 @@ class Pipeline(BasePipeline):
         )
         data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
 
-        context = ExecutionContext.from_root(self)
+        context = ExecutionContext.from_root(self, self.cache_folder)
 
         data_container = self._transform_core(data_container, context)
 
@@ -98,7 +99,7 @@ class Pipeline(BasePipeline):
             expected_outputs=expected_outputs
         )
 
-        context = ExecutionContext.from_root(self)
+        context = ExecutionContext.from_root(self, self.cache_folder)
 
         new_self, data_container = self._fit_transform_core(data_container, context)
 
@@ -125,7 +126,7 @@ class Pipeline(BasePipeline):
             expected_outputs=expected_outputs
         )
 
-        context = ExecutionContext.from_root(self)
+        context = ExecutionContext.from_root(self, self.cache_folder)
 
         new_self, data_container = self._fit_core(data_container, context)
 
@@ -270,10 +271,6 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
     """
     Fits and transform steps after latest checkpoint
     """
-
-    def __init__(self, steps: NamedTupleList):
-        Pipeline.__init__(self, steps=steps)
-
     def _load_checkpoint(
             self,
             data_container: DataContainer,
@@ -366,7 +363,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
 
         current_ids = self._create_current_ids(data_inputs)
         data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
-        context = ExecutionContext.from_root(self)
+        context = ExecutionContext.from_root(self, self.cache_folder)
         data_container = self.handle_transform(data_container, context)
 
         return data_container.data_inputs
@@ -385,7 +382,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         )
-        context = ExecutionContext.from_root(self)
+        context = ExecutionContext.from_root(self, self.cache_folder)
         new_self, data_container = self.handle_fit_transform(data_container, context)
 
         return new_self, data_container.data_inputs

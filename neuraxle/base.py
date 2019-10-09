@@ -146,7 +146,7 @@ class BaseSaver(ABC):
     """
 
     @abstractmethod
-    def save_step(self, step: 'BaseStep', context: 'ExecutionContext'):
+    def save_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
         """
         Save step with execution context.
 
@@ -179,9 +179,11 @@ class JoblibStepSaver(BaseSaver):
     """
 
     def can_load(self, step: 'BaseStep', context: 'ExecutionContext'):
-        return os.path.exists(self._create_step_path(context, step))
+        return os.path.exists(
+            os.path.join(context.get_path(), '{0}.joblib'.format(step.name))
+        )
 
-    def save_step(self, step: 'BaseStep', context: 'ExecutionContext'):
+    def save_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
         """
         Saved step stripped out of things that would make it unserializable.
 
@@ -192,7 +194,10 @@ class JoblibStepSaver(BaseSaver):
         if not os.path.exists(context.get_path()):
             context.mkdir()
 
-        dump(step, self._create_step_path(context, step))
+        path = os.path.join(context.get_path(), '{0}.joblib'.format(step.name))
+        dump(step, path)
+
+        return step
 
     def load_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
         """
@@ -202,17 +207,7 @@ class JoblibStepSaver(BaseSaver):
         :param context: execution context to load from
         :return:
         """
-        return load(self._create_step_path(context, step))
-
-    def _create_step_path(self, context, step):
-        """
-        Create step path with context.
-
-        :param context: context for step path to create
-        :param step: step
-        :return:
-        """
-        return os.path.join(context.get_path(), step.name)
+        return load(context.get_path())
 
 
 class ExecutionContext:
@@ -221,17 +216,24 @@ class ExecutionContext:
     First item in execution context parents is root, second is nested, and so on. This is like a stack.
     """
 
-    def __init__(self, root: str = DEFAULT_CACHE_FOLDER, stripped_saver: BaseSaver = None):
+    def __init__(
+        self,
+        root: str = DEFAULT_CACHE_FOLDER,
+        stripped_saver: BaseSaver = None,
+        parents=None
+    ):
         if stripped_saver is None:
             stripped_saver: BaseSaver = JoblibStepSaver()
 
         self.stripped_saver = stripped_saver
         self.root: str = root
-        self.parents: List[BaseStep] = []
+        if parents is None:
+            parents = []
+        self.parents: List[BaseStep] = parents
 
     @staticmethod
-    def from_root(root: 'BaseStep') -> 'ExecutionContext':
-        return ExecutionContext().push(root)
+    def from_root(root_step: 'BaseStep', root_path) -> 'ExecutionContext':
+        return ExecutionContext(root=root_path, parents=[root_step])
 
     def save_all_unsaved(self):
         """
@@ -250,7 +252,9 @@ class ExecutionContext:
 
         :return:
         """
-        return self.parents[-1].should_save()
+        if len(self.parents) > 0:
+            return self.parents[-1].should_save()
+        return False
 
     def pop_item(self) -> 'BaseStep':
         """
@@ -277,9 +281,10 @@ class ExecutionContext:
         :param step: step to add to the execution context
         :return: self
         """
-        new_self = copy(self)
-        new_self.parents.append(step)
-        return new_self
+        return ExecutionContext(
+            root=self.root,
+            parents=self.parents + [step]
+        )
 
     def peek(self):
         """
@@ -295,7 +300,9 @@ class ExecutionContext:
 
         :return:
         """
-        os.makedirs(self.get_path())
+        path = self.get_path()
+        if not os.path.exists(path):
+            os.makedirs(path)
 
     def get_path(self):
         """
@@ -434,7 +441,8 @@ class BaseStep(ABC):
 
         return new_self, data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
         """
         Update the data inputs inside DataContainer after fit transform,
         and update its current_ids.
@@ -518,7 +526,9 @@ class BaseStep(ABC):
                 # Each saver strips the step a bit more if needs be.
                 stripped_step = saver.save_step(stripped_step, context)
 
-            del stripped_step
+            return stripped_step
+
+        return self
 
     def load(self, context: ExecutionContext) -> 'BaseStep':
         """
@@ -856,11 +866,13 @@ class NonTransformableMixin:
         """
         return processed_outputs
 
+
 class TruncableJoblibStepSaver(JoblibStepSaver):
     """
     Step saver for a TruncableSteps.
     TruncableJoblibStepSaver saves, and loads all of the sub steps using their savers.
     """
+
     def __init__(self):
         super().__init__()
 
@@ -875,8 +887,8 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         # First, save all of the sub steps with the right execution context.
         for _, sub_step in step:
             if sub_step.should_save():
-                subcontext = copy(context).push(sub_step)
-                sub_step.save(subcontext)
+                sub_context = context.push(sub_step)
+                sub_step.save(sub_context)
 
         # Second, set the sub steps savers named tuple list so that they can be loaded
         # from their name, and savers during load.
@@ -887,7 +899,7 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         del step.steps_as_tuple
 
         # Fourth, save using the inherited joblibstep saver step.
-        super().save_step(step, context)
+        return super().save_step(step, context)
 
     def load_step(self, step: 'TruncableSteps', context: ExecutionContext) -> 'TruncableSteps':
         """
@@ -901,7 +913,6 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         step = super().load_step(step, context)
 
         for step_name, savers in step.sub_steps_savers:
-
             # Second, load each sub step with their savers
             sub_step = Identity(name=step_name, savers=savers)
             subcontext = copy(context).push(sub_step)
@@ -912,6 +923,7 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         step._refresh_steps()
 
         return step
+
 
 class TruncableSteps(BaseStep, ABC):
 
@@ -1046,6 +1058,8 @@ class TruncableSteps(BaseStep, ABC):
         """
         self.is_invalidated = True
         self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
+        for name, step in self.items():
+            step.name = name
 
     def get_hyperparams(self) -> HyperparameterSamples:
         hyperparams = dict()
@@ -1397,7 +1411,8 @@ class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def join_fit_transform(self, step: BaseStep, data_container: DataContainer, context: ExecutionContext) -> Tuple['Any', Iterable]:
+    def join_fit_transform(self, step: BaseStep, data_container: DataContainer, context: ExecutionContext) -> Tuple[
+        'Any', Iterable]:
         raise NotImplementedError()
 
 
