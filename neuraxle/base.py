@@ -207,7 +207,7 @@ class JoblibStepSaver(BaseSaver):
         :param context: execution context to load from
         :return:
         """
-        return load(context.get_path())
+        return load(os.path.join(context.get_path(), '{0}.joblib'.format(step.name)))
 
 
 class ExecutionContext:
@@ -898,8 +898,7 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         del step.steps
         del step.steps_as_tuple
 
-        # Fourth, save using the inherited joblibstep saver step.
-        return super().save_step(step, context)
+        return step
 
     def load_step(self, step: 'TruncableSteps', context: ExecutionContext) -> 'TruncableSteps':
         """
@@ -909,11 +908,8 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         :param context: execution context
         :return:
         """
-        # First, load truncable steps with stripped steps, and sub steps savers.
-        step = super().load_step(step, context)
-
         for step_name, savers in step.sub_steps_savers:
-            # Second, load each sub step with their savers
+            # Load each sub step with their savers
             sub_step = Identity(name=step_name, savers=savers)
             subcontext = copy(context).push(sub_step)
 
