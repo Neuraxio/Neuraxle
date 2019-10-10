@@ -228,8 +228,8 @@ def create_test_cases():
 
 
 @pytest.mark.parametrize("test_case", create_test_cases())
-def test_transform_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase):
-    pipeline = ResumablePipelineWithMockHasher(steps=test_case.steps)
+def test_transform_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase, tmpdir):
+    pipeline = ResumablePipelineWithMockHasher(steps=test_case.steps, cache_folder=tmpdir)
 
     pipeline.transform(test_case.data_inputs)
 
@@ -239,8 +239,8 @@ def test_transform_should_rehash_hyperparameters_for_each_steps(test_case: Resum
 
 
 @pytest.mark.parametrize("test_case", create_test_cases())
-def test_fit_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase):
-    pipeline = ResumablePipelineWithMockHasher(steps=test_case.steps)
+def test_fit_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase, tmpdir):
+    pipeline = ResumablePipelineWithMockHasher(steps=test_case.steps, cache_folder=tmpdir)
 
     pipeline.fit(test_case.data_inputs, test_case.expected_outputs)
 
@@ -250,8 +250,8 @@ def test_fit_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePi
 
 
 @pytest.mark.parametrize("test_case", create_test_cases())
-def test_fit_transform_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase):
-    pipeline = ResumablePipelineWithMockHasher(steps=test_case.steps)
+def test_fit_transform_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase, tmpdir):
+    pipeline = ResumablePipelineWithMockHasher(steps=test_case.steps, cache_folder=tmpdir)
 
     pipeline.fit_transform(test_case.data_inputs, test_case.expected_outputs)
 

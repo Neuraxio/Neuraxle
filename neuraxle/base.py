@@ -217,10 +217,10 @@ class ExecutionContext:
     """
 
     def __init__(
-        self,
-        root: str = DEFAULT_CACHE_FOLDER,
-        stripped_saver: BaseSaver = None,
-        parents=None
+            self,
+            root: str = DEFAULT_CACHE_FOLDER,
+            stripped_saver: BaseSaver = None,
+            parents=None
     ):
         if stripped_saver is None:
             stripped_saver: BaseSaver = JoblibStepSaver()
@@ -242,8 +242,9 @@ class ExecutionContext:
         :return:
         """
         copy_self = copy(self)
-        while copy_self.should_save_last_step():
-            self.peek().save(self)
+        while not copy_self.empty():
+            if copy_self.should_save_last_step():
+                copy_self.peek().save(copy_self)
             copy_self.pop()
 
     def should_save_last_step(self):
@@ -321,6 +322,9 @@ class ExecutionContext:
         """
         return [p.name for p in self.parents]
 
+    def empty(self):
+        return len(self) == 0
+
     def __len__(self):
         return len(self.parents)
 
@@ -369,15 +373,15 @@ class BaseStep(ABC):
             current_ids = h.hash(current_ids, hyperparameters, data_inputs)
         return current_ids
 
-    def setup(self, step_path: str, setup_arguments: dict) -> 'BaseStep':
+    def setup(self, context: ExecutionContext) -> 'BaseStep':
         """
         Initialize step before it runs
 
-        :param step_path: pipeline step path ex: pipeline/step_name/
-        :param setup_arguments: any setup arguments that need to be passed to the setup method of one of the pipeline step
+        :param context: execution context
         :return: self
         """
         self.is_initialized = True
+        self.is_invalidated = True
         return self
 
     def teardown(self):
@@ -408,6 +412,14 @@ class BaseStep(ABC):
         """
         return self.name
 
+    def get_savers(self) -> List[BaseSaver]:
+        """
+        Get the step savers of a pipeline step.
+
+        :return:
+        """
+        return self.savers
+
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
         self.is_invalidated = True
         self.hyperparams = HyperparameterSamples(hyperparams).to_flat()
@@ -432,12 +444,12 @@ class BaseStep(ABC):
         :param context: execution context
         :return: tuple(fitted pipeline, data_container)
         """
+        self.is_invalidated = True
+
         new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
 
         current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
         data_container.set_current_ids(current_ids)
-
-        self.is_invalidated = True
 
         return new_self, data_container
 
@@ -544,7 +556,7 @@ class BaseStep(ABC):
         for saver in savers_with_provided_default_stripped_saver:
             # Each saver unstrips the step a bit more if needed
             if saver.can_load(loaded_self, context):
-                loaded_self = saver.load_step(self, context)
+                loaded_self = saver.load_step(loaded_self, context)
             else:
                 warnings.warn('Cannot Load Step {0} With Step Saver {1}.'.format(self.name, saver.__class__.__name__))
                 break
@@ -731,11 +743,8 @@ class MetaStepMixin:
     ):
         self.wrapped: BaseStep = wrapped
 
-    def setup(self, step_path: str, setup_arguments: dict = None) -> BaseStep:
-        self.wrapped.setup(
-            step_path=os.path.join(step_path, self.name),
-            setup_arguments=setup_arguments
-        )
+    def setup(self, context: ExecutionContext) -> BaseStep:
+        self.wrapped.setup(context=context)
 
         self.is_initialized = True
 
@@ -892,7 +901,8 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
 
         # Second, set the sub steps savers named tuple list so that they can be loaded
         # from their name, and savers during load.
-        step.sub_steps_savers = [(n, s.savers) for n, s in step.steps_as_tuple]
+        step.remember_step_savers()
+        step.sub_steps_savers = [(n, s.get_savers()) for n, s in step.steps_as_tuple]
 
         # Third, strip the sub steps from truncable steps before saving
         del step.steps
@@ -908,10 +918,12 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         :param context: execution context
         :return:
         """
+        step.steps_as_tuple = []
+
         for step_name, savers in step.sub_steps_savers:
             # Load each sub step with their savers
             sub_step = Identity(name=step_name, savers=savers)
-            subcontext = copy(context).push(sub_step)
+            subcontext = context.push(sub_step)
 
             sub_step = sub_step.load(subcontext)
             step.steps_as_tuple.append((step_name, sub_step))
@@ -944,7 +956,8 @@ class TruncableSteps(BaseStep, ABC):
 
         :return: bool
         """
-        for current_index, (step_name, step) in enumerate(self[:index]):
+        steps_before_index = self[:index]
+        for current_index, (step_name, step) in enumerate(steps_before_index):
             source_current_step = inspect.getsource(step.__class__)
             source_cached_step = inspect.getsource(other[current_index].__class__)
 
@@ -978,21 +991,9 @@ class TruncableSteps(BaseStep, ABC):
         self.steps_as_tuple = self.patch_missing_names(steps_as_tuple)
         self._refresh_steps()
 
-    def setup(self, step_path: str = None, setup_arguments: dict = None) -> 'BaseStep':
+    def setup(self, context: ExecutionContext) -> 'BaseStep':
         if self.is_initialized:
             return self
-
-        if step_path is None:
-            step_path = self.name
-
-        if setup_arguments is None:
-            setup_arguments = {}
-
-        for step_name, step in self.steps_as_tuple:
-            step.setup(
-                step_path=os.path.join(step_path, step_name),
-                setup_arguments=setup_arguments
-            )
 
         self.is_initialized = True
 
@@ -1113,6 +1114,12 @@ class TruncableSteps(BaseStep, ABC):
         self.hyperparams = HyperparameterSpace(remainders)
 
         return self
+
+    def remember_step_savers(self):
+        self.sub_step_savers = [
+            (n, s.get_savers())
+            for n, s in self.steps_as_tuple
+        ]
 
     def should_save(self):
         if super().should_save():
@@ -1314,7 +1321,7 @@ class ResumableStepMixin:
     """
 
     @abstractmethod
-    def should_resume(self, data_container: DataContainer) -> bool:
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
         raise NotImplementedError()
 
 

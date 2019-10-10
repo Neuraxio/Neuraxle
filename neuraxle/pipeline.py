@@ -63,8 +63,6 @@ class Pipeline(BasePipeline):
         :param data_inputs: the data input to transform
         :return: transformed data inputs
         """
-        self.setup()  # TODO: perhaps, remove this to pass path in context
-
         current_ids = self.hash(
             current_ids=None,
             hyperparameters=self.hyperparams,
@@ -86,8 +84,6 @@ class Pipeline(BasePipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        self.setup()  # TODO: perhaps, remove this to pass path in context
-
         current_ids = self.hash(
             current_ids=None,
             hyperparameters=self.hyperparams,
@@ -113,8 +109,6 @@ class Pipeline(BasePipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        self.setup()  # TODO: perhaps, remove this to pass path in context
-
         current_ids = self.hash(
             current_ids=None,
             hyperparameters=self.hyperparams,
@@ -160,7 +154,7 @@ class Pipeline(BasePipeline):
         return new_self, data_container
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+            'BaseStep', DataContainer):
         """
         Fit transform then rehash ids with hyperparams and transformed data inputs
 
@@ -200,20 +194,25 @@ class Pipeline(BasePipeline):
         :return: tuple(pipeline, data_container)
         """
         steps_left_to_do, data_container = self._load_checkpoint(data_container, context)
+        self.setup(context)
+
         index_last_step = len(steps_left_to_do) - 1
 
         new_steps_as_tuple: NamedTupleList = []
 
         for index, (step_name, step) in enumerate(steps_left_to_do):
+            sub_step_context = context.push(step)
+            step.setup(sub_step_context)
+
             if index != index_last_step:
-                step, data_container = step.handle_fit_transform(data_container, context)
+                step, data_container = step.handle_fit_transform(data_container, sub_step_context)
             else:
-                step, data_container = step.handle_fit(data_container, context)
+                step, data_container = step.handle_fit(data_container, sub_step_context)
 
             new_steps_as_tuple.append((step_name, step))
 
-        self.steps_as_tuple = self.steps_as_tuple[:len(self.steps_as_tuple) - len(steps_left_to_do)] + \
-                              new_steps_as_tuple
+        self.steps_as_tuple = self.steps_as_tuple[
+                              :len(self.steps_as_tuple) - len(steps_left_to_do)] + new_steps_as_tuple
 
         return self, data_container
 
@@ -227,11 +226,16 @@ class Pipeline(BasePipeline):
         :return: tuple(pipeline, data_container)
         """
         steps_left_to_do, data_container = self._load_checkpoint(data_container, context)
+        self.setup(context)
 
         new_steps_as_tuple: NamedTupleList = []
 
         for step_name, step in steps_left_to_do:
-            step, data_container = step.handle_fit_transform(data_container, context)
+            sub_step_context = context.push(step)
+            step.setup(sub_step_context)
+
+            step, data_container = step.handle_fit_transform(data_container, sub_step_context)
+
             new_steps_as_tuple.append((step_name, step))
 
         self.steps_as_tuple = self.steps_as_tuple[:len(self.steps_as_tuple) - len(steps_left_to_do)] + \
@@ -249,7 +253,8 @@ class Pipeline(BasePipeline):
         steps_left_to_do, data_container = self._load_checkpoint(data_container, context)
 
         for step_name, step in steps_left_to_do:
-            data_container = step.handle_transform(data_container, context)
+            sub_context = context.push(step)
+            data_container = step.handle_transform(data_container, sub_context)
 
         return data_container
 
@@ -271,6 +276,7 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
     """
     Fits and transform steps after latest checkpoint
     """
+
     def _load_checkpoint(
             self,
             data_container: DataContainer,
@@ -286,7 +292,7 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
         :return: tuple(steps left to do, last checkpoint data container)
         """
         new_starting_step_index, starting_step_data_container = \
-            self._get_starting_step_info(data_container)
+            self._get_starting_step_info(data_container, context)
 
         loaded_pipeline = self.load(context)
         if not self.are_steps_before_index_the_same(loaded_pipeline, new_starting_step_index):
@@ -302,10 +308,11 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
 
     def _load_pipeline(self, loaded_self):
         self.steps_as_tuple = loaded_self.steps_as_tuple
+        self._refresh_steps()
         self.hyperparams = loaded_self.hyperparams
         self.hyperparams_space = loaded_self.hyperparams_space
 
-    def _get_starting_step_info(self, data_container: DataContainer) -> Tuple[int, DataContainer]:
+    def _get_starting_step_info(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[int, DataContainer]:
         """
         Find the index of the latest step that can be resumed
 
@@ -313,11 +320,13 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
         :return: index of the latest resumable step, data container at starting step
         """
         starting_step_data_container = copy(data_container)
+        starting_step_context = copy(context)
         current_data_container = copy(data_container)
         index_latest_checkpoint = 0
 
         for index, (step_name, step) in enumerate(self.items()):
-            if isinstance(step, ResumableStepMixin) and step.should_resume(current_data_container):
+            sub_step_context = starting_step_context.push(step)
+            if isinstance(step, ResumableStepMixin) and step.should_resume(current_data_container, sub_step_context):
                 index_latest_checkpoint = index
                 starting_step_data_container = copy(current_data_container)
 
@@ -331,15 +340,17 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
 
         return index_latest_checkpoint, starting_step_data_container
 
-    def should_resume(self, data_container: DataContainer) -> bool:
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
         """
         Return True if the pipeline has a saved checkpoint that it can resume from
 
+        :param context: execution context
         :param data_container: the data container to resume
         :return: bool
         """
         for index, (step_name, step) in enumerate(reversed(self.items())):
-            if isinstance(step, ResumableStepMixin) and step.should_resume(data_container):
+            sub_step_context = context.push(step)
+            if isinstance(step, ResumableStepMixin) and step.should_resume(data_container, sub_step_context):
                 return True
 
         return False
@@ -359,8 +370,6 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         :param data_inputs: the data input to transform
         :return: transformed data inputs
         """
-        self.setup()
-
         current_ids = self._create_current_ids(data_inputs)
         data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
         context = ExecutionContext.from_root(self, self.cache_folder)
@@ -374,8 +383,6 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        self.setup()
-
         current_ids = self._create_current_ids(data_inputs)
         data_container = DataContainer(
             current_ids=current_ids,
@@ -430,11 +437,14 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         index_start = 0
 
         for sub_pipeline in sub_pipelines:
+            sub_context = context.push(sub_pipeline)
+            sub_pipeline.setup(sub_context)
+
             barrier = sub_pipeline[-1]
             sub_pipeline, data_container = barrier.join_fit_transform(
                 step=sub_pipeline,
                 data_container=data_container,
-                context=context
+                context=sub_context
             )
             current_ids = self.hash(data_container.current_ids, self.hyperparams)
             data_container.set_current_ids(current_ids)

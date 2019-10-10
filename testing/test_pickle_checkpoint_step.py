@@ -60,7 +60,8 @@ def create_pipeline(tmpdir, pickle_checkpoint_step, tape, hyperparameters=None, 
                 ('pickle_checkpoint', pickle_checkpoint_step),
                 ('c', TransformCallbackStep(tape.callback, ["2"])),
                 ('d', TransformCallbackStep(tape.callback, ["3"]))
-            ]
+            ],
+            cache_folder=tmpdir
         )
     else:
         pipeline = ResumablePipeline(
@@ -70,7 +71,7 @@ def create_pipeline(tmpdir, pickle_checkpoint_step, tape, hyperparameters=None, 
                 ('pickle_checkpoint', pickle_checkpoint_step),
                 ('c', TransformCallbackStep(tape.callback, ["2"])),
                 ('d', TransformCallbackStep(tape.callback, ["3"]))
-            ]
+            ], cache_folder=tmpdir
         )
     return pipeline
 

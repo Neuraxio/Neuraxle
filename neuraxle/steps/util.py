@@ -310,20 +310,6 @@ class ValueCachingWrapper(MetaStepMixin, BaseStep):
 
         self.cache_folder = cache_folder
 
-    def setup(self, step_path: str, setup_arguments: dict = None):
-        """
-        Fit transform data container using value caching.
-
-        :param setup_arguments: optional additional setup arguments
-        :type setup_arguments: dict
-
-        :param step_path: path of the step in the pipeline ex: `̀pipeline/step_name/`̀
-        :type step_path: str
-
-        :return: tuple(fitted pipeline, data_container)
-        """
-        self.create_checkpoint_path(step_path)
-
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit transform data container.
@@ -334,6 +320,7 @@ class ValueCachingWrapper(MetaStepMixin, BaseStep):
 
         :return: tuple(fitted pipeline, data_container)
         """
+        self.create_checkpoint_path(context.get_path())
         self.flush_cache()
         self.wrapped = self.wrapped.fit(data_container.data_inputs, data_container.expected_outputs)
         outputs = self._transform_with_cache(data_container)
@@ -355,6 +342,7 @@ class ValueCachingWrapper(MetaStepMixin, BaseStep):
 
         :return: transformed data container
         """
+        self.create_checkpoint_path(context.get_path())
         outputs = self._transform_with_cache(data_container)
 
         data_container.set_data_inputs(outputs)

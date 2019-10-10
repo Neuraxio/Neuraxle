@@ -22,7 +22,7 @@ Tests for resumable pipelines
 import numpy as np
 import pytest
 
-from neuraxle.base import DataContainer
+from neuraxle.base import DataContainer, ExecutionContext
 from neuraxle.checkpoints import BaseCheckpointStep
 from neuraxle.pipeline import Pipeline, ResumablePipeline
 from neuraxle.steps.util import FitTransformCallbackStep, TapeCallbackFunction
@@ -47,7 +47,7 @@ class SomeCheckpointStep(BaseCheckpointStep):
         self.saved = True
         return data_container
 
-    def should_resume(self, data_container) -> bool:
+    def should_resume(self, data_container, context: ExecutionContext) -> bool:
         return self.saved_data_container is not None
 
 
@@ -265,9 +265,10 @@ def create_test_cases():
 
 
 @pytest.mark.parametrize("test_case", create_test_cases())
-def test_should_fit_transform_each_steps(test_case: ResumablePipelineTestCase):
+def test_should_fit_transform_each_steps(test_case: ResumablePipelineTestCase, tmpdir):
     pipeline = ResumablePipeline(
-        steps=test_case.steps
+        steps=test_case.steps,
+        cache_folder=tmpdir
     )
 
     actual_pipeline, actual_data_inputs = pipeline.fit_transform(test_case.data_inputs, test_case.expected_outputs)
@@ -279,9 +280,10 @@ def test_should_fit_transform_each_steps(test_case: ResumablePipelineTestCase):
 
 
 @pytest.mark.parametrize("test_case", create_test_cases())
-def test_should_fit_each_steps(test_case: ResumablePipelineTestCase):
+def test_should_fit_each_steps(test_case: ResumablePipelineTestCase, tmpdir):
     pipeline = ResumablePipeline(
-        steps=test_case.steps
+        steps=test_case.steps,
+        cache_folder=tmpdir
     )
 
     actual_pipeline = pipeline.fit(test_case.data_inputs, test_case.expected_outputs)
@@ -292,9 +294,10 @@ def test_should_fit_each_steps(test_case: ResumablePipelineTestCase):
 
 
 @pytest.mark.parametrize("test_case", create_test_cases())
-def test_should_transform_each_steps(test_case: ResumablePipelineTestCase):
+def test_should_transform_each_steps(test_case: ResumablePipelineTestCase, tmpdir):
     pipeline = ResumablePipeline(
-        steps=test_case.steps
+        steps=test_case.steps,
+        cache_folder=tmpdir
     )
 
     actual_data_inputs = pipeline.transform(test_case.data_inputs)
