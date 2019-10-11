@@ -279,33 +279,15 @@ class BaseStep(ABC):
 
         return new_self, out
 
+    @abstractmethod
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
-        if expected_outputs is None:
-            expected_outputs = [None] * len(data_inputs)
+        raise NotImplementedError("TODO: Implement this method in {}, or have this class inherit from the NonFittableMixin.".format(self.__class__.__name__))
 
-        for data_input, expected_output in zip(data_inputs, expected_outputs):
-            self.fit_one(data_input, expected_output)
-
-        return self
-
+    @abstractmethod
     def transform(self, data_inputs):
-        processed_outputs = [self.transform_one(data_input) for data_input in data_inputs]
-        return processed_outputs
+        raise NotImplementedError("TODO: Implement this method in {}, or have this class inherit from the NonTransformableMixin.".format(self.__class__.__name__))
 
     def inverse_transform(self, processed_outputs):
-        data_inputs = [self.inverse_transform_one(data_output) for data_output in processed_outputs]
-        return data_inputs
-
-    def fit_one(self, data_input, expected_output=None) -> 'BaseStep':
-        # return self
-        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
-
-    def transform_one(self, data_input):
-        # return processed_output
-        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
-
-    def inverse_transform_one(self, data_output):
-        # return data_input
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
     def predict(self, data_input):
@@ -590,16 +572,6 @@ class NonFittableMixin:
 
         :param data_inputs: the data that would normally be fitted on.
         :param expected_outputs: the data that would normally be fitted on.
-        :return: self
-        """
-        return self
-
-    def fit_one(self, data_input, expected_output=None) -> 'NonFittableMixin':
-        """
-        Don't fit.
-
-        :param data_input: the data that would normally be fitted on.
-        :param expected_output: the data that would normally be fitted on.
         :return: self
         """
         return self

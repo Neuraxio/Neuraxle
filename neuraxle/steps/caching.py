@@ -24,12 +24,12 @@ import shutil
 from abc import abstractmethod
 from typing import Iterable, Any
 
-from neuraxle.base import MetaStepMixin, BaseStep, DataContainer
+from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, NonFittableMixin, NonTransformableMixin
 from neuraxle.pipeline import DEFAULT_CACHE_FOLDER
 from neuraxle.steps.misc import BaseValueHasher, Md5Hasher, VALUE_CACHING
 
 
-class ValueCachingWrapper(MetaStepMixin, BaseStep):
+class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin, BaseStep):
     """
     Value caching wrapper wraps a step to cache the values.
     """
@@ -195,6 +195,9 @@ class PickleValueCachingWrapper(ValueCachingWrapper):
     """
     Value Caching Wrapper class that caches the wrapped step transformed data inputs using python ``pickle`` library.
     """
+
+    def transform(self, data_inputs):
+        pass
 
     def create_checkpoint_path(self, step_path: str) -> str:
         self.checkpoint_path = os.path.join(self.cache_folder, step_path, VALUE_CACHING)

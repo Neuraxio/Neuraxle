@@ -62,7 +62,7 @@ def test_should_flush_cache_on_every_fit(tmpdir):
             tape_transform,
             tape_fit,
             transform_function=np.log),
-        tmpdir
+        cache_folder=tmpdir
     )
     p = Pipeline([
         wrapper

@@ -22,10 +22,11 @@ Tests for Pipelines
 import numpy as np
 import pytest
 
-from neuraxle.base import BaseStep
+from neuraxle.base import BaseStep, NonFittableMixin
 from neuraxle.hyperparams.distributions import RandInt, LogUniform
 from neuraxle.hyperparams.space import nested_dict_to_flat, HyperparameterSpace
 from neuraxle.pipeline import Pipeline
+
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction
@@ -35,15 +36,12 @@ AN_INPUT = "I am an input"
 AN_EXPECTED_OUTPUT = "I am an expected output"
 
 
-class SomeStep(BaseStep):
+class SomeStep(NonFittableMixin, BaseStep):
     def __init__(self, hyperparams_space: HyperparameterSpace = None):
         super().__init__(hyperparams=None, hyperparams_space=hyperparams_space)
 
-    def fit_one(self, data_input, expected_output=None) -> 'SomeStep':
-        return self
-
-    def transform_one(self, data_input):
-        return AN_EXPECTED_OUTPUT
+    def transform(self, data_inputs):
+        return [AN_EXPECTED_OUTPUT] * len(data_inputs)
 
 
 steps_lists = [
