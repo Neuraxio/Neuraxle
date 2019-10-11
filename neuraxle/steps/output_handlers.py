@@ -1,7 +1,7 @@
 """
 Output Handlers Steps
 ====================================
-You can find here output handlers steps that change the data inputs passed to the fit, and transform functions.
+You can find here output handlers steps that changes especially the data outputs.
 
 ..
     Copyright 2019, Neuraxio Inc.
