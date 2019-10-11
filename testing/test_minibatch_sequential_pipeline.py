@@ -2,7 +2,7 @@ import numpy as np
 
 from neuraxle.base import Joiner
 from neuraxle.pipeline import MiniBatchSequentialPipeline, Barrier
-from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction, FitTransformCallbackStep
+from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction, FitTransformCallbackStep
 
 
 class MultiplyBy2TransformCallbackStep(TransformCallbackStep):
