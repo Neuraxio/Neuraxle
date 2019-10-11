@@ -3,7 +3,7 @@ from typing import Tuple, Any
 from neuraxle.base import DataContainer, BaseStep, NonFittableMixin
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.util import OutputTransformerMixin
+from neuraxle.steps.output_handlers import OutputTransformerMixin
 
 
 class MultiplyBy2OutputTransformer(NonFittableMixin, OutputTransformerMixin, BaseStep):

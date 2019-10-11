@@ -25,7 +25,7 @@ import pytest
 from neuraxle.base import DataContainer
 from neuraxle.checkpoints import BaseCheckpointStep
 from neuraxle.pipeline import Pipeline, ResumablePipeline
-from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction, NullPipelineSaver
+from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction, NullPipelineSaver
 
 
 class SomeCheckpointStep(BaseCheckpointStep):

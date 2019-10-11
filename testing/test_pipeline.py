@@ -28,7 +28,7 @@ from neuraxle.hyperparams.space import nested_dict_to_flat, HyperparameterSpace
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
-from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
+from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction
 from neuraxle.union import Identity, AddFeatures, ModelStacking
 
 AN_INPUT = "I am an input"
