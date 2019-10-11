@@ -279,14 +279,16 @@ class BaseStep(ABC):
 
         return new_self, out
 
+    @abstractmethod
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
-        return self
+        raise NotImplementedError("TODO: Implement this method in {}, or have this class inherit from the NonFittableMixin.".format(self.__class__.__name__))
 
+    @abstractmethod
     def transform(self, data_inputs):
-        raise NotImplementedError()
+        raise NotImplementedError("TODO: Implement this method in {}, or have this class inherit from the NonTransformableMixin.".format(self.__class__.__name__))
 
     def inverse_transform(self, processed_outputs):
-        raise NotImplementedError()
+        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
     def predict(self, data_input):
         return self.transform(data_input)
