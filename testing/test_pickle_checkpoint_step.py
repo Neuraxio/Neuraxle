@@ -47,11 +47,6 @@ class DifferentCallbackStep(NonFittableMixin, BaseCallbackStep):
         self._callback(data_inputs)
         return data_inputs
 
-    def transform_one(self, data_input):
-        self._callback(data_input)
-        return data_input
-
-
 def create_pipeline(tmpdir, pickle_checkpoint_step, tape, hyperparameters=None, different=False, save_pipeline=True):
     pipeline_repository = JoblibPipelineSaver(tmpdir)
     if not save_pipeline:
