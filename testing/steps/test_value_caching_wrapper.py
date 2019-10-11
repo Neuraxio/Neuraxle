@@ -1,8 +1,9 @@
 import numpy as np
 
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.util import PickleValueCachingWrapper, TapeCallbackFunction, \
+from neuraxle.steps.misc import TapeCallbackFunction, \
     FitTransformCallbackStep
+from neuraxle.steps.caching import PickleValueCachingWrapper
 
 EXPECTED_OUTPUTS = [0.0, 0.0, 0.6931471805599453, 0.6931471805599453]
 
@@ -61,7 +62,7 @@ def test_should_flush_cache_on_every_fit(tmpdir):
             tape_transform,
             tape_fit,
             transform_function=np.log),
-        tmpdir
+        cache_folder=tmpdir
     )
     p = Pipeline([
         wrapper

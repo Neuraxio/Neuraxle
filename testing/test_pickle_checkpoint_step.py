@@ -31,7 +31,7 @@ from neuraxle.checkpoints import PickleCheckpointStep
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
 from neuraxle.pipeline import ResumablePipeline, JoblibPipelineSaver
-from neuraxle.steps.util import TapeCallbackFunction, TransformCallbackStep, BaseCallbackStep, \
+from neuraxle.steps.misc import TapeCallbackFunction, TransformCallbackStep, BaseCallbackStep, \
     NullPipelineSaver
 from testing.steps.test_output_transformer_wrapper import MultiplyBy2OutputTransformer
 

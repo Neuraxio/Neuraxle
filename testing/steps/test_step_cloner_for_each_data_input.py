@@ -1,6 +1,6 @@
 from neuraxle.hyperparams.distributions import Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
-from neuraxle.steps.util import StepClonerForEachDataInput
+from neuraxle.steps.loop import StepClonerForEachDataInput
 from testing.test_pipeline import SomeStep
 
 

@@ -29,7 +29,7 @@ from sklearn.metrics import r2_score
 
 from neuraxle.base import MetaStepMixin, BaseStep
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnCustomAxis
-from neuraxle.steps.util import StepClonerForEachDataInput
+from neuraxle.steps.loop import StepClonerForEachDataInput
 
 
 class BaseCrossValidation(MetaStepMixin, BaseStep, ABC):
