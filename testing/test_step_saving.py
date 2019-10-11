@@ -186,7 +186,7 @@ def test_resumable_pipeline_fit_should_load_all_pipeline_steps(tmpdir: LocalPath
 
 
 def given_saved_pipeline(tmpdir):
-    root = ResumablePipeline([])
+    root = ResumablePipeline([], cache_folder=tmpdir)
     root.sub_steps_savers = [
         (SOME_STEP_1, []),
         (PIPELINE_2, [TruncableJoblibStepSaver()])
@@ -194,7 +194,7 @@ def given_saved_pipeline(tmpdir):
     root.name = ROOT
     dump(root, create_root_path(tmpdir, True))
 
-    pipeline_2 = ResumablePipeline([])
+    pipeline_2 = ResumablePipeline([], cache_folder=tmpdir)
     pipeline_2.name = 'pipeline2'
     pipeline_2.sub_steps_savers = [
         (SOME_STEP_2, []),
@@ -215,7 +215,7 @@ def given_saved_pipeline(tmpdir):
     some_step3.name = SOME_STEP_3
     dump(some_step3, create_some_step3_path(tmpdir, True))
 
-    pickle_checkpoint_step = PickleCheckpointStep()
+    pickle_checkpoint_step = PickleCheckpointStep(cache_folder=tmpdir)
     pickle_checkpoint_step.name = CHECKPOINT
     dump(pickle_checkpoint_step, create_some_checkpoint_path(tmpdir, True))
 

@@ -29,7 +29,6 @@ from neuraxle.base import DataContainer, ExecutionContext
 from neuraxle.base import NonFittableMixin
 from neuraxle.checkpoints import PickleCheckpointStep
 from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.pipeline import Pipeline
 from neuraxle.pipeline import ResumablePipeline
 from neuraxle.steps.util import TapeCallbackFunction, TransformCallbackStep, BaseCallbackStep
 from testing.steps.test_output_transformer_wrapper import MultiplyBy2OutputTransformer
@@ -233,13 +232,12 @@ def test_pickle_checkpoint_step_should_load_data_container(tmpdir: LocalPath):
     initial_data_inputs = [1, 2]
     initial_expected_outputs = [2, 3]
 
-    create_pipeline_output_transformer = lambda: Pipeline(
+    create_pipeline_output_transformer = lambda: ResumablePipeline(
         [
-            ('output_transformer', MultiplyBy2OutputTransformer()),
+            ('output_transformer_1', MultiplyBy2OutputTransformer()),
             ('pickle_checkpoint', create_pickle_checkpoint_step(tmpdir)),
-            ('output_transformer', MultiplyBy2OutputTransformer()),
-        ]
-    )
+            ('output_transformer_2', MultiplyBy2OutputTransformer()),
+        ], cache_folder=tmpdir)
 
     create_pipeline_output_transformer().fit_transform(
         data_inputs=initial_data_inputs, expected_outputs=initial_expected_outputs

@@ -366,7 +366,7 @@ class BaseStep(ABC):
 
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
         self.is_initialized = False
-        self.is_invalidated = False
+        self.is_invalidated = True
 
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
         for h in self.hashers:
@@ -515,7 +515,7 @@ class BaseStep(ABC):
 
         :return: bool
         """
-        return self.is_invalidated
+        return self.is_invalidated and self.is_initialized
 
     def save(self, context: ExecutionContext):
         """
@@ -545,6 +545,8 @@ class BaseStep(ABC):
     def load(self, context: ExecutionContext) -> 'BaseStep':
         """
         Load step using the execution context to create the directory of the saved step.
+        Warning: please do not override this method because on loading it is an identity
+        step that will load whatever step you coded.
 
         :param context: execution context to load step from
         :return:
@@ -894,15 +896,25 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         :return:
         """
         # First, save all of the sub steps with the right execution context.
+        saved_steps = []
         for _, sub_step in step:
             if sub_step.should_save():
                 sub_context = context.push(sub_step)
                 sub_step.save(sub_context)
+                saved_steps.append(True)
+            else:
+                saved_steps.append(False)
 
         # Second, set the sub steps savers named tuple list so that they can be loaded
         # from their name, and savers during load.
-        step.remember_step_savers()
-        step.sub_steps_savers = [(n, s.get_savers()) for n, s in step.steps_as_tuple]
+        sub_steps_savers = []
+        for i, saved in enumerate(saved_steps):
+            if saved:
+                sub_steps_savers.append((step[i].name, step[i].get_savers()))
+            else:
+                sub_steps_savers.append((step[i].name, None))
+
+        step.sub_steps_savers = sub_steps_savers
 
         # Third, strip the sub steps from truncable steps before saving
         del step.steps
@@ -921,12 +933,16 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         step.steps_as_tuple = []
 
         for step_name, savers in step.sub_steps_savers:
-            # Load each sub step with their savers
-            sub_step = Identity(name=step_name, savers=savers)
-            subcontext = context.push(sub_step)
+            if savers is None:
+                # get current step
+                pass
+            else:
+                # Load each sub step with their savers
+                sub_step_to_load = Identity(name=step_name, savers=savers)
+                subcontext = context.push(sub_step_to_load)
 
-            sub_step = sub_step.load(subcontext)
-            step.steps_as_tuple.append((step_name, sub_step))
+                sub_step = sub_step_to_load.load(subcontext)
+                step.steps_as_tuple.append((step_name, sub_step))
 
         step._refresh_steps()
 
@@ -1115,11 +1131,6 @@ class TruncableSteps(BaseStep, ABC):
 
         return self
 
-    def remember_step_savers(self):
-        self.sub_step_savers = [
-            (n, s.get_savers())
-            for n, s in self.steps_as_tuple
-        ]
 
     def should_save(self):
         if super().should_save():
@@ -1313,6 +1324,7 @@ class TruncableSteps(BaseStep, ABC):
 
     def ends_with(self, step_type: type):
         return isinstance(self[-1], step_type)
+
 
 
 class ResumableStepMixin:
