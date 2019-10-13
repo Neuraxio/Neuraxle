@@ -140,9 +140,9 @@ class BaseStep(ABC):
             self,
             hyperparams: HyperparameterSamples = None,
             hyperparams_space: HyperparameterSpace = None,
-            name: str = None
+            name: str = None,
+            train: bool = True
     ):
-
         if hyperparams is None:
             hyperparams = dict()
         if hyperparams_space is None:
@@ -151,6 +151,7 @@ class BaseStep(ABC):
             name = self.__class__.__name__
 
         self.name: str = name
+        self.train = train
 
         self.hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams)
         self.hyperparams = self.hyperparams.to_flat()
@@ -209,6 +210,30 @@ class BaseStep(ABC):
         """
         self.is_initialized = False
         return self
+
+    def set_train(self, train: bool):
+        """
+        Set pipeline step mode to train or test.
+
+        In the transform functions, you can add a simple if statement to direct to the right implementation:
+        `
+            def transform(self, data_inputs):
+                if self.train:
+                    self.transform_train_(data_inputs)
+                else:
+                    self.transform_test_(data_inputs)
+
+            def fit_transform(self, data_inputs, expected_outputs):
+                if self.train:
+                    self.fit_transform_train_(data_inputs, expected_outputs)
+                else:
+                    self.fit_transform_test_(data_inputs, expected_outputs)
+        `
+
+        :param train: bool
+        :return:
+        """
+        self.train = train
 
     def set_name(self, name: str):
         """
@@ -480,6 +505,10 @@ class MetaStepMixin:
 
         return self
 
+    def set_train(self, train: bool):
+        self.train = train
+        self.wrapped.set_train(train)
+
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
         """
         Set meta step and wrapped step hyperparams using the given hyperparams.
@@ -607,9 +636,10 @@ class TruncableSteps(BaseStep, ABC):
             self,
             steps_as_tuple: NamedTupleList,
             hyperparams: HyperparameterSamples = dict(),
-            hyperparams_space: HyperparameterSpace = dict()
+            hyperparams_space: HyperparameterSpace = dict(),
+            train: bool = True
     ):
-        super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space)
+        super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space, train=train)
         self._set_steps(steps_as_tuple)
 
         assert isinstance(self, BaseStep), "Classes that inherit from TruncableMixin must also inherit from BaseStep."
@@ -968,6 +998,32 @@ class TruncableSteps(BaseStep, ABC):
 
     def ends_with(self, step_type: type):
         return isinstance(self[-1], step_type)
+
+    def set_train(self, train: bool):
+        """
+        Set pipeline step mode to train or test.
+
+        In the pipeline steps functions, you can add a simple if statement to direct to the right implementation:
+        `
+            def transform(self, data_inputs):
+                if self.train:
+                    self.transform_train_(data_inputs)
+                else:
+                    self.transform_test_(data_inputs)
+
+            def fit_transform(self, data_inputs, expected_outputs):
+                if self.train:
+                    self.fit_transform_train_(data_inputs, expected_outputs)
+                else:
+                    self.fit_transform_test_(data_inputs, expected_outputs)
+        `
+
+        :param train: bool
+        :return:
+        """
+        self.train = train
+        for _, step in self.items():
+            step.set_train(train)
 
 
 class ResumableStepMixin:

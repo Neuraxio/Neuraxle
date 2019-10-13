@@ -35,8 +35,8 @@ DEFAULT_CACHE_FOLDER = 'cache'
 
 
 class BasePipeline(TruncableSteps, ABC):
-    def __init__(self, steps: NamedTupleList):
-        TruncableSteps.__init__(self, steps_as_tuple=steps)
+    def __init__(self, steps: NamedTupleList, train: bool):
+        TruncableSteps.__init__(self, steps_as_tuple=steps, train=train)
 
     @abstractmethod
     def fit(self, data_inputs, expected_outputs=None) -> 'BasePipeline':
@@ -194,8 +194,8 @@ class Pipeline(BasePipeline):
     Fits and transform steps
     """
 
-    def __init__(self, steps: NamedTupleList):
-        BasePipeline.__init__(self, steps=steps)
+    def __init__(self, steps: NamedTupleList, train: bool = True):
+        BasePipeline.__init__(self, steps=steps, train=train)
 
     def save(self, data_container: DataContainer):
         """

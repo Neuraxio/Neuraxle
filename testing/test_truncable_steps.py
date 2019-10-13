@@ -34,3 +34,39 @@ def test_truncable_steps_should_split_by_type():
     assert 'SomeStep3' in sub_pipelines[1]
     assert 'SomeSplitStep1' in sub_pipelines[1]
     assert 'SomeStep4' in sub_pipelines[2]
+
+
+def test_set_train_should_set_train_to_false():
+    pipeline = Pipeline([
+        SomeStep(),
+        SomeStep(),
+        Pipeline([
+            SomeStep(),
+        ])
+    ], train=True)
+
+    pipeline.set_train(False)
+
+    assert not pipeline.train
+    assert not pipeline[0].train
+    assert not pipeline[1].train
+    assert not pipeline[2].train
+    assert not pipeline[2][0].train
+
+
+def test_set_train_should_set_train_to_true():
+    pipeline = Pipeline([
+        SomeStep(),
+        SomeStep(),
+        Pipeline([
+            SomeStep(),
+        ])
+    ], train=False)
+
+    pipeline.set_train(True)
+
+    assert pipeline.train
+    assert pipeline[0].train
+    assert pipeline[1].train
+    assert pipeline[2].train
+    assert pipeline[2][0].train
