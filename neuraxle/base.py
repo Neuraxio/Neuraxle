@@ -207,7 +207,14 @@ class JoblibStepSaver(BaseSaver):
         :param context: execution context to load from
         :return:
         """
-        return load(os.path.join(context.get_path(), '{0}.joblib'.format(step.name)))
+        loaded_step = load(os.path.join(context.get_path(), '{0}.joblib'.format(step.name)))
+
+        # we need to keep the current steps in memory because they have been deleted before saving...
+        # the steps that have not been saved yet need to be in memory while loading a truncable steps...
+        if isinstance(step, TruncableSteps):
+            loaded_step.steps = step.steps
+
+        return loaded_step
 
 
 class ExecutionContext:
@@ -554,7 +561,7 @@ class BaseStep(ABC):
         # A final "visitor" saver might reload anything that wasn't saved customly after stripping the rest.
         savers_with_provided_default_stripped_saver = [context.stripped_saver] + self.savers
 
-        loaded_self = copy(self)
+        loaded_self = self
         for saver in savers_with_provided_default_stripped_saver:
             # Each saver unstrips the step a bit more if needed
             if saver.can_load(loaded_self, context):
@@ -896,20 +903,11 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         :return:
         """
         # First, save all of the sub steps with the right execution context.
-        saved_steps = []
-        for _, sub_step in step:
+        sub_steps_savers = []
+        for i, (_, sub_step) in enumerate(step):
             if sub_step.should_save():
                 sub_context = context.push(sub_step)
                 sub_step.save(sub_context)
-                saved_steps.append(True)
-            else:
-                saved_steps.append(False)
-
-        # Second, set the sub steps savers named tuple list so that they can be loaded
-        # from their name, and savers during load.
-        sub_steps_savers = []
-        for i, saved in enumerate(saved_steps):
-            if saved:
                 sub_steps_savers.append((step[i].name, step[i].get_savers()))
             else:
                 sub_steps_savers.append((step[i].name, None))
@@ -934,8 +932,8 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
 
         for step_name, savers in step.sub_steps_savers:
             if savers is None:
-                # get current step
-                pass
+                # keep step as it is if it hasn't been saved
+                step.steps_as_tuple.append((step_name, step[step_name]))
             else:
                 # Load each sub step with their savers
                 sub_step_to_load = Identity(name=step_name, savers=savers)
