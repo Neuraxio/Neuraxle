@@ -26,6 +26,7 @@ from neuraxle.base import DataContainer, ExecutionContext
 from neuraxle.checkpoints import BaseCheckpointStep
 from neuraxle.pipeline import Pipeline, ResumablePipeline
 from neuraxle.steps.util import FitTransformCallbackStep, TapeCallbackFunction
+from neuraxle.steps.misc import TapeCallbackFunction
 
 
 class SomeCheckpointStep(BaseCheckpointStep):

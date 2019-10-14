@@ -4,7 +4,7 @@ import numpy as np
 from joblib import dump
 from py._path.local import LocalPath
 
-from neuraxle.base import BaseStep, TruncableJoblibStepSaver
+from neuraxle.base import BaseStep, TruncableJoblibStepSaver, NonFittableMixin
 from neuraxle.checkpoints import PickleCheckpointStep
 from neuraxle.pipeline import ResumablePipeline
 
@@ -60,7 +60,7 @@ def create_root_path(tmpdir, create_dir=False):
     return p
 
 
-class MultiplyBy(BaseStep):
+class MultiplyBy(NonFittableMixin, BaseStep):
     def __init__(self, multiply_by):
         super().__init__()
         self.multiply_by = multiply_by
