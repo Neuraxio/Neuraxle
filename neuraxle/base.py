@@ -584,7 +584,7 @@ class TruncableSteps(BaseStep, ABC):
             hyperparams_space: HyperparameterSpace = dict(),
             hasher: BaseHasher = None
     ):
-        BaseStep().__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space, hasher=hasher)
+        BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space, hasher=hasher)
         self.steps_as_tuple: NamedTupleList = self.patch_missing_names(steps_as_tuple)
         self._refresh_steps()
 
