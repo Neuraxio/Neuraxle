@@ -5,8 +5,8 @@ from neuraxle.union import Identity
 
 
 class SomeMetaStep(NonFittableMixin, MetaStepMixin, BaseStep):
-    def __init__(self, wrapped: BaseStep, train):
-        BaseStep.__init__(self, train=train)
+    def __init__(self, wrapped: BaseStep):
+        BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
 
     def transform(self, data_inputs):
@@ -16,22 +16,22 @@ class SomeMetaStep(NonFittableMixin, MetaStepMixin, BaseStep):
 def test_metastepmixin_set_train_should_set_train_to_false():
     p = SomeMetaStep(Pipeline([
         Identity()
-    ]), train=True)
+    ]))
 
     p.set_train(False)
 
-    assert not p.train
-    assert not p.wrapped[0].train
-    assert not p.wrapped.train
+    assert not p.is_train
+    assert not p.wrapped[0].is_train
+    assert not p.wrapped.is_train
 
 
 def test_metastepmixin_set_train_should_set_train_to_true():
     p = SomeMetaStep(Pipeline([
         Identity()
-    ]), train=False)
+    ]))
 
     p.set_train(True)
 
-    assert p.train
-    assert p.wrapped[0].train
-    assert p.wrapped.train
+    assert p.is_train
+    assert p.wrapped[0].is_train
+    assert p.wrapped.is_train

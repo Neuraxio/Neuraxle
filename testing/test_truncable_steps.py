@@ -43,15 +43,15 @@ def test_set_train_should_set_train_to_false():
         Pipeline([
             SomeStep(),
         ])
-    ], train=True)
+    ])
 
     pipeline.set_train(False)
 
-    assert not pipeline.train
-    assert not pipeline[0].train
-    assert not pipeline[1].train
-    assert not pipeline[2].train
-    assert not pipeline[2][0].train
+    assert not pipeline.is_train
+    assert not pipeline[0].is_train
+    assert not pipeline[1].is_train
+    assert not pipeline[2].is_train
+    assert not pipeline[2][0].is_train
 
 
 def test_set_train_should_set_train_to_true():
@@ -61,12 +61,12 @@ def test_set_train_should_set_train_to_true():
         Pipeline([
             SomeStep(),
         ])
-    ], train=False)
+    ])
 
     pipeline.set_train(True)
 
-    assert pipeline.train
-    assert pipeline[0].train
-    assert pipeline[1].train
-    assert pipeline[2].train
-    assert pipeline[2][0].train
+    assert pipeline.is_train
+    assert pipeline[0].is_train
+    assert pipeline[1].is_train
+    assert pipeline[2].is_train
+    assert pipeline[2][0].is_train

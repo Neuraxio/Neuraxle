@@ -140,8 +140,7 @@ class BaseStep(ABC):
             self,
             hyperparams: HyperparameterSamples = None,
             hyperparams_space: HyperparameterSpace = None,
-            name: str = None,
-            train: bool = True
+            name: str = None
     ):
         if hyperparams is None:
             hyperparams = dict()
@@ -151,7 +150,6 @@ class BaseStep(ABC):
             name = self.__class__.__name__
 
         self.name: str = name
-        self.train = train
 
         self.hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams)
         self.hyperparams = self.hyperparams.to_flat()
@@ -161,6 +159,7 @@ class BaseStep(ABC):
 
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
         self.is_initialized = False
+        self.is_train: bool = True
         self.parent_step = None
 
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
@@ -211,29 +210,30 @@ class BaseStep(ABC):
         self.is_initialized = False
         return self
 
-    def set_train(self, train: bool):
+    def set_train(self, is_train: bool=True):
         """
         Set pipeline step mode to train or test.
 
-        In the transform functions, you can add a simple if statement to direct to the right implementation:
+        For instance, you can add a simple if statement to direct to the right implementation:
         `
             def transform(self, data_inputs):
-                if self.train:
+                if self.is_train:
                     self.transform_train_(data_inputs)
                 else:
                     self.transform_test_(data_inputs)
 
             def fit_transform(self, data_inputs, expected_outputs):
-                if self.train:
+                if self.is_train:
                     self.fit_transform_train_(data_inputs, expected_outputs)
                 else:
                     self.fit_transform_test_(data_inputs, expected_outputs)
         `
 
-        :param train: bool
+        :param is_train: bool
         :return:
         """
-        self.train = train
+        self.is_train = is_train
+        return self
 
     def set_name(self, name: str):
         """
@@ -505,9 +505,10 @@ class MetaStepMixin:
 
         return self
 
-    def set_train(self, train: bool):
-        self.train = train
-        self.wrapped.set_train(train)
+    def set_train(self, is_train: bool=True):
+        self.is_train = is_train
+        self.wrapped.set_train(is_train)
+        return self
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
         """
@@ -636,10 +637,9 @@ class TruncableSteps(BaseStep, ABC):
             self,
             steps_as_tuple: NamedTupleList,
             hyperparams: HyperparameterSamples = dict(),
-            hyperparams_space: HyperparameterSpace = dict(),
-            train: bool = True
+            hyperparams_space: HyperparameterSpace = dict()
     ):
-        super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space, train=train)
+        super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         self._set_steps(steps_as_tuple)
 
         assert isinstance(self, BaseStep), "Classes that inherit from TruncableMixin must also inherit from BaseStep."
@@ -999,31 +999,32 @@ class TruncableSteps(BaseStep, ABC):
     def ends_with(self, step_type: type):
         return isinstance(self[-1], step_type)
 
-    def set_train(self, train: bool):
+    def set_train(self, is_train: bool=True) -> 'BaseStep':
         """
         Set pipeline step mode to train or test.
 
         In the pipeline steps functions, you can add a simple if statement to direct to the right implementation:
         `
             def transform(self, data_inputs):
-                if self.train:
+                if self.is_train:
                     self.transform_train_(data_inputs)
                 else:
                     self.transform_test_(data_inputs)
 
             def fit_transform(self, data_inputs, expected_outputs):
-                if self.train:
+                if self.is_train:
                     self.fit_transform_train_(data_inputs, expected_outputs)
                 else:
                     self.fit_transform_test_(data_inputs, expected_outputs)
         `
 
-        :param train: bool
-        :return:
+        :param is_train: bool
+        :return: self
         """
-        self.train = train
+        self.is_train = is_train
         for _, step in self.items():
-            step.set_train(train)
+            step.set_train(is_train)
+        return self
 
 
 class ResumableStepMixin:
