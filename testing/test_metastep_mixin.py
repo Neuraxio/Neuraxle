@@ -30,8 +30,6 @@ def test_metastepmixin_set_train_should_set_train_to_true():
         Identity()
     ]))
 
-    p.set_train(True)
-
     assert p.is_train
     assert p.wrapped[0].is_train
     assert p.wrapped.is_train
