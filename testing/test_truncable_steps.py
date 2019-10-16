@@ -63,8 +63,6 @@ def test_set_train_should_set_train_to_true():
         ])
     ])
 
-    pipeline.set_train(True)
-
     assert pipeline.is_train
     assert pipeline[0].is_train
     assert pipeline[1].is_train
