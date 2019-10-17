@@ -387,6 +387,7 @@ class BaseStep(ABC):
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
         self.is_initialized = False
         self.is_invalidated = True
+        self.is_train: bool = True
 
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
         for h in self.hashers:
@@ -411,6 +412,31 @@ class BaseStep(ABC):
         :return:
         """
         self.is_initialized = False
+        return self
+
+    def set_train(self, is_train: bool=True):
+        """
+        Set pipeline step mode to train or test.
+
+        For instance, you can add a simple if statement to direct to the right implementation:
+        `
+            def transform(self, data_inputs):
+                if self.is_train:
+                    self.transform_train_(data_inputs)
+                else:
+                    self.transform_test_(data_inputs)
+
+            def fit_transform(self, data_inputs, expected_outputs):
+                if self.is_train:
+                    self.fit_transform_train_(data_inputs, expected_outputs)
+                else:
+                    self.fit_transform_test_(data_inputs, expected_outputs)
+        `
+
+        :param is_train: bool
+        :return:
+        """
+        self.is_train = is_train
         return self
 
     def set_name(self, name: str):
@@ -788,6 +814,11 @@ class MetaStepMixin:
         """
         BaseStep.setup(self)
         self.wrapped.setup()
+        return self
+
+    def set_train(self, is_train: bool=True):
+        self.is_train = is_train
+        self.wrapped.set_train(is_train)
         return self
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
@@ -1358,6 +1389,33 @@ class TruncableSteps(BaseStep, ABC):
 
     def ends_with(self, step_type: type):
         return isinstance(self[-1], step_type)
+
+    def set_train(self, is_train: bool=True) -> 'BaseStep':
+        """
+        Set pipeline step mode to train or test.
+
+        In the pipeline steps functions, you can add a simple if statement to direct to the right implementation:
+        `
+            def transform(self, data_inputs):
+                if self.is_train:
+                    self.transform_train_(data_inputs)
+                else:
+                    self.transform_test_(data_inputs)
+
+            def fit_transform(self, data_inputs, expected_outputs):
+                if self.is_train:
+                    self.fit_transform_train_(data_inputs, expected_outputs)
+                else:
+                    self.fit_transform_test_(data_inputs, expected_outputs)
+        `
+
+        :param is_train: bool
+        :return: self
+        """
+        self.is_train = is_train
+        for _, step in self.items():
+            step.set_train(is_train)
+        return self
 
 
 
