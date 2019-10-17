@@ -181,6 +181,12 @@ class BaseStep(ABC):
     def get_hyperparams(self) -> HyperparameterSamples:
         return self.hyperparams
 
+    def set_params(self, **params) -> 'BaseStep':
+        return self.set_hyperparams(HyperparameterSamples(params))
+
+    def get_params(self) -> dict:
+        return self.get_hyperparams().to_flat_as_ordered_dict_primitive()
+
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
         self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
         return self
