@@ -484,6 +484,12 @@ class BaseStep(ABC):
     def get_hyperparams(self) -> HyperparameterSamples:
         return self.hyperparams
 
+    def set_params(self, **params) -> 'BaseStep':
+        return self.set_hyperparams(HyperparameterSamples(params))
+
+    def get_params(self) -> dict:
+        return self.get_hyperparams().to_flat_as_ordered_dict_primitive()
+
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
         self.is_invalidated = True
         self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
@@ -1063,7 +1069,7 @@ class TruncableSteps(BaseStep, ABC):
         :param steps_as_tuple: List[Tuple[str, BaseStep]] list of tuple containing step name and step
         :return:
         """
-        self.steps_as_tuple = self.patch_missing_names(steps_as_tuple)
+        self.steps_as_tuple: NamedTupleList = self.patch_missing_names(steps_as_tuple)
         self._refresh_steps()
 
     def setup(self) -> 'BaseStep':
