@@ -23,9 +23,8 @@ import os
 import pickle
 from abc import abstractmethod
 
-from neuraxle.base import ResumableStepMixin, BaseStep, DataContainer, ListDataContainer
-
-DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
+from neuraxle.base import ResumableStepMixin, BaseStep, DataContainer, ListDataContainer, DEFAULT_CACHE_FOLDER, \
+    ExecutionContext
 
 
 class BaseCheckpointStep(ResumableStepMixin, BaseStep):
@@ -39,14 +38,26 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
         BaseStep.__init__(self)
         self.force_checkpoint_name = force_checkpoint_name
 
-    def setup(self, step_path: str, setup_arguments: dict):
-        self.set_checkpoint_path(step_path)
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        data_container = self._handle_any(context, data_container)
+        return self, data_container
 
-    def handle_transform(self, data_container: DataContainer) -> DataContainer:
-        return self.save_checkpoint(data_container)
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        data_container = self._handle_any(context, data_container)
+        return data_container
 
-    def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
-        return self, self.save_checkpoint(data_container)
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        data_container = self._handle_any(context, data_container)
+        return self, data_container
+
+    def _handle_any(self, context, data_container):
+        self.set_checkpoint_path(context.get_path())
+        data_container: DataContainer = self.save_checkpoint(data_container)
+
+        self.save_checkpoint(data_container)
+        context.save_all_unsaved()
+
+        return data_container
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseCheckpointStep':
         """
@@ -156,13 +167,15 @@ class PickleCheckpointStep(BaseCheckpointStep):
         if not os.path.exists(self.checkpoint_path):
             os.makedirs(self.checkpoint_path)
 
-    def should_resume(self, data_container: DataContainer) -> bool:
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
         """
         Whether or not we should resume the pipeline (if the checkpoint exists)
 
+        :param context: execution context
         :param data_container: data to resume
         :return:
         """
+        self.set_checkpoint_path(context.get_path())
         return self._checkpoint_exists(data_container)
 
     def _checkpoint_exists(self, data_container: DataContainer) -> bool:

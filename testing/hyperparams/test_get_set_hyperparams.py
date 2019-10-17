@@ -1,7 +1,7 @@
-from neuraxle.base import MetaStepMixin, BaseStep
+from neuraxle.base import MetaStepMixin, BaseStep, NonFittableMixin, NonTransformableMixin
 from neuraxle.hyperparams.distributions import RandInt, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
-from neuraxle.steps.util import StepClonerForEachDataInput
+from neuraxle.steps.loop import StepClonerForEachDataInput
 from testing.test_pipeline import SomeStep
 
 SOME_STEP_HP_KEY = 'somestep_hyperparam'
@@ -22,7 +22,7 @@ HYPE_SAMPLE = HyperparameterSamples({
 })
 
 
-class SomeMetaStepMixin(MetaStepMixin, BaseStep):
+class SomeMetaStepMixin(NonTransformableMixin, NonFittableMixin, MetaStepMixin, BaseStep):
     pass
 
 

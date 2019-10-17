@@ -24,6 +24,8 @@ import copy
 import numpy as np
 
 from neuraxle.pipeline import Pipeline
+from neuraxle.steps.loop import StepClonerForEachDataInput
+from neuraxle.steps.misc import TapeCallbackFunction, TransformCallbackStep
 from neuraxle.steps.util import TapeCallbackFunction, TransformCallbackStep, StepClonerForEachDataInput
 from neuraxle.union import Identity, AddFeatures
 
@@ -61,3 +63,4 @@ def test_step_cloner():
     print(tape.get_data())
     assert tape.get_data() == data
     assert tape.get_name_tape() == ["-"] * 3
+
