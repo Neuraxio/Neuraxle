@@ -180,8 +180,11 @@ class JoblibStepSaver(BaseSaver):
 
     def can_load(self, step: 'BaseStep', context: 'ExecutionContext'):
         return os.path.exists(
-            os.path.join(context.get_path(), '{0}.joblib'.format(step.name))
+            self._create_step_path(context, step)
         )
+
+    def _create_step_path(self, context, step):
+        return os.path.join(context.get_path(), '{0}.joblib'.format(step.name))
 
     def save_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
         """
@@ -191,10 +194,9 @@ class JoblibStepSaver(BaseSaver):
         :param context: execution context to save from
         :return:
         """
-        if not os.path.exists(context.get_path()):
-            context.mkdir()
+        context.mkdir()
 
-        path = os.path.join(context.get_path(), '{0}.joblib'.format(step.name))
+        path = self._create_step_path(context, step)
         dump(step, path)
 
         return step
@@ -207,7 +209,7 @@ class JoblibStepSaver(BaseSaver):
         :param context: execution context to load from
         :return:
         """
-        loaded_step = load(os.path.join(context.get_path(), '{0}.joblib'.format(step.name)))
+        loaded_step = load(self._create_step_path(context, step))
 
         # we need to keep the current steps in memory because they have been deleted before saving...
         # the steps that have not been saved yet need to be in memory while loading a truncable steps...
@@ -316,7 +318,8 @@ class ExecutionContext:
         """
         Creates the directory path for the current execution context.
 
-        :return:
+        :return: current context path
+        :rtype: str
         """
         parents_with_path = [self.root] + [p.name for p in self.parents]
         return os.path.join(*parents_with_path)
@@ -325,11 +328,18 @@ class ExecutionContext:
         """
         Returns a list of the parent names.
 
-        :return:
+        :return: list of parents step names
+        :rtype: list(str)
         """
         return [p.name for p in self.parents]
 
     def empty(self):
+        """
+        Return True if the context has parent steps.
+
+        :return: if parents len is 0
+        :rtype: bool
+        """
         return len(self) == 0
 
     def __len__(self):
@@ -339,8 +349,11 @@ class ExecutionContext:
 class BaseStep(ABC):
     """
     Base class for a pipeline step.
-    """
 
+    Note : All heavy initialization logic should be done inside the *setup* method (e.g.: things inside GPU),
+    and NOT in the constructor.
+
+    """
     def __init__(
             self,
             hyperparams: HyperparameterSamples = None,
@@ -380,9 +393,10 @@ class BaseStep(ABC):
             current_ids = h.hash(current_ids, hyperparameters, data_inputs)
         return current_ids
 
-    def setup(self, context: ExecutionContext) -> 'BaseStep':
+    def setup(self, context: ExecutionContext = None) -> 'BaseStep':
         """
-        Initialize step before it runs
+        Initialize step before it runs. Only from here and not before that heavy things should be created
+        (e.g.: things inside GPU), and NOT in the constructor.
 
         :param context: execution context
         :return: self
@@ -393,7 +407,7 @@ class BaseStep(ABC):
 
     def teardown(self):
         """
-        Teardown step after program execution
+        Teardown step after program execution. This is like the inverse of setup, and it clears memory.
 
         :return:
         """
@@ -426,6 +440,16 @@ class BaseStep(ABC):
         :return:
         """
         return self.savers
+
+    def set_savers(self, savers: List[BaseSaver]) -> 'BaseStep':
+        """
+        Set the step savers of a pipeline step.
+
+        :return: self
+        :rtype: BaseStep
+        """
+        self.savers = savers
+        return self
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
         self.is_invalidated = True
@@ -569,7 +593,7 @@ class BaseStep(ABC):
             if saver.can_load(loaded_self, context):
                 loaded_self = saver.load_step(loaded_self, context)
             else:
-                warnings.warn('Cannot Load Step {0} With Step Saver {1}.'.format(self.name, saver.__class__.__name__))
+                warnings.warn('Cannot Load Step {0} ({1}:{2}) With Step Saver {3}.'.format(context.get_path(), self.name, self.__class__.__name__, saver.__class__.__name__))
                 break
 
         return loaded_self
@@ -609,6 +633,7 @@ class BaseStep(ABC):
         :param warn: (verbose) wheter or not to warn about the inexistence of the method.
         :return: self, a copy of self, or even perhaps a new or different BaseStep object.
         """
+        self.is_invalidated = True
         pending_new_base_step, pending_new_method, pending_method_to_assign_to = self.pending_mutate
 
         # Use everything that is pending if they are not none (ternaries).
@@ -754,11 +779,16 @@ class MetaStepMixin:
     ):
         self.wrapped: BaseStep = wrapped
 
-    def setup(self, context: ExecutionContext) -> BaseStep:
+    def setup(self, context: ExecutionContext = None) -> BaseStep:
+        """
+        Initialize step before it runs
+
+        :param context: execution context
+        :return: self
+        :rtype: BaseStep
+        """
+        BaseStep.setup(self, context=context)
         self.wrapped.setup(context=context)
-
-        self.is_initialized = True
-
         return self
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
@@ -961,7 +991,7 @@ class TruncableSteps(BaseStep, ABC):
         self._set_steps(steps_as_tuple)
 
         # TruncableJoblibStepSaver needs to be called first to load all the sub steps properly.
-        self.savers = [TruncableJoblibStepSaver()] + self.savers
+        self.set_savers([TruncableJoblibStepSaver()] + self.savers)
 
     def are_steps_before_index_the_same(self, other: 'TruncableSteps', index: int):
         """
@@ -1007,7 +1037,13 @@ class TruncableSteps(BaseStep, ABC):
         self.steps_as_tuple = self.patch_missing_names(steps_as_tuple)
         self._refresh_steps()
 
-    def setup(self, context: ExecutionContext) -> 'BaseStep':
+    def setup(self, context: ExecutionContext = None) -> 'BaseStep':
+        """
+        Initialize step before it runs
+
+        :param context: execution context
+        :return: self
+        """
         if self.is_initialized:
             return self
 

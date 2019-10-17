@@ -85,13 +85,14 @@ def test_resumable_pipeline_fit_transform_should_save_all_fitted_pipeline_steps(
         np.array(range(10))
     )
 
+    not_saved_paths = [create_some_step3_path(tmpdir)]
+    saved_paths = [create_root_path(tmpdir), create_pipeline2_path(tmpdir), create_some_step1_path(tmpdir),
+                   create_some_step2_path(tmpdir), create_some_step3_path(tmpdir), create_some_checkpoint_path(tmpdir)]
     assert np.array_equal(outputs, EXPECTED_OUTPUTS)
-    assert os.path.exists(create_root_path(tmpdir))
-    assert os.path.exists(create_some_step1_path(tmpdir))
-    assert os.path.exists(create_pipeline2_path(tmpdir))
-    assert os.path.exists(create_some_step2_path(tmpdir))
-    assert os.path.exists(create_some_checkpoint_path(tmpdir))
-    assert not os.path.exists(create_some_step3_path(tmpdir))
+    for p in saved_paths:
+        assert os.path.exists(p)
+    for p in not_saved_paths:
+        assert not os.path.exists(p)
 
 
 def test_resumable_pipeline_transform_should_not_save_steps(tmpdir: LocalPath):
@@ -109,13 +110,11 @@ def test_resumable_pipeline_transform_should_not_save_steps(tmpdir: LocalPath):
         np.array(range(10))
     )
 
+    saved_paths = [create_root_path(tmpdir), create_pipeline2_path(tmpdir), create_some_step1_path(tmpdir),
+             create_some_step2_path(tmpdir), create_some_step3_path(tmpdir), create_some_checkpoint_path(tmpdir)]
     assert np.array_equal(outputs, EXPECTED_OUTPUTS)
-    assert not os.path.exists(create_root_path(tmpdir))
-    assert not os.path.exists(create_pipeline2_path(tmpdir))
-    assert not os.path.exists(create_some_step1_path(tmpdir))
-    assert not os.path.exists(create_some_step2_path(tmpdir))
-    assert not os.path.exists(create_some_step3_path(tmpdir))
-    assert not os.path.exists(create_some_checkpoint_path(tmpdir))
+    for p in saved_paths:
+        assert not os.path.exists(p)
 
 
 def test_resumable_pipeline_fit_should_save_all_fitted_pipeline_steps(tmpdir: LocalPath):
@@ -134,12 +133,13 @@ def test_resumable_pipeline_fit_should_save_all_fitted_pipeline_steps(tmpdir: Lo
         np.array(range(10))
     )
 
-    assert os.path.exists(create_root_path(tmpdir))
-    assert os.path.exists(create_some_step1_path(tmpdir))
-    assert os.path.exists(create_pipeline2_path(tmpdir))
-    assert os.path.exists(create_some_step2_path(tmpdir))
-    assert os.path.exists(create_some_checkpoint_path(tmpdir))
-    assert not os.path.exists(create_some_step3_path(tmpdir))
+    not_saved_paths = [create_some_step3_path(tmpdir)]
+    saved_paths = [create_root_path(tmpdir), create_pipeline2_path(tmpdir), create_some_step1_path(tmpdir),
+                   create_some_step2_path(tmpdir), create_some_step3_path(tmpdir), create_some_checkpoint_path(tmpdir)]
+    for p in saved_paths:
+        assert os.path.exists(p)
+    for p in not_saved_paths:
+        assert not os.path.exists(p)
 
 
 def test_resumable_pipeline_fit_transform_should_load_all_pipeline_steps(tmpdir: LocalPath):
@@ -186,13 +186,12 @@ def test_resumable_pipeline_fit_should_load_all_pipeline_steps(tmpdir: LocalPath
 
 
 def given_saved_pipeline(tmpdir):
+    step_savers = [(SOME_STEP_1, []), (PIPELINE_2, [TruncableJoblibStepSaver()])]
+    path = create_root_path(tmpdir, True)
     root = ResumablePipeline([], cache_folder=tmpdir)
-    root.sub_steps_savers = [
-        (SOME_STEP_1, []),
-        (PIPELINE_2, [TruncableJoblibStepSaver()])
-    ]
+    root.sub_steps_savers = step_savers
     root.name = ROOT
-    dump(root, create_root_path(tmpdir, True))
+    dump(root, path)
 
     pipeline_2 = ResumablePipeline([], cache_folder=tmpdir)
     pipeline_2.name = 'pipeline2'
@@ -203,17 +202,9 @@ def given_saved_pipeline(tmpdir):
     ]
     dump(pipeline_2, create_pipeline2_path(tmpdir, True))
 
-    some_step1 = MultiplyBy(multiply_by=2)
-    some_step1.name = SOME_STEP_1
-    dump(some_step1, create_some_step1_path(tmpdir, True))
-
-    multiply_by = MultiplyBy(multiply_by=4)
-    multiply_by.name = SOME_STEP_2
-    dump(multiply_by, create_some_step2_path(tmpdir, True))
-
-    some_step3 = MultiplyBy(multiply_by=6)
-    some_step3.name = SOME_STEP_3
-    dump(some_step3, create_some_step3_path(tmpdir, True))
+    given_saved_some_step(multiply_by=2, name=SOME_STEP_1, path=create_some_step1_path(tmpdir, True))
+    given_saved_some_step(multiply_by=4, name=SOME_STEP_2, path=create_some_step2_path(tmpdir, True))
+    given_saved_some_step(multiply_by=6, name=SOME_STEP_3, path=create_some_step3_path(tmpdir, True))
 
     pickle_checkpoint_step = PickleCheckpointStep(cache_folder=tmpdir)
     pickle_checkpoint_step.name = CHECKPOINT
@@ -230,3 +221,9 @@ def given_saved_pipeline(tmpdir):
     p.name = ROOT
 
     return p
+
+
+def given_saved_some_step(multiply_by, name, path):
+    some_step1 = MultiplyBy(multiply_by=multiply_by)
+    some_step1.name = name
+    dump(some_step1, path)
