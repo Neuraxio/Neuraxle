@@ -26,9 +26,9 @@ from neuraxle.base import MetaStepMixin, BaseStep
 class MetaSKLearnWrapper(MetaStepMixin, BaseStep):
 
     def __init__(self, wrapped: 'MetaEstimatorMixin'):
+        BaseStep.__init__(self)
         self.wrapped_sklearn_metaestimator = wrapped
         # sklearn.model_selection.RandomizedSearchCV
-        super().__init__()
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
         self.wrapped_sklearn_metaestimator = self.wrapped_sklearn_metaestimator.fit(data_inputs, expected_outputs)

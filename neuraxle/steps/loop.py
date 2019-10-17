@@ -95,13 +95,13 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
         self.copy_op = copy_op
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
-        super().set_hyperparams(hyperparams)
-        self.steps = [s.set_hyperparams(self.wrapped.hyperparams) for s in self.steps]
+        MetaStepMixin.set_hyperparams(self, hyperparams)
+        self.steps = [s.set_hyperparams(self.wrapped.get_hyperparams()) for s in self.steps]
         return self
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
-        super().set_hyperparams_space(hyperparams_space)
-        self.steps = [s.set_hyperparams_space(self.wrapped.hyperparams_space) for s in self.steps]
+        MetaStepMixin.set_hyperparams_space(self, hyperparams_space)
+        self.steps = [s.set_hyperparams_space(self.wrapped.get_hyperparams_space()) for s in self.steps]
         return self
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):

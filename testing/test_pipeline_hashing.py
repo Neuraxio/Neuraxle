@@ -28,7 +28,6 @@ from neuraxle.base import NamedTupleList
 from neuraxle.checkpoints import BaseCheckpointStep
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline, ResumablePipeline
-from neuraxle.steps.util import TapeCallbackFunction
 from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction
 from testing.test_resumable_pipeline import SomeCheckpointStep
 
