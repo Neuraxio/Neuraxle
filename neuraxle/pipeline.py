@@ -194,7 +194,7 @@ class Pipeline(BasePipeline):
         :return: tuple(pipeline, data_container)
         """
         steps_left_to_do, data_container = self._load_checkpoint(data_container, context)
-        self.setup(context)
+        self.setup()
 
         index_last_step = len(steps_left_to_do) - 1
 
@@ -202,7 +202,7 @@ class Pipeline(BasePipeline):
 
         for index, (step_name, step) in enumerate(steps_left_to_do):
             sub_step_context = context.push(step)
-            step.setup(sub_step_context)
+            step.setup()
 
             if index != index_last_step:
                 step, data_container = step.handle_fit_transform(data_container, sub_step_context)
@@ -226,13 +226,13 @@ class Pipeline(BasePipeline):
         :return: tuple(pipeline, data_container)
         """
         steps_left_to_do, data_container = self._load_checkpoint(data_container, context)
-        self.setup(context)
+        self.setup()
 
         new_steps_as_tuple: NamedTupleList = []
 
         for step_name, step in steps_left_to_do:
             sub_step_context = context.push(step)
-            step.setup(sub_step_context)
+            step.setup()
 
             step, data_container = step.handle_fit_transform(data_container, sub_step_context)
 
@@ -298,7 +298,7 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
         if not self.are_steps_before_index_the_same(loaded_pipeline, new_starting_step_index):
             return self.steps_as_tuple, data_container
 
-        self._load_pipeline(loaded_pipeline)
+        self._load_loaded_pipeline_into_self(loaded_pipeline)
 
         step = self[new_starting_step_index]
         if isinstance(step, BaseCheckpointStep):
@@ -306,7 +306,7 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
 
         return self[new_starting_step_index:], starting_step_data_container
 
-    def _load_pipeline(self, loaded_self):
+    def _load_loaded_pipeline_into_self(self, loaded_self):
         self.steps_as_tuple = loaded_self.steps_as_tuple
         self._refresh_steps()
         self.hyperparams = loaded_self.hyperparams
@@ -438,7 +438,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
 
         for sub_pipeline in sub_pipelines:
             sub_context = context.push(sub_pipeline)
-            sub_pipeline.setup(sub_context)
+            sub_pipeline.setup()
 
             barrier = sub_pipeline[-1]
             sub_pipeline, data_container = barrier.join_fit_transform(

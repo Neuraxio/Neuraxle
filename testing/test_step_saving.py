@@ -87,7 +87,7 @@ def test_resumable_pipeline_fit_transform_should_save_all_fitted_pipeline_steps(
 
     not_saved_paths = [create_some_step3_path(tmpdir)]
     saved_paths = [create_root_path(tmpdir), create_pipeline2_path(tmpdir), create_some_step1_path(tmpdir),
-                   create_some_step2_path(tmpdir), create_some_step3_path(tmpdir), create_some_checkpoint_path(tmpdir)]
+                   create_some_step2_path(tmpdir), create_some_checkpoint_path(tmpdir)]
     assert np.array_equal(outputs, EXPECTED_OUTPUTS)
     for p in saved_paths:
         assert os.path.exists(p)
@@ -135,7 +135,7 @@ def test_resumable_pipeline_fit_should_save_all_fitted_pipeline_steps(tmpdir: Lo
 
     not_saved_paths = [create_some_step3_path(tmpdir)]
     saved_paths = [create_root_path(tmpdir), create_pipeline2_path(tmpdir), create_some_step1_path(tmpdir),
-                   create_some_step2_path(tmpdir), create_some_step3_path(tmpdir), create_some_checkpoint_path(tmpdir)]
+                   create_some_step2_path(tmpdir), create_some_checkpoint_path(tmpdir)]
     for p in saved_paths:
         assert os.path.exists(p)
     for p in not_saved_paths:

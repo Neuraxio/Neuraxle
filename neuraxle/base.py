@@ -393,12 +393,11 @@ class BaseStep(ABC):
             current_ids = h.hash(current_ids, hyperparameters, data_inputs)
         return current_ids
 
-    def setup(self, context: ExecutionContext = None) -> 'BaseStep':
+    def setup(self) -> 'BaseStep':
         """
         Initialize step before it runs. Only from here and not before that heavy things should be created
         (e.g.: things inside GPU), and NOT in the constructor.
 
-        :param context: execution context
         :return: self
         """
         self.is_initialized = True
@@ -779,7 +778,7 @@ class MetaStepMixin:
     ):
         self.wrapped: BaseStep = wrapped
 
-    def setup(self, context: ExecutionContext = None) -> BaseStep:
+    def setup(self) -> BaseStep:
         """
         Initialize step before it runs
 
@@ -787,8 +786,8 @@ class MetaStepMixin:
         :return: self
         :rtype: BaseStep
         """
-        BaseStep.setup(self, context=context)
-        self.wrapped.setup(context=context)
+        BaseStep.setup(self)
+        self.wrapped.setup()
         return self
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
@@ -990,7 +989,6 @@ class TruncableSteps(BaseStep, ABC):
         super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         self._set_steps(steps_as_tuple)
 
-        # TruncableJoblibStepSaver needs to be called first to load all the sub steps properly.
         self.set_savers([TruncableJoblibStepSaver()] + self.savers)
 
     def are_steps_before_index_the_same(self, other: 'TruncableSteps', index: int):
@@ -1037,11 +1035,10 @@ class TruncableSteps(BaseStep, ABC):
         self.steps_as_tuple = self.patch_missing_names(steps_as_tuple)
         self._refresh_steps()
 
-    def setup(self, context: ExecutionContext = None) -> 'BaseStep':
+    def setup(self) -> 'BaseStep':
         """
         Initialize step before it runs
 
-        :param context: execution context
         :return: self
         """
         if self.is_initialized:
@@ -1169,8 +1166,9 @@ class TruncableSteps(BaseStep, ABC):
 
 
     def should_save(self):
-        if super().should_save():
+        if BaseStep.should_save(self):
             return True
+
         for _, step in self.items():
             if step.should_save():
                 return True
@@ -1371,73 +1369,6 @@ class ResumableStepMixin:
     @abstractmethod
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
         raise NotImplementedError()
-
-
-class Barrier(BaseStep, ABC):
-    pass
-
-
-# class Joiner(Barrier):
-#     pass
-
-
-# TODO: review ideas below...
-
-class Checkpoint(Barrier, ABC):
-    pass
-
-
-class StepCheckpoint(Checkpoint, ABC):
-    pass
-
-
-class DataCheckpoint(Checkpoint, ABC):
-    pass
-
-
-# TODO: move classes below elsewhere.
-
-# TODO: talk to guillaume, and make sure he pushed code that compiles
-
-# class JoblibStepCheckpoint(StepCheckpoint):
-#     def save_previous(self, context: ExecutionContext):
-#         # TODO: CTRL+SHIFT+F for "stripped_saver: BaseSaver"
-#         context.save_all_unsaved()
-#
-#     def load_previous(self, context: ExecutionContext):
-#         context.load_all_unloaded()  # Should we do this?
-
-
-# TODO: talk to guillaume about this
-# class PickleDataCheckpoint(DataCheckpoint):
-#     # TODO: ...
-#     pass
-
-
-"""
-TODO: see ideas below.
-
-BaseStep.save(self, context: Context):
-	stripped_step = Saver.save(step: BaseStep)
-	stripped_step = StrippedSaver.save(stripped_step: BaseStep)
-	self.is_invalidated = False
-
-TruncableSteps.saver
-TruncableSteps.save
-TruncableSteps.load
-BaseStep.should_save()
-
-BaseStep.saver
-BaseStep.save
-BaseStep.load
-BaseStep.should_save()
-
-Context.pop()
-Context.stripped_saver
-
-...
-
-"""
 
 
 class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):

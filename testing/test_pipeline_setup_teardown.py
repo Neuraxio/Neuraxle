@@ -33,8 +33,7 @@ class SomeStepSetup(SomeStep):
         super().__init__()
         self.called_with = None
 
-    def setup(self, context: ExecutionContext) -> 'BaseStep':
-        self.called_with = context
+    def setup(self) -> 'BaseStep':
         self.is_initialized = True
         return self
 
@@ -48,7 +47,6 @@ def test_fit_transform_should_setup_pipeline_and_steps():
     p.fit_transform([1], [1])
 
     assert p.is_initialized
-    assert step_setup.called_with.parents == [p, step_setup]
 
 
 def test_transform_should_setup_pipeline_and_steps():
@@ -70,4 +68,4 @@ def test_fit_should_setup_pipeline_and_steps():
 
     p.fit([1], [1])
 
-    assert step_setup.called_with.parents == [p, step_setup]
+    assert step_setup.is_initialized
