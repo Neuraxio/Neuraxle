@@ -19,7 +19,7 @@ You can find here output handlers steps that changes especially the data outputs
     limitations under the License.
 
 """
-from neuraxle.base import DataContainer
+from neuraxle.base import DataContainer, ExecutionContext, BaseStep
 
 
 class OutputTransformerMixin:
@@ -27,10 +27,11 @@ class OutputTransformerMixin:
     Base output transformer step that can modify data inputs, and expected_outputs at the same time.
     """
 
-    def handle_transform(self, data_container: DataContainer) -> DataContainer:
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Handle transform by updating the data inputs, and expected outputs inside the data container.
 
+        :param context: execution context
         :param data_container:
         :return:
         """
@@ -45,11 +46,12 @@ class OutputTransformerMixin:
 
         return data_container
 
-    def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Handle transform by fitting the step,
         and updating the data inputs, and expected outputs inside the data container.
 
+        :param context: execution context
         :param data_container:
         :return:
         """

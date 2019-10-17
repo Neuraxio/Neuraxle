@@ -25,14 +25,13 @@ import pickle
 import numpy as np
 from py._path.local import LocalPath
 
-from neuraxle.base import DataContainer
+from neuraxle.base import DataContainer, ExecutionContext
 from neuraxle.base import NonFittableMixin
 from neuraxle.checkpoints import PickleCheckpointStep
 from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.pipeline import Pipeline
-from neuraxle.pipeline import ResumablePipeline, JoblibPipelineSaver
-from neuraxle.steps.misc import TapeCallbackFunction, TransformCallbackStep, BaseCallbackStep, \
-    NullPipelineSaver
+from neuraxle.pipeline import ResumablePipeline
+from neuraxle.steps.misc import TapeCallbackFunction, TransformCallbackStep, BaseCallbackStep
+from neuraxle.steps.util import TapeCallbackFunction, TransformCallbackStep
 from testing.steps.test_output_transformer_wrapper import MultiplyBy2OutputTransformer
 
 EXPECTED_TAPE_AFTER_CHECKPOINT = ["2", "3"]
@@ -48,10 +47,6 @@ class DifferentCallbackStep(NonFittableMixin, BaseCallbackStep):
         return data_inputs
 
 def create_pipeline(tmpdir, pickle_checkpoint_step, tape, hyperparameters=None, different=False, save_pipeline=True):
-    pipeline_repository = JoblibPipelineSaver(tmpdir)
-    if not save_pipeline:
-        pipeline_repository = NullPipelineSaver()
-
     if different:
         pipeline = ResumablePipeline(
             steps=[
@@ -60,7 +55,8 @@ def create_pipeline(tmpdir, pickle_checkpoint_step, tape, hyperparameters=None, 
                 ('pickle_checkpoint', pickle_checkpoint_step),
                 ('c', TransformCallbackStep(tape.callback, ["2"])),
                 ('d', TransformCallbackStep(tape.callback, ["3"]))
-            ], pipeline_saver=pipeline_repository
+            ],
+            cache_folder=tmpdir
         )
     else:
         pipeline = ResumablePipeline(
@@ -70,7 +66,7 @@ def create_pipeline(tmpdir, pickle_checkpoint_step, tape, hyperparameters=None, 
                 ('pickle_checkpoint', pickle_checkpoint_step),
                 ('c', TransformCallbackStep(tape.callback, ["2"])),
                 ('d', TransformCallbackStep(tape.callback, ["3"]))
-            ], pipeline_saver=pipeline_repository
+            ], cache_folder=tmpdir
         )
     return pipeline
 
@@ -232,19 +228,20 @@ def test_pickle_checkpoint_step_should_load_data_container(tmpdir: LocalPath):
     initial_data_inputs = [1, 2]
     initial_expected_outputs = [2, 3]
 
-    create_pipeline_output_transformer = lambda: Pipeline(
+    create_pipeline_output_transformer = lambda: ResumablePipeline(
         [
-            ('output_transformer', MultiplyBy2OutputTransformer()),
+            ('output_transformer_1', MultiplyBy2OutputTransformer()),
             ('pickle_checkpoint', create_pickle_checkpoint_step(tmpdir)),
-            ('output_transformer', MultiplyBy2OutputTransformer()),
-        ]
-    )
+            ('output_transformer_2', MultiplyBy2OutputTransformer()),
+        ], cache_folder=tmpdir)
 
     create_pipeline_output_transformer().fit_transform(
         data_inputs=initial_data_inputs, expected_outputs=initial_expected_outputs
     )
-    actual_data_container = create_pipeline_output_transformer().handle_transform(
-        DataContainer(current_ids=[0, 1], data_inputs=initial_data_inputs, expected_outputs=initial_expected_outputs)
+    transformer = create_pipeline_output_transformer()
+    actual_data_container = transformer.handle_transform(
+        DataContainer(current_ids=[0, 1], data_inputs=initial_data_inputs, expected_outputs=initial_expected_outputs),
+        ExecutionContext.from_root(transformer, tmpdir)
     )
 
     assert np.array_equal(actual_data_container.data_inputs, [4, 8])

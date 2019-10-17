@@ -19,16 +19,12 @@ This is the core of Neuraxle's pipelines. You can chain steps to call them one a
     limitations under the License.
 
 """
-import hashlib
-import os
 from abc import ABC, abstractmethod
 from copy import copy
 from typing import Any, Tuple, List
 
-from joblib import load, dump
-
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, DataContainer, NonFittableMixin, \
-    Barrier
+    Barrier, ExecutionContext
 from neuraxle.checkpoints import BaseCheckpointStep
 
 DEFAULT_CACHE_FOLDER = 'cache'
@@ -50,164 +46,15 @@ class BasePipeline(TruncableSteps, ABC):
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BasePipeline', Any):
         raise NotImplementedError()
 
-    @abstractmethod
-    def inverse_transform_processed_outputs(self, data_inputs) -> Any:
-        raise NotImplementedError()
-
-    def inverse_transform(self, processed_outputs):
-        if self.transform != self.inverse_transform:
-            raise BrokenPipeError("Don't call inverse_transform on a pipeline before having mutated it inversely or "
-                                  "before having called the `.reverse()` or `reversed(.)` on it.")
-
-        return self.inverse_transform_processed_outputs(processed_outputs)
-
-
-class PipelineSaver(ABC):
-    @abstractmethod
-    def save(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
-        """
-        Persist pipeline for current data container
-
-        :param pipeline:
-        :param data_container:
-        :return:
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def can_load(self, pipeline: 'Pipeline', data_container: DataContainer) -> bool:
-        """
-        Returns True if the pipeline can be loaded with the passed data container
-
-        :param pipeline:
-        :param data_container:
-        :return: pipeline
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
-        """
-        Load pipeline for current data container
-
-        :param pipeline:
-        :param data_container:
-        :return: pipeline
-        """
-        raise NotImplementedError()
-
-
-class JoblibPipelineSaver(PipelineSaver):
-    """
-    Pipeline Repository to persist and load pipeline based on a data container
-    """
-
-    def __init__(self, cache_folder, pipeline_cache_list_file_name='pipeline_cache_list.txt'):
-        self.pipeline_cache_list_file_name = pipeline_cache_list_file_name
-        self.cache_folder = cache_folder
-
-    def save(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
-        """
-        Persist pipeline for current data container
-
-        :param pipeline:
-        :param data_container:
-        :return:
-        """
-        pipeline_cache_folder = os.path.join(self.cache_folder, pipeline.name)
-
-        if not os.path.exists(pipeline_cache_folder):
-            os.makedirs(pipeline_cache_folder)
-
-        next_cached_pipeline_path = self._create_cached_pipeline_path(pipeline_cache_folder, data_container)
-        dump(pipeline, next_cached_pipeline_path)
-
-        return pipeline
-
-    def can_load(self, pipeline: 'Pipeline', data_container: DataContainer) -> bool:
-        """
-        Returns True if the pipeline can be loaded with the passed data container
-
-        :param pipeline:
-        :param data_container:
-        :return: pipeline
-        """
-        pipeline_cache_folder = os.path.join(self.cache_folder, pipeline.name)
-
-        return os.path.exists(
-            self._create_cached_pipeline_path(
-                pipeline_cache_folder,
-                data_container
-            )
-        )
-
-    def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
-        """
-        Load pipeline for current data container.
-
-        :param pipeline:
-        :param data_container:
-        :return: pipeline
-        """
-        pipeline_cache_folder = os.path.join(self.cache_folder, pipeline.name)
-
-        return load(
-            self._create_cached_pipeline_path(
-                pipeline_cache_folder,
-                data_container
-            )
-        )
-
-    def _create_cached_pipeline_path(self, pipeline_cache_folder, data_container: 'DataContainer') -> str:
-        """
-        Create cached pipeline path with data container, and pipeline cache folder.
-
-        :type data_container: DataContainer
-        :param pipeline_cache_folder: str
-
-        :return: path string
-        """
-        all_current_ids_hash = self._hash_data_container(data_container)
-        return os.path.join(pipeline_cache_folder, '{0}.joblib'.format(str(all_current_ids_hash)))
-
-    def _hash_data_container(self, data_container):
-        """
-        Hash data container current ids with md5.
-
-        :param data_container: data container
-        :type data_container: DataContainer
-
-        :return: str hexdigest of all of the current ids hashed together.
-        """
-        all_current_ids_hash = None
-        for current_id, *_ in data_container:
-            m = hashlib.md5()
-            m.update(str.encode(current_id))
-            if all_current_ids_hash is not None:
-                m.update(str.encode(all_current_ids_hash))
-            all_current_ids_hash = m.hexdigest()
-        return all_current_ids_hash
-
 
 class Pipeline(BasePipeline):
     """
     Fits and transform steps
     """
 
-    def __init__(self, steps: NamedTupleList):
+    def __init__(self, steps: NamedTupleList, cache_folder=DEFAULT_CACHE_FOLDER):
         BasePipeline.__init__(self, steps=steps)
-
-    def save(self, data_container: DataContainer):
-        """
-        Save the fitted parent pipeline with the passed data container
-
-        :param data_container: data container to save pipeline with
-        :return:
-        """
-        if self.parent_step is None:
-            pass  # nothing to do here, we cannot save a pipeline that is not resumable
-        else:
-            self.parent_step.save(data_container)
+        self.cache_folder = cache_folder
 
     def transform(self, data_inputs: Any):
         """
@@ -216,15 +63,16 @@ class Pipeline(BasePipeline):
         :param data_inputs: the data input to transform
         :return: transformed data inputs
         """
-        self.setup()  # TODO: perhaps, remove this to pass path in context
-
         current_ids = self.hash(
             current_ids=None,
             hyperparameters=self.hyperparams,
             data_inputs=data_inputs
         )
         data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
-        data_container = self._transform_core(data_container)
+
+        context = ExecutionContext.from_root(self, self.cache_folder)
+
+        data_container = self._transform_core(data_container, context)
 
         return data_container.data_inputs
 
@@ -236,8 +84,6 @@ class Pipeline(BasePipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        self.setup()  # TODO: perhaps, remove this to pass path in context
-
         current_ids = self.hash(
             current_ids=None,
             hyperparameters=self.hyperparams,
@@ -248,7 +94,10 @@ class Pipeline(BasePipeline):
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         )
-        new_self, data_container = self._fit_transform_core(data_container)
+
+        context = ExecutionContext.from_root(self, self.cache_folder)
+
+        new_self, data_container = self._fit_transform_core(data_container, context)
 
         return new_self, data_container.data_inputs
 
@@ -260,8 +109,6 @@ class Pipeline(BasePipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        self.setup()  # TODO: perhaps, remove this to pass path in context
-
         current_ids = self.hash(
             current_ids=None,
             hyperparameters=self.hyperparams,
@@ -273,11 +120,13 @@ class Pipeline(BasePipeline):
             expected_outputs=expected_outputs
         )
 
-        new_self, _ = self._fit_transform_core(data_container)
+        context = ExecutionContext.from_root(self, self.cache_folder)
+
+        new_self, data_container = self._fit_core(data_container, context)
 
         return new_self
 
-    def inverse_transform_processed_outputs(self, processed_outputs) -> Any:
+    def inverse_transform(self, processed_outputs) -> Any:
         """
         After transforming all data inputs, and obtaining a prediction, we can inverse transform the processed outputs
 
@@ -285,51 +134,108 @@ class Pipeline(BasePipeline):
         :return: backward transformed processed outputs
         """
         for step_name, step in list(reversed(self.items())):
-            processed_outputs = step.transform(processed_outputs)
+            processed_outputs = step.inverse_transform(processed_outputs)
         return processed_outputs
 
-    def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
         """
         Fit transform then rehash ids with hyperparams and transformed data inputs
 
         :param data_container: data container to fit transform
+        :param context: execution context
         :return: tuple(fitted pipeline, transformed data container)
         """
-        new_self, data_container = self._fit_transform_core(data_container)
+        new_self, data_container = self._fit_core(data_container, context)
 
         ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
         data_container.set_current_ids(ids)
 
         return new_self, data_container
 
-    def handle_transform(self, data_container: DataContainer) -> DataContainer:
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
+        """
+        Fit transform then rehash ids with hyperparams and transformed data inputs
+
+        :param data_container: data container to fit transform
+        :param context: execution context
+        :return: tuple(fitted pipeline, transformed data container)
+        """
+        new_self, data_container = self._fit_transform_core(data_container, context)
+
+        ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        data_container.set_current_ids(ids)
+
+        return new_self, data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Transform then rehash ids with hyperparams and transformed data inputs
 
         :param data_container: data container to transform
+        :param context: execution context
         :return: tuple(fitted pipeline, transformed data container)
         """
-        data_container = self._transform_core(data_container)
+        data_container = self._transform_core(data_container, context)
 
         ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
         data_container.set_current_ids(ids)
 
         return data_container
 
-    def _fit_transform_core(self, data_container) -> ('Pipeline', DataContainer):
+    def _fit_core(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
+        """
+        After loading the last checkpoint, fit transform each pipeline steps,
+        but only fit the last pipeline step.
+
+        :param data_container: the data container to fit transform on
+        :param context: execution context
+        :return: tuple(pipeline, data_container)
+        """
+        steps_left_to_do, data_container = self._load_checkpoint(data_container, context)
+        self.setup()
+
+        index_last_step = len(steps_left_to_do) - 1
+
+        new_steps_as_tuple: NamedTupleList = []
+
+        for index, (step_name, step) in enumerate(steps_left_to_do):
+            sub_step_context = context.push(step)
+            step.setup()
+
+            if index != index_last_step:
+                step, data_container = step.handle_fit_transform(data_container, sub_step_context)
+            else:
+                step, data_container = step.handle_fit(data_container, sub_step_context)
+
+            new_steps_as_tuple.append((step_name, step))
+
+        self.steps_as_tuple = self.steps_as_tuple[
+                              :len(self.steps_as_tuple) - len(steps_left_to_do)] + new_steps_as_tuple
+
+        return self, data_container
+
+    def _fit_transform_core(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'Pipeline', DataContainer):
         """
         After loading the last checkpoint, fit transform each pipeline steps
 
         :param data_container: the data container to fit transform on
+        :param context: execution context
         :return: tuple(pipeline, data_container)
         """
-        steps_left_to_do, data_container = self._load_checkpoint(data_container)
+        steps_left_to_do, data_container = self._load_checkpoint(data_container, context)
+        self.setup()
 
         new_steps_as_tuple: NamedTupleList = []
 
         for step_name, step in steps_left_to_do:
-            step.set_parent(self)
-            step, data_container = step.handle_fit_transform(data_container)
+            sub_step_context = context.push(step)
+            step.setup()
+
+            step, data_container = step.handle_fit_transform(data_container, sub_step_context)
+
             new_steps_as_tuple.append((step_name, step))
 
         self.steps_as_tuple = self.steps_as_tuple[:len(self.steps_as_tuple) - len(steps_left_to_do)] + \
@@ -337,28 +243,30 @@ class Pipeline(BasePipeline):
 
         return self, data_container
 
-    def _transform_core(self, data_container: DataContainer) -> DataContainer:
+    def _transform_core(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         After loading the last checkpoint, transform each pipeline steps
 
         :param data_container: the data container to transform
         :return: transformed data container
         """
-        steps_left_to_do, data_container = self._load_checkpoint(data_container)
+        steps_left_to_do, data_container = self._load_checkpoint(data_container, context)
 
         for step_name, step in steps_left_to_do:
-            step.set_parent(self)
-            data_container = step.handle_transform(data_container)
+            sub_context = context.push(step)
+            data_container = step.handle_transform(data_container, sub_context)
 
         return data_container
 
-    def _load_checkpoint(self, data_container: DataContainer) -> Tuple[NamedTupleList, DataContainer]:
+    def _load_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> \
+            Tuple[NamedTupleList, DataContainer]:
         """
         Try loading a pipeline cache with the passed data container.
         If pipeline cache loading succeeds, find steps left to do,
         and load the latest data container.
 
         :param data_container: the data container to resume
+        :param context: the execution context to resume
         :return: tuple(steps left to do, last checkpoint data container)
         """
         return self.steps_as_tuple, data_container
@@ -369,55 +277,28 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
     Fits and transform steps after latest checkpoint
     """
 
-    def __init__(self, steps: NamedTupleList, pipeline_saver: PipelineSaver = None):
-        Pipeline.__init__(self, steps=steps)
-
-        if pipeline_saver is None:
-            self.pipeline_saver = JoblibPipelineSaver(DEFAULT_CACHE_FOLDER)
-        else:
-            self.pipeline_saver = pipeline_saver
-
-    def save(self, data_container: DataContainer):
-        """
-        Save the fitted parent pipeline with the passed data container
-
-        :param data_container: data container to save pipeline with
-        :return:
-        """
-        if self.parent_step is None:
-            self.pipeline_saver.save(self, data_container)
-        else:
-            self.parent_step.save(data_container)
-
-    def _load_checkpoint(self, data_container: DataContainer) -> Tuple[NamedTupleList, DataContainer]:
+    def _load_checkpoint(
+            self,
+            data_container: DataContainer,
+            context: ExecutionContext
+    ) -> Tuple[NamedTupleList, DataContainer]:
         """
         Try loading a pipeline cache with the passed data container.
         If pipeline cache loading succeeds, find steps left to do,
         and load the latest data container.
 
         :param data_container: the data container to resume
+        :param context: the execution context to resume
         :return: tuple(steps left to do, last checkpoint data container)
         """
         new_starting_step_index, starting_step_data_container = \
-            self._get_starting_step_info(data_container)
+            self._get_starting_step_info(data_container, context)
 
-        if self.parent_step is None:
-            if not self.pipeline_saver.can_load(self, starting_step_data_container):
-                return self.steps_as_tuple, data_container
+        loaded_pipeline = self.load(context)
+        if not self.are_steps_before_index_the_same(loaded_pipeline, new_starting_step_index):
+            return self.steps_as_tuple, data_container
 
-            saved_pipeline = self.pipeline_saver.load(self, starting_step_data_container)
-
-            if not self._can_load_saved_pipeline(
-                    saved_pipeline=saved_pipeline,
-                    starting_step_data_container=starting_step_data_container,
-                    new_starting_step_index=new_starting_step_index
-            ):
-                return self.steps_as_tuple, data_container
-
-            self._load_saved_pipeline_steps_before_index(
-                saved_pipeline=saved_pipeline,
-                index=new_starting_step_index
-            )
+        self._load_loaded_pipeline_into_self(loaded_pipeline)
 
         step = self[new_starting_step_index]
         if isinstance(step, BaseCheckpointStep):
@@ -425,31 +306,13 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
 
         return self[new_starting_step_index:], starting_step_data_container
 
-    def _can_load_saved_pipeline(
-            self,
-            saved_pipeline: Pipeline,
-            starting_step_data_container: DataContainer,
-            new_starting_step_index
-    ) -> bool:
-        """
-        Returns True if the saved pipeline steps before passed starting step index
-        are the same as current pipeline steps before starting step index.
+    def _load_loaded_pipeline_into_self(self, loaded_self):
+        self.steps_as_tuple = loaded_self.steps_as_tuple
+        self._refresh_steps()
+        self.hyperparams = loaded_self.hyperparams
+        self.hyperparams_space = loaded_self.hyperparams_space
 
-        :param saved_pipeline: loaded saved pipeline
-        :param starting_step_data_container: loaded cached pipeline
-        :param new_starting_step_index:
-
-        :return bool
-        """
-        if not self.pipeline_saver.can_load(self, starting_step_data_container):
-            return False
-
-        if self.are_steps_before_index_the_same(saved_pipeline, new_starting_step_index):
-            return True
-
-        return False
-
-    def _get_starting_step_info(self, data_container: DataContainer) -> Tuple[int, DataContainer]:
+    def _get_starting_step_info(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[int, DataContainer]:
         """
         Find the index of the latest step that can be resumed
 
@@ -457,11 +320,13 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
         :return: index of the latest resumable step, data container at starting step
         """
         starting_step_data_container = copy(data_container)
+        starting_step_context = copy(context)
         current_data_container = copy(data_container)
         index_latest_checkpoint = 0
 
         for index, (step_name, step) in enumerate(self.items()):
-            if isinstance(step, ResumableStepMixin) and step.should_resume(current_data_container):
+            sub_step_context = starting_step_context.push(step)
+            if isinstance(step, ResumableStepMixin) and step.should_resume(current_data_container, sub_step_context):
                 index_latest_checkpoint = index
                 starting_step_data_container = copy(current_data_container)
 
@@ -475,15 +340,17 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
 
         return index_latest_checkpoint, starting_step_data_container
 
-    def should_resume(self, data_container: DataContainer) -> bool:
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
         """
         Return True if the pipeline has a saved checkpoint that it can resume from
 
+        :param context: execution context
         :param data_container: the data container to resume
         :return: bool
         """
         for index, (step_name, step) in enumerate(reversed(self.items())):
-            if isinstance(step, ResumableStepMixin) and step.should_resume(data_container):
+            sub_step_context = context.push(step)
+            if isinstance(step, ResumableStepMixin) and step.should_resume(data_container, sub_step_context):
                 return True
 
         return False
@@ -503,11 +370,10 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         :param data_inputs: the data input to transform
         :return: transformed data inputs
         """
-        self.setup()
-
         current_ids = self._create_current_ids(data_inputs)
         data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
-        data_container = self.handle_transform(data_container)
+        context = ExecutionContext.from_root(self, self.cache_folder)
+        data_container = self.handle_transform(data_container, context)
 
         return data_container.data_inputs
 
@@ -517,15 +383,14 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        self.setup()
-
         current_ids = self._create_current_ids(data_inputs)
         data_container = DataContainer(
             current_ids=current_ids,
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         )
-        new_self, data_container = self.handle_fit_transform(data_container)
+        context = ExecutionContext.from_root(self, self.cache_folder)
+        new_self, data_container = self.handle_fit_transform(data_container, context)
 
         return new_self, data_container.data_inputs
 
@@ -537,11 +402,12 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         )
         return current_ids
 
-    def handle_transform(self, data_container: DataContainer) -> DataContainer:
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Transform all sub pipelines splitted by the Barrier steps.
 
         :param data_container: data container to transform.
+        :param context: execution context
         :return: data container
         """
         sub_pipelines = self._create_sub_pipelines()
@@ -550,29 +416,35 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
             barrier = sub_pipeline[-1]
             data_container = barrier.join_transform(
                 step=sub_pipeline,
-                data_container=data_container
+                data_container=data_container,
+                context=context
             )
             current_ids = self.hash(data_container.current_ids, self.hyperparams)
             data_container.set_current_ids(current_ids)
 
         return data_container
 
-    def handle_fit_transform(self, data_container: DataContainer) -> \
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> \
             Tuple['MiniBatchSequentialPipeline', DataContainer]:
         """
         Transform all sub pipelines splitted by the Barrier steps.
 
         :param data_container: data container to transform.
+        :param context: execution context
         :return: data container
         """
         sub_pipelines = self._create_sub_pipelines()
         index_start = 0
 
         for sub_pipeline in sub_pipelines:
+            sub_context = context.push(sub_pipeline)
+            sub_pipeline.setup()
+
             barrier = sub_pipeline[-1]
             sub_pipeline, data_container = barrier.join_fit_transform(
                 step=sub_pipeline,
-                data_container=data_container
+                data_container=data_container,
+                context=sub_context
             )
             current_ids = self.hash(data_container.current_ids, self.hyperparams)
             data_container.set_current_ids(current_ids)

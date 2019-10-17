@@ -24,7 +24,8 @@ import shutil
 from abc import abstractmethod
 from typing import Iterable, Any
 
-from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, NonFittableMixin, NonTransformableMixin
+from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, NonFittableMixin, NonTransformableMixin, \
+    ExecutionContext
 from neuraxle.pipeline import DEFAULT_CACHE_FOLDER
 from neuraxle.steps.misc import BaseValueHasher, Md5Hasher, VALUE_CACHING
 
@@ -49,29 +50,17 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
 
         self.cache_folder = cache_folder
 
-    def setup(self, step_path: str, setup_arguments: dict = None):
-        """
-        Fit transform data container using value caching.
-
-        :param setup_arguments: optional additional setup arguments
-        :type setup_arguments: dict
-
-        :param step_path: path of the step in the pipeline ex: `̀pipeline/step_name/`̀
-        :type step_path: str
-
-        :return: tuple(fitted pipeline, data_container)
-        """
-        self.create_checkpoint_path(step_path)
-
-    def handle_fit_transform(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit transform data container.
 
+        :param context: execution context
         :param data_container: the data container to transform
         :type data_container: DataContainer
 
         :return: tuple(fitted pipeline, data_container)
         """
+        self.create_checkpoint_path(context.get_path())
         self.flush_cache()
         self.wrapped = self.wrapped.fit(data_container.data_inputs, data_container.expected_outputs)
         outputs = self._transform_with_cache(data_container)
@@ -83,15 +72,17 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
 
         return self, data_container
 
-    def handle_transform(self, data_container: DataContainer) -> DataContainer:
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Transform data container.
 
+        :param context: execution context
         :param data_container: the data container to transform
         :type data_container: DataContainer
 
         :return: transformed data container
         """
+        self.create_checkpoint_path(context.get_path())
         outputs = self._transform_with_cache(data_container)
 
         data_container.set_data_inputs(outputs)

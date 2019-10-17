@@ -26,10 +26,10 @@ from neuraxle.base import BaseStep, NonFittableMixin
 from neuraxle.hyperparams.distributions import RandInt, LogUniform
 from neuraxle.hyperparams.space import nested_dict_to_flat, HyperparameterSpace
 from neuraxle.pipeline import Pipeline
-
+from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
-from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction
+from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
 from neuraxle.union import Identity, AddFeatures, ModelStacking
 
 AN_INPUT = "I am an input"
@@ -37,11 +37,12 @@ AN_EXPECTED_OUTPUT = "I am an expected output"
 
 
 class SomeStep(NonFittableMixin, BaseStep):
-    def __init__(self, hyperparams_space: HyperparameterSpace = None):
+    def __init__(self, hyperparams_space: HyperparameterSpace = None, output=AN_EXPECTED_OUTPUT):
         super().__init__(hyperparams=None, hyperparams_space=hyperparams_space)
+        self.output = output
 
     def transform(self, data_inputs):
-        return [AN_EXPECTED_OUTPUT] * len(data_inputs)
+        return [self.output] * len(data_inputs)
 
 
 steps_lists = [

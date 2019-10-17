@@ -29,7 +29,6 @@ VALUE_CACHING = 'value_caching'
 from typing import List, Any
 
 from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, DataContainer
-from neuraxle.pipeline import PipelineSaver
 
 
 class BaseCallbackStep(BaseStep, ABC):
@@ -214,21 +213,6 @@ class TapeCallbackFunction:
         :return: The list of names.
         """
         return self.name_tape
-
-
-class DataShuffler:
-    pass  # TODO.
-
-
-class NullPipelineSaver(PipelineSaver):
-    def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
-        return pipeline
-
-    def can_load(self, pipeline: 'Pipeline', data_container: DataContainer) -> bool:
-        return True
-
-    def save(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
-        return pipeline
 
 
 class DataShuffler:

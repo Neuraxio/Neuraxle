@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 
 from neuraxle.pipeline import Pipeline
@@ -67,7 +69,7 @@ def test_should_flush_cache_on_every_fit(tmpdir):
     p = Pipeline([
         wrapper
     ])
-    p.setup()
+    wrapper.create_checkpoint_path(os.path.join(tmpdir, 'Pipeline', 'PickleValueCachingWrapper'))
     wrapper.write_cache(1, 10)
     wrapper.write_cache(2, 20)
 

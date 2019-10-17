@@ -28,7 +28,8 @@ from neuraxle.base import NamedTupleList
 from neuraxle.checkpoints import BaseCheckpointStep
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline, ResumablePipeline
-from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction, NullPipelineSaver
+from neuraxle.steps.util import TapeCallbackFunction
+from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction
 from testing.test_resumable_pipeline import SomeCheckpointStep
 
 
@@ -59,6 +60,7 @@ def mock_hasher(current_ids, data_inputs, hyperparameters):
 class ResumablePipelineWithMockHasher(ResumablePipeline):
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
         return mock_hasher(current_ids, data_inputs, hyperparameters)
+
 
 class TransformCallbackStepWithMockHasher(TransformCallbackStep):
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
@@ -227,19 +229,19 @@ def create_test_cases():
 
 
 @pytest.mark.parametrize("test_case", create_test_cases())
-def test_transform_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase):
-    pipeline = ResumablePipelineWithMockHasher(steps=test_case.steps, pipeline_saver=NullPipelineSaver())
+def test_transform_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase, tmpdir):
+    pipeline = ResumablePipelineWithMockHasher(steps=test_case.steps, cache_folder=tmpdir)
 
     pipeline.transform(test_case.data_inputs)
 
     mocked_checkpoint = find_checkpoint(pipeline.steps_as_tuple)
     actual_rehashed_ids = mocked_checkpoint.saved_data_container.current_ids
-    assert np.array_equal(actual_rehashed_ids,  test_case.expected_rehashed_ids)
+    assert np.array_equal(actual_rehashed_ids, test_case.expected_rehashed_ids)
 
 
 @pytest.mark.parametrize("test_case", create_test_cases())
-def test_fit_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase):
-    pipeline = ResumablePipelineWithMockHasher(steps=test_case.steps, pipeline_saver=NullPipelineSaver())
+def test_fit_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase, tmpdir):
+    pipeline = ResumablePipelineWithMockHasher(steps=test_case.steps, cache_folder=tmpdir)
 
     pipeline.fit(test_case.data_inputs, test_case.expected_outputs)
 
@@ -249,8 +251,8 @@ def test_fit_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePi
 
 
 @pytest.mark.parametrize("test_case", create_test_cases())
-def test_fit_transform_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase):
-    pipeline = ResumablePipelineWithMockHasher(steps=test_case.steps, pipeline_saver=NullPipelineSaver())
+def test_fit_transform_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase, tmpdir):
+    pipeline = ResumablePipelineWithMockHasher(steps=test_case.steps, cache_folder=tmpdir)
 
     pipeline.fit_transform(test_case.data_inputs, test_case.expected_outputs)
 
