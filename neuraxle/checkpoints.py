@@ -22,9 +22,173 @@ The checkpoint classes used by the checkpoint pipeline runner
 import os
 import pickle
 from abc import abstractmethod
+from typing import List, Tuple
 
+from build.lib.neuraxle.checkpoints import BaseCheckpointStep
 from neuraxle.base import ResumableStepMixin, BaseStep, DataContainer, ListDataContainer, DEFAULT_CACHE_FOLDER, \
-    ExecutionContext
+    ExecutionContext, NonTransformableMixin, NonFittableMixin
+
+
+class BaseCheckpoint(BaseStep):
+    def __init__(self, cache_folder: str = DEFAULT_CACHE_FOLDER):
+        BaseStep.__init__(self)
+        self.cache_folder = cache_folder
+
+    @abstractmethod
+    def is_fit(self) -> bool:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def is_fit_transform(self) -> bool:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def is_transform(self) -> bool:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> bool:
+        raise NotImplementedError()
+
+
+class ReadableCheckpointMixin:
+    @abstractmethod
+    def read_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> bool:
+        raise NotImplementedError()
+
+    def set_checkpoint_path(self, path):
+        self.checkpoint_path = os.path.join(self.cache_folder, path)
+        if not os.path.exists(self.checkpoint_path):
+            os.makedirs(self.checkpoint_path)
+
+
+class StepCheckpoint(NonFittableMixin, NonTransformableMixin, BaseCheckpoint):
+    def is_fit(self) -> bool:
+        return True
+
+    def is_fit_transform(self) -> bool:
+        return True
+
+    def is_transform(self) -> bool:
+        return False
+
+    def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> bool:
+        context.save_all_unsaved()
+
+
+class BaseDataInputCheckpoint(NonFittableMixin, NonTransformableMixin, ReadableCheckpointMixin, BaseCheckpoint):
+    def is_fit(self) -> bool:
+        return True
+
+    def is_fit_transform(self) -> bool:
+        return True
+
+    def is_transform(self) -> bool:
+        return True
+
+    def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        self.set_checkpoint_path(context.get_path())
+        for current_id, data_input, expected_output in data_container:
+            self.save_current_id_checkpoint(current_id, data_input, expected_output)
+
+        return data_container
+
+    def read_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        list_data_container = ListDataContainer.empty()
+
+        for current_id, data_input, expected_output in data_container:
+            checkpoint_current_id, checkpoint_data_input, checkpoint_expected_outputs = self.read_current_id_checkpoint(
+                current_id)
+            list_data_container.append(
+                checkpoint_current_id,
+                checkpoint_data_input,
+                checkpoint_expected_outputs
+            )
+
+        return list_data_container
+
+    @abstractmethod
+    def save_current_id_checkpoint(self, current_id, data_input, expected_output) -> bool:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def read_current_id_checkpoint(self, current_id) -> DataContainer:
+        raise NotImplementedError()
+
+
+class PickleDataInputCheckpoint(BaseDataInputCheckpoint):
+    def save_current_id_checkpoint(self, current_id, data_input, expected_output) -> bool:
+        with open(self.get_checkpoint_file_path(current_id), 'wb') as file:
+            pickle.dump(
+                (current_id, data_input, expected_output),
+                file
+            )
+        return True
+
+    def read_current_id_checkpoint(self, current_id) -> Tuple:
+        with open(self.get_checkpoint_file_path(current_id), 'rb') as file:
+            (checkpoint_current_id, checkpoint_data_input, checkpoint_expected_output) = \
+                pickle.load(file)
+            return checkpoint_current_id, checkpoint_data_input, checkpoint_expected_output
+
+    def get_checkpoint_file_path(self, current_id) -> str:
+        """
+        Returns the checkpoint file path for a data input id
+
+        :param current_id:
+        :return:
+        """
+        return os.path.join(
+            self.checkpoint_path,
+            '{0}.pickle'.format(current_id)
+        )
+
+
+class BaseExpectedOutputsCheckpoint(NonFittableMixin, NonTransformableMixin, ReadableCheckpointMixin, BaseCheckpoint):
+    def is_fit(self) -> bool:
+        return True
+
+    def is_fit_transform(self) -> bool:
+        return True
+
+    def is_transform(self) -> bool:
+        return False
+
+    def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> bool:
+        pass
+
+    def read_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> bool:
+        pass
+
+
+class Checkpoint(BaseStep):
+    def __init__(self, checkpoint_savers: List[BaseCheckpoint] = None):
+        BaseStep.__init__(self)
+        if checkpoint_savers is None:
+            checkpoint_savers = [StepCheckpoint(), BaseDataInputCheckpoint(), BaseExpectedOutputsCheckpoint()]
+        self.checkpoint_savers: List[BaseCheckpoint] = checkpoint_savers
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        data_container = self._handle_any(context, data_container)
+        return self, data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        data_container = self._handle_any(context, data_container)
+        return data_container
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
+        data_container = self._handle_any(context, data_container)
+        return self, data_container
+
+    def _handle_any(self, context, data_container):
+        self.set_checkpoint_path(context.get_path())
+        data_container: DataContainer = self.save_checkpoint(data_container)
+
+        self.save_checkpoint(data_container)
+        context.save_all_unsaved()
+
+        return data_container
 
 
 class BaseCheckpointStep(ResumableStepMixin, BaseStep):
@@ -46,7 +210,8 @@ class BaseCheckpointStep(ResumableStepMixin, BaseStep):
         data_container = self._handle_any(context, data_container)
         return data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
         data_container = self._handle_any(context, data_container)
         return self, data_container
 
