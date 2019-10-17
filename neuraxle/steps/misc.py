@@ -42,7 +42,7 @@ class BaseCallbackStep(BaseStep, ABC):
         :param callback_function: The function that will be called on events.
         :param more_arguments: Extra arguments that will be sent to the callback after the processed data (optional).
         """
-        super().__init__(hyperparams=hyperparams)
+        BaseStep.__init__(self, hyperparams=hyperparams)
         self.transform_function = transform_function
         self.callback_function = callback_function
         self.fit_callback_function = fit_callback_function

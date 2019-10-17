@@ -118,7 +118,7 @@ class PickleCheckpointStep(BaseCheckpointStep):
     """
 
     def __init__(self, cache_folder: str = DEFAULT_CACHE_FOLDER):
-        super().__init__()
+        BaseCheckpointStep.__init__(self)
         self.cache_folder = cache_folder
 
     def read_checkpoint(self, data_container: DataContainer) -> DataContainer:
