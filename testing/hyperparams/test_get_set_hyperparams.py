@@ -166,3 +166,12 @@ def test_meta_step_mixin_should_get_hyperparams_space():
 
     assert hyperparams_space[META_STEP_HP] == RAND_INT_META_STEP
     assert hyperparams_space[SOME_STEP_HP] == RAND_INT_SOME_STEP
+
+
+def test_get_set_params_base_step():
+    s = SomeStep()
+
+    s.set_params(learning_rate=0.1)
+    hyperparams = s.get_params()
+
+    assert hyperparams == {"learning_rate": 0.1}
