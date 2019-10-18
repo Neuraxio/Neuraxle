@@ -7,7 +7,7 @@ from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction, Fit
 
 class MultiplyBy2TransformCallbackStep(TransformCallbackStep):
     def transform(self, data_inputs):
-        super().transform(data_inputs)
+        TransformCallbackStep.transform(self, data_inputs)
 
         return list(np.array(data_inputs) * 2)
 
@@ -48,7 +48,7 @@ def test_mini_batch_sequential_pipeline_should_transform_steps_sequentially_for_
 
 class MultiplyBy2FitTransformCallbackStep(FitTransformCallbackStep):
     def fit_transform(self, data_inputs, expected_outputs=None):
-        super().fit_transform(data_inputs, expected_outputs)
+        FitTransformCallbackStep.fit_transform(self, data_inputs, expected_outputs)
 
         return self, list(np.array(data_inputs) * 2)
 

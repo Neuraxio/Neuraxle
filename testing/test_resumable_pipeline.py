@@ -25,13 +25,12 @@ import pytest
 from neuraxle.base import DataContainer, ExecutionContext
 from neuraxle.checkpoints import Checkpoint
 from neuraxle.pipeline import Pipeline, ResumablePipeline
-from neuraxle.steps.util import FitTransformCallbackStep, TapeCallbackFunction
-from neuraxle.steps.misc import TapeCallbackFunction
+from neuraxle.steps.misc import TapeCallbackFunction, FitTransformCallbackStep
 
 
 class SomeCheckpointStep(Checkpoint):
     def __init__(self, data_container: DataContainer = None):
-        super().__init__()
+        BaseCheckpointStep.__init__(self)
         self.saved = False
         self.saved_data_container = data_container
         self.checkpoint_path = None

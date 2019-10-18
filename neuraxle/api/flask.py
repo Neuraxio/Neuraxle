@@ -110,7 +110,7 @@ class FlaskRestApiWrapper(Pipeline):
             wrapped: BaseStep,
             json_encoder: JSONDataResponseEncoder,
             route='/'):
-        super().__init__([
+        Pipeline.__init__(self, [
             json_decoder,
             wrapped,
             json_encoder

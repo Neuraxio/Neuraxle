@@ -36,7 +36,7 @@ class BaseCrossValidation(MetaStepMixin, BaseStep, ABC):
     # TODO: assert that set_step was called.
     # TODO: change default argument of scoring_function...
     def __init__(self, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch()):
-        super().__init__()
+        BaseStep.__init__(self)
         self.scoring_function = scoring_function
         self.joiner = joiner
 
@@ -70,7 +70,7 @@ class KFoldCrossValidation(BaseCrossValidation):
 
     def __init__(self, scoring_function=r2_score, k_fold=3, joiner=NumpyConcatenateOuterBatch()):
         self.k_fold = k_fold
-        super().__init__(scoring_function=scoring_function, joiner=joiner)
+        BaseCrossValidation.__init__(self, scoring_function=scoring_function, joiner=joiner)
 
     def split(self, data_inputs, expected_outputs):
         validation_data_inputs, validation_expected_outputs = self.validation_split(
@@ -150,13 +150,13 @@ class AnchoredWalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
         :param joiner the joiner callable that can join the different result together.
         :return: WalkForwardTimeSeriesCrossValidation instance.
         """
+        BaseCrossValidation.__init__(self, scoring_function=scoring_function, joiner=joiner)
         self.minimum_training_size = minimum_training_size
         # If validation_window_size is None, we give the same value as training_window_size.
         self.validation_window_size = validation_window_size or self.minimum_training_size
         self.padding_between_training_and_validation = padding_between_training_and_validation
         self.drop_remainder = drop_remainder
         self._validation_initial_start = self.minimum_training_size + self.padding_between_training_and_validation
-        super().__init__(scoring_function=scoring_function, joiner=joiner)
 
     def split(self, data_inputs, expected_outputs):
         """
@@ -286,9 +286,13 @@ class WalkForwardTimeSeriesCrossValidation(AnchoredWalkForwardTimeSeriesCrossVal
         :param joiner the joiner callable that can join the different result together.
         :return: WalkForwardTimeSeriesCrossValidation instance.
         """
-        super().__init__(training_window_size, validation_window_size=validation_window_size,
-                         padding_between_training_and_validation=padding_between_training_and_validation,
-                         drop_remainder=drop_remainder, scoring_function=scoring_function, joiner=joiner)
+        AnchoredWalkForwardTimeSeriesCrossValidation.__init__(
+            self,
+            training_window_size,
+            validation_window_size=validation_window_size,
+            padding_between_training_and_validation=padding_between_training_and_validation,
+            drop_remainder=drop_remainder, scoring_function=scoring_function, joiner=joiner
+        )
 
     def _train_split(self, data_inputs):
         splitted_data_inputs = []
@@ -320,7 +324,7 @@ class RandomSearch(MetaStepMixin, BaseStep):
             validation_technique: BaseCrossValidation = KFoldCrossValidation(),
             refit=True
     ):
-        super().__init__()
+        BaseStep.__init__(self)
         self.n_iter = n_iter
         self.higher_score_is_better = higher_score_is_better
         self.validation_technique: BaseCrossValidation = validation_technique

@@ -755,7 +755,7 @@ class BaseStep(ABC):
 
         return self
 
-    def tosklearn(self) -> 'NeuraxleToSKLearnPipelineWrapper':
+    def tosklearn(self):
         from sklearn.base import BaseEstimator
 
         class NeuraxleToSKLearnPipelineWrapper(BaseEstimator):
@@ -977,7 +977,7 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
     """
 
     def __init__(self):
-        super().__init__()
+        JoblibStepSaver.__init__(self)
 
     def save_step(self, step: 'TruncableSteps', context: ExecutionContext):
         """
@@ -1198,7 +1198,7 @@ class TruncableSteps(BaseStep, ABC):
                 step_name: hspace
             })
         all_hyperparams.update(
-            super().get_hyperparams_space()
+            BaseStep.get_hyperparams_space(self)
         )
 
         return all_hyperparams.to_flat()
@@ -1249,9 +1249,9 @@ class TruncableSteps(BaseStep, ABC):
                 for k, v in new_base_step.steps_as_tuple
             ]
             new_base_step._refresh_steps()
-            return super().mutate(new_method, method_to_assign_to, warn)
+            return BaseStep.mutate(self, new_method, method_to_assign_to, warn)
         else:
-            return super().mutate(new_method, method_to_assign_to, warn)
+            return BaseStep.mutate(self, new_method, method_to_assign_to, warn)
 
     def _step_name_to_index(self, step_name):
         for index, (current_step_name, step) in self.steps_as_tuple:
@@ -1494,7 +1494,7 @@ class Joiner(Barrier):
     """
 
     def __init__(self, batch_size):
-        super().__init__()
+        Barrier.__init__(self)
         self.batch_size = batch_size
 
     def join_transform(self, step: BaseStep, data_container: DataContainer, context: ExecutionContext) -> Iterable:

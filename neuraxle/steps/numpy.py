@@ -71,7 +71,7 @@ class NumpyConcatenateInnerFeatures(NumpyConcatenateOnCustomAxis):
         :return: NumpyConcatenateOnCustomAxis instance.
         """
         # The concatenate is on the inner features so axis = -1.
-        super().__init__(axis=-1)
+        NumpyConcatenateOnCustomAxis.__init__(self, axis=-1)
 
 class NumpyConcatenateOuterBatch(NumpyConcatenateOnCustomAxis):
     """
@@ -83,7 +83,7 @@ class NumpyConcatenateOuterBatch(NumpyConcatenateOnCustomAxis):
         Create a numpy concetenate outer batch object.
         :return: NumpyConcatenateOnCustomAxis instance which is inherited by base step.
         """
-        super().__init__(axis=0)
+        NumpyConcatenateOnCustomAxis.__init__(self, axis=0)
 
 
 class NumpyTranspose(NonFittableMixin, BaseStep):
