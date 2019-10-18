@@ -9,7 +9,7 @@ from testing.test_pipeline import SomeStep
 
 class SomePipeline(Pipeline):
     def __init__(self, steps: NamedTupleList):
-        super().__init__(steps)
+        Pipeline.__init__(self, steps)
         self.teared_down = False
 
     def teardown(self) -> 'BaseStep':
@@ -30,7 +30,7 @@ class SomeException(BaseStep):
 
 class SomeStepSetup(SomeStep):
     def __init__(self):
-        super().__init__()
+        SomeStep.__init__(self)
         self.called_with = None
 
     def setup(self) -> 'BaseStep':

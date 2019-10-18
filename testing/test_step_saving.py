@@ -62,7 +62,7 @@ def create_root_path(tmpdir, create_dir=False):
 
 class MultiplyBy(NonFittableMixin, BaseStep):
     def __init__(self, multiply_by):
-        super().__init__()
+        BaseStep.__init__(self)
         self.multiply_by = multiply_by
 
     def transform(self, data_inputs):
