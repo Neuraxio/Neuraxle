@@ -27,6 +27,7 @@ import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
+from enum import Enum
 from typing import Tuple, List, Union, Any, Iterable
 
 from conv import convolved_1d
@@ -218,6 +219,12 @@ class JoblibStepSaver(BaseSaver):
 
         return loaded_step
 
+class ExecutionMode(Enum):
+    FIT_OR_FIT_TRANSFORM = 'all'
+    TRANSFORM = 'transform'
+    FIT = 'fit'
+    FIT_TRANSFORM = 'fit_transform'
+
 
 class ExecutionContext:
     """
@@ -227,10 +234,12 @@ class ExecutionContext:
 
     def __init__(
             self,
+            execution_mode: ExecutionMode,
             root: str = DEFAULT_CACHE_FOLDER,
             stripped_saver: BaseSaver = None,
-            parents=None
+            parents=None,
     ):
+        self.execution_mode = execution_mode
         if stripped_saver is None:
             stripped_saver: BaseSaver = JoblibStepSaver()
 
@@ -240,9 +249,16 @@ class ExecutionContext:
             parents = []
         self.parents: List[BaseStep] = parents
 
+    def get_execution_mode(self) -> ExecutionMode:
+        return self.execution_mode
+
     @staticmethod
-    def from_root(root_step: 'BaseStep', root_path) -> 'ExecutionContext':
-        return ExecutionContext(root=root_path, parents=[root_step])
+    def from_root(mode, root_step: 'BaseStep', root_path) -> 'ExecutionContext':
+        return ExecutionContext(
+            execution_mode=mode,
+            root=root_path,
+            parents=[root_step]
+        )
 
     def save_all_unsaved(self):
         """
@@ -292,6 +308,7 @@ class ExecutionContext:
         :return: self
         """
         return ExecutionContext(
+            execution_mode=self.execution_mode,
             root=self.root,
             parents=self.parents + [step]
         )
@@ -1425,13 +1442,22 @@ class TruncableSteps(BaseStep, ABC):
 
 
 
-class ResumableStepMixin:
+class ResumableMixin:
     """
-    A step that can be resumed, for example a checkpoint on disk.
+    Mixin to add resumable function to a step, or a class that can be resumed, for example a checkpoint on disk.
     """
 
     @abstractmethod
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
+        """
+        Returns True if a step can be resumed with the given the data container, and execution context.
+        See Checkpoint class documentation for more details on how a resumable checkpoint works.
+
+        :param data_container: data container to resume from
+        :param context: execution context to resume from
+        :return: if we can resume
+        :rtype: bool
+        """
         raise NotImplementedError()
 
 

@@ -23,9 +23,9 @@ from abc import ABC, abstractmethod
 from copy import copy
 from typing import Any, Tuple, List
 
-from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, DataContainer, NonFittableMixin, \
-    Barrier, ExecutionContext
-from neuraxle.checkpoints import BaseCheckpointStep
+from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableMixin, DataContainer, NonFittableMixin, \
+    Barrier, ExecutionContext, ExecutionMode
+from neuraxle.checkpoints import BaseCheckpointStep, Checkpoint
 
 DEFAULT_CACHE_FOLDER = 'cache'
 
@@ -70,7 +70,7 @@ class Pipeline(BasePipeline):
         )
         data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
 
-        context = ExecutionContext.from_root(self, self.cache_folder)
+        context = ExecutionContext.from_root(ExecutionMode.TRANSFORM, self, self.cache_folder)
 
         data_container = self._transform_core(data_container, context)
 
@@ -95,7 +95,11 @@ class Pipeline(BasePipeline):
             expected_outputs=expected_outputs
         )
 
-        context = ExecutionContext.from_root(self, self.cache_folder)
+        context = ExecutionContext.from_root(
+            ExecutionMode.FIT_TRANSFORM,
+            self,
+            self.cache_folder
+        )
 
         new_self, data_container = self._fit_transform_core(data_container, context)
 
@@ -272,7 +276,7 @@ class Pipeline(BasePipeline):
         return self.steps_as_tuple, data_container
 
 
-class ResumablePipeline(Pipeline, ResumableStepMixin):
+class ResumablePipeline(Pipeline, ResumableMixin):
     """
     Fits and transform steps after latest checkpoint
     """
@@ -301,8 +305,8 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
         self._load_loaded_pipeline_into_self(loaded_pipeline)
 
         step = self[new_starting_step_index]
-        if isinstance(step, BaseCheckpointStep):
-            starting_step_data_container = step.read_checkpoint(starting_step_data_container)
+        if isinstance(step, Checkpoint):
+            starting_step_data_container = step.read_checkpoint(starting_step_data_container, context)
 
         return self[new_starting_step_index:], starting_step_data_container
 
@@ -312,7 +316,8 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
         self.hyperparams = loaded_self.hyperparams
         self.hyperparams_space = loaded_self.hyperparams_space
 
-    def _get_starting_step_info(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[int, DataContainer]:
+    def _get_starting_step_info(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
+        int, DataContainer]:
         """
         Find the index of the latest step that can be resumed
 
@@ -326,7 +331,7 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
 
         for index, (step_name, step) in enumerate(self.items()):
             sub_step_context = starting_step_context.push(step)
-            if isinstance(step, ResumableStepMixin) and step.should_resume(current_data_container, sub_step_context):
+            if isinstance(step, ResumableMixin) and step.should_resume(current_data_container, sub_step_context):
                 index_latest_checkpoint = index
                 starting_step_data_container = copy(current_data_container)
 
@@ -350,7 +355,7 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
         """
         for index, (step_name, step) in enumerate(reversed(self.items())):
             sub_step_context = context.push(step)
-            if isinstance(step, ResumableStepMixin) and step.should_resume(data_container, sub_step_context):
+            if isinstance(step, ResumableMixin) and step.should_resume(data_container, sub_step_context):
                 return True
 
         return False
