@@ -19,6 +19,7 @@ The checkpoint classes used by the checkpoint pipeline runner
     limitations under the License.
 
 """
+
 import os
 import pickle
 from abc import abstractmethod, ABC
