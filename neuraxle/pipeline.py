@@ -25,7 +25,7 @@ from typing import Any, Tuple, List
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableMixin, DataContainer, NonFittableMixin, \
     Barrier, ExecutionContext, ExecutionMode
-from neuraxle.checkpoints import BaseCheckpointStep, Checkpoint
+from neuraxle.checkpoints import Checkpoint
 
 DEFAULT_CACHE_FOLDER = 'cache'
 
@@ -70,7 +70,7 @@ class Pipeline(BasePipeline):
         )
         data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
 
-        context = ExecutionContext.from_root(ExecutionMode.TRANSFORM, self, self.cache_folder)
+        context = ExecutionContext.create(ExecutionMode.TRANSFORM, self, self.cache_folder)
 
         data_container = self._transform_core(data_container, context)
 
@@ -95,7 +95,7 @@ class Pipeline(BasePipeline):
             expected_outputs=expected_outputs
         )
 
-        context = ExecutionContext.from_root(
+        context = ExecutionContext.create(
             ExecutionMode.FIT_TRANSFORM,
             self,
             self.cache_folder
@@ -124,7 +124,7 @@ class Pipeline(BasePipeline):
             expected_outputs=expected_outputs
         )
 
-        context = ExecutionContext.from_root(self, self.cache_folder)
+        context = ExecutionContext.create(ExecutionMode.FIT, self, self.cache_folder)
 
         new_self, data_container = self._fit_core(data_container, context)
 
@@ -211,7 +211,7 @@ class Pipeline(BasePipeline):
             if index != index_last_step:
                 step, data_container = step.handle_fit_transform(data_container, sub_step_context)
             else:
-                step, data_container = step.handle_fit(data_container, sub_step_context)
+                step = step.handle_fit(data_container, sub_step_context)
 
             new_steps_as_tuple.append((step_name, step))
 
@@ -377,7 +377,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         """
         current_ids = self._create_current_ids(data_inputs)
         data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
-        context = ExecutionContext.from_root(self, self.cache_folder)
+        context = ExecutionContext.create(ExecutionMode.TRANSFORM, self, self.cache_folder)
         data_container = self.handle_transform(data_container, context)
 
         return data_container.data_inputs
@@ -394,7 +394,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         )
-        context = ExecutionContext.from_root(self, self.cache_folder)
+        context = ExecutionContext.create(self, self.cache_folder)
         new_self, data_container = self.handle_fit_transform(data_container, context)
 
         return new_self, data_container.data_inputs

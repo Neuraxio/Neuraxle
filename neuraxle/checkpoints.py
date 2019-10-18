@@ -26,7 +26,7 @@ from abc import abstractmethod, ABC
 from typing import List, Tuple, Iterable
 
 from neuraxle.base import ResumableMixin, BaseStep, DataContainer, ListDataContainer, ExecutionContext, \
-    ExecutionMode
+    ExecutionMode, NonTransformableMixin, NonFittableMixin
 
 
 class BaseCheckpointer(ResumableMixin):
@@ -245,12 +245,14 @@ class DataContainerCheckpointer(BaseCheckpointer):
             return DataContainerCheckpointer(
                 PickleDataContainerSaver(ExecutionMode.TRANSFORM),
                 ExecutionMode.TRANSFORM
-            ),
+            )
+
         if execution_mode == ExecutionMode.FIT:
             return DataContainerCheckpointer(
                 PickleDataContainerSaver(ExecutionMode.FIT),
                 ExecutionMode.FIT
-            ),
+            )
+
         if execution_mode == ExecutionMode.FIT_TRANSFORM:
             return DataContainerCheckpointer(
                 PickleDataContainerSaver(ExecutionMode.FIT_TRANSFORM),
@@ -323,7 +325,7 @@ class DataContainerCheckpointer(BaseCheckpointer):
         return True
 
 
-class Checkpoint(ResumableMixin, BaseStep):
+class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableMixin, BaseStep):
     """
     Resumable Checkpoint Step to load, and save both data checkpoints, and step checkpoints.
     Checkpoint uses a list of step checkpointers(List[StepCheckpointer]), and data checkpointers(List[BaseCheckpointer]).

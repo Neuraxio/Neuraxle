@@ -30,7 +30,7 @@ from neuraxle.steps.misc import TapeCallbackFunction, FitTransformCallbackStep
 
 class SomeCheckpointStep(Checkpoint):
     def __init__(self, data_container: DataContainer = None):
-        BaseCheckpointStep.__init__(self)
+        Checkpoint.__init__(self)
         self.saved = False
         self.saved_data_container = data_container
         self.checkpoint_path = None

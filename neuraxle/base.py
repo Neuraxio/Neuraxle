@@ -253,7 +253,7 @@ class ExecutionContext:
         return self.execution_mode
 
     @staticmethod
-    def from_root(mode, root_step: 'BaseStep', root_path) -> 'ExecutionContext':
+    def create(mode, root_step: 'BaseStep', root_path) -> 'ExecutionContext':
         return ExecutionContext(
             execution_mode=mode,
             root=root_path,
