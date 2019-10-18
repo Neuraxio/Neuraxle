@@ -377,7 +377,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableMixin, BaseSt
             ]
         self.data_checkpointers: List[BaseCheckpointer] = data_checkpointers
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'Checkpoint':
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> Tuple['Checkpoint', DataContainer]:
         """
         Saves step, and data checkpointers for the FIT execution mode.
 
@@ -387,7 +387,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableMixin, BaseSt
         :rtype: DataContainer
         """
         self.save_checkpoint(data_container, context)
-        return self
+        return self, data_container
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """

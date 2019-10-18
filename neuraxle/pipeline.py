@@ -211,7 +211,7 @@ class Pipeline(BasePipeline):
             if index != index_last_step:
                 step, data_container = step.handle_fit_transform(data_container, sub_step_context)
             else:
-                step = step.handle_fit(data_container, sub_step_context)
+                step, data_container = step.handle_fit(data_container, sub_step_context)
 
             new_steps_as_tuple.append((step_name, step))
 
@@ -394,7 +394,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         )
-        context = ExecutionContext.create(self, self.cache_folder)
+        context = ExecutionContext.create(ExecutionMode.FIT_TRANSFORM, self, self.cache_folder)
         new_self, data_container = self.handle_fit_transform(data_container, context)
 
         return new_self, data_container.data_inputs

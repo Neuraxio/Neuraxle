@@ -80,8 +80,8 @@ def test_when_no_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
     actual_tape = tape.get_name_tape()
     assert np.array_equal(actual_data_inputs, data_inputs)
     assert actual_tape == ["1", "2", "3"]
-    assert os.path.exists(pickle_checkpoint_step.get_checkpoint_file_path(0))
-    assert os.path.exists(pickle_checkpoint_step.get_checkpoint_file_path(1))
+    assert os.path.exists(pickle_checkpoint_step.data_checkpointers[2].data_checkpointer.get_checkpoint_file_path(0))
+    assert os.path.exists(pickle_checkpoint_step.data_checkpointers[2].data_checkpointer.get_checkpoint_file_path(1))
 
 
 def test_when_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
@@ -94,8 +94,8 @@ def test_when_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
     actual_tape = tape.get_name_tape()
     assert np.array_equal(actual_data_inputs, data_inputs)
     assert actual_tape == ["1", "2", "3"]
-    assert os.path.exists(pickle_checkpoint_step.get_checkpoint_file_path(expected_rehashed_data_inputs[0]))
-    assert os.path.exists(pickle_checkpoint_step.get_checkpoint_file_path(expected_rehashed_data_inputs[1]))
+    assert os.path.exists(pickle_checkpoint_step.data_checkpointers[2].data_checkpointer.get_checkpoint_file_path(expected_rehashed_data_inputs[0]))
+    assert os.path.exists(pickle_checkpoint_step.data_checkpointers[2].data_checkpointer.get_checkpoint_file_path(expected_rehashed_data_inputs[1]))
 
 
 def test_when_no_hyperparams_and_saved_same_pipeline_should_load_checkpoint_pickle(tmpdir: LocalPath):
