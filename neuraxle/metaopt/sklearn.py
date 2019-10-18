@@ -25,7 +25,13 @@ from neuraxle.base import MetaStepMixin, BaseStep
 
 class MetaSKLearnWrapper(MetaStepMixin, BaseStep):
 
-    def __init__(self, wrapped: 'MetaEstimatorMixin'):
+    def __init__(self, wrapped):
+        """
+        Wrap a scikit-learn MetaEstimatorMixin for usage in Neuraxle. 
+        This class is similar to the SKLearnWrapper class of Neuraxle that can wrap a scikit-learn BaseEstimator. 
+        
+        :param wrapped: a scikit-learn object of type "MetaEstimatorMixin". 
+        """
         self.wrapped_sklearn_metaestimator = wrapped
         # sklearn.model_selection.RandomizedSearchCV
         super().__init__()
