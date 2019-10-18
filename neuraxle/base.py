@@ -738,7 +738,7 @@ class BaseStep(ABC):
 
         return self
 
-    def tosklearn(self) -> 'NeuraxleToSKLearnPipelineWrapper':
+    def tosklearn(self):
         from sklearn.base import BaseEstimator
 
         class NeuraxleToSKLearnPipelineWrapper(BaseEstimator):
