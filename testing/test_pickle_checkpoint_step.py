@@ -31,7 +31,6 @@ from neuraxle.checkpoints import PickleCheckpointStep
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import ResumablePipeline
 from neuraxle.steps.misc import TapeCallbackFunction, TransformCallbackStep, BaseCallbackStep
-from neuraxle.steps.util import TapeCallbackFunction, TransformCallbackStep
 from testing.steps.test_output_transformer_wrapper import MultiplyBy2OutputTransformer
 
 EXPECTED_TAPE_AFTER_CHECKPOINT = ["2", "3"]

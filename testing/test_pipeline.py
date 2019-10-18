@@ -29,7 +29,6 @@ from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
-from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
 from neuraxle.union import Identity, AddFeatures, ModelStacking
 
 AN_INPUT = "I am an input"
@@ -38,7 +37,8 @@ AN_EXPECTED_OUTPUT = "I am an expected output"
 
 class SomeStep(NonFittableMixin, BaseStep):
     def __init__(self, hyperparams_space: HyperparameterSpace = None, output=AN_EXPECTED_OUTPUT):
-        super().__init__(hyperparams=None, hyperparams_space=hyperparams_space)
+        BaseStep.__init__(self, hyperparams=None, hyperparams_space=hyperparams_space)
+        NonFittableMixin.__init__(self)
         self.output = output
 
     def transform(self, data_inputs):

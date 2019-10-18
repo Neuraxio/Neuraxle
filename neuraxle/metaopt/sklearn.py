@@ -32,9 +32,10 @@ class MetaSKLearnWrapper(MetaStepMixin, BaseStep):
         
         :param wrapped: a scikit-learn object of type "MetaEstimatorMixin". 
         """
-        self.wrapped_sklearn_metaestimator = wrapped
+        MetaStepMixin.__init__(self)
+        BaseStep.__init__(self)
+        self.wrapped_sklearn_metaestimator = wrapped  # TODO: use self.set_step of the MetaStepMixin instead?
         # sklearn.model_selection.RandomizedSearchCV
-        super().__init__()
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
         self.wrapped_sklearn_metaestimator = self.wrapped_sklearn_metaestimator.fit(data_inputs, expected_outputs)

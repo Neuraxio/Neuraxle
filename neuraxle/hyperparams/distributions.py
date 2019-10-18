@@ -108,8 +108,8 @@ class FixedHyperparameter(HyperparameterDistribution):
 
         :param value: what will be returned by calling ``.rvs()``.
         """
+        HyperparameterDistribution.__init__(self)
         self.value = value
-        super(FixedHyperparameter, self).__init__()
 
     def rvs(self):
         """
@@ -168,8 +168,8 @@ class Choice(HyperparameterDistribution):
 
         :param choice_list: a list of values to sample from.
         """
+        HyperparameterDistribution.__init__(self)
         self.choice_list = choice_list
-        super(Choice, self).__init__()
 
     def rvs(self):
         """
@@ -220,8 +220,8 @@ class PriorityChoice(HyperparameterDistribution):
 
         :param choice_list: a list of values to sample from. First placed, first kept when space is narrowed.
         """
+        HyperparameterDistribution.__init__(self)
         self.choice_list = choice_list
-        super(PriorityChoice, self).__init__()
 
     def rvs(self):
         """
@@ -278,9 +278,9 @@ class WrappedHyperparameterDistributions(HyperparameterDistribution):
         :param hd: the other HyperparameterDistribution to wrap.
         :param hds: the others HyperparameterDistribution to wrap.
         """
+        HyperparameterDistribution.__init__(self)
         self.hd: HyperparameterDistribution = hd
         self.hds: List[HyperparameterDistribution] = hds
-        super(WrappedHyperparameterDistributions, self).__init__()
 
     def __repr__(self):
         return self.__class__.__name__ + "(" + repr(self.hd) + ", hds=" + repr(self.hds) + ")"
@@ -324,9 +324,9 @@ class RandInt(HyperparameterDistribution):
         :param min_included: minimum integer, included.
         :param max_included: maximum integer, included.
         """
+        HyperparameterDistribution.__init__(self)
         self.min_included = min_included
         self.max_included = max_included
-        super(RandInt, self).__init__()
 
     def rvs(self) -> int:
         """
@@ -363,9 +363,9 @@ class Uniform(HyperparameterDistribution):
         :param min_included: minimum integer, included.
         :param max_included: maximum integer, might be included - for more info, see https://docs.python.org/2/library/random.html#random.uniform
         """
+        HyperparameterDistribution.__init__(self)
         self.min_included: float = min_included
         self.max_included: float = max_included
-        super(Uniform, self).__init__()
 
     def rvs(self) -> float:
         """
@@ -404,9 +404,9 @@ class LogUniform(HyperparameterDistribution):
         :param min_included: minimum integer, should be somehow included.
         :param max_included: maximum integer, should be somehow included.
         """
+        HyperparameterDistribution.__init__(self)
         self.log2_min_included = math.log2(min_included)
         self.log2_max_included = math.log2(max_included)
-        super(LogUniform, self).__init__()
 
     def rvs(self) -> float:
         """
@@ -446,11 +446,11 @@ class Normal(HyperparameterDistribution):
         :param hard_clip_min: if not none, rvs will return max(result, hard_clip_min).
         :param hard_clip_max: if not none, rvs will return min(result, hard_clip_min).
         """
+        HyperparameterDistribution.__init__(self)
         self.mean = mean,
         self.std = std
         self.hard_clip_min = hard_clip_min
         self.hard_clip_max = hard_clip_max
-        super(Normal, self).__init__()
 
     def rvs(self) -> float:
         """
@@ -504,11 +504,11 @@ class LogNormal(HyperparameterDistribution):
         :param hard_clip_min: if not none, rvs will return max(result, hard_clip_min). This value is not checked in logspace (so it is checked after the exp).
         :param hard_clip_max: if not none, rvs will return min(result, hard_clip_min). This value is not checked in logspace (so it is checked after the exp).
         """
+        HyperparameterDistribution.__init__(self)
         self.log2_space_mean = log2_space_mean
         self.log2_space_std = log2_space_std
         self.hard_clip_min = hard_clip_min
         self.hard_clip_max = hard_clip_max
-        super(LogNormal, self).__init__()
 
     def rvs(self) -> float:
         """

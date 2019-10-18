@@ -12,7 +12,7 @@ EXPECTED_OUTPUTS = [0.0, 0.0, 0.6931471805599453, 0.6931471805599453]
 
 class LogFitTransformCallbackStep(FitTransformCallbackStep):
     def fit_transform(self, data_inputs, expected_outputs=None):
-        super().fit_transform(data_inputs, expected_outputs)
+        FitTransformCallbackStep.fit_transform(self, data_inputs, expected_outputs)
         return self, np.log(data_inputs)
 
 
