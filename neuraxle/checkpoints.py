@@ -18,7 +18,6 @@ The checkpoint classes used by the checkpoint pipeline runner
     See the License for the specific language governing permissions and
     limitations under the License.
 
-
 """
 
 import os
@@ -376,7 +375,7 @@ class Checkpoint(ResumableMixin, BaseStep):
             ]
         self.data_checkpointers: List[BaseCheckpointer] = data_checkpointers
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'Checkpoint':
         """
         Saves step, and data checkpointers for the FIT execution mode.
 
@@ -385,7 +384,8 @@ class Checkpoint(ResumableMixin, BaseStep):
         :return: saved data container
         :rtype: DataContainer
         """
-        return self._handle_any(data_container, context)
+        self.save_checkpoint(data_container, context)
+        return self
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -396,11 +396,9 @@ class Checkpoint(ResumableMixin, BaseStep):
         :return: saved data container
         :rtype: DataContainer
         """
-        return self._handle_any(data_container, context)
+        return self.save_checkpoint(data_container, context)
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer
-    ):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> Tuple['Checkpoint', DataContainer]:
         """
         Saves step, and data checkpointers for the FIT_TRANSORM execution mode.
 
@@ -409,9 +407,9 @@ class Checkpoint(ResumableMixin, BaseStep):
         :return: saved data container
         :rtype: DataContainer
         """
-        return self._handle_any(data_container, context)
+        return self, self.save_checkpoint(data_container, context)
 
-    def _handle_any(self, data_container, context):
+    def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext):
         """
         Saves step, and data checkpointers for the current execution mode.
 
