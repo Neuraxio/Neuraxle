@@ -80,8 +80,8 @@ def test_when_no_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
     actual_tape = tape.get_name_tape()
     assert np.array_equal(actual_data_inputs, data_inputs)
     assert actual_tape == ["1", "2", "3"]
-    assert os.path.exists(pickle_checkpoint_step.data_checkpointers[2].data_checkpointer.get_checkpoint_file_path(0))
-    assert os.path.exists(pickle_checkpoint_step.data_checkpointers[2].data_checkpointer.get_checkpoint_file_path(1))
+    assert os.path.exists(pickle_checkpoint_step.data_checkpointers[2].data_checkpointer.get_checkpoint_path(0))
+    assert os.path.exists(pickle_checkpoint_step.data_checkpointers[2].data_checkpointer.get_checkpoint_path(1))
 
 
 def test_when_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
@@ -94,8 +94,8 @@ def test_when_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
     actual_tape = tape.get_name_tape()
     assert np.array_equal(actual_data_inputs, data_inputs)
     assert actual_tape == ["1", "2", "3"]
-    assert os.path.exists(pickle_checkpoint_step.data_checkpointers[2].data_checkpointer.get_checkpoint_file_path(expected_rehashed_data_inputs[0]))
-    assert os.path.exists(pickle_checkpoint_step.data_checkpointers[2].data_checkpointer.get_checkpoint_file_path(expected_rehashed_data_inputs[1]))
+    assert os.path.exists(pickle_checkpoint_step.data_checkpointers[2].data_checkpointer.get_checkpoint_path(expected_rehashed_data_inputs[0]))
+    assert os.path.exists(pickle_checkpoint_step.data_checkpointers[2].data_checkpointer.get_checkpoint_path(expected_rehashed_data_inputs[1]))
 
 
 def test_when_no_hyperparams_and_saved_same_pipeline_should_load_checkpoint_pickle(tmpdir: LocalPath):
@@ -209,7 +209,7 @@ def test_when_hyperparams_and_saved_no_pipeline_should_not_load_checkpoint_pickl
 
 
 def setup_pickle_checkpoint(current_id, data_input, expected_output, pickle_checkpoint_step):
-    with open(pickle_checkpoint_step.get_checkpoint_file_path(current_id), 'wb') as file:
+    with open(pickle_checkpoint_step.get_checkpoint_path(current_id), 'wb') as file:
         pickle.dump((current_id, data_input, expected_output), file)
 
 
@@ -230,11 +230,7 @@ def test_pickle_checkpoint_step_should_load_data_container(tmpdir: LocalPath):
     transformer = create_pipeline_output_transformer()
     actual_data_container = transformer.handle_transform(
         DataContainer(current_ids=[0, 1], data_inputs=initial_data_inputs, expected_outputs=initial_expected_outputs),
-        ExecutionContext.create(
-            ExecutionMode.TRANSFORM,
-            transformer,
-            tmpdir
-        )
+        ExecutionContext.create(transformer, ExecutionMode.TRANSFORM, tmpdir)
     )
 
     assert np.array_equal(actual_data_container.data_inputs, [4, 8])

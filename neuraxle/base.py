@@ -220,7 +220,8 @@ class JoblibStepSaver(BaseSaver):
         return loaded_step
 
 class ExecutionMode(Enum):
-    FIT_OR_FIT_TRANSFORM = 'all'
+    FIT_OR_FIT_TRANSFORM_OR_TRANSFORM = 'fit_or_fit_transform_transform'
+    FIT_OR_FIT_TRANSFORM = 'fit_or_fit_transform'
     TRANSFORM = 'transform'
     FIT = 'fit'
     FIT_TRANSFORM = 'fit_transform'
@@ -253,9 +254,9 @@ class ExecutionContext:
         return self.execution_mode
 
     @staticmethod
-    def create(mode, root_step: 'BaseStep', root_path) -> 'ExecutionContext':
+    def create(root_step: 'BaseStep', execution_mode, root_path) -> 'ExecutionContext':
         return ExecutionContext(
-            execution_mode=mode,
+            execution_mode=execution_mode,
             root=root_path,
             parents=[root_step]
         )

@@ -22,6 +22,7 @@ The checkpoint classes used by the checkpoint pipeline runner
 
 import os
 import pickle
+import warnings
 from abc import abstractmethod, ABC
 from typing import List, Tuple, Iterable
 
@@ -37,6 +38,7 @@ class BaseCheckpointer(ResumableMixin):
 
     BaseCheckpointer has an execution mode so there could be different checkpoints for each execution mode (fit, fit_transform or transform).
     """
+
     def __init__(
             self,
             execution_mode: ExecutionMode
@@ -59,9 +61,8 @@ class BaseCheckpointer(ResumableMixin):
             return self.execution_mode == ExecutionMode.FIT_TRANSFORM or \
                    self.execution_mode == ExecutionMode.FIT_OR_FIT_TRANSFORM
 
-        if execution_mode == ExecutionMode.FIT:
-            return self.execution_mode == ExecutionMode.FIT or \
-                   self.execution_mode == ExecutionMode.FIT_OR_FIT_TRANSFORM
+        if execution_mode == ExecutionMode.TRANSFORM:
+            return self.execution_mode == ExecutionMode.TRANSFORM
 
     @abstractmethod
     def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -90,7 +91,8 @@ class BaseCheckpointer(ResumableMixin):
         """
         raise NotImplementedError()
 
-class StepCheckpointer(BaseCheckpointer):
+
+class StepSavingCheckpointer(BaseCheckpointer):
     """
     StepCheckpointer is used by the Checkpoint step to save the fitted steps contained in the context of type ExecutionContext.
 
@@ -103,9 +105,10 @@ class StepCheckpointer(BaseCheckpointer):
     StepCheckpointer()
     ```
     """
+
     def __init__(
-        self,
-        execution_mode: ExecutionMode = ExecutionMode.FIT_OR_FIT_TRANSFORM,
+            self,
+            execution_mode: ExecutionMode = ExecutionMode.FIT_OR_FIT_TRANSFORM,
     ):
         BaseCheckpointer.__init__(self, execution_mode=execution_mode)
 
@@ -123,12 +126,11 @@ class StepCheckpointer(BaseCheckpointer):
         return True
 
 
-class BaseDataContainerSaver(ABC):
-
+class BaseDataSaver(ABC):
     @abstractmethod
-    def get_checkpoint_file_path(self, checkpoint_path: str, current_id) -> str:
+    def get_checkpoint_path(self, checkpoint_path: str, current_id) -> str:
         """
-        Returns the checkpoint file path for a data input id
+        Returns the checkpoint path for a data input id
 
         :param checkpoint_path:
         :param current_id:
@@ -137,7 +139,7 @@ class BaseDataContainerSaver(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def save_current_id_checkpoint(self, checkpoint_path: str, current_id, data_input, expected_output) -> bool:
+    def save_checkpoint_for_current_id(self, checkpoint_path: str, current_id, data_input, expected_output) -> bool:
         """
         Save the given current id, data input, and expected output.
 
@@ -150,7 +152,7 @@ class BaseDataContainerSaver(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def read_current_id_checkpoint(self, checkpoint_path: str, current_id) -> Tuple:
+    def read_checkpoint_for_current_id(self, checkpoint_path: str, current_id) -> Tuple:
         """
         Read the data inputs, and expected outputs for the given current id.
 
@@ -162,11 +164,12 @@ class BaseDataContainerSaver(ABC):
         raise NotImplementedError()
 
 
-class PickleDataContainerSaver(BaseDataContainerSaver):
+class PickleDataSaver(BaseDataSaver):
     """
     PickleDataContainerSaver is used by DataContainerCheckpointer so save,
     and load the checkpoint files for all of the current ids inside a data container.
     """
+
     def __init__(self, execution_mode: ExecutionMode):
         if execution_mode == ExecutionMode.FIT:
             self.checkpoint_file_name_suffix = ExecutionMode.FIT.value
@@ -177,7 +180,7 @@ class PickleDataContainerSaver(BaseDataContainerSaver):
         if execution_mode == ExecutionMode.FIT_TRANSFORM:
             self.checkpoint_file_name_suffix = ExecutionMode.FIT_TRANSFORM.value
 
-    def save_current_id_checkpoint(self, checkpoint_path: str, current_id, data_input, expected_output) -> bool:
+    def save_checkpoint_for_current_id(self, checkpoint_path: str, current_id, data_input, expected_output) -> bool:
         """
         Save the given current id, data input, and expected output using pickle.dump.
 
@@ -187,12 +190,12 @@ class PickleDataContainerSaver(BaseDataContainerSaver):
         :param expected_output:
         :return:
         """
-        with open(self.get_checkpoint_file_path(checkpoint_path, current_id), 'wb') as file:
+        with open(self.get_checkpoint_path(checkpoint_path, current_id), 'wb') as file:
             pickle.dump((current_id, data_input, expected_output), file)
 
         return True
 
-    def read_current_id_checkpoint(self, checkpoint_path: str, current_id) -> Tuple[str, Iterable, Iterable]:
+    def read_checkpoint_for_current_id(self, checkpoint_path: str, current_id) -> Tuple[str, Iterable, Iterable]:
         """
         Read the data inputs, and expected outputs for the given current id using pickle.load.
 
@@ -201,12 +204,12 @@ class PickleDataContainerSaver(BaseDataContainerSaver):
         :return: tuple(current_id, checkpoint_data_input, checkpoint_expected_output)
         :rtype: tuple(str, Iterable, Iterable)
         """
-        with open(self.get_checkpoint_file_path(checkpoint_path, current_id), 'rb') as file:
+        with open(self.get_checkpoint_path(checkpoint_path, current_id), 'rb') as file:
             (checkpoint_current_id, checkpoint_data_input, checkpoint_expected_output) = \
                 pickle.load(file)
             return checkpoint_current_id, checkpoint_data_input, checkpoint_expected_output
 
-    def get_checkpoint_file_path(self, checkpoint_path: str, current_id) -> str:
+    def get_checkpoint_path(self, checkpoint_path: str, current_id) -> str:
         """
         Get the checkpoint file path for a data input id
 
@@ -229,35 +232,16 @@ class DataContainerCheckpointer(BaseCheckpointer):
     DataContainerCheckpointer loops through a data container to save, or load the data inputs,
     and expected outputs using the current_ids inside the data container.
     """
+
     def __init__(
             self,
-            data_container_saver: BaseDataContainerSaver,
+            data_container_saver: BaseDataSaver,
             execution_mode: ExecutionMode
     ):
         BaseCheckpointer.__init__(self, execution_mode)
 
         self.execution_mode: ExecutionMode = execution_mode
-        self.data_checkpointer: BaseDataContainerSaver = data_container_saver
-
-    @staticmethod
-    def create_pickle_checkpointer(execution_mode: ExecutionMode):
-        if execution_mode == ExecutionMode.TRANSFORM:
-            return DataContainerCheckpointer(
-                PickleDataContainerSaver(ExecutionMode.TRANSFORM),
-                ExecutionMode.TRANSFORM
-            )
-
-        if execution_mode == ExecutionMode.FIT:
-            return DataContainerCheckpointer(
-                PickleDataContainerSaver(ExecutionMode.FIT),
-                ExecutionMode.FIT
-            )
-
-        if execution_mode == ExecutionMode.FIT_TRANSFORM:
-            return DataContainerCheckpointer(
-                PickleDataContainerSaver(ExecutionMode.FIT_TRANSFORM),
-                ExecutionMode.FIT_TRANSFORM
-            )
+        self.data_checkpointer: BaseDataSaver = data_container_saver
 
     def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -269,7 +253,7 @@ class DataContainerCheckpointer(BaseCheckpointer):
         """
         context.mkdir()
         for current_id, data_input, expected_output in data_container:
-            self.data_checkpointer.save_current_id_checkpoint(
+            self.data_checkpointer.save_checkpoint_for_current_id(
                 context.get_path(),
                 current_id,
                 data_input,
@@ -292,7 +276,7 @@ class DataContainerCheckpointer(BaseCheckpointer):
 
         for current_id, data_input, expected_output in data_container:
             checkpoint_current_id, checkpoint_data_input, checkpoint_expected_outputs = \
-                self.data_checkpointer.read_current_id_checkpoint(
+                self.data_checkpointer.read_checkpoint_for_current_id(
                     context.get_path(),
                     current_id
                 )
@@ -315,7 +299,7 @@ class DataContainerCheckpointer(BaseCheckpointer):
         """
         for current_id in data_container.current_ids:
             if not os.path.exists(
-                    self.data_checkpointer.get_checkpoint_file_path(
+                    self.data_checkpointer.get_checkpoint_path(
                         context.get_path(),
                         current_id
                     )
@@ -356,28 +340,25 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableMixin, BaseSt
     Checkpoint()
     ```
     """
+
     def __init__(
             self,
-            step_checkpointers: List[StepCheckpointer] = None,
+            step_checkpointers: List[StepSavingCheckpointer] = None,
             data_checkpointers: List[BaseCheckpointer] = None
     ):
         BaseStep.__init__(self)
-
         if step_checkpointers is None:
-            step_checkpointers = [
-                StepCheckpointer(ExecutionMode.FIT_OR_FIT_TRANSFORM)
-            ]
+            step_checkpointers = []
+            warnings.warn('Checkpoint Step Initialized without Step checkpointers: {0}.'.format(self.name))
         self.step_checkpointers = step_checkpointers
 
         if data_checkpointers is None:
-            data_checkpointers = [
-                DataContainerCheckpointer.create_pickle_checkpointer(ExecutionMode.TRANSFORM),
-                DataContainerCheckpointer.create_pickle_checkpointer(ExecutionMode.FIT),
-                DataContainerCheckpointer.create_pickle_checkpointer(ExecutionMode.FIT_TRANSFORM),
-            ]
+            data_checkpointers = []
+
         self.data_checkpointers: List[BaseCheckpointer] = data_checkpointers
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> Tuple['Checkpoint', DataContainer]:
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
+        'Checkpoint', DataContainer]:
         """
         Saves step, and data checkpointers for the FIT execution mode.
 
@@ -400,7 +381,8 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableMixin, BaseSt
         """
         return self.save_checkpoint(data_container, context)
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> Tuple['Checkpoint', DataContainer]:
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
+        'Checkpoint', DataContainer]:
         """
         Saves step, and data checkpointers for the FIT_TRANSORM execution mode.
 
@@ -460,3 +442,25 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableMixin, BaseSt
                     return False
 
         return True
+
+
+class PickleDataCheckpoint(Checkpoint):
+    def __init__(self):
+        Checkpoint.__init__(
+            self,
+            step_checkpointers=[StepSavingCheckpointer(ExecutionMode.FIT_OR_FIT_TRANSFORM)],
+            data_checkpointers=[
+                DataContainerCheckpointer(
+                    PickleDataSaver(ExecutionMode.TRANSFORM),
+                    ExecutionMode.TRANSFORM
+                ),
+                DataContainerCheckpointer(
+                    PickleDataSaver(ExecutionMode.FIT),
+                    ExecutionMode.FIT
+                ),
+                DataContainerCheckpointer(
+                    PickleDataSaver(ExecutionMode.FIT_TRANSFORM),
+                    ExecutionMode.FIT_TRANSFORM
+                )
+            ]
+        )

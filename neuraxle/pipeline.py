@@ -70,7 +70,7 @@ class Pipeline(BasePipeline):
         )
         data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
 
-        context = ExecutionContext.create(ExecutionMode.TRANSFORM, self, self.cache_folder)
+        context = ExecutionContext.create(self, ExecutionMode.TRANSFORM, self.cache_folder)
 
         data_container = self._transform_core(data_container, context)
 
@@ -95,11 +95,7 @@ class Pipeline(BasePipeline):
             expected_outputs=expected_outputs
         )
 
-        context = ExecutionContext.create(
-            ExecutionMode.FIT_TRANSFORM,
-            self,
-            self.cache_folder
-        )
+        context = ExecutionContext.create(self, ExecutionMode.FIT_TRANSFORM, self.cache_folder)
 
         new_self, data_container = self._fit_transform_core(data_container, context)
 
@@ -124,7 +120,7 @@ class Pipeline(BasePipeline):
             expected_outputs=expected_outputs
         )
 
-        context = ExecutionContext.create(ExecutionMode.FIT, self, self.cache_folder)
+        context = ExecutionContext.create(self, ExecutionMode.FIT, self.cache_folder)
 
         new_self, data_container = self._fit_core(data_container, context)
 
@@ -302,7 +298,7 @@ class ResumablePipeline(Pipeline, ResumableMixin):
         if not self.are_steps_before_index_the_same(loaded_pipeline, new_starting_step_index):
             return self.steps_as_tuple, data_container
 
-        self._load_loaded_pipeline_into_self(loaded_pipeline)
+        self._assign_loaded_pipeline_into_self(loaded_pipeline)
 
         step = self[new_starting_step_index]
         if isinstance(step, Checkpoint):
@@ -310,7 +306,7 @@ class ResumablePipeline(Pipeline, ResumableMixin):
 
         return self[new_starting_step_index:], starting_step_data_container
 
-    def _load_loaded_pipeline_into_self(self, loaded_self):
+    def _assign_loaded_pipeline_into_self(self, loaded_self):
         self.steps_as_tuple = loaded_self.steps_as_tuple
         self._refresh_steps()
         self.hyperparams = loaded_self.hyperparams
@@ -377,7 +373,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         """
         current_ids = self._create_current_ids(data_inputs)
         data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
-        context = ExecutionContext.create(ExecutionMode.TRANSFORM, self, self.cache_folder)
+        context = ExecutionContext.create(self, ExecutionMode.TRANSFORM, self.cache_folder)
         data_container = self.handle_transform(data_container, context)
 
         return data_container.data_inputs
@@ -394,7 +390,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         )
-        context = ExecutionContext.create(ExecutionMode.FIT_TRANSFORM, self, self.cache_folder)
+        context = ExecutionContext.create(self, ExecutionMode.FIT_TRANSFORM, self.cache_folder)
         new_self, data_container = self.handle_fit_transform(data_container, context)
 
         return new_self, data_container.data_inputs
