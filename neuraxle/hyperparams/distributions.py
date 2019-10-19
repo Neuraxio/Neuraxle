@@ -154,6 +154,33 @@ class Boolean(HyperparameterDistribution):
         """
         return random.choice([True, False])
 
+    def pdf(self, x) -> float:
+        """
+        Calculate the boolean probability mass function value at position `x`.
+        :param x: value where the probability mass function is evaluated.
+        :return: value of the probability mass function.
+        """
+        if (x is True) or (x == 1) or (x is False) or (x == 0):
+            return 0.5
+
+        return 0.
+
+    def cdf(self, x) -> float:
+        """
+        Calculate the boolean cumulative distribution function value at position `x`.
+        :param x: value where the cumulative distribution function is evaluated.
+        :return: value of the cumulative distribution function.
+        """
+        if x < 0:
+            return 0.
+
+        if (0 <= x < 1) or (x is False):
+            return 0.5
+
+        if x >= 1 or (x is True):
+            return 1.
+
+        return 0.
 
 class Choice(HyperparameterDistribution):
     """Get a random value from a choice list of possible value for this hyperparameter.
@@ -336,6 +363,33 @@ class RandInt(HyperparameterDistribution):
         :return: an integer.
         """
         return random.randint(self.min_included, self.max_included)
+
+    def pdf(self, x) -> float:
+        """
+        Calculate the random int mass function value at position `x`.
+        :param x: value where the probability mass function is evaluated.
+        :return: value of the probability mass function.
+        """
+
+        possible_values = set(range(self.min_included, self.max_included+1))
+        if (isinstance(x, int) or x.is_integer()) and x in possible_values:
+            return 1 / (self.max_included - self.min_included + 1)
+
+        return 0.
+
+    def cdf(self, x) -> float:
+        """
+        Calculate the random int cumulative distribution function value at position `x`.
+        :param x: value where the cumulative distribution function is evaluated.
+        :return: value of the cumulative distribution function.
+        """
+        if x < self.min_included:
+            return 0.
+
+        if x > self.max_included:
+            return 1.
+
+        return (math.floor(x) - self.min_included + 1) / (self.max_included - self.min_included + 1)
 
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
         """

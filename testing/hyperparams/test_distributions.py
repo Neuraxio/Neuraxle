@@ -42,7 +42,19 @@ def test_boolean_distribution():
     # You'd need to win the lotto for this test to fail. Or a broken random sampler. Or a bug.
     assert trues > NUM_TRIALS * 0.4
     assert falses > NUM_TRIALS * 0.4
+    assert hd.pdf(False) == 0.5
+    assert hd.pdf(0.) == 0.5
+    assert hd.pdf(True) == 0.5
+    assert hd.pdf(1.) == 0.5
+    assert hd.pdf(-0.1) == 0.
+    assert hd.pdf(1.1) == 0.
 
+    assert hd.cdf(False) == 0.5
+    assert hd.cdf(0.) == 0.5
+    assert hd.cdf(True) == 1.
+    assert hd.cdf(1.) == 1.
+    assert hd.cdf(-0.1) == 0.
+    assert hd.cdf(1.1) == 1.
 
 @pytest.mark.parametrize("ctor", [Choice, PriorityChoice])
 def test_choice_and_priority_choice(ctor):
@@ -86,6 +98,19 @@ def test_randint():
     assert min(samples) >= -10.0
     assert max(samples) <= 10.0
 
+    assert hd.pdf(-11) == 0.
+    assert abs(hd.pdf(-10) - 1 / (10 + 10 + 1)) < 1e-6
+    assert abs(hd.pdf(0) - 1 / (10 + 10 + 1)) < 1e-6
+    assert hd.pdf(0.5) == 0.
+    assert abs(hd.pdf(10) - 1 / (10 + 10 + 1)) < 1e-6
+    assert hd.pdf(11) == 0.
+
+    assert hd.cdf(-10.1) == 0.
+    assert abs(hd.cdf(-10) - 1 / (10 + 10 + 1)) < 1e-6
+    assert abs(hd.cdf(0) - (0 + 10 + 1) / (10 + 10 + 1)) < 1e-6
+    assert abs(hd.cdf(5) - (5 + 10 + 1) / (10 + 10 + 1)) < 1e-6
+    assert abs(hd.cdf(10) - 1.) < 1e-6
+    assert hd.cdf(10.1) == 1.
 
 def test_uniform():
     hd = Uniform(-10, 10)
@@ -97,10 +122,10 @@ def test_uniform():
     assert min(samples) >= -10.0
     assert max(samples) <= 10.0
     assert hd.pdf(-10.1) == 0.
-    assert hd.pdf(0) == 1/(10 + 10)
+    assert abs(hd.pdf(0) - 1/(10 + 10)) < 1e-6
     assert hd.pdf(10.1) == 0.
     assert hd.cdf(-10.1) == 0.
-    assert hd.cdf(0) == (0 + 10) / (10 + 10)
+    assert abs(hd.cdf(0) - (0 + 10) / (10 + 10)) < 1e-6
     assert hd.cdf(10.1) == 1.
 
 def test_loguniform():
@@ -113,10 +138,10 @@ def test_loguniform():
     assert min(samples) >= 0.001
     assert max(samples) <= 10.0
     assert hd.pdf(0.0001) == 0.
-    assert hd.pdf(2) == 0.054286810237906484
+    assert abs(hd.pdf(2) - 0.054286810237906484) < 1e-6
     assert hd.pdf(10.1) == 0.
     assert hd.cdf(0.0001) == 0.
-    assert hd.cdf(2) == (math.log2(2) - math.log2(0.001)) / (math.log2(10) - math.log2(0.001))
+    assert abs(hd.cdf(2) - (math.log2(2) - math.log2(0.001)) / (math.log2(10) - math.log2(0.001))) < 1e-6
     assert hd.cdf(10.1) == 1.
 
 
@@ -129,12 +154,12 @@ def test_normal():
     assert samples_mean < 0.1
     samples_std = np.std(samples)
     assert 0.9 < samples_std < 1.1
-    assert hd.pdf(-1.) == 0.24197072451914337
-    assert hd.pdf(0.) == 0.3989422804014327
-    assert hd.pdf(1.) == 0.24197072451914337
-    assert hd.cdf(-1.) == 0.15865525393145707
-    assert hd.cdf(0.) == 0.5
-    assert hd.cdf(1.) == 0.8413447460685429
+    assert abs(hd.pdf(-1.) - 0.24197072451914337) < 1e-6
+    assert abs(hd.pdf(0.) - 0.3989422804014327) < 1e-6
+    assert abs(hd.pdf(1.) - 0.24197072451914337) < 1e-6
+    assert abs(hd.cdf(-1.) - 0.15865525393145707) < 1e-6
+    assert abs(hd.cdf(0.) - 0.5) < 1e-6
+    assert abs(hd.cdf(1.) - 0.8413447460685429) < 1e-6
 
 
 def test_lognormal():
@@ -147,11 +172,11 @@ def test_lognormal():
     samples_std = np.std(samples)
     assert 5 < samples_std < 8
     assert hd.pdf(0.) == 0.
-    assert hd.pdf(1.) == 0.28777602476804065
-    assert hd.pdf(5.) == 0.029336304593386688
+    assert abs(hd.pdf(1.) - 0.28777602476804065) < 1e-6
+    assert abs(hd.pdf(5.) - 0.029336304593386688) < 1e-6
     assert hd.cdf(0.) == 0.
     assert hd.cdf(1.) == 0.5
-    assert hd.cdf(5.) == 0.8771717397015799
+    assert abs(hd.cdf(5.) - 0.8771717397015799) < 1e-6
 
 
 
@@ -223,3 +248,4 @@ def test_priority_choice_threshold_narrowing():
     assert isinstance(hd, PriorityChoice)
     assert len(hd) == 4
     assert hd.get_current_narrowing_value() == 1.0
+
