@@ -31,18 +31,7 @@ from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.union import Identity, AddFeatures, ModelStacking
 
-AN_INPUT = "I am an input"
-AN_EXPECTED_OUTPUT = "I am an expected output"
-
-
-class SomeStep(NonFittableMixin, BaseStep):
-    def __init__(self, hyperparams_space: HyperparameterSpace = None, output=AN_EXPECTED_OUTPUT):
-        BaseStep.__init__(self, hyperparams=None, hyperparams_space=hyperparams_space)
-        NonFittableMixin.__init__(self)
-        self.output = output
-
-    def transform(self, data_inputs):
-        return [self.output] * len(data_inputs)
+from testing.mocks.step_mocks import SomeStep, AN_INPUT, AN_EXPECTED_OUTPUT
 
 
 steps_lists = [

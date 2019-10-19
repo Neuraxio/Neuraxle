@@ -23,6 +23,7 @@ This is the core of Neuraxle. Most pipeline steps derive (inherit) from those cl
 import hashlib
 import inspect
 import os
+import pprint
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
@@ -799,6 +800,15 @@ class BaseStep(ABC):
         """
         return self.reverse()
 
+    def __repr__(self):
+        output = 'step name : ' + self.name + '\n' \
+                 + 'hyperparameters : ' + pprint.pformat(self.get_hyperparams())
+
+        return output
+
+    def __str__(self):
+        return self.__repr__()
+
 
 class MetaStepMixin:
     """A class to represent a meta step which is used to optimize another step."""
@@ -822,7 +832,7 @@ class MetaStepMixin:
         self.wrapped.setup()
         return self
 
-    def set_train(self, is_train: bool=True):
+    def set_train(self, is_train: bool = True):
         self.is_train = is_train
         self.wrapped.set_train(is_train)
         return self
@@ -1423,6 +1433,19 @@ class TruncableSteps(BaseStep, ABC):
             step.set_train(is_train)
         return self
 
+    def __repr__(self):
+        main_step_output = super(TruncableSteps, self).__repr__()
+
+        output = "main step : " + '\n' \
+                 + main_step_output + '\n' \
+                 + "intermediate steps : " + '\n' \
+                 + pprint.pformat(self.steps_as_tuple) \
+                 + '\n'
+
+        return output
+
+    def __str__(self):
+        return self.__repr__()
 
 
 class ResumableStepMixin:
