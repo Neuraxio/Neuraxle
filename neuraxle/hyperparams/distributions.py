@@ -28,7 +28,7 @@ import sys
 from abc import abstractmethod, ABCMeta
 from typing import List
 from scipy.stats import norm
-
+from scipy.integrate import quad
 import math
 import numpy as np
 
@@ -328,6 +328,28 @@ class Quantized(WrappedHyperparameterDistributions):
         """
         return round(self.hd.rvs())
 
+
+    def pdf(self, x) -> float:
+        """
+        Calculate the Quantized probability mass function value at position `x` of a continuous distribution.
+        :param x: value where the probability mass function is evaluated.
+        :return: value of the probability mass function.
+        """
+        # In order to calculate the pdf for any quantized distribution,
+        # we have to perform the integral from x-0.5 to x+0.5 (because of round).
+        if isinstance(x, int) or (isinstance(x, float) and x.is_integer()):
+            return quad(self.hd.pdf, x - 0.5, x + 0.5)[0]
+        return 0.
+
+    def cdf(self, x) -> float:
+        """
+        Calculate the Quantized cumulative distribution function at position `x` of a continuous distribution.
+        :param x: value where the cumulative distribution function is evaluated.
+        :return: value of the cumulative distribution function.
+        """
+        # In order to calculate the cdf for any quantized distribution, we have to take the cdf at x + 0.5.
+        return self.hd.cdf(math.floor(x) + 0.5)
+
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> 'Quantized':
         """
         Will narrow the underlying distribution and re-wrap it under a Quantized.
@@ -602,15 +624,17 @@ class Normal(HyperparameterDistribution):
             return 0.
 
         if self.hard_clip_min is not None and (x == self.hard_clip_min):
-            return norm.cdf(x, loc=self.mean, scale=self.std)
+            # TODO: replace with scipy.stats.truncnorm
+            raise NotImplementedError("Should be infinity because of derivative of a discontinuity is infinity.")
 
         if self.hard_clip_max is not None and (x == self.hard_clip_max):
-            return 1 - norm.cdf(x, loc=self.mean, scale=self.std)
+            # TODO: replace with scipy.stats.truncnorm
+            raise NotImplementedError("Should be infinity because of derivative of a discontinuity is infinity.")
 
         if self.hard_clip_max is not None and (x > self.hard_clip_max):
             return 0.
 
-        return 1 / (self.std * math.sqrt(2 * math.pi)) * math.exp(-(x - self.mean) ** 2 / (2 * self.std ** 2))
+        return norm.pdf(x, loc=self.mean, scale=self.std)
 
     def cdf(self, x) -> float:
         """
@@ -695,10 +719,12 @@ class LogNormal(HyperparameterDistribution):
             return 0.
 
         if self.hard_clip_min is not None and (x == self.hard_clip_min):
-            return norm.cdf(math.log2(x), loc=self.log2_space_mean, scale=self.log2_space_std)
+            # TODO: replace with scipy.stats.truncnorm
+            raise NotImplementedError("Should be infinity because of derivative of a discontinuity is infinity.")
 
         if self.hard_clip_max is not None and (x == self.hard_clip_max):
-            return 1 - norm.cdf(math.log2(x), loc=self.log2_space_mean, scale=self.log2_space_std)
+            # TODO: replace with scipy.stats.truncnorm
+            raise NotImplementedError("Should be infinity because of derivative of a discontinuity is infinity.")
 
         if self.hard_clip_max is not None and (x > self.hard_clip_max):
             return 0.

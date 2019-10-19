@@ -85,6 +85,19 @@ def test_quantized_uniform():
     assert min(samples) >= -10.0
     assert max(samples) <= 10.0
 
+    assert abs(hd.pdf(-10) - 1/40) < 1e-6
+    assert abs(hd.pdf(-9) - 1 / 20) < 1e-6
+    assert abs(hd.pdf(0) - 1 / 20) < 1e-6
+    assert abs(hd.pdf(9) - 1 / 20) < 1e-6
+    assert abs(hd.pdf(10) - 1 / 40) < 1e-6
+
+    assert abs(hd.cdf(-10) - 1/40) < 1e-6
+    assert abs(hd.cdf(-9) - 1.5 / 20) < 1e-6
+    assert abs(hd.cdf(0) - 10.5 / 20) < 1e-6
+    assert abs(hd.cdf(9) - 19.5 / 20) < 1e-6
+    assert abs(hd.cdf(9.2) - 19.5 / 20) < 1e-6
+    assert hd.cdf(10) == 1.
+
 
 def test_randint():
     hd = RandInt(-10, 10)
