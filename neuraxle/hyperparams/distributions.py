@@ -31,7 +31,7 @@ from scipy.stats import norm
 from scipy.integrate import quad
 import math
 import numpy as np
-
+from scipy.stats import truncnorm
 
 class HyperparameterDistribution(metaclass=ABCMeta):
     """Base class for other hyperparameter distributions."""
@@ -691,6 +691,7 @@ class Normal(HyperparameterDistribution):
         :param hard_clip_min: if not none, rvs will return max(result, hard_clip_min).
         :param hard_clip_max: if not none, rvs will return min(result, hard_clip_min).
         """
+        HyperparameterDistribution.__init__(self)
         self.mean = mean
         self.std = std
         self.hard_clip_min = hard_clip_min
@@ -702,14 +703,22 @@ class Normal(HyperparameterDistribution):
 
         :return: a float.
         """
-        result = float(np.random.normal(self.mean, self.std))
+        if self.hard_clip_min is None and self.hard_clip_max is None:
+            result = float(np.random.normal(self.mean, self.std))
+        else:
+            a = -np.inf
+            b = np.inf
+
+            if self.hard_clip_min is not None:
+                a = (self.hard_clip_min - self.mean) / self.std
+
+            if self.hard_clip_max is not None:
+                b = (self.hard_clip_max - self.mean) / self.std
+
+            result = truncnorm.rvs(a=a, b=b, loc=self.mean, scale=self.std)
+
         if not math.isfinite(result):
             return self.rvs()
-        # TODO: replace hard_clip with malleable max and min? also remove in doc if so (search for "hard clip").
-        if self.hard_clip_max is not None:
-            result = min(result, self.hard_clip_max)
-        if self.hard_clip_min is not None:
-            result = max(result, self.hard_clip_min)
         return float(result)
 
     def pdf(self, x) -> float:
@@ -722,16 +731,20 @@ class Normal(HyperparameterDistribution):
         if self.hard_clip_min is not None and (x < self.hard_clip_min):
             return 0.
 
-        if self.hard_clip_min is not None and (x == self.hard_clip_min):
-            # TODO: replace with scipy.stats.truncnorm
-            raise NotImplementedError("Should be infinity because of derivative of a discontinuity is infinity.")
-
-        if self.hard_clip_max is not None and (x == self.hard_clip_max):
-            # TODO: replace with scipy.stats.truncnorm
-            raise NotImplementedError("Should be infinity because of derivative of a discontinuity is infinity.")
-
         if self.hard_clip_max is not None and (x > self.hard_clip_max):
             return 0.
+
+        if self.hard_clip_min is not None or self.hard_clip_max is not None:
+            a = -np.inf
+            b = np.inf
+
+            if self.hard_clip_min is not None:
+                a = (self.hard_clip_min - self.mean) / self.std
+
+            if self.hard_clip_max is not None:
+                b = (self.hard_clip_max - self.mean) / self.std
+
+            return truncnorm.pdf(x, a=a, b=b, loc=self.mean, scale=self.std)
 
         return norm.pdf(x, loc=self.mean, scale=self.std)
 
@@ -744,8 +757,20 @@ class Normal(HyperparameterDistribution):
         if self.hard_clip_min is not None and (x < self.hard_clip_min):
             return 0.
 
-        if self.hard_clip_max is not None and (x >= self.hard_clip_max):
+        if self.hard_clip_max is not None and (x > self.hard_clip_max):
             return 1.
+
+        if self.hard_clip_min is not None or self.hard_clip_max is not None:
+            a = -np.inf
+            b = np.inf
+
+            if self.hard_clip_min is not None:
+                a = (self.hard_clip_min - self.mean) / self.std
+
+            if self.hard_clip_max is not None:
+                b = (self.hard_clip_max - self.mean) / self.std
+
+            return truncnorm.cdf(x, a=a, b=b, loc=self.mean, scale=self.std)
 
         return norm.cdf(x, loc=self.mean, scale=self.std)
 
@@ -798,13 +823,23 @@ class LogNormal(HyperparameterDistribution):
 
         :return: a float.
         """
-        result = 2 ** float(np.random.normal(self.log2_space_mean, self.log2_space_std))
+        if self.hard_clip_min is None and self.hard_clip_max is None:
+            result = 2 ** float(np.random.normal(self.log2_space_mean, self.log2_space_std))
+        else:
+            a = -np.inf
+            b = np.inf
+
+            if self.hard_clip_min is not None:
+                a = (math.log2(self.hard_clip_min) - self.log2_space_mean) / self.log2_space_std
+
+            if self.hard_clip_max is not None:
+                b = (math.log2(self.hard_clip_max) - self.log2_space_mean) / self.log2_space_std
+
+            result = 2 ** float(truncnorm.rvs(a=a, b=b, loc=self.log2_space_mean, scale=self.log2_space_std))
+
         if not math.isfinite(result):
             return self.rvs()
-        if self.hard_clip_max is not None:
-            result = min(result, self.hard_clip_max)
-        if self.hard_clip_min is not None:
-            result = max(result, self.hard_clip_min)
+
         return float(result)
 
     def pdf(self, x) -> float:
@@ -817,22 +852,24 @@ class LogNormal(HyperparameterDistribution):
         if self.hard_clip_min is not None and (x < self.hard_clip_min):
             return 0.
 
-        if self.hard_clip_min is not None and (x == self.hard_clip_min):
-            # TODO: replace with scipy.stats.truncnorm
-            raise NotImplementedError("Should be infinity because of derivative of a discontinuity is infinity.")
-
-        if self.hard_clip_max is not None and (x == self.hard_clip_max):
-            # TODO: replace with scipy.stats.truncnorm
-            raise NotImplementedError("Should be infinity because of derivative of a discontinuity is infinity.")
-
         if self.hard_clip_max is not None and (x > self.hard_clip_max):
             return 0.
 
-        if x > 0:
-            return 1 / (x * math.log(2) * self.log2_space_std * math.sqrt(2 * math.pi)) * math.exp(
-                -(math.log2(x) - self.log2_space_mean) ** 2 / (2 * self.log2_space_std ** 2))
+        if x <= 0:
+            return 0.
 
-        return 0.
+        cdf_min = 0.
+        cdf_max = 1.
+
+        if self.hard_clip_min is not None:
+            cdf_min = norm.cdf(math.log2(self.hard_clip_min), loc=self.log2_space_mean, scale=self.log2_space_std)
+
+        if self.hard_clip_max is not None:
+            cdf_max = norm.cdf(math.log2(self.hard_clip_max), loc=self.log2_space_mean, scale=self.log2_space_std)
+
+        pdf_x = 1 / (x * math.log(2) * self.log2_space_std * math.sqrt(2 * math.pi)) * math.exp(
+            -(math.log2(x) - self.log2_space_mean) ** 2 / (2 * self.log2_space_std ** 2))
+        return pdf_x / (cdf_max - cdf_min)
 
     def cdf(self, x) -> float:
         """
@@ -846,10 +883,20 @@ class LogNormal(HyperparameterDistribution):
         if self.hard_clip_max is not None and (x >= self.hard_clip_max):
             return 1.
 
-        if x > 0:
-            return norm.cdf(math.log2(x), loc=self.log2_space_mean, scale=self.log2_space_std)
+        if x <= 0:
+            return 0.
 
-        return 0.
+        cdf_min = 0.
+        cdf_max = 1.
+
+        if self.hard_clip_min is not None:
+            cdf_min = norm.cdf(math.log2(self.hard_clip_min), loc=self.log2_space_mean, scale=self.log2_space_std)
+
+        if self.hard_clip_max is not None:
+            cdf_max = norm.cdf(math.log2(self.hard_clip_max), loc=self.log2_space_mean, scale=self.log2_space_std)
+
+        cdf_x = norm.cdf(math.log2(x), loc=self.log2_space_mean, scale=self.log2_space_std)
+        return (cdf_x - cdf_min) / (cdf_max - cdf_min)
 
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
         """
