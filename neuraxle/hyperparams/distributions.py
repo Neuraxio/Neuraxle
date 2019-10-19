@@ -263,8 +263,14 @@ class Choice(HyperparameterDistribution):
         :param x: value where the probability mass function is evaluated.
         :return: value of the probability mass function.
         """
-        if x in self.choice_list:
-            return 1/(len(self.choice_list))
+        try:
+            x_in_choice = x in self.choice_list
+        except (TypeError, ValueError, AttributeError):
+            raise ValueError(
+                "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
+        else:
+            if x_in_choice:
+                return 1/(len(self.choice_list))
 
         return 0.
 
@@ -278,7 +284,7 @@ class Choice(HyperparameterDistribution):
         try:
             index = self.choice_list.index(x)
         except ValueError:
-            return 0.
+            raise ValueError("Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
         except (NotImplementedError, NotImplemented):
             raise ValueError("A correct method for __eq__ should be defined for all item in the list.")
         except AttributeError:
@@ -344,10 +350,17 @@ class PriorityChoice(HyperparameterDistribution):
         :param x: value where the probability mass function is evaluated.
         :return: value of the probability mass function.
         """
-        if x in self.choice_list:
-            return 1/(len(self.choice_list))
+        try:
+            x_in_choice = x in self.choice_list
+        except (TypeError, ValueError, AttributeError):
+            raise ValueError(
+                "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
+        else:
+            if x_in_choice:
+                return 1/(len(self.choice_list))
 
         return 0.
+
 
     def cdf(self, x) -> float:
         """
@@ -359,7 +372,7 @@ class PriorityChoice(HyperparameterDistribution):
         try:
             index = self.choice_list.index(x)
         except ValueError:
-            return 0.
+            raise ValueError("Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
         except (NotImplementedError, NotImplemented):
             raise ValueError("A correct method for __eq__ should be defined for all item in the list.")
         except AttributeError:
