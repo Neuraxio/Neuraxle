@@ -2,14 +2,14 @@ from typing import Any
 
 import pytest
 
-from neuraxle.base import NamedTupleList, BaseStep
+from neuraxle.base import NamedTupleList, BaseStep, ExecutionContext
 from neuraxle.pipeline import Pipeline
 from testing.test_pipeline import SomeStep
 
 
 class SomePipeline(Pipeline):
     def __init__(self, steps: NamedTupleList):
-        super().__init__(steps)
+        Pipeline.__init__(self, steps)
         self.teared_down = False
 
     def teardown(self) -> 'BaseStep':
@@ -30,11 +30,12 @@ class SomeException(BaseStep):
 
 class SomeStepSetup(SomeStep):
     def __init__(self):
-        super().__init__()
+        SomeStep.__init__(self)
         self.called_with = None
 
-    def setup(self, step_path: str, setup_arguments: dict) -> 'BaseStep':
-        self.called_with = [step_path, setup_arguments]
+    def setup(self) -> 'BaseStep':
+        self.is_initialized = True
+        return self
 
 
 def test_fit_transform_should_setup_pipeline_and_steps():
@@ -46,7 +47,6 @@ def test_fit_transform_should_setup_pipeline_and_steps():
     p.fit_transform([1], [1])
 
     assert p.is_initialized
-    assert step_setup.called_with == ['SomePipeline/SomeStepSetup', {}]
 
 
 def test_transform_should_setup_pipeline_and_steps():
@@ -57,8 +57,7 @@ def test_transform_should_setup_pipeline_and_steps():
 
     p.transform([1])
 
-    assert p.is_initialized
-    assert step_setup.called_with == ['SomePipeline/SomeStepSetup', {}]
+    assert not p.is_initialized
 
 
 def test_fit_should_setup_pipeline_and_steps():
@@ -69,79 +68,4 @@ def test_fit_should_setup_pipeline_and_steps():
 
     p.fit([1], [1])
 
-    assert p.is_initialized
-
-
-@pytest.mark.skip('to be fixed with context algorithm')
-def test_teardown_should_be_called_on_fit_transform():
-    p = SomePipeline([
-        SomeStep()
-    ])
-
-    p.fit_transform([1], [1])
-
-    assert p.teared_down
-
-
-@pytest.mark.skip('to be fixed with context algorithm')
-def test_teardown_should_be_called_on_transform():
-    p = SomePipeline([
-        SomeStep()
-    ])
-
-    p.transform([1])
-
-    assert p.teared_down
-
-
-@pytest.mark.skip('to be fixed with context algorithm')
-def test_teardown_should_be_called_on_fit():
-    p = SomePipeline([
-        SomeStep()
-    ])
-
-    p.fit([1], [1])
-
-    assert p.teared_down
-
-
-@pytest.mark.skip('to be fixed with context algorithm')
-def test_teardown_should_be_called_on_pipeline_steps_exceptions_on_fit():
-    p = SomePipeline([
-        SomeException()
-    ])
-
-    try:
-        p.fit([1])
-    except:
-        pass
-
-    assert p.teared_down
-
-
-@pytest.mark.skip('to be fixed with context algorithm')
-def test_teardown_should_be_called_on_pipeline_steps_exceptions_on_fit_transform():
-    p = SomePipeline([
-        SomeException()
-    ])
-
-    try:
-        p.fit_transform([1], [1])
-    except:
-        pass
-
-    assert p.teared_down
-
-
-@pytest.mark.skip('to be fixed with context algorithm')
-def test_teardown_should_be_called_on_pipeline_steps_exceptions_on_transform():
-    p = SomePipeline([
-        SomeException()
-    ])
-
-    try:
-        p.transform([1])
-    except:
-        pass
-
-    assert p.teared_down
+    assert step_setup.is_initialized
