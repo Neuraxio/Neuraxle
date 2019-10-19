@@ -42,7 +42,7 @@ class SKLearnWrapper(BaseStep):
             raise ValueError("The wrapped_sklearn_predictor must be an instance of scikit-learn's BaseEstimator.")
         self.wrapped_sklearn_predictor = wrapped_sklearn_predictor
         params: HyperparameterSamples = wrapped_sklearn_predictor.get_params()
-        super().__init__(hyperparams=params, hyperparams_space=hyperparams_space)
+        BaseStep.__init__(self, hyperparams=params, hyperparams_space=hyperparams_space)
         self.return_all_sklearn_default_params_on_get = return_all_sklearn_default_params_on_get
         self.name += "_" + wrapped_sklearn_predictor.__class__.__name__
 
@@ -68,7 +68,7 @@ class SKLearnWrapper(BaseStep):
         return self.wrapped_sklearn_predictor.transform(data_inputs)
 
     def set_hyperparams(self, flat_hyperparams: dict) -> BaseStep:
-        super().set_hyperparams(flat_hyperparams)
+        BaseStep.set_hyperparams(self, flat_hyperparams)
         self.wrapped_sklearn_predictor.set_params(**flat_hyperparams)
         return self
 
@@ -76,7 +76,7 @@ class SKLearnWrapper(BaseStep):
         if self.return_all_sklearn_default_params_on_get:
             return self.wrapped_sklearn_predictor.get_params()
         else:
-            return super(SKLearnWrapper, self).get_hyperparams()
+            return SKLearnWrapper.get_hyperparams(self)
 
     def __repr__(self):
         return self.__str__()
@@ -91,7 +91,8 @@ class SKLearnWrapper(BaseStep):
 
 class RidgeModelStacking(ModelStacking):
     def __init__(self, brothers):
-        super().__init__(
+        ModelStacking.__init__(
+            self,
             brothers,
             SKLearnWrapper(
                 Ridge(),

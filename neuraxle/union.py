@@ -22,7 +22,7 @@ This module contains steps to perform various feature unions and model stacking,
 
 from joblib import Parallel, delayed
 
-from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin, NamedTupleList, NonTransformableMixin
+from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin, NamedTupleList, Identity
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
@@ -44,7 +44,7 @@ class FeatureUnion(TruncableSteps):
         :param n_jobs: The number of jobs for the parallelized ``joblib.Parallel`` loop in fit and in transform.
         :param backend: The type of parallelization to do with ``joblib.Parallel``. Possible values: "loky", "multiprocessing", "threading", "dask" if you use dask, and more.
         """
-        super().__init__(steps_as_tuple)
+        TruncableSteps.__init__(self, steps_as_tuple)
         self.joiner = joiner  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
         self.n_jobs = n_jobs
         self.backend = backend
@@ -98,17 +98,6 @@ class FeatureUnion(TruncableSteps):
         return results
 
 
-class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
-    """A pipeline step that has no effect at all but to return the same data without changes.
-
-    This can be useful to concatenate new features to existing features, such as what AddFeatures do.
-
-    Identity inherits from ``NonTransformableMixin`` and from ``NonFittableMixin`` which makes it a class that has no
-    effect in the pipeline: it doesn't require fitting, and at transform-time, it returns the same data it received.
-    """
-    pass  # Multi-class inheritance does the job here! See inside those other classes for more info.
-
-
 class AddFeatures(FeatureUnion):
     """Parallelize the union of many pipeline steps AND concatenate the new features to the received inputs using Identity."""
 
@@ -120,7 +109,7 @@ class AddFeatures(FeatureUnion):
         :param steps_as_tuple: The steps to be sent to the ``FeatureUnion``. ``Identity()`` is prepended.
         :param kwargs: Other arguments to send to ``FeatureUnion``.
         """
-        super().__init__([Identity()] + steps_as_tuple, **kwargs)
+        FeatureUnion.__init__(self, [Identity()] + steps_as_tuple, **kwargs)
 
 
 class ModelStacking(FeatureUnion):
@@ -140,7 +129,7 @@ class ModelStacking(FeatureUnion):
         :param judge: a BaseStep that will learn to judge the best answer and who to trust out of every parallel steps.
         :param kwargs: Other arguments to send to ``FeatureUnion``.
         """
-        super().__init__(steps_as_tuple, **kwargs)
+        FeatureUnion.__init__(self, steps_as_tuple, **kwargs)
         self.judge: BaseStep = judge  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
 
     def fit(self, data_inputs, expected_outputs=None) -> 'ModelStacking':
@@ -152,8 +141,8 @@ class ModelStacking(FeatureUnion):
         :param expected_outputs: The output that should be obtained when fitting.
         :return: self
         """
-        super().fit(data_inputs, expected_outputs)
-        results = super().transform(data_inputs)
+        FeatureUnion.fit(self, data_inputs, expected_outputs)
+        results = FeatureUnion.transform(self, data_inputs)
 
         self.judge = self.judge.fit(results, expected_outputs)
         return self
@@ -166,5 +155,5 @@ class ModelStacking(FeatureUnion):
         :param data_inputs: The input data to fit onto
         :return: the transformed data_inputs.
         """
-        results = super().transform(data_inputs)
+        results = FeatureUnion.transform(self, data_inputs)
         return self.judge.transform(results)
