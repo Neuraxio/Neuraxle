@@ -51,6 +51,28 @@ class HyperparameterDistribution(metaclass=ABCMeta):
         """
         pass
 
+    @abstractmethod
+    def pdf(self, x) -> float:
+        """
+        Abstract method for probability distribution function value at `x`.
+
+        :param x: value where the probability distribution function is evaluated.
+
+        :return: The probability distribution function value.
+        """
+        pass
+
+    @abstractmethod
+    def cdf(self, x) -> float:
+        """
+        Abstract method for cumulative distribution function value at `x`.
+
+        :param x: value where the cumulative distribution function is evaluated.
+
+        :return: The cumulative distribution function value.
+        """
+        pass
+
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.0) -> 'HyperparameterDistribution':
         """
         Takes a value that is estimated to be the best one of the space, and restrict the space near that value.
@@ -119,6 +141,34 @@ class FixedHyperparameter(HyperparameterDistribution):
         :return: the value given at creation.
         """
         return self.value
+
+    def pdf(self, x) -> float:
+        """
+        Probability distribution function value at `x`.
+        Since the parameter is fixed, the value return is 1 when x == value and 0 otherwise.
+
+        :param x: value where the probability distribution function is evaluated.
+
+        :return: The probability distribution function value.
+        """
+        if x == self.value:
+            return 1.
+        return 0.
+
+    def cdf(self, x) -> float:
+        """
+        Cumulative distribution function value at `x`.
+        Since the parameter is fixed, the value return is 1 if x>= value and 0 otherwise.
+
+        :param x: value where the cumulative distribution function is evaluated.
+
+        :return: The cumulative distribution function value.
+        """
+        if x >= self.value:
+            return 1.
+
+        return 0.
+
 
 
 # TODO: Mixin this or something:
@@ -207,6 +257,31 @@ class Choice(HyperparameterDistribution):
         """
         return random.choice(self.choice_list)
 
+    def pdf(self, x) -> float:
+        """
+        Calculate the choice probability mass function value at position `x`.
+        :param x: value where the probability mass function is evaluated.
+        :return: value of the probability mass function.
+        """
+        if x in self.choice_list:
+            return 1/(len(self.choice_list))
+
+        return 0.
+
+    def cdf(self, x) -> float:
+        """
+        Calculate the choice probability cumulative distribution function value at position `x`.
+        The index in the list is used to know how the choice is performed.
+        :param x: value where the cumulative distribution function is evaluated.
+        :return: value of the cumulative distribution function.
+        """
+        try:
+            index = self.choice_list.index(x)
+        except (AttributeError, ValueError):
+            return 0.
+        else:
+            return (index + 1) / len(self.choice_list)
+
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.0) -> HyperparameterDistribution:
         """
         Will narrow the space. If the cumulative kept_space_ratio gets to be under or equal to 1/len(choice_list),
@@ -258,6 +333,31 @@ class PriorityChoice(HyperparameterDistribution):
         :return: one of the items of the list.
         """
         return random.choice(self.choice_list)
+
+    def pdf(self, x) -> float:
+        """
+        Calculate the choice probability mass function value at position `x`.
+        :param x: value where the probability mass function is evaluated.
+        :return: value of the probability mass function.
+        """
+        if x in self.choice_list:
+            return 1/(len(self.choice_list))
+
+        return 0.
+
+    def cdf(self, x) -> float:
+        """
+        Calculate the choice probability cumulative distribution function value at position `x`.
+        The index in the list is used to know how the choice is performed.
+        :param x: value where the cumulative distribution function is evaluated.
+        :return: value of the cumulative distribution function.
+        """
+        try:
+            index = self.choice_list.index(x)
+        except (AttributeError, ValueError):
+            return 0.
+        else:
+            return (index + 1) / len(self.choice_list)
 
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.0) -> HyperparameterDistribution:
         """

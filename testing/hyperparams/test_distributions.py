@@ -72,6 +72,19 @@ def test_choice_and_priority_choice(ctor):
     assert zNone > NUM_TRIALS * 0.2
     assert zTest > NUM_TRIALS * 0.2
 
+    assert (hd.pdf(0) - 1 / 4) < 1e-6
+    assert (hd.pdf(1) - 1 / 4) < 1e-6
+    assert (hd.pdf(False) - 1/4) < 1e-6
+    assert (hd.pdf("Test") - 1 / 4) < 1e-6
+    assert hd.pdf(3) == 0.
+
+    assert hd.cdf(3) == 0.
+    assert (hd.cdf(0) - 1 / 4) < 1e-6
+    assert (hd.cdf(1) - 2 / 4) < 1e-6
+    assert (hd.cdf(False) - 3 / 4) < 1e-6
+    assert hd.cdf("Test") == 1.
+    assert hd.cdf(3) == 0.
+
 
 def test_quantized_uniform():
     hd = Quantized(Uniform(-10, 10))
