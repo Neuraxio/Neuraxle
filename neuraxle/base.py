@@ -38,17 +38,59 @@ DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
 
 
 class BaseHasher(ABC):
+    """
+    Base class to hash hyperparamters, and data input ids together.
+    The :class:`DataContainer` class uses the hashed values for its current ids.
+    :class:`BaseStep` uses many :class:`BaseHasher` objects
+    to hash hyperparameters, and data inputs ids together after each transform.
+
+    .. seealso:: :class:`DataContainer`
+    .. todo:: potentially hash by source code
+    """
+
     @abstractmethod
-    def hash(self, current_ids, hyperparameters: HyperparameterSamples, data_inputs: Any):
+    def hash(self, current_ids: List[str], hyperparameters: HyperparameterSamples, data_inputs: Iterable) -> List[str]:
+        """
+        Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together.
+
+        :param current_ids: current hashed ids (can be None if this function has not been called yet)
+        :type current_ids: List[str]
+        :param hyperparameters: step hyperparameters to hash with current ids
+        :type hyperparameters: HyperparameterSamples
+        :param data_inputs: data inputs to hash current ids for
+        :type data_inputs: Iterable
+        :return: the new hashed current ids
+        :rtype: List[str]
+        """
         raise NotImplementedError()
 
-    def _hash_hyperparameters(self, hyperparams: HyperparameterSamples):
-        hyperperams_dict = hyperparams.to_flat_as_dict_primitive()
-        return hashlib.md5(str.encode(str(hyperperams_dict))).hexdigest()
+class HashlibMd5Hasher(BaseHasher):
+    """
+    Class to hash hyperparamters, and data input ids together using md5 algorithm from hashlib :
+    `<https://docs.python.org/3/library/hashlib.html>`_
 
+    The :class:`DataContainer` class uses the hashed values for its current ids.
+    :class:`BaseStep` uses many :class:`BaseHasher` objects
+    to hash hyperparameters, and data inputs ids together after each transform.
 
-class HashlibMd5Hasher:
-    def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
+    .. seealso:: :class`BaseHasher`, :class:`DataContainer`
+    .. todo:: potentially hash by source code
+    """
+
+    def hash(self, current_ids, hyperparameters, data_inputs: Any = None) -> List[str]:
+        """
+        Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together
+        using  `hashlib.md5 <https://docs.python.org/3/library/hashlib.html>`_
+
+        :param current_ids: current hashed ids (can be None if this function has not been called yet)
+        :type current_ids: List[str]
+        :param hyperparameters: step hyperparameters to hash with current ids
+        :type hyperparameters: HyperparameterSamples
+        :param data_inputs: data inputs to hash current ids for
+        :type data_inputs: Iterable
+        :return: the new hashed current ids
+        :rtype: List[str]
+        """
         if current_ids is None:
             current_ids = [str(i) for i in range(len(data_inputs))]
 
@@ -69,6 +111,20 @@ class HashlibMd5Hasher:
 
 
 class DataContainer:
+    """
+    DataContainer class to store data inputs, expected outputs, and ids together.
+    Each :class:`BaseStep` needs to rehash ids with hyperparameters so that the :class:`Checkpoint` step
+    can create checkpoints for a set of hyperparameters.
+
+    The DataContainer object is passed to all of the :class:`BaseStep` handle methods :
+        * :func:`~neuraxle.base.BaseStep.handle_transform`
+        * :func:`~neuraxle.base.BaseStep.handle_fit_transform`
+        * :func:`~neuraxle.base.BaseStep.handle_fit`
+
+    Most of the time, you won't need to care about the DataContainer because it is the pipeline that manages it.
+
+    .. seealso:: :class:`BaseHasher`, :class: `BaseStep`
+    """
     def __init__(self,
                  current_ids,
                  data_inputs: Any,
@@ -81,16 +137,47 @@ class DataContainer:
         else:
             self.expected_outputs = expected_outputs
 
-    def set_data_inputs(self, data_inputs: Any):
+    def set_data_inputs(self, data_inputs: Iterable):
+        """
+        Set data inputs.
+
+        :param data_inputs: data inputs
+        :type data_inputs: Iterable
+        :return:
+        """
         self.data_inputs = data_inputs
 
-    def set_expected_outputs(self, expected_outputs: Any):
+    def set_expected_outputs(self, expected_outputs: Iterable):
+        """
+        Set expected outputs.
+
+        :param expected_outputs: expected outputs
+        :type expected_outputs: Iterable
+        :return:
+        """
         self.expected_outputs = expected_outputs
 
-    def set_current_ids(self, current_ids: Any):
+    def set_current_ids(self, current_ids: List[str]):
+        """
+        Set current ids.
+
+        :param current_ids: data inputs
+        :type current_ids: List[str]
+        :return:
+        """
         self.current_ids = current_ids
 
-    def convolved_1d(self, stride, kernel_size) -> Iterable:
+    def convolved_1d(self, stride, kernel_size) -> Iterable['DataContainer']:
+        """
+        Returns an iterator that iterates through batches of the DataContainer.
+
+        :param stride: step size for the convolution operation
+        :param kernel_size:
+        :return: an iterator of DataContainer
+        :rtype: Iterable[DataContainer]
+
+        .. seealso:: `<https://github.com/guillaume-chevalier/python-conv-lib>`_
+        """
         conv_current_ids = convolved_1d(stride=stride, iterable=self.current_ids, kernel_size=kernel_size)
         conv_data_inputs = convolved_1d(stride=stride, iterable=self.data_inputs, kernel_size=kernel_size)
         conv_expected_outputs = convolved_1d(stride=stride, iterable=self.expected_outputs, kernel_size=kernel_size)
@@ -104,6 +191,12 @@ class DataContainer:
             )
 
     def __iter__(self):
+        """
+        Iter method returns a zip of all of the current_ids, data_inputs, and expected_outputs in the data container.
+
+        :return: iterator of tuples containing current_ids, data_inputs, and expected outputs
+        :rtype: Iterator[Tuple]
+        """
         current_ids = self.current_ids
         if self.current_ids is None:
             current_ids = [None] * len(self.data_inputs)
@@ -125,16 +218,39 @@ class DataContainer:
 
 
 class ListDataContainer(DataContainer):
+    """
+    Sub class of DataContainer to perform list operations.
+    It allows to perform append, and concat operations on a DataContainer.
+
+    .. seealso:: :class:`DataContainer`
+    """
+
     @staticmethod
     def empty() -> 'ListDataContainer':
         return ListDataContainer([], [], [])
 
-    def append(self, current_id, data_input, expected_output):
+    def append(self, current_id: str, data_input: Any, expected_output: Any):
+        """
+        Append a new data input to the DataContainer.
+
+        :param current_id: current id for the data input
+        :type current_id: str
+        :param data_input: data input
+        :param expected_output: expected output
+        :return:
+        """
         self.current_ids.append(current_id)
         self.data_inputs.append(data_input)
         self.expected_outputs.append(expected_output)
 
     def concat(self, data_container: DataContainer):
+        """
+        Concat the given data container to the current data container.
+
+        :param data_container: data container
+        :type data_container: DataContainer
+        :return:
+        """
         self.current_ids.extend(data_container.current_ids)
         self.data_inputs.extend(data_container.data_inputs)
         self.expected_outputs.extend(data_container.expected_outputs)
@@ -143,6 +259,9 @@ class ListDataContainer(DataContainer):
 class BaseSaver(ABC):
     """
     Any saver must inherit from this one. Some savers just save parts of objects, some save it all or what remains.
+    Each :class`BaseStep` can potentially have multiple savers to make serialization possible.
+
+    .. seealso:: :func:`~neuraxle.base.BaseStep.save`, :func:`~neuraxle.base.BaseStep.load`
     """
 
     @abstractmethod
@@ -151,13 +270,24 @@ class BaseSaver(ABC):
         Save step with execution context.
 
         :param step: step to save
+        :type step: BaseStep
         :param context: execution context
+        :type context: ExecutionContext
         :return:
         """
         raise NotImplementedError()
 
     @abstractmethod
     def can_load(self, step: 'BaseStep', context: 'ExecutionContext'):
+        """
+        Returns true if we can load the given step with the given execution context.
+
+        :param step: step to load
+        :type step: BaseStep
+        :param context: execution context to load from
+        :type context: ExecutionContext
+        :return:
+        """
         raise NotImplementedError()
 
     @abstractmethod
@@ -174,16 +304,45 @@ class BaseSaver(ABC):
 
 class JoblibStepSaver(BaseSaver):
     """
+    Saver that can save, or load a step with `joblib.load <https://joblib.readthedocs.io/en/latest/generated/joblib.load.html>`_,
+    and `joblib.dump <https://joblib.readthedocs.io/en/latest/generated/joblib.dump.html>`_.
+
     This saver is a good default saver when the object is
     already stripped out of things that would make it unserializable.
+
+    It is the default stripped_saver for the :class:`ExecutionContext`.
+    The stripped saver is the first to load the step, and the last to save the step.
+    The saver receives a *stripped* version of the step so that it can be saved by joblib.
+
+    .. seealso:: :class:`BaseSaver`, :class:`ExecutionContext`
     """
 
-    def can_load(self, step: 'BaseStep', context: 'ExecutionContext'):
+    def can_load(self, step: 'BaseStep', context: 'ExecutionContext') -> bool:
+        """
+        Returns true if the given step has been saved with the given execution context.
+
+        :param step: step that might have been saved
+        :type step: BaseStep
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: if we can load the step with the given context
+        :rtype: bool
+        """
         return os.path.exists(
             self._create_step_path(context, step)
         )
 
     def _create_step_path(self, context, step):
+        """
+        Create step path for the given context.
+
+        :param context: execution context
+        :type context: ExecutionContext
+        :param step: step to save, or load
+        :type step: BaseStep
+        :return: path
+        :rtype: str
+        """
         return os.path.join(context.get_path(), '{0}.joblib'.format(step.name))
 
     def save_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
@@ -191,7 +350,9 @@ class JoblibStepSaver(BaseSaver):
         Saved step stripped out of things that would make it unserializable.
 
         :param step: stripped step to save
+        :type step: BaseStep
         :param context: execution context to save from
+        :type context: ExecutionContext
         :return:
         """
         context.mkdir()
@@ -206,7 +367,9 @@ class JoblibStepSaver(BaseSaver):
         Load stripped step.
 
         :param step: stripped step to load
+        :type step: BaseStep
         :param context: execution context to load from
+        :type context: ExecutionContext
         :return:
         """
         loaded_step = load(self._create_step_path(context, step))
@@ -223,6 +386,16 @@ class ExecutionContext:
     """
     Execution context object containing all of the pipeline hierarchy steps.
     First item in execution context parents is root, second is nested, and so on. This is like a stack.
+
+    The execution context is used for fitted step saving, and caching :
+        * :func:`~neuraxle.base.BaseStep.save`
+        * :func:`~neuraxle.base.BaseStep.load`
+        * :func:`~neuraxle.steps.caching.ValueCachingWrapper.handle_transform`
+        * :func:`~neuraxle.steps.caching.ValueCachingWrapper.handle_fit_transform`
+
+    .. seealso::
+        * :class:`BaseStep`
+        * :class:`ValueCachingWrapper`
     """
 
     def __init__(
@@ -246,7 +419,8 @@ class ExecutionContext:
 
     def save_all_unsaved(self):
         """
-        Save all unsaved steps in the parents of the execution context.
+        Save all unsaved steps in the parents of the execution context using :func:`~neuraxle.base.BaseStep.save`.
+        This method is called from a step checkpointer inside a :class:`Checkpoint`.
 
         :return:
         """
@@ -256,11 +430,12 @@ class ExecutionContext:
                 copy_self.peek().save(copy_self)
             copy_self.pop()
 
-    def should_save_last_step(self):
+    def should_save_last_step(self) -> bool:
         """
         Returns True if the last step should be saved.
 
-        :return:
+        :return: if the last step should be saved
+        :rtype: bool
         """
         if len(self.parents) > 0:
             return self.parents[-1].should_save()
@@ -276,8 +451,10 @@ class ExecutionContext:
 
     def pop(self) -> bool:
         """
-        Pop the context.
-        :return:
+        Pop the context. Returns True if it successfully popped an item from the parents list.
+
+        :return: if an item has been popped
+        :rtype: bool
         """
         if len(self) == 0:
             return False
@@ -289,18 +466,21 @@ class ExecutionContext:
         Pushes a step in the parents of the execution context.
 
         :param step: step to add to the execution context
+        :type step: BaseStep
         :return: self
+        :rtype: ExecutionContext
         """
         return ExecutionContext(
             root=self.root,
             parents=self.parents + [step]
         )
 
-    def peek(self):
+    def peek(self) -> 'BaseStep':
         """
         Get last parent.
 
-        :return:
+        :return: the last parent base step
+        :rtype: BaseStep
         """
         return self.parents[-1]
 
@@ -329,7 +509,7 @@ class ExecutionContext:
         Returns a list of the parent names.
 
         :return: list of parents step names
-        :rtype: list(str)
+        :rtype: List[str]
         """
         return [p.name for p in self.parents]
 
@@ -350,9 +530,54 @@ class BaseStep(ABC):
     """
     Base class for a pipeline step.
 
-    Note : All heavy initialization logic should be done inside the *setup* method (e.g.: things inside GPU),
-    and NOT in the constructor.
+    Every step must implement :
+        * :func:`~neuraxle.base.BaseStep.fit`
+        * :func:`~neuraxle.base.BaseStep.fit_transform`
+        * :func:`~neuraxle.base.BaseStep.transform`
 
+    If a step is not fittable, you can inherit from :class:`NonFittableMixin`.
+    If a step is not transformable, you can inherit from :class:`NonTransformableMixin`.
+    A step should only change its state inside :func:`~neuraxle.base.BaseStep.fit` or :func:`~neuraxle.base.BaseStep.fit_transform`.
+
+    Example usage :
+    ```
+    class MultiplyBy(NonFittableMixin, BaseStep):
+        def transform(self, data_inputs):
+            return data_inputs * self.hyperparams['multiply_by']
+    ```
+
+    Every step can be saved using its savers of type :class:`BaseSaver`. Some savers just save parts of objects, some save it all or what remains.
+    Most step hash data inputs with hyperparams after every transformations to update the current ids inside the :class:`DataContainer`.
+
+    Every step has handle methods that can be overridden to add side effects or change the execution flow based on the execution context, and the data container :
+        * :func:`~neuraxle.base.BaseStep.handle_transform`
+        * :func:`~neuraxle.base.BaseStep.handle_fit_transform`
+        * :func:`~neuraxle.base.BaseStep.handle_fit`
+
+    Every step has hyperparemeters, and hyperparameters spaces that can be set before the learning process begins.
+    Hyperparameters can not only be passed in the constructor, but also be set by the pipeline that contains all of the steps :
+    ```
+    pipeline = Pipeline([
+        SomeStep()
+    ])
+
+    pipeline.set_hyperparams(HyperparameterSamples({
+        'learning_rate': 0.1,
+        'SomeStep__learning_rate': 0.05
+    }))
+    ```
+
+
+    .. note:: All heavy initialization logic should be done inside the *setup* method (e.g.: things inside GPU),
+    and NOT in the constructor.
+    .. seealso::
+        * :class:`NonFittableMixin`
+        * :class:`NonTransformableMixin`
+        * :class:`HyperparameterSamples`
+        * :class:`HyperparameterSpace`
+        * :class:`BaseSaver`
+        * :class:`BaseHasher`
+        * :class:`DataContainer`
     """
     def __init__(
             self,
@@ -390,6 +615,14 @@ class BaseStep(ABC):
         self.is_train: bool = True
 
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
+        """
+        Hash data inputs, current ids, and hyperparameters together using self.hashers.
+
+        :param current_ids:
+        :param hyperparameters:
+        :param data_inputs:
+        :return:
+        """
         for h in self.hashers:
             current_ids = h.hash(current_ids, hyperparameters, data_inputs)
         return current_ids
@@ -586,6 +819,7 @@ class BaseStep(ABC):
         Save step using the execution context to create the directory to save the step into.
 
         :param context: context to save from
+        :type context: ExecutionContext
         :return:
         """
         if self.is_invalidated and self.is_initialized:
