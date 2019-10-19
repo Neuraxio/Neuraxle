@@ -277,8 +277,12 @@ class Choice(HyperparameterDistribution):
         """
         try:
             index = self.choice_list.index(x)
-        except (AttributeError, ValueError):
+        except ValueError:
             return 0.
+        except (NotImplementedError, NotImplemented):
+            raise ValueError("A correct method for __eq__ should be defined for all item in the list.")
+        except AttributeError:
+            raise ValueError("choice_list param should be a list.")
         else:
             return (index + 1) / len(self.choice_list)
 
@@ -354,8 +358,12 @@ class PriorityChoice(HyperparameterDistribution):
         """
         try:
             index = self.choice_list.index(x)
-        except (AttributeError, ValueError):
+        except ValueError:
             return 0.
+        except (NotImplementedError, NotImplemented):
+            raise ValueError("A correct method for __eq__ should be defined for all item in the list.")
+        except AttributeError:
+            raise ValueError("choice_list param should be a list.")
         else:
             return (index + 1) / len(self.choice_list)
 
