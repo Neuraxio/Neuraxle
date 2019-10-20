@@ -35,9 +35,13 @@ class BaseCheckpointer(ResumableMixin):
     """
     Base class to implement a step checkpoint or data container checkpoint.
 
-    Checkpoint step uses many BaseCheckpointer to checkpoint both data container checkpoints, and step checkpoints.
+    :class:`Checkpoint` uses many BaseCheckpointer to checkpoint both data container checkpoints, and step checkpoints.
 
     BaseCheckpointer has an execution mode so there could be different checkpoints for each execution mode (fit, fit_transform or transform).
+
+    .. seealso::
+        * :class:`Checkpoint`
+        * :class:`ResumableMixin`
     """
 
     def __init__(
@@ -46,11 +50,12 @@ class BaseCheckpointer(ResumableMixin):
     ):
         self.execution_mode = execution_mode
 
-    def is_for_execution_mode(self, execution_mode) -> bool:
+    def is_for_execution_mode(self, execution_mode: ExecutionMode) -> bool:
         """
         Returns true if the checkpointer should be used with the given execution mode.
 
         :param execution_mode: execution mode (fit, fit_transform, or transform)
+        :type execution_mode: ExecutionMode
         :return: if the checkpointer should be used
         :rtype: bool
         """
@@ -72,7 +77,9 @@ class BaseCheckpointer(ResumableMixin):
         Returns the data container checkpoint, or latest data container.
 
         :param data_container: data container to save data container or fitted steps
+        :type data_container: DataContainer
         :param context: context to save data container or fitted steps
+        :type context: ExecutionContext
         :return: saved data container
         :rtype: DataContainer
         """
@@ -86,7 +93,9 @@ class BaseCheckpointer(ResumableMixin):
         and expected outputs for each current id in the given data container.
 
         :param data_container: data container containing the current_ids to read checkpoint for
+        :type data_container: DataContainer
         :param context: context to read checkpoint for
+        :type context: ExecutionContext
         :return: the data container checkpoint
         :rtype: DataContainer
         """
@@ -324,22 +333,28 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableMixin, BaseSt
     By default(no arguments specified), the Checkpoint step saves the step checkpoints for any fit or fit transform,
     and saves a different data checkpoint with pickle data container checkpointers :
 
-    ```
-    Checkpoint(
-        step_checkpointers=[
-            StepCheckpointer(ExecutionMode.FIT_OR_FIT_TRANSFORM)
-        ]
-        data_checkpointers=[
-            DataContainerCheckpointer.create_pickle_checkpointer(ExecutionMode.TRANSFORM),
-            DataContainerCheckpointer.create_pickle_checkpointer(ExecutionMode.FIT),
-            DataContainerCheckpointer.create_pickle_checkpointer(ExecutionMode.FIT_TRANSFORM),
-        ]
-    )
+    .. code:: python
+        Checkpoint(
+            step_checkpointers=[
+                StepCheckpointer(ExecutionMode.FIT_OR_FIT_TRANSFORM)
+            ],
+            data_checkpointers=[
+                DataContainerCheckpointer.create_pickle_checkpointer(ExecutionMode.TRANSFORM),
+                DataContainerCheckpointer.create_pickle_checkpointer(ExecutionMode.FIT),
+                DataContainerCheckpointer.create_pickle_checkpointer(ExecutionMode.FIT_TRANSFORM),
+            ]
+        )
 
-    # this is equivalent to :
+        # this is equivalent to :
 
-    Checkpoint()
-    ```
+        Checkpoint()
+
+    .. seealso::
+        * :class:`BaseStep`
+        * :func:`ResumablePipeline._load_checkpoint`
+        * :class:`ResumableStepMixin`
+        * :class:`NonFittableMixin`
+        * :class:`NonTransformableMixin`
     """
 
     def __init__(
@@ -467,12 +482,54 @@ class BigCheckpoint(Checkpoint):
 
 
 class BaseMiniDataCheckpointer(ABC):
+    """
+    Mini Data Checkpoint that uses pickle to create a checkpoint for a current id, and a data input or an expected output.
+
+    A mini data checkpointer must be wrapped with a :class:`MiniDataCheckpointerWrapper` to be added to a :class:`Checkpoint`
+    :py:attr:`~Checkpoint.data_checkpointers` :
+
+    .. code:: python
+        Checkpoint(
+            step_checkpointer=StepSavingCheckpointer(),
+            data_checkpointers=[
+                MiniDataCheckpointerWrapper(
+                    data_input_checkpointer=PickleMiniDataCheckpointer(MiniDataCheckpointSuffix.DATA_INPUT),
+                    expected_output_checkpointer=PickleMiniDataCheckpointer(MiniDataCheckpointSuffix.EXPECTED_OUTPUT)
+                )
+            ]
+        )
+
+    .. seealso::
+        * :class:`BaseMiniDataCheckpointer`
+        * :class:`MiniDataCheckpointerWrapper`
+    """
+
     @abstractmethod
-    def save(self, path, ids, data):
+    def save(self, path, current_id, data):
+        """
+        Save data checkpoint with the given current_id, and data.
+
+        :param path: checkpoint path for saving
+        :type path: str
+        :param current_id: current id to checkpoint
+        :type current_id: str
+        :param data: data to checkpoint
+        :type data: Any
+        :return:
+        """
         raise NotImplementedError()
 
     @abstractmethod
-    def read(self, path, ids) -> Tuple:
+    def read(self, path, current_id) -> Tuple:
+        """
+        Read data checkpoint with the given current_id, and data.
+
+        :param path: checkpoint path to read
+        :type path: str
+        :param current_id: current id to read checkpoint for
+        :type current_id: str
+        :return:
+        """
         raise NotImplementedError()
 
 class MiniDataCheckpointSuffix(Enum):
@@ -480,49 +537,87 @@ class MiniDataCheckpointSuffix(Enum):
     EXPECTED_OUTPUT = 'eo'
 
 class PickleMiniDataCheckpointer(BaseMiniDataCheckpointer):
+    """
+    Mini Data Checkpoint that uses pickle to create a pickle checkpoint file for a current id, and a data input or expected output.
+
+    A mini data checkpointer must be wrapped with a :class:`MiniDataCheckpointerWrapper` to be added to a :class:`Checkpoint`
+    :py:attr:`~Checkpoint.data_checkpointers` :
+
+    .. code:: python
+        Checkpoint(
+            step_checkpointer=StepSavingCheckpointer(),
+            data_checkpointers=[
+                MiniDataCheckpointerWrapper(
+                    data_input_checkpointer=PickleMiniDataCheckpointer(MiniDataCheckpointSuffix.DATA_INPUT),
+                    expected_output_checkpointer=PickleMiniDataCheckpointer(MiniDataCheckpointSuffix.EXPECTED_OUTPUT)
+                )
+            ]
+        )
+
+    .. seealso::
+        * :class:`BaseMiniDataCheckpointer`
+        * :class:`MiniDataCheckpointerWrapper`
+    """
     def __init__(self, file_name_suffix):
         self.file_name_suffix = file_name_suffix
 
-    def save(self, checkpoint_path: str, current_id, data) -> bool:
+    def save(self, checkpoint_path: str, current_id, data):
         """
         Save the given current id, data input, and expected output using pickle.dump.
 
-        :param checkpoint_path:
-        :param current_id:
-        :param data:
+        :param checkpoint_path: checkpoint path
+        :type checkpoint_path: str
+        :param current_id: checkpoint current id
+        :type current_id: str
+        :param data: data to checkpoint
+        :type data: Any
         :return:
         """
         with open(self.get_checkpoint_path(checkpoint_path, current_id), 'wb') as file:
-            pickle.dump((current_id, data), file)
-
-        return True
+            pickle.dump(data, file)
 
     def read(self, checkpoint_path: str, current_id) -> Tuple[str, Any]:
         """
         Read the data inputs, and expected outputs for the given current id using pickle.load.
 
-        :param checkpoint_path:
-        :param current_id:
+        :param checkpoint_path: checkpoint folder path
+        :type checkpoint_path: str
+        :param current_id: checkpoint current id
+        :type current_id: str
         :return: tuple(current_id, checkpoint_data_input, checkpoint_expected_output)
         :rtype: tuple(str, Iterable, Iterable)
         """
         with open(self.get_checkpoint_path(checkpoint_path, current_id), 'rb') as file:
-            (checkpoint_current_id, checkpoint_data) = pickle.load(file)
-            return checkpoint_current_id, checkpoint_data
+            return pickle.load(file)
 
-    def get_checkpoint_path(self, checkpoint_path: str, current_id) -> str:
+    def get_checkpoint_path(self, checkpoint_path: str, current_id: str) -> str:
         """
         Get the checkpoint file path for a data input id
 
-        :param checkpoint_path:
-        :param current_id:
+        :param checkpoint_path: checkpoint folder path
+        :type checkpoint_path: str
+        :param current_id: checkpoint current id
+        :type current_id: str
         :return: path
         :rtype: str
         """
-        return os.path.join( checkpoint_path, '{0}_{1}.pickle'.format(current_id, self.file_name_suffix))
+        return os.path.join(checkpoint_path, '{0}_{1}.pickle'.format(current_id, self.file_name_suffix))
 
 
 class MiniDataCheckpointerWrapper(BaseCheckpointer):
+    """
+    A :class:`BaseCheckpointer` to checkpoint data inputs, and expected outputs with mini data checkpointers.
+
+    .. code:: python
+        MiniDataCheckpointerWrapper(
+            data_input_checkpointer=PickleMiniDataCheckpointer(MiniDataCheckpointSuffix.DATA_INPUT),
+            expected_output_checkpointer=PickleMiniDataCheckpointer(MiniDataCheckpointSuffix.EXPECTED_OUTPUT)
+        )
+
+    .. seealso::
+        * :class:`BaseMiniDataCheckpointer`
+        * :class:`BaseCheckpointer`
+    """
     def __init__(
             self,
             data_input_checkpointer: BaseMiniDataCheckpointer,
@@ -535,28 +630,59 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         self.expected_output_checkpointer = expected_output_checkpointer
 
     def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Save data container data inputs with :py:attr:`~data_input_checkpointer`.
+        Save data container expected outputs with :py:attr:`~expected_output_checkpointer`.
+
+        :param data_container: data container to checkpoint
+        :type data_container: DataContainer
+        :param context: execution context to checkpoint from
+        :type context: ExecutionContext
+        :return:
+        """
         for current_id, data_input, _ in data_container:
-            self.data_input_checkpointer.save(ids=current_id, data=data_input, path=context.get_path())
+            self.data_input_checkpointer.save(current_id=current_id, data=data_input, path=context.get_path())
 
         for current_id, _, expected_output in data_container:
-            self.expected_output_checkpointer.save(ids=current_id, data=expected_output, path=context.get_path())
+            self.expected_output_checkpointer.save(current_id=current_id, data=expected_output, path=context.get_path())
 
         return data_container
 
     def read_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Read data container data inputs checkpoint with :py:attr:`~data_input_checkpointer`.
+        Read data container expected outputs checkpoint with :py:attr:`~expected_output_checkpointer`.
+
+        :param data_container: data container to read checkpoint for
+        :type data_container: DataContainer
+        :param context: execution context to read checkpoint from
+        :type context: ExecutionContext
+        :return: data container checkpoint
+        :rtype: DataContainer
+        """
+        data_inputs = []
         for current_id, data_input, _ in data_container:
-            checkpoint = self.data_input_checkpointer.read(ids=data_container.current_ids, path=context.get_path())
-            data_container.set_data_inputs(checkpoint)
+            checkpoint = self.data_input_checkpointer.read(current_id=data_container.current_ids, path=context.get_path())
+            data_inputs.append(checkpoint)
+        data_container.set_data_inputs(data_inputs)
 
         expected_outputs = []
         for current_id, _, expected_output in data_container:
-            checkpoint = self.expected_output_checkpointer.read(ids=current_id, path=context.get_path())
+            checkpoint = self.expected_output_checkpointer.read(current_id=current_id, path=context.get_path())
             expected_outputs.append(checkpoint)
+        data_container.set_expected_outputs(expected_outputs)
 
         return data_container
 
 
 class MiniCheckpoint(Checkpoint):
+    """
+    :class:`Checkpoint` with pickle mini data checkpointers wrapped in a :class:`MiniDataCheckpointerWrapper`, and the default step saving checkpointer.
+
+    .. seealso::
+        * :class:`Checkpoint`
+        * :class:`MiniDataCheckpointerWrapper`
+    """
     def __init__(self):
         Checkpoint.__init__(
             self,
