@@ -304,6 +304,7 @@ class ResumablePipeline(Pipeline, ResumableMixin):
 
         step = self[new_starting_step_index]
         if isinstance(step, Checkpoint):
+            context = context.push(step)
             starting_step_data_container = step.read_checkpoint(starting_step_data_container, context)
 
         return self[new_starting_step_index:], starting_step_data_container

@@ -508,8 +508,10 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         """
         data_inputs = []
         for current_id, data_input, _ in data_container:
-            checkpoint = self.data_input_checkpointer.read(current_id=data_container.current_ids,
-                                                           checkpoint_path=context.get_path())
+            checkpoint = self.data_input_checkpointer.read(
+                current_id=current_id,
+                checkpoint_path=context.get_path()
+            )
             data_inputs.append(checkpoint)
         data_container.set_data_inputs(data_inputs)
 
@@ -537,7 +539,7 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         :rtype: DataContainer
         """
         for current_id, data_input, _ in data_container:
-            if not self.data_input_checkpointer.checkpoint_exists(checkpoint_path=context.get_path(), current_id=data_container.current_ids):
+            if not self.data_input_checkpointer.checkpoint_exists(checkpoint_path=context.get_path(), current_id=current_id):
                 return False
 
         if self.expected_output_checkpointer is None:

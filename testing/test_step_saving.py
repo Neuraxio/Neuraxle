@@ -5,7 +5,7 @@ from joblib import dump
 from py._path.local import LocalPath
 
 from neuraxle.base import BaseStep, TruncableJoblibStepSaver, NonFittableMixin
-from neuraxle.checkpoints import Checkpoint
+from neuraxle.checkpoints import Checkpoint, MiniCheckpoint
 from neuraxle.pipeline import ResumablePipeline
 
 OUTPUT = "OUTPUT"
@@ -74,7 +74,7 @@ def test_resumable_pipeline_fit_transform_should_save_all_fitted_pipeline_steps(
         (SOME_STEP_1, MultiplyBy(multiply_by=2)),
         (PIPELINE_2, ResumablePipeline([
             (SOME_STEP_2, MultiplyBy(multiply_by=4)),
-            (CHECKPOINT, Checkpoint()),
+            (CHECKPOINT, MiniCheckpoint()),
             (SOME_STEP_3, MultiplyBy(multiply_by=6)),
         ]))
     ], cache_folder=tmpdir)

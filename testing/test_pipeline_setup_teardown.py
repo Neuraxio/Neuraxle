@@ -57,7 +57,7 @@ def test_transform_should_setup_pipeline_and_steps():
 
     p.transform([1])
 
-    assert not p.is_initialized
+    assert p.is_initialized
 
 
 def test_fit_should_setup_pipeline_and_steps():
