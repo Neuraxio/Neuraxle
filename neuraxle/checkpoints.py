@@ -135,7 +135,7 @@ class StepSavingCheckpointer(BaseCheckpointer):
             context: ExecutionContext
     ) -> DataContainer:
         # TODO: save the context by execution mode AND data container ids / summary
-        context.save_all_unsaved()
+        context.copy().save_all_unsaved()
         return data_container
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:

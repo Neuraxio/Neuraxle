@@ -201,8 +201,8 @@ class Pipeline(BasePipeline):
         new_steps_as_tuple: NamedTupleList = []
 
         for index, (step_name, step) in enumerate(steps_left_to_do):
-            sub_step_context = context.push(step)
             step.setup()
+            sub_step_context = context.push(step)
 
             if index != index_last_step:
                 step, data_container = step.handle_fit_transform(data_container, sub_step_context)
@@ -231,8 +231,8 @@ class Pipeline(BasePipeline):
         new_steps_as_tuple: NamedTupleList = []
 
         for step_name, step in steps_left_to_do:
-            sub_step_context = context.push(step)
             step.setup()
+            sub_step_context = context.push(step)
 
             step, data_container = step.handle_fit_transform(data_container, sub_step_context)
 
@@ -251,8 +251,10 @@ class Pipeline(BasePipeline):
         :return: transformed data container
         """
         steps_left_to_do, data_container = self._load_checkpoint(data_container, context)
+        self.setup()
 
         for step_name, step in steps_left_to_do:
+            step.setup()
             sub_context = context.push(step)
             data_container = step.handle_transform(data_container, sub_context)
 

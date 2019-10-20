@@ -56,8 +56,8 @@ def test_resumable_pipeline_with_checkpoint_fit_transform_should_resume_saved_ch
 
     pipeline, outputs = test_case.pipeline.fit_transform([0, 1], [0, 1])
 
-    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline/checkpoint/0_eo.pickle'))
-    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline/checkpoint/1_eo.pickle'))
+    assert test_case.tape_transform_step1.data == []
+    assert test_case.tape_transform_step2.data == [([0, 1], [0, 1])]
 
 
 def test_resumable_pipeline_with_checkpoint_transform_should_resume_saved_checkpoints(tmpdir):
@@ -116,7 +116,7 @@ def test_resumable_pipeline_with_checkpoint_transform_should_not_resume_partiall
     given_partially_saved_checkpoints(tmpdir)
     test_case = create_checkpoint_test_case(tmpdir)
 
-    pipeline, outputs = test_case.pipeline.transform([0, 1])
+    outputs = test_case.pipeline.transform([0, 1])
 
     assert test_case.tape_transform_step1.data == [[0, 1]]
     assert test_case.tape_transform_step2.data == [[0, 1]]

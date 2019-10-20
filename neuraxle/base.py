@@ -314,6 +314,13 @@ class ExecutionContext:
             parents=self.parents + [step]
         )
 
+    def copy(self):
+        return ExecutionContext(
+            execution_mode=self.execution_mode,
+            root=self.root,
+            parents=copy(self.parents),
+        )
+
     def peek(self):
         """
         Get last parent.
