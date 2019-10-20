@@ -1,4 +1,4 @@
-from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin
+from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin, MetaStepMixin
 from neuraxle.hyperparams.distributions import LogUniform, Quantized, RandInt, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
@@ -30,8 +30,6 @@ AN_INPUT = "I am an input"
 AN_EXPECTED_OUTPUT = "I am an expected output"
 
 
-
-
 class SomeStep(NonFittableMixin, BaseStep):
     def __init__(self, hyperparams_space: HyperparameterSpace = None, output=AN_EXPECTED_OUTPUT):
         BaseStep.__init__(self, hyperparams=None, hyperparams_space=hyperparams_space)
@@ -49,6 +47,18 @@ class SomeStepWithHyperparams(BaseStep):
                           hyperparams_space=HYPERPARAMETERS_SPACE,
                           name="MockStep"
                           )
+
+    def transform(self, data_inputs):
+        pass
+
+    def fit(self, data_inputs, expected_outputs=None):
+        pass
+
+
+class SomeMetaStepWithHyperparams(MetaStepMixin):
+    def __init__(self):
+        BaseStep.__init__(self)
+        MetaStepMixin.__init__(self, SomeStepWithHyperparams())
 
     def transform(self, data_inputs):
         pass
