@@ -801,8 +801,9 @@ class BaseStep(ABC):
         return self.reverse()
 
     def __repr__(self):
-        output = 'step name : ' + self.name + '\n' \
-                 + 'hyperparameters : ' + pprint.pformat(self.get_hyperparams())
+
+        output = self.__class__.__name__ + "(\n\tname=" + self.name + "," + "\n\thyperparameters=" + pprint.pformat(
+            self.hyperparams) + "\n)"
 
         return output
 
@@ -914,6 +915,15 @@ class MetaStepMixin:
 
     def get_best_model(self) -> BaseStep:
         return self.best_model
+
+    def __repr__(self):
+        output = self.__class__.__name__ + "(\n\twrapped=" + repr(self.wrapped) + "," + "\n\thyperparameters=" + pprint.pformat(
+            self.hyperparams) + "\n)"
+
+        return output
+
+    def __str__(self):
+        return self.__repr__()
 
 
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
@@ -1211,7 +1221,6 @@ class TruncableSteps(BaseStep, ABC):
 
         return self
 
-
     def should_save(self):
         if BaseStep.should_save(self):
             return True
@@ -1434,13 +1443,12 @@ class TruncableSteps(BaseStep, ABC):
         return self
 
     def __repr__(self):
-        main_step_output = super(TruncableSteps, self).__repr__()
 
-        output = "main step : " + '\n' \
-                 + main_step_output + '\n' \
-                 + "intermediate steps : " + '\n' \
-                 + pprint.pformat(self.steps_as_tuple) \
-                 + '\n'
+        output = self.__class__.__name__ + '\n' \
+                 + "(\n\t" + super(TruncableSteps, self).__repr__() \
+                 + "(\n\t\t" + pprint.pformat(self.steps_as_tuple) \
+                 + "\t\n)" \
+                 + "\n)"
 
         return output
 
