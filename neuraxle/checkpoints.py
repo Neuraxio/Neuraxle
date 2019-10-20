@@ -478,7 +478,9 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         for current_id, data_input, _ in data_container:
             self.data_input_checkpointer.save(current_id=current_id, data=data_input, path=context.get_path())
 
-        if self.expected_output_checkpointer:
+        if self.expected_output_checkpointer is None:
+            if context.get_execution_mode() == ExecutionMode.FIT or context.get_execution_mode() == ExecutionMode.FIT_TRANSFORM:
+                warnings.warn('Saving Data Checkpoint {0} without an expected output checkpointer with Step Saver {1}. Perhaps, you wanted to have an expected output checkpointer ?'.format(context.get_path(), self.__class__.__name__))
             return data_container
 
         for current_id, _, expected_output in data_container:
@@ -505,7 +507,7 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
             data_inputs.append(checkpoint)
         data_container.set_data_inputs(data_inputs)
 
-        if self.expected_output_checkpointer:
+        if self.expected_output_checkpointer is None:
             data_container.set_expected_outputs(None)
             return data_container
 
@@ -532,7 +534,9 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
             if not self.data_input_checkpointer.checkpoint_exists(current_id=data_container.current_ids, path=context.get_path()):
                 return False
 
-        if self.expected_output_checkpointer or data_container.expected_outputs is None:
+        if self.expected_output_checkpointer is None:
+            if context.get_execution_mode() == ExecutionMode.FIT or context.get_execution_mode() == ExecutionMode.FIT_TRANSFORM:
+                warnings.warn('Resuming Data Checkpoint {0} without an expected output checkpointer with Step Saver {1}. Perhaps, you wanted to have an expected output checkpointer ?'.format(context.get_path(), self.__class__.__name__))
             return True
 
         for current_id, _, expected_output in data_container:
