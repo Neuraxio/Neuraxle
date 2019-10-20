@@ -2149,101 +2149,22 @@ class ResumableStepMixin:
     @abstractmethod
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
         """
+        Returns True if the step can be resumed with the given data container, and execution context.
 
         :param data_container: data container
         :type data_container: DataContainer
         :param context: execution context
         :type context: ExecutionContext
-        :return:
+
+        :return: if the step can be resumed
+        :rtype: bool
         """
         raise NotImplementedError()
-
-
-class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
-    """
-    A Barrier step to be used in a minibatch sequential pipeline. It forces all the
-    data inputs to get to the barrier in a sub pipeline before going through to the next sub-pipeline.
-
-    ```
-    p = MiniBatchSequentialPipeline([
-        SomeStep(),
-        SomeStep(),
-        Barrier(), # must be a concrete Barrier ex: Joiner()
-        SomeStep(),
-        SomeStep(),
-        Barrier(), # must be a concrete Barrier ex: Joiner()
-    ], batch_size=10)
-    ```
-    """
-
-    @abstractmethod
-    def join_transform(self, step: BaseStep, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def join_fit_transform(self, step: BaseStep, data_container: DataContainer, context: ExecutionContext) -> Tuple[
-        'Any', Iterable]:
-        raise NotImplementedError()
-
-
-class Joiner(Barrier):
-    """
-    A Special Barrier step that joins the transformed mini batches together with list.extend method.
-    """
-
-    def __init__(self, batch_size):
-        Barrier.__init__(self)
-        self.batch_size = batch_size
-
-    def join_transform(self, step: BaseStep, data_container: DataContainer, context: ExecutionContext) -> Iterable:
-        """
-        Concatenate the pipeline transform output of each batch of self.batch_size together.
-
-        :param step: pipeline to transform on
-        :param data_container: data container to transform
-        :param context: execution context
-        :return:
-        """
-        data_container_batches = data_container.convolved_1d(
-            stride=self.batch_size,
-            kernel_size=self.batch_size
-        )
-
-        output_data_container = ListDataContainer.empty()
-        for data_container_batch in data_container_batches:
-            output_data_container.concat(
-                step._transform_core(data_container_batch, context)
-            )
-
-        return output_data_container
-
-    def join_fit_transform(self, step: BaseStep, data_container: DataContainer, context: ExecutionContext) -> \
-            Tuple['Any', Iterable]:
-        """
-        Concatenate the pipeline fit transform output of each batch of self.batch_size together.
-
-        :param step: pipeline to fit transform on
-        :param data_container: data container to fit transform on
-        :param context: execution context
-        :return: fitted self, transformed data inputs
-        """
-        data_container_batches = data_container.convolved_1d(
-            stride=self.batch_size,
-            kernel_size=self.batch_size
-        )
-
-        output_data_container = ListDataContainer.empty()
-        for data_container_batch in data_container_batches:
-            step, data_container_batch = step._fit_transform_core(data_container_batch, context)
-            output_data_container.concat(
-                data_container_batch
-            )
-
-        return step, output_data_container
 
 
 class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
-    """A pipeline step that has no effect at all but to return the same data without changes.
+    """
+    A pipeline step that has no effect at all but to return the same data without changes.
 
     This can be useful to concatenate new features to existing features, such as what AddFeatures do.
 
