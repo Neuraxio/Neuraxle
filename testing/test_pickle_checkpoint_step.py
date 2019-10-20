@@ -27,11 +27,12 @@ from py._path.local import LocalPath
 
 from neuraxle.base import DataContainer, ExecutionContext, ExecutionMode
 from neuraxle.base import NonFittableMixin
-from neuraxle.checkpoints import Checkpoint
+from neuraxle.checkpoints import MiniCheckpoint
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import ResumablePipeline
 from neuraxle.steps.misc import TapeCallbackFunction, TransformCallbackStep, BaseCallbackStep
 from testing.steps.test_output_transformer_wrapper import MultiplyBy2OutputTransformer
+from testing.test_step_saving import PIPELINE_2, CHECKPOINT
 
 EXPECTED_TAPE_AFTER_CHECKPOINT = ["2", "3"]
 
@@ -72,7 +73,7 @@ def create_pipeline(tmpdir, pickle_checkpoint_step, tape, hyperparameters=None, 
 
 def test_when_no_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
     tape = TapeCallbackFunction()
-    pickle_checkpoint_step = Checkpoint()
+    pickle_checkpoint_step = MiniCheckpoint()
     pipeline = create_pipeline(tmpdir, pickle_checkpoint_step, tape)
 
     pipeline, actual_data_inputs = pipeline.fit_transform(data_inputs, expected_outputs)
@@ -80,13 +81,15 @@ def test_when_no_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
     actual_tape = tape.get_name_tape()
     assert np.array_equal(actual_data_inputs, data_inputs)
     assert actual_tape == ["1", "2", "3"]
-    assert os.path.exists(pickle_checkpoint_step.data_checkpointers[2].data_checkpointer.get_checkpoint_path(0))
-    assert os.path.exists(pickle_checkpoint_step.data_checkpointers[2].data_checkpointer.get_checkpoint_path(1))
+    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', '0_di.pickle'))
+    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', '1_di.pickle'))
+    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', '0_eo.pickle'))
+    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', '1_eo.pickle'))
 
 
 def test_when_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
     tape = TapeCallbackFunction()
-    pickle_checkpoint_step = Checkpoint()
+    pickle_checkpoint_step = MiniCheckpoint()
     pipeline = create_pipeline(tmpdir, pickle_checkpoint_step, tape, HyperparameterSamples({"a__learning_rate": 1}))
 
     pipeline, actual_data_inputs = pipeline.fit_transform(data_inputs, expected_outputs)
@@ -94,8 +97,12 @@ def test_when_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
     actual_tape = tape.get_name_tape()
     assert np.array_equal(actual_data_inputs, data_inputs)
     assert actual_tape == ["1", "2", "3"]
-    assert os.path.exists(pickle_checkpoint_step.data_checkpointers[2].data_checkpointer.get_checkpoint_path(expected_rehashed_data_inputs[0]))
-    assert os.path.exists(pickle_checkpoint_step.data_checkpointers[2].data_checkpointer.get_checkpoint_path(expected_rehashed_data_inputs[1]))
+
+
+    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', '44f9d6dd8b6ccae571ca04525c3eaffa_di.pickle'))
+    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', '898a67b2f5eeae6393ca4b3162ba8e3d_di.pickle'))
+    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', '44f9d6dd8b6ccae571ca04525c3eaffa_eo.pickle'))
+    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', '898a67b2f5eeae6393ca4b3162ba8e3d_eo.pickle'))
 
 
 def test_when_no_hyperparams_and_saved_same_pipeline_should_load_checkpoint_pickle(tmpdir: LocalPath):
@@ -105,14 +112,14 @@ def test_when_no_hyperparams_and_saved_same_pipeline_should_load_checkpoint_pick
     # When
     pipeline_save = create_pipeline(
         tmpdir=tmpdir,
-        pickle_checkpoint_step=Checkpoint(),
+        pickle_checkpoint_step=MiniCheckpoint(),
         tape=TapeCallbackFunction()
     )
     pipeline_save.fit_transform(data_inputs, expected_outputs)
 
     pipeline_load = create_pipeline(
         tmpdir=tmpdir,
-        pickle_checkpoint_step=Checkpoint(),
+        pickle_checkpoint_step=MiniCheckpoint(),
         tape=tape
     )
     pipeline_load, actual_data_inputs = pipeline_load.fit_transform(data_inputs, expected_outputs)
@@ -130,7 +137,7 @@ def test_when_hyperparams_and_saved_same_pipeline_should_load_checkpoint_pickle(
     # When
     pipeline_save = create_pipeline(
         tmpdir=tmpdir,
-        pickle_checkpoint_step=Checkpoint(),
+        pickle_checkpoint_step=MiniCheckpoint(),
         tape=TapeCallbackFunction(),
         hyperparameters=HyperparameterSamples({"a__learning_rate": 1})
     )
@@ -138,7 +145,7 @@ def test_when_hyperparams_and_saved_same_pipeline_should_load_checkpoint_pickle(
 
     pipeline_load = create_pipeline(
         tmpdir=tmpdir,
-        pickle_checkpoint_step=Checkpoint(),
+        pickle_checkpoint_step=MiniCheckpoint(),
         tape=tape,
         hyperparameters=HyperparameterSamples({"a__learning_rate": 1})
     )
@@ -157,7 +164,7 @@ def test_when_hyperparams_and_saved_different_pipeline_should_not_load_checkpoin
     # When
     pipeline_save = create_pipeline(
         tmpdir=tmpdir,
-        pickle_checkpoint_step=Checkpoint(),
+        pickle_checkpoint_step=MiniCheckpoint(),
         tape=TapeCallbackFunction(),
         hyperparameters=HyperparameterSamples({"a__learning_rate": 1}),
         different=True
@@ -166,7 +173,7 @@ def test_when_hyperparams_and_saved_different_pipeline_should_not_load_checkpoin
 
     pipeline_load = create_pipeline(
         tmpdir=tmpdir,
-        pickle_checkpoint_step=Checkpoint(),
+        pickle_checkpoint_step=MiniCheckpoint(),
         tape=tape,
         hyperparameters=HyperparameterSamples({"a__learning_rate": 1})
     )
@@ -181,12 +188,12 @@ def test_when_hyperparams_and_saved_different_pipeline_should_not_load_checkpoin
 def test_when_hyperparams_and_saved_no_pipeline_should_not_load_checkpoint_pickle(tmpdir: LocalPath):
     # Given
     tape = TapeCallbackFunction()
-    pickle_checkpoint_step = Checkpoint()
+    pickle_checkpoint_step = MiniCheckpoint()
 
     # When
     pipeline_save = create_pipeline(
         tmpdir=tmpdir,
-        pickle_checkpoint_step=Checkpoint(),
+        pickle_checkpoint_step=MiniCheckpoint(),
         tape=TapeCallbackFunction(),
         hyperparameters=HyperparameterSamples({"a__learning_rate": 1}),
         different=True,
@@ -220,7 +227,7 @@ def test_pickle_checkpoint_step_should_load_data_container(tmpdir: LocalPath):
     create_pipeline_output_transformer = lambda: ResumablePipeline(
         [
             ('output_transformer_1', MultiplyBy2OutputTransformer()),
-            ('pickle_checkpoint', Checkpoint()),
+            ('pickle_checkpoint', MiniCheckpoint()),
             ('output_transformer_2', MultiplyBy2OutputTransformer()),
         ], cache_folder=tmpdir)
 

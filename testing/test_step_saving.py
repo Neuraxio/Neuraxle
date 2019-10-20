@@ -5,7 +5,7 @@ from joblib import dump
 from py._path.local import LocalPath
 
 from neuraxle.base import BaseStep, TruncableJoblibStepSaver, NonFittableMixin
-from neuraxle.checkpoints import Checkpoint, MiniCheckpoint
+from neuraxle.checkpoints import MiniCheckpoint
 from neuraxle.pipeline import ResumablePipeline
 
 OUTPUT = "OUTPUT"
@@ -100,7 +100,7 @@ def test_resumable_pipeline_transform_should_not_save_steps(tmpdir: LocalPath):
         (SOME_STEP_1, MultiplyBy(multiply_by=2)),
         (PIPELINE_2, ResumablePipeline([
             (SOME_STEP_2, MultiplyBy(multiply_by=4)),
-            (CHECKPOINT, Checkpoint()),
+            (CHECKPOINT, MiniCheckpoint()),
             (SOME_STEP_3, MultiplyBy(multiply_by=6)),
         ]))
     ], cache_folder=tmpdir)
@@ -122,7 +122,7 @@ def test_resumable_pipeline_fit_should_save_all_fitted_pipeline_steps(tmpdir: Lo
         (SOME_STEP_1, MultiplyBy(multiply_by=2)),
         (PIPELINE_2, ResumablePipeline([
             (SOME_STEP_2, MultiplyBy(multiply_by=4)),
-            (CHECKPOINT, Checkpoint()),
+            (CHECKPOINT, MiniCheckpoint()),
             (SOME_STEP_3, MultiplyBy(multiply_by=6)),
         ]))
     ], cache_folder=tmpdir)
@@ -206,7 +206,7 @@ def given_saved_pipeline(tmpdir):
     given_saved_some_step(multiply_by=4, name=SOME_STEP_2, path=create_some_step2_path(tmpdir, True))
     given_saved_some_step(multiply_by=6, name=SOME_STEP_3, path=create_some_step3_path(tmpdir, True))
 
-    checkpoint = Checkpoint()
+    checkpoint = MiniCheckpoint()
     checkpoint.name = CHECKPOINT
     dump(checkpoint, create_some_checkpoint_path(tmpdir, True))
 
@@ -214,7 +214,7 @@ def given_saved_pipeline(tmpdir):
         (SOME_STEP_1, MultiplyBy(multiply_by=1)),
         (PIPELINE_2, ResumablePipeline([
             (SOME_STEP_2, MultiplyBy(multiply_by=1)),
-            (CHECKPOINT, Checkpoint()),
+            (CHECKPOINT, MiniCheckpoint()),
             (SOME_STEP_3, MultiplyBy(multiply_by=1)),
         ]))
     ], cache_folder=tmpdir)
