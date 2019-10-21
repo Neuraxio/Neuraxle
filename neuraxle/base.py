@@ -739,6 +739,7 @@ class BaseStep(ABC):
 
         Example :
         .. code-block:: python
+
             step.set_hyperparams(HyperparameterSamples({
                 'learning_rate': 0.10
             }))
@@ -952,36 +953,16 @@ class BaseStep(ABC):
         :func:`~neuraxle.base.BaseStep.mutate` or :func:`~neuraxle.base.BaseStep.reverse` can be called to change the default transform behavior :
 
         .. code-block:: python
-            class MultiplyByN(NonFittableMixin, BaseStep):
-                def __init__(self, multiply_by):
-                    NonFittableMixin.__init__(self)
-                    BaseStep.__init__(
-                        self,
-                        hyperparams=HyperparameterSamples({
-                            'multiply_by': multiply_by
-                        })
-                    )
 
-                def transform(self, data_inputs):
-                    return data_inputs * self.hyperparams['multiply_by']
+            p = Pipeline([MultiplyBy()])
 
-                def inverse_transform(self, processed_outputs):
-                    return data_inputs / self.hyperparams['multiply_by']
+            _in = np.array([1, 2])
 
-            p = Pipeline([
-                MultiplyByN(multiply_by=2)
-            ])
+            _out = p.transform(_in)
 
-            outputs = p.transform(np.array[1, 2])
+            _regenerated_in = reversed(p).transform(_out)
 
-            assert np.array_equal(outputs, np.array([2, 4]))
-
-            p = p.mutate(new_method="inverse_transform", method_to_assign_to="transform")
-            # or p = reverse(p)
-
-            outputs = p.transform(processed_outputs) # this will call inverse transform method instead
-
-            assert np.array_equal(outputs, np.array([1, 2]))
+            assert np.array_equal(_regenerated_in, _in)
 
         :param processed_outputs: processed data inputs
         :return: inverse transformed processed outputs
@@ -1786,6 +1767,7 @@ class TruncableSteps(BaseStep, ABC):
 
         Example :
         .. code-block:: python
+
             p = Pipeline([SomeStep()])
             p.set_hyperparams(HyperparameterSamples({
                 'learning_rate': 0.1,
