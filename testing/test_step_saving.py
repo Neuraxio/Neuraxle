@@ -6,6 +6,7 @@ from py._path.local import LocalPath
 
 from neuraxle.base import BaseStep, TruncableJoblibStepSaver, NonFittableMixin
 from neuraxle.checkpoints import PickleCheckpointStep
+from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import ResumablePipeline
 
 OUTPUT = "OUTPUT"
@@ -60,22 +61,27 @@ def create_root_path(tmpdir, create_dir=False):
     return p
 
 
-class MultiplyBy(NonFittableMixin, BaseStep):
+class MultiplyByN(NonFittableMixin, BaseStep):
     def __init__(self, multiply_by):
-        BaseStep.__init__(self)
-        self.multiply_by = multiply_by
+        NonFittableMixin.__init__(self)
+        BaseStep.__init__(
+            self,
+            hyperparams=HyperparameterSamples({
+                'multiply_by': multiply_by
+            })
+        )
 
     def transform(self, data_inputs):
-        return data_inputs * self.multiply_by
+        return data_inputs * self.hyperparams['multiply_by']
 
 
 def test_resumable_pipeline_fit_transform_should_save_all_fitted_pipeline_steps(tmpdir: LocalPath):
     p = ResumablePipeline([
-        (SOME_STEP_1, MultiplyBy(multiply_by=2)),
+        (SOME_STEP_1, MultiplyByN(multiply_by=2)),
         (PIPELINE_2, ResumablePipeline([
-            (SOME_STEP_2, MultiplyBy(multiply_by=4)),
+            (SOME_STEP_2, MultiplyByN(multiply_by=4)),
             (CHECKPOINT, PickleCheckpointStep(cache_folder=tmpdir)),
-            (SOME_STEP_3, MultiplyBy(multiply_by=6)),
+            (SOME_STEP_3, MultiplyByN(multiply_by=6)),
         ]))
     ], cache_folder=tmpdir)
     p.name = ROOT
@@ -97,11 +103,11 @@ def test_resumable_pipeline_fit_transform_should_save_all_fitted_pipeline_steps(
 
 def test_resumable_pipeline_transform_should_not_save_steps(tmpdir: LocalPath):
     p = ResumablePipeline([
-        (SOME_STEP_1, MultiplyBy(multiply_by=2)),
+        (SOME_STEP_1, MultiplyByN(multiply_by=2)),
         (PIPELINE_2, ResumablePipeline([
-            (SOME_STEP_2, MultiplyBy(multiply_by=4)),
+            (SOME_STEP_2, MultiplyByN(multiply_by=4)),
             (CHECKPOINT, PickleCheckpointStep(cache_folder=tmpdir)),
-            (SOME_STEP_3, MultiplyBy(multiply_by=6)),
+            (SOME_STEP_3, MultiplyByN(multiply_by=6)),
         ]))
     ], cache_folder=tmpdir)
     p.name = ROOT
@@ -119,11 +125,11 @@ def test_resumable_pipeline_transform_should_not_save_steps(tmpdir: LocalPath):
 
 def test_resumable_pipeline_fit_should_save_all_fitted_pipeline_steps(tmpdir: LocalPath):
     p = ResumablePipeline([
-        (SOME_STEP_1, MultiplyBy(multiply_by=2)),
+        (SOME_STEP_1, MultiplyByN(multiply_by=2)),
         (PIPELINE_2, ResumablePipeline([
-            (SOME_STEP_2, MultiplyBy(multiply_by=4)),
+            (SOME_STEP_2, MultiplyByN(multiply_by=4)),
             (CHECKPOINT, PickleCheckpointStep(cache_folder=tmpdir)),
-            (SOME_STEP_3, MultiplyBy(multiply_by=6)),
+            (SOME_STEP_3, MultiplyByN(multiply_by=6)),
         ]))
     ], cache_folder=tmpdir)
     p.name = ROOT
@@ -180,9 +186,9 @@ def test_resumable_pipeline_fit_should_load_all_pipeline_steps(tmpdir: LocalPath
     )
 
     # Then
-    assert p[SOME_STEP_1].multiply_by == 2
-    assert p[PIPELINE_2][SOME_STEP_2].multiply_by == 4
-    assert p[PIPELINE_2][SOME_STEP_3].multiply_by == 6
+    assert p[SOME_STEP_1].hyperparams['multiply_by'] == 2
+    assert p[PIPELINE_2][SOME_STEP_2].hyperparams['multiply_by'] == 4
+    assert p[PIPELINE_2][SOME_STEP_3].hyperparams['multiply_by'] == 6
 
 
 def given_saved_pipeline(tmpdir):
@@ -211,11 +217,11 @@ def given_saved_pipeline(tmpdir):
     dump(pickle_checkpoint_step, create_some_checkpoint_path(tmpdir, True))
 
     p = ResumablePipeline([
-        (SOME_STEP_1, MultiplyBy(multiply_by=1)),
+        (SOME_STEP_1, MultiplyByN(multiply_by=1)),
         (PIPELINE_2, ResumablePipeline([
-            (SOME_STEP_2, MultiplyBy(multiply_by=1)),
+            (SOME_STEP_2, MultiplyByN(multiply_by=1)),
             (CHECKPOINT, PickleCheckpointStep(cache_folder=tmpdir)),
-            (SOME_STEP_3, MultiplyBy(multiply_by=1)),
+            (SOME_STEP_3, MultiplyByN(multiply_by=1)),
         ]))
     ], cache_folder=tmpdir)
     p.name = ROOT
@@ -224,6 +230,6 @@ def given_saved_pipeline(tmpdir):
 
 
 def given_saved_some_step(multiply_by, name, path):
-    some_step1 = MultiplyBy(multiply_by=multiply_by)
+    some_step1 = MultiplyByN(multiply_by=multiply_by)
     some_step1.name = name
     dump(some_step1, path)
