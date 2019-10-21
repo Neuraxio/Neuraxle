@@ -220,7 +220,7 @@ class JoblibStepSaver(BaseSaver):
         return loaded_step
 
 class ExecutionMode(Enum):
-    FIT_OR_FIT_TRANSFORM_OR_TRANSFORM = 'fit_or_fit_transform_transform'
+    FIT_OR_FIT_TRANSFORM_OR_TRANSFORM = 'fit_or_fit_transform_or_transform'
     FIT_OR_FIT_TRANSFORM = 'fit_or_fit_transform'
     TRANSFORM = 'transform'
     FIT = 'fit'
@@ -254,7 +254,7 @@ class ExecutionContext:
         return self.execution_mode
 
     @staticmethod
-    def create(root_step: 'BaseStep', execution_mode, root_path) -> 'ExecutionContext':
+    def create_from_root(root_step: 'BaseStep', execution_mode, root_path) -> 'ExecutionContext':
         return ExecutionContext(
             execution_mode=execution_mode,
             root=root_path,
@@ -1450,7 +1450,7 @@ class TruncableSteps(BaseStep, ABC):
 
 
 
-class ResumableMixin:
+class ResumableStepMixin:
     """
     Mixin to add resumable function to a step, or a class that can be resumed, for example a checkpoint on disk.
     """

@@ -40,7 +40,7 @@ def test_output_transformer_should_zip_data_input_and_expected_output_in_the_tra
             data_inputs=[1, 2, 3],
             expected_outputs=[2, 3, 4]
         ),
-        ExecutionContext.create(pipeline, ExecutionMode.FIT_TRANSFORM, tmpdir)
+        ExecutionContext.create_from_root(pipeline, ExecutionMode.FIT_TRANSFORM, tmpdir)
     )
 
     assert new_data_container.data_inputs == [2, 4, 6]

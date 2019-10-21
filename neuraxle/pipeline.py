@@ -23,7 +23,7 @@ from abc import ABC, abstractmethod
 from copy import copy
 from typing import Any, Tuple, List
 
-from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableMixin, DataContainer, NonFittableMixin, \
+from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, DataContainer, NonFittableMixin, \
     Barrier, ExecutionContext, ExecutionMode
 from neuraxle.checkpoints import Checkpoint
 
@@ -70,7 +70,7 @@ class Pipeline(BasePipeline):
         )
         data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
 
-        context = ExecutionContext.create(self, ExecutionMode.TRANSFORM, self.cache_folder)
+        context = ExecutionContext.create_from_root(self, ExecutionMode.TRANSFORM, self.cache_folder)
 
         data_container = self._transform_core(data_container, context)
 
@@ -95,7 +95,7 @@ class Pipeline(BasePipeline):
             expected_outputs=expected_outputs
         )
 
-        context = ExecutionContext.create(self, ExecutionMode.FIT_TRANSFORM, self.cache_folder)
+        context = ExecutionContext.create_from_root(self, ExecutionMode.FIT_TRANSFORM, self.cache_folder)
 
         new_self, data_container = self._fit_transform_core(data_container, context)
 
@@ -120,7 +120,7 @@ class Pipeline(BasePipeline):
             expected_outputs=expected_outputs
         )
 
-        context = ExecutionContext.create(self, ExecutionMode.FIT, self.cache_folder)
+        context = ExecutionContext.create_from_root(self, ExecutionMode.FIT, self.cache_folder)
 
         new_self, data_container = self._fit_core(data_container, context)
 
@@ -274,7 +274,7 @@ class Pipeline(BasePipeline):
         return self.steps_as_tuple, data_container
 
 
-class ResumablePipeline(Pipeline, ResumableMixin):
+class ResumablePipeline(ResumableStepMixin, Pipeline):
     """
     Fits and transform steps after latest checkpoint
     """
@@ -330,7 +330,7 @@ class ResumablePipeline(Pipeline, ResumableMixin):
 
         for index, (step_name, step) in enumerate(self.items()):
             sub_step_context = starting_step_context.push(step)
-            if isinstance(step, ResumableMixin) and step.should_resume(current_data_container, sub_step_context):
+            if isinstance(step, ResumableStepMixin) and step.should_resume(current_data_container, sub_step_context):
                 index_latest_checkpoint = index
                 starting_step_data_container = copy(current_data_container)
 
@@ -354,7 +354,7 @@ class ResumablePipeline(Pipeline, ResumableMixin):
         """
         for index, (step_name, step) in enumerate(reversed(self.items())):
             sub_step_context = context.push(step)
-            if isinstance(step, ResumableMixin) and step.should_resume(data_container, sub_step_context):
+            if isinstance(step, ResumableStepMixin) and step.should_resume(data_container, sub_step_context):
                 return True
 
         return False
@@ -376,7 +376,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         """
         current_ids = self._create_current_ids(data_inputs)
         data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
-        context = ExecutionContext.create(self, ExecutionMode.TRANSFORM, self.cache_folder)
+        context = ExecutionContext.create_from_root(self, ExecutionMode.TRANSFORM, self.cache_folder)
         data_container = self.handle_transform(data_container, context)
 
         return data_container.data_inputs
@@ -393,7 +393,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         )
-        context = ExecutionContext.create(self, ExecutionMode.FIT_TRANSFORM, self.cache_folder)
+        context = ExecutionContext.create_from_root(self, ExecutionMode.FIT_TRANSFORM, self.cache_folder)
         new_self, data_container = self.handle_fit_transform(data_container, context)
 
         return new_self, data_container.data_inputs
