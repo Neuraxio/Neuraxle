@@ -66,6 +66,7 @@ class BaseHasher(ABC):
         """
         raise NotImplementedError()
 
+
 class HashlibMd5Hasher(BaseHasher):
     """
     Class to hash hyperparamters, and data input ids together using md5 algorithm from hashlib :
@@ -127,6 +128,7 @@ class DataContainer:
 
     .. seealso:: :class:`BaseHasher`, :class: `BaseStep`
     """
+
     def __init__(self,
                  current_ids,
                  data_inputs: Any,
@@ -383,6 +385,7 @@ class JoblibStepSaver(BaseSaver):
 
         return loaded_step
 
+
 class ExecutionMode(Enum):
     FIT_OR_FIT_TRANSFORM_OR_TRANSFORM = 'fit_or_fit_transform_or_transform'
     FIT_OR_FIT_TRANSFORM = 'fit_or_fit_transform'
@@ -614,6 +617,7 @@ class BaseStep(ABC):
         * :class:`BaseHasher`
         * :class:`DataContainer`
     """
+
     def __init__(
             self,
             hyperparams: HyperparameterSamples = None,
@@ -692,7 +696,7 @@ class BaseStep(ABC):
         self.is_initialized = False
         return self
 
-    def set_train(self, is_train: bool=True):
+    def set_train(self, is_train: bool = True):
         """
         This method overrides the method of BaseStep to also consider the wrapped step as well as self.
         Set pipeline step mode to train or test.
@@ -958,7 +962,9 @@ class BaseStep(ABC):
         :return: fitted self
         :rtype: BaseStep
         """
-        raise NotImplementedError("TODO: Implement this method in {}, or have this class inherit from the NonFittableMixin.".format(self.__class__.__name__))
+        raise NotImplementedError(
+            "TODO: Implement this method in {}, or have this class inherit from the NonFittableMixin.".format(
+                self.__class__.__name__))
 
     @abstractmethod
     def transform(self, data_inputs):
@@ -969,7 +975,9 @@ class BaseStep(ABC):
         :return: transformed data inputs
         :rtype: Any
         """
-        raise NotImplementedError("TODO: Implement this method in {}, or have this class inherit from the NonTransformableMixin.".format(self.__class__.__name__))
+        raise NotImplementedError(
+            "TODO: Implement this method in {}, or have this class inherit from the NonTransformableMixin.".format(
+                self.__class__.__name__))
 
     def inverse_transform(self, processed_outputs):
         """
@@ -1084,7 +1092,10 @@ class BaseStep(ABC):
             if saver.can_load(loaded_self, context):
                 loaded_self = saver.load_step(loaded_self, context)
             else:
-                warnings.warn('Cannot Load Step {0} ({1}:{2}) With Step Saver {3}.'.format(context.get_path(), self.name, self.__class__.__name__, saver.__class__.__name__))
+                warnings.warn(
+                    'Cannot Load Step {0} ({1}:{2}) With Step Saver {3}.'.format(context.get_path(), self.name,
+                                                                                 self.__class__.__name__,
+                                                                                 saver.__class__.__name__))
                 break
 
         return loaded_self
@@ -1239,6 +1250,12 @@ class BaseStep(ABC):
             def predict(self, **args):
                 return self.p.transform(**args)
 
+            def __repr__(self):
+                return self.__class__.__name__ + "(" + self.p.__repr__() + ")"
+
+            def __str__(self):
+                return self.__repr__()
+
         return NeuraxleToSKLearnPipelineWrapper(self)
 
     def reverse(self) -> 'BaseStep':
@@ -1347,7 +1364,7 @@ class MetaStepMixin:
         self.wrapped.setup()
         return self
 
-    def set_train(self, is_train: bool=True):
+    def set_train(self, is_train: bool = True):
         """
         Set pipeline step mode to train or test. Also set wrapped step mode to train or test.
 
@@ -1476,7 +1493,8 @@ class MetaStepMixin:
         return self.best_model
 
     def __repr__(self):
-        output = self.__class__.__name__ + "(\n\twrapped=" + repr(self.wrapped) + "," + "\n\thyperparameters=" + pprint.pformat(
+        output = self.__class__.__name__ + "(\n\twrapped=" + repr(
+            self.wrapped) + "," + "\n\thyperparameters=" + pprint.pformat(
             self.hyperparams) + "\n)"
 
         return output
@@ -1633,6 +1651,7 @@ class TruncableSteps(BaseStep, ABC):
         * :class:`Pipeline`
         * :class:`FeatureUnion`
     """
+
     def __init__(
             self,
             steps_as_tuple: NamedTupleList,
@@ -2226,7 +2245,7 @@ class TruncableSteps(BaseStep, ABC):
         """
         return isinstance(self[-1], step_type)
 
-    def set_train(self, is_train: bool=True) -> 'BaseStep':
+    def set_train(self, is_train: bool = True) -> 'BaseStep':
         """
         Set pipeline step mode to train or test.
 
@@ -2267,6 +2286,7 @@ class TruncableSteps(BaseStep, ABC):
     def __str__(self):
         return self.__repr__()
 
+
 class ResumableStepMixin:
     """
     Mixin to add resumable function to a step, or a class that can be resumed, for example a checkpoint on disk.
@@ -2304,7 +2324,7 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
         * :class:`BaseStep`
     """
 
-    def __init__(self, savers = None, name = None):
+    def __init__(self, savers=None, name=None):
         NonTransformableMixin.__init__(self)
         NonFittableMixin.__init__(self)
         BaseStep.__init__(self, name=name, savers=savers)
