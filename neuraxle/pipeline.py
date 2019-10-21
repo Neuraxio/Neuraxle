@@ -24,7 +24,7 @@ from copy import copy
 from typing import Any, Tuple, List
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, DataContainer, NonFittableMixin, \
-    Barrier, ExecutionContext, ExecutionMode
+    ExecutionContext, ExecutionMode, NonTransformableMixin, ListDataContainer
 from neuraxle.checkpoints import Checkpoint
 
 DEFAULT_CACHE_FOLDER = 'cache'
@@ -476,3 +476,116 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
                 )
 
         return sub_pipelines
+
+
+class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
+    """
+    A Barrier step to be used in a minibatch sequential pipeline. It forces all the
+    data inputs to get to the barrier in a sub pipeline before going through to the next sub-pipeline.
+
+    ```
+    p = MiniBatchSequentialPipeline([
+        SomeStep(),
+        SomeStep(),
+        Barrier(), # must be a concrete Barrier ex: Joiner()
+        SomeStep(),
+        SomeStep(),
+        Barrier(), # must be a concrete Barrier ex: Joiner()
+    ], batch_size=10)
+    ```
+    """
+
+    @abstractmethod
+    def join_transform(self, step: TruncableSteps, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Execute the given pipeline :func:`~neuraxle.pipeline.Pipeline.transform` with the given data container, and execution context.
+
+        :param step: truncable steps to execute
+        :type step: TruncableSteps
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: transformed data container
+        :rtype: DataContainer
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple[
+        'Any', DataContainer]:
+        """
+        Execute the given pipeline :func:`~neuraxle.pipeline.Pipeline.fit_transform` with the given data container, and execution context.
+
+        :param step: truncable steps to execute
+        :type step: Pipeline
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: (fitted step, transformed data container)
+        :rtype: Tuple['Any', DataContainer]
+        """
+        raise NotImplementedError()
+
+
+class Joiner(Barrier):
+    """
+    A Special Barrier step that joins the transformed mini batches together with list.extend method.
+    """
+
+    def __init__(self, batch_size):
+        Barrier.__init__(self)
+        self.batch_size = batch_size
+
+    def join_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Concatenate the pipeline transform output of each batch of self.batch_size together.
+
+        :param step: pipeline to transform on
+        :type step: Pipeline
+        :param data_container: data container to transform
+        :type data_container: DataContainer
+        :param context: execution context
+        :return: transformed data container
+        :rtype: DataContainer
+        """
+        data_container_batches = data_container.convolved_1d(
+            stride=self.batch_size,
+            kernel_size=self.batch_size
+        )
+
+        output_data_container = ListDataContainer.empty()
+        for data_container_batch in data_container_batches:
+            output_data_container.concat(
+                step._transform_core(data_container_batch, context)
+            )
+
+        return output_data_container
+
+    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> \
+            Tuple['Any', DataContainer]:
+        """
+        Concatenate the pipeline fit transform output of each batch of self.batch_size together.
+
+        :param step: pipeline to fit transform on
+        :type step: Pipeline
+        :param data_container: data container to fit transform on
+        :type data_container: DataContainer
+        :param context: execution context
+        :return: fitted self, transformed data inputs
+        :rtype: Tuple[Any, DataContainer]
+        """
+        data_container_batches = data_container.convolved_1d(
+            stride=self.batch_size,
+            kernel_size=self.batch_size
+        )
+
+        output_data_container = ListDataContainer.empty()
+        for data_container_batch in data_container_batches:
+            step, data_container_batch = step._fit_transform_core(data_container_batch, context)
+            output_data_container.concat(
+                data_container_batch
+            )
+
+        return step, output_data_container
