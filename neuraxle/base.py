@@ -565,16 +565,16 @@ class BaseStep(ABC):
 
     Every step has hyperparemeters, and hyperparameters spaces that can be set before the learning process begins.
     Hyperparameters can not only be passed in the constructor, but also be set by the pipeline that contains all of the steps :
-    ```
-    pipeline = Pipeline([
-        SomeStep()
-    ])
+    .. code-block:: python
 
-    pipeline.set_hyperparams(HyperparameterSamples({
-        'learning_rate': 0.1,
-        'SomeStep__learning_rate': 0.05
-    }))
-    ```
+        pipeline = Pipeline([
+            SomeStep()
+        ])
+
+        pipeline.set_hyperparams(HyperparameterSamples({
+            'learning_rate': 0.1,
+            'SomeStep__learning_rate': 0.05
+        }))
 
     .. note:: All heavy initialization logic should be done inside the *setup* method (e.g.: things inside GPU),
     and NOT in the constructor.
@@ -737,11 +737,10 @@ class BaseStep(ABC):
         Set the step hyperparameters.
 
         Example :
-        ```
-        step.set_hyperparams(HyperparameterSamples({
-            'learning_rate': 0.10
-        }))
-        ```
+        .. code-block:: python
+            step.set_hyperparams(HyperparameterSamples({
+                'learning_rate': 0.10
+            }))
 
         :param hyperparams: hyperparameters
         :return: self
@@ -771,11 +770,11 @@ class BaseStep(ABC):
         Set step hyperparameters with a dictionary.
 
         Example :
-        ```
-        s.set_params(learning_rate=0.1)
-        hyperparams = s.get_params()
-        assert hyperparams == {"learning_rate": 0.1}
-        ```
+        .. code-block:: python
+
+            s.set_params(learning_rate=0.1)
+            hyperparams = s.get_params()
+            assert hyperparams == {"learning_rate": 0.1}
 
         :param **params: arbitrary number of arguments for hyperparameters
         :rtype: BaseStep
@@ -790,11 +789,11 @@ class BaseStep(ABC):
         Get step hyperparameters as a flat primitive dict.
 
         Example :
-        ```
-        s.set_params(learning_rate=0.1)
-        hyperparams = s.get_params()
-        assert hyperparams == {"learning_rate": 0.1}
-        ```
+        .. code-block:: python
+
+            s.set_params(learning_rate=0.1)
+            hyperparams = s.get_params()
+            assert hyperparams == {"learning_rate": 0.1}
 
         :return: hyperparameters
         :rtype: dict
@@ -809,11 +808,11 @@ class BaseStep(ABC):
         Set step hyperparameters space.
 
         Example :
-        ```
-        step.set_hyperparams_space(HyperparameterSpace({
-            'hp': RandInt(0, 10)
-        }))
-        ```
+        .. code-block:: python
+
+            step.set_hyperparams_space(HyperparameterSpace({
+                'hp': RandInt(0, 10)
+            }))
 
         :param hyperparams_space: hyperparameters space
         :type hyperparams_space: HyperparameterSpace
@@ -833,9 +832,10 @@ class BaseStep(ABC):
         Get step hyperparameters space.
 
         Example :
-        ```
-        step.get_hyperparams_space()
-        ```
+        .. code-block:: python
+
+            step.get_hyperparams_space()
+
 
         :return: step hyperparams space
         :rtype: HyperparameterSpace
@@ -1262,7 +1262,54 @@ class BaseStep(ABC):
 
 class MetaStepMixin:
     """
-    A class to represent a meta step which is used wrap a step, and add behavior to it.
+    A class to represent a step that wraps another step. It can be used for many things.
+
+    For example, :class:`ForEachDataInputs` adds a loop before any calls to the wrapped step :
+    .. code-block:: python
+
+        class ForEachDataInputs(MetaStepMixin, BaseStep):
+            def __init__(
+                self,
+                wrapped: BaseStep
+            ):
+                BaseStep.__init__(self)
+                MetaStepMixin.__init__(self, wrapped)
+
+            def fit(self, data_inputs, expected_outputs=None):
+                if expected_outputs is None:
+                    expected_outputs = [None] * len(data_inputs)
+
+                for di, eo in zip(data_inputs, expected_outputs):
+                    self.wrapped = self.wrapped.fit(di, eo)
+
+                return self
+
+            def transform(self, data_inputs):
+                outputs = []
+                for di in data_inputs:
+                    output = self.wrapped.transform(di)
+                    outputs.append(output)
+
+            return outputs
+
+            def fit_transform(self, data_inputs, expected_outputs=None):
+                if expected_outputs is None:
+                    expected_outputs = [None] * len(data_inputs)
+
+                outputs = []
+                for di, eo in zip(data_inputs, expected_outputs):
+                    self.wrapped, output = self.wrapped.fit_transform(di, eo)
+                outputs.append(output)
+
+                return self, outputs
+
+    .. seealso::
+        * :class:`ForEachDataInputs`
+        * :class:`MetaSKLearnWrapper`
+        * :class:`RandomSearch`
+        * :class:`BaseCrossValidation`
+        * :class:`ValueCachingWrapper`
+        * :class:`StepClonerForEachDataInput`
     """
 
     # TODO: remove equal None, and fix random search at the same time ?
@@ -1288,7 +1335,8 @@ class MetaStepMixin:
         Set pipeline step mode to train or test. Also set wrapped step mode to train or test.
 
         For instance, you can add a simple if statement to direct to the right implementation:
-        ```
+        .. code-block:: python
+
             def transform(self, data_inputs):
                 if self.is_train:
                     self.transform_train_(data_inputs)
@@ -1300,7 +1348,6 @@ class MetaStepMixin:
                     self.fit_transform_train_(data_inputs, expected_outputs)
                 else:
                     self.fit_transform_test_(data_inputs, expected_outputs)
-        ```
 
         :param is_train: bool
         :return:
@@ -1314,12 +1361,12 @@ class MetaStepMixin:
         Set step hyperparameters, and wrapped step hyperparams with the given hyperparams.
 
         Example :
-        ```
-        step.set_hyperparams(HyperparameterSamples({
-            'learning_rate': 0.10
-            'wrapped__learning_rate': 0.10 # this will set the wrapped step 'learning_rate' hyperparam
-        }))
-        ```
+        .. code-block:: python
+
+            step.set_hyperparams(HyperparameterSamples({
+                'learning_rate': 0.10
+                'wrapped__learning_rate': 0.10 # this will set the wrapped step 'learning_rate' hyperparam
+            }))
 
         :param hyperparams: hyperparameters
         :type hyperparams: HyperparameterSamples
@@ -1785,7 +1832,6 @@ class TruncableSteps(BaseStep, ABC):
         Get step hyperparameters space as :class:`HyperparameterSpace`.
 
         Example :
-        ```
         .. code-block:: python
 
             p = Pipeline([SomeStep()])
