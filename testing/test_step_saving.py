@@ -5,7 +5,7 @@ from joblib import dump
 from py._path.local import LocalPath
 
 from neuraxle.base import BaseStep, TruncableJoblibStepSaver, NonFittableMixin
-from neuraxle.checkpoints import PickleCheckpointStep
+from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import ResumablePipeline
 
@@ -80,8 +80,8 @@ def test_resumable_pipeline_fit_transform_should_save_all_fitted_pipeline_steps(
         (SOME_STEP_1, MultiplyByN(multiply_by=2)),
         (PIPELINE_2, ResumablePipeline([
             (SOME_STEP_2, MultiplyByN(multiply_by=4)),
-            (CHECKPOINT, PickleCheckpointStep(cache_folder=tmpdir)),
-            (SOME_STEP_3, MultiplyByN(multiply_by=6)),
+            (CHECKPOINT, DefaultCheckpoint()),
+            (SOME_STEP_3, MultiplyByN(multiply_by=6))
         ]))
     ], cache_folder=tmpdir)
     p.name = ROOT
@@ -106,7 +106,7 @@ def test_resumable_pipeline_transform_should_not_save_steps(tmpdir: LocalPath):
         (SOME_STEP_1, MultiplyByN(multiply_by=2)),
         (PIPELINE_2, ResumablePipeline([
             (SOME_STEP_2, MultiplyByN(multiply_by=4)),
-            (CHECKPOINT, PickleCheckpointStep(cache_folder=tmpdir)),
+            (CHECKPOINT, DefaultCheckpoint()),
             (SOME_STEP_3, MultiplyByN(multiply_by=6)),
         ]))
     ], cache_folder=tmpdir)
@@ -128,8 +128,8 @@ def test_resumable_pipeline_fit_should_save_all_fitted_pipeline_steps(tmpdir: Lo
         (SOME_STEP_1, MultiplyByN(multiply_by=2)),
         (PIPELINE_2, ResumablePipeline([
             (SOME_STEP_2, MultiplyByN(multiply_by=4)),
-            (CHECKPOINT, PickleCheckpointStep(cache_folder=tmpdir)),
-            (SOME_STEP_3, MultiplyByN(multiply_by=6)),
+            (CHECKPOINT, DefaultCheckpoint()),
+            (SOME_STEP_3, MultiplyByN(multiply_by=6))
         ]))
     ], cache_folder=tmpdir)
     p.name = ROOT
@@ -212,16 +212,16 @@ def given_saved_pipeline(tmpdir):
     given_saved_some_step(multiply_by=4, name=SOME_STEP_2, path=create_some_step2_path(tmpdir, True))
     given_saved_some_step(multiply_by=6, name=SOME_STEP_3, path=create_some_step3_path(tmpdir, True))
 
-    pickle_checkpoint_step = PickleCheckpointStep(cache_folder=tmpdir)
-    pickle_checkpoint_step.name = CHECKPOINT
-    dump(pickle_checkpoint_step, create_some_checkpoint_path(tmpdir, True))
+    checkpoint = DefaultCheckpoint()
+    checkpoint.name = CHECKPOINT
+    dump(checkpoint, create_some_checkpoint_path(tmpdir, True))
 
     p = ResumablePipeline([
         (SOME_STEP_1, MultiplyByN(multiply_by=1)),
         (PIPELINE_2, ResumablePipeline([
             (SOME_STEP_2, MultiplyByN(multiply_by=1)),
-            (CHECKPOINT, PickleCheckpointStep(cache_folder=tmpdir)),
-            (SOME_STEP_3, MultiplyByN(multiply_by=1)),
+            (CHECKPOINT, DefaultCheckpoint()),
+            (SOME_STEP_3, MultiplyByN(multiply_by=1))
         ]))
     ], cache_folder=tmpdir)
     p.name = ROOT

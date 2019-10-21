@@ -24,8 +24,8 @@ from copy import copy
 from typing import Any, Tuple, List
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, DataContainer, NonFittableMixin, \
-    ExecutionContext, NonTransformableMixin, ListDataContainer
-from neuraxle.checkpoints import BaseCheckpointStep
+    ExecutionContext, ExecutionMode, NonTransformableMixin, ListDataContainer
+from neuraxle.checkpoints import Checkpoint
 
 DEFAULT_CACHE_FOLDER = 'cache'
 
@@ -70,7 +70,7 @@ class Pipeline(BasePipeline):
         )
         data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
 
-        context = ExecutionContext.from_root(self, self.cache_folder)
+        context = ExecutionContext.create_from_root(self, ExecutionMode.TRANSFORM, self.cache_folder)
 
         data_container = self._transform_core(data_container, context)
 
@@ -95,7 +95,7 @@ class Pipeline(BasePipeline):
             expected_outputs=expected_outputs
         )
 
-        context = ExecutionContext.from_root(self, self.cache_folder)
+        context = ExecutionContext.create_from_root(self, ExecutionMode.FIT_TRANSFORM, self.cache_folder)
 
         new_self, data_container = self._fit_transform_core(data_container, context)
 
@@ -120,7 +120,7 @@ class Pipeline(BasePipeline):
             expected_outputs=expected_outputs
         )
 
-        context = ExecutionContext.from_root(self, self.cache_folder)
+        context = ExecutionContext.create_from_root(self, ExecutionMode.FIT, self.cache_folder)
 
         new_self, data_container = self._fit_core(data_container, context)
 
@@ -201,8 +201,8 @@ class Pipeline(BasePipeline):
         new_steps_as_tuple: NamedTupleList = []
 
         for index, (step_name, step) in enumerate(steps_left_to_do):
-            sub_step_context = context.push(step)
             step.setup()
+            sub_step_context = context.push(step)
 
             if index != index_last_step:
                 step, data_container = step.handle_fit_transform(data_container, sub_step_context)
@@ -231,8 +231,8 @@ class Pipeline(BasePipeline):
         new_steps_as_tuple: NamedTupleList = []
 
         for step_name, step in steps_left_to_do:
-            sub_step_context = context.push(step)
             step.setup()
+            sub_step_context = context.push(step)
 
             step, data_container = step.handle_fit_transform(data_container, sub_step_context)
 
@@ -251,8 +251,10 @@ class Pipeline(BasePipeline):
         :return: transformed data container
         """
         steps_left_to_do, data_container = self._load_checkpoint(data_container, context)
+        self.setup()
 
         for step_name, step in steps_left_to_do:
+            step.setup()
             sub_context = context.push(step)
             data_container = step.handle_transform(data_container, sub_context)
 
@@ -272,7 +274,7 @@ class Pipeline(BasePipeline):
         return self.steps_as_tuple, data_container
 
 
-class ResumablePipeline(Pipeline, ResumableStepMixin):
+class ResumablePipeline(ResumableStepMixin, Pipeline):
     """
     Fits and transform steps after latest checkpoint
     """
@@ -298,21 +300,23 @@ class ResumablePipeline(Pipeline, ResumableStepMixin):
         if not self.are_steps_before_index_the_same(loaded_pipeline, new_starting_step_index):
             return self.steps_as_tuple, data_container
 
-        self._load_loaded_pipeline_into_self(loaded_pipeline)
+        self._assign_loaded_pipeline_into_self(loaded_pipeline)
 
         step = self[new_starting_step_index]
-        if isinstance(step, BaseCheckpointStep):
-            starting_step_data_container = step.read_checkpoint(starting_step_data_container)
+        if isinstance(step, Checkpoint):
+            context = context.push(step)
+            starting_step_data_container = step.read_checkpoint(starting_step_data_container, context)
 
         return self[new_starting_step_index:], starting_step_data_container
 
-    def _load_loaded_pipeline_into_self(self, loaded_self):
+    def _assign_loaded_pipeline_into_self(self, loaded_self):
         self.steps_as_tuple = loaded_self.steps_as_tuple
         self._refresh_steps()
         self.hyperparams = loaded_self.hyperparams
         self.hyperparams_space = loaded_self.hyperparams_space
 
-    def _get_starting_step_info(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[int, DataContainer]:
+    def _get_starting_step_info(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
+        int, DataContainer]:
         """
         Find the index of the latest step that can be resumed
 
@@ -372,7 +376,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         """
         current_ids = self._create_current_ids(data_inputs)
         data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
-        context = ExecutionContext.from_root(self, self.cache_folder)
+        context = ExecutionContext.create_from_root(self, ExecutionMode.TRANSFORM, self.cache_folder)
         data_container = self.handle_transform(data_container, context)
 
         return data_container.data_inputs
@@ -389,7 +393,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         )
-        context = ExecutionContext.from_root(self, self.cache_folder)
+        context = ExecutionContext.create_from_root(self, ExecutionMode.FIT_TRANSFORM, self.cache_folder)
         new_self, data_container = self.handle_fit_transform(data_container, context)
 
         return new_self, data_container.data_inputs

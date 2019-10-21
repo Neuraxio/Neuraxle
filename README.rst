@@ -298,6 +298,7 @@ Thanks to everyone who contributed to the project:
 -  Éric Hamel: https://github.com/Eric2Hamel
 -  Jérôme Blanchet: https://github.com/JeromeBlanchet
 -  Michaël Lévesque-Dion: https://github.com/mlevesquedion
+-  Philippe Racicot: https://github.com/Vaunorage
 
 Supported By
 ~~~~~~~~~~~~
@@ -306,4 +307,3 @@ We thank these organisations for generously supporting the project:
 
 -  Neuraxio Inc.: https://github.com/Neuraxio
 -  Umanéo Technologies Inc.: https://umaneo.com
-
