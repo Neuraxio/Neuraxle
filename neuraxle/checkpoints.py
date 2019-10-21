@@ -576,10 +576,10 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         return True
 
     def _get_data_input_checkpoint_path(self, context):
-        return context.push(Identity(DataCheckpointType.DATA_INPUT.value)).get_path()
+        return context.push(Identity(name=DataCheckpointType.DATA_INPUT.value)).get_path()
 
     def _get_expected_output_checkpoint_path(self, context):
-        return context.push(Identity(DataCheckpointType.EXPECTED_OUTPUT.value)).get_path()
+        return context.push(Identity(name=DataCheckpointType.EXPECTED_OUTPUT.value)).get_path()
 
 
 class DefaultCheckpoint(Checkpoint):
