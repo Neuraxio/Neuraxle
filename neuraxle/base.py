@@ -1559,5 +1559,14 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
 
     Identity inherits from ``NonTransformableMixin`` and from ``NonFittableMixin`` which makes it a class that has no
     effect in the pipeline: it doesn't require fitting, and at transform-time, it returns the same data it received.
+
+    .. seemore::
+        * :class:`NonTransformableMixin`
+        * :class:`NonFittableMixin`
+        * :class:`BaseStep`
     """
-    pass  # Multi-class inheritance does the job here! See inside those other classes for more info.
+
+    def __init__(self, savers = None, name = None):
+        NonTransformableMixin.__init__(self)
+        NonFittableMixin.__init__(self)
+        BaseStep.__init__(self, name=name, savers=savers)

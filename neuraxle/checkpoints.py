@@ -27,7 +27,7 @@ from enum import Enum
 from typing import List, Tuple, Any
 
 from neuraxle.base import ResumableStepMixin, BaseStep, DataContainer, ExecutionContext, \
-    ExecutionMode, NonTransformableMixin, NonFittableMixin, ListDataContainer
+    ExecutionMode, NonTransformableMixin, NonFittableMixin, ListDataContainer, Identity
 
 
 class DataCheckpointType(Enum):
@@ -35,7 +35,7 @@ class DataCheckpointType(Enum):
     EXPECTED_OUTPUT = 'eo'
 
 
-class BaseCheckpointer:
+class BaseCheckpointer(NonFittableMixin, NonTransformableMixin, BaseStep):
     """
     Base class to implement a step checkpoint or data container checkpoint.
 
@@ -51,6 +51,7 @@ class BaseCheckpointer:
             self,
             execution_mode: ExecutionMode
     ):
+        BaseStep.__init__(self)
         self.execution_mode = execution_mode
 
     def is_for_execution_mode(self, execution_mode: ExecutionMode) -> bool:
@@ -305,16 +306,6 @@ class BaseMiniDataCheckpointer(ABC):
         * :class:`PickleMiniDataCheckpointer`
     """
 
-    def set_checkpoint_type(self, checkpoint_type: DataCheckpointType):
-        """
-        Set suffix for checkpoint.
-
-        :param checkpoint_type: checkpoint file name suffix
-        :type checkpoint_type: DataCheckpointType
-        :return:
-        """
-        raise NotImplementedError()
-
     @abstractmethod
     def save_checkpoint(self, checkpoint_path, current_id, data):
         """
@@ -448,7 +439,7 @@ class PickleMiniDataCheckpointer(BaseMiniDataCheckpointer):
         :return: path
         :rtype: str
         """
-        return os.path.join(checkpoint_path, '{0}_{1}.pickle'.format(current_id, self.file_name_suffix))
+        return os.path.join(checkpoint_path, '{0}.pickle'.format(current_id))
 
     def checkpoint_exists(self, checkpoint_path: str, current_id: str) -> bool:
         """
@@ -462,10 +453,7 @@ class PickleMiniDataCheckpointer(BaseMiniDataCheckpointer):
         :rtype: str
         """
         return os.path.exists(
-            os.path.join(
-                checkpoint_path,
-                '{0}_{1}.pickle'.format(current_id, self.file_name_suffix)
-            )
+            os.path.join(checkpoint_path, '{0}.pickle'.format(current_id))
         )
 
 
@@ -493,13 +481,11 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         BaseCheckpointer.__init__(self, execution_mode)
 
         self.data_input_checkpointer: BaseMiniDataCheckpointer = data_input_checkpointer
-        self.data_input_checkpointer.set_checkpoint_type(DataCheckpointType.DATA_INPUT)
 
         if expected_output_checkpointer is None:
             expected_output_checkpointer = NullMiniDataCheckpointer()
 
         self.expected_output_checkpointer: BaseMiniDataCheckpointer = expected_output_checkpointer
-        self.expected_output_checkpointer.set_checkpoint_type(DataCheckpointType.EXPECTED_OUTPUT)
 
     def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -517,15 +503,15 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
 
         for current_id, data_input, expected_output in data_container:
             self.data_input_checkpointer.save_checkpoint(
+                checkpoint_path=self._get_data_input_checkpoint_path(context),
                 current_id=current_id,
-                data=data_input,
-                checkpoint_path=context.get_path()
+                data=data_input
             )
 
             self.expected_output_checkpointer.save_checkpoint(
+                checkpoint_path=self._get_expected_output_checkpoint_path(context),
                 current_id=current_id,
-                data=expected_output,
-                checkpoint_path=context.get_path()
+                data=expected_output
             )
 
         return data_container
@@ -546,12 +532,12 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
 
         for current_id in data_container.current_ids:
             data_input = self.data_input_checkpointer.read_checkpoint(
-                current_id=current_id,
-                checkpoint_path=context.get_path()
+                checkpoint_path=self._get_data_input_checkpoint_path(context),
+                current_id=current_id
             )
 
             expected_output = self.expected_output_checkpointer.read_checkpoint(
-                checkpoint_path=context.get_path(),
+                checkpoint_path=self._get_expected_output_checkpoint_path(context),
                 current_id=current_id
             )
 
@@ -576,18 +562,24 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         """
         for current_id in data_container.current_ids:
             if not self.data_input_checkpointer.checkpoint_exists(
-                    checkpoint_path=context.get_path(),
+                    checkpoint_path=self._get_data_input_checkpoint_path(context),
                     current_id=current_id
             ):
                 return False
 
             if not self.expected_output_checkpointer.checkpoint_exists(
-                    checkpoint_path=context.get_path(),
+                    checkpoint_path=self._get_expected_output_checkpoint_path(context),
                     current_id=current_id
             ):
                 return False
 
         return True
+
+    def _get_data_input_checkpoint_path(self, context):
+        return context.push(Identity(DataCheckpointType.DATA_INPUT.value)).get_path()
+
+    def _get_expected_output_checkpoint_path(self, context):
+        return context.push(Identity(DataCheckpointType.EXPECTED_OUTPUT.value)).get_path()
 
 
 class DefaultCheckpoint(Checkpoint):
