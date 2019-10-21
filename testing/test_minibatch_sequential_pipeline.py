@@ -1,7 +1,6 @@
 import numpy as np
 
-from neuraxle.base import Joiner
-from neuraxle.pipeline import MiniBatchSequentialPipeline, Barrier
+from neuraxle.pipeline import MiniBatchSequentialPipeline, Joiner
 from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction, FitTransformCallbackStep
 
 
