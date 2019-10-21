@@ -28,6 +28,7 @@ import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
+from enum import Enum
 from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView
 
 from conv import convolved_1d
@@ -382,6 +383,13 @@ class JoblibStepSaver(BaseSaver):
 
         return loaded_step
 
+class ExecutionMode(Enum):
+    FIT_OR_FIT_TRANSFORM_OR_TRANSFORM = 'fit_or_fit_transform_or_transform'
+    FIT_OR_FIT_TRANSFORM = 'fit_or_fit_transform'
+    TRANSFORM = 'transform'
+    FIT = 'fit'
+    FIT_TRANSFORM = 'fit_transform'
+
 
 class ExecutionContext:
     """
@@ -401,10 +409,12 @@ class ExecutionContext:
 
     def __init__(
             self,
+            execution_mode: ExecutionMode,
             root: str = DEFAULT_CACHE_FOLDER,
             stripped_saver: BaseSaver = None,
-            parents=None
+            parents=None,
     ):
+        self.execution_mode = execution_mode
         if stripped_saver is None:
             stripped_saver: BaseSaver = JoblibStepSaver()
 
@@ -414,9 +424,16 @@ class ExecutionContext:
             parents = []
         self.parents: List[BaseStep] = parents
 
+    def get_execution_mode(self) -> ExecutionMode:
+        return self.execution_mode
+
     @staticmethod
-    def from_root(root_step: 'BaseStep', root_path) -> 'ExecutionContext':
-        return ExecutionContext(root=root_path, parents=[root_step])
+    def create_from_root(root_step: 'BaseStep', execution_mode, root_path) -> 'ExecutionContext':
+        return ExecutionContext(
+            execution_mode=execution_mode,
+            root=root_path,
+            parents=[root_step]
+        )
 
     def save_all_unsaved(self):
         """
@@ -472,8 +489,16 @@ class ExecutionContext:
         :rtype: ExecutionContext
         """
         return ExecutionContext(
+            execution_mode=self.execution_mode,
             root=self.root,
             parents=self.parents + [step]
+        )
+
+    def copy(self):
+        return ExecutionContext(
+            execution_mode=self.execution_mode,
+            root=self.root,
+            parents=copy(self.parents),
         )
 
     def peek(self) -> 'BaseStep':
@@ -2242,26 +2267,26 @@ class TruncableSteps(BaseStep, ABC):
     def __str__(self):
         return self.__repr__()
 
-
 class ResumableStepMixin:
     """
-    Mixin for a step that can be resumed, for example a checkpoint on disk.
+    Mixin to add resumable function to a step, or a class that can be resumed, for example a checkpoint on disk.
     """
 
     @abstractmethod
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
         """
-        Returns True if the step can be resumed with the given data container, and execution context.
+        Returns True if a step can be resumed with the given the data container, and execution context.
+        See Checkpoint class documentation for more details on how a resumable checkpoint works.
 
-        :param data_container: data container
-        :type data_container: DataContainer
-        :param context: execution context
-        :type context: ExecutionContext
-
-        :return: if the step can be resumed
+        :param data_container: data container to resume from
+        :param context: execution context to resume from
+        :return: if we can resume
         :rtype: bool
         """
         raise NotImplementedError()
+
+    def __str__(self):
+        return self.__repr__()
 
 
 class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
@@ -2272,5 +2297,14 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
 
     Identity inherits from ``NonTransformableMixin`` and from ``NonFittableMixin`` which makes it a class that has no
     effect in the pipeline: it doesn't require fitting, and at transform-time, it returns the same data it received.
+
+    .. seemore::
+        * :class:`NonTransformableMixin`
+        * :class:`NonFittableMixin`
+        * :class:`BaseStep`
     """
-    pass  # Multi-class inheritance does the job here! See inside those other classes for more info.
+
+    def __init__(self, savers = None, name = None):
+        NonTransformableMixin.__init__(self)
+        NonFittableMixin.__init__(self)
+        BaseStep.__init__(self, name=name, savers=savers)

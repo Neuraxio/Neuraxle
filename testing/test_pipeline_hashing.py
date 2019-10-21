@@ -25,7 +25,7 @@ import numpy as np
 import pytest
 
 from neuraxle.base import NamedTupleList
-from neuraxle.checkpoints import BaseCheckpointStep
+from neuraxle.checkpoints import Checkpoint
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline, ResumablePipeline
 from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction
@@ -82,7 +82,7 @@ def find_checkpoint(steps):
     for name, step in steps:
         if isinstance(step, Pipeline):
             return find_checkpoint(step.steps_as_tuple)
-        if isinstance(step, BaseCheckpointStep):
+        if isinstance(step, Checkpoint):
             return step
     return None
 

@@ -94,6 +94,8 @@ class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
         self._callback(data_inputs)
 
+        if self.transform_function is not None:
+            return self, self.transform_function(data_inputs)
         return self, data_inputs
 
     def transform(self, data_inputs):
