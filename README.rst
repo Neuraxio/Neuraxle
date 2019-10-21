@@ -306,4 +306,15 @@ Supported By
 We thank these organisations for generously supporting the project:
 
 -  Neuraxio Inc.: https://github.com/Neuraxio
+
+
+.. raw:: html
+
+    <img src="https://www.neuraxio.com/images/neuraxio_logo_transparent.png" width="140px">
+
+
 -  Umanéo Technologies Inc.: https://umaneo.com
+
+.. raw:: html
+
+    <img src="https://uploads-ssl.webflow.com/5be35e61c9728278fc5f4150/5c6dabf76fc786262e6654a0_signature-courriel-logo-umaneo.png" width="200px">

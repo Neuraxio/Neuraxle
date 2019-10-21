@@ -22,7 +22,6 @@ Tests for Pipelines
 import numpy as np
 import pytest
 
-from neuraxle.base import BaseStep, NonFittableMixin
 from neuraxle.hyperparams.distributions import RandInt, LogUniform
 from neuraxle.hyperparams.space import nested_dict_to_flat, HyperparameterSpace
 from neuraxle.pipeline import Pipeline
@@ -30,9 +29,7 @@ from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.union import Identity, AddFeatures, ModelStacking
-
 from testing.mocks.step_mocks import SomeStep, AN_INPUT, AN_EXPECTED_OUTPUT
-
 
 steps_lists = [
     [("just_one_step", SomeStep())],
@@ -222,7 +219,13 @@ def test_pipeline_tosklearn():
     p = sklearn.pipeline.Pipeline([('sk', p)])
 
     p.set_params(**{"sk__b__a__z__learning_rate": 11})
-    assert p.named_steps["sk"].p["b"].wrapped_sklearn_predictor.named_steps["a"]["z"]["learning_rate"] == 11
+
+    sk_ = p.named_steps["sk"]
+    b_ = sk_.p["b"]
+    predictor = b_.wrapped_sklearn_predictor
+    a_ = predictor.named_steps["a"]
+    z_ = a_["z"]
+    assert z_.get_params()["learning_rate"] == 11
 
     p.set_params(**nested_dict_to_flat({
         "sk__b": {
@@ -231,7 +234,8 @@ def test_pipeline_tosklearn():
         }
     }))
     # p.set_params(**{"sk__b__a__z__learning_rate": 12})
-    assert p.named_steps["sk"].p["b"].wrapped_sklearn_predictor.named_steps["a"]["z"]["learning_rate"] == 12
+    assert p.named_steps["sk"].p["b"].wrapped_sklearn_predictor.named_steps["a"]["z"].get_params()[
+               "learning_rate"] == 12
     print(the_step.get_hyperparams())
     # assert the_step.get_hyperparams()["learning_rate"] == 12  # TODO: debug why wouldn't this work
 
