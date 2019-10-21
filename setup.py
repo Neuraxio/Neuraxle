@@ -34,7 +34,7 @@ setup(
                 'abstractions to both ease research, development, and deployment of your ML applications.',
     long_description=_README,
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "Intended Audience :: Education",
         "Intended Audience :: Financial and Insurance Industry",
@@ -99,3 +99,30 @@ setup(
     license='Apache 2.0',
     keywords='pipeline pipelines data science machine learning deep learning'
 )
+
+print("""
+____________________________________________________________________
+
+ Thank you for installing
+   _   _                               __
+  | \ | |                             |  |
+  |  \| | ___  _   _  _ __  ___ __  __ | |  ___
+  | . ` |/ _ \| | | || ' _||__ \\\\ \/ / | | / _ \\
+  | |\  || __|| |_| | | |  / _ | >  <  | | | __|
+  |_| \_|\___| \__,_||___| \_,_|/_/\_\ |__|\___|
+
+
+ Learn more:
+ - https://www.neuraxio.com/en/neuraxle/stable/index.html
+
+ Contribute:
+ - https://gitter.im/Neuraxle/community
+
+ Open issue:
+ - https://github.com/Neuraxio/Neuraxle
+
+ Ask questions:
+ - https://stackoverflow.com/questions/tagged/neuraxle
+____________________________________________________________________
+""")
+

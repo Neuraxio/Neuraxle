@@ -23,6 +23,7 @@ This is the core of Neuraxle. Most pipeline steps derive (inherit) from those cl
 import hashlib
 import inspect
 import os
+import pprint
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
@@ -1259,6 +1260,16 @@ class BaseStep(ABC):
         """
         return self.reverse()
 
+    def __repr__(self):
+
+        output = self.__class__.__name__ + "(\n\tname=" + self.name + "," + "\n\thyperparameters=" + pprint.pformat(
+            self.hyperparams) + "\n)"
+
+        return output
+
+    def __str__(self):
+        return self.__repr__()
+
 
 class MetaStepMixin:
     """
@@ -1457,6 +1468,15 @@ class MetaStepMixin:
 
     def get_best_model(self) -> BaseStep:
         return self.best_model
+
+    def __repr__(self):
+        output = self.__class__.__name__ + "(\n\twrapped=" + repr(self.wrapped) + "," + "\n\thyperparameters=" + pprint.pformat(
+            self.hyperparams) + "\n)"
+
+        return output
+
+    def __str__(self):
+        return self.__repr__()
 
 
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
@@ -1896,7 +1916,6 @@ class TruncableSteps(BaseStep, ABC):
 
         return self
 
-
     def should_save(self):
         """
         Returns if the step needs to be saved or not.
@@ -2228,6 +2247,18 @@ class TruncableSteps(BaseStep, ABC):
             step.set_train(is_train)
         return self
 
+    def __repr__(self):
+
+        output = self.__class__.__name__ + '\n' \
+                 + "(\n\t" + super(TruncableSteps, self).__repr__() \
+                 + "(\n\t\t" + pprint.pformat(self.steps_as_tuple) \
+                 + "\t\n)" \
+                 + "\n)"
+
+        return output
+
+    def __str__(self):
+        return self.__repr__()
 
 
 class ResumableStepMixin:
