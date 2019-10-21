@@ -540,11 +540,20 @@ class BaseStep(ABC):
     A step should only change its state inside :func:`~neuraxle.base.BaseStep.fit` or :func:`~neuraxle.base.BaseStep.fit_transform`.
 
     Example usage :
-    ```
-    class MultiplyBy(NonFittableMixin, BaseStep):
-        def transform(self, data_inputs):
-            return data_inputs * self.hyperparams['multiply_by']
-    ```
+    .. code-block:: python
+
+        class MultiplyByN(NonFittableMixin, BaseStep):
+            def __init__(self, multiply_by):
+                NonFittableMixin.__init__(self)
+                BaseStep.__init__(
+                    self,
+                    hyperparams=HyperparameterSamples({
+                        'multiply_by': multiply_by
+                    })
+                )
+
+            def transform(self, data_inputs):
+                return data_inputs * self.hyperparams['multiply_by']
 
     Every step can be saved using its savers of type :class:`BaseSaver`. Some savers just save parts of objects, some save it all or what remains.
     Most step hash data inputs with hyperparams after every transformations to update the current ids inside the :class:`DataContainer`.
@@ -634,7 +643,7 @@ class BaseStep(ABC):
 
     def setup(self) -> 'BaseStep':
         """
-        Initialize step before it runs. Only from here and not before that heavy things should be created
+        Initialize the step before it runs. Only from here and not before that heavy things should be created
         (e.g.: things inside GPU), and NOT in the constructor.
 
         The setup method is called for each step before any fit, or fit_transform.
@@ -648,7 +657,8 @@ class BaseStep(ABC):
 
     def teardown(self) -> 'BaseStep':
         """
-        Teardown step after program execution. This is like the inverse of setup, and it clears memory.
+        Teardown step after program execution. Inverse of setup, and it should clear memory.
+        Override this method if you need to clear memory.
 
         :return: self
         :rtype: BaseStep
@@ -658,25 +668,15 @@ class BaseStep(ABC):
 
     def set_train(self, is_train: bool=True):
         """
+        This method overrides the method of BaseStep to also consider the wrapped step as well as self.
         Set pipeline step mode to train or test.
 
-        For instance, you can add a simple if statement to direct to the right implementation:
-        `
-            def transform(self, data_inputs):
-                if self.is_train:
-                    self.transform_train_(data_inputs)
-                else:
-                    self.transform_test_(data_inputs)
-
-            def fit_transform(self, data_inputs, expected_outputs):
-                if self.is_train:
-                    self.fit_transform_train_(data_inputs, expected_outputs)
-                else:
-                    self.fit_transform_test_(data_inputs, expected_outputs)
-        `
-
-        :param is_train: bool
+        :param is_train: is training mode or not
+        :type is_train: bool
         :return:
+
+        .. seealso::
+            * :func:`BaseStep.set_train`
         """
         self.is_train = is_train
         return self
@@ -734,7 +734,7 @@ class BaseStep(ABC):
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
         """
-        Set step hyperparameters.
+        Set the step hyperparameters.
 
         Example :
         ```
@@ -854,6 +854,10 @@ class BaseStep(ABC):
         :param data_container: the data container to transform
         :param context: execution context
         :return: tuple(fitted pipeline, data_container)
+
+        .. seealso::
+            * :class:`DataContainer`
+            * :class:`Pipeline`
         """
         self.is_invalidated = True
 
@@ -945,24 +949,38 @@ class BaseStep(ABC):
         Inverse Transform the given transformed data inputs.
 
         :func:`~neuraxle.base.BaseStep.mutate` or :func:`~neuraxle.base.BaseStep.reverse` can be called to change the default transform behavior :
-        ```
-            class MultiplyBy(NonFittableMixin, BaseStep):
+
+        .. code-block:: python
+            class MultiplyByN(NonFittableMixin, BaseStep):
+                def __init__(self, multiply_by):
+                    NonFittableMixin.__init__(self)
+                    BaseStep.__init__(
+                        self,
+                        hyperparams=HyperparameterSamples({
+                            'multiply_by': multiply_by
+                        })
+                    )
+
                 def transform(self, data_inputs):
                     return data_inputs * self.hyperparams['multiply_by']
 
                 def inverse_transform(self, processed_outputs):
                     return data_inputs / self.hyperparams['multiply_by']
 
-            p = Pipeline([MultiplyBy()])
+            p = Pipeline([
+                MultiplyByN(multiply_by=2)
+            ])
+
+            outputs = p.transform(np.array[1, 2])
+
+            assert np.array_equal(outputs, np.array([2, 4]))
 
             p = p.mutate(new_method="inverse_transform", method_to_assign_to="transform")
-            p.transform(processed_outputs) # this will call inverse transform method instead
+            # or p = reverse(p)
 
-            # is equivalent to :
+            outputs = p.transform(processed_outputs) # this will call inverse transform method instead
 
-            p = reverse(p)
-            p.transform(processed_outputs) # this will call inverse transform method instead
-        ```
+            assert np.array_equal(outputs, np.array([1, 2]))
 
         :param processed_outputs: processed data inputs
         :return: inverse transformed processed outputs
@@ -973,6 +991,7 @@ class BaseStep(ABC):
     def predict(self, data_input):
         """
         Predict data input expected output using transform method.
+        This is simply a shorthand method that does the same thing as func:`~.transform`.
 
         :param data_input: data input to predict
         :return: prediction
@@ -983,6 +1002,15 @@ class BaseStep(ABC):
     def should_save(self) -> bool:
         """
         Returns true if the step should be saved.
+        If the step has been initialized and invalidated, then it must be saved.
+
+        A step is invalidated when any of the following things happen :
+            * a mutation has been performed on the step : func:`~.mutate`
+            * an hyperparameter has changed func:`~.set_hyperparams`
+            * an hyperparameter space has changed func:`~.set_hyperparams_space`
+            * a call to the fit method func:`~.handle_fit`
+            * a call to the fit_transform method func:`~.handle_fit_transform`
+            * the step name has changed func:`~.set_name`
 
         :return: if the step should be saved
         :rtype: bool
@@ -1215,7 +1243,7 @@ class BaseStep(ABC):
 
         :return: a copy of self, reversed. Each contained object will also have been reversed if self is a pipeline.
         .. seealso::
-            * :func:`~neuraxle.base.BaseStep.__reversed__`
+            * func:`~neuraxle.base.BaseStep.__reversed__`
             * :func:`~neuraxle.base.BaseStep.inverse_transform`
         """
         return self.mutate(new_method="inverse_transform", method_to_assign_to="transform")
@@ -1410,6 +1438,17 @@ class NonFittableMixin:
 class NonTransformableMixin:
     """
     A pipeline step that has no effect at all but to return the same data without changes.
+    Transform method is automatically implemented as changing nothing.
+
+    Example :
+    .. code-block:: python
+        class PrintOnFit(NonTransformableMixin, BaseStep):
+            def __init__(self):
+                BaseStep.__init__(self)
+
+            def fit(self, data_inputs, expected_outputs=None) -> 'FitCallbackStep':
+                print((data_inputs, expected_outputs))
+                return self
 
     .. note::
         fit methods are not implemented
@@ -1528,7 +1567,7 @@ class TruncableSteps(BaseStep, ABC):
             hyperparams_space: HyperparameterSpace = dict()
     ):
         BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
-        self._set_steps(steps_as_tuple)
+        self.set_steps(steps_as_tuple)
 
         self.set_savers([TruncableJoblibStepSaver()] + self.savers)
 
@@ -1569,9 +1608,9 @@ class TruncableSteps(BaseStep, ABC):
         self.set_hyperparams_space(saved_pipeline.get_hyperparams_space())
 
         new_truncable_steps = saved_pipeline[:index] + self[index:]
-        self._set_steps(new_truncable_steps.steps_as_tuple)
+        self.set_steps(new_truncable_steps.steps_as_tuple)
 
-    def _set_steps(self, steps_as_tuple: NamedTupleList):
+    def set_steps(self, steps_as_tuple: NamedTupleList):
         """
         Set steps as tuple.
 
@@ -1679,16 +1718,15 @@ class TruncableSteps(BaseStep, ABC):
         Get step hyperparameters as :class:`HyperparameterSamples`.
 
         Example :
-        ```
-        p = Pipeline([SomeStep()])
-        p.set_hyperparams(HyperparameterSamples({
-            'learning_rate': 0.1,
-            'some_step__learning_rate': 0.2 # will set SomeStep() hyperparam 'learning_rate' to 0.2
-        }))
+        .. code-block:: python
+            p = Pipeline([SomeStep()])
+            p.set_hyperparams(HyperparameterSamples({
+                'learning_rate': 0.1,
+                'some_step__learning_rate': 0.2 # will set SomeStep() hyperparam 'learning_rate' to 0.2
+            }))
 
-        hp = p.get_hyperparams()
-        # hp ==>  { 'learning_rate': 0.1, 'some_step__learning_rate': 0.2 }
-        ```
+            hp = p.get_hyperparams()
+            # hp ==>  { 'learning_rate': 0.1, 'some_step__learning_rate': 0.2 }
 
         :return: step hyperparameters
         :rtype: HyperparameterSamples
@@ -1714,13 +1752,13 @@ class TruncableSteps(BaseStep, ABC):
         Set step hyperparameters to the given :class:`HyperparameterSamples`.
 
         Example :
-        ```
-        p = Pipeline([SomeStep()])
-        p.set_hyperparams(HyperparameterSamples({
-            'learning_rate': 0.1,
-            'some_step__learning_rate': 0.2 # will set SomeStep() hyperparam 'learning_rate' to 0.2
-        }))
-        ```
+        .. code-block:: python
+
+            p = Pipeline([SomeStep()])
+            p.set_hyperparams(HyperparameterSamples({
+                'learning_rate': 0.1,
+                'some_step__learning_rate': 0.2 # will set SomeStep() hyperparam 'learning_rate' to 0.2
+            }))
 
         :return: step hyperparameters
         :rtype: HyperparameterSamples
@@ -1748,15 +1786,16 @@ class TruncableSteps(BaseStep, ABC):
 
         Example :
         ```
-        p = Pipeline([SomeStep()])
-        p.set_hyperparams_space(HyperparameterSpace({
-            'learning_rate': RandInt(0,5),
-            'some_step__learning_rate': RandInt(0, 10) # will set SomeStep() 'learning_rate' hyperparam space to RandInt(0, 10)
-        }))
+        .. code-block:: python
 
-        hp = p.get_hyperparams_space()
-        # hp ==>  { 'learning_rate': RandInt(0,5), 'some_step__learning_rate': RandInt(0,10) }
-        ```
+            p = Pipeline([SomeStep()])
+            p.set_hyperparams_space(HyperparameterSpace({
+                'learning_rate': RandInt(0,5),
+                'some_step__learning_rate': RandInt(0, 10) # will set SomeStep() 'learning_rate' hyperparam space to RandInt(0, 10)
+            }))
+
+            hp = p.get_hyperparams_space()
+            # hp ==>  { 'learning_rate': RandInt(0,5), 'some_step__learning_rate': RandInt(0,10) }
 
         :return: step hyperparameters space
         :rtype: HyperparameterSpace
@@ -1781,13 +1820,13 @@ class TruncableSteps(BaseStep, ABC):
         Set step hyperparameters space as :class:`HyperparameterSpace`.
 
         Example :
-        ```
-        p = Pipeline([SomeStep()])
-        p.set_hyperparams_space(HyperparameterSpace({
-            'learning_rate': RandInt(0,5),
-            'some_step__learning_rate': RandInt(0, 10) # will set SomeStep() 'learning_rate' hyperparam space to RandInt(0, 10)
-        }))
-        ```
+        .. code-block:: python
+
+            p = Pipeline([SomeStep()])
+            p.set_hyperparams_space(HyperparameterSpace({
+                'learning_rate': RandInt(0,5),
+                'some_step__learning_rate': RandInt(0, 10) # will set SomeStep() 'learning_rate' hyperparam space to RandInt(0, 10)
+            }))
 
         :param hyperparams_space: hyperparameters space
         :type hyperparams_space: Union[HyperparameterSpace, OrderedDict, dict]
@@ -1875,22 +1914,26 @@ class TruncableSteps(BaseStep, ABC):
         Truncate self with a slice, an index or a step name.
 
         Example :
-        ```
-        p = Pipeline([
-            ('1', SomeStep()),
-            ('2', SomeStep()),
-            ('3', SomeStep())
-        ])
-        p[0] # returns the first SomeStep()
-        p[0:2] # returns a TruncableSteps containing the first, and second SomeStep()
-        p['2'] # returns the second SomeStep()
-        ```
+        .. code-block:: python
+
+            p = Pipeline([
+                ('1', SomeStep()),
+                ('2', SomeStep()),
+                ('3', SomeStep())
+            ])
+            p[0] # returns the first SomeStep()
+            p[0:2] # returns a TruncableSteps containing the first, and second SomeStep()
+            p['2'] # returns the second SomeStep()
 
         :param key: slice, index, or step name
         :type key: Union[slice, int, str]
 
         :return: truncated self
         :rtype: Union[TruncableSteps, BaseStep]
+
+
+        .. seealso:: :class:`DataContainer`
+            `Getting model attributes from scikit-learn pipeline on stackoverflow <https://stackoverflow.com/questions/28822756/getting-model-attributes-from-scikit-learn-pipeline/58359509#58359509>`_
         """
         if isinstance(key, slice):
             self_shallow_copy = copy(self)
@@ -1959,7 +2002,7 @@ class TruncableSteps(BaseStep, ABC):
         :return: new truncable steps with concatenated steps
         :rtype: TruncableSteps
         """
-        self._set_steps(self.steps_as_tuple + other.steps_as_tuple)
+        self.set_steps(self.steps_as_tuple + other.steps_as_tuple)
         return self
 
     def items(self) -> ItemsView:
@@ -2116,7 +2159,8 @@ class TruncableSteps(BaseStep, ABC):
         Set pipeline step mode to train or test.
 
         In the pipeline steps functions, you can add a simple if statement to direct to the right implementation:
-        ```
+        .. code-block:: python
+
             def transform(self, data_inputs):
                 if self.is_train:
                     self.transform_train_(data_inputs)
@@ -2128,7 +2172,6 @@ class TruncableSteps(BaseStep, ABC):
                     self.fit_transform_train_(data_inputs, expected_outputs)
                 else:
                     self.fit_transform_test_(data_inputs, expected_outputs)
-        ```
 
         :param is_train: if the step is in train mode (True) or test mode (False)
         :type is_train: bool
