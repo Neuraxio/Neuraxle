@@ -28,6 +28,8 @@ from typing import List, Tuple, Any
 
 from neuraxle.base import ResumableStepMixin, BaseStep, DataContainer, ExecutionContext, \
     ExecutionMode, NonTransformableMixin, NonFittableMixin, ListDataContainer, Identity
+from neuraxle.pipeline import Pipeline
+from neuraxle.steps.flow import TransformOnlyWrapper, FitOnlyWrapper, FitTransformOnlyWrapper
 
 
 class DataCheckpointType(Enum):
@@ -281,7 +283,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         return True
 
 
-class BaseMiniDataCheckpointer(ABC):
+class BaseDataCheckpointer(ABC):
     """
     Mini Data Checkpoint that uses pickle to create a checkpoint for a current id, and a data input or an expected output.
 
@@ -348,7 +350,7 @@ class BaseMiniDataCheckpointer(ABC):
         raise NotImplementedError()
 
 
-class NullMiniDataCheckpointer(BaseMiniDataCheckpointer):
+class NullDataCheckpointer(BaseDataCheckpointer):
     def set_checkpoint_type(self, checkpoint_type: DataCheckpointType):
         pass
 
@@ -362,7 +364,7 @@ class NullMiniDataCheckpointer(BaseMiniDataCheckpointer):
         return True
 
 
-class PickleMiniDataCheckpointer(BaseMiniDataCheckpointer):
+class PickleDataCheckpointer(BaseDataCheckpointer):
     """
     Mini Data Checkpoint that uses pickle to create a pickle checkpoint file for a current id, and a data input or expected output.
 
@@ -457,7 +459,7 @@ class PickleMiniDataCheckpointer(BaseMiniDataCheckpointer):
         )
 
 
-class MiniDataCheckpointerWrapper(BaseCheckpointer):
+class FullDataCheckpointerWrapper(BaseCheckpointer):
     """
     A :class:`BaseCheckpointer` to checkpoint data inputs, and expected outputs with mini data checkpointers.
 
@@ -474,18 +476,18 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
 
     def __init__(
             self,
-            data_input_checkpointer: BaseMiniDataCheckpointer,
-            expected_output_checkpointer: BaseMiniDataCheckpointer = None
+            data_input_checkpointer: BaseDataCheckpointer,
+            expected_output_checkpointer: BaseDataCheckpointer = None
     ):
         execution_mode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM  # TODO: analyse if we need this or not ?
         BaseCheckpointer.__init__(self, execution_mode)
 
-        self.data_input_checkpointer: BaseMiniDataCheckpointer = data_input_checkpointer
+        self.data_input_checkpointer: BaseDataCheckpointer = data_input_checkpointer
 
         if expected_output_checkpointer is None:
-            expected_output_checkpointer = NullMiniDataCheckpointer()
+            expected_output_checkpointer = NullDataCheckpointer()
 
-        self.expected_output_checkpointer: BaseMiniDataCheckpointer = expected_output_checkpointer
+        self.expected_output_checkpointer: BaseDataCheckpointer = expected_output_checkpointer
 
     def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -596,9 +598,302 @@ class DefaultCheckpoint(Checkpoint):
             self,
             all_checkpointers=[
                 StepSavingCheckpointer(),
-                MiniDataCheckpointerWrapper(
-                    data_input_checkpointer=PickleMiniDataCheckpointer(),
-                    expected_output_checkpointer=PickleMiniDataCheckpointer()
+                FullDataCheckpointerWrapper(
+                    data_input_checkpointer=PickleDataCheckpointer(),
+                    expected_output_checkpointer=PickleDataCheckpointer()
                 )
             ]
         )
+
+
+class BaseDataCheckpointerWrapper(BaseCheckpointer):
+    """
+    Base data checkpointer wrappper class to create or read a data checkpoint.
+
+    .. seealso::
+        * :class:`ExpectedOutputCheckpointerWrapper`
+        * :class:`DataInputCheckpointerWrapper`
+    """
+
+    def __init__(self, data_checkpointer: BaseDataCheckpointer, checkpoint_type_name):
+        BaseCheckpointer.__init__(self, execution_mode=ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM)
+        self.checkpoint_type_name = checkpoint_type_name
+        self.data_checkpointer = data_checkpointer
+
+    def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Save data container data inputs with :py:attr:`~data_input_checkpointer`.
+        Save data container expected outputs with :py:attr:`~expected_output_checkpointer`.
+
+        :param data_container: data container to checkpoint
+        :type data_container: DataContainer
+        :param context: execution context to checkpoint from
+        :type context: ExecutionContext
+        :return:
+        """
+        if not self.is_for_execution_mode(context.get_execution_mode()):
+            return data_container
+
+        for current_id, data_input, expected_output in data_container:
+            self.save_one_checkpoint(context, current_id, data_input, expected_output)
+
+        return data_container
+
+    @abstractmethod
+    def save_one_checkpoint(self, context: ExecutionContext, current_id: str, data_input: Any, expected_output: Any):
+        """
+        Save data checkpoint with :class:`BaseDataCheckpointer`.
+
+        :param context: execution context
+        :type context: ExecutionContext
+        :param current_id: current id
+        :type current_id: str
+        :param data_input: data input
+        :type data_input: Any
+        :param expected_output: expected output
+        :type expected_output: Any
+        :return:
+        """
+        raise NotImplementedError()
+
+    def read_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Read data container data inputs checkpoint with :py:attr:`~data_input_checkpointer`.
+        Read data container expected outputs checkpoint with :py:attr:`~expected_output_checkpointer`.
+
+        :param data_container: data container to read checkpoint for
+        :type data_container: DataContainer
+        :param context: execution context to read checkpoint from
+        :type context: ExecutionContext
+        :return: data container checkpoint
+        :rtype: DataContainer
+        """
+        data_container_checkpoint = ListDataContainer.empty()
+
+        for current_id, data_input, expected_output in data_container:
+            current_id, data_input, expected_output = self.read_one_checkpoint(
+                context=context,
+                current_id=current_id,
+                data_input=data_input,
+                expected_output=expected_output
+            )
+
+            data_container_checkpoint.append(
+                current_id=current_id,
+                data_input=data_input,
+                expected_output=expected_output
+            )
+
+        return data_container_checkpoint
+
+    @abstractmethod
+    def read_one_checkpoint(self, context: ExecutionContext, current_id: str, data_input: Any, expected_output: Any) -> Tuple:
+        """
+        Read a data checkpoint with a :class:`BaseDataCheckpointer`.
+
+        :param context: execution context
+        :type context: ExecutionContext
+        :param current_id: current id
+        :type current_id: str
+        :param data_input: data input
+        :type data_input: Any
+        :param expected_output: expected output
+        :type expected_output: Any
+        :return: current_id, data_input, expected_output
+        :rtype: Tuple[str, Any, Any]
+        """
+        raise NotImplementedError()
+
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
+        """
+        Returns true if the whole data container has been checkpointed.
+
+        :param data_container: data container to read checkpoint for
+        :type data_container: DataContainer
+        :param context: execution context to read checkpoint from
+        :type context: ExecutionContext
+        :return: data container checkpoint
+        :rtype: DataContainer
+        """
+        for current_id in data_container.current_ids:
+            if not self.data_checkpointer.checkpoint_exists(
+                    checkpoint_path=self._get_checkpoint_path(context),
+                    current_id=current_id
+            ):
+                return False
+
+        return True
+
+    def _get_checkpoint_path(self, context: ExecutionContext):
+        """
+        Return checkpoint path for execution context, and checkpoint type name.
+
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: checkpoint path
+        :rtype: str
+        """
+        return context.push(Identity(name=self.checkpoint_type_name)).get_path()
+
+
+class DataInputCheckpointerWrapper(BaseDataCheckpointerWrapper):
+    """
+    Checkpoint data input with data checkpointer.
+    """
+
+    def __init__(self, data_checkpointer: BaseDataCheckpointer):
+        BaseDataCheckpointerWrapper.__init__(
+            self,
+            data_checkpointer=data_checkpointer,
+            checkpoint_type_name=DataCheckpointType.DATA_INPUT.value
+        )
+
+    def save_one_checkpoint(self, context: ExecutionContext, current_id: str, data_input: Any, expected_output: Any):
+        """
+        Save one data input data checkpoint with :class:`BaseDataCheckpointer`.
+
+        :param context: execution context
+        :type context: ExecutionContext
+        :param current_id: current id
+        :type current_id: str
+        :param data_input: data input
+        :type data_input: Any
+        :param expected_output: expected output
+        :type expected_output: Any
+        :return:
+        """
+        self.data_checkpointer.save_checkpoint(
+            checkpoint_path=self._get_checkpoint_path(context),
+            current_id=current_id,
+            data=data_input
+        )
+
+    def read_one_checkpoint(self, context: ExecutionContext, current_id: str, data_input: Any, expected_output: Any) -> Tuple:
+        """
+        Read a data input checkpoint with :class:`BaseDataCheckpointer`.
+
+        :param context: execution context
+        :type context: ExecutionContext
+        :param current_id: current id
+        :type current_id: str
+        :param data_input: data input
+        :type data_input: Any
+        :param expected_output: expected output
+        :type expected_output: Any
+        :return: current_id, data_input, expected_output
+        :rtype: Tuple[str, Any, Any]
+        """
+        checkpoint = self.data_checkpointer.read_checkpoint(
+            checkpoint_path=self._get_checkpoint_path(context),
+            current_id=current_id
+        )
+
+        return current_id, checkpoint, expected_output
+
+
+class ExpectedOutputCheckpointerWrapper(BaseDataCheckpointerWrapper):
+    """
+    Checkpoint expected output with data checkpointer.
+
+    .. seealso::
+        * :class:`BaseDataCheckpointerWrapper`
+    """
+
+    def __init__(self, data_checkpointer: BaseDataCheckpointer):
+        BaseDataCheckpointerWrapper.__init__(
+            self,
+            data_checkpointer=data_checkpointer,
+            checkpoint_type_name=DataCheckpointType.EXPECTED_OUTPUT.value
+        )
+
+    def save_one_checkpoint(self, context: ExecutionContext, current_id: str, data_input: Any, expected_output: Any):
+        """
+        Save one expected output data checkpoint with :class:`BaseDataCheckpointer`.
+
+        :param context: execution context
+        :type context: ExecutionContext
+        :param current_id: current id
+        :type current_id: str
+        :param data_input: data input
+        :type data_input: Any
+        :param expected_output: expected output
+        :type expected_output: Any
+        :return:
+        """
+        self.data_checkpointer.save_checkpoint(
+            checkpoint_path=self._get_checkpoint_path(context),
+            current_id=current_id,
+            data=expected_output
+        )
+
+    def read_one_checkpoint(self, context: ExecutionContext, current_id: str, data_input: Any, expected_output: Any) -> Tuple:
+        """
+        Read an expected output checkpoint with a :class:`BaseDataCheckpointer`.
+
+        :param context: execution context
+        :type context: ExecutionContext
+        :param current_id: current id
+        :type current_id: str
+        :param data_input: data input
+        :type data_input: Any
+        :param expected_output: expected output
+        :type expected_output: Any
+        :return: current_id, data_input, expected_output
+        :rtype: Tuple[str, Any, Any]
+        """
+        checkpoint = self.data_checkpointer.read_checkpoint(
+            checkpoint_path=self._get_checkpoint_path(context),
+            current_id=current_id
+        )
+
+        return current_id, data_input, checkpoint
+
+class FullCheckpoint(Pipeline):
+    """
+    Full checkpoint pipeline that handles every execution mode.
+
+    #. Saves data checkpoints for data inputs.
+    #. Saves data checkpoints for expected outputs.
+    #. Saves fitted step
+
+    .. seealso::
+        * :class:`Pipeline`
+        * :class:`TransformOnlyWrapper`
+        * :class:`FitOnlyWrapper`
+        * :class:`FitTransformOnlyWrapper`
+        * :class:`StepSavingCheckpointer`
+    """
+    def __init__(self):
+        Pipeline.__init__(self, [
+            TransformOnlyWrapper(DataInputCheckpointerWrapper(PickleDataCheckpointer())),
+            TransformOnlyWrapper(ExpectedOutputCheckpointerWrapper(PickleDataCheckpointer())),
+
+            FitOnlyWrapper(DataInputCheckpointerWrapper(PickleDataCheckpointer())),
+            FitOnlyWrapper(ExpectedOutputCheckpointerWrapper(PickleDataCheckpointer())),
+
+            FitTransformOnlyWrapper(DataInputCheckpointerWrapper(PickleDataCheckpointer())),
+            FitTransformOnlyWrapper(ExpectedOutputCheckpointerWrapper(PickleDataCheckpointer())),
+
+            StepSavingCheckpointer(),
+        ])
+
+#
+# TODO: make mini bath sequential pipeline resumable to use this
+# class CheckpointJoiner(MetaStepMixin, Joiner):
+#     def __init__(self, batch_size: int, checkpoint_pipeline):
+#         Joiner.__init__(self, batch_size)
+#         MetaStepMixin.__init__(self, checkpoint_pipeline)
+#
+#     def join_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+#         data_container = self.join_transform(step, data_container, context)
+#
+#         data_container = self.wrapped.handle_transform(data_container, context)
+#
+#         return data_container
+#
+#     def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple['Any', DataContainer]:
+#         step, data_container = self.join_fit_transform(step, data_container, context)
+#
+#         new_self, data_container = self.wrapped.handle_fit_transform(data_container, context)
+#
+#         return step, data_container
