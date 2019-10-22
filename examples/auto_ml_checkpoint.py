@@ -10,9 +10,26 @@ from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.random import RandomSearch
 from neuraxle.pipeline import ResumablePipeline, DEFAULT_CACHE_FOLDER, Pipeline
 
+EXPECTED_OUTPUTS = np.array(range(10, 20))
+
+DATA_INPUTS = np.array(range(10))
+
+HYPERPARAMETER_SPACE = HyperparameterSpace({
+    'multiplication_2__hp_mul': RandInt(1, 3),
+    'multiplication_3__hp_mul': RandInt(1, 3),
+    'multiplication_4__hp_mul': RandInt(1, 3),
+    'multiplication_5__hp_mul': RandInt(1, 3),
+    'multiplication_6__hp_mul': RandInt(1, 3),
+    'multiplication_7__hp_mul': RandInt(1, 3),
+    'multiplication_8__hp_mul': RandInt(1, 3),
+    'multiplication_9__hp_mul': RandInt(1, 3),
+    'multiplication_10__hp_mul': RandInt(1, 3),
+    'multiplication_11__hp_mul': RandInt(1, 3)
+})
+
 
 class Multiplication(NonFittableMixin, BaseStep):
-    def __init__(self, sleep_time=0.010, hyperparams=None, hyperparams_space=None):
+    def __init__(self, sleep_time=0.1, hyperparams=None, hyperparams_space=None):
         BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         self.sleep_time = sleep_time
 
@@ -25,63 +42,62 @@ class Multiplication(NonFittableMixin, BaseStep):
 
 
 def main():
-    hyperparams_space = HyperparameterSpace(
-        {
-            'multiplication_2__hp_mul': RandInt(1, 3),
-            'multiplication_3__hp_mul': RandInt(1, 3),
-            'multiplication_4__hp_mul': RandInt(1, 3),
-            'multiplication_5__hp_mul': RandInt(1, 3),
-            'multiplication_6__hp_mul': RandInt(1, 3),
-            'multiplication_7__hp_mul': RandInt(1, 3),
-            'multiplication_8__hp_mul': RandInt(1, 3),
-            'multiplication_9__hp_mul': RandInt(1, 3),
-            'multiplication_10__hp_mul': RandInt(1, 3),
-            'multiplication_11__hp_mul': RandInt(1, 3)
-        }
-    )
-
-    pipeline = Pipeline([
-        ('multiplication_2', Multiplication(sleep_time=0.0)),
-        ('multiplication_3', Multiplication(sleep_time=0.0)),
-        ('multiplication_4', Multiplication(sleep_time=0.0)),
-        ('multiplication_5', Multiplication(sleep_time=0.0)),
-        ('multiplication_6', Multiplication(sleep_time=0.0)),
-        ('multiplication_7', Multiplication(sleep_time=0.0)),
-        ('multiplication_8', Multiplication(sleep_time=0.0)),
-        ('multiplication_9', Multiplication(sleep_time=0.0)),
-        ('multiplication_10', Multiplication(sleep_time=0.0)),
-        ('multiplication_11', Multiplication(sleep_time=0.0)),
-    ])
-
-    resumable_pipeline = ResumablePipeline([
-        ('multiplication_2', Multiplication(sleep_time=0.0)),
-        ('multiplication_3', Multiplication(sleep_time=0.0)),
-        ('checkpoint_1', DefaultCheckpoint()),
-        ('multiplication_4', Multiplication(sleep_time=0.0)),
-        ('multiplication_5', Multiplication(sleep_time=0.0)),
-        ('checkpoint_2', DefaultCheckpoint()),
-        ('multiplication_6', Multiplication(sleep_time=0.0)),
-        ('multiplication_7', Multiplication(sleep_time=0.0)),
-        ('checkpoint_3', DefaultCheckpoint()),
-        ('multiplication_8', Multiplication(sleep_time=0.0)),
-        ('multiplication_9', Multiplication(sleep_time=0.0)),
-        ('checkpoint_4', DefaultCheckpoint()),
-        ('multiplication_10', Multiplication(sleep_time=0.0)),
-        ('multiplication_11', Multiplication(sleep_time=0.0)),
-    ])
-
-    data_inputs = np.array(range(10))
-    expected_outputs = np.array(range(10, 20))
-
-    print('Classic Pipeline')
-    run_random_search(pipeline, hyperparams_space, data_inputs, expected_outputs)
-
-    print('\n')
-
-    print('Resumable Pipeline')
-    run_random_search(resumable_pipeline, hyperparams_space, data_inputs, expected_outputs)
+    run_random_search_normal_pipeline()
+    run_random_search_resumable_pipeline()
 
     shutil.rmtree(DEFAULT_CACHE_FOLDER)
+
+
+def run_random_search_normal_pipeline(sleep_time=0.1):
+    pipeline = Pipeline([
+        ('multiplication_2', Multiplication(sleep_time=sleep_time)),
+        ('multiplication_3', Multiplication(sleep_time=sleep_time)),
+        ('multiplication_4', Multiplication(sleep_time=sleep_time)),
+        ('multiplication_5', Multiplication(sleep_time=sleep_time)),
+        ('multiplication_6', Multiplication(sleep_time=sleep_time)),
+        ('multiplication_7', Multiplication(sleep_time=sleep_time)),
+        ('multiplication_8', Multiplication(sleep_time=sleep_time)),
+        ('multiplication_9', Multiplication(sleep_time=sleep_time)),
+        ('multiplication_10', Multiplication(sleep_time=sleep_time)),
+        ('multiplication_11', Multiplication(sleep_time=sleep_time)),
+    ])
+
+    print('Classic Pipeline')
+
+    return run_random_search(
+        pipeline,
+        HYPERPARAMETER_SPACE,
+        DATA_INPUTS,
+        EXPECTED_OUTPUTS
+    )
+
+
+def run_random_search_resumable_pipeline(sleep_time=0.1):
+    resumable_pipeline = ResumablePipeline([
+        ('multiplication_2', Multiplication(sleep_time=sleep_time)),
+        ('multiplication_3', Multiplication(sleep_time=sleep_time)),
+        ('checkpoint_1', DefaultCheckpoint()),
+        ('multiplication_4', Multiplication(sleep_time=sleep_time)),
+        ('multiplication_5', Multiplication(sleep_time=sleep_time)),
+        ('checkpoint_2', DefaultCheckpoint()),
+        ('multiplication_6', Multiplication(sleep_time=sleep_time)),
+        ('multiplication_7', Multiplication(sleep_time=sleep_time)),
+        ('checkpoint_3', DefaultCheckpoint()),
+        ('multiplication_8', Multiplication(sleep_time=sleep_time)),
+        ('multiplication_9', Multiplication(sleep_time=sleep_time)),
+        ('checkpoint_4', DefaultCheckpoint()),
+        ('multiplication_10', Multiplication(sleep_time=sleep_time)),
+        ('multiplication_11', Multiplication(sleep_time=sleep_time)),
+    ])
+
+    print('Resumable Pipeline')
+
+    return run_random_search(
+        resumable_pipeline,
+        HYPERPARAMETER_SPACE,
+        DATA_INPUTS,
+        EXPECTED_OUTPUTS
+    )
 
 
 def run_random_search(p, hyperparams_space, data_inputs, expected_outputs):
@@ -89,10 +105,10 @@ def run_random_search(p, hyperparams_space, data_inputs, expected_outputs):
     p.set_hyperparams_space(hyperparams_space)
 
     random_search = RandomSearch(
-       p,
-       n_iter=200,
-       higher_score_is_better=True,
-       print=True
+        p,
+        n_iter=200,
+        higher_score_is_better=True,
+        print=True
     ).fit(data_inputs, expected_outputs)
 
     outputs = random_search.transform(data_inputs)
@@ -104,6 +120,8 @@ def run_random_search(p, hyperparams_space, data_inputs, expected_outputs):
     print('output: {0}'.format(outputs))
     print('smallest mse: {0}'.format(actual_score))
     print('best hyperparams: {0}'.format(p.get_hyperparams()))
+
+    return actual_score, outputs, p.get_hyperparams()
 
 
 def mean_squared_error(actual_outputs, expected_outputs):

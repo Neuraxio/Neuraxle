@@ -23,6 +23,7 @@ Those steps works with NumPy (np) arrays.
 import numpy as np
 
 from neuraxle.base import NonFittableMixin, BaseStep
+from neuraxle.hyperparams.space import HyperparameterSamples
 
 
 class NumpyFlattenDatum(NonFittableMixin, BaseStep):
@@ -121,3 +122,19 @@ class NumpyShapePrinter(NonFittableMixin, BaseStep):
 
     def _print_one(self, data_input):
         print(self.__class__.__name__ + " (one):", data_input.shape, self.custom_message)
+
+class MultiplyByN(NonFittableMixin, BaseStep):
+    def __init__(self, multiply_by):
+        NonFittableMixin.__init__(self)
+        BaseStep.__init__(
+            self,
+            hyperparams=HyperparameterSamples({
+                'multiply_by': multiply_by
+            })
+        )
+
+    def transform(self, data_inputs):
+        return data_inputs * self.hyperparams['multiply_by']
+
+    def inverse_transform(self, data_inputs):
+        return data_inputs / self.hyperparams['multiply_by']

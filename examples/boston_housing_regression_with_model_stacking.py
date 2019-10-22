@@ -41,41 +41,44 @@ from neuraxle.steps.numpy import NumpyShapePrinter
 from neuraxle.steps.sklearn import SKLearnWrapper, RidgeModelStacking
 from neuraxle.union import AddFeatures
 
-boston = load_boston()
-X, y = shuffle(boston.data, boston.target, random_state=13)
-X = X.astype(np.float32)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffle=False)
 
-p = Pipeline([
-    NumpyShapePrinter(),
-    AddFeatures([
-        SKLearnWrapper(PCA(n_components=2)),
-        SKLearnWrapper(FastICA(n_components=2)),
-    ]),
-    NumpyShapePrinter(),
-    RidgeModelStacking([
-        SKLearnWrapper(GradientBoostingRegressor()),
-        SKLearnWrapper(GradientBoostingRegressor(n_estimators=500)),
-        SKLearnWrapper(GradientBoostingRegressor(max_depth=5)),
-        SKLearnWrapper(KMeans()),
-    ]),
-    NumpyShapePrinter(),
-])
+def main():
+    boston = load_boston()
+    X, y = shuffle(boston.data, boston.target, random_state=13)
+    X = X.astype(np.float32)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffle=False)
 
-print("Fitting on train:")
-p = p.fit(X_train, y_train)
-print("")
+    p = Pipeline([
+        NumpyShapePrinter(),
+        AddFeatures([
+            SKLearnWrapper(PCA(n_components=2)),
+            SKLearnWrapper(FastICA(n_components=2)),
+        ]),
+        NumpyShapePrinter(),
+        RidgeModelStacking([
+            SKLearnWrapper(GradientBoostingRegressor()),
+            SKLearnWrapper(GradientBoostingRegressor(n_estimators=500)),
+            SKLearnWrapper(GradientBoostingRegressor(max_depth=5)),
+            SKLearnWrapper(KMeans()),
+        ]),
+        NumpyShapePrinter(),
+    ])
 
-print("Transforming train and test:")
-y_train_predicted = p.transform(X_train)
-y_test_predicted = p.transform(X_test)
-print("")
+    print("Fitting on train:")
+    p = p.fit(X_train, y_train)
+    print("")
+    print("Transforming train and test:")
+    y_train_predicted = p.transform(X_train)
+    y_test_predicted = p.transform(X_test)
+    print("")
+    print("Evaluating transformed train:")
+    score_train = r2_score(y_train_predicted, y_train)
+    print('R2 regression score:', score_train)
+    print("")
+    print("Evaluating transformed test:")
+    score_test = r2_score(y_test_predicted, y_test)
+    print('R2 regression score:', score_test)
 
-print("Evaluating transformed train:")
-score = r2_score(y_train_predicted, y_train)
-print('R2 regression score:', score)
-print("")
+    return y_train_predicted, y_test_predicted, score_train, score_test
 
-print("Evaluating transformed test:")
-score = r2_score(y_test_predicted, y_test)
-print('R2 regression score:', score)
+

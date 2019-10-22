@@ -1837,6 +1837,10 @@ class TruncableSteps(BaseStep, ABC):
 
         hyperparams = HyperparameterSamples(hyperparams)
 
+        hyperparams.update(
+            BaseStep.get_hyperparams(self)
+        )
+
         return hyperparams.to_flat()
 
     def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
@@ -1937,7 +1941,7 @@ class TruncableSteps(BaseStep, ABC):
                 self.steps[name].set_hyperparams_space(hparams)
             else:
                 remainders[name] = hparams
-        self.hyperparams = HyperparameterSpace(remainders)
+        self.hyperparams_space = HyperparameterSpace(remainders)
 
         return self
 
