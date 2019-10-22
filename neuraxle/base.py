@@ -405,9 +405,7 @@ class ExecutionContext:
         * :func:`~neuraxle.steps.caching.ValueCachingWrapper.handle_transform`
         * :func:`~neuraxle.steps.caching.ValueCachingWrapper.handle_fit_transform`
 
-    .. seealso::
-        * :class:`BaseStep`
-        * :class:`ValueCachingWrapper`
+    .. seealso:: :class:`BaseStep`, :class:`ValueCachingWrapper`
     """
 
     def __init__(
@@ -605,17 +603,16 @@ class BaseStep(ABC):
             'SomeStep__learning_rate': 0.05
         }))
 
-    .. note:: All heavy initialization logic should be done inside the *setup* method (e.g.: things inside GPU),
-    and NOT in the constructor.
+    .. note:: All heavy initialization logic should be done inside the *setup* method (e.g.: things inside GPU), and NOT in the constructor.
     .. seealso::
-        * :class:`Pipeline`
-        * :class:`NonFittableMixin`
-        * :class:`NonTransformableMixin`
-        * :class:`HyperparameterSamples`
-        * :class:`HyperparameterSpace`
-        * :class:`BaseSaver`
-        * :class:`BaseHasher`
-        * :class:`DataContainer`
+        :class:`Pipeline`,
+        :class:`NonFittableMixin`,
+        :class:`NonTransformableMixin`,
+        :class:`HyperparameterSamples`,
+        :class:`HyperparameterSpace`,
+        :class:`BaseSaver`,
+        :class:`BaseHasher`,
+        :class:`DataContainer`
     """
 
     def __init__(
@@ -1348,7 +1345,7 @@ class MetaStepMixin:
 
     def __init__(
             self,
-            wrapped: BaseStep
+            wrapped: BaseStep = None
     ):
         self.wrapped: BaseStep = wrapped
 

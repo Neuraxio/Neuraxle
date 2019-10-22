@@ -40,10 +40,6 @@ class BaseCrossValidation(MetaStepMixin, BaseStep, ABC):
         self.scoring_function = scoring_function
         self.joiner = joiner
 
-    def set_step(self, step):
-        MetaStepMixin.__init__(self, step)
-        return self
-
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseCrossValidation':
         train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = self.split(
             data_inputs, expected_outputs)
@@ -323,14 +319,15 @@ class RandomSearch(MetaStepMixin, BaseStep):
 
     def __init__(
             self,
-            wrapped,
-            n_iter: int,
-            higher_score_is_better: bool,
+            wrapped = None,
+            n_iter: int = 10,
+            higher_score_is_better: bool = True,
             validation_technique: BaseCrossValidation = KFoldCrossValidation(),
             refit=True,
             print=False
     ):
-        MetaStepMixin.__init__(self, wrapped)
+        if wrapped is not None:
+            MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
         self.print = print
         self.n_iter = n_iter
@@ -363,12 +360,15 @@ class RandomSearch(MetaStepMixin, BaseStep):
         self.best_validation_wrapper_of_model.wrapped.set_hyperparams(best_hyperparams)
 
         if self.refit:
-            self.best_model = self.best_validation_wrapper_of_model.fit(
+            self.best_model = self.best_validation_wrapper_of_model.wrapped.fit(
                 data_inputs,
                 expected_outputs
             )
 
         return self
+
+    def get_best_model(self):
+        return self.best_model
 
     def transform(self, data_inputs):
         if self.best_validation_wrapper_of_model is None:

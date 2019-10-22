@@ -85,7 +85,6 @@ def main():
     ])
     print("Meta-fitting on train:")
     p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
-        p,
         n_iter=10,
         higher_score_is_better=True,
         validation_technique=KFoldCrossValidation(scoring_function=r2_score, k_fold=10)
