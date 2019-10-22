@@ -6,12 +6,13 @@ import numpy as np
 from neuraxle.base import BaseStep, NonFittableMixin
 from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.hyperparams.distributions import RandInt
-from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
+from neuraxle.hyperparams.space import HyperparameterSpace
+from neuraxle.metaopt.random import RandomSearch
 from neuraxle.pipeline import ResumablePipeline, DEFAULT_CACHE_FOLDER, Pipeline
 
 
 class Multiplication(NonFittableMixin, BaseStep):
-    def __init__(self, sleep_time=0.050, hyperparams=None, hyperparams_space=None):
+    def __init__(self, sleep_time=0.010, hyperparams=None, hyperparams_space=None):
         BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         self.sleep_time = sleep_time
 
@@ -21,42 +22,6 @@ class Multiplication(NonFittableMixin, BaseStep):
             data_inputs = np.array(data_inputs)
 
         return data_inputs * self.hyperparams['hp_mul']
-
-
-class AutoMLSequentialWrapper:
-    def __init__(
-            self,
-            pipeline: Pipeline,
-            hyperparameters_space: HyperparameterSpace,
-            objective_function,
-            n_iters=100
-    ):
-        self.objective_function = objective_function
-        self.hyperparameters_space = hyperparameters_space
-        self.pipeline = pipeline
-        self.n_iters = n_iters
-
-    def fit(self, data_inputs, expected_outputs) -> Pipeline:
-        best_score = None
-        best_hp = None
-        for _ in range(self.n_iters):
-            next_hp: HyperparameterSamples = self.hyperparameters_space.rvs()
-            self.pipeline.set_hyperparams(next_hp)
-
-            self.pipeline, actual_outputs = self.pipeline.fit_transform(data_inputs, expected_outputs)
-
-            score = self.objective_function(actual_outputs, expected_outputs)
-
-            if best_score is None or score < best_score:
-                best_score = score
-                best_hp = next_hp
-                print('score: {0}'.format(score))
-                print('best hp: {0}'.format(best_hp))
-                print('outputs: {0}'.format(actual_outputs))
-                print('\n')
-
-        fitted_pipeline = self.pipeline.set_hyperparams(best_hp)
-        return fitted_pipeline
 
 
 def main():
@@ -76,33 +41,33 @@ def main():
     )
 
     pipeline = Pipeline([
-        ('multiplication_2', Multiplication(sleep_time=0.05)),
-        ('multiplication_3', Multiplication(sleep_time=0.05)),
-        ('multiplication_4', Multiplication(sleep_time=0.05)),
-        ('multiplication_5', Multiplication(sleep_time=0.05)),
-        ('multiplication_6', Multiplication(sleep_time=0.05)),
-        ('multiplication_7', Multiplication(sleep_time=0.05)),
-        ('multiplication_8', Multiplication(sleep_time=0.05)),
-        ('multiplication_9', Multiplication(sleep_time=0.05)),
-        ('multiplication_10', Multiplication(sleep_time=0.05)),
-        ('multiplication_11', Multiplication(sleep_time=0.05)),
+        ('multiplication_2', Multiplication(sleep_time=0.01)),
+        ('multiplication_3', Multiplication(sleep_time=0.01)),
+        ('multiplication_4', Multiplication(sleep_time=0.01)),
+        ('multiplication_5', Multiplication(sleep_time=0.01)),
+        ('multiplication_6', Multiplication(sleep_time=0.01)),
+        ('multiplication_7', Multiplication(sleep_time=0.01)),
+        ('multiplication_8', Multiplication(sleep_time=0.01)),
+        ('multiplication_9', Multiplication(sleep_time=0.01)),
+        ('multiplication_10', Multiplication(sleep_time=0.01)),
+        ('multiplication_11', Multiplication(sleep_time=0.01)),
     ])
 
     resumable_pipeline = ResumablePipeline([
-        ('multiplication_2', Multiplication(sleep_time=0.05)),
-        ('multiplication_3', Multiplication(sleep_time=0.05)),
+        ('multiplication_2', Multiplication(sleep_time=0.01)),
+        ('multiplication_3', Multiplication(sleep_time=0.01)),
         ('checkpoint_1', DefaultCheckpoint()),
-        ('multiplication_4', Multiplication(sleep_time=0.05)),
-        ('multiplication_5', Multiplication(sleep_time=0.05)),
+        ('multiplication_4', Multiplication(sleep_time=0.01)),
+        ('multiplication_5', Multiplication(sleep_time=0.01)),
         ('checkpoint_2', DefaultCheckpoint()),
-        ('multiplication_6', Multiplication(sleep_time=0.05)),
-        ('multiplication_7', Multiplication(sleep_time=0.05)),
+        ('multiplication_6', Multiplication(sleep_time=0.01)),
+        ('multiplication_7', Multiplication(sleep_time=0.01)),
         ('checkpoint_3', DefaultCheckpoint()),
-        ('multiplication_8', Multiplication(sleep_time=0.05)),
-        ('multiplication_9', Multiplication(sleep_time=0.05)),
+        ('multiplication_8', Multiplication(sleep_time=0.01)),
+        ('multiplication_9', Multiplication(sleep_time=0.01)),
         ('checkpoint_4', DefaultCheckpoint()),
-        ('multiplication_10', Multiplication(sleep_time=0.05)),
-        ('multiplication_11', Multiplication(sleep_time=0.05)),
+        ('multiplication_10', Multiplication(sleep_time=0.01)),
+        ('multiplication_11', Multiplication(sleep_time=0.01)),
     ])
 
     data_inputs = np.array(range(10))
@@ -121,22 +86,23 @@ def main():
 
 def run_pipeline(p, hyperparams_space, data_inputs, expected_outputs):
     time_a = time.time()
+    p.set_hyperparams_space(hyperparams_space)
 
-    p = AutoMLSequentialWrapper(
-        pipeline=p,
-        n_iters=200,
-        hyperparameters_space=hyperparams_space,
-        objective_function=mean_squared_error
+    random_search = RandomSearch(
+       p,
+       n_iter=200,
+       higher_score_is_better=True,
+       print=True
     ).fit(data_inputs, expected_outputs)
 
-    p, outputs = p.fit_transform(data_inputs, expected_outputs)
+    outputs = random_search.transform(data_inputs)
 
     time_b = time.time()
 
     actual_score = mean_squared_error(outputs, expected_outputs)
     print('{0} seconds'.format(time_b - time_a))
     print('output: {0}'.format(outputs))
-    print('smallest error: {0}'.format(actual_score))
+    print('smallest mse: {0}'.format(actual_score))
     print('best hyperparams: {0}'.format(p.get_hyperparams()))
 
 
