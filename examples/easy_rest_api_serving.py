@@ -22,6 +22,7 @@ This demonstrates an easy way to deploy your Neuraxle model or pipeline to a RES
 """
 
 import numpy as np
+from flask import Flask
 from sklearn.cluster import KMeans
 from sklearn.datasets import load_boston
 from sklearn.decomposition import PCA, FastICA
@@ -114,4 +115,9 @@ def main():
     # print(test_predictictions)
     # print(test_predictictions.content)
 
+    assert isinstance(app, Flask)
+
     return app
+
+if __name__ == "__main__":
+    main()

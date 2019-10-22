@@ -1,5 +1,4 @@
 import os
-import shutil
 import time
 
 import numpy as np
@@ -132,3 +131,6 @@ def main(sleep_time):
     assert isinstance(outputs, np.ndarray)
 
     pipeline.flush_all_cache()
+
+if __name__ == "__main__":
+    main(0.1)

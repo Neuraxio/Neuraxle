@@ -16,3 +16,6 @@ def main():
     _regenerated_in = reversed(p).transform(_out)
 
     assert np.array_equal(_regenerated_in, _in)
+
+if __name__ == "__main__":
+    main()

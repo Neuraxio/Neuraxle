@@ -39,3 +39,6 @@ def main():
 
     assert hyperparams_space['SomeStep__hp'].min_included == -10
     assert hyperparams_space['SomeStep__hp'].max_included == 0
+
+if __name__ == "__main__":
+    main()

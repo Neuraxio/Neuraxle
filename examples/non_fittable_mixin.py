@@ -56,3 +56,6 @@ def main():
 
     assert tape_fit.data == []
     assert np.array_equal(tape_transform.data[0], np.array([0, 1]))
+
+if __name__ == "__main__":
+    main()
