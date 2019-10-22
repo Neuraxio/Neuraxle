@@ -94,16 +94,19 @@ p = Pipeline([
 
 print("Meta-fitting on train:")
 p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
+    p,
     n_iter=10,
     higher_score_is_better=True,
     validation_technique=KFoldCrossValidation(scoring_function=r2_score, k_fold=10)
 ))
 # Here is an alternative way to do it, more "pipeliney":
 # p = RandomSearch(
+#     p,
 #     n_iter=15,
 #     higher_score_is_better=True,
 #     validation_technique=KFoldCrossValidation(scoring_function=r2_score, k_fold=3)
-# ).set_step(p).fit(X_train, y_train).get_best_model()
+# ).fit(X_train, y_train)
+
 print("")
 
 print("Transforming train and test:")

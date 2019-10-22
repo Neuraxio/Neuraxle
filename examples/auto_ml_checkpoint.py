@@ -41,50 +41,50 @@ def main():
     )
 
     pipeline = Pipeline([
-        ('multiplication_2', Multiplication(sleep_time=0.01)),
-        ('multiplication_3', Multiplication(sleep_time=0.01)),
-        ('multiplication_4', Multiplication(sleep_time=0.01)),
-        ('multiplication_5', Multiplication(sleep_time=0.01)),
-        ('multiplication_6', Multiplication(sleep_time=0.01)),
-        ('multiplication_7', Multiplication(sleep_time=0.01)),
-        ('multiplication_8', Multiplication(sleep_time=0.01)),
-        ('multiplication_9', Multiplication(sleep_time=0.01)),
-        ('multiplication_10', Multiplication(sleep_time=0.01)),
-        ('multiplication_11', Multiplication(sleep_time=0.01)),
+        ('multiplication_2', Multiplication(sleep_time=0.0)),
+        ('multiplication_3', Multiplication(sleep_time=0.0)),
+        ('multiplication_4', Multiplication(sleep_time=0.0)),
+        ('multiplication_5', Multiplication(sleep_time=0.0)),
+        ('multiplication_6', Multiplication(sleep_time=0.0)),
+        ('multiplication_7', Multiplication(sleep_time=0.0)),
+        ('multiplication_8', Multiplication(sleep_time=0.0)),
+        ('multiplication_9', Multiplication(sleep_time=0.0)),
+        ('multiplication_10', Multiplication(sleep_time=0.0)),
+        ('multiplication_11', Multiplication(sleep_time=0.0)),
     ])
 
     resumable_pipeline = ResumablePipeline([
-        ('multiplication_2', Multiplication(sleep_time=0.01)),
-        ('multiplication_3', Multiplication(sleep_time=0.01)),
+        ('multiplication_2', Multiplication(sleep_time=0.0)),
+        ('multiplication_3', Multiplication(sleep_time=0.0)),
         ('checkpoint_1', DefaultCheckpoint()),
-        ('multiplication_4', Multiplication(sleep_time=0.01)),
-        ('multiplication_5', Multiplication(sleep_time=0.01)),
+        ('multiplication_4', Multiplication(sleep_time=0.0)),
+        ('multiplication_5', Multiplication(sleep_time=0.0)),
         ('checkpoint_2', DefaultCheckpoint()),
-        ('multiplication_6', Multiplication(sleep_time=0.01)),
-        ('multiplication_7', Multiplication(sleep_time=0.01)),
+        ('multiplication_6', Multiplication(sleep_time=0.0)),
+        ('multiplication_7', Multiplication(sleep_time=0.0)),
         ('checkpoint_3', DefaultCheckpoint()),
-        ('multiplication_8', Multiplication(sleep_time=0.01)),
-        ('multiplication_9', Multiplication(sleep_time=0.01)),
+        ('multiplication_8', Multiplication(sleep_time=0.0)),
+        ('multiplication_9', Multiplication(sleep_time=0.0)),
         ('checkpoint_4', DefaultCheckpoint()),
-        ('multiplication_10', Multiplication(sleep_time=0.01)),
-        ('multiplication_11', Multiplication(sleep_time=0.01)),
+        ('multiplication_10', Multiplication(sleep_time=0.0)),
+        ('multiplication_11', Multiplication(sleep_time=0.0)),
     ])
 
     data_inputs = np.array(range(10))
     expected_outputs = np.array(range(10, 20))
 
     print('Classic Pipeline')
-    run_pipeline(pipeline, hyperparams_space, data_inputs, expected_outputs)
+    run_random_search(pipeline, hyperparams_space, data_inputs, expected_outputs)
 
     print('\n')
 
     print('Resumable Pipeline')
-    run_pipeline(resumable_pipeline, hyperparams_space, data_inputs, expected_outputs)
+    run_random_search(resumable_pipeline, hyperparams_space, data_inputs, expected_outputs)
 
     shutil.rmtree(DEFAULT_CACHE_FOLDER)
 
 
-def run_pipeline(p, hyperparams_space, data_inputs, expected_outputs):
+def run_random_search(p, hyperparams_space, data_inputs, expected_outputs):
     time_a = time.time()
     p.set_hyperparams_space(hyperparams_space)
 

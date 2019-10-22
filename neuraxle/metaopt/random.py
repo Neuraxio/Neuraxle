@@ -340,6 +340,8 @@ class RandomSearch(MetaStepMixin, BaseStep):
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
         started = False
+        best_hyperparams = None
+
         for _ in range(self.n_iter):
 
             step = copy.copy(self.wrapped)
@@ -353,14 +355,12 @@ class RandomSearch(MetaStepMixin, BaseStep):
             score = step.scores_mean
 
             if not started or self.higher_score_is_better == (score > self.score):
-                if self.print:
-                    print('best hyperparameters: {0}'.format(new_hyperparams))
-                    print('best score: {0}'.format(score))
-                    print('\n')
-
                 started = True
                 self.score = score
-                self.best_validation_wrapper_of_model = step
+                self.best_validation_wrapper_of_model = copy.copy(step)
+                best_hyperparams = new_hyperparams
+
+        self.best_validation_wrapper_of_model.wrapped.set_hyperparams(best_hyperparams)
 
         if self.refit:
             self.best_model = self.best_validation_wrapper_of_model.fit(

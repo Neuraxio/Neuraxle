@@ -1346,10 +1346,9 @@ class MetaStepMixin:
         * :class:`StepClonerForEachDataInput`
     """
 
-    # TODO: remove equal None, and fix random search at the same time ?
     def __init__(
             self,
-            wrapped: BaseStep = None
+            wrapped: BaseStep
     ):
         self.wrapped: BaseStep = wrapped
 
