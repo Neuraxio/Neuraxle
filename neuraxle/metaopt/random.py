@@ -324,12 +324,10 @@ class RandomSearch(MetaStepMixin, BaseStep):
             higher_score_is_better: bool = True,
             validation_technique: BaseCrossValidation = KFoldCrossValidation(),
             refit=True,
-            print=False
     ):
         if wrapped is not None:
             MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
-        self.print = print
         self.n_iter = n_iter
         self.higher_score_is_better = higher_score_is_better
         self.validation_technique: BaseCrossValidation = validation_technique

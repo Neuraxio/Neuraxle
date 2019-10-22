@@ -21,6 +21,7 @@ You can find here misc. pipeline steps, for example, callbacks useful for debugg
 """
 
 import hashlib
+import time
 from abc import ABC, abstractmethod
 
 from neuraxle.pipeline import Pipeline
@@ -215,6 +216,15 @@ class TapeCallbackFunction:
         :return: The list of names.
         """
         return self.name_tape
+
+class Sleep(NonFittableMixin, BaseStep):
+    def __init__(self, sleep_time=0.1, hyperparams=None, hyperparams_space=None):
+        BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
+        self.sleep_time = sleep_time
+
+    def transform(self, data_inputs):
+        time.sleep(self.sleep_time)
+        return data_inputs
 
 
 class DataShuffler:
