@@ -41,14 +41,13 @@ class Multiplication(NonFittableMixin, BaseStep):
         return data_inputs * self.hyperparams['hp_mul']
 
 
-def main():
-    run_random_search_normal_pipeline()
-    run_random_search_resumable_pipeline()
+def main(sleep_time):
+    def mean_squared_error(actual_outputs, expected_outputs):
+        mses = [(a - b) ** 2 for a, b in zip(actual_outputs, expected_outputs)]
+        return sum(mses) / float(len(mses))
 
     shutil.rmtree(DEFAULT_CACHE_FOLDER)
 
-
-def run_random_search_normal_pipeline(sleep_time=0.1):
     pipeline = Pipeline([
         ('multiplication_2', Multiplication(sleep_time=sleep_time)),
         ('multiplication_3', Multiplication(sleep_time=sleep_time)),
@@ -64,16 +63,31 @@ def run_random_search_normal_pipeline(sleep_time=0.1):
 
     print('Classic Pipeline')
 
-    return run_random_search(
+    time_a = time.time()
+
+    pipeline.set_hyperparams_space(HYPERPARAMETER_SPACE)
+
+    random_search = RandomSearch(
         pipeline,
-        HYPERPARAMETER_SPACE,
-        DATA_INPUTS,
-        EXPECTED_OUTPUTS
-    )
+        n_iter=200,
+        higher_score_is_better=True,
+        print=True
+    ).fit(DATA_INPUTS, EXPECTED_OUTPUTS)
 
+    outputs = random_search.transform(DATA_INPUTS)
 
-def run_random_search_resumable_pipeline(sleep_time=0.1):
-    resumable_pipeline = ResumablePipeline([
+    time_b = time.time()
+
+    actual_score = mean_squared_error(outputs, EXPECTED_OUTPUTS)
+    print('{0} seconds'.format(time_b - time_a))
+    print('output: {0}'.format(outputs))
+    print('smallest mse: {0}'.format(actual_score))
+    print('best hyperparams: {0}'.format(pipeline.get_hyperparams()))
+
+    assert isinstance(actual_score, float)
+    assert isinstance(outputs, np.ndarray)
+
+    pipeline = ResumablePipeline([
         ('multiplication_2', Multiplication(sleep_time=sleep_time)),
         ('multiplication_3', Multiplication(sleep_time=sleep_time)),
         ('checkpoint_1', DefaultCheckpoint()),
@@ -92,42 +106,26 @@ def run_random_search_resumable_pipeline(sleep_time=0.1):
 
     print('Resumable Pipeline')
 
-    return run_random_search(
-        resumable_pipeline,
-        HYPERPARAMETER_SPACE,
-        DATA_INPUTS,
-        EXPECTED_OUTPUTS
-    )
-
-
-def run_random_search(p, hyperparams_space, data_inputs, expected_outputs):
     time_a = time.time()
-    p.set_hyperparams_space(hyperparams_space)
+
+    pipeline.set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     random_search = RandomSearch(
-        p,
+        pipeline,
         n_iter=200,
         higher_score_is_better=True,
         print=True
-    ).fit(data_inputs, expected_outputs)
+    ).fit(DATA_INPUTS, EXPECTED_OUTPUTS)
 
-    outputs = random_search.transform(data_inputs)
+    outputs = random_search.transform(DATA_INPUTS)
 
     time_b = time.time()
 
-    actual_score = mean_squared_error(outputs, expected_outputs)
+    actual_score = mean_squared_error(outputs, EXPECTED_OUTPUTS)
     print('{0} seconds'.format(time_b - time_a))
     print('output: {0}'.format(outputs))
     print('smallest mse: {0}'.format(actual_score))
-    print('best hyperparams: {0}'.format(p.get_hyperparams()))
+    print('best hyperparams: {0}'.format(pipeline.get_hyperparams()))
 
-    return actual_score, outputs, p.get_hyperparams()
-
-
-def mean_squared_error(actual_outputs, expected_outputs):
-    mses = [(a - b) ** 2 for a, b in zip(actual_outputs, expected_outputs)]
-    return sum(mses) / float(len(mses))
-
-
-if __name__ == '__main__':
-    main()
+    assert isinstance(actual_score, float)
+    assert isinstance(outputs, np.ndarray)
