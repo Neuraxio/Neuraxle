@@ -20,8 +20,8 @@ This demonstrates an easy way to deploy your Neuraxle model or pipeline to a RES
     limitations under the License.
 
 ..
-    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning 
-    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
 

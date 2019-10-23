@@ -23,8 +23,8 @@ attributes in the nested pipelines.
     limitations under the License.
 
 ..
-    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning 
-    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
 
