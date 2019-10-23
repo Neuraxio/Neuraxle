@@ -124,7 +124,7 @@ class NumpyShapePrinter(NonFittableMixin, BaseStep):
         print(self.__class__.__name__ + " (one):", data_input.shape, self.custom_message)
 
 class MultiplyByN(NonFittableMixin, BaseStep):
-    def __init__(self, multiply_by):
+    def __init__(self, multiply_by=1):
         NonFittableMixin.__init__(self)
         BaseStep.__init__(
             self,

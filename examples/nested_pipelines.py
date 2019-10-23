@@ -22,6 +22,7 @@ def main():
             ])
         ])
     ])
+    np.random.seed(42)
     X = np.random.randint(5, size=(100, 5))
 
     pipeline, X_t = pipeline.fit_transform(X)

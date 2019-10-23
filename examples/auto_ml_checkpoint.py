@@ -26,11 +26,11 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     print('Classic Pipeline:')
 
     pipeline = Pipeline([
-        ('multiplication_1', MultiplyByN(1)),
+        ('multiplication_1', MultiplyByN()),
         ('sleep_1', ForEachDataInput(Sleep(sleep_time))),
-        ('multiplication_2', MultiplyByN(1)),
+        ('multiplication_2', MultiplyByN()),
         ('sleep_2', ForEachDataInput(Sleep(sleep_time))),
-        ('multiplication_3', MultiplyByN(1)),
+        ('multiplication_3', MultiplyByN()),
     ]).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
@@ -54,13 +54,13 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     print('Resumable Pipeline:')
 
     pipeline = ResumablePipeline([
-        ('multiplication_1', MultiplyByN(1)),
+        ('multiplication_1', MultiplyByN()),
         ('sleep_1', ForEachDataInput(Sleep(sleep_time))),
         DefaultCheckpoint(),
-        ('multiplication_2', MultiplyByN(1)),
+        ('multiplication_2', MultiplyByN()),
         ('sleep_2', ForEachDataInput(Sleep(sleep_time))),
         DefaultCheckpoint(),
-        ('multiplication_3', MultiplyByN(1))
+        ('multiplication_3', MultiplyByN())
     ], cache_folder=tmpdir).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
