@@ -19,6 +19,10 @@ This demonstrates an easy way to deploy your Neuraxle model or pipeline to a RES
     See the License for the specific language governing permissions and
     limitations under the License.
 
+..
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning 
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+
 """
 
 import numpy as np
@@ -118,6 +122,7 @@ def main():
     assert isinstance(app, Flask)
 
     return app
+
 
 if __name__ == "__main__":
     main()

@@ -25,6 +25,10 @@ This example also prints the shapes of the objects between the pipeline elements
     See the License for the specific language governing permissions and
     limitations under the License.
 
+..
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning 
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+
 """
 
 import numpy as np
@@ -85,6 +89,7 @@ def main():
     assert isinstance(score_test, float)
 
     return y_train_predicted, y_test_predicted, score_train, score_test
+
 
 if __name__ == "__main__":
     main()
