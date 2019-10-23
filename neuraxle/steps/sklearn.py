@@ -78,6 +78,9 @@ class SKLearnWrapper(BaseStep):
         else:
             return BaseStep.get_hyperparams(self)
 
+    def get_wrapped_sklearn_predictor(self):
+        return self.wrapped_sklearn_predictor
+
     def __repr__(self):
         return self.__str__()
 

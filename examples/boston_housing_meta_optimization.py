@@ -41,81 +41,80 @@ from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.union import AddFeatures, ModelStacking
 
-boston = load_boston()
-X, y = shuffle(boston.data, boston.target, random_state=13)
-X = X.astype(np.float32)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffle=False)
 
-# Note that the hyperparameter spaces are defined here during the pipeline definition, but it could be already set
-# within the classes ar their definition if using custom classes, or also it could be defined after declaring the
-# pipeline using a flat dict or a nested dict.
-p = Pipeline([
-    AddFeatures([
-        SKLearnWrapper(
-            PCA(n_components=2),
-            HyperparameterSpace({"n_components": RandInt(1, 3)})
-        ),
-        SKLearnWrapper(
-            FastICA(n_components=2),
-            HyperparameterSpace({"n_components": RandInt(1, 3)})
-        ),
-    ]),
-    ModelStacking([
-        SKLearnWrapper(
-            GradientBoostingRegressor(),
-            HyperparameterSpace({
-                "n_estimators": RandInt(50, 600), "max_depth": RandInt(1, 10), "learning_rate": LogUniform(0.07, 0.7)
-            })
-        ),
-        SKLearnWrapper(
-            GradientBoostingRegressor(),
-            HyperparameterSpace({
-                "n_estimators": RandInt(50, 600), "max_depth": RandInt(1, 10), "learning_rate": LogUniform(0.07, 0.7)
-            })
-        ),
-        SKLearnWrapper(
-            GradientBoostingRegressor(),
-            HyperparameterSpace({
-                "n_estimators": RandInt(50, 600), "max_depth": RandInt(1, 10), "learning_rate": LogUniform(0.07, 0.7)
-            })
-        ),
-        SKLearnWrapper(
-            KMeans(),
-            HyperparameterSpace({"n_clusters": RandInt(5, 10)})
-        ),
-    ],
-        joiner=NumpyTranspose(),
-        judge=SKLearnWrapper(
-            Ridge(),
-            HyperparameterSpace({"alpha": LogUniform(0.7, 1.4), "fit_intercept": Boolean()})
-        ),
-    )
-])
+def main():
+    boston = load_boston()
+    X, y = shuffle(boston.data, boston.target, random_state=13)
+    X = X.astype(np.float32)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffle=False)
 
-print("Meta-fitting on train:")
-p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
-    n_iter=10,
-    higher_score_is_better=True,
-    validation_technique=KFoldCrossValidation(scoring_function=r2_score, k_fold=10)
-))
-# Here is an alternative way to do it, more "pipeliney":
-# p = RandomSearch(
-#     n_iter=15,
-#     higher_score_is_better=True,
-#     validation_technique=KFoldCrossValidation(scoring_function=r2_score, k_fold=3)
-# ).set_step(p).fit(X_train, y_train).get_best_model()
-print("")
+    # Note that the hyperparameter spaces are defined here during the pipeline definition, but it could be already set
+    # within the classes ar their definition if using custom classes, or also it could be defined after declaring the
+    # pipeline using a flat dict or a nested dict.
 
-print("Transforming train and test:")
-y_train_predicted = p.transform(X_train)
-y_test_predicted = p.transform(X_test)
-print("")
+    p = Pipeline([
+        AddFeatures([
+            SKLearnWrapper(
+                PCA(n_components=2),
+                HyperparameterSpace({"n_components": RandInt(1, 3)})
+            ),
+            SKLearnWrapper(
+                FastICA(n_components=2),
+                HyperparameterSpace({"n_components": RandInt(1, 3)})
+            ),
+        ]),
+        ModelStacking([
+            SKLearnWrapper(
+                GradientBoostingRegressor(),
+                HyperparameterSpace({
+                    "n_estimators": RandInt(50, 600), "max_depth": RandInt(1, 10),
+                    "learning_rate": LogUniform(0.07, 0.7)
+                })
+            ),
+            SKLearnWrapper(
+                KMeans(),
+                HyperparameterSpace({"n_clusters": RandInt(5, 10)})
+            ),
+        ],
+            joiner=NumpyTranspose(),
+            judge=SKLearnWrapper(
+                Ridge(),
+                HyperparameterSpace({"alpha": LogUniform(0.7, 1.4), "fit_intercept": Boolean()})
+            ),
+        )
+    ])
+    print("Meta-fitting on train:")
+    p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
+        n_iter=10,
+        higher_score_is_better=True,
+        validation_technique=KFoldCrossValidation(scoring_function=r2_score, k_fold=10)
+    ))
+    # Here is an alternative way to do it, more "pipeliney":
+    # p = RandomSearch(
+    #     p,
+    #     n_iter=15,
+    #     higher_score_is_better=True,
+    #     validation_technique=KFoldCrossValidation(scoring_function=r2_score, k_fold=3)
+    # ).fit(X_train, y_train)
 
-print("Evaluating transformed train:")
-score = r2_score(y_train_predicted, y_train)
-print('R2 regression score:', score)
-print("")
+    print("")
 
-print("Evaluating transformed test:")
-score = r2_score(y_test_predicted, y_test)
-print('R2 regression score:', score)
+    print("Transforming train and test:")
+    y_train_predicted = p.transform(X_train)
+    y_test_predicted = p.transform(X_test)
+
+    print("")
+
+    print("Evaluating transformed train:")
+    score_transform = r2_score(y_train_predicted, y_train)
+    print('R2 regression score:', score_transform)
+
+    print("")
+
+    print("Evaluating transformed test:")
+    score_test = r2_score(y_test_predicted, y_test)
+    print('R2 regression score:', score_test)
+
+
+if __name__ == "__main__":
+    main()

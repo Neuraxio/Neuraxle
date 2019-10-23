@@ -19,6 +19,7 @@ This is the core of Neuraxle's pipelines. You can chain steps to call them one a
     limitations under the License.
 
 """
+import shutil
 from abc import ABC, abstractmethod
 from copy import copy
 from typing import Any, Tuple, List
@@ -272,6 +273,9 @@ class Pipeline(BasePipeline):
         :return: tuple(steps left to do, last checkpoint data container)
         """
         return self.steps_as_tuple, data_container
+
+    def flush_all_cache(self):
+        shutil.rmtree(self.cache_folder)
 
 
 class ResumablePipeline(ResumableStepMixin, Pipeline):

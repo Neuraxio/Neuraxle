@@ -36,6 +36,7 @@ class BaseCrossValidation(MetaStepMixin, BaseStep, ABC):
     # TODO: assert that set_step was called.
     # TODO: change default argument of scoring_function...
     def __init__(self, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch()):
+        MetaStepMixin.__init__(self)
         BaseStep.__init__(self)
         self.scoring_function = scoring_function
         self.joiner = joiner
@@ -44,7 +45,7 @@ class BaseCrossValidation(MetaStepMixin, BaseStep, ABC):
         train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = self.split(
             data_inputs, expected_outputs)
 
-        step = StepClonerForEachDataInput(self.step)
+        step = StepClonerForEachDataInput(self.wrapped)
         step = step.fit(train_data_inputs, train_expected_outputs)
 
         results = step.transform(validation_data_inputs)
@@ -319,11 +320,14 @@ class RandomSearch(MetaStepMixin, BaseStep):
 
     def __init__(
             self,
-            n_iter: int,
-            higher_score_is_better: bool,
+            wrapped = None,
+            n_iter: int = 10,
+            higher_score_is_better: bool = True,
             validation_technique: BaseCrossValidation = KFoldCrossValidation(),
-            refit=True
+            refit=True,
     ):
+        if wrapped is not None:
+            MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
         self.n_iter = n_iter
         self.higher_score_is_better = higher_score_is_better
@@ -331,32 +335,41 @@ class RandomSearch(MetaStepMixin, BaseStep):
         self.refit = refit
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
-        # TODO: assert that set_step was called.
         started = False
+        best_hyperparams = None
+
         for _ in range(self.n_iter):
 
-            step = copy.copy(self.step)
+            step = copy.copy(self.wrapped)
 
             new_hyperparams = step.get_hyperparams_space().rvs()
             step.set_hyperparams(new_hyperparams)
 
             step: BaseCrossValidation = copy.copy(self.validation_technique).set_step(step)
 
-            # TODO: skip on error???
             step = step.fit(data_inputs, expected_outputs)
             score = step.scores_mean
 
             if not started or self.higher_score_is_better == (score > self.score):
                 started = True
                 self.score = score
-                self.best_validation_wrapper_of_model = step
+                self.best_validation_wrapper_of_model = copy.copy(step)
+                best_hyperparams = new_hyperparams
+
+        self.best_validation_wrapper_of_model.wrapped.set_hyperparams(best_hyperparams)
 
         if self.refit:
-            self.best_model = self.best_validation_wrapper_of_model.step.fit(
-                data_inputs, expected_outputs)
+            self.best_model = self.best_validation_wrapper_of_model.wrapped.fit(
+                data_inputs,
+                expected_outputs
+            )
 
         return self
 
+    def get_best_model(self):
+        return self.best_model
+
     def transform(self, data_inputs):
-        # TODO: check this again to be sure.
-        return self.best_validation_wrapper_of_model.transform(data_inputs)
+        if self.best_validation_wrapper_of_model is None:
+            raise Exception('Cannot transform RandomSearch before fit')
+        return self.best_validation_wrapper_of_model.wrapped.transform(data_inputs)
