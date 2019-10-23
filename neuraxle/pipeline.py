@@ -626,11 +626,3 @@ class FullExecutionCheckpoint(ResumablePipeline):
 
             ('StepSavingCheckpointer', StepSavingCheckpointer()),
         ])
-
-    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
-        for index, (step_name, step) in enumerate(reversed(self[:-1].items())):
-            sub_step_context = context.push(step)
-            if isinstance(step, ResumableStepMixin) and step.should_resume(data_container, sub_step_context):
-                return True
-
-        return False
