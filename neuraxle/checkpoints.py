@@ -245,7 +245,8 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :rtype: DataContainer
         """
         for checkpointer in self.all_checkpointers:
-            checkpointer.save_checkpoint(data_container, context)
+            checkpointer_context = context.push(checkpointer)
+            checkpointer.save_checkpoint(data_container, checkpointer_context)
 
         return data_container
 
@@ -259,8 +260,9 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :rtype: DataContainer
         """
         for checkpointer in self.all_checkpointers:
-            if checkpointer.is_for_execution_mode(context.get_execution_mode()):
-                data_container = checkpointer.read_checkpoint(data_container, context)
+            checkpointer_context = context.push(checkpointer)
+            if checkpointer.is_for_execution_mode(checkpointer_context.get_execution_mode()):
+                data_container = checkpointer.read_checkpoint(data_container, checkpointer_context)
 
         return data_container
 
@@ -613,9 +615,8 @@ class BaseDataCheckpointerWrapper(BaseCheckpointer):
         * :class:`DataInputCheckpointerWrapper`
     """
 
-    def __init__(self, data_checkpointer: BaseDataCheckpointer, checkpoint_type_name):
+    def __init__(self, data_checkpointer: BaseDataCheckpointer):
         BaseCheckpointer.__init__(self, execution_mode=ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM)
-        self.checkpoint_type_name = checkpoint_type_name
         self.data_checkpointer = data_checkpointer
 
     def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -716,23 +717,12 @@ class BaseDataCheckpointerWrapper(BaseCheckpointer):
         """
         for current_id in data_container.current_ids:
             if not self.data_checkpointer.checkpoint_exists(
-                    checkpoint_path=self._get_checkpoint_path(context),
+                    checkpoint_path=context.get_path(),
                     current_id=current_id
             ):
                 return False
 
         return True
-
-    def _get_checkpoint_path(self, context: ExecutionContext):
-        """
-        Return checkpoint path for execution context, and checkpoint type name.
-
-        :param context: execution context
-        :type context: ExecutionContext
-        :return: checkpoint path
-        :rtype: str
-        """
-        return context.push(Identity(name=self.checkpoint_type_name)).get_path()
 
 
 class DataInputCheckpointerWrapper(BaseDataCheckpointerWrapper):
@@ -743,8 +733,7 @@ class DataInputCheckpointerWrapper(BaseDataCheckpointerWrapper):
     def __init__(self, data_checkpointer: BaseDataCheckpointer):
         BaseDataCheckpointerWrapper.__init__(
             self,
-            data_checkpointer=data_checkpointer,
-            checkpoint_type_name=DataCheckpointType.DATA_INPUT.value
+            data_checkpointer=data_checkpointer
         )
 
     def save_one_checkpoint(self, context: ExecutionContext, current_id: str, data_input: Any, expected_output: Any):
@@ -762,7 +751,7 @@ class DataInputCheckpointerWrapper(BaseDataCheckpointerWrapper):
         :return:
         """
         self.data_checkpointer.save_checkpoint(
-            checkpoint_path=self._get_checkpoint_path(context),
+            checkpoint_path=context.get_path(),
             current_id=current_id,
             data=data_input
         )
@@ -784,7 +773,7 @@ class DataInputCheckpointerWrapper(BaseDataCheckpointerWrapper):
         :rtype: Tuple[str, Any, Any]
         """
         checkpoint = self.data_checkpointer.read_checkpoint(
-            checkpoint_path=self._get_checkpoint_path(context),
+            checkpoint_path=context.get_path(),
             current_id=current_id
         )
 
@@ -808,8 +797,7 @@ class ExpectedOutputCheckpointerWrapper(BaseDataCheckpointerWrapper):
     def __init__(self, data_checkpointer: BaseDataCheckpointer):
         BaseDataCheckpointerWrapper.__init__(
             self,
-            data_checkpointer=data_checkpointer,
-            checkpoint_type_name=DataCheckpointType.EXPECTED_OUTPUT.value
+            data_checkpointer=data_checkpointer
         )
 
     def save_one_checkpoint(self, context: ExecutionContext, current_id: str, data_input: Any, expected_output: Any):
@@ -827,7 +815,7 @@ class ExpectedOutputCheckpointerWrapper(BaseDataCheckpointerWrapper):
         :return:
         """
         self.data_checkpointer.save_checkpoint(
-            checkpoint_path=self._get_checkpoint_path(context),
+            checkpoint_path=context.get_path(),
             current_id=current_id,
             data=expected_output
         )
@@ -849,7 +837,7 @@ class ExpectedOutputCheckpointerWrapper(BaseDataCheckpointerWrapper):
         :rtype: Tuple[str, Any, Any]
         """
         checkpoint = self.data_checkpointer.read_checkpoint(
-            checkpoint_path=self._get_checkpoint_path(context),
+            checkpoint_path=context.get_path(),
             current_id=current_id
         )
 

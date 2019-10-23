@@ -21,9 +21,9 @@ def test_resumable_pipeline_with_checkpoint_fit_transform_should_save_data_input
     pipeline, outputs = test_case.pipeline.fit_transform([0, 1], [1, 2])
 
     assert os.path.exists(
-        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', FIT_TRANSFORM_ONLY_WRAPPER_DI_NAME, 'di', '0.pickle'))
+        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', FIT_TRANSFORM_ONLY_WRAPPER_DI_NAME, '0.pickle'))
     assert os.path.exists(
-        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', FIT_TRANSFORM_ONLY_WRAPPER_DI_NAME, 'di', '1.pickle'))
+        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', FIT_TRANSFORM_ONLY_WRAPPER_DI_NAME, '1.pickle'))
 
 
 def test_resumable_pipeline_with_checkpoint_transform_should_save_data_inputs(tmpdir):
@@ -32,9 +32,9 @@ def test_resumable_pipeline_with_checkpoint_transform_should_save_data_inputs(tm
     pipeline, outputs = test_case.pipeline.transform([0, 1])
 
     assert os.path.exists(
-        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', TRANSFORM_ONLY_WRAPPER_DI_NAME, 'di', '0.pickle'))
+        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', TRANSFORM_ONLY_WRAPPER_DI_NAME, '0.pickle'))
     assert os.path.exists(
-        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', TRANSFORM_ONLY_WRAPPER_DI_NAME, 'di', '1.pickle'))
+        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', TRANSFORM_ONLY_WRAPPER_DI_NAME, '1.pickle'))
 
 
 def test_resumable_pipeline_with_checkpoint_fit_should_save_data_inputs(tmpdir):
@@ -43,9 +43,9 @@ def test_resumable_pipeline_with_checkpoint_fit_should_save_data_inputs(tmpdir):
     pipeline = test_case.pipeline.fit([0, 1], [1, 2])
 
     assert os.path.exists(
-        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', FIT_ONLY_WRAPPER_DI_NAME, 'di', '0.pickle'))
+        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', FIT_ONLY_WRAPPER_DI_NAME, '0.pickle'))
     assert os.path.exists(
-        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', FIT_ONLY_WRAPPER_DI_NAME, 'di', '1.pickle'))
+        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', FIT_ONLY_WRAPPER_DI_NAME, '1.pickle'))
 
 
 def test_resumable_pipeline_with_checkpoint_fit_transform_should_save_expected_outputs(tmpdir):
@@ -54,9 +54,9 @@ def test_resumable_pipeline_with_checkpoint_fit_transform_should_save_expected_o
     pipeline, outputs = test_case.pipeline.fit_transform([0, 1], [1, 2])
 
     assert os.path.exists(
-        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', FIT_TRANSFORM_ONLY_WRAPPER_EO_NAME, 'eo', '0.pickle'))
+        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', FIT_TRANSFORM_ONLY_WRAPPER_EO_NAME, '0.pickle'))
     assert os.path.exists(
-        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', FIT_TRANSFORM_ONLY_WRAPPER_EO_NAME, 'eo', '1.pickle'))
+        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', FIT_TRANSFORM_ONLY_WRAPPER_EO_NAME, '1.pickle'))
 
 
 def test_resumable_pipeline_with_checkpoint_fit_should_save_expected_outputs(tmpdir):
@@ -65,9 +65,9 @@ def test_resumable_pipeline_with_checkpoint_fit_should_save_expected_outputs(tmp
     pipeline = test_case.pipeline.fit([0, 1], [1, 2])
 
     assert os.path.exists(
-        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', FIT_ONLY_WRAPPER_EO_NAME, 'eo', '0.pickle'))
+        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', FIT_ONLY_WRAPPER_EO_NAME, '0.pickle'))
     assert os.path.exists(
-        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', FIT_ONLY_WRAPPER_EO_NAME, 'eo', '1.pickle'))
+        os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', FIT_ONLY_WRAPPER_EO_NAME, '1.pickle'))
 
 
 def test_resumable_pipeline_with_checkpoint_fit_transform_should_resume_saved_checkpoints(tmpdir):
@@ -104,6 +104,7 @@ def test_resumable_pipeline_with_checkpoint_fit_should_resume_saved_checkpoints(
     assert test_case.tape_transform_step2.data == []
     assert test_case.tape_fit_step2.data == [([0, 1], [1, 2])]
 
+
 def test_resumable_pipeline_with_checkpoint_fit_transform_should_not_resume_partially_saved_checkpoints(tmpdir):
     given_partially_saved_checkpoints(tmpdir, FIT_TRANSFORM_ONLY_WRAPPER_DI_NAME, FIT_TRANSFORM_ONLY_WRAPPER_EO_NAME)
     test_case = create_full_execution_checkpoint_test_case(tmpdir)
@@ -139,31 +140,31 @@ def test_resumable_pipeline_with_checkpoint_transform_should_not_resume_partiall
 
 
 def given_partially_saved_checkpoints(tmpdir, execution_mode_di_name, execution_mode_eo_name):
-    os.makedirs(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_di_name, 'di'))
-    os.makedirs(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_eo_name, 'eo'))
+    os.makedirs(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_di_name))
+    os.makedirs(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_eo_name))
 
-    with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_di_name, 'di', '0.pickle'),
+    with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_di_name, '0.pickle'),
               'wb') as file:
         dump(0, file)
-    with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_eo_name, 'eo', '1.pickle'),
+    with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_eo_name, '1.pickle'),
               'wb') as file:
         dump(0, file)
 
 
 def given_fully_saved_checkpoints(tmpdir, execution_mode_name_di, execution_mode_name_eo):
-    os.makedirs(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_name_di, 'di'))
-    os.makedirs(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_name_eo, 'eo'))
+    os.makedirs(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_name_di))
+    os.makedirs(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_name_eo))
 
-    with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_name_di, 'di', '0.pickle'),
+    with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_name_di, '0.pickle'),
               'wb') as file:
         dump(0, file)
-    with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_name_di, 'di', '1.pickle'),
+    with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_name_di, '1.pickle'),
               'wb') as file:
         dump(1, file)
-    with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_name_eo, 'eo', '0.pickle'),
+    with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_name_eo, '0.pickle'),
               'wb') as file:
         dump(1, file)
-    with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_name_eo, 'eo', '1.pickle'),
+    with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', execution_mode_name_eo, '1.pickle'),
               'wb') as file:
         dump(2, file)
 
