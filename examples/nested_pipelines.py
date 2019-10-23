@@ -31,7 +31,7 @@ def main():
 
     assert pca_components.shape == (2, 5)
 
-    return pca_components
+    # https://stackoverflow.com/questions/28822756/getting-model-attributes-from-scikit-learn-pipeline/58359509#58359509
 
 if __name__ == "__main__":
     main()
