@@ -134,7 +134,13 @@ class MultiplyByN(NonFittableMixin, BaseStep):
         )
 
     def transform(self, data_inputs):
+        if not isinstance(data_inputs, np.ndarray):
+            data_inputs = np.array(data_inputs)
+
         return data_inputs * self.hyperparams['multiply_by']
 
     def inverse_transform(self, data_inputs):
+        if not isinstance(data_inputs, np.ndarray):
+            data_inputs = np.array(data_inputs)
+
         return data_inputs / self.hyperparams['multiply_by']

@@ -36,6 +36,7 @@ class BaseCrossValidation(MetaStepMixin, BaseStep, ABC):
     # TODO: assert that set_step was called.
     # TODO: change default argument of scoring_function...
     def __init__(self, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch()):
+        MetaStepMixin.__init__(self)
         BaseStep.__init__(self)
         self.scoring_function = scoring_function
         self.joiner = joiner

@@ -115,12 +115,6 @@ def main():
     score_test = r2_score(y_test_predicted, y_test)
     print('R2 regression score:', score_test)
 
-    assert y_train_predicted is not None
-    assert y_test_predicted is not None
-    assert score_transform is not None
-    assert score_test is not None
-
-    return y_train_predicted, y_test_predicted, score_transform, score_test
 
 if __name__ == "__main__":
     main()
