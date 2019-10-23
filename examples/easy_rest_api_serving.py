@@ -19,9 +19,14 @@ This demonstrates an easy way to deploy your Neuraxle model or pipeline to a RES
     See the License for the specific language governing permissions and
     limitations under the License.
 
+..
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+
 """
 
 import numpy as np
+from flask import Flask
 from sklearn.cluster import KMeans
 from sklearn.datasets import load_boston
 from sklearn.decomposition import PCA, FastICA
@@ -35,84 +40,89 @@ from neuraxle.pipeline import Pipeline
 from neuraxle.steps.sklearn import SKLearnWrapper, RidgeModelStacking
 from neuraxle.union import AddFeatures
 
-boston = load_boston()
-X, y = shuffle(boston.data, boston.target, random_state=13)
-X = X.astype(np.float32)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffle=False)
 
-pipeline = Pipeline([
-    AddFeatures([
-        SKLearnWrapper(PCA(n_components=2)),
-        SKLearnWrapper(FastICA(n_components=2)),
-    ]),
-    RidgeModelStacking([
-        SKLearnWrapper(GradientBoostingRegressor()),
-        SKLearnWrapper(KMeans()),
-    ]),
-])
+def main():
+    boston = load_boston()
+    X, y = shuffle(boston.data, boston.target, random_state=13)
+    X = X.astype(np.float32)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffle=False)
 
-print("Fitting on train:")
-pipeline = pipeline.fit(X_train, y_train)
-print("")
+    pipeline = Pipeline([
+        AddFeatures([
+            SKLearnWrapper(PCA(n_components=2)),
+            SKLearnWrapper(FastICA(n_components=2)),
+        ]),
+        RidgeModelStacking([
+            SKLearnWrapper(GradientBoostingRegressor()),
+            SKLearnWrapper(KMeans()),
+        ]),
+    ])
 
-print("Transforming train and test:")
-y_train_predicted = pipeline.transform(X_train)
-y_test_predicted = pipeline.transform(X_test)
-print("")
+    print("Fitting on train:")
+    pipeline = pipeline.fit(X_train, y_train)
+    print("")
+    print("Transforming train and test:")
+    y_train_predicted = pipeline.transform(X_train)
+    y_test_predicted = pipeline.transform(X_test)
+    print("")
+    print("Evaluating transformed train:")
+    score = r2_score(y_train_predicted, y_train)
+    print('R2 regression score:', score)
+    print("")
+    print("Evaluating transformed test:")
+    score = r2_score(y_test_predicted, y_test)
+    print('R2 regression score:', score)
+    print("Deploying the application by routing data to the transform method:")
 
-print("Evaluating transformed train:")
-score = r2_score(y_train_predicted, y_train)
-print('R2 regression score:', score)
-print("")
+    class CustomJSONDecoderFor2DArray(JSONDataBodyDecoder):
+        """This is a custom JSON decoder class that precedes the pipeline's transformation."""
 
-print("Evaluating transformed test:")
-score = r2_score(y_test_predicted, y_test)
-print('R2 regression score:', score)
+        def decode(self, data_inputs):
+            """
+            Transform a JSON list object into an np.array object.
 
-print("Deploying the application by routing data to the transform method:")
+            :param data_inputs: json object
+            :return: np array for data inputs
+            """
+            return np.array(data_inputs)
+
+    class CustomJSONEncoderOfOutputs(JSONDataResponseEncoder):
+        """This is a custom JSON response encoder class for converting the pipeline's transformation outputs."""
+
+        def encode(self, data_inputs) -> dict:
+            """
+            Convert predictions to a dict for creating a JSON Response object.
+
+            :param data_inputs:
+            :return:
+            """
+            return {
+                'predictions': list(data_inputs)
+            }
+
+    app = FlaskRestApiWrapper(
+        json_decoder=CustomJSONDecoderFor2DArray(),
+        wrapped=pipeline,
+        json_encoder=CustomJSONEncoderOfOutputs()
+    ).get_app()
+
+    print("Finally, run the app by uncommenting this next line of code:")
+
+    # app.run(debug=False, port=5000)
+
+    print("You can now call your pipeline over HTTP with a (JSON) REST API.")
+
+    # test_predictictions = requests.post(
+    #     url='http://127.0.0.1:5000/',
+    #     json=X_test.tolist()
+    # )
+    # print(test_predictictions)
+    # print(test_predictictions.content)
+
+    assert isinstance(app, Flask)
+
+    return app
 
 
-class CustomJSONDecoderFor2DArray(JSONDataBodyDecoder):
-    """This is a custom JSON decoder class that precedes the pipeline's transformation."""
-
-    def decode(self, data_inputs):
-        """
-        Transform a JSON list object into an np.array object.
-
-        :param data_inputs: json object
-        :return: np array for data inputs
-        """
-        return np.array(data_inputs)
-
-
-class CustomJSONEncoderOfOutputs(JSONDataResponseEncoder):
-    """This is a custom JSON response encoder class for converting the pipeline's transformation outputs."""
-
-    def encode(self, data_inputs) -> dict:
-        """
-        Convert predictions to a dict for creating a JSON Response object.
-
-        :param data_inputs:
-        :return:
-        """
-        return {
-            'predictions': list(data_inputs)
-        }
-
-
-app = FlaskRestApiWrapper(
-    json_decoder=CustomJSONDecoderFor2DArray(),
-    wrapped=pipeline,
-    json_encoder=CustomJSONEncoderOfOutputs()
-).get_app()
-
-print("Finally, run the app by uncommenting this next line of code:")
-# app.run(debug=False, port=5000)
-
-print("You can now call your pipeline over HTTP with a (JSON) REST API.")
-# test_predictictions = requests.post(
-#     url='http://127.0.0.1:5000/',
-#     json=X_test.tolist()
-# )
-# print(test_predictictions)
-# print(test_predictictions.content)
+if __name__ == "__main__":
+    main()

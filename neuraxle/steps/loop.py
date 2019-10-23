@@ -25,7 +25,7 @@ from neuraxle.base import MetaStepMixin, BaseStep
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
 
-class ForEachDataInputs(MetaStepMixin, BaseStep):
+class ForEachDataInput(MetaStepMixin, BaseStep):
     """
     Truncable step that fits/transforms each step for each of the data inputs, and expected outputs.
     """
