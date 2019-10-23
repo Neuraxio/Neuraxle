@@ -63,7 +63,7 @@ class BaseCrossValidation(MetaStepMixin, BaseStep, ABC):
         # TODO: use the splits and average the results?? instead of picking best model...
         raise NotImplementedError("TODO: code this method in Neuraxle.")
         data_inputs = self.split(data_inputs)
-        predicted_outputs_splitted = self.step.transform(data_inputs)
+        predicted_outputs_splitted = self.wrapped.transform(data_inputs)
         return self.joiner.transform(predicted_outputs_splitted)
 
 
