@@ -29,7 +29,7 @@ def main():
     # Get the components:
     pca_components = pipeline["Pipeline"]["Pipeline"][-1].get_wrapped_sklearn_predictor().components_
 
-    assert pca_components.shape == (2, 4)
+    assert pca_components.shape == (2, 5)
 
     return pca_components
 

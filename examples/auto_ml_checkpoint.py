@@ -13,7 +13,7 @@ from neuraxle.steps.misc import Sleep
 from neuraxle.steps.numpy import MultiplyByN
 
 
-def main(sleep_time, n_iter=200):
+def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     DATA_INPUTS = np.array(range(10))
     EXPECTED_OUTPUTS = np.array(range(10, 20))
 
@@ -32,7 +32,6 @@ def main(sleep_time, n_iter=200):
         ('sleep_2', ForEachDataInput(Sleep(sleep_time))),
         ('multiplication_3', MultiplyByN(1)),
     ]).set_hyperparams_space(HYPERPARAMETER_SPACE)
-
 
     time_a = time.time()
     best_model = RandomSearch(
@@ -62,8 +61,7 @@ def main(sleep_time, n_iter=200):
         ('sleep_2', ForEachDataInput(Sleep(sleep_time))),
         DefaultCheckpoint(),
         ('multiplication_3', MultiplyByN(1))
-    ], cache_folder=DEFAULT_CACHE_FOLDER).set_hyperparams_space(HYPERPARAMETER_SPACE)
-
+    ], cache_folder=tmpdir).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
     best_model = RandomSearch(
@@ -86,4 +84,5 @@ def main(sleep_time, n_iter=200):
 
 
 if __name__ == "__main__":
-    main(sleep_time=0.01, n_iter=30)
+    main(DEFAULT_CACHE_FOLDER, sleep_time=0.01, n_iter=30)
+
