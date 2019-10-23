@@ -2,7 +2,7 @@ import os
 from pickle import dump
 
 from neuraxle.checkpoints import DefaultCheckpoint
-from neuraxle.pipeline import ResumablePipeline
+from neuraxle.pipeline import ResumablePipeline, FullExecutionCheckpoint
 from neuraxle.steps.misc import FitTransformCallbackStep, TapeCallbackFunction
 
 
@@ -167,7 +167,3 @@ def create_checkpoint_test_case(tmpdir):
     return CheckpointTest(
         tape_transform_1, tape_fit_1, tape_transform_2, tape_fit_2, pipeline
     )
-
-
-def test_resumable_pipeline_with_checkpoint_should_save_steps():
-    pass

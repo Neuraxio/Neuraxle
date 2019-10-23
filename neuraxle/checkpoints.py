@@ -28,8 +28,6 @@ from typing import List, Tuple, Any
 
 from neuraxle.base import ResumableStepMixin, BaseStep, DataContainer, ExecutionContext, \
     ExecutionMode, NonTransformableMixin, NonFittableMixin, ListDataContainer, Identity
-from neuraxle.pipeline import Pipeline
-from neuraxle.steps.flow import TransformOnlyWrapper, FitOnlyWrapper, FitTransformOnlyWrapper
 
 
 class DataCheckpointType(Enum):
@@ -37,7 +35,7 @@ class DataCheckpointType(Enum):
     EXPECTED_OUTPUT = 'eo'
 
 
-class BaseCheckpointer(NonFittableMixin, NonTransformableMixin, BaseStep):
+class BaseCheckpointer(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, BaseStep):
     """
     Base class to implement a step checkpoint or data container checkpoint.
 
@@ -46,7 +44,7 @@ class BaseCheckpointer(NonFittableMixin, NonTransformableMixin, BaseStep):
     BaseCheckpointer has an execution mode so there could be different checkpoints for each execution mode (fit, fit_transform or transform).
 
     .. seealso::
-        * :class:`Checkpoint`
+        :class:`Checkpoint`
     """
 
     def __init__(
@@ -85,6 +83,19 @@ class BaseCheckpointer(NonFittableMixin, NonTransformableMixin, BaseStep):
                 ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM
             ]
 
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        self.save_checkpoint(data_container, context)
+        return self, data_container
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseStep', DataContainer):
+        self.save_checkpoint(data_container, context)
+        return self, data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        self.save_checkpoint(data_container, context)
+        return data_container
+
     @abstractmethod
     def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -116,23 +127,10 @@ class BaseCheckpointer(NonFittableMixin, NonTransformableMixin, BaseStep):
         """
         raise NotImplementedError()
 
-    @abstractmethod
-    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
-        raise NotImplementedError()
-
 
 class StepSavingCheckpointer(BaseCheckpointer):
     """
     StepCheckpointer is used by the Checkpoint step to save the fitted steps contained in the context of type ExecutionContext.
-
-    By default, StepCheckpointer saves the fitted steps when the execution mode is either FIT, or FIT_TRANSFORM :
-    ```
-    StepCheckpointer(ExecutionMode.FIT_OR_FIT_TRANSFORM)
-
-    # is equivalent to :
-
-    StepCheckpointer()
-    ```
     """
 
     def __init__(
@@ -158,7 +156,7 @@ class StepSavingCheckpointer(BaseCheckpointer):
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
         # TODO: change this when we support multiple execution modes and data container ids / summary
-        return True
+        return False
 
 
 class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, BaseStep):
@@ -303,9 +301,9 @@ class BaseDataCheckpointer(ABC):
         )
 
     .. seealso::
-        * :class:`BaseMiniDataCheckpointer`
-        * :class:`MiniDataCheckpointerWrapper`
-        * :class:`PickleMiniDataCheckpointer`
+        :class:`BaseMiniDataCheckpointer`,
+        :class:`MiniDataCheckpointerWrapper`,
+        :class:`PickleMiniDataCheckpointer`
     """
 
     @abstractmethod
@@ -687,7 +685,8 @@ class BaseDataCheckpointerWrapper(BaseCheckpointer):
         return data_container_checkpoint
 
     @abstractmethod
-    def read_one_checkpoint(self, context: ExecutionContext, current_id: str, data_input: Any, expected_output: Any) -> Tuple:
+    def read_one_checkpoint(self, context: ExecutionContext, current_id: str, data_input: Any,
+                            expected_output: Any) -> Tuple:
         """
         Read a data checkpoint with a :class:`BaseDataCheckpointer`.
 
@@ -768,7 +767,8 @@ class DataInputCheckpointerWrapper(BaseDataCheckpointerWrapper):
             data=data_input
         )
 
-    def read_one_checkpoint(self, context: ExecutionContext, current_id: str, data_input: Any, expected_output: Any) -> Tuple:
+    def read_one_checkpoint(self, context: ExecutionContext, current_id: str, data_input: Any,
+                            expected_output: Any) -> Tuple:
         """
         Read a data input checkpoint with :class:`BaseDataCheckpointer`.
 
@@ -789,6 +789,12 @@ class DataInputCheckpointerWrapper(BaseDataCheckpointerWrapper):
         )
 
         return current_id, checkpoint, expected_output
+
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
+        if not self.is_for_execution_mode(context.get_execution_mode()):
+            return False
+
+        return super().should_resume(data_container, context)
 
 
 class ExpectedOutputCheckpointerWrapper(BaseDataCheckpointerWrapper):
@@ -826,7 +832,8 @@ class ExpectedOutputCheckpointerWrapper(BaseDataCheckpointerWrapper):
             data=expected_output
         )
 
-    def read_one_checkpoint(self, context: ExecutionContext, current_id: str, data_input: Any, expected_output: Any) -> Tuple:
+    def read_one_checkpoint(self, context: ExecutionContext, current_id: str, data_input: Any,
+                            expected_output: Any) -> Tuple:
         """
         Read an expected output checkpoint with a :class:`BaseDataCheckpointer`.
 
@@ -848,34 +855,11 @@ class ExpectedOutputCheckpointerWrapper(BaseDataCheckpointerWrapper):
 
         return current_id, data_input, checkpoint
 
-class FullCheckpoint(Pipeline):
-    """
-    Full checkpoint pipeline that handles every execution mode.
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
+        if not self.is_for_execution_mode(context.get_execution_mode()):
+            return False
 
-    #. Saves data checkpoints for data inputs.
-    #. Saves data checkpoints for expected outputs.
-    #. Saves fitted step
-
-    .. seealso::
-        * :class:`Pipeline`
-        * :class:`TransformOnlyWrapper`
-        * :class:`FitOnlyWrapper`
-        * :class:`FitTransformOnlyWrapper`
-        * :class:`StepSavingCheckpointer`
-    """
-    def __init__(self):
-        Pipeline.__init__(self, [
-            TransformOnlyWrapper(DataInputCheckpointerWrapper(PickleDataCheckpointer())),
-            TransformOnlyWrapper(ExpectedOutputCheckpointerWrapper(PickleDataCheckpointer())),
-
-            FitOnlyWrapper(DataInputCheckpointerWrapper(PickleDataCheckpointer())),
-            FitOnlyWrapper(ExpectedOutputCheckpointerWrapper(PickleDataCheckpointer())),
-
-            FitTransformOnlyWrapper(DataInputCheckpointerWrapper(PickleDataCheckpointer())),
-            FitTransformOnlyWrapper(ExpectedOutputCheckpointerWrapper(PickleDataCheckpointer())),
-
-            StepSavingCheckpointer(),
-        ])
+        return super().should_resume(data_container, context)
 
 #
 # TODO: make mini bath sequential pipeline resumable to use this
