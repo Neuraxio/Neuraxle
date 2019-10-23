@@ -36,7 +36,9 @@ class TransformOnlyWrapper(
         BaseStep.__init__(self)
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        return self.wrapped.handle_transform(data_container, context)
+        wrapped_context = context.push(self.wrapped)
+
+        return self.wrapped.handle_transform(data_container, wrapped_context)
 
 
 class FitTransformOnlyWrapper(
@@ -66,7 +68,10 @@ class FitTransformOnlyWrapper(
         BaseStep.__init__(self)
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
-        self.wrapped, outputs = self.wrapped.handle_fit_transform(data_container, context)
+        wrapped_context = context.push(self.wrapped)
+
+        self.wrapped, outputs = self.wrapped.handle_fit_transform(data_container, wrapped_context)
+
         return self, outputs
 
 
@@ -98,7 +103,8 @@ class FitOnlyWrapper(
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
         if context.execution_mode == ExecutionMode.FIT:
-            self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
+            wrapped_context = context.push(self.wrapped)
+            self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, wrapped_context)
 
         return self, data_container
 
