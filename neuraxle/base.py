@@ -405,9 +405,7 @@ class ExecutionContext:
         * :func:`~neuraxle.steps.caching.ValueCachingWrapper.handle_transform`
         * :func:`~neuraxle.steps.caching.ValueCachingWrapper.handle_fit_transform`
 
-    .. seealso::
-        * :class:`BaseStep`
-        * :class:`ValueCachingWrapper`
+    .. seealso:: :class:`BaseStep`, :class:`ValueCachingWrapper`
     """
 
     def __init__(
@@ -605,17 +603,16 @@ class BaseStep(ABC):
             'SomeStep__learning_rate': 0.05
         }))
 
-    .. note:: All heavy initialization logic should be done inside the *setup* method (e.g.: things inside GPU),
-    and NOT in the constructor.
+    .. note:: All heavy initialization logic should be done inside the *setup* method (e.g.: things inside GPU), and NOT in the constructor.
     .. seealso::
-        * :class:`Pipeline`
-        * :class:`NonFittableMixin`
-        * :class:`NonTransformableMixin`
-        * :class:`HyperparameterSamples`
-        * :class:`HyperparameterSpace`
-        * :class:`BaseSaver`
-        * :class:`BaseHasher`
-        * :class:`DataContainer`
+        :class:`Pipeline`,
+        :class:`NonFittableMixin`,
+        :class:`NonTransformableMixin`,
+        :class:`HyperparameterSamples`,
+        :class:`HyperparameterSpace`,
+        :class:`BaseSaver`,
+        :class:`BaseHasher`,
+        :class:`DataContainer`
     """
 
     def __init__(
@@ -1346,7 +1343,6 @@ class MetaStepMixin:
         * :class:`StepClonerForEachDataInput`
     """
 
-    # TODO: remove equal None, and fix random search at the same time ?
     def __init__(
             self,
             wrapped: BaseStep = None
@@ -1838,6 +1834,10 @@ class TruncableSteps(BaseStep, ABC):
 
         hyperparams = HyperparameterSamples(hyperparams)
 
+        hyperparams.update(
+            BaseStep.get_hyperparams(self)
+        )
+
         return hyperparams.to_flat()
 
     def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
@@ -1938,7 +1938,7 @@ class TruncableSteps(BaseStep, ABC):
                 self.steps[name].set_hyperparams_space(hparams)
             else:
                 remainders[name] = hparams
-        self.hyperparams = HyperparameterSpace(remainders)
+        self.hyperparams_space = HyperparameterSpace(remainders)
 
         return self
 
