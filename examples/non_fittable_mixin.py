@@ -34,78 +34,49 @@ BaseStep class.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-
-from typing import Any
-
 import numpy as np
 
-from neuraxle.base import BaseStep, NonTransformableMixin, NonFittableMixin, Identity
+from neuraxle.base import NonTransformableMixin, NonFittableMixin, Identity, BaseStep
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.misc import BaseCallbackStep, TapeCallbackFunction
 
 
-# Fit method is automatically implemented as changing nothing.
-
-class FitCallbackStep(NonTransformableMixin, BaseCallbackStep):
+class NonTransformableStep(NonTransformableMixin, BaseStep):
     """
-    Call a callback method on fit.
-
-    Note that a BaseCallbackStep inherits from BaseStep, and here we simply add more behavior to the base class.
+    Transform method is automatically implemented as returning data inputs as it is.
+    Please make your steps inherit from NonTransformableMixin, when they don't need any transformations.
+    Also, make sure that BaseStep is the last step you inherit from.
     """
 
-    def fit(self, data_inputs, expected_outputs=None) -> 'FitCallbackStep':
-        self._callback((data_inputs, expected_outputs))
+    def fit(self, data_inputs, expected_outputs=None) -> 'NonTransformableStep':
+        # insert your fit code here
         return self
 
 
-# Transform method is automatically implemented as changing nothing.
-
-class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
+class NonFittableStep(NonFittableMixin, BaseStep):
     """
-    Call a callback method on transform or fit_transform.
-
-    Note that a BaseCallbackStep inherits from BaseStep, and here we simply add more behavior to the base class.
+    Fit method is automatically implemented as changing nothing.
+    Please make your steps inherit from NonFittableMixin, when they don't need any transformations.
+    Also, make sure that BaseStep is the last step you inherit from.
     """
-
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
-        self._callback(data_inputs)
-
-        return self, data_inputs
 
     def transform(self, data_inputs):
-        self._callback(data_inputs)
-        if self.transform_function is not None:
-            return self.transform_function(data_inputs)
-
-        return data_inputs
+        # insert your transform code here
+        return self, data_inputs
 
     def inverse_transform(self, processed_outputs):
-        self._callback(processed_outputs)
+        # insert your inverse transform code here
         return processed_outputs
 
 
 def main():
-    tape_fit = TapeCallbackFunction()
-    tape_transform = TapeCallbackFunction()
-
     p = Pipeline([
-        FitCallbackStep(tape_fit),
-        TransformCallbackStep(tape_transform),
+        NonFittableStep(),
+        NonTransformableStep(),
         Identity()
     ])
 
     p = p.fit(np.array([0, 1]), np.array([0, 1]))
-
-    assert np.array_equal(tape_fit.data[0][0], np.array([0, 1]))
-    assert np.array_equal(tape_fit.data[0][1], np.array([0, 1]))
-    assert tape_transform.data == []
-
-    tape_fit.data = []
-
-    _out = p.transform(np.array([0, 1]))
-
-    assert tape_fit.data == []
-    assert np.array_equal(tape_transform.data[0], np.array([0, 1]))
+    p = p.transform(np.array([0, 1]))
 
 
 if __name__ == "__main__":
