@@ -1508,18 +1508,6 @@ class NonFittableMixin:
     Note: fit methods are not implemented
     """
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
-        data_container.set_current_ids(current_ids)
-
-        return self, data_container
-
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
-        data_container.set_current_ids(current_ids)
-
-        return self, data_container
-
     def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
         """
         Don't fit.
@@ -1549,18 +1537,6 @@ class NonTransformableMixin:
     .. note::
         fit methods are not implemented
     """
-
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
-        data_container.set_current_ids(current_ids)
-
-        return data_container
-
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
-        data_container.set_current_ids(current_ids)
-
-        return self, data_container
 
     def transform(self, data_inputs):
         """

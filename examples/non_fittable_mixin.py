@@ -98,7 +98,6 @@ def main():
 
     assert np.array_equal(tape_fit.data[0][0], np.array([0, 1]))
     assert np.array_equal(tape_fit.data[0][1], np.array([0, 1]))
-    assert tape_transform.data == []
 
     tape_fit.data = []
 
