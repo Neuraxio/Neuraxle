@@ -607,10 +607,10 @@ class FullExecutionCheckpoint(ResumablePipeline):
 
     .. seealso::
         :class:`neuraxle.pipeline.ResumablePipeline`,
-        :class:`TransformOnlyWrapper`,
-        :class:`FitOnlyWrapper`,
-        :class:`FitTransformOnlyWrapper`,
-        :class:`StepSavingCheckpointer`
+        :class:`neuraxle.flow.TransformOnlyWrapper`,
+        :class:`neuraxle.flow.FitOnlyWrapper`,
+        :class:`neuraxle.flow.FitTransformOnlyWrapper`,
+        :class:`neuraxle.flow.StepSavingCheckpointer`
     """
 
     def __init__(self):
