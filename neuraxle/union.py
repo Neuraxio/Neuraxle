@@ -97,6 +97,27 @@ class FeatureUnion(TruncableSteps):
         results = self.joiner.transform(results)
         return results
 
+    def inverse_transform(self, processed_outputs):
+        """
+        Inverse Transform the data with the unions. It will make use of some parallel processing.
+
+        :param processed_outputs: The input data to inverse transform onto
+        :return: the transformed data_inputs.
+        """
+        if self.n_jobs != 1:
+            results = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
+                delayed(bro.inverse_transform)(processed_outputs)
+                for _, bro in self.steps_as_tuple
+            )
+        else:
+            results = [
+                bro.inverse_transform(processed_outputs)
+                for _, bro in self.steps_as_tuple
+            ]
+
+        results = self.joiner.transform(results)
+        return results
+
 
 class AddFeatures(FeatureUnion):
     """Parallelize the union of many pipeline steps AND concatenate the new features to the received inputs using Identity."""
