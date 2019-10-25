@@ -29,7 +29,8 @@ from neuraxle.pipeline import Pipeline
 VALUE_CACHING = 'value_caching'
 from typing import List, Any
 
-from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, DataContainer
+from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin
+from neuraxle.data_container import DataContainer
 
 
 class BaseCallbackStep(BaseStep, ABC):

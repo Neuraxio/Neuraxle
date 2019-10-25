@@ -31,9 +31,9 @@ from copy import copy
 from enum import Enum
 from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView
 
-from conv import convolved_1d
 from joblib import dump, load
 
+from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
 DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
@@ -68,6 +68,27 @@ class BaseHasher(ABC):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def summary_hash(
+            self,
+            current_ids: List[str],
+            hyperparameters: HyperparameterSamples,
+            data_inputs: Iterable
+    ) -> str:
+        """
+        Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together into one id.
+
+        :param current_ids: current hashed ids (can be None if this function has not been called yet)
+        :type current_ids: List[str]
+        :param hyperparameters: step hyperparameters to hash with current ids
+        :type hyperparameters: HyperparameterSamples
+        :param data_inputs: data inputs to hash current ids for
+        :type data_inputs: Iterable
+        :return: single hashed current id for all of the current ids
+        :rtype: str
+        """
+        raise NotImplementedError()
+
 
 class HashlibMd5Hasher(BaseHasher):
     """
@@ -84,6 +105,39 @@ class HashlibMd5Hasher(BaseHasher):
 
     .. todo:: potentially hash by source code
     """
+
+    def summary_hash(
+            self,
+            current_ids: List[str],
+            hyperparameters: HyperparameterSamples,
+            data_inputs: Iterable
+    ) -> str:
+        """
+        Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters into one current id
+        using  `hashlib.md5 <https://docs.python.org/3/library/hashlib.html>`_
+
+        :param current_ids: list of ids for each data inputs
+        :type current_ids: List[str]
+        :param hyperparameters: hyperparameters
+        :type hyperparameters: HyperparameterSamples
+        :param data_inputs: data inputs
+        :type data_inputs: Iterable
+        :return:
+        """
+        if len(hyperparameters) == 0:
+            current_hyperparameters_hash = ''
+        else:
+            hyperperams_dict = hyperparameters.to_flat_as_dict_primitive()
+            current_hyperparameters_hash = hashlib.md5(
+                str.encode(str(hyperperams_dict))
+            ).hexdigest()
+
+        m = hashlib.md5()
+        for current_id in current_ids:
+            m.update(str.encode(current_id))
+        m.update(str.encode(current_hyperparameters_hash))
+
+        return m.hexdigest()
 
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None) -> List[str]:
         """
@@ -116,157 +170,6 @@ class HashlibMd5Hasher(BaseHasher):
             new_current_ids.append(m.hexdigest())
 
         return new_current_ids
-
-
-class DataContainer:
-    """
-    DataContainer class to store data inputs, expected outputs, and ids together.
-    Each :class:`BaseStep` needs to rehash ids with hyperparameters so that the :class:`Checkpoint` step
-    can create checkpoints for a set of hyperparameters.
-
-    The DataContainer object is passed to all of the :class:`BaseStep` handle methods :
-        * :func:`~neuraxle.base.BaseStep.handle_transform`
-        * :func:`~neuraxle.base.BaseStep.handle_fit_transform`
-        * :func:`~neuraxle.base.BaseStep.handle_fit`
-
-    Most of the time, you won't need to care about the DataContainer because it is the pipeline that manages it.
-
-    .. seealso::
-        :class:`BaseHasher`,
-        :class: `BaseStep`
-    """
-
-    def __init__(self,
-                 current_ids,
-                 data_inputs: Any,
-                 expected_outputs: Any = None
-                 ):
-        self.current_ids = current_ids
-        self.data_inputs = data_inputs
-        if expected_outputs is None:
-            self.expected_outputs = [None] * len(current_ids)
-        else:
-            self.expected_outputs = expected_outputs
-
-    def set_data_inputs(self, data_inputs: Iterable):
-        """
-        Set data inputs.
-
-        :param data_inputs: data inputs
-        :type data_inputs: Iterable
-        :return:
-        """
-        self.data_inputs = data_inputs
-
-    def set_expected_outputs(self, expected_outputs: Iterable):
-        """
-        Set expected outputs.
-
-        :param expected_outputs: expected outputs
-        :type expected_outputs: Iterable
-        :return:
-        """
-        self.expected_outputs = expected_outputs
-
-    def set_current_ids(self, current_ids: List[str]):
-        """
-        Set current ids.
-
-        :param current_ids: data inputs
-        :type current_ids: List[str]
-        :return:
-        """
-        self.current_ids = current_ids
-
-    def convolved_1d(self, stride, kernel_size) -> Iterable['DataContainer']:
-        """
-        Returns an iterator that iterates through batches of the DataContainer.
-
-        :param stride: step size for the convolution operation
-        :param kernel_size:
-        :return: an iterator of DataContainer
-        :rtype: Iterable[DataContainer]
-
-        .. seealso::
-            `<https://github.com/guillaume-chevalier/python-conv-lib>`_
-        """
-        conv_current_ids = convolved_1d(stride=stride, iterable=self.current_ids, kernel_size=kernel_size)
-        conv_data_inputs = convolved_1d(stride=stride, iterable=self.data_inputs, kernel_size=kernel_size)
-        conv_expected_outputs = convolved_1d(stride=stride, iterable=self.expected_outputs, kernel_size=kernel_size)
-
-        for current_ids, data_inputs, expected_outputs in zip(conv_current_ids, conv_data_inputs,
-                                                              conv_expected_outputs):
-            yield DataContainer(
-                current_ids=current_ids,
-                data_inputs=data_inputs,
-                expected_outputs=expected_outputs
-            )
-
-    def __iter__(self):
-        """
-        Iter method returns a zip of all of the current_ids, data_inputs, and expected_outputs in the data container.
-
-        :return: iterator of tuples containing current_ids, data_inputs, and expected outputs
-        :rtype: Iterator[Tuple]
-        """
-        current_ids = self.current_ids
-        if self.current_ids is None:
-            current_ids = [None] * len(self.data_inputs)
-
-        expected_outputs = self.expected_outputs
-        if self.expected_outputs is None:
-            expected_outputs = [None] * len(self.data_inputs)
-
-        return zip(current_ids, self.data_inputs, expected_outputs)
-
-    def __repr__(self):
-        return str(self)
-
-    def __str__(self):
-        return self.__class__.__name__ + "(current_ids=" + repr(list(self.current_ids)) + ", ...)"
-
-    def __len__(self):
-        return len(self.data_inputs)
-
-
-class ListDataContainer(DataContainer):
-    """
-    Sub class of DataContainer to perform list operations.
-    It allows to perform append, and concat operations on a DataContainer.
-
-    .. seealso::
-        :class:`DataContainer`
-    """
-
-    @staticmethod
-    def empty() -> 'ListDataContainer':
-        return ListDataContainer([], [], [])
-
-    def append(self, current_id: str, data_input: Any, expected_output: Any):
-        """
-        Append a new data input to the DataContainer.
-
-        :param current_id: current id for the data input
-        :type current_id: str
-        :param data_input: data input
-        :param expected_output: expected output
-        :return:
-        """
-        self.current_ids.append(current_id)
-        self.data_inputs.append(data_input)
-        self.expected_outputs.append(expected_output)
-
-    def concat(self, data_container: DataContainer):
-        """
-        Concat the given data container to the current data container.
-
-        :param data_container: data container
-        :type data_container: DataContainer
-        :return:
-        """
-        self.current_ids.extend(data_container.current_ids)
-        self.data_inputs.extend(data_container.data_inputs)
-        self.expected_outputs.extend(data_container.expected_outputs)
 
 
 class BaseSaver(ABC):
@@ -683,7 +586,28 @@ class BaseStep(ABC):
         """
         for h in self.hashers:
             current_ids = h.hash(current_ids, hyperparameters, data_inputs)
+
         return current_ids
+
+    def summary_hash(self, current_ids, hyperparameters, data_inputs) -> str:
+        """
+        Hash data inputs, current ids, and hyperparameters together using self.hashers.
+        This is used to create unique ids for the data checkpoints.
+
+        :param current_ids: current ids to rehash
+        :param hyperparameters: hyperparameters to hash current ids with
+        :param data_inputs: data inputs to create id for
+        :return: hashed current ids
+        :rtype: List[str]
+
+        .. seealso::
+            :class:`neuraxle.checkpoints.Checkpoint`
+        """
+        summary_current_id = None
+        for h in self.hashers:
+            summary_current_id = h.summary_hash(current_ids, hyperparameters, data_inputs)
+
+        return summary_current_id
 
     def setup(self) -> 'BaseStep':
         """

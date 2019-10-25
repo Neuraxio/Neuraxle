@@ -19,7 +19,8 @@ You can find here output handlers steps that changes especially the data outputs
     limitations under the License.
 
 """
-from neuraxle.base import DataContainer, ExecutionContext, BaseStep
+from neuraxle.base import ExecutionContext, BaseStep
+from neuraxle.data_container import DataContainer
 
 
 class OutputTransformerMixin:

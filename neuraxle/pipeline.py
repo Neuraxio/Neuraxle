@@ -24,8 +24,9 @@ from abc import ABC, abstractmethod
 from copy import copy
 from typing import Any, Tuple, List
 
-from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, DataContainer, NonFittableMixin, \
-    ExecutionContext, ExecutionMode, NonTransformableMixin, ListDataContainer
+from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, NonFittableMixin, \
+    ExecutionContext, ExecutionMode, NonTransformableMixin
+from neuraxle.data_container import DataContainer, ListDataContainer
 from neuraxle.checkpoints import Checkpoint
 
 DEFAULT_CACHE_FOLDER = 'cache'
