@@ -21,12 +21,11 @@ Pipeline Steps For Looping
 import copy
 from typing import List, Any
 
-from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ListDataContainer, \
-    NonTransformableMixin, NonFittableMixin
+from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ListDataContainer, ForceHandleMixin
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
 
-class ForEachDataInput(NonFittableMixin, NonTransformableMixin, MetaStepMixin, BaseStep):
+class ForEachDataInput(ForceHandleMixin, MetaStepMixin, BaseStep):
     """
     Truncable step that fits/transforms each step for each of the data inputs, and expected outputs.
     """
@@ -43,12 +42,18 @@ class ForEachDataInput(NonFittableMixin, NonTransformableMixin, MetaStepMixin, B
 
         for current_id, di, eo in data_container:
             self.wrapped, output = self.wrapped.handle_fit(
-                DataContainer(current_ids=range(len(di)), data_inputs=di, expected_outputs=eo),
+                DataContainer(current_ids=None, data_inputs=di, expected_outputs=eo),
                 context
             )
 
-            # TODO: summary hash for new current id
-            output_data_container.append(current_id, output.data_inputs, output.expected_outputs)
+            output_data_container.append(
+                current_id,
+                output.data_inputs,
+                output.expected_outputs
+            )
+
+        current_ids = self.hash(data_container.current_ids, self.get_hyperparams())
+        output_data_container.set_current_ids(current_ids)
 
         return self, output_data_container
 
@@ -57,12 +62,18 @@ class ForEachDataInput(NonFittableMixin, NonTransformableMixin, MetaStepMixin, B
 
         for current_id, di, eo in data_container:
             output = self.wrapped.handle_transform(
-                DataContainer(current_ids=range(len(di)), data_inputs=di, expected_outputs=eo),
+                DataContainer(current_ids=None, data_inputs=di, expected_outputs=eo),
                 context
             )
 
-            # TODO: summary hash for new current id
-            output_data_container.append(current_id, output.data_inputs, output.expected_outputs)
+            output_data_container.append(
+                current_id,
+                output.data_inputs,
+                output.expected_outputs
+            )
+
+        current_ids = self.hash(data_container.current_ids, self.get_hyperparams())
+        output_data_container.set_current_ids(current_ids)
 
         return output_data_container
 
@@ -71,12 +82,18 @@ class ForEachDataInput(NonFittableMixin, NonTransformableMixin, MetaStepMixin, B
 
         for current_id, di, eo in data_container:
             self.wrapped, output = self.wrapped.handle_fit_transform(
-                DataContainer(current_ids=range(len(di)), data_inputs=di, expected_outputs=eo),
+                DataContainer(current_ids=None, data_inputs=di, expected_outputs=eo),
                 context
             )
 
-            # TODO: summary hash for new current id
-            output_data_container.append(current_id, output.data_inputs, output.expected_outputs)
+            output_data_container.append(
+                current_id,
+                output.data_inputs,
+                output.expected_outputs
+            )
+
+        current_ids = self.hash(data_container.current_ids, self.get_hyperparams())
+        output_data_container.set_current_ids(current_ids)
 
         return self, output_data_container
 

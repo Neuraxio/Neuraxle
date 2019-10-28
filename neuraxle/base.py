@@ -100,7 +100,10 @@ class HashlibMd5Hasher(BaseHasher):
         :rtype: List[str]
         """
         if current_ids is None:
-            current_ids = [str(i) for i in range(len(data_inputs))]
+            if isinstance(data_inputs, Iterable):
+                current_ids = [str(i) for i in range(len(data_inputs))]
+            else:
+                current_ids = 0
 
         if len(hyperparameters) == 0:
             return current_ids
@@ -143,8 +146,8 @@ class DataContainer:
                  ):
         self.current_ids = current_ids
         self.data_inputs = data_inputs
-        if expected_outputs is None:
-            self.expected_outputs = [None] * len(current_ids)
+        if expected_outputs is None and isinstance(data_inputs, Iterable):
+            self.expected_outputs = [None] * len(data_inputs)
         else:
             self.expected_outputs = expected_outputs
 
@@ -913,7 +916,7 @@ class BaseStep(ABC):
 
         new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
 
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.expected_outputs)
         data_container.set_current_ids(current_ids)
 
         return new_self, data_container
@@ -1526,6 +1529,39 @@ class MetaStepMixin:
 
 
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
+
+
+class ForceHandleMixin:
+    """
+    A pipeline step that only requires the implementation of handler methods :
+        - handle_transform
+        - handle_fit_transform
+        - handle_fit
+
+    .. seealso::
+        :class:`BaseStep`
+    """
+
+    @abstractmethod
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
+        raise NotImplementedError('Must implement handle_fit in {0}'.format(self.name))
+
+    @abstractmethod
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+        raise NotImplementedError('Must implement handle_transform in {0}'.format(self.name))
+
+    @abstractmethod
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+        raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
+
+    def transform(self, data_inputs) -> 'ForceHandleMixin':
+        raise Exception('Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(self.name))
+
+    def fit(self, data_inputs, expected_outputs=None) -> 'ForceHandleMixin':
+        raise Exception('Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(self.name))
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceHandleMixin':
+        raise Exception('Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(self.name))
 
 
 class NonFittableMixin:
