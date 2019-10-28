@@ -21,11 +21,12 @@ Pipeline Steps For Looping
 import copy
 from typing import List, Any
 
-from neuraxle.base import MetaStepMixin, BaseStep
+from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ListDataContainer, \
+    NonTransformableMixin, NonFittableMixin
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
 
-class ForEachDataInput(MetaStepMixin, BaseStep):
+class ForEachDataInput(NonFittableMixin, NonTransformableMixin, MetaStepMixin, BaseStep):
     """
     Truncable step that fits/transforms each step for each of the data inputs, and expected outputs.
     """
@@ -34,57 +35,50 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
             self,
             wrapped: BaseStep
     ):
-        BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
+        BaseStep.__init__(self)
 
-    def fit(self, data_inputs, expected_outputs=None):
-        """
-        Fit each step for each data inputs, and expected outputs
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
+        output_data_container = ListDataContainer.empty()
 
-        :param data_inputs:
-        :param expected_outputs:
-        :return: self
-        """
-        if expected_outputs is None:
-            expected_outputs = [None] * len(data_inputs)
+        for current_id, di, eo in data_container:
+            self.wrapped, output = self.wrapped.handle_fit(
+                DataContainer(current_ids=range(len(di)), data_inputs=di, expected_outputs=eo),
+                context
+            )
 
-        for di, eo in zip(data_inputs, expected_outputs):
-            self.wrapped = self.wrapped.fit(di, eo)
+            # TODO: summary hash for new current id
+            output_data_container.append(current_id, output.data_inputs, output.expected_outputs)
 
-        return self
+        return self, output_data_container
 
-    def transform(self, data_inputs):
-        """
-        Transform each step for each data inputs, and expected outputs
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+        output_data_container = ListDataContainer.empty()
 
-        :param data_inputs:
-        :return: self
-        """
-        outputs = []
-        for di in data_inputs:
-            output = self.wrapped.transform(di)
-            outputs.append(output)
+        for current_id, di, eo in data_container:
+            output = self.wrapped.handle_transform(
+                DataContainer(current_ids=range(len(di)), data_inputs=di, expected_outputs=eo),
+                context
+            )
 
-        return outputs
+            # TODO: summary hash for new current id
+            output_data_container.append(current_id, output.data_inputs, output.expected_outputs)
 
-    def fit_transform(self, data_inputs, expected_outputs=None):
-        """
-        Fit transform each step for each data inputs, and expected outputs
+        return output_data_container
 
-        :param data_inputs:
-        :param expected_outputs:
-        :return: self
-        """
-        if expected_outputs is None:
-            expected_outputs = [None] * len(data_inputs)
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+        output_data_container = ListDataContainer.empty()
 
-        outputs = []
-        for di, eo in zip(data_inputs, expected_outputs):
-            self.wrapped, output = self.wrapped.fit_transform(di, eo)
-            outputs.append(output)
+        for current_id, di, eo in data_container:
+            self.wrapped, output = self.wrapped.handle_fit_transform(
+                DataContainer(current_ids=range(len(di)), data_inputs=di, expected_outputs=eo),
+                context
+            )
 
-        return self, outputs
+            # TODO: summary hash for new current id
+            output_data_container.append(current_id, output.data_inputs, output.expected_outputs)
 
+        return self, output_data_container
 
 class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
     def __init__(self, wrapped: BaseStep, copy_op=copy.deepcopy):
