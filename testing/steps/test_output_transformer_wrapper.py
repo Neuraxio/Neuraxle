@@ -6,16 +6,18 @@ from neuraxle.pipeline import Pipeline
 from neuraxle.steps.output_handlers import OutputTransformerMixin
 
 
-class MultiplyBy2OutputTransformer(NonFittableMixin, OutputTransformerMixin, BaseStep):
+class MultiplyBy2OutputTransformer(OutputTransformerMixin, BaseStep):
     def __init__(
             self,
             hyperparams: HyperparameterSamples = None,
             hyperparams_space: HyperparameterSpace = None,
             name: str = None
     ):
-        NonFittableMixin.__init__(self)
         BaseStep.__init__(self, hyperparams, hyperparams_space, name)
         OutputTransformerMixin.__init__(self)
+
+    def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
+        return self
 
     def transform(self, data_inputs) -> Tuple[Any, Any]:
         dis, eos = data_inputs

@@ -76,7 +76,7 @@ def main():
     ])
 
     p = p.fit(np.array([0, 1]), np.array([0, 1]))
-    p = p.transform(np.array([0, 1]))
+    outputs = p.transform(np.array([0, 1]))
 
 
 if __name__ == "__main__":
