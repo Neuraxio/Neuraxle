@@ -110,3 +110,5 @@ venv.bak/
 ___*
 
 **cache/**
+cache/**
+testing/examples/cache/**

@@ -41,7 +41,7 @@ class SKLearnWrapper(BaseStep):
         if not isinstance(wrapped_sklearn_predictor, BaseEstimator):
             raise ValueError("The wrapped_sklearn_predictor must be an instance of scikit-learn's BaseEstimator.")
         self.wrapped_sklearn_predictor = wrapped_sklearn_predictor
-        params: HyperparameterSamples = wrapped_sklearn_predictor.get_params()
+        params: HyperparameterSamples = HyperparameterSamples(wrapped_sklearn_predictor.get_params())
         BaseStep.__init__(self, hyperparams=params, hyperparams_space=hyperparams_space)
         self.return_all_sklearn_default_params_on_get = return_all_sklearn_default_params_on_get
         self.name += "_" + wrapped_sklearn_predictor.__class__.__name__
@@ -67,16 +67,19 @@ class SKLearnWrapper(BaseStep):
             return self.wrapped_sklearn_predictor.predict(data_inputs)
         return self.wrapped_sklearn_predictor.transform(data_inputs)
 
-    def set_hyperparams(self, flat_hyperparams: dict) -> BaseStep:
+    def set_hyperparams(self, flat_hyperparams: HyperparameterSamples) -> BaseStep:
         BaseStep.set_hyperparams(self, flat_hyperparams)
-        self.wrapped_sklearn_predictor.set_params(**flat_hyperparams)
+        self.wrapped_sklearn_predictor.set_params(**HyperparameterSamples(flat_hyperparams).to_flat_as_dict_primitive())
         return self
 
     def get_hyperparams(self):
         if self.return_all_sklearn_default_params_on_get:
-            return self.wrapped_sklearn_predictor.get_params()
+            return HyperparameterSamples(self.wrapped_sklearn_predictor.get_params()).to_flat()
         else:
-            return SKLearnWrapper.get_hyperparams(self)
+            return BaseStep.get_hyperparams(self)
+
+    def get_wrapped_sklearn_predictor(self):
+        return self.wrapped_sklearn_predictor
 
     def __repr__(self):
         return self.__str__()
