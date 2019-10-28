@@ -1,16 +1,44 @@
-# Note: some of the code in the present code block is derived from another project licensed under The MIT License (MIT),
-# Copyright (c) 2017 Vooban Inc. For the full information, see:
-#     https://github.com/guillaume-chevalier/Hyperopt-Keras-CNN-CIFAR-100/blob/Vooban/LICENSE
+"""
+Notebook matplotlib plotting functions
+================================================
+
+Utility function for plotting in notebooks.
+
+..
+    Note: some of the code in the present code block is derived from another project licensed under The MIT License (MIT),
+    Copyright (c) 2017 Vooban Inc. For the full information, see:
+    https://github.com/guillaume-chevalier/Hyperopt-Keras-CNN-CIFAR-100/blob/Vooban/LICENSE
+
+..
+    Copyright 2019, Neuraxio Inc.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+..
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+
+"""
+import matplotlib.pyplot as plt
 
 from neuraxle.hyperparams.distributions import *
 from neuraxle.hyperparams.space import HyperparameterSpace
-import matplotlib.pyplot as plt
-import numpy as np
 
 DISCRETE_NUM_BINS = 40
 CONTINUOUS_NUM_BINS = 1000
 NUM_TRIALS = 100000
 X_DOMAIN = np.array(range(-100, 600)) / 100
+
 
 def plot_histogram(title: str, distribution: HyperparameterDistribution, num_bins=50):
     samples = np.array([
@@ -76,9 +104,3 @@ def plot_distribution_space(hyperparameter_space: HyperparameterSpace, num_bins=
         print(title + ":")
         plot_histogram(title, distribution, num_bins=num_bins)
         plot_pdf_cdf(title, distribution)
-
-if __name__ == '__main__':
-    discrete_hyperparameter_space = HyperparameterSpace({
-        "randint": RandInt(1, 4)
-    })
-    plot_distribution_space(discrete_hyperparameter_space, num_bins=DISCRETE_NUM_BINS)
