@@ -252,10 +252,8 @@ class Pipeline(BasePipeline):
         :return: transformed data container
         """
         steps_left_to_do, data_container = self._load_checkpoint(data_container, context)
-        self.setup()
 
         for step_name, step in steps_left_to_do:
-            step.setup()
             sub_context = context.push(step)
             data_container = step.handle_transform(data_container, sub_context)
 
