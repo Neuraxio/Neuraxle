@@ -23,9 +23,12 @@ Classes for containing the data that flows throught the pipeline steps.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
+import hashlib
 from typing import Any, Iterable, List
 
 from conv import convolved_1d
+
+from neuraxle.hyperparams.space import HyperparameterSamples
 
 
 class DataContainer:
@@ -87,6 +90,30 @@ class DataContainer:
         :return:
         """
         self.current_ids = current_ids
+
+    def summary_hash(self, hyperparams: HyperparameterSamples):
+        """
+        Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together into one id.
+
+        :param hyperparams: step hyperparameters to hash with current ids
+        :return: single hashed current id for all of the current ids
+        :rtype: str
+        """
+        if len(hyperparams) == 0:
+            current_hyperparameters_hash = ''
+        else:
+            hyperperams_dict = hyperparams.to_flat_as_dict_primitive()
+            current_hyperparameters_hash = hashlib.md5(
+                str.encode(str(hyperperams_dict))
+            ).hexdigest()
+
+        m = hashlib.md5()
+        for current_id in self.current_ids:
+            m.update(str.encode(current_id))
+
+        m.update(str.encode(current_hyperparameters_hash))
+
+        return m.hexdigest()
 
     def convolved_1d(self, stride, kernel_size) -> Iterable['DataContainer']:
         """
@@ -170,7 +197,7 @@ class ExpandedDataContainer(DataContainer):
         )
 
     @staticmethod
-    def create_from(data_container: DataContainer, summary_hash: str) -> 'ExpandedDataContainer':
+    def create_from(data_container: DataContainer) -> 'ExpandedDataContainer':
         """
         Create ExpandedDataContainer with the given summary hash for the single current id.
 
@@ -182,7 +209,7 @@ class ExpandedDataContainer(DataContainer):
         :rtype: ExpandedDataContainer
         """
         return ExpandedDataContainer(
-            current_ids=[summary_hash],
+            current_ids=[data_container.summary_hash()],
             data_inputs=[data_container.data_inputs],
             expected_outputs=[data_container.expected_outputs],
             old_current_ids=data_container.current_ids

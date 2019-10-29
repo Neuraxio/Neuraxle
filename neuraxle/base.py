@@ -68,28 +68,6 @@ class BaseHasher(ABC):
         """
         raise NotImplementedError()
 
-    @abstractmethod
-    def summary_hash(
-            self,
-            current_ids: List[str],
-            hyperparameters: HyperparameterSamples,
-            data_inputs: Iterable
-    ) -> str:
-        """
-        Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together into one id.
-
-        :param current_ids: current hashed ids (can be None if this function has not been called yet)
-        :type current_ids: List[str]
-        :param hyperparameters: step hyperparameters to hash with current ids
-        :type hyperparameters: HyperparameterSamples
-        :param data_inputs: data inputs to hash current ids for
-        :type data_inputs: Iterable
-        :return: single hashed current id for all of the current ids
-        :rtype: str
-        """
-        raise NotImplementedError()
-
-
 class HashlibMd5Hasher(BaseHasher):
     """
     Class to hash hyperparamters, and data input ids together using md5 algorithm from hashlib :
@@ -109,8 +87,7 @@ class HashlibMd5Hasher(BaseHasher):
     def summary_hash(
             self,
             current_ids: List[str],
-            hyperparameters: HyperparameterSamples,
-            data_inputs: Iterable
+            hyperparameters: HyperparameterSamples
     ) -> str:
         """
         Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters into one current id
@@ -120,8 +97,6 @@ class HashlibMd5Hasher(BaseHasher):
         :type current_ids: List[str]
         :param hyperparameters: hyperparameters
         :type hyperparameters: HyperparameterSamples
-        :param data_inputs: data inputs
-        :type data_inputs: Iterable
         :return:
         """
         if len(hyperparameters) == 0:
@@ -1471,7 +1446,6 @@ class NonFittableMixin:
         """
         return self
 
-
 class NonTransformableMixin:
     """
     A pipeline step that has no effect at all but to return the same data without changes.
@@ -1510,6 +1484,37 @@ class NonTransformableMixin:
         :return: the ``processed_outputs``, unchanged.
         """
         return processed_outputs
+
+class ForceHandleMixin:
+    """
+    A pipeline step that only requires the implementation of handler methods :
+        - handle_transform
+        - handle_fit_transform
+        - handle_fit
+    .. seealso::
+        :class:`BaseStep`
+    """
+
+    @abstractmethod
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
+        raise NotImplementedError('Must implement handle_fit in {0}'.format(self.name))
+
+    @abstractmethod
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+        raise NotImplementedError('Must implement handle_transform in {0}'.format(self.name))
+
+    @abstractmethod
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+        raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
+
+    def transform(self, data_inputs) -> 'ForceHandleMixin':
+        raise Exception('Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(self.name))
+
+    def fit(self, data_inputs, expected_outputs=None) -> 'ForceHandleMixin':
+        raise Exception('Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(self.name))
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceHandleMixin':
+        raise Exception('Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(self.name))
 
 
 class TruncableJoblibStepSaver(JoblibStepSaver):

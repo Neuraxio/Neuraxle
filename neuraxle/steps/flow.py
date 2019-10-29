@@ -23,13 +23,13 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-from neuraxle.base import NonFittableMixin, NonTransformableMixin, MetaStepMixin, BaseStep, ExecutionContext
+from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, \
+    ForceHandleMixin
 from neuraxle.data_container import DataContainer, ExpandedDataContainer
 
 
 class ExpandDim(
-    NonFittableMixin,
-    NonTransformableMixin,
+    ForceHandleMixin,
     MetaStepMixin,
     BaseStep
 ):
@@ -44,8 +44,7 @@ class ExpandDim(
         - The expected_outputs is a list of one element that contains the original expected outputs list.
 
     .. seealso::
-        :class:`NonFittableMixin`,
-        :class:`NonTransformableMixin`,
+        :class:`ForceHandleMixin`,
         :class:`MetaStepMixin`,
         :class:`BaseStep`
         :class:`BaseHasher`
@@ -66,7 +65,7 @@ class ExpandDim(
         :return: data container
         :rtype: DataContainer
         """
-        expanded_data_container = self._create_expaned_data_container(data_container)
+        expanded_data_container = self._create_expanded_data_container(data_container)
 
         expanded_data_container =  self.wrapped.handle_transform(
             expanded_data_container,
@@ -87,7 +86,7 @@ class ExpandDim(
         :return: data container
         :rtype: DataContainer
         """
-        expanded_data_container = self._create_expaned_data_container(data_container)
+        expanded_data_container = self._create_expanded_data_container(data_container)
 
         self.wrapped, expanded_data_container = self.wrapped.handle_fit_transform(
             expanded_data_container,
@@ -108,7 +107,7 @@ class ExpandDim(
         :return: data container
         :rtype: DataContainer
         """
-        expanded_data_container = self._create_expaned_data_container(data_container)
+        expanded_data_container = self._create_expanded_data_container(data_container)
 
         self.wrapped, expanded_data_container = self.wrapped.handle_fit(
             expanded_data_container,
@@ -117,7 +116,7 @@ class ExpandDim(
 
         return expanded_data_container.reduce_dim()
 
-    def _create_expaned_data_container(self, data_container) -> ExpandedDataContainer:
+    def _create_expanded_data_container(self, data_container: DataContainer) -> ExpandedDataContainer:
         """
         Create expanded data container.
 
@@ -126,12 +125,9 @@ class ExpandDim(
         :return: expanded data container
         :rtype: ExpandedDataContainer
         """
-        summary_hash = self.summary_hash(
-            data_container.current_ids,
-            self.hyperparams,
-            data_container.data_inputs
-        )
+        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        data_container.set_current_ids(current_ids)
 
-        expanded_data_container = ExpandedDataContainer.create_from(data_container, summary_hash)
+        expanded_data_container = ExpandedDataContainer.create_from(data_container)
 
         return expanded_data_container
