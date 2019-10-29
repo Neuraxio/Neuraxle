@@ -84,6 +84,11 @@ class ChooseOneOrManyStepsOf(Pipeline):
         for key in self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM].keys():
             if key not in self.keys():
                 raise ValueError('Invalid Choosen Step {0} in {1}'.format(key, self.name))
+
+        for key in self.keys():
+            if key not in self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM].keys():
+                self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM][key] = False
+
         return self
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
