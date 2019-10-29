@@ -91,28 +91,16 @@ class DataContainer:
         """
         self.current_ids = current_ids
 
-    def summary_hash(self, hyperparams: HyperparameterSamples):
+    def summary_hash(self):
         """
         Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together into one id.
 
-        :param hyperparams: step hyperparameters to hash with current ids
         :return: single hashed current id for all of the current ids
         :rtype: str
         """
-        if len(hyperparams) == 0:
-            current_hyperparameters_hash = ''
-        else:
-            hyperperams_dict = hyperparams.to_flat_as_dict_primitive()
-            current_hyperparameters_hash = hashlib.md5(
-                str.encode(str(hyperperams_dict))
-            ).hexdigest()
-
         m = hashlib.md5()
         for current_id in self.current_ids:
             m.update(str.encode(current_id))
-
-        m.update(str.encode(current_hyperparameters_hash))
-
         return m.hexdigest()
 
     def convolved_1d(self, stride, kernel_size) -> Iterable['DataContainer']:
@@ -203,8 +191,6 @@ class ExpandedDataContainer(DataContainer):
 
         :param data_container: data container to transform
         :type data_container: DataContainer
-        :param summary_hash: data container summary hash
-        :type summary_hash: str
         :return: expanded data container
         :rtype: ExpandedDataContainer
         """

@@ -29,7 +29,7 @@ from neuraxle.pipeline import Pipeline
 VALUE_CACHING = 'value_caching'
 from typing import List, Any
 
-from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin
+from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, ForceHandleMixin, ExecutionContext
 from neuraxle.data_container import DataContainer
 
 
@@ -217,6 +217,32 @@ class TapeCallbackFunction:
         :return: The list of names.
         """
         return self.name_tape
+
+class HandleCallbackStep(ForceHandleMixin, BaseStep):
+    def __init__(
+            self,
+            handle_fit_callback,
+            handle_transform_callback,
+            handle_fit_transform_callback
+    ):
+        ForceHandleMixin.__init__(self)
+        BaseStep.__init__(self)
+        self.handle_fit_callback = handle_fit_callback
+        self.handle_fit_transform_callback = handle_fit_transform_callback
+        self.handle_transform_callback = handle_transform_callback
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
+        self.handle_fit_callback((data_container, context))
+        return self, data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+        self.handle_transform_callback((data_container, context))
+        return data_container
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+        self.handle_fit_transform_callback((data_container, context))
+        return self, data_container
+
 
 class Sleep(NonFittableMixin, BaseStep):
     def __init__(self, sleep_time=0.1, hyperparams=None, hyperparams_space=None):

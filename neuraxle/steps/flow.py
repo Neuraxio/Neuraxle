@@ -54,7 +54,7 @@ class ExpandDim(
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
         """
         Send expanded data container to the wrapped handle_transform method, and returned the reduced transformed data container (back to it's orginal shape).
 
@@ -74,7 +74,7 @@ class ExpandDim(
 
         return expanded_data_container.reduce_dim()
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
         """
         Send expanded data container to the wrapped handle_fit_transform method,
         and returned the reduced transformed data container (back to it's orginal shape).
@@ -93,9 +93,9 @@ class ExpandDim(
             context.push(self.wrapped)
         )
 
-        return expanded_data_container.reduce_dim()
+        return self, expanded_data_container.reduce_dim()
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
         """
         Send expanded data container to the wrapped handle_fit method,
         and returned the reduced transformed data container (back to it's orginal shape).
@@ -114,7 +114,7 @@ class ExpandDim(
             context.push(self.wrapped)
         )
 
-        return expanded_data_container.reduce_dim()
+        return self, expanded_data_container.reduce_dim()
 
     def _create_expanded_data_container(self, data_container: DataContainer) -> ExpandedDataContainer:
         """

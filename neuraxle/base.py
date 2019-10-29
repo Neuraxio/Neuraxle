@@ -1496,15 +1496,15 @@ class ForceHandleMixin:
     """
 
     @abstractmethod
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         raise NotImplementedError('Must implement handle_fit in {0}'.format(self.name))
 
     @abstractmethod
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         raise NotImplementedError('Must implement handle_transform in {0}'.format(self.name))
 
     @abstractmethod
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
 
     def transform(self, data_inputs) -> 'ForceHandleMixin':
