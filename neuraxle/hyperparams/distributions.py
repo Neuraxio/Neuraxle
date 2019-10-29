@@ -37,11 +37,12 @@ from scipy.stats import truncnorm
 class HyperparameterDistribution(metaclass=ABCMeta):
     """Base class for other hyperparameter distributions."""
 
-    def __init__(self):
+    def __init__(self, null_default_value):
         """
         Create a HyperparameterDistribution. This method should still be called with super if it gets overriden.
         """
         self.first_id = id(self)
+        self.null_default_value = null_default_value
 
     @abstractmethod
     def rvs(self):
@@ -199,6 +200,9 @@ class FixedHyperparameter(HyperparameterDistribution):
 class Boolean(HyperparameterDistribution):
     """Get a random boolean hyperparameter."""
 
+    def __init__(self, default_value=False):
+        HyperparameterDistribution.__init__(self, default_value)
+
     def rvs(self):
         """
         Get a random True or False.
@@ -250,7 +254,7 @@ class Choice(HyperparameterDistribution):
 
         :param choice_list: a list of values to sample from.
         """
-        HyperparameterDistribution.__init__(self)
+        HyperparameterDistribution.__init__(self, None)
         self.choice_list = choice_list
 
     def rvs(self):
@@ -338,7 +342,7 @@ class PriorityChoice(HyperparameterDistribution):
 
         :param choice_list: a list of values to sample from. First placed, first kept when space is narrowed.
         """
-        HyperparameterDistribution.__init__(self)
+        HyperparameterDistribution.__init__(self, None)
         self.choice_list = choice_list
 
     def rvs(self):
@@ -432,7 +436,7 @@ class WrappedHyperparameterDistributions(HyperparameterDistribution):
         :param hd: the other HyperparameterDistribution to wrap.
         :param hds: the others HyperparameterDistribution to wrap.
         """
-        HyperparameterDistribution.__init__(self)
+        HyperparameterDistribution.__init__(self, None)
         self.hd: HyperparameterDistribution = hd
         self.hds: List[HyperparameterDistribution] = hds
 
@@ -557,7 +561,7 @@ class RandInt(HyperparameterDistribution):
 class Uniform(HyperparameterDistribution):
     """Get a uniform distribution."""
 
-    def __init__(self, min_included: float, max_included: float):
+    def __init__(self, min_included: float, max_included: float, default_value=None):
         """
         Create a random uniform distribution.
         A random float between the two values somehow inclusively will be returned.
@@ -565,7 +569,11 @@ class Uniform(HyperparameterDistribution):
         :param min_included: minimum integer, included.
         :param max_included: maximum integer, might be included - for more info, see https://docs.python.org/2/library/random.html#random.uniform
         """
-        HyperparameterDistribution.__init__(self)
+        if default_value is None:
+            HyperparameterDistribution.__init__(self, min_included)
+        else:
+            HyperparameterDistribution.__init__(self, default_value)
+
         self.min_included: float = min_included
         self.max_included: float = max_included
 
@@ -634,7 +642,7 @@ class LogUniform(HyperparameterDistribution):
 
     For example, this is good for neural networks' learning rates: that vary exponentially."""
 
-    def __init__(self, min_included: float, max_included: float):
+    def __init__(self, min_included: float, max_included: float, default_value=None):
         """
         Create a quantized random log uniform distribution.
         A random float between the two values inclusively will be returned.
@@ -642,7 +650,13 @@ class LogUniform(HyperparameterDistribution):
         :param min_included: minimum integer, should be somehow included.
         :param max_included: maximum integer, should be somehow included.
         """
-        HyperparameterDistribution.__init__(self)
+        if default_value is None:
+            HyperparameterDistribution.__init__(self, math.log2(min_included))
+        else:
+            HyperparameterDistribution.__init__(self, math.log2(default_value))
+
+        self.min_included: float = min_included
+        self.max_included: float = max_included
         self.log2_min_included = math.log2(min_included)
         self.log2_max_included = math.log2(max_included)
 
@@ -707,7 +721,7 @@ class Normal(HyperparameterDistribution):
     """Get a normal distribution."""
 
     def __init__(self, mean: float, std: float,
-                 hard_clip_min: float = None, hard_clip_max: float = None):
+                 hard_clip_min: float = None, hard_clip_max: float = None, default_value=None):
         """
         Create a normal distribution from mean and standard deviation.
 
@@ -716,7 +730,11 @@ class Normal(HyperparameterDistribution):
         :param hard_clip_min: if not none, rvs will return max(result, hard_clip_min).
         :param hard_clip_max: if not none, rvs will return min(result, hard_clip_min).
         """
-        HyperparameterDistribution.__init__(self)
+        if default_value is None:
+            HyperparameterDistribution.__init__(self, hard_clip_min)
+        else:
+            HyperparameterDistribution.__init__(self, default_value)
+
         self.mean = mean
         self.std = std
         self.hard_clip_min = hard_clip_min
@@ -826,7 +844,7 @@ class LogNormal(HyperparameterDistribution):
     """Get a LogNormal distribution."""
 
     def __init__(self, log2_space_mean: float, log2_space_std: float,
-                 hard_clip_min: float = None, hard_clip_max: float = None):
+                 hard_clip_min: float = None, hard_clip_max: float = None, default_value=None):
         """
         Create a LogNormal distribution. 
 
@@ -835,7 +853,7 @@ class LogNormal(HyperparameterDistribution):
         :param hard_clip_min: if not none, rvs will return max(result, hard_clip_min). This value is not checked in logspace (so it is checked after the exp).
         :param hard_clip_max: if not none, rvs will return min(result, hard_clip_min). This value is not checked in logspace (so it is checked after the exp).
         """
-        HyperparameterDistribution.__init__(self)
+        HyperparameterDistribution.__init__(self, default_value)
         self.log2_space_mean = log2_space_mean
         self.log2_space_std = log2_space_std
         self.hard_clip_min = hard_clip_min

@@ -61,6 +61,7 @@ class NumpyConcatenateOnCustomAxis(NonFittableMixin, BaseStep):
     def _concat(self, data_inputs):
         return np.concatenate(data_inputs, axis=self.axis)
 
+
 class NumpyConcatenateInnerFeatures(NumpyConcatenateOnCustomAxis):
     """
     Numpy concetenation step where the concatenation is performed along `axis=-1`.
@@ -73,6 +74,7 @@ class NumpyConcatenateInnerFeatures(NumpyConcatenateOnCustomAxis):
         """
         # The concatenate is on the inner features so axis = -1.
         NumpyConcatenateOnCustomAxis.__init__(self, axis=-1)
+
 
 class NumpyConcatenateOuterBatch(NumpyConcatenateOnCustomAxis):
     """
@@ -122,6 +124,7 @@ class NumpyShapePrinter(NonFittableMixin, BaseStep):
 
     def _print_one(self, data_input):
         print(self.__class__.__name__ + " (one):", data_input.shape, self.custom_message)
+
 
 class MultiplyByN(NonFittableMixin, BaseStep):
     def __init__(self, multiply_by=1):

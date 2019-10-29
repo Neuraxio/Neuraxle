@@ -1515,6 +1515,15 @@ class MetaStepMixin:
         self.wrapped: BaseStep = step
         return self
 
+    def get_step(self, step: BaseStep) -> BaseStep:
+        """
+        Get wrapped step
+
+        :return: self
+        :rtype: BaseStep
+        """
+        return self.wrapped
+
     def get_best_model(self) -> BaseStep:
         return self.best_model
 
@@ -2024,17 +2033,22 @@ class TruncableSteps(BaseStep, ABC):
         else:
             return BaseStep.mutate(self, new_method, method_to_assign_to, warn)
 
-    def _step_name_to_index(self, step_name):
-        for index, (current_step_name, step) in self.steps_as_tuple:
-            if current_step_name == step_name:
-                return index
-
     def _step_index_to_name(self, step_index):
         if step_index == len(self.items()):
             return None
 
         name, _ = self.steps_as_tuple[step_index]
         return name
+
+    def __setitem__(self, key: str, new_step: BaseStep):
+        index = 0
+        for step_index, (current_step_name, step) in enumerate(self.steps_as_tuple):
+            if current_step_name == key:
+                index = step_index
+
+        new_step.set_name(key)
+        self.steps[index] = new_step
+        self.steps_as_tuple[index] = (key, new_step)
 
     def __getitem__(self, key: Union[slice, int, str]):
         """
