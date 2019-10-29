@@ -120,12 +120,12 @@ def create_test_case_invalid_step_not_choosen():
         callbacks=[a_callback, b_callback],
         expected_callbacks_data=[DATA_INPUTS, DATA_INPUTS],
         hyperparams={
-            'ChooseOneOrManyStepsOf__c': False,
-            'ChooseOneOrManyStepsOf__b__b': False
+            'ChooseOneOrManyStepsOf__choice__c': False,
+            'ChooseOneOrManyStepsOf__choice__b': False
         },
         hyperparams_space={
-            'ChooseOneOrManyStepsOf__a__a': Boolean(),
-            'ChooseOneOrManyStepsOf__b__b': Boolean()
+            'ChooseOneOrManyStepsOf__choice__a': Boolean(),
+            'ChooseOneOrManyStepsOf__choice__b': Boolean()
         },
         expected_processed_outputs=np.array(range(10))
     )

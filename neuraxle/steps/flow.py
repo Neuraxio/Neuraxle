@@ -76,6 +76,16 @@ CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM = 'choice'
 
 
 class ChooseOneOrManyStepsOf(Pipeline):
+    def __init__(self, steps, hyperparams=None):
+        Pipeline.__init__(self, steps)
+
+        if hyperparams is None:
+            hyperparams = HyperparameterSamples({
+                'choice': {}
+            })
+
+        self.set_hyperparams(hyperparams)
+
     def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
         super().set_hyperparams(hyperparams=hyperparams)
         if CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM not in self.hyperparams:
@@ -89,25 +99,9 @@ class ChooseOneOrManyStepsOf(Pipeline):
             if key not in self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM].keys():
                 self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM][key] = False
 
+        self.nullify_steps_that_are_not_chosen()
+
         return self
-
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
-        self.nullify_steps_that_are_not_chosen()
-
-        new_self, data_container = super().handle_fit(data_container, context)
-        return new_self, data_container
-
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        self.nullify_steps_that_are_not_chosen()
-
-        data_container = super().handle_transform(data_container, context)
-        return data_container
-
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
-        self.nullify_steps_that_are_not_chosen()
-
-        new_self, data_container = super().handle_fit_transform(data_container, context)
-        return new_self, data_container
 
     def nullify_steps_that_are_not_chosen(self):
         for step_name, is_chosen in self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM].items():

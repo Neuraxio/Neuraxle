@@ -1515,7 +1515,7 @@ class MetaStepMixin:
         self.wrapped: BaseStep = step
         return self
 
-    def get_step(self, step: BaseStep) -> BaseStep:
+    def get_step(self) -> BaseStep:
         """
         Get wrapped step
 
