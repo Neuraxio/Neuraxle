@@ -190,9 +190,12 @@ class DataContainer:
         .. seealso::
             `<https://github.com/guillaume-chevalier/python-conv-lib>`_
         """
-        conv_current_ids = convolved_1d(stride=stride, iterable=self.current_ids, kernel_size=kernel_size)
-        conv_data_inputs = convolved_1d(stride=stride, iterable=self.data_inputs, kernel_size=kernel_size)
-        conv_expected_outputs = convolved_1d(stride=stride, iterable=self.expected_outputs, kernel_size=kernel_size)
+        conv_current_ids = convolved_1d(stride=stride, iterable=self.current_ids, kernel_size=kernel_size,
+                                        include_incomplete_pass=True)
+        conv_data_inputs = convolved_1d(stride=stride, iterable=self.data_inputs, kernel_size=kernel_size,
+                                        include_incomplete_pass=True)
+        conv_expected_outputs = convolved_1d(stride=stride, iterable=self.expected_outputs, kernel_size=kernel_size,
+                                             include_incomplete_pass=True)
 
         for current_ids, data_inputs, expected_outputs in zip(conv_current_ids, conv_data_inputs,
                                                               conv_expected_outputs):
@@ -1314,7 +1317,29 @@ class BaseStep(ABC):
         return self.__repr__()
 
 
-class MetaStepMixin:
+class ResumableStepMixin:
+    """
+    Mixin to add resumable function to a step, or a class that can be resumed, for example a checkpoint on disk.
+    """
+
+    @abstractmethod
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
+        """
+        Returns True if a step can be resumed with the given the data container, and execution context.
+        See Checkpoint class documentation for more details on how a resumable checkpoint works.
+
+        :param data_container: data container to resume from
+        :param context: execution context to resume from
+        :return: if we can resume
+        :rtype: bool
+        """
+        raise NotImplementedError()
+
+    def __str__(self):
+        return self.__repr__()
+
+
+class MetaStepMixin(ResumableStepMixin):
     """
     A class to represent a step that wraps another step. It can be used for many things.
 
@@ -1371,6 +1396,7 @@ class MetaStepMixin:
             self,
             wrapped: BaseStep = None
     ):
+        ResumableStepMixin.__init__(self)
         self.wrapped: BaseStep = wrapped
 
     def setup(self) -> BaseStep:
@@ -1514,6 +1540,12 @@ class MetaStepMixin:
     def get_best_model(self) -> BaseStep:
         return self.best_model
 
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
+        if isinstance(self.wrapped, ResumableStepMixin):
+            wrapped_context = context.push(self.wrapped)
+            return self.wrapped.should_resume(data_container, wrapped_context)
+        return False
+
     def __repr__(self):
         output = self.__class__.__name__ + "(\n\twrapped=" + repr(
             self.wrapped) + "," + "\n\thyperparameters=" + pprint.pformat(
@@ -1583,6 +1615,45 @@ class NonTransformableMixin:
         :return: the ``processed_outputs``, unchanged.
         """
         return processed_outputs
+
+
+class ForceHandleMixin:
+    """
+    A pipeline step that only requires the implementation of handler methods :
+        - handle_transform
+        - handle_fit_transform
+        - handle_fit
+    .. seealso::
+        :class:`BaseStep`
+    """
+
+    @abstractmethod
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        raise NotImplementedError('Must implement handle_fit in {0}'.format(self.name))
+
+    @abstractmethod
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        raise NotImplementedError('Must implement handle_transform in {0}'.format(self.name))
+
+    @abstractmethod
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseStep', DataContainer):
+        raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
+
+    def transform(self, data_inputs) -> 'ForceHandleMixin':
+        raise Exception(
+            'Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(
+                self.name))
+
+    def fit(self, data_inputs, expected_outputs=None) -> 'ForceHandleMixin':
+        raise Exception(
+            'Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(
+                self.name))
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceHandleMixin':
+        raise Exception(
+            'Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(
+                self.name))
 
 
 class TruncableJoblibStepSaver(JoblibStepSaver):
@@ -2314,28 +2385,6 @@ class TruncableSteps(BaseStep, ABC):
                  + "\n)"
 
         return output
-
-    def __str__(self):
-        return self.__repr__()
-
-
-class ResumableStepMixin:
-    """
-    Mixin to add resumable function to a step, or a class that can be resumed, for example a checkpoint on disk.
-    """
-
-    @abstractmethod
-    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
-        """
-        Returns True if a step can be resumed with the given the data container, and execution context.
-        See Checkpoint class documentation for more details on how a resumable checkpoint works.
-
-        :param data_container: data container to resume from
-        :param context: execution context to resume from
-        :return: if we can resume
-        :rtype: bool
-        """
-        raise NotImplementedError()
 
     def __str__(self):
         return self.__repr__()

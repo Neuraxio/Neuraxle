@@ -49,6 +49,8 @@ class NonTransformableStep(NonTransformableMixin, BaseStep):
 
     def fit(self, data_inputs, expected_outputs=None) -> 'NonTransformableStep':
         # insert your fit code here
+        print('data_inputs: {0}'.format(data_inputs))
+        print('expected_outputs: {0}'.format(expected_outputs))
         return self
 
 
@@ -61,6 +63,7 @@ class NonFittableStep(NonFittableMixin, BaseStep):
 
     def transform(self, data_inputs):
         # insert your transform code here
+        print('data_inputs: {0}'.format(data_inputs))
         return self, data_inputs
 
     def inverse_transform(self, processed_outputs):

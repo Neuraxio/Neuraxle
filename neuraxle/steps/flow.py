@@ -1,24 +1,15 @@
 from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, DataContainer, NonTransformableMixin, \
-    ExecutionMode, NonFittableMixin, ResumableStepMixin
-
-
-class ResumableMetaStepMixin(ResumableStepMixin):
-    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
-        if isinstance(self.wrapped, ResumableStepMixin):
-            wrapped_context = context.push(self.wrapped)
-            return self.wrapped.should_resume(data_container, wrapped_context)
-        return False
+    ExecutionMode, NonFittableMixin, ForceHandleMixin
 
 
 class TransformOnlyWrapper(
     NonTransformableMixin,
     NonFittableMixin,
     MetaStepMixin,
-    ResumableMetaStepMixin,
     BaseStep
 ):
     """
-    A wrapper step that only executes in the transform execution mode.
+    A wrapper step that makes its wrapped step only executes in the transform execution mode.
 
     .. seealso:: :class:`ExecutionMode`,
         :class:`neuraxle.base.DataContainer`,
@@ -32,7 +23,6 @@ class TransformOnlyWrapper(
         NonTransformableMixin.__init__(self)
         NonFittableMixin.__init__(self)
         MetaStepMixin.__init__(self, wrapped=wrapped)
-        ResumableMetaStepMixin.__init__(self)
         BaseStep.__init__(self)
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -45,11 +35,10 @@ class FitTransformOnlyWrapper(
     NonTransformableMixin,
     NonFittableMixin,
     MetaStepMixin,
-    ResumableMetaStepMixin,
     BaseStep
 ):
     """
-    A wrapper step that only executes in the fit_transform execution mode.
+    A wrapper step that makes its wrapped step only executes in the fit_transform execution mode.
 
     .. seealso::
         :class:`neuraxle.base.ExecutionMode`,
@@ -64,7 +53,6 @@ class FitTransformOnlyWrapper(
         NonTransformableMixin.__init__(self)
         NonFittableMixin.__init__(self)
         MetaStepMixin.__init__(self, wrapped=wrapped)
-        ResumableMetaStepMixin.__init__(self)
         BaseStep.__init__(self)
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
@@ -76,30 +64,29 @@ class FitTransformOnlyWrapper(
 
 
 class FitOnlyWrapper(
-    NonTransformableMixin,
-    NonFittableMixin,
+    ForceHandleMixin,
     MetaStepMixin,
-    ResumableMetaStepMixin,
     BaseStep
 ):
     """
-    A wrapper step that only executes in the fit execution mode.
+    A wrapper step that makes its wrapped step only executes in the fit execution mode.
 
     .. seealso::
         :class:`neuraxle.base.ExecutionMode`,
         :class:`neuraxle.base.DataContainer`,
-        :class:`neuraxle.base.NonTransformableMixin`,
-        :class:`neuraxle.base.NonFittableMixin`,
+        :class:`neuraxle.base.ForceHandleMixin`,
         :class:`neuraxle.base.MetaStepMixin`,
         :class:`neuraxle.base.BaseStep`
     """
 
     def __init__(self, wrapped: BaseStep):
-        NonTransformableMixin.__init__(self)
-        NonFittableMixin.__init__(self)
+        ForceHandleMixin.__init__(self)
         MetaStepMixin.__init__(self, wrapped=wrapped)
-        ResumableMetaStepMixin.__init__(self)
         BaseStep.__init__(self)
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        # fit only wrapper: nothing to do in transform
+        return data_container
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
         if context.execution_mode == ExecutionMode.FIT:

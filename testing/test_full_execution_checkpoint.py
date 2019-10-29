@@ -18,7 +18,6 @@ FIT_TRANSFORM_ONLY_WRAPPER_EO_NAME = 'FitTransformOnlyWrapperEo'
 TRANSFORM_ONLY_WRAPPER_EO_NAME = 'TransformOnlyWrapperEo'
 FIT_ONLY_WRAPPER_EO_NAME = 'FitOnlyWrapperEo'
 
-
 def test_resumable_pipeline_with_checkpoint_fit_transform_should_save_data_inputs(tmpdir):
     test_case = create_full_execution_checkpoint_test_case(tmpdir)
 
