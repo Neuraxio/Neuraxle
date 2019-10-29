@@ -33,6 +33,7 @@ import math
 import numpy as np
 from scipy.stats import truncnorm
 
+
 class HyperparameterDistribution(metaclass=ABCMeta):
     """Base class for other hyperparameter distributions."""
 
@@ -50,6 +51,9 @@ class HyperparameterDistribution(metaclass=ABCMeta):
         :return: The randomly sampled value.
         """
         pass
+
+    def nullify(self):
+        return self.null_default_value
 
     @abstractmethod
     def pdf(self, x) -> float:
@@ -170,7 +174,6 @@ class FixedHyperparameter(HyperparameterDistribution):
         return 0.
 
 
-
 # TODO: Mixin this or something:
 # class DelayedAdditionOf(MalleableDistribution):
 #     """A HyperparameterDistribution (MalleableDistribution mixin) that """
@@ -232,6 +235,7 @@ class Boolean(HyperparameterDistribution):
 
         return 0.
 
+
 class Choice(HyperparameterDistribution):
     """Get a random value from a choice list of possible value for this hyperparameter.
 
@@ -270,7 +274,7 @@ class Choice(HyperparameterDistribution):
                 "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
         else:
             if x_in_choice:
-                return 1/(len(self.choice_list))
+                return 1 / (len(self.choice_list))
 
         return 0.
 
@@ -284,7 +288,8 @@ class Choice(HyperparameterDistribution):
         try:
             index = self.choice_list.index(x)
         except ValueError:
-            raise ValueError("Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
+            raise ValueError(
+                "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
         except (NotImplementedError, NotImplemented):
             raise ValueError("A correct method for __eq__ should be defined for all item in the list.")
         except AttributeError:
@@ -357,10 +362,9 @@ class PriorityChoice(HyperparameterDistribution):
                 "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
         else:
             if x_in_choice:
-                return 1/(len(self.choice_list))
+                return 1 / (len(self.choice_list))
 
         return 0.
-
 
     def cdf(self, x) -> float:
         """
@@ -372,7 +376,8 @@ class PriorityChoice(HyperparameterDistribution):
         try:
             index = self.choice_list.index(x)
         except ValueError:
-            raise ValueError("Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
+            raise ValueError(
+                "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
         except (NotImplementedError, NotImplemented):
             raise ValueError("A correct method for __eq__ should be defined for all item in the list.")
         except AttributeError:
@@ -449,7 +454,6 @@ class Quantized(WrappedHyperparameterDistributions):
         """
         return round(self.hd.rvs())
 
-
     def pdf(self, x) -> float:
         """
         Calculate the Quantized probability mass function value at position `x` of a continuous distribution.
@@ -487,7 +491,7 @@ class Quantized(WrappedHyperparameterDistributions):
 class RandInt(HyperparameterDistribution):
     """Get a random integer within a range"""
 
-    def __init__(self, min_included: int, max_included: int):
+    def __init__(self, min_included: int, max_included: int, null_default_value=0):
         """
         Create a quantized random uniform distribution.
         A random integer between the two values inclusively will be returned.
@@ -495,7 +499,7 @@ class RandInt(HyperparameterDistribution):
         :param min_included: minimum integer, included.
         :param max_included: maximum integer, included.
         """
-        HyperparameterDistribution.__init__(self)
+        HyperparameterDistribution.__init__(self, null_default_value)
         self.min_included = min_included
         self.max_included = max_included
 
@@ -514,7 +518,7 @@ class RandInt(HyperparameterDistribution):
         :return: value of the probability mass function.
         """
 
-        possible_values = set(range(self.min_included, self.max_included+1))
+        possible_values = set(range(self.min_included, self.max_included + 1))
         if (isinstance(x, int) or x.is_integer()) and x in possible_values:
             return 1 / (self.max_included - self.min_included + 1)
 
