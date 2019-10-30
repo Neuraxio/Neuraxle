@@ -1519,7 +1519,7 @@ class MetaStepMixin:
         """
         Get wrapped step
 
-        :return: self
+        :return: self.wrapped
         :rtype: BaseStep
         """
         return self.wrapped
@@ -2040,15 +2040,26 @@ class TruncableSteps(BaseStep, ABC):
         name, _ = self.steps_as_tuple[step_index]
         return name
 
-    def __setitem__(self, key: str, new_step: BaseStep):
-        index = 0
-        for step_index, (current_step_name, step) in enumerate(self.steps_as_tuple):
-            if current_step_name == key:
-                index = step_index
+    def __setitem__(self, key: Union[slice, int, str], new_step: BaseStep):
+        """
+        Set one step with a key, and a value.
 
-        new_step.set_name(key)
-        self.steps[index] = new_step
-        self.steps_as_tuple[index] = (key, new_step)
+        :param key: slice, index, or step name
+        :type key: Union[slice, int, str]
+        :param new_step: step
+        :type new_step: BaseStep
+        """
+        if isinstance(key, str):
+            index = 0
+            for step_index, (current_step_name, step) in enumerate(self.steps_as_tuple):
+                if current_step_name == key:
+                    index = step_index
+
+            new_step.set_name(key)
+            self.steps[index] = new_step
+            self.steps_as_tuple[index] = (key, new_step)
+        else:
+            raise ValueError('type {0} not supported yet in TruncableSteps.__setitem__, please implement it if you need it'.format(type(key)))
 
     def __getitem__(self, key: Union[slice, int, str]):
         """
