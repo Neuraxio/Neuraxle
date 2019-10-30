@@ -65,12 +65,9 @@ class Pipeline(BasePipeline):
         :param data_inputs: the data input to transform
         :return: transformed data inputs
         """
-        current_ids = self.hash(
-            current_ids=None,
-            hyperparameters=self.hyperparams,
-            data_inputs=data_inputs
-        )
-        data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
+        data_container = DataContainer(current_ids=None, data_inputs=data_inputs)
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
 
         context = ExecutionContext.create_from_root(self, ExecutionMode.TRANSFORM, self.cache_folder)
 
@@ -86,16 +83,13 @@ class Pipeline(BasePipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        current_ids = self.hash(
-            current_ids=None,
-            hyperparameters=self.hyperparams,
-            data_inputs=data_inputs
-        )
         data_container = DataContainer(
-            current_ids=current_ids,
+            current_ids=None,
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         )
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
 
         context = ExecutionContext.create_from_root(self, ExecutionMode.FIT_TRANSFORM, self.cache_folder)
 
@@ -111,16 +105,13 @@ class Pipeline(BasePipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        current_ids = self.hash(
-            current_ids=None,
-            hyperparameters=self.hyperparams,
-            data_inputs=data_inputs
-        )
         data_container = DataContainer(
-            current_ids=current_ids,
+            current_ids=None,
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         )
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
 
         context = ExecutionContext.create_from_root(self, ExecutionMode.FIT, self.cache_folder)
 
@@ -150,7 +141,7 @@ class Pipeline(BasePipeline):
         """
         new_self, data_container = self._fit_core(data_container, context)
 
-        ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        ids = self.hash(data_container)
         data_container.set_current_ids(ids)
 
         return new_self, data_container
@@ -166,7 +157,7 @@ class Pipeline(BasePipeline):
         """
         new_self, data_container = self._fit_transform_core(data_container, context)
 
-        ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        ids = self.hash(data_container)
         data_container.set_current_ids(ids)
 
         return new_self, data_container
@@ -181,7 +172,7 @@ class Pipeline(BasePipeline):
         """
         data_container = self._transform_core(data_container, context)
 
-        ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        ids = self.hash(data_container)
         data_container.set_current_ids(ids)
 
         return data_container
@@ -337,12 +328,7 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
                 index_latest_checkpoint = index
                 starting_step_data_container = copy(current_data_container)
 
-            current_ids = step.hash(
-                current_ids=current_data_container.current_ids,
-                hyperparameters=step.hyperparams,
-                data_inputs=current_data_container.data_inputs
-            )
-
+            current_ids = step.hash(current_data_container)
             current_data_container.set_current_ids(current_ids)
 
         return index_latest_checkpoint, starting_step_data_container
@@ -377,8 +363,10 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         :param data_inputs: the data input to transform
         :return: transformed data inputs
         """
-        current_ids = self._create_current_ids(data_inputs)
-        data_container = DataContainer(current_ids=current_ids, data_inputs=data_inputs)
+        data_container = DataContainer(current_ids=None, data_inputs=data_inputs)
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
+
         context = ExecutionContext.create_from_root(self, ExecutionMode.TRANSFORM, self.cache_folder)
         data_container = self.handle_transform(data_container, context)
 
@@ -390,24 +378,14 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        current_ids = self._create_current_ids(data_inputs)
-        data_container = DataContainer(
-            current_ids=current_ids,
-            data_inputs=data_inputs,
-            expected_outputs=expected_outputs
-        )
+        data_container = DataContainer(current_ids=None, data_inputs=data_inputs, expected_outputs=expected_outputs)
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
+
         context = ExecutionContext.create_from_root(self, ExecutionMode.FIT_TRANSFORM, self.cache_folder)
         new_self, data_container = self.handle_fit_transform(data_container, context)
 
         return new_self, data_container.data_inputs
-
-    def _create_current_ids(self, data_inputs):
-        current_ids = self.hash(
-            current_ids=None,
-            hyperparameters=self.hyperparams,
-            data_inputs=data_inputs
-        )
-        return current_ids
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -426,7 +404,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
                 data_container=data_container,
                 context=context
             )
-            current_ids = self.hash(data_container.current_ids, self.hyperparams)
+            current_ids = self.hash(data_container)
             data_container.set_current_ids(current_ids)
 
         return data_container
@@ -453,7 +431,7 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
                 data_container=data_container,
                 context=sub_context
             )
-            current_ids = self.hash(data_container.current_ids, self.hyperparams)
+            current_ids = self.hash(data_container)
             data_container.set_current_ids(current_ids)
 
             new_self = self[:index_start] + sub_pipeline

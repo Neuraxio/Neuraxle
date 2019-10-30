@@ -18,6 +18,10 @@ This is the core of Neuraxle. Most pipeline steps derive (inherit) from those cl
     See the License for the specific language governing permissions and
     limitations under the License.
 
+..
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+
 """
 
 import hashlib
@@ -515,22 +519,22 @@ class BaseStep(ABC):
         self.is_invalidated = True
         self.is_train: bool = True
 
-    def hash(self, current_ids, hyperparameters, data_inputs: Any = None) -> List[str]:
+    def hash(self, data_container: DataContainer) -> List[str]:
         """
         Hash data inputs, current ids, and hyperparameters together using self.hashers.
         This is used to create unique ids for the data checkpoints.
 
-        :param current_ids: current ids to rehash
-        :param hyperparameters: hyperparameters to hash current ids with
-        :param data_inputs: data inputs to create id for
+        :param data_container: data container
+        :type data_container: DataContainer
         :return: hashed current ids
         :rtype: List[str]
 
         .. seealso::
             :class:`neuraxle.checkpoints.Checkpoint`
         """
+        current_ids = data_container.current_ids
         for h in self.hashers:
-            current_ids = h.hash(current_ids, hyperparameters, data_inputs)
+            current_ids = h.hash(current_ids, self.hyperparams, data_container.data_inputs)
 
         return current_ids
 
@@ -762,7 +766,7 @@ class BaseStep(ABC):
 
         new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
 
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
         return new_self, data_container
@@ -782,7 +786,7 @@ class BaseStep(ABC):
         new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
         data_container.set_data_inputs(out)
 
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, out)
+        current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
         return new_self, data_container
@@ -799,7 +803,7 @@ class BaseStep(ABC):
         out = self.transform(data_container.data_inputs)
         data_container.set_data_inputs(out)
 
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, out)
+        current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
         return data_container

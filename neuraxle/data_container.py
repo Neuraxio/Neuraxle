@@ -17,8 +17,8 @@ Classes for containing the data that flows throught the pipeline steps.
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
     See the License for the specific language governing permissions and
     limitations under the License.
-..
 
+..
     Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
@@ -27,8 +27,6 @@ import hashlib
 from typing import Any, Iterable, List
 
 from conv import convolved_1d
-
-from neuraxle.hyperparams.space import HyperparameterSamples
 
 
 class DataContainer:
@@ -57,7 +55,7 @@ class DataContainer:
         self.current_ids = current_ids
         self.data_inputs = data_inputs
         if expected_outputs is None:
-            self.expected_outputs = [None] * len(current_ids)
+            self.expected_outputs = [None] * len(data_inputs)
         else:
             self.expected_outputs = expected_outputs
 

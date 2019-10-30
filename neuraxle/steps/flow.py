@@ -125,7 +125,7 @@ class ExpandDim(
         :return: expanded data container
         :rtype: ExpandedDataContainer
         """
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
         expanded_data_container = ExpandedDataContainer.create_from(data_container)
