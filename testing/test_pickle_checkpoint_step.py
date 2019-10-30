@@ -21,6 +21,7 @@ Tests for pickle checkpoint steps
 
 import os
 import pickle
+from typing import Any
 
 import numpy as np
 from py._path.local import LocalPath
@@ -32,7 +33,7 @@ from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import ResumablePipeline
 from neuraxle.steps.misc import TapeCallbackFunction, TransformCallbackStep, BaseCallbackStep
 from testing.steps.test_output_transformer_wrapper import MultiplyBy2OutputTransformer
-from testing.test_step_saving import PIPELINE_2, CHECKPOINT
+from testing.test_checkpoints import FULL_DATA_CHECKPOINTER_WRAPPER
 
 EXPECTED_TAPE_AFTER_CHECKPOINT = ["2", "3"]
 
@@ -41,10 +42,19 @@ expected_outputs = np.array([2, 3])
 expected_rehashed_data_inputs = ['44f9d6dd8b6ccae571ca04525c3eaffa', '898a67b2f5eeae6393ca4b3162ba8e3d']
 
 
-class DifferentCallbackStep(NonFittableMixin, BaseCallbackStep):
+class DifferentCallbackStep(BaseCallbackStep):
+    def fit(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+        self._callback(data_inputs)
+        return self
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+        self._callback(data_inputs)
+        return self, data_inputs
+
     def transform(self, data_inputs):
         self._callback(data_inputs)
         return data_inputs
+
 
 def create_pipeline(tmpdir, pickle_checkpoint_step, tape, hyperparameters=None, different=False, save_pipeline=True):
     if different:
@@ -81,10 +91,18 @@ def test_when_no_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
     actual_tape = tape.get_name_tape()
     assert np.array_equal(actual_data_inputs, data_inputs)
     assert actual_tape == ["1", "2", "3"]
-    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', 'di', '0.pickle'))
-    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', 'di', '1.pickle'))
-    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', 'eo', '0.pickle'))
-    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', 'eo', '1.pickle'))
+    assert os.path.exists(
+        os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', FULL_DATA_CHECKPOINTER_WRAPPER, 'di',
+                     '0.pickle'))
+    assert os.path.exists(
+        os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', FULL_DATA_CHECKPOINTER_WRAPPER, 'di',
+                     '1.pickle'))
+    assert os.path.exists(
+        os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', FULL_DATA_CHECKPOINTER_WRAPPER, 'eo',
+                     '0.pickle'))
+    assert os.path.exists(
+        os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', FULL_DATA_CHECKPOINTER_WRAPPER, 'eo',
+                     '1.pickle'))
 
 
 def test_when_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
@@ -98,11 +116,18 @@ def test_when_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
     assert np.array_equal(actual_data_inputs, data_inputs)
     assert actual_tape == ["1", "2", "3"]
 
-
-    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', 'di', '44f9d6dd8b6ccae571ca04525c3eaffa.pickle'))
-    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', 'di', '898a67b2f5eeae6393ca4b3162ba8e3d.pickle'))
-    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', 'eo', '44f9d6dd8b6ccae571ca04525c3eaffa.pickle'))
-    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', 'eo', '898a67b2f5eeae6393ca4b3162ba8e3d.pickle'))
+    assert os.path.exists(
+        os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', FULL_DATA_CHECKPOINTER_WRAPPER, 'di',
+                     '44f9d6dd8b6ccae571ca04525c3eaffa.pickle'))
+    assert os.path.exists(
+        os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', FULL_DATA_CHECKPOINTER_WRAPPER, 'di',
+                     '898a67b2f5eeae6393ca4b3162ba8e3d.pickle'))
+    assert os.path.exists(
+        os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', FULL_DATA_CHECKPOINTER_WRAPPER, 'eo',
+                     '44f9d6dd8b6ccae571ca04525c3eaffa.pickle'))
+    assert os.path.exists(
+        os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', FULL_DATA_CHECKPOINTER_WRAPPER, 'eo',
+                     '898a67b2f5eeae6393ca4b3162ba8e3d.pickle'))
 
 
 def test_when_no_hyperparams_and_saved_same_pipeline_should_load_checkpoint_pickle(tmpdir: LocalPath):
@@ -234,8 +259,10 @@ def test_pickle_checkpoint_step_should_load_data_container(tmpdir: LocalPath):
     create_pipeline_output_transformer().fit_transform(
         data_inputs=initial_data_inputs, expected_outputs=initial_expected_outputs
     )
+
     transformer = create_pipeline_output_transformer()
-    actual_data_container = transformer.handle_transform(
+
+    transformer, actual_data_container = transformer.handle_fit_transform(
         DataContainer(current_ids=[0, 1], data_inputs=initial_data_inputs, expected_outputs=initial_expected_outputs),
         ExecutionContext.create_from_root(transformer, ExecutionMode.TRANSFORM, tmpdir)
     )

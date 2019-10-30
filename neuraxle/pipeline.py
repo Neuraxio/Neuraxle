@@ -26,7 +26,9 @@ from typing import Any, Tuple, List
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, DataContainer, NonFittableMixin, \
     ExecutionContext, ExecutionMode, NonTransformableMixin, ListDataContainer
-from neuraxle.checkpoints import Checkpoint
+from neuraxle.checkpoints import Checkpoint, DataInputCheckpointerWrapper, PickleDataCheckpointer, \
+    ExpectedOutputCheckpointerWrapper, StepSavingCheckpointer
+from neuraxle.steps.flow import TransformOnlyWrapper, FitOnlyWrapper, FitTransformOnlyWrapper
 
 DEFAULT_CACHE_FOLDER = 'cache'
 
@@ -252,10 +254,8 @@ class Pipeline(BasePipeline):
         :return: transformed data container
         """
         steps_left_to_do, data_container = self._load_checkpoint(data_container, context)
-        self.setup()
 
         for step_name, step in steps_left_to_do:
-            step.setup()
             sub_context = context.push(step)
             data_container = step.handle_transform(data_container, sub_context)
 
@@ -593,3 +593,34 @@ class Joiner(Barrier):
             )
 
         return step, output_data_container
+
+
+class FullExecutionCheckpoint(ResumablePipeline):
+    """
+    Full checkpoint pipeline that handles every execution mode.
+
+    #. Saves data checkpoints for data inputs.
+    #. Saves data checkpoints for expected outputs.
+    #. Saves fitted step
+
+    .. seealso::
+        :class:`neuraxle.pipeline.ResumablePipeline`,
+        :class:`neuraxle.flow.TransformOnlyWrapper`,
+        :class:`neuraxle.flow.FitOnlyWrapper`,
+        :class:`neuraxle.flow.FitTransformOnlyWrapper`,
+        :class:`neuraxle.flow.StepSavingCheckpointer`
+    """
+
+    def __init__(self):
+        Pipeline.__init__(self, [
+            ('TransformOnlyWrapperDi', TransformOnlyWrapper(DataInputCheckpointerWrapper(PickleDataCheckpointer()))),
+            ('TransformOnlyWrapperEo', TransformOnlyWrapper(ExpectedOutputCheckpointerWrapper(PickleDataCheckpointer()))),
+
+            ('FitOnlyWrapperDi', FitOnlyWrapper(DataInputCheckpointerWrapper(PickleDataCheckpointer()))),
+            ('FitOnlyWrapperEo', FitOnlyWrapper(ExpectedOutputCheckpointerWrapper(PickleDataCheckpointer()))),
+
+            ('FitTransformOnlyWrapperDi', FitTransformOnlyWrapper(DataInputCheckpointerWrapper(PickleDataCheckpointer()))),
+            ('FitTransformOnlyWrapperEo', FitTransformOnlyWrapper(ExpectedOutputCheckpointerWrapper(PickleDataCheckpointer()))),
+
+            ('StepSavingCheckpointer', StepSavingCheckpointer()),
+        ])
