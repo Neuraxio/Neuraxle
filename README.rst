@@ -70,7 +70,7 @@ such:
     app.run(debug=False, port=5000)
 
 Visit the
-`examples <https://www.neuraxle.neuraxio.com/stable/examples/index.html>`__
+`examples <https://www.neuraxio.com/en/neuraxle/stable/examples/index.html>`__
 to get more a feeling of how it works, and inspiration.
 
 Why Neuraxle?
@@ -108,9 +108,9 @@ Parallel Computing
 Neuraxle offer multiple parallel processing features using
 `joblib <https://joblib.readthedocs.io/en/latest/parallel.html>`__. Most
 parallel processing in Neuraxle happens in the
-`pipeline <https://www.neuraxle.neuraxio.com/stable/api/neuraxle.pipeline.html>`__
+`pipeline <https://www.neuraxio.com/en/neuraxle/stable/api/neuraxle.pipeline.html>`__
 and
-`union <https://www.neuraxle.neuraxio.com/stable/api/neuraxle.union.html>`__
+`union <https://www.neuraxio.com/en/neuraxle/stable/api/neuraxle.union.html>`__
 modules, and as such, neuraxle can be easily parallelized on a cluster
 of computers using `distributed <https://ml.dask.org/joblib.html>`__ as
 its `joblib backend <https://ml.dask.org/joblib.html>`__.
@@ -313,7 +313,7 @@ We thank these organisations for generously supporting the project:
     <img src="https://www.neuraxio.com/images/neuraxio_logo_transparent.png" width="140px">
 
 
--  Umanéo Technologies Inc.: https://umaneo.com
+-  Umanéo Technologies Inc.: https://umaneo.com/
 
 .. raw:: html
 
