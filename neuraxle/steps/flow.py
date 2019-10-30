@@ -1,10 +1,9 @@
 from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, DataContainer, NonTransformableMixin, \
-    ExecutionMode, NonFittableMixin, ForceHandleMixin
+    ExecutionMode, ForceHandleMixin
 
 
 class TransformOnlyWrapper(
-    NonTransformableMixin,
-    NonFittableMixin,
+    ForceHandleMixin,
     MetaStepMixin,
     BaseStep
 ):
@@ -20,8 +19,7 @@ class TransformOnlyWrapper(
     """
 
     def __init__(self, wrapped: BaseStep):
-        NonTransformableMixin.__init__(self)
-        NonFittableMixin.__init__(self)
+        ForceHandleMixin.__init__(self)
         MetaStepMixin.__init__(self, wrapped=wrapped)
         BaseStep.__init__(self)
 
@@ -30,10 +28,16 @@ class TransformOnlyWrapper(
 
         return self.wrapped.handle_transform(data_container, wrapped_context)
 
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        return self, data_container
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
+        return self, data_container
+
 
 class FitTransformOnlyWrapper(
-    NonTransformableMixin,
-    NonFittableMixin,
+    ForceHandleMixin,
     MetaStepMixin,
     BaseStep
 ):
@@ -51,7 +55,6 @@ class FitTransformOnlyWrapper(
 
     def __init__(self, wrapped: BaseStep):
         NonTransformableMixin.__init__(self)
-        NonFittableMixin.__init__(self)
         MetaStepMixin.__init__(self, wrapped=wrapped)
         BaseStep.__init__(self)
 
@@ -61,6 +64,12 @@ class FitTransformOnlyWrapper(
         self.wrapped, outputs = self.wrapped.handle_fit_transform(data_container, wrapped_context)
 
         return self, outputs
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        return self, data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        return data_container
 
 
 class FitOnlyWrapper(
