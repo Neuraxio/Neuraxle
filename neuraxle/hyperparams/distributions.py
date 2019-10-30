@@ -87,7 +87,7 @@ class HyperparameterDistribution(metaclass=ABCMeta):
         :param kept_space_ratio: what proportion of the space is kept. Should be between 0.0 and 1.0. Default is to keep only the best_guess (0.0).
         :return: a new HyperparameterDistribution object that has been narrowed down.
         """
-        return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
+        return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
 
     def was_narrowed_from(
             self, kept_space_ratio: float, original_hp: 'HyperparameterDistribution'
@@ -324,7 +324,7 @@ class Choice(HyperparameterDistribution):
         new_narrowing = self.get_current_narrowing_value() * kept_space_ratio
 
         if len(self.choice_list) == 0 or len(self.choice_list) == 1 or new_narrowing <= 1.0 / len(self.choice_list):
-            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
+            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
 
         return copy.deepcopy(self).was_narrowed_from(kept_space_ratio, self)
 
@@ -426,7 +426,7 @@ class PriorityChoice(HyperparameterDistribution):
                 or new_size <= 1
                 or kept_space_ratio <= 1.0 / len(self.choice_list)
         ):
-            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
+            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
 
         # Bring best_guess to front
         idx = self.choice_list.index(best_guess)
@@ -507,7 +507,8 @@ class Quantized(WrappedHyperparameterDistributions):
         :return:
         """
         return Quantized(
-            self.hd.narrow_space_from_best_guess(best_guess, kept_space_ratio)
+            self.hd.narrow_space_from_best_guess(best_guess, kept_space_ratio),
+            null_default_value=self.null_default_value
         ).was_narrowed_from(kept_space_ratio, self)
 
 
@@ -579,8 +580,8 @@ class RandInt(HyperparameterDistribution):
         new_min_included = round(self.min_included * kept_space_ratio + best_guess * lost_space_ratio)
         new_max_included = round(self.max_included * kept_space_ratio + best_guess * lost_space_ratio)
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
-            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
-        return RandInt(new_min_included, new_max_included).was_narrowed_from(kept_space_ratio, self)
+            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
+        return RandInt(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
 
 
 class Uniform(HyperparameterDistribution):
@@ -662,8 +663,8 @@ class Uniform(HyperparameterDistribution):
         new_min_included = self.min_included * kept_space_ratio + best_guess * lost_space_ratio
         new_max_included = self.max_included * kept_space_ratio + best_guess * lost_space_ratio
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
-            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
-        return Uniform(new_min_included, new_max_included).was_narrowed_from(kept_space_ratio, self)
+            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
+        return Uniform(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
 
 
 class LogUniform(HyperparameterDistribution):
@@ -744,8 +745,8 @@ class LogUniform(HyperparameterDistribution):
         new_min_included = self.log2_min_included * kept_space_ratio + log2_best_guess * lost_space_ratio
         new_max_included = self.log2_max_included * kept_space_ratio + log2_best_guess * lost_space_ratio
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
-            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
-        return LogUniform(2 ** new_min_included, 2 ** new_max_included).was_narrowed_from(kept_space_ratio, self)
+            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
+        return LogUniform(2 ** new_min_included, 2 ** new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
 
 
 class Normal(HyperparameterDistribution):
@@ -871,9 +872,9 @@ class Normal(HyperparameterDistribution):
         new_mean = self.mean * kept_space_ratio + best_guess * lost_space_ratio
         new_std = self.std * kept_space_ratio
         if new_std <= 0.0:
-            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
+            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
         return Normal(
-            new_mean, new_std, self.hard_clip_min, self.hard_clip_max
+            new_mean, new_std, self.hard_clip_min, self.hard_clip_max, self.null_default_value
         ).was_narrowed_from(kept_space_ratio, self)
 
 
@@ -998,7 +999,7 @@ class LogNormal(HyperparameterDistribution):
         new_mean = self.log2_space_mean * kept_space_ratio + log2_best_guess * lost_space_ratio
         new_std = self.log2_space_std * kept_space_ratio
         if new_std <= 0.0:
-            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
+            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
         return Normal(
-            new_mean, new_std, self.hard_clip_min, self.hard_clip_max
+            new_mean, new_std, self.hard_clip_min, self.hard_clip_max, self.null_default_value
         ).was_narrowed_from(kept_space_ratio, self)
