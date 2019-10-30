@@ -313,7 +313,7 @@ We thank these organisations for generously supporting the project:
     <img src="https://www.neuraxio.com/images/neuraxio_logo_transparent.png" width="140px">
 
 
--  Umanéo Technologies Inc.: https://umaneo.com/
+-  Umanéo Technologies Inc.: https://www.umaneo.com/
 
 .. raw:: html
 
