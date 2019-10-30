@@ -33,6 +33,7 @@ from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, Value
 
 from conv import convolved_1d
 from joblib import dump, load
+from sklearn.base import BaseEstimator
 
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
@@ -1234,8 +1235,6 @@ class BaseStep(ABC):
         return self
 
     def tosklearn(self):
-        from sklearn.base import BaseEstimator
-
         class NeuraxleToSKLearnPipelineWrapper(BaseEstimator):
             def __init__(self, neuraxle_step):
                 self.p: Union[BaseStep, TruncableSteps] = neuraxle_step
@@ -1734,7 +1733,8 @@ class TruncableSteps(BaseStep, ABC):
         :type steps_as_tuple: NamedTupleList
         :return:
         """
-        self.steps_as_tuple: NamedTupleList = self.patch_missing_names(steps_as_tuple)
+        steps_as_tuple = self._wrap_non_base_steps(steps_as_tuple)
+        self.steps_as_tuple: NamedTupleList = self._patch_missing_names(steps_as_tuple)
         self._refresh_steps()
 
     def setup(self) -> 'BaseStep':
@@ -1764,24 +1764,46 @@ class TruncableSteps(BaseStep, ABC):
 
         return self
 
-    def patch_missing_names(self, steps_as_tuple: List) -> NamedTupleList:
+    def _wrap_non_base_steps(self, steps_as_tuple: List) -> NamedTupleList:
         """
-        Make sure that each sub step as a unique name, and add a name to the sub steps that don't have one already.
+        If some steps are not of type BaseStep, we'll try to make them of this type. For instance, sklearn objects
+        will be wrapped by a SKLearnWrapper here.
 
-        :param steps_as_tuple: steps as tuple
-        :type steps_as_tuple: NamedTupleList
-        :return:
+        :param steps_as_tuple: a list of steps or of named tuples of steps (e.g.: NamedTupleList)
+        :return: a NamedTupleList
         """
-        names_yet = set()
-        patched = []
+        # TODO: document more the type of the `steps as tuple`.
+
+        wrapped = []
         for step in steps_as_tuple:
-
+            class_name = None
             if isinstance(step, tuple):
                 class_name = step[0]
                 step = step[1]
-            else:
+
+            if isinstance(step, BaseEstimator):
+                import neuraxle.steps.sklearn
+                step = neuraxle.steps.sklearn.SKLearnWrapper(step)
+                step.set_name(step.get_wrapped_sklearn_predictor().__class__.__name__)
+
+            if class_name is None:
                 class_name = step.get_name()
 
+            wrapped.append((class_name, step))
+        return wrapped
+
+    def _patch_missing_names(self, steps_as_tuple: NamedTupleList) -> NamedTupleList:
+        """
+        Make sure that each sub step has a unique name, and add a name to the sub steps that don't have one already.
+
+        :param steps_as_tuple: a NamedTupleList
+        :type steps_as_tuple: a NamedTupleList
+        :return: a NamedTupleList with fixed names
+        """
+        # TODO: document more the type of the `steps as tuple`.
+        names_yet = set()
+        patched = []
+        for class_name, step in steps_as_tuple:
             _name = class_name
             if class_name in names_yet:
                 warnings.warn(

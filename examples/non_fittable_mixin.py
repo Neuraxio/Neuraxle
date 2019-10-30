@@ -1,6 +1,6 @@
 """
-Create Pipeline Steps in Neuraxle that doesn't Require Fitting (Non-Fittable) or/nor Transforming (Non-Transformable)
-========================================================================================================================
+Create Pipeline Steps in Neuraxle that doesn't fit or transform
+================================================================
 
 If a pipeline step doesn't need to be fitted and only transforms data (e.g.: taking the logarithm of the data),
 then you can inherit from the NonFittableMixin as demonstrated here, which will override the fit method properly
@@ -19,7 +19,7 @@ BaseStep class.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
+    You may obtain a copy of tche License at
 
         http://www.apache.org/licenses/LICENSE-2.0
 
@@ -40,18 +40,6 @@ from neuraxle.base import NonTransformableMixin, NonFittableMixin, Identity, Bas
 from neuraxle.pipeline import Pipeline
 
 
-class NonTransformableStep(NonTransformableMixin, BaseStep):
-    """
-    Transform method is automatically implemented as returning data inputs as it is.
-    Please make your steps inherit from NonTransformableMixin, when they don't need any transformations.
-    Also, make sure that BaseStep is the last step you inherit from.
-    """
-
-    def fit(self, data_inputs, expected_outputs=None) -> 'NonTransformableStep':
-        # insert your fit code here
-        return self
-
-
 class NonFittableStep(NonFittableMixin, BaseStep):
     """
     Fit method is automatically implemented as changing nothing.
@@ -61,22 +49,38 @@ class NonFittableStep(NonFittableMixin, BaseStep):
 
     def transform(self, data_inputs):
         # insert your transform code here
+        print("NonFittableStep: I transformed.")
         return self, data_inputs
 
     def inverse_transform(self, processed_outputs):
         # insert your inverse transform code here
+        print("NonFittableStep: I inverse transformed.")
         return processed_outputs
+
+
+class NonTransformableStep(NonTransformableMixin, BaseStep):
+    """
+    Transform method is automatically implemented as returning data inputs as it is.
+    Please make your steps inherit from NonTransformableMixin, when they don't need any transformations.
+    Also, make sure that BaseStep is the last step you inherit from.
+    """
+
+    def fit(self, data_inputs, expected_outputs=None) -> 'NonTransformableStep':
+        # insert your fit code here
+        print("NonTransformableStep: I fitted.")
+        return self
 
 
 def main():
     p = Pipeline([
         NonFittableStep(),
         NonTransformableStep(),
-        Identity()
+        Identity()  # Note: Identity does nothing: it inherits from both NonFittableMixin and NonTransformableMixin.
     ])
 
     p = p.fit(np.array([0, 1]), np.array([0, 1]))
-    p = p.transform(np.array([0, 1]))
+
+    out = p.transform(np.array([0, 1]))
 
 
 if __name__ == "__main__":

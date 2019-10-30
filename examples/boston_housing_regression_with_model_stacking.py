@@ -42,7 +42,7 @@ from sklearn.utils import shuffle
 
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyShapePrinter
-from neuraxle.steps.sklearn import SKLearnWrapper, RidgeModelStacking
+from neuraxle.steps.sklearn import RidgeModelStacking
 from neuraxle.union import AddFeatures
 
 
@@ -55,15 +55,15 @@ def main():
     p = Pipeline([
         NumpyShapePrinter(),
         AddFeatures([
-            SKLearnWrapper(PCA(n_components=2)),
-            SKLearnWrapper(FastICA(n_components=2)),
+            PCA(n_components=2),
+            FastICA(n_components=2),
         ]),
         NumpyShapePrinter(),
         RidgeModelStacking([
-            SKLearnWrapper(GradientBoostingRegressor()),
-            SKLearnWrapper(GradientBoostingRegressor(n_estimators=500)),
-            SKLearnWrapper(GradientBoostingRegressor(max_depth=5)),
-            SKLearnWrapper(KMeans()),
+            GradientBoostingRegressor(),
+            GradientBoostingRegressor(n_estimators=500),
+            GradientBoostingRegressor(max_depth=5),
+            KMeans(),
         ]),
         NumpyShapePrinter(),
     ])
