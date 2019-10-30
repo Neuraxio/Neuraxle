@@ -3,6 +3,8 @@ Neuraxle Pipelines
 
     Code Machine Learning Pipelines - The Right Way.
 
+.. image:: https://www.neuraxio.com/en/blog/assets/pipeline_1_small.jpg
+
 Neuraxle is a Machine Learning (ML) library for building neat pipelines,
 providing the right abstractions to both ease research, development, and
 deployment of your ML applications.
