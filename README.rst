@@ -36,18 +36,18 @@ such:
         AddFeatures([
             # Add (concatenate) features in parallel, that are
             # themselves derived of the existing features:
-            SKLearnWrapper(PCA(n_components=2)),
-            SKLearnWrapper(FastICA(n_components=2)),
+            PCA(n_components=2),
+            FastICA(n_components=2),
         ]),
         RidgeModelStacking([
             # Here is an ensemble of 4 models or feature extractors,
             # That are themselves then fed to a ridge regression which
             # will act as a judge to finalize the prediction.
-            SKLearnWrapper(LinearRegression()),
-            SKLearnWrapper(LogisticRegression()),
-            SKLearnWrapper(GradientBoostingRegressor(n_estimators=500)),
-            SKLearnWrapper(GradientBoostingRegressor(max_depth=5)),
-            SKLearnWrapper(KMeans()),
+            LinearRegression(),
+            LogisticRegression(),
+            GradientBoostingRegressor(n_estimators=500),
+            GradientBoostingRegressor(max_depth=5),
+            KMeans(),
         ])
     ])
     # Note: here all the steps were imported from scikit-learn,
