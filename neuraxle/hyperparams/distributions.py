@@ -130,13 +130,13 @@ class HyperparameterDistribution(metaclass=ABCMeta):
 class FixedHyperparameter(HyperparameterDistribution):
     """This is an hyperparameter that won't change again, but that is still expressed as a distribution."""
 
-    def __init__(self, value):
+    def __init__(self, value, default_value=None):
         """
         Create a still hyperparameter
 
         :param value: what will be returned by calling ``.rvs()``.
         """
-        HyperparameterDistribution.__init__(self)
+        HyperparameterDistribution.__init__(self, default_value)
         self.value = value
 
     def rvs(self):
