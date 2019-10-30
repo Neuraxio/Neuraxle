@@ -138,9 +138,6 @@ class Optional(ForceHandleMixin, MetaStepMixin, BaseStep):
         self.wrapped.set_hyperparams(hyperparams_space.nullify())
 
 
-CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM = 'choice'
-
-
 class ChooseOneOrManyStepsOf(Pipeline):
     """
     A pipeline to allow choosing many steps using an hyperparameter.
@@ -156,16 +153,14 @@ class ChooseOneOrManyStepsOf(Pipeline):
             ])
         ])
         p.set_hyperparams({
-            'ChooseOneOrManyStepsOf__choice__a__enabled': True,
-            'ChooseOneOrManyStepsOf__choice__b__enabled': False
+            'ChooseOneOrManyStepsOf__a__enabled': True,
+            'ChooseOneOrManyStepsOf__b__enabled': False
         })
         # or
         p.set_hyperparams({
             'ChooseOneOrManyStepsOf': {
-                'choice': {
-                    'a': { 'enabled': True },
-                    'b': { 'enabled': False }
-                }
+                'a': { 'enabled': True },
+                'b': { 'enabled': False }
             }
         })
 
@@ -178,11 +173,9 @@ class ChooseOneOrManyStepsOf(Pipeline):
         Pipeline.__init__(self, steps)
 
         if hyperparams is None:
-            hyperparams = HyperparameterSamples({
-                CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM: {}
-            })
-
-        self.set_hyperparams(hyperparams)
+            self.set_hyperparams(HyperparameterSamples({}))
+        else:
+            self.set_hyperparams(hyperparams)
 
         self._make_all_steps_optional()
 
@@ -195,30 +188,30 @@ class ChooseOneOrManyStepsOf(Pipeline):
         :return: self
         :rtype: BaseStep
         """
-        if CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM not in hyperparams:
-            hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM] = {}
-
         super().set_hyperparams(hyperparams=hyperparams)
 
         self._validate_choice_hyperparams()
-        self._set_all_hyperparams_steps_choice_to_true_by_default()
+        self._set_all_hyperparams_steps_enabled_by_default()
 
         return self
 
     def _validate_choice_hyperparams(self):
-        for key in self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM].keys():
+        for key in self.hyperparams.keys():
             if key not in self.keys():
                 raise ValueError('Invalid Choosen Step {0} in {1}'.format(key, self.name))
 
-    def _set_all_hyperparams_steps_choice_to_true_by_default(self):
-        for key in self.keys():
-            if key not in self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM].keys():
-                self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM][key] = True
+    def _set_all_hyperparams_steps_enabled_by_default(self):
+        for step_name in self.keys():
+            if step_name not in self.hyperparams.keys():
+                self.hyperparams[step_name] = {
+                    OPTIONAL_ENABLED_HYPERPARAM: True
+                }
 
     def _make_all_steps_optional(self):
         """
         Wrap all steps with :class:`Optional` wrapper.
         """
-        for step_name, is_chosen in self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM].items():
+        step_names = list(self.keys())
+        for step_name in step_names:
             self[step_name] = Optional(self[step_name])
         self._refresh_steps()
