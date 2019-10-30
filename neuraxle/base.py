@@ -1477,7 +1477,7 @@ class MetaStepMixin:
         """
         self.is_invalidated = True
 
-        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space.to_nested_dict())
+        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
 
         remainders = dict()
         for name, hparams in hyperparams_space.items():
@@ -1909,7 +1909,7 @@ class TruncableSteps(BaseStep, ABC):
         remainders = dict()
         for name, hparams in hyperparams.items():
             if name in self.steps.keys():
-                self.steps[name].set_hyperparams(hparams)
+                self.steps[name].set_hyperparams(HyperparameterSamples(hparams))
             else:
                 remainders[name] = hparams
         self.hyperparams = HyperparameterSamples(remainders)
@@ -1979,8 +1979,8 @@ class TruncableSteps(BaseStep, ABC):
 
         remainders = dict()
         for name, hparams in hyperparams_space.items():
-            if name in self.steps.keys():
-                self.steps[name].set_hyperparams_space(hparams)
+            if name in self.keys():
+                self.steps[name].set_hyperparams_space(HyperparameterSpace(hparams))
             else:
                 remainders[name] = hparams
         self.hyperparams_space = HyperparameterSpace(remainders)
