@@ -2,6 +2,8 @@ from abc import abstractmethod
 from collections import OrderedDict
 from typing import Union
 
+from py._log import warning
+
 from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
@@ -13,6 +15,7 @@ class ForceHandleMixin:
         - handle_transform
         - handle_fit_transform
         - handle_fit
+
     .. seealso::
         :class:`BaseStep`
     """
@@ -47,35 +50,106 @@ class ForceHandleMixin:
 
 
 class Nullify(ForceHandleMixin, MetaStepMixin, BaseStep):
+    """
+    A wrapper to nullify a step : nullify its hyperparams, and also nullify all of his behavior.
+
+    Example usage :
+
+    .. code-block:: python
+
+        p = Pipeline([
+            Nullify(Identity())
+        ])
+
+    """
+
     def __init__(self, wrapped: BaseStep):
         ForceHandleMixin.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
-        hyperparams_space = self.wrapped.get_hyperparams_space()
-        self.wrapped.set_hyperparams(hyperparams_space.nullify())
+        """
+        Nullify wrapped step hyperparams, and don't fit the wrapped step.
 
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: step, data_container
+        :type: (BaseStep, DataContainer)
+        """
+        self._nullify_hyperparams()
         return self, data_container
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
             'BaseStep', DataContainer):
-        hyperparams_space = self.wrapped.get_hyperparams_space()
-        self.wrapped.set_hyperparams(hyperparams_space.nullify())
+        """
+        Nullify wrapped step hyperparams, and don't fit_transform the wrapped step.
 
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: step, data_container
+        :type: (BaseStep, DataContainer)
+        """
+        self._nullify_hyperparams()
         return self, data_container
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Nullify wrapped step hyperparams, and don't transform the wrapped step.
+
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: step, data_container
+        :type: DataContainer
+        """
+        self._nullify_hyperparams()
+        return data_container
+
+    def _nullify_hyperparams(self):
+        """
+        Nullify wrapped step hyperparams using hyperparams_space.nullify().
+        """
         hyperparams_space = self.wrapped.get_hyperparams_space()
         self.wrapped.set_hyperparams(hyperparams_space.nullify())
-
-        return data_container
 
 
 CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM = 'choice'
 
 
 class ChooseOneOrManyStepsOf(Pipeline):
+    """
+    A pipeline to allow choosing many steps using an hyperparameter.
+
+    Example usage :
+
+    .. code-block:: python
+
+        p = Pipeline([
+            ChooseOneOrManyStepsOf([
+                ('a', Identity()),
+                ('b', Identity())
+            ])
+        ])
+        p.set_hyperparams({
+            'ChooseOneOrManyStepsOf': {
+                'choice': {
+                    'a': True
+                    'b': False
+                }
+            }
+        })
+
+    .. seealso::
+        :class:`Pipeline`
+        :class:`Nullify`
+    """
+
     def __init__(self, steps, hyperparams=None):
         Pipeline.__init__(self, steps)
 
@@ -87,7 +161,16 @@ class ChooseOneOrManyStepsOf(Pipeline):
         self.set_hyperparams(hyperparams)
 
     def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
+        """
+        Set hyperparams for step selection, and nullify the steps that are not chosen.
+
+        :param hyperparams: hyperparams
+        :type hyperparams: HyperparameterSamples
+        :return: self
+        :rtype: BaseStep
+        """
         super().set_hyperparams(hyperparams=hyperparams)
+
         if CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM not in self.hyperparams:
             raise ValueError('\'choice\' hyperparam not set in {0} hyperparams'.format(self.name))
 
@@ -98,12 +181,16 @@ class ChooseOneOrManyStepsOf(Pipeline):
         for key in self.keys():
             if key not in self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM].keys():
                 self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM][key] = False
+                warning.warn('You have not set any choice hyperparameter for {0} in {1}. Setting choice to False by default.'.format(key, self.name))
 
         self.nullify_steps_that_are_not_chosen()
 
         return self
 
     def nullify_steps_that_are_not_chosen(self):
+        """
+        Nullify steps that are not chosen using :class:`Nullify` step wrapper.
+        """
         for step_name, is_chosen in self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM].items():
             if not is_chosen:
                 self[step_name] = Nullify(self[step_name])
