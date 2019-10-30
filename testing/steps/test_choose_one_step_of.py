@@ -78,7 +78,7 @@ def create_test_case_multiple_steps_choosen():
             'ChooseOneOrManyStepsOf__a__enabled': Boolean(),
             'ChooseOneOrManyStepsOf__b__enabled': Boolean()
         },
-        expected_processed_outputs=np.array([0, 4, 8, 12, 16, 20, 24, 28, 32, 36])
+        expected_processed_outputs=np.array([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
     )
 
 
@@ -222,7 +222,7 @@ def create_test_case_fit_transform_multiple_steps_choosen():
             'ChooseOneOrManyStepsOf__a__enabled': Boolean(),
             'ChooseOneOrManyStepsOf__b__enabled': Boolean()
         },
-        expected_processed_outputs=np.array([0, 4, 8, 12, 16, 20, 24, 28, 32, 36])
+        expected_processed_outputs=np.array([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
     )
 
 
@@ -254,7 +254,7 @@ def create_test_case_fit_multiple_steps_choosen():
             'ChooseOneOrManyStepsOf__a__enabled': Boolean(),
             'ChooseOneOrManyStepsOf__b__enabled': Boolean()
         },
-        expected_processed_outputs=np.array([0, 4, 8, 12, 16, 20, 24, 28, 32, 36])
+        expected_processed_outputs=np.array([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
     )
 
 

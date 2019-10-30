@@ -4,7 +4,7 @@ from typing import Union
 
 from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext
 from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.pipeline import Pipeline
+from neuraxle.union import FeatureUnion
 
 
 class ForceHandleMixin:
@@ -66,7 +66,7 @@ class Optional(ForceHandleMixin, MetaStepMixin, BaseStep):
 
     """
 
-    def __init__(self, wrapped: BaseStep, enabled: bool = True):
+    def __init__(self, wrapped: BaseStep, enabled: bool = True, nullified_return_value=None):
         ForceHandleMixin.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(
@@ -75,6 +75,10 @@ class Optional(ForceHandleMixin, MetaStepMixin, BaseStep):
                 OPTIONAL_ENABLED_HYPERPARAM: enabled
             })
         )
+
+        if nullified_return_value is None:
+            nullified_return_value = []
+        self.nullified_return_value = nullified_return_value
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
@@ -92,7 +96,12 @@ class Optional(ForceHandleMixin, MetaStepMixin, BaseStep):
             return self, data_container
 
         self._nullify_hyperparams()
-        return self, data_container
+
+        return self, DataContainer(
+            current_ids=data_container.current_ids,
+            data_inputs=self.nullified_return_value,
+            expected_outputs=self.nullified_return_value
+        )
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
             'BaseStep', DataContainer):
@@ -111,7 +120,12 @@ class Optional(ForceHandleMixin, MetaStepMixin, BaseStep):
             return self, data_container
 
         self._nullify_hyperparams()
-        return self, data_container
+
+        return self, DataContainer(
+            current_ids=data_container.current_ids,
+            data_inputs=self.nullified_return_value,
+            expected_outputs=self.nullified_return_value
+        )
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -128,7 +142,13 @@ class Optional(ForceHandleMixin, MetaStepMixin, BaseStep):
             return self.wrapped.handle_transform(data_container, context)
 
         self._nullify_hyperparams()
-        return data_container
+        data_container.set_data_inputs(self.nullified_return_value)
+
+        return DataContainer(
+            current_ids=data_container.current_ids,
+            data_inputs=self.nullified_return_value,
+            expected_outputs=self.nullified_return_value
+        )
 
     def _nullify_hyperparams(self):
         """
@@ -138,7 +158,7 @@ class Optional(ForceHandleMixin, MetaStepMixin, BaseStep):
         self.wrapped.set_hyperparams(hyperparams_space.nullify())
 
 
-class ChooseOneOrManyStepsOf(Pipeline):
+class ChooseOneOrManyStepsOf(FeatureUnion):
     """
     A pipeline to allow choosing many steps using an hyperparameter.
 
@@ -170,7 +190,7 @@ class ChooseOneOrManyStepsOf(Pipeline):
     """
 
     def __init__(self, steps, hyperparams=None):
-        Pipeline.__init__(self, steps)
+        FeatureUnion.__init__(self, steps)
 
         if hyperparams is None:
             self.set_hyperparams(HyperparameterSamples({}))

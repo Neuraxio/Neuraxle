@@ -19,10 +19,11 @@ Those steps works with NumPy (np) arrays.
     limitations under the License.
 
 """
+from typing import List
 
 import numpy as np
 
-from neuraxle.base import NonFittableMixin, BaseStep
+from neuraxle.base import NonFittableMixin, BaseStep, DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
 
 
@@ -74,6 +75,22 @@ class NumpyConcatenateInnerFeatures(NumpyConcatenateOnCustomAxis):
         """
         # The concatenate is on the inner features so axis = -1.
         NumpyConcatenateOnCustomAxis.__init__(self, axis=-1)
+
+    def join_data_containers(
+            self,
+            data_containers: List[DataContainer],
+            new_current_ids
+    ):
+        data_inputs = np.array([dc.data_inputs for dc in data_containers])
+        data_inputs = self.transform(data_inputs)
+
+        expected_outputs = data_containers[-1].expected_outputs
+
+        return DataContainer(
+            current_ids=new_current_ids,
+            data_inputs=data_inputs,
+            expected_outputs=expected_outputs
+        )
 
 
 class NumpyConcatenateOuterBatch(NumpyConcatenateOnCustomAxis):
