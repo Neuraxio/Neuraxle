@@ -111,23 +111,24 @@ class FeatureUnion(TruncableSteps):
         :return: the transformed data_inputs.
         """
         if self.n_jobs != 1:
-            fitted_steps, data_containers = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
+            fitted_steps_data_containers = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
                 delayed(step.handle_fit_transform)(data_container.copy(), context.push(step))
                 for _, step in self.steps_as_tuple
             )
         else:
-            fitted_steps, data_containers = [
+            fitted_steps_data_containers = [
                 step.handle_fit_transform(data_container.copy(), context.push(step))
                 for _, step in self.steps_as_tuple
             ]
 
         new_current_ids = self.hash(data_container.current_ids, self.get_hyperparams(), data_container.data_inputs)
 
+        data_containers  = [dc for _, dc in fitted_steps_data_containers]
         data_container = self.joiner.join_data_containers(data_containers, new_current_ids)
 
         # Save fitted steps
-        for i, f in enumerate(fitted_steps):
-            self.steps_as_tuple[i] = (self.steps_as_tuple[i][0], f)
+        for i, (fitted_step, _) in enumerate(fitted_steps_data_containers):
+            self.steps_as_tuple[i] = (self.steps_as_tuple[i][0], fitted_step)
         self._refresh_steps()
 
         return self, data_container

@@ -69,7 +69,7 @@ def create_test_case_multiple_steps_choosen():
             ]),
         ]),
         callbacks=[a_callback, b_callback],
-        expected_callbacks_data=[DATA_INPUTS, DATA_INPUTS * 2],
+        expected_callbacks_data=[DATA_INPUTS, DATA_INPUTS],
         hyperparams={
             'ChooseOneOrManyStepsOf__a__enabled': True,
             'ChooseOneOrManyStepsOf__b__enabled': True
@@ -211,8 +211,8 @@ def create_test_case_fit_transform_multiple_steps_choosen():
         expected_callbacks_data=[
             DATA_INPUTS,
             (DATA_INPUTS, EXPECTED_OUTPUTS),
-            DATA_INPUTS * 2,
-            (DATA_INPUTS * 2, EXPECTED_OUTPUTS)
+            DATA_INPUTS,
+            (DATA_INPUTS, EXPECTED_OUTPUTS)
         ],
         hyperparams={
             'ChooseOneOrManyStepsOf__a__enabled': True,
@@ -225,6 +225,36 @@ def create_test_case_fit_transform_multiple_steps_choosen():
         expected_processed_outputs=np.array([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
     )
 
+def create_test_case_fit_single_step_choosen():
+    a_callback = TapeCallbackFunction()
+    b_callback = TapeCallbackFunction()
+    c_callback = TapeCallbackFunction()
+    d_callback = TapeCallbackFunction()
+
+    return ChooseStepsTestCase(
+        pipeline=Pipeline([
+            ChooseOneOrManyStepsOf([
+                ('a', FitTransformCallbackStep(a_callback, c_callback, transform_function=lambda di: di * 2)),
+                ('b', FitTransformCallbackStep(b_callback, d_callback, transform_function=lambda di: di * 2))
+            ]),
+        ]),
+        callbacks=[a_callback, c_callback, b_callback, d_callback],
+        expected_callbacks_data=[
+            [],
+            (DATA_INPUTS, EXPECTED_OUTPUTS),
+            [],
+            []
+        ],
+        hyperparams={
+            'ChooseOneOrManyStepsOf__a__enabled': True,
+            'ChooseOneOrManyStepsOf__b__enabled': False
+        },
+        hyperparams_space={
+            'ChooseOneOrManyStepsOf__a__enabled': Boolean(),
+            'ChooseOneOrManyStepsOf__b__enabled': Boolean()
+        },
+        expected_processed_outputs=np.array([0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
+    )
 
 def create_test_case_fit_multiple_steps_choosen():
     a_callback = TapeCallbackFunction()
@@ -241,10 +271,10 @@ def create_test_case_fit_multiple_steps_choosen():
         ]),
         callbacks=[a_callback, c_callback, b_callback, d_callback],
         expected_callbacks_data=[
-            DATA_INPUTS,
+            [],
             (DATA_INPUTS, EXPECTED_OUTPUTS),
             [],
-            (DATA_INPUTS * 2, EXPECTED_OUTPUTS)
+            (DATA_INPUTS, EXPECTED_OUTPUTS)
         ],
         hyperparams={
             'ChooseOneOrManyStepsOf__a__enabled': True,
@@ -275,7 +305,7 @@ def test_choose_one_or_many_step_of_fit_transform_should_choose_step(
 
 
 @pytest.mark.parametrize('test_case', [
-    create_test_case_fit_transform_single_step_choosen(),
+    create_test_case_fit_single_step_choosen(),
     create_test_case_fit_multiple_steps_choosen()
 ])
 def test_choose_one_or_many_step_of_fit_should_choose_step(
