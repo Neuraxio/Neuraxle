@@ -2,8 +2,6 @@ from abc import abstractmethod
 from collections import OrderedDict
 from typing import Union
 
-from py._log import warning
-
 from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
@@ -15,6 +13,8 @@ class ForceHandleMixin:
         - handle_transform
         - handle_fit_transform
         - handle_fit
+
+    If forbids only implementing fit or transform or fit_transform without the handles. So it forces the handles.
 
     .. seealso::
         :class:`BaseStep`
@@ -49,7 +49,10 @@ class ForceHandleMixin:
                 self.name))
 
 
-class Nullify(ForceHandleMixin, MetaStepMixin, BaseStep):
+OPTIONAL_ENABLED_HYPERPARAM = 'enabled'
+
+
+class Optional(ForceHandleMixin, MetaStepMixin, BaseStep):
     """
     A wrapper to nullify a step : nullify its hyperparams, and also nullify all of his behavior.
 
@@ -58,15 +61,20 @@ class Nullify(ForceHandleMixin, MetaStepMixin, BaseStep):
     .. code-block:: python
 
         p = Pipeline([
-            Nullify(Identity())
+            Optional(Identity(), enabled=True)
         ])
 
     """
 
-    def __init__(self, wrapped: BaseStep):
+    def __init__(self, wrapped: BaseStep, enabled: bool = True):
         ForceHandleMixin.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
-        BaseStep.__init__(self)
+        BaseStep.__init__(
+            self,
+            hyperparams=HyperparameterSamples({
+                OPTIONAL_ENABLED_HYPERPARAM: enabled
+            })
+        )
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
@@ -79,6 +87,10 @@ class Nullify(ForceHandleMixin, MetaStepMixin, BaseStep):
         :return: step, data_container
         :type: (BaseStep, DataContainer)
         """
+        if self.hyperparams[OPTIONAL_ENABLED_HYPERPARAM]:
+            self.wrapped, data_container = self.wrapped.handle_fit(data_container, context)
+            return self, data_container
+
         self._nullify_hyperparams()
         return self, data_container
 
@@ -94,6 +106,10 @@ class Nullify(ForceHandleMixin, MetaStepMixin, BaseStep):
         :return: step, data_container
         :type: (BaseStep, DataContainer)
         """
+        if self.hyperparams[OPTIONAL_ENABLED_HYPERPARAM]:
+            self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
+            return self, data_container
+
         self._nullify_hyperparams()
         return self, data_container
 
@@ -108,6 +124,9 @@ class Nullify(ForceHandleMixin, MetaStepMixin, BaseStep):
         :return: step, data_container
         :type: DataContainer
         """
+        if self.hyperparams[OPTIONAL_ENABLED_HYPERPARAM]:
+            return self.wrapped.handle_transform(data_container, context)
+
         self._nullify_hyperparams()
         return data_container
 
@@ -137,17 +156,22 @@ class ChooseOneOrManyStepsOf(Pipeline):
             ])
         ])
         p.set_hyperparams({
+            'ChooseOneOrManyStepsOf__choice__a__enabled': True,
+            'ChooseOneOrManyStepsOf__choice__b__enabled': False
+        })
+        # or
+        p.set_hyperparams({
             'ChooseOneOrManyStepsOf': {
                 'choice': {
-                    'a': True
-                    'b': False
+                    'a': { 'enabled': True },
+                    'b': { 'enabled': False }
                 }
             }
         })
 
     .. seealso::
         :class:`Pipeline`
-        :class:`Nullify`
+        :class:`Optional`
     """
 
     def __init__(self, steps, hyperparams=None):
@@ -155,10 +179,12 @@ class ChooseOneOrManyStepsOf(Pipeline):
 
         if hyperparams is None:
             hyperparams = HyperparameterSamples({
-                'choice': {}
+                CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM: {}
             })
 
         self.set_hyperparams(hyperparams)
+
+        self._make_all_steps_optional()
 
     def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
         """
@@ -169,31 +195,30 @@ class ChooseOneOrManyStepsOf(Pipeline):
         :return: self
         :rtype: BaseStep
         """
+        if CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM not in hyperparams:
+            hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM] = {}
+
         super().set_hyperparams(hyperparams=hyperparams)
 
-        if CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM not in self.hyperparams:
-            raise ValueError('\'choice\' hyperparam not set in {0} hyperparams'.format(self.name))
+        self._validate_choice_hyperparams()
+        self._set_all_hyperparams_steps_choice_to_true_by_default()
 
+        return self
+
+    def _validate_choice_hyperparams(self):
         for key in self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM].keys():
             if key not in self.keys():
                 raise ValueError('Invalid Choosen Step {0} in {1}'.format(key, self.name))
 
+    def _set_all_hyperparams_steps_choice_to_true_by_default(self):
         for key in self.keys():
             if key not in self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM].keys():
-                self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM][key] = False
-                warning.warn('You have not set any choice hyperparameter for {0} in {1}. Setting choice to False by default.'.format(key, self.name))
+                self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM][key] = True
 
-        self.nullify_steps_that_are_not_chosen()
-
-        return self
-
-    def nullify_steps_that_are_not_chosen(self):
+    def _make_all_steps_optional(self):
         """
-        Nullify steps that are not chosen using :class:`Nullify` step wrapper.
+        Wrap all steps with :class:`Optional` wrapper.
         """
         for step_name, is_chosen in self.hyperparams[CHOOSE_ONE_OR_MANY_STEPS_OF_CHOICE_HYPERPARAM].items():
-            if not is_chosen:
-                self[step_name] = Nullify(self[step_name])
-            elif isinstance(self[step_name], Nullify):
-                self[step_name] = self[step_name].get_step()
+            self[step_name] = Optional(self[step_name])
         self._refresh_steps()

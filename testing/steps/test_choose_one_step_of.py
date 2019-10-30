@@ -45,12 +45,12 @@ def create_test_case_single_step_choosen():
             []
         ],
         hyperparams={
-            'ChooseOneOrManyStepsOf__choice__a': True,
-            'ChooseOneOrManyStepsOf__choice__b': False
+            'ChooseOneOrManyStepsOf__choice__a__enabled': True,
+            'ChooseOneOrManyStepsOf__choice__b__enabled': False
         },
         hyperparams_space={
-            'ChooseOneOrManyStepsOf__choice__a': Boolean(),
-            'ChooseOneOrManyStepsOf__choice__b': Boolean()
+            'ChooseOneOrManyStepsOf__choice__a__enabled': Boolean(),
+            'ChooseOneOrManyStepsOf__choice__b__enabled': Boolean()
         },
         expected_processed_outputs=np.array([0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
     )
@@ -70,12 +70,12 @@ def create_test_case_multiple_steps_choosen():
         callbacks=[a_callback, b_callback],
         expected_callbacks_data=[DATA_INPUTS, DATA_INPUTS * 2],
         hyperparams={
-            'ChooseOneOrManyStepsOf__choice__a': True,
-            'ChooseOneOrManyStepsOf__choice__b': True
+            'ChooseOneOrManyStepsOf__choice__a__enabled': True,
+            'ChooseOneOrManyStepsOf__choice__b__enabled': True
         },
         hyperparams_space={
-            'ChooseOneOrManyStepsOf__choice__a': Boolean(),
-            'ChooseOneOrManyStepsOf__choice__b': Boolean()
+            'ChooseOneOrManyStepsOf__choice__a__enabled': Boolean(),
+            'ChooseOneOrManyStepsOf__choice__b__enabled': Boolean()
         },
         expected_processed_outputs=np.array([0, 4, 8, 12, 16, 20, 24, 28, 32, 36])
     )
@@ -95,12 +95,12 @@ def create_test_case_invalid_step_choosen():
         callbacks=[a_callback, b_callback],
         expected_callbacks_data=[DATA_INPUTS, DATA_INPUTS],
         hyperparams={
-            'ChooseOneOrManyStepsOf__choice__c': True,
-            'ChooseOneOrManyStepsOf__choice__b': False
+            'ChooseOneOrManyStepsOf__choice__c__enabled': True,
+            'ChooseOneOrManyStepsOf__choice__b__enabled': False
         },
         hyperparams_space={
-            'ChooseOneOrManyStepsOf__choice__a': Boolean(),
-            'ChooseOneOrManyStepsOf__choice__b': Boolean()
+            'ChooseOneOrManyStepsOf__choice__a__enabled': Boolean(),
+            'ChooseOneOrManyStepsOf__choice__b__enabled': Boolean()
         },
         expected_processed_outputs=np.array([0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
     )
@@ -120,12 +120,12 @@ def create_test_case_invalid_step_not_choosen():
         callbacks=[a_callback, b_callback],
         expected_callbacks_data=[DATA_INPUTS, DATA_INPUTS],
         hyperparams={
-            'ChooseOneOrManyStepsOf__choice__c': False,
-            'ChooseOneOrManyStepsOf__choice__b': False
+            'ChooseOneOrManyStepsOf__choice__c__enabled': False,
+            'ChooseOneOrManyStepsOf__choice__b__enabled': False
         },
         hyperparams_space={
-            'ChooseOneOrManyStepsOf__choice__a': Boolean(),
-            'ChooseOneOrManyStepsOf__choice__b': Boolean()
+            'ChooseOneOrManyStepsOf__choice__a__enabled': Boolean(),
+            'ChooseOneOrManyStepsOf__choice__b__enabled': Boolean()
         },
         expected_processed_outputs=np.array(range(10))
     )
@@ -182,12 +182,12 @@ def create_test_case_fit_transform_single_step_choosen():
             []
         ],
         hyperparams={
-            'ChooseOneOrManyStepsOf__choice__a': True,
-            'ChooseOneOrManyStepsOf__choice__b': False
+            'ChooseOneOrManyStepsOf__choice__a__enabled': True,
+            'ChooseOneOrManyStepsOf__choice__b__enabled': False
         },
         hyperparams_space={
-            'ChooseOneOrManyStepsOf__choice__a': Boolean(),
-            'ChooseOneOrManyStepsOf__choice__b': Boolean()
+            'ChooseOneOrManyStepsOf__choice__a__enabled': Boolean(),
+            'ChooseOneOrManyStepsOf__choice__b__enabled': Boolean()
         },
         expected_processed_outputs=np.array([0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
     )
@@ -214,12 +214,12 @@ def create_test_case_fit_transform_multiple_steps_choosen():
             (DATA_INPUTS * 2, EXPECTED_OUTPUTS)
         ],
         hyperparams={
-            'ChooseOneOrManyStepsOf__choice__a': True,
-            'ChooseOneOrManyStepsOf__choice__b': True
+            'ChooseOneOrManyStepsOf__choice__a__enabled': True,
+            'ChooseOneOrManyStepsOf__choice__b__enabled': True
         },
         hyperparams_space={
-            'ChooseOneOrManyStepsOf__choice__a': Boolean(),
-            'ChooseOneOrManyStepsOf__choice__b': Boolean()
+            'ChooseOneOrManyStepsOf__choice__a__enabled': Boolean(),
+            'ChooseOneOrManyStepsOf__choice__b__enabled': Boolean()
         },
         expected_processed_outputs=np.array([0, 4, 8, 12, 16, 20, 24, 28, 32, 36])
     )
@@ -246,12 +246,12 @@ def create_test_case_fit_multiple_steps_choosen():
             (DATA_INPUTS * 2, EXPECTED_OUTPUTS)
         ],
         hyperparams={
-            'ChooseOneOrManyStepsOf__choice__a': True,
-            'ChooseOneOrManyStepsOf__choice__b': True
+            'ChooseOneOrManyStepsOf__choice__a__enabled': True,
+            'ChooseOneOrManyStepsOf__choice__b__enabled': True
         },
         hyperparams_space={
-            'ChooseOneOrManyStepsOf__choice__a': Boolean(),
-            'ChooseOneOrManyStepsOf__choice__b': Boolean()
+            'ChooseOneOrManyStepsOf__choice__a__enabled': Boolean(),
+            'ChooseOneOrManyStepsOf__choice__b__enabled': Boolean()
         },
         expected_processed_outputs=np.array([0, 4, 8, 12, 16, 20, 24, 28, 32, 36])
     )
