@@ -84,36 +84,6 @@ class HashlibMd5Hasher(BaseHasher):
     .. todo:: potentially hash by source code
     """
 
-    def summary_hash(
-            self,
-            current_ids: List[str],
-            hyperparameters: HyperparameterSamples
-    ) -> str:
-        """
-        Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters into one current id
-        using  `hashlib.md5 <https://docs.python.org/3/library/hashlib.html>`_
-
-        :param current_ids: list of ids for each data inputs
-        :type current_ids: List[str]
-        :param hyperparameters: hyperparameters
-        :type hyperparameters: HyperparameterSamples
-        :return:
-        """
-        if len(hyperparameters) == 0:
-            current_hyperparameters_hash = ''
-        else:
-            hyperperams_dict = hyperparameters.to_flat_as_dict_primitive()
-            current_hyperparameters_hash = hashlib.md5(
-                str.encode(str(hyperperams_dict))
-            ).hexdigest()
-
-        m = hashlib.md5()
-        for current_id in current_ids:
-            m.update(str.encode(current_id))
-        m.update(str.encode(current_hyperparameters_hash))
-
-        return m.hexdigest()
-
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None) -> List[str]:
         """
         Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together
@@ -563,26 +533,6 @@ class BaseStep(ABC):
             current_ids = h.hash(current_ids, hyperparameters, data_inputs)
 
         return current_ids
-
-    def summary_hash(self, current_ids, hyperparameters, data_inputs) -> str:
-        """
-        Hash data inputs, current ids, and hyperparameters together using self.hashers.
-        This is used to create unique ids for the data checkpoints.
-
-        :param current_ids: current ids to rehash
-        :param hyperparameters: hyperparameters to hash current ids with
-        :param data_inputs: data inputs to create id for
-        :return: hashed current ids
-        :rtype: List[str]
-
-        .. seealso::
-            :class:`neuraxle.checkpoints.Checkpoint`
-        """
-        summary_current_id = None
-        for h in self.hashers:
-            summary_current_id = h.summary_hash(current_ids, hyperparameters, data_inputs)
-
-        return summary_current_id
 
     def setup(self) -> 'BaseStep':
         """
