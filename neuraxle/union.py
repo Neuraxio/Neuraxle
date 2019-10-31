@@ -216,6 +216,28 @@ class ModelStacking(FeatureUnion):
         FeatureUnion.__init__(self, steps_as_tuple, **kwargs)
         self.judge: BaseStep = judge  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
 
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
+        new_self, data_container = FeatureUnion.handle_fit_transform(self, data_container, context)
+
+        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
+
+        return new_self, self.transform(data_container.data_inputs)
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
+        new_self, data_container = FeatureUnion.handle_fit_transform(self, data_container, context)
+
+        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
+
+        return new_self
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        data_container = FeatureUnion.handle_transform(self, data_container, context)
+
+        data_inputs = self.transform(data_container.data_inputs)
+        data_container.set_data_inputs(data_inputs)
+
+        return data_container
+
     def fit(self, data_inputs, expected_outputs=None) -> 'ModelStacking':
         """
         Fit the parallel steps on the data. It will make use of some parallel processing.
