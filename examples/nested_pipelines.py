@@ -7,6 +7,8 @@ You can create pipelines within pipelines using the composition design pattern.
 This demonstrates how to create pipelines within pipelines, and how to access the steps and their
 attributes in the nested pipelines.
 
+For more info, see the `thread here <https://stackoverflow.com/questions/28822756/getting-model-attributes-from-scikit-learn-pipeline/58359509#58359509>`__.
+
 ..
     Copyright 2019, Neuraxio Inc.
 
@@ -34,7 +36,6 @@ from sklearn.preprocessing import StandardScaler
 
 from neuraxle.base import Identity
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.sklearn import SKLearnWrapper
 
 
 def main():
@@ -43,15 +44,15 @@ def main():
 
     # Create and fit the pipeline:
     pipeline = Pipeline([
-        SKLearnWrapper(StandardScaler()),
+        StandardScaler(),
         Identity(),
         Pipeline([
+            Identity(),
             Identity(),  # Note: an Identity step is a step that does nothing.
             Identity(),  # We use it here for demonstration purposes.
             Pipeline([
                 Identity(),
-                Identity(),
-                SKLearnWrapper(PCA(n_components=2))
+                PCA(n_components=2)
             ])
         ])
     ])
