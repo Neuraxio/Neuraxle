@@ -3,6 +3,8 @@ Neuraxle Pipelines
 
     Code Machine Learning Pipelines - The Right Way.
 
+.. image:: https://www.neuraxio.com/en/blog/assets/pipeline_1_small.jpg
+
 Neuraxle is a Machine Learning (ML) library for building neat pipelines,
 providing the right abstractions to both ease research, development, and
 deployment of your ML applications.
@@ -36,18 +38,18 @@ such:
         AddFeatures([
             # Add (concatenate) features in parallel, that are
             # themselves derived of the existing features:
-            SKLearnWrapper(PCA(n_components=2)),
-            SKLearnWrapper(FastICA(n_components=2)),
+            PCA(n_components=2),
+            FastICA(n_components=2),
         ]),
         RidgeModelStacking([
             # Here is an ensemble of 4 models or feature extractors,
             # That are themselves then fed to a ridge regression which
             # will act as a judge to finalize the prediction.
-            SKLearnWrapper(LinearRegression()),
-            SKLearnWrapper(LogisticRegression()),
-            SKLearnWrapper(GradientBoostingRegressor(n_estimators=500)),
-            SKLearnWrapper(GradientBoostingRegressor(max_depth=5)),
-            SKLearnWrapper(KMeans()),
+            LinearRegression(),
+            LogisticRegression(),
+            GradientBoostingRegressor(n_estimators=500),
+            GradientBoostingRegressor(max_depth=5),
+            KMeans(),
         ])
     ])
     # Note: here all the steps were imported from scikit-learn,
@@ -70,7 +72,7 @@ such:
     app.run(debug=False, port=5000)
 
 Visit the
-`examples <https://www.neuraxle.neuraxio.com/stable/examples/index.html>`__
+`examples <https://www.neuraxio.com/en/neuraxle/stable/examples/index.html>`__
 to get more a feeling of how it works, and inspiration.
 
 Why Neuraxle?
@@ -108,9 +110,9 @@ Parallel Computing
 Neuraxle offer multiple parallel processing features using
 `joblib <https://joblib.readthedocs.io/en/latest/parallel.html>`__. Most
 parallel processing in Neuraxle happens in the
-`pipeline <https://www.neuraxle.neuraxio.com/stable/api/neuraxle.pipeline.html>`__
+`pipeline <https://www.neuraxio.com/en/neuraxle/stable/api/neuraxle.pipeline.html>`__
 and
-`union <https://www.neuraxle.neuraxio.com/stable/api/neuraxle.union.html>`__
+`union <https://www.neuraxio.com/en/neuraxle/stable/api/neuraxle.union.html>`__
 modules, and as such, neuraxle can be easily parallelized on a cluster
 of computers using `distributed <https://ml.dask.org/joblib.html>`__ as
 its `joblib backend <https://ml.dask.org/joblib.html>`__.
@@ -221,8 +223,8 @@ Community
 ---------
 
 Join our `Slack
-workspace <https://join.slack.com/t/neuraxio-open-source/shared_invite/enQtNjc0NzM1NTI5MTczLWUwZmI5NjhkMzRmYzc1MGE5ZTE0YWRkYWI3NWIzZjc1YTRlM2Y1MzRmYzFmM2FiNWNhNGZlZDhhMzkyMTQ1ZTQ>`__ and our `Gitter <https://gitter.im/Neuraxle/community>`__!
-We <3 collaborators.
+workspace <https://neuraxio-open-source.slack.com/join/shared_invite/enQtNjc0NzM1NTI5MTczLWUwZmI5NjhkMzRmYzc1MGE5ZTE0YWRkYWI3NWIzZjc1YTRlM2Y1MzRmYzFmM2FiNWNhNGZlZDhhMzkyMTQ1ZTQ>`__ and our `Gitter <https://gitter.im/Neuraxle/community>`__!
+We <3 collaborators. You can also subscribe to our `mailing list <https://www.neuraxio.com/en/blog/index.html>`__ where we post our updates and news. 
 
 For **technical questions**, we recommend posting them on
 `StackOverflow <https://stackoverflow.com/questions/tagged/machine-learning>`__
@@ -313,7 +315,7 @@ We thank these organisations for generously supporting the project:
     <img src="https://www.neuraxio.com/images/neuraxio_logo_transparent.png" width="140px">
 
 
--  Umanéo Technologies Inc.: https://umaneo.com
+-  Umanéo Technologies Inc.: https://www.umaneo.com/
 
 .. raw:: html
 

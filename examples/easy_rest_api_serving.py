@@ -37,7 +37,7 @@ from sklearn.utils import shuffle
 
 from neuraxle.api.flask import FlaskRestApiWrapper, JSONDataBodyDecoder, JSONDataResponseEncoder
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.sklearn import SKLearnWrapper, RidgeModelStacking
+from neuraxle.steps.sklearn import RidgeModelStacking
 from neuraxle.union import AddFeatures
 
 
@@ -49,12 +49,12 @@ def main():
 
     pipeline = Pipeline([
         AddFeatures([
-            SKLearnWrapper(PCA(n_components=2)),
-            SKLearnWrapper(FastICA(n_components=2)),
+            PCA(n_components=2),
+            FastICA(n_components=2),
         ]),
         RidgeModelStacking([
-            SKLearnWrapper(GradientBoostingRegressor()),
-            SKLearnWrapper(KMeans()),
+            GradientBoostingRegressor(),
+            KMeans(),
         ]),
     ])
 
