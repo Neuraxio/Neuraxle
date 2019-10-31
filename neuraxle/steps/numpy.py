@@ -81,7 +81,10 @@ class NumpyConcatenateInnerFeatures(NumpyConcatenateOnCustomAxis):
             data_containers: List[DataContainer],
             new_current_ids
     ):
-        data_inputs = np.array([dc.data_inputs for dc in data_containers])
+        data_inputs = []
+        for dc in data_containers:
+            data_inputs.append(dc.data_inputs)
+
         data_inputs = self.transform(data_inputs)
 
         expected_outputs = data_containers[-1].expected_outputs
@@ -110,6 +113,25 @@ class NumpyTranspose(NonFittableMixin, BaseStep):
     def __init__(self):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
+
+    def join_data_containers(
+            self,
+            data_containers: List[DataContainer],
+            new_current_ids
+    ):
+        data_inputs = []
+        for dc in data_containers:
+            data_inputs.append(dc.data_inputs)
+
+        data_inputs = self.transform(data_inputs)
+
+        expected_outputs = data_containers[-1].expected_outputs
+
+        return DataContainer(
+            current_ids=new_current_ids,
+            data_inputs=data_inputs,
+            expected_outputs=expected_outputs
+        )
 
     def transform(self, data_inputs):
         return self._transpose(data_inputs)
