@@ -38,6 +38,15 @@ class ForEachDataInput(ForceHandleMixin, MetaStepMixin, BaseStep):
         BaseStep.__init__(self)
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Fit each step for each data inputs, and expected outputs
+
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: self
+        """
         output_data_container = ListDataContainer.empty()
 
         for current_id, di, eo in data_container:
@@ -58,6 +67,15 @@ class ForEachDataInput(ForceHandleMixin, MetaStepMixin, BaseStep):
         return self, output_data_container
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Transform each step for each data inputs, and expected outputs
+
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: self
+        """
         output_data_container = ListDataContainer.empty()
 
         for current_id, di, eo in data_container:
@@ -78,6 +96,16 @@ class ForEachDataInput(ForceHandleMixin, MetaStepMixin, BaseStep):
         return output_data_container
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Fit transform each step for each data inputs, and expected outputs
+
+        :param data_container: data container to fit transform
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+
+        :return: self, transformed_data_container
+        """
         output_data_container = ListDataContainer.empty()
 
         for current_id, di, eo in data_container:
