@@ -746,7 +746,7 @@ class LogUniform(HyperparameterDistribution):
         new_max_included = self.log2_max_included * kept_space_ratio + log2_best_guess * lost_space_ratio
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
             return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return LogUniform(2 ** new_min_included, 2 ** new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
+        return LogUniform(2 ** new_min_included, 2 ** new_max_included, 2 ** self.null_default_value).was_narrowed_from(kept_space_ratio, self)
 
 
 class Normal(HyperparameterDistribution):
