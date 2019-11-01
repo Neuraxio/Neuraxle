@@ -2,7 +2,7 @@
 Manipulate Hyperparameters in Neuraxle
 ================================================
 
-This demonstrates how to manipulate hyperparameters reletively to hyperparameter spaces.
+This demonstrates how to manipulate hyperparameters relatively to hyperparameter spaces.
 
 ..
     Copyright 2019, Neuraxio Inc.
