@@ -1530,9 +1530,10 @@ class MetaStepMixin:
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
 
 
-class ForceHandleMixin:
+class ForceAlwaysHandleMixin:
     """
     A pipeline step that only requires the implementation of handler methods :
+
         - handle_transform
         - handle_fit_transform
         - handle_fit
@@ -1553,13 +1554,13 @@ class ForceHandleMixin:
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
         raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
 
-    def transform(self, data_inputs) -> 'ForceHandleMixin':
+    def transform(self, data_inputs) -> 'ForceAlwaysHandleMixin':
         raise Exception('Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(self.name))
 
-    def fit(self, data_inputs, expected_outputs=None) -> 'ForceHandleMixin':
+    def fit(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
         raise Exception('Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(self.name))
 
-    def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceHandleMixin':
+    def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
         raise Exception('Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(self.name))
 
 

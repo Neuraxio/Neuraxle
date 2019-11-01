@@ -21,11 +21,11 @@ Pipeline Steps For Looping
 import copy
 from typing import List, Any
 
-from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ListDataContainer, ForceHandleMixin
+from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ListDataContainer, ForceAlwaysHandleMixin
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
 
-class ForEachDataInput(ForceHandleMixin, MetaStepMixin, BaseStep):
+class ForEachDataInput(MetaStepMixin, BaseStep):
     """
     Truncable step that fits/transforms each step for each of the data inputs, and expected outputs.
     """
@@ -36,6 +36,15 @@ class ForEachDataInput(ForceHandleMixin, MetaStepMixin, BaseStep):
     ):
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
+
+    def fit(self, data_inputs, expected_outputs=None):
+        if expected_outputs is None:
+            expected_outputs = [None] * len(data_inputs)
+
+        for di, eo in zip(data_inputs, expected_outputs):
+            self.wrapped = self.wrapped.fit(di, eo)
+
+        return self
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
         """
@@ -66,9 +75,23 @@ class ForEachDataInput(ForceHandleMixin, MetaStepMixin, BaseStep):
 
         return self, output_data_container
 
+    def transform(self, data_inputs):
+        """
+        Transform each step for each data inputs.
+
+        :param data_inputs: data inputs to transform
+        :type data_inputs: Iterable
+        :return: outputs
+        """
+        outputs = []
+        for di in data_inputs:
+            outputs.append(self.wrapped.transform(di))
+
+        return outputs
+
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
         """
-        Transform each step for each data inputs, and expected outputs
+        Transform each step for each data inputs.
 
         :param data_container: data container
         :type data_container: DataContainer
@@ -94,6 +117,27 @@ class ForEachDataInput(ForceHandleMixin, MetaStepMixin, BaseStep):
         output_data_container.set_current_ids(current_ids)
 
         return output_data_container
+
+    def fit_transform(self, data_inputs, expected_outputs=None):
+        """
+        Fit transform each step for each data inputs, and expected outputs
+
+        :param data_inputs: data inputs to fit transform
+        :type data_inputs: Iterable
+        :param expected_outputs: expected outputs to fit transform on
+        :type expected_outputs: Iterable
+
+        :return: self, transformed_data_container
+        """
+        if expected_outputs is None:
+            expected_outputs = [None] * len(data_inputs)
+
+        outputs = []
+        for di, eo in zip(data_inputs, expected_outputs):
+            self.wrapped, output = self.wrapped.fit_transform(di, eo)
+            outputs.append(output)
+
+        return self
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
         """

@@ -4,9 +4,10 @@ Create Pipeline Steps that only require implementing handler methods.
 
 If a pipeline step only needs to implement handler methods, then you can inherit from the ForceHandleMixin as demonstrated here.
 Handler methods are useful when :
-- You need to change the shape of the data container passed to the following steps, or the wrapped steps.
-- You want to apply side effects based on the data container, and the execution context.
-- You want to change the pipeline execution flow based on the data container, and the execution context.
+
+    - You need to change the shape of the data container passed to the following steps, or the wrapped steps.
+    - You want to apply side effects based on the data container, and the execution context.
+    - You want to change the pipeline execution flow based on the data container, and the execution context.
 
 ..
     Copyright 2019, Neuraxio Inc.
@@ -30,26 +31,29 @@ Handler methods are useful when :
 """
 import numpy as np
 
-from neuraxle.base import BaseStep, ForceHandleMixin, DataContainer, ExecutionContext
+from neuraxle.base import BaseStep, ForceAlwaysHandleMixin, DataContainer, ExecutionContext
 from neuraxle.pipeline import Pipeline
 
 
-class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
+class ForceAlwaysAlwaysHandleMixinStep(ForceAlwaysHandleMixin, BaseStep):
     """
-    Please make your steps inherit from ForceHandleMixin, when they only implement handle_methods.
+    Please make your steps inherit from ForceHandleMixin when they only implement handle_methods, but also
+    when you want to make impossible the use of regular fit, transform, and fit_transform methods
     Also, make sure that BaseStep is the last step you inherit from.
     """
 
     def __init__(self):
-        ForceHandleMixin.__init__(self)
+        ForceAlwaysHandleMixin.__init__(self)
         BaseStep.__init__(self)
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
-        # change the shape of the data container (ex: expand it's dimension like numpys expand dim using ExpandDim step)
-        # and/or
-        # apply any side effects based on the data container (ex: see checkpoint steps)
-        # and/or
-        # change the execution flow of the pipeline
+        """
+        Change the shape of the data container.
+        and/or
+        Apply any side effects based on the data container
+        And/or
+        Change the execution flow of the pipeline
+        """
 
         current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
         data_container.set_current_ids(current_ids)
@@ -57,11 +61,13 @@ class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
         return self, data_container
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
-        # change the shape of the data container (ex: expand it's dimension like numpys expand dim using ExpandDim step)
-        # and/or
-        # apply any side effects based on the data container (ex: see checkpoint steps)
-        # and/or
-        # change the execution flow of the pipeline
+        """
+        Change the shape of the data container.
+        and/or
+        Apply any side effects based on the data container
+        And/or
+        Change the execution flow of the pipeline
+        """
 
         current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
         data_container.set_current_ids(current_ids)
@@ -69,11 +75,13 @@ class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
         return data_container
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
-        # change the shape of the data container (ex: expand it's dimension like numpys expand dim using ExpandDim step)
-        # and/or
-        # apply any side effects based on the data container (ex: see checkpoint steps)
-        # and/or
-        # change the execution flow of the pipeline
+        """
+        Change the shape of the data container.
+        and/or
+        Apply any side effects based on the data container
+        And/or
+        Change the execution flow of the pipeline
+        """
 
         current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
         data_container.set_current_ids(current_ids)
@@ -83,7 +91,7 @@ class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
 
 def main():
     p = Pipeline([
-        ForceHandleMixinStep(),
+        ForceAlwaysAlwaysHandleMixinStep(),
     ])
 
     p = p.fit(np.array([0, 1]), np.array([0, 1]))
