@@ -225,6 +225,7 @@ def create_test_case_fit_transform_multiple_steps_choosen():
         expected_processed_outputs=np.array([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
     )
 
+
 def create_test_case_fit_single_step_choosen():
     a_callback = TapeCallbackFunction()
     b_callback = TapeCallbackFunction()
@@ -255,6 +256,7 @@ def create_test_case_fit_single_step_choosen():
         },
         expected_processed_outputs=np.array([0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
     )
+
 
 def create_test_case_fit_multiple_steps_choosen():
     a_callback = TapeCallbackFunction()
@@ -317,15 +319,3 @@ def test_choose_one_or_many_step_of_fit_should_choose_step(
     p = p.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
 
     assert_callback_data_is_as_expected(test_case)
-
-
-@pytest.mark.parametrize('test_case', [
-    create_test_case_invalid_step_choosen(),
-    create_test_case_invalid_step_not_choosen()
-])
-def test_choose_one_or_many_step_of_should_throw_exception_on_invalid_chosen_step(
-        test_case: ChooseStepsTestCase):
-    with pytest.raises(ValueError):
-        p = test_case.pipeline
-        p.set_hyperparams_space(test_case.hyperparams_space)
-        p.set_hyperparams(test_case.hyperparams)

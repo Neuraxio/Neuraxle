@@ -1,13 +1,11 @@
 from abc import abstractmethod
-from collections import OrderedDict
-from typing import Union
 
 from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.union import FeatureUnion
 
 
-class ForceHandleMixin:
+class ForceMustHandleMixin:
     """
     A pipeline step that only requires the implementation of handler methods :
         - handle_transform
@@ -33,17 +31,17 @@ class ForceHandleMixin:
             'BaseStep', DataContainer):
         raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
 
-    def transform(self, data_inputs) -> 'ForceHandleMixin':
+    def transform(self, data_inputs) -> 'ForceMustHandleMixin':
         raise Exception(
             'Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(
                 self.name))
 
-    def fit(self, data_inputs, expected_outputs=None) -> 'ForceHandleMixin':
+    def fit(self, data_inputs, expected_outputs=None) -> 'ForceMustHandleMixin':
         raise Exception(
             'Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(
                 self.name))
 
-    def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceHandleMixin':
+    def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceMustHandleMixin':
         raise Exception(
             'Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(
                 self.name))
@@ -52,7 +50,7 @@ class ForceHandleMixin:
 OPTIONAL_ENABLED_HYPERPARAM = 'enabled'
 
 
-class Optional(ForceHandleMixin, MetaStepMixin, BaseStep):
+class Optional(ForceMustHandleMixin, MetaStepMixin, BaseStep):
     """
     A wrapper to nullify a step : nullify its hyperparams, and also nullify all of his behavior.
 
@@ -67,7 +65,7 @@ class Optional(ForceHandleMixin, MetaStepMixin, BaseStep):
     """
 
     def __init__(self, wrapped: BaseStep, enabled: bool = True, nullified_return_value=None):
-        ForceHandleMixin.__init__(self)
+        ForceMustHandleMixin.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(
             self,
@@ -198,34 +196,6 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
             self.set_hyperparams(hyperparams)
 
         self._make_all_steps_optional()
-
-    def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
-        """
-        Set hyperparams for step selection, and nullify the steps that are not chosen.
-
-        :param hyperparams: hyperparams
-        :type hyperparams: HyperparameterSamples
-        :return: self
-        :rtype: BaseStep
-        """
-        super().set_hyperparams(hyperparams=hyperparams)
-
-        self._validate_choice_hyperparams()
-        self._set_all_hyperparams_steps_enabled_by_default()
-
-        return self
-
-    def _validate_choice_hyperparams(self):
-        for key in self.hyperparams.keys():
-            if key not in self.keys():
-                raise ValueError('Invalid Choosen Step {0} in {1}'.format(key, self.name))
-
-    def _set_all_hyperparams_steps_enabled_by_default(self):
-        for step_name in self.keys():
-            if step_name not in self.hyperparams.keys():
-                self.hyperparams[step_name] = {
-                    OPTIONAL_ENABLED_HYPERPARAM: True
-                }
 
     def _make_all_steps_optional(self):
         """

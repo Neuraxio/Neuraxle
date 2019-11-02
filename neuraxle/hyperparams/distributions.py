@@ -302,7 +302,7 @@ class Choice(HyperparameterDistribution):
             index = self.choice_list.index(x)
         except ValueError:
             raise ValueError(
-                "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
+                "Item not found in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
         except (NotImplementedError, NotImplemented):
             raise ValueError("A correct method for __eq__ should be defined for all item in the list.")
         except AttributeError:
@@ -594,7 +594,7 @@ class Uniform(HyperparameterDistribution):
 
         :param min_included: minimum integer, included.
         :type min_included: float
-        :param max_included: maximum integer, might be included - for more info, see https://docs.python.org/2/library/random.html#random.uniform
+        :param max_included: maximum integer, might be included - for more info, see `examples <https://docs.python.org/2/library/random.html#random.uniform>`__
         :type max_included: float
         :param null_default_value: null default value for distribution. if None, take the min_included
         :type null_default_value: int
