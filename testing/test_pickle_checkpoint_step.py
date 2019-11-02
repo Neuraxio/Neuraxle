@@ -25,7 +25,8 @@ import pickle
 import numpy as np
 from py._path.local import LocalPath
 
-from neuraxle.base import DataContainer, ExecutionContext, ExecutionMode
+from neuraxle.base import ExecutionContext, ExecutionMode
+from neuraxle.data_container import DataContainer
 from neuraxle.base import NonFittableMixin
 from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.hyperparams.space import HyperparameterSamples
