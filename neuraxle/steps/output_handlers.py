@@ -19,7 +19,44 @@ You can find here output handlers steps that changes especially the data outputs
     limitations under the License.
 
 """
-from neuraxle.base import DataContainer, ExecutionContext, BaseStep
+from neuraxle.base import DataContainer, ExecutionContext, BaseStep, NonFittableMixin, MetaStepMixin
+
+
+class TransformExpectedOutputWrapper(NonFittableMixin, MetaStepMixin, BaseStep):
+    """
+    Transform expected output wrapper step that can sends the expected_outputs to the wrapped step
+    so that it can transform the expected outputs.
+    """
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Handle transform by transforming the expected outputs using the wrapped step.
+
+        :param context: execution context
+        :type context: ExecutionContext
+        :param data_container: data container
+        :type data_container: DataContainer
+        :return: data container
+        :rtype: DataContainer
+        """
+        new_expected_outputs_data_container = self.wrapped.handle_transform(
+            DataContainer(
+                current_ids=data_container.current_ids,
+                data_inputs=data_container.expected_outputs,
+                expected_outputs=None
+            ),
+            context.push(self.wrapped)
+        )
+
+        data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
+
+        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        data_container.set_current_ids(current_ids)
+
+        return data_container
+
+    def transform(self, data_inputs):
+        raise NotImplementedError('must be used inside a pipeline')
 
 
 class OutputTransformerMixin:
@@ -46,7 +83,8 @@ class OutputTransformerMixin:
 
         return data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
         """
         Handle transform by fitting the step,
         and updating the data inputs, and expected outputs inside the data container.
