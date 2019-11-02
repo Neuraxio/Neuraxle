@@ -1312,6 +1312,9 @@ class BaseStep(ABC):
     def __str__(self):
         return self.__repr__()
 
+    def __del__(self):
+        self.teardown()
+
 
 class MetaStepMixin:
     """
