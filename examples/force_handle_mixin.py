@@ -1,5 +1,5 @@
 """
-Create Pipeline Steps that only require implementing handler methods.
+Create Pipeline Steps that require implementing only handler methods
 ========================================================================================================================
 
 If a pipeline step only needs to implement handler methods, then you can inherit from the ForceHandleMixin as demonstrated here.
