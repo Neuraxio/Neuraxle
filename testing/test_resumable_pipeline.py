@@ -22,7 +22,8 @@ Tests for resumable pipelines
 import numpy as np
 import pytest
 
-from neuraxle.base import DataContainer, ExecutionContext
+from neuraxle.base import ExecutionContext
+from neuraxle.data_container import DataContainer
 from neuraxle.checkpoints import Checkpoint
 from neuraxle.pipeline import Pipeline, ResumablePipeline
 from neuraxle.steps.misc import TapeCallbackFunction, FitTransformCallbackStep
