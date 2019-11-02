@@ -1,5 +1,5 @@
 """
-Create Pipeline Steps that only require implementing handler methods.
+Create Pipeline Steps that require implementing only handler methods
 ========================================================================================================================
 
 If a pipeline step only needs to implement handler methods, then you can inherit from the ForceHandleMixin as demonstrated here.
@@ -96,6 +96,10 @@ def main():
 
     p = p.fit(np.array([0, 1]), np.array([0, 1]))
     p = p.transform(np.array([0, 1]))
+    
+    # Note that calling `ForceAlwaysAlwaysHandleMixinStep().fit(...)`
+    # on some data would have crashed. We would need to instead do
+    # `ForceAlwaysAlwaysHandleMixinStep().handle_fit(...)` with a handle.
 
 
 if __name__ == "__main__":
