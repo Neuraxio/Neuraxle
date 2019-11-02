@@ -1,8 +1,8 @@
 """
-Manipulate Hyperparameters in Neuraxle
-================================================
+Manipulate Hyperparameter Spaces for Hyperparameter Tuning
+===========================================================
 
-This demonstrates how to manipulate hyperparameters reletively to hyperparameter spaces.
+This demonstrates how to manipulate hyperparameters and hyperparameter spaces.
 
 ..
     Copyright 2019, Neuraxio Inc.
