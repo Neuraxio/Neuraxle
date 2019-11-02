@@ -1,6 +1,7 @@
 from typing import Tuple, Any
 
-from neuraxle.base import DataContainer, BaseStep, NonFittableMixin, ExecutionContext, ExecutionMode
+from neuraxle.base import BaseStep, NonFittableMixin, ExecutionContext, ExecutionMode
+from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.output_handlers import OutputTransformerMixin

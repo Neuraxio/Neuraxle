@@ -24,8 +24,9 @@ import shutil
 from abc import abstractmethod
 from typing import Iterable, Any
 
-from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, NonFittableMixin, NonTransformableMixin, \
+from neuraxle.base import MetaStepMixin, BaseStep, NonFittableMixin, NonTransformableMixin, \
     ExecutionContext
+from neuraxle.data_container import DataContainer
 from neuraxle.pipeline import DEFAULT_CACHE_FOLDER
 from neuraxle.steps.misc import BaseValueHasher, Md5Hasher, VALUE_CACHING
 
@@ -56,7 +57,7 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
 
         :param context: execution context
         :param data_container: the data container to transform
-        :type data_container: DataContainer
+        :type data_container: neuraxle.data_container.DataContainer
 
         :return: tuple(fitted pipeline, data_container)
         """
@@ -67,7 +68,7 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
 
         data_container.set_data_inputs(outputs)
 
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, outputs)
+        current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
         return self, data_container
@@ -78,7 +79,7 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
 
         :param context: execution context
         :param data_container: the data container to transform
-        :type data_container: DataContainer
+        :type data_container: neuraxle.data_container.DataContainer
 
         :return: transformed data container
         """
@@ -87,7 +88,7 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
 
         data_container.set_data_inputs(outputs)
 
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, outputs)
+        current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
         return data_container
@@ -100,7 +101,7 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
         Transform data container using value caching.
 
         :param data_container: the data container to transform
-        :type data_container: DataContainer
+        :type data_container: neuraxle.data_container.DataContainer
 
         :return: iterable
         """

@@ -21,7 +21,8 @@ Pipeline Steps For Looping
 import copy
 from typing import List, Any
 
-from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ListDataContainer, ForceAlwaysHandleMixin
+from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext
+from neuraxle.data_container import ListDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
 
@@ -70,7 +71,7 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
                 output.expected_outputs
             )
 
-        current_ids = self.hash(data_container.current_ids, self.get_hyperparams())
+        current_ids = self.hash(data_container)
         output_data_container.set_current_ids(current_ids)
 
         return self, output_data_container
@@ -113,7 +114,7 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
                 output.expected_outputs
             )
 
-        current_ids = self.hash(data_container.current_ids, self.get_hyperparams())
+        current_ids = self.hash(data_container)
         output_data_container.set_current_ids(current_ids)
 
         return output_data_container
@@ -164,7 +165,7 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
                 output.expected_outputs
             )
 
-        current_ids = self.hash(data_container.current_ids, self.get_hyperparams())
+        current_ids = self.hash(data_container)
         output_data_container.set_current_ids(current_ids)
 
         return self, output_data_container
