@@ -22,7 +22,7 @@ You can find here output handlers steps that changes especially the data outputs
 from neuraxle.base import DataContainer, ExecutionContext, BaseStep, NonFittableMixin, MetaStepMixin
 
 
-class TransformExpectedOutputWrapper(NonFittableMixin, MetaStepMixin, BaseStep):
+class OutputTransformerWrapper(NonFittableMixin, MetaStepMixin, BaseStep):
     """
     Transform expected output wrapper step that can sends the expected_outputs to the wrapped step
     so that it can transform the expected outputs.
