@@ -19,8 +19,8 @@ This is the core of Neuraxle. Most pipeline steps derive (inherit) from those cl
     limitations under the License.
 
 ..
-    Thanks to Umaneo for their contributions to this Machine Learning 
-    project, visit https://www.umaneo.com/ for more information on Umaneo
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
 
@@ -35,9 +35,10 @@ from copy import copy
 from enum import Enum
 from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView
 
-from conv import convolved_1d
 from joblib import dump, load
+from sklearn.base import BaseEstimator
 
+from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
 DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
@@ -120,164 +121,6 @@ class HashlibMd5Hasher(BaseHasher):
             new_current_ids.append(m.hexdigest())
 
         return new_current_ids
-
-
-class DataContainer:
-    """
-    DataContainer class to store data inputs, expected outputs, and ids together.
-    Each :class:`BaseStep` needs to rehash ids with hyperparameters so that the :class:`Checkpoint` step
-    can create checkpoints for a set of hyperparameters.
-
-    The DataContainer object is passed to all of the :class:`BaseStep` handle methods :
-        * :func:`~neuraxle.base.BaseStep.handle_transform`
-        * :func:`~neuraxle.base.BaseStep.handle_fit_transform`
-        * :func:`~neuraxle.base.BaseStep.handle_fit`
-
-    Most of the time, you won't need to care about the DataContainer because it is the pipeline that manages it.
-
-    .. seealso::
-        :class:`BaseHasher`,
-        :class: `BaseStep`
-    """
-
-    def __init__(self,
-                 current_ids,
-                 data_inputs: Any,
-                 expected_outputs: Any = None
-                 ):
-        self.current_ids = current_ids
-        self.data_inputs = data_inputs
-        if expected_outputs is None:
-            self.expected_outputs = [None] * len(current_ids)
-        else:
-            self.expected_outputs = expected_outputs
-
-    def set_data_inputs(self, data_inputs: Iterable):
-        """
-        Set data inputs.
-
-        :param data_inputs: data inputs
-        :type data_inputs: Iterable
-        :return:
-        """
-        self.data_inputs = data_inputs
-
-    def set_expected_outputs(self, expected_outputs: Iterable):
-        """
-        Set expected outputs.
-
-        :param expected_outputs: expected outputs
-        :type expected_outputs: Iterable
-        :return:
-        """
-        self.expected_outputs = expected_outputs
-
-    def set_current_ids(self, current_ids: List[str]):
-        """
-        Set current ids.
-
-        :param current_ids: data inputs
-        :type current_ids: List[str]
-        :return:
-        """
-        self.current_ids = current_ids
-
-    def convolved_1d(self, stride, kernel_size) -> Iterable['DataContainer']:
-        """
-        Returns an iterator that iterates through batches of the DataContainer.
-
-        :param stride: step size for the convolution operation
-        :param kernel_size:
-        :return: an iterator of DataContainer
-        :rtype: Iterable[DataContainer]
-
-        .. seealso::
-            `<https://github.com/guillaume-chevalier/python-conv-lib>`_
-        """
-        conv_current_ids = convolved_1d(stride=stride, iterable=self.current_ids, kernel_size=kernel_size)
-        conv_data_inputs = convolved_1d(stride=stride, iterable=self.data_inputs, kernel_size=kernel_size)
-        conv_expected_outputs = convolved_1d(stride=stride, iterable=self.expected_outputs, kernel_size=kernel_size)
-
-        for current_ids, data_inputs, expected_outputs in zip(conv_current_ids, conv_data_inputs,
-                                                              conv_expected_outputs):
-            yield DataContainer(
-                current_ids=current_ids,
-                data_inputs=data_inputs,
-                expected_outputs=expected_outputs
-            )
-
-    def copy(self):
-        return DataContainer(
-            current_ids=copy(self.current_ids),
-            data_inputs=copy(self.data_inputs),
-            expected_outputs=copy(self.expected_outputs),
-        )
-
-    def __iter__(self):
-        """
-        Iter method returns a zip of all of the current_ids, data_inputs, and expected_outputs in the data container.
-
-        :return: iterator of tuples containing current_ids, data_inputs, and expected outputs
-        :rtype: Iterator[Tuple]
-        """
-        current_ids = self.current_ids
-        if self.current_ids is None:
-            current_ids = [None] * len(self.data_inputs)
-
-        expected_outputs = self.expected_outputs
-        if self.expected_outputs is None:
-            expected_outputs = [None] * len(self.data_inputs)
-
-        return zip(current_ids, self.data_inputs, expected_outputs)
-
-    def __repr__(self):
-        return str(self)
-
-    def __str__(self):
-        return self.__class__.__name__ + "(current_ids=" + repr(list(self.current_ids)) + ", ...)"
-
-    def __len__(self):
-        return len(self.data_inputs)
-
-
-class ListDataContainer(DataContainer):
-    """
-    Sub class of DataContainer to perform list operations.
-    It allows to perform append, and concat operations on a DataContainer.
-
-    .. seealso::
-        :class:`DataContainer`
-    """
-
-    @staticmethod
-    def empty() -> 'ListDataContainer':
-        return ListDataContainer([], [], [])
-
-    def append(self, current_id: str, data_input: Any, expected_output: Any):
-        """
-        Append a new data input to the DataContainer.
-
-        :param current_id: current id for the data input
-        :type current_id: str
-        :param data_input: data input
-        :param expected_output: expected output
-        :return:
-        """
-        self.current_ids.append(current_id)
-        self.data_inputs.append(data_input)
-        self.expected_outputs.append(expected_output)
-
-    def concat(self, data_container: DataContainer):
-        """
-        Concat the given data container to the current data container.
-
-        :param data_container: data container
-        :type data_container: DataContainer
-        :return:
-        """
-        self.current_ids.extend(data_container.current_ids)
-        self.data_inputs.extend(data_container.data_inputs)
-        self.expected_outputs.extend(data_container.expected_outputs)
 
 
 class BaseSaver(ABC):
@@ -678,22 +521,23 @@ class BaseStep(ABC):
         self.is_invalidated = True
         self.is_train: bool = True
 
-    def hash(self, current_ids, hyperparameters, data_inputs: Any = None) -> List[str]:
+    def hash(self, data_container: DataContainer) -> List[str]:
         """
         Hash data inputs, current ids, and hyperparameters together using self.hashers.
         This is used to create unique ids for the data checkpoints.
 
-        :param current_ids: current ids to rehash
-        :param hyperparameters: hyperparameters to hash current ids with
-        :param data_inputs: data inputs to create id for
+        :param data_container: data container
+        :type data_container: DataContainer
         :return: hashed current ids
         :rtype: List[str]
 
         .. seealso::
             :class:`neuraxle.checkpoints.Checkpoint`
         """
+        current_ids = data_container.current_ids
         for h in self.hashers:
-            current_ids = h.hash(current_ids, hyperparameters, data_inputs)
+            current_ids = h.hash(current_ids, self.hyperparams, data_container.data_inputs)
+
         return current_ids
 
     def setup(self) -> 'BaseStep':
@@ -924,7 +768,7 @@ class BaseStep(ABC):
 
         new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
 
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
         return new_self, data_container
@@ -944,7 +788,7 @@ class BaseStep(ABC):
         new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
         data_container.set_data_inputs(out)
 
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, out)
+        current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
         return new_self, data_container
@@ -961,7 +805,7 @@ class BaseStep(ABC):
         out = self.transform(data_container.data_inputs)
         data_container.set_data_inputs(out)
 
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, out)
+        current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
         return data_container
@@ -1245,8 +1089,6 @@ class BaseStep(ABC):
         return self
 
     def tosklearn(self):
-        from sklearn.base import BaseEstimator
-
         class NeuraxleToSKLearnPipelineWrapper(BaseEstimator):
             def __init__(self, neuraxle_step):
                 self.p: Union[BaseStep, TruncableSteps] = neuraxle_step
@@ -1323,6 +1165,9 @@ class BaseStep(ABC):
 
     def __str__(self):
         return self.__repr__()
+
+    def __del__(self):
+        self.teardown()
 
 
 class MetaStepMixin:
@@ -1754,7 +1599,8 @@ class TruncableSteps(BaseStep, ABC):
         :type steps_as_tuple: NamedTupleList
         :return:
         """
-        self.steps_as_tuple: NamedTupleList = self.patch_missing_names(steps_as_tuple)
+        steps_as_tuple = self._wrap_non_base_steps(steps_as_tuple)
+        self.steps_as_tuple: NamedTupleList = self._patch_missing_names(steps_as_tuple)
         self._refresh_steps()
 
     def setup(self) -> 'BaseStep':
@@ -1784,24 +1630,46 @@ class TruncableSteps(BaseStep, ABC):
 
         return self
 
-    def patch_missing_names(self, steps_as_tuple: List) -> NamedTupleList:
+    def _wrap_non_base_steps(self, steps_as_tuple: List) -> NamedTupleList:
         """
-        Make sure that each sub step as a unique name, and add a name to the sub steps that don't have one already.
+        If some steps are not of type BaseStep, we'll try to make them of this type. For instance, sklearn objects
+        will be wrapped by a SKLearnWrapper here.
 
-        :param steps_as_tuple: steps as tuple
-        :type steps_as_tuple: NamedTupleList
-        :return:
+        :param steps_as_tuple: a list of steps or of named tuples of steps (e.g.: NamedTupleList)
+        :return: a NamedTupleList
         """
-        names_yet = set()
-        patched = []
+        # TODO: document more the type of the `steps as tuple`.
+
+        wrapped = []
         for step in steps_as_tuple:
-
+            class_name = None
             if isinstance(step, tuple):
                 class_name = step[0]
                 step = step[1]
-            else:
+
+            if isinstance(step, BaseEstimator):
+                import neuraxle.steps.sklearn
+                step = neuraxle.steps.sklearn.SKLearnWrapper(step)
+                step.set_name(step.get_wrapped_sklearn_predictor().__class__.__name__)
+
+            if class_name is None:
                 class_name = step.get_name()
 
+            wrapped.append((class_name, step))
+        return wrapped
+
+    def _patch_missing_names(self, steps_as_tuple: NamedTupleList) -> NamedTupleList:
+        """
+        Make sure that each sub step has a unique name, and add a name to the sub steps that don't have one already.
+
+        :param steps_as_tuple: a NamedTupleList
+        :type steps_as_tuple: a NamedTupleList
+        :return: a NamedTupleList with fixed names
+        """
+        # TODO: document more the type of the `steps as tuple`.
+        names_yet = set()
+        patched = []
+        for class_name, step in steps_as_tuple:
             _name = class_name
             if class_name in names_yet:
                 warnings.warn(
@@ -2066,7 +1934,9 @@ class TruncableSteps(BaseStep, ABC):
             self.steps[index] = new_step
             self.steps_as_tuple[index] = (key, new_step)
         else:
-            raise ValueError('type {0} not supported yet in TruncableSteps.__setitem__, please implement it if you need it'.format(type(key)))
+            raise ValueError(
+                'type {0} not supported yet in TruncableSteps.__setitem__, please implement it if you need it'.format(
+                    type(key)))
 
     def __getitem__(self, key: Union[slice, int, str]):
         """

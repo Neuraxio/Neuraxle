@@ -26,8 +26,9 @@ from abc import abstractmethod, ABC
 from enum import Enum
 from typing import List, Tuple, Any
 
-from neuraxle.base import ResumableStepMixin, BaseStep, DataContainer, ExecutionContext, \
-    ExecutionMode, NonTransformableMixin, NonFittableMixin, ListDataContainer, Identity
+from neuraxle.base import ResumableStepMixin, BaseStep, ExecutionContext, \
+    ExecutionMode, NonTransformableMixin, NonFittableMixin, Identity
+from neuraxle.data_container import DataContainer, ListDataContainer
 
 
 class DataCheckpointType(Enum):
@@ -90,11 +91,11 @@ class BaseCheckpointer(NonFittableMixin, NonTransformableMixin, BaseStep):
         Returns the data container checkpoint, or latest data container.
 
         :param data_container: data container to save data container or fitted steps
-        :type data_container: DataContainer
+        :type data_container: neuraxle.data_container.DataContainer
         :param context: context to save data container or fitted steps
         :type context: ExecutionContext
         :return: saved data container
-        :rtype: DataContainer
+        :rtype: neuraxle.data_container.DataContainer
         """
         raise NotImplementedError()
 
@@ -106,11 +107,11 @@ class BaseCheckpointer(NonFittableMixin, NonTransformableMixin, BaseStep):
         and expected outputs for each current id in the given data container.
 
         :param data_container: data container containing the current_ids to read checkpoint for
-        :type data_container: DataContainer
+        :type data_container: neuraxle.data_container.DataContainer
         :param context: context to read checkpoint for
         :type context: ExecutionContext
         :return: the data container checkpoint
-        :rtype: DataContainer
+        :rtype: neuraxle.data_container.DataContainer
         """
         raise NotImplementedError()
 
@@ -207,7 +208,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :param data_container: data container for creating the data checkpoint
         :param context: context for creating the step checkpoint
         :return: saved data container
-        :rtype: DataContainer
+        :rtype: neuraxle.data_container.DataContainer
         """
         self.save_checkpoint(data_container, context)
         return self, data_container
@@ -219,7 +220,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :param data_container: data container for creating the data checkpoint
         :param context: context for creating the step checkpoint
         :return: saved data container
-        :rtype: DataContainer
+        :rtype: neuraxle.data_container.DataContainer
         """
         return self.save_checkpoint(data_container, context)
 
@@ -231,7 +232,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :param data_container: data container for creating the data checkpoint
         :param context: context for creating the step checkpoint
         :return: saved data container
-        :rtype: DataContainer
+        :rtype: neuraxle.data_container.DataContainer
         """
         return self, self.save_checkpoint(data_container, context)
 
@@ -242,7 +243,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :param data_container: data container for creating the data checkpoint
         :param context: context for creating the step checkpoint
         :return: saved data container
-        :rtype: DataContainer
+        :rtype: neuraxle.data_container.DataContainer
         """
         for checkpointer in self.all_checkpointers:
             checkpointer.save_checkpoint(data_container, context)
@@ -256,7 +257,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :param data_container: data container to load checkpoint from
         :param context: execution mode to load checkpoint from
         :return: loaded data container checkpoint
-        :rtype: DataContainer
+        :rtype: neuraxle.data_container.DataContainer
         """
         for checkpointer in self.all_checkpointers:
             if checkpointer.is_for_execution_mode(context.get_execution_mode()):
@@ -493,7 +494,7 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         Save data container expected outputs with :py:attr:`~expected_output_checkpointer`.
 
         :param data_container: data container to checkpoint
-        :type data_container: DataContainer
+        :type data_container: neuraxle.data_container.DataContainer
         :param context: execution context to checkpoint from
         :type context: ExecutionContext
         :return:
@@ -522,11 +523,11 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         Read data container expected outputs checkpoint with :py:attr:`~expected_output_checkpointer`.
 
         :param data_container: data container to read checkpoint for
-        :type data_container: DataContainer
+        :type data_container: neuraxle.data_container.DataContainer
         :param context: execution context to read checkpoint from
         :type context: ExecutionContext
         :return: data container checkpoint
-        :rtype: DataContainer
+        :rtype: neuraxle.data_container.DataContainer
         """
         data_container_checkpoint = ListDataContainer.empty()
 
@@ -554,11 +555,11 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         Returns if the whole data container has been checkpointed.
 
         :param data_container: data container to read checkpoint for
-        :type data_container: DataContainer
+        :type data_container: neuraxle.data_container.DataContainer
         :param context: execution context to read checkpoint from
         :type context: ExecutionContext
         :return: data container checkpoint
-        :rtype: DataContainer
+        :rtype: neuraxle.data_container.DataContainer
         """
         for current_id in data_container.current_ids:
             if not self.data_input_checkpointer.checkpoint_exists(

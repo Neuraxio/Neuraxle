@@ -96,7 +96,7 @@ class FeatureUnion(TruncableSteps):
                 for _, step in self.steps_as_tuple
             ]
 
-        new_current_ids = self.hash(data_container.current_ids, self.get_hyperparams(), data_container.data_inputs)
+        new_current_ids = self.hash(data_container)
 
         data_container = self.joiner.join_data_containers(data_containers, new_current_ids)
 
@@ -121,7 +121,7 @@ class FeatureUnion(TruncableSteps):
                 for _, step in self.steps_as_tuple
             ]
 
-        new_current_ids = self.hash(data_container.current_ids, self.get_hyperparams(), data_container.data_inputs)
+        new_current_ids = self.hash(data_container)
 
         data_containers  = [dc for _, dc in fitted_steps_data_containers]
         data_container = self.joiner.join_data_containers(data_containers, new_current_ids)
