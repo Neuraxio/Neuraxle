@@ -31,32 +31,33 @@ class OneHotEncoder(NonFittableMixin, BaseStep):
     Rounds floats  to integer for safety in the transform.
     """
 
-    def __init__(self, no_columns, name):
+    def __init__(self, nb_columns, name):
         super().__init__(name=name)
-        self.no_columns = no_columns
+        self.nb_columns = nb_columns
 
     def transform(self, data_inputs):
         """
         Transform data inputs using one hot encoding, adding no_columns to the -1 axis.
-
         :param data_inputs: data inputs to encode
         :return: one hot encoded data inputs
         """
         # validate enum values
-        if np.any(data_inputs >= self.no_columns):
-            raise NotImplementedError('To high enum value for {0}'.format(self.name))
+        if not isinstance(data_inputs, np.ndarray):
+            data_inputs = np.array(data_inputs)
 
         # treats invalid values as having no columns activated. create a temporary column for invalid values
-        data_inputs[data_inputs is None] = self.no_columns
-        data_inputs[data_inputs < 0] = self.no_columns
+        data_inputs[data_inputs == None] = self.nb_columns
+        data_inputs[data_inputs >= self.nb_columns] = self.nb_columns
+        data_inputs[data_inputs < 0] = self.nb_columns
 
         # round floats to integer for safety in the transform
         data_inputs = np.rint(data_inputs)
 
         # finally, one hot encode data inputs
-        outputs_ = np.eye(self.no_columns + 1)[np.array(data_inputs, dtype=np.int32)]
+        outputs_ = np.eye(self.nb_columns + 1)[np.array(data_inputs, dtype=np.int32)]
 
         # delete the invalid values column, and zero hot the invalid values
-        outputs_ = np.delete(outputs_, self.no_columns, axis=-1)
+        outputs_ = np.delete(outputs_, self.nb_columns, axis=-1)
 
         return outputs_
+
