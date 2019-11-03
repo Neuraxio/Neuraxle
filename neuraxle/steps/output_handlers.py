@@ -27,6 +27,10 @@ class TransformExpectedOutputWrapper(NonFittableMixin, MetaStepMixin, BaseStep):
     Transform expected output wrapper step that can sends the expected_outputs to the wrapped step
     so that it can transform the expected outputs.
     """
+    def __init__(self, wrapped):
+        NonFittableMixin.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
+        BaseStep.__init__(self)
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
