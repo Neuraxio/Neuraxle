@@ -18,6 +18,10 @@ This is the core of Neuraxle. Most pipeline steps derive (inherit) from those cl
     See the License for the specific language governing permissions and
     limitations under the License.
 
+..
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+
 """
 
 import hashlib
@@ -31,10 +35,10 @@ from copy import copy
 from enum import Enum
 from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView
 
-from conv import convolved_1d
 from joblib import dump, load
 from sklearn.base import BaseEstimator
 
+from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
 DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
@@ -68,7 +72,6 @@ class BaseHasher(ABC):
         :rtype: List[str]
         """
         raise NotImplementedError()
-
 
 class HashlibMd5Hasher(BaseHasher):
     """
@@ -117,157 +120,6 @@ class HashlibMd5Hasher(BaseHasher):
             new_current_ids.append(m.hexdigest())
 
         return new_current_ids
-
-
-class DataContainer:
-    """
-    DataContainer class to store data inputs, expected outputs, and ids together.
-    Each :class:`BaseStep` needs to rehash ids with hyperparameters so that the :class:`Checkpoint` step
-    can create checkpoints for a set of hyperparameters.
-
-    The DataContainer object is passed to all of the :class:`BaseStep` handle methods :
-        * :func:`~neuraxle.base.BaseStep.handle_transform`
-        * :func:`~neuraxle.base.BaseStep.handle_fit_transform`
-        * :func:`~neuraxle.base.BaseStep.handle_fit`
-
-    Most of the time, you won't need to care about the DataContainer because it is the pipeline that manages it.
-
-    .. seealso::
-        :class:`BaseHasher`,
-        :class: `BaseStep`
-    """
-
-    def __init__(self,
-                 current_ids,
-                 data_inputs: Any,
-                 expected_outputs: Any = None
-                 ):
-        self.current_ids = current_ids
-        self.data_inputs = data_inputs
-        if expected_outputs is None:
-            self.expected_outputs = [None] * len(current_ids)
-        else:
-            self.expected_outputs = expected_outputs
-
-    def set_data_inputs(self, data_inputs: Iterable):
-        """
-        Set data inputs.
-
-        :param data_inputs: data inputs
-        :type data_inputs: Iterable
-        :return:
-        """
-        self.data_inputs = data_inputs
-
-    def set_expected_outputs(self, expected_outputs: Iterable):
-        """
-        Set expected outputs.
-
-        :param expected_outputs: expected outputs
-        :type expected_outputs: Iterable
-        :return:
-        """
-        self.expected_outputs = expected_outputs
-
-    def set_current_ids(self, current_ids: List[str]):
-        """
-        Set current ids.
-
-        :param current_ids: data inputs
-        :type current_ids: List[str]
-        :return:
-        """
-        self.current_ids = current_ids
-
-    def convolved_1d(self, stride, kernel_size) -> Iterable['DataContainer']:
-        """
-        Returns an iterator that iterates through batches of the DataContainer.
-
-        :param stride: step size for the convolution operation
-        :param kernel_size:
-        :return: an iterator of DataContainer
-        :rtype: Iterable[DataContainer]
-
-        .. seealso::
-            `<https://github.com/guillaume-chevalier/python-conv-lib>`_
-        """
-        conv_current_ids = convolved_1d(stride=stride, iterable=self.current_ids, kernel_size=kernel_size)
-        conv_data_inputs = convolved_1d(stride=stride, iterable=self.data_inputs, kernel_size=kernel_size)
-        conv_expected_outputs = convolved_1d(stride=stride, iterable=self.expected_outputs, kernel_size=kernel_size)
-
-        for current_ids, data_inputs, expected_outputs in zip(conv_current_ids, conv_data_inputs,
-                                                              conv_expected_outputs):
-            yield DataContainer(
-                current_ids=current_ids,
-                data_inputs=data_inputs,
-                expected_outputs=expected_outputs
-            )
-
-    def __iter__(self):
-        """
-        Iter method returns a zip of all of the current_ids, data_inputs, and expected_outputs in the data container.
-
-        :return: iterator of tuples containing current_ids, data_inputs, and expected outputs
-        :rtype: Iterator[Tuple]
-        """
-        current_ids = self.current_ids
-        if self.current_ids is None:
-            current_ids = [None] * len(self.data_inputs)
-
-        expected_outputs = self.expected_outputs
-        if self.expected_outputs is None:
-            expected_outputs = [None] * len(self.data_inputs)
-
-        return zip(current_ids, self.data_inputs, expected_outputs)
-
-    def __repr__(self):
-        return str(self)
-
-    def __str__(self):
-        return self.__class__.__name__ + "(current_ids=" + repr(list(self.current_ids)) + ", ...)"
-
-    def __len__(self):
-        return len(self.data_inputs)
-
-
-class ListDataContainer(DataContainer):
-    """
-    Sub class of DataContainer to perform list operations.
-    It allows to perform append, and concat operations on a DataContainer.
-
-    .. seealso::
-        :class:`DataContainer`
-    """
-
-    @staticmethod
-    def empty() -> 'ListDataContainer':
-        return ListDataContainer([], [], [])
-
-    def append(self, current_id: str, data_input: Any, expected_output: Any):
-        """
-        Append a new data input to the DataContainer.
-
-        :param current_id: current id for the data input
-        :type current_id: str
-        :param data_input: data input
-        :param expected_output: expected output
-        :return:
-        """
-        self.current_ids.append(current_id)
-        self.data_inputs.append(data_input)
-        self.expected_outputs.append(expected_output)
-
-    def concat(self, data_container: DataContainer):
-        """
-        Concat the given data container to the current data container.
-
-        :param data_container: data container
-        :type data_container: DataContainer
-        :return:
-        """
-        self.current_ids.extend(data_container.current_ids)
-        self.data_inputs.extend(data_container.data_inputs)
-        self.expected_outputs.extend(data_container.expected_outputs)
 
 
 class BaseSaver(ABC):
@@ -668,22 +520,23 @@ class BaseStep(ABC):
         self.is_invalidated = True
         self.is_train: bool = True
 
-    def hash(self, current_ids, hyperparameters, data_inputs: Any = None) -> List[str]:
+    def hash(self, data_container: DataContainer) -> List[str]:
         """
         Hash data inputs, current ids, and hyperparameters together using self.hashers.
         This is used to create unique ids for the data checkpoints.
 
-        :param current_ids: current ids to rehash
-        :param hyperparameters: hyperparameters to hash current ids with
-        :param data_inputs: data inputs to create id for
+        :param data_container: data container
+        :type data_container: DataContainer
         :return: hashed current ids
         :rtype: List[str]
 
         .. seealso::
             :class:`neuraxle.checkpoints.Checkpoint`
         """
+        current_ids = data_container.current_ids
         for h in self.hashers:
-            current_ids = h.hash(current_ids, hyperparameters, data_inputs)
+            current_ids = h.hash(current_ids, self.hyperparams, data_container.data_inputs)
+
         return current_ids
 
     def setup(self) -> 'BaseStep':
@@ -914,7 +767,7 @@ class BaseStep(ABC):
 
         new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
 
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
         return new_self, data_container
@@ -934,7 +787,7 @@ class BaseStep(ABC):
         new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
         data_container.set_data_inputs(out)
 
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, out)
+        current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
         return new_self, data_container
@@ -951,7 +804,7 @@ class BaseStep(ABC):
         out = self.transform(data_container.data_inputs)
         data_container.set_data_inputs(out)
 
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, out)
+        current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
         return data_container
@@ -1312,6 +1165,9 @@ class BaseStep(ABC):
     def __str__(self):
         return self.__repr__()
 
+    def __del__(self):
+        self.teardown()
+
 
 class MetaStepMixin:
     """
@@ -1546,7 +1402,6 @@ class NonFittableMixin:
         """
         return self
 
-
 class NonTransformableMixin:
     """
     A pipeline step that has no effect at all but to return the same data without changes.
@@ -1585,6 +1440,37 @@ class NonTransformableMixin:
         :return: the ``processed_outputs``, unchanged.
         """
         return processed_outputs
+
+class ForceHandleMixin:
+    """
+    A pipeline step that only requires the implementation of handler methods :
+        - handle_transform
+        - handle_fit_transform
+        - handle_fit
+    .. seealso::
+        :class:`BaseStep`
+    """
+
+    @abstractmethod
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        raise NotImplementedError('Must implement handle_fit in {0}'.format(self.name))
+
+    @abstractmethod
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        raise NotImplementedError('Must implement handle_transform in {0}'.format(self.name))
+
+    @abstractmethod
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
+
+    def transform(self, data_inputs) -> 'ForceHandleMixin':
+        raise Exception('Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(self.name))
+
+    def fit(self, data_inputs, expected_outputs=None) -> 'ForceHandleMixin':
+        raise Exception('Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(self.name))
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceHandleMixin':
+        raise Exception('Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(self.name))
 
 
 class TruncableJoblibStepSaver(JoblibStepSaver):

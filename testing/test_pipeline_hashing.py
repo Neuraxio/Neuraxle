@@ -57,13 +57,13 @@ def mock_hasher(current_ids, data_inputs, hyperparameters):
 
 
 class ResumablePipelineWithMockHasher(ResumablePipeline):
-    def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
-        return mock_hasher(current_ids, data_inputs, hyperparameters)
+    def hash(self, data_container):
+        return mock_hasher(data_container.current_ids, data_container.data_inputs, self.hyperparams)
 
 
 class TransformCallbackStepWithMockHasher(TransformCallbackStep):
-    def hash(self, current_ids, hyperparameters, data_inputs: Any = None):
-        return mock_hasher(current_ids, data_inputs, hyperparameters)
+    def hash(self, data_container):
+        return mock_hasher(data_container.current_ids, data_container.data_inputs, self.hyperparams)
 
 
 def create_callback_step(tape_step_name, hyperparams):
