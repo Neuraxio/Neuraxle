@@ -7,7 +7,7 @@ from neuraxle.steps.encoding import OneHotEncoder
 @pytest.mark.parametrize("n_dims", [1, 2, 3])
 @pytest.mark.parametrize("no_columns", [10])
 def test_one_hot_encode_should_encode_data_inputs(n_dims, no_columns):
-    one_hot_encode = OneHotEncoder(no_columns=no_columns, name='one_hot')
+    one_hot_encode = OneHotEncoder(nb_columns=no_columns, name='one_hot')
     data_shape = list(range(100, 200))[:n_dims]
     data_inputs = np.random.randint(low=no_columns, size=data_shape)
     data_inputs[0] = 0

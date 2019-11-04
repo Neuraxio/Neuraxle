@@ -354,9 +354,9 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
     Mini Batch Sequential Pipeline class to create a pipeline processing data inputs in batch.
     """
 
-    def __init__(self, steps: NamedTupleList, batch_size):
+    def __init__(self, steps: NamedTupleList):
         Pipeline.__init__(self, steps)
-        self.batch_size = batch_size
+        self.is_initialized = True
 
     def transform(self, data_inputs: Any):
         """
