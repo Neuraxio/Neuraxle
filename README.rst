@@ -290,6 +290,22 @@ distributed under different terms and without source code.
 Note: this Summary of the License is not legal advice. Refer to the `full
 license <https://github.com/Neuraxio/Neuraxle/blob/master/LICENSE>`__.
 
+Citation
+~~~~~~~~~~~~
+
+You may cite our `extended abstract <https://www.researchgate.net/publication/337002011_Neuraxle_-_A_Python_Framework_for_Neat_Machine_Learning_Pipelines>`__ that was presented at the Montreal Artificial Intelligence Symposium (MAIS) 2019. Here is the bibtex code to cite:
+
+.. code:: bibtex
+
+    @misc{neuraxle,
+    author = {Chevalier, Guillaume and Brillant, Alexandre and Hamel, Eric},
+    year = {2019},
+    month = {09},
+    pages = {},
+    title = {Neuraxle - A Python Framework for Neat Machine Learning Pipelines},
+    doi = {10.13140/RG.2.2.33135.59043}
+    }
+
 Contributors
 ~~~~~~~~~~~~
 
