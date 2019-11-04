@@ -21,7 +21,8 @@ Pipeline Steps For Looping
 import copy
 from typing import List, Any
 
-from neuraxle.base import MetaStepMixin, BaseStep
+from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext
+from neuraxle.data_container import ListDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
 
@@ -34,17 +35,10 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
             self,
             wrapped: BaseStep
     ):
-        BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
+        BaseStep.__init__(self)
 
     def fit(self, data_inputs, expected_outputs=None):
-        """
-        Fit each step for each data inputs, and expected outputs
-
-        :param data_inputs:
-        :param expected_outputs:
-        :return: self
-        """
         if expected_outputs is None:
             expected_outputs = [None] * len(data_inputs)
 
@@ -53,27 +47,88 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
 
         return self
 
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Fit each step for each data inputs, and expected outputs
+
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: self
+        """
+        output_data_container = ListDataContainer.empty()
+
+        for current_id, di, eo in data_container:
+            self.wrapped, output = self.wrapped.handle_fit(
+                DataContainer(current_ids=None, data_inputs=di, expected_outputs=eo),
+                context
+            )
+
+            output_data_container.append(
+                current_id,
+                output.data_inputs,
+                output.expected_outputs
+            )
+
+        current_ids = self.hash(data_container)
+        output_data_container.set_current_ids(current_ids)
+
+        return self, output_data_container
+
     def transform(self, data_inputs):
         """
-        Transform each step for each data inputs, and expected outputs
+        Transform each step for each data inputs.
 
-        :param data_inputs:
-        :return: self
+        :param data_inputs: data inputs to transform
+        :type data_inputs: Iterable
+        :return: outputs
         """
         outputs = []
         for di in data_inputs:
-            output = self.wrapped.transform(di)
-            outputs.append(output)
+            outputs.append(self.wrapped.transform(di))
 
         return outputs
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Transform each step for each data inputs.
+
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: self
+        """
+        output_data_container = ListDataContainer.empty()
+
+        for current_id, di, eo in data_container:
+            output = self.wrapped.handle_transform(
+                DataContainer(current_ids=None, data_inputs=di, expected_outputs=eo),
+                context
+            )
+
+            output_data_container.append(
+                current_id,
+                output.data_inputs,
+                output.expected_outputs
+            )
+
+        current_ids = self.hash(data_container)
+        output_data_container.set_current_ids(current_ids)
+
+        return output_data_container
 
     def fit_transform(self, data_inputs, expected_outputs=None):
         """
         Fit transform each step for each data inputs, and expected outputs
 
-        :param data_inputs:
-        :param expected_outputs:
-        :return: self
+        :param data_inputs: data inputs to fit transform
+        :type data_inputs: Iterable
+        :param expected_outputs: expected outputs to fit transform on
+        :type expected_outputs: Iterable
+
+        :return: self, transformed_data_container
         """
         if expected_outputs is None:
             expected_outputs = [None] * len(data_inputs)
@@ -83,8 +138,37 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
             self.wrapped, output = self.wrapped.fit_transform(di, eo)
             outputs.append(output)
 
-        return self, outputs
+        return self
 
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Fit transform each step for each data inputs, and expected outputs
+
+        :param data_container: data container to fit transform
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+
+        :return: self, transformed_data_container
+        """
+        output_data_container = ListDataContainer.empty()
+
+        for current_id, di, eo in data_container:
+            self.wrapped, output = self.wrapped.handle_fit_transform(
+                DataContainer(current_ids=None, data_inputs=di, expected_outputs=eo),
+                context
+            )
+
+            output_data_container.append(
+                current_id,
+                output.data_inputs,
+                output.expected_outputs
+            )
+
+        current_ids = self.hash(data_container)
+        output_data_container.set_current_ids(current_ids)
+
+        return self, output_data_container
 
 class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
     def __init__(self, wrapped: BaseStep, copy_op=copy.deepcopy):
