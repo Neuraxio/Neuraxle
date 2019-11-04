@@ -54,7 +54,7 @@ class DataContainer:
                  ):
         self.current_ids = current_ids
         self.data_inputs = data_inputs
-        if expected_outputs is None:
+        if expected_outputs is None and isinstance(data_inputs, Iterable):
             self.expected_outputs = [None] * len(data_inputs)
         else:
             self.expected_outputs = expected_outputs
