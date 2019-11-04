@@ -104,7 +104,10 @@ class HashlibMd5Hasher(BaseHasher):
         :rtype: List[str]
         """
         if current_ids is None:
-            current_ids = [str(i) for i in range(len(data_inputs))]
+            if isinstance(data_inputs, Iterable):
+                current_ids = [str(i) for i in range(len(data_inputs))]
+            else:
+                current_ids = 0
 
         if len(hyperparameters) == 0:
             return current_ids
@@ -1379,6 +1382,40 @@ class MetaStepMixin:
 
 
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
+
+
+class ForceAlwaysHandleMixin:
+    """
+    A pipeline step that only requires the implementation of handler methods :
+
+        - handle_transform
+        - handle_fit_transform
+        - handle_fit
+
+    .. seealso::
+        :class:`BaseStep`
+    """
+
+    @abstractmethod
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
+        raise NotImplementedError('Must implement handle_fit in {0}'.format(self.name))
+
+    @abstractmethod
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+        raise NotImplementedError('Must implement handle_transform in {0}'.format(self.name))
+
+    @abstractmethod
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+        raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
+
+    def transform(self, data_inputs) -> 'ForceAlwaysHandleMixin':
+        raise Exception('Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(self.name))
+
+    def fit(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
+        raise Exception('Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(self.name))
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
+        raise Exception('Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(self.name))
 
 
 class NonFittableMixin:
