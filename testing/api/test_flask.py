@@ -50,7 +50,7 @@ def setup_api():
             :return:
             """
             return {
-                'predictions': data_inputs.tolist()
+                'predictions': np.array(data_inputs).tolist()
             }
 
     class Multiplier(NonFittableMixin, BaseStep):
