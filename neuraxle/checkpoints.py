@@ -282,6 +282,73 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         return True
 
 
+class BaseSummaryCheckpointer(ABC):
+    """
+    Mini Data Checkpoint that uses pickle to create a checkpoint for a current id, and a data input or an expected output.
+
+    A mini data checkpointer must be wrapped with a :class:`MiniDataCheckpointerWrapper` to be added to a :class:`Checkpoint`
+    :py:attr:`~Checkpoint.data_checkpointers` :
+
+    .. code:: python
+
+        Checkpoint(
+            all_checkpointers=[
+                StepSavingCheckpointer(),
+                MiniDataCheckpointerWrapper(
+                    data_input_checkpointer=PickleMiniDataCheckpointer(),
+                    expected_output_checkpointer=PickleMiniDataCheckpointer()
+                )
+            ]
+        )
+
+    .. seealso::
+        * :class:`BaseMiniDataCheckpointer`
+        * :class:`MiniDataCheckpointerWrapper`
+        * :class:`PickleMiniDataCheckpointer`
+    """
+
+    @abstractmethod
+    def save_summary(self, checkpoint_path, data_container: DataContainer):
+        """
+        Save data checkpoint with the given current_id, and data.
+
+        :param checkpoint_path: checkpoint path for saving
+        :type checkpoint_path: str
+        :param current_id: current id to checkpoint
+        :type current_id: str
+        :param data: data to checkpoint
+        :type data: Any
+        :return:
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def read_summary(self, checkpoint_path, data_container: DataContainer) -> List[str]:
+        """
+        Read data checkpoint with the given current_id, and data.
+
+        :param checkpoint_path: checkpoint path to read
+        :type checkpoint_path: str
+        :param current_id: current id to read checkpoint for
+        :type current_id: str
+        :return:
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def checkpoint_exists(self, checkpoint_path, data_container: DataContainer) -> bool:
+        """
+        Returns if checkpoint exists with the given path, and current id.
+
+        :param checkpoint_path: checkpoint path to read
+        :type checkpoint_path: str
+        :param current_id: current id to read checkpoint for
+        :type current_id: str
+        :return:
+        """
+        raise NotImplementedError()
+
+
 class BaseMiniDataCheckpointer(ABC):
     """
     Mini Data Checkpoint that uses pickle to create a checkpoint for a current id, and a data input or an expected output.
@@ -361,6 +428,24 @@ class NullMiniDataCheckpointer(BaseMiniDataCheckpointer):
 
     def checkpoint_exists(self, checkpoint_path, current_id) -> bool:
         return True
+
+
+class PickleSummaryCheckpointer(BaseSummaryCheckpointer):
+    def save_summary(self, checkpoint_path, data_container: DataContainer):
+        with open(os.path.join(checkpoint_path, '{0}.txt'.format(data_container.summary_id)), 'w+') as file:
+            file.writelines(data_container.current_ids)
+
+    def read_summary(self, checkpoint_path, data_container: DataContainer) -> List[str]:
+        with open(os.path.join(checkpoint_path, '{0}.txt'.format(data_container.summary_id)), 'r') as file:
+            current_ids = file.readlines(data_container.current_ids)
+        return current_ids
+
+    def checkpoint_exists(self, checkpoint_path, data_container: DataContainer) -> bool:
+        return os.path.exists(
+            os.path.join(
+                checkpoint_path, '{0}.txt'.format(data_container.summary_id)
+            )
+        )
 
 
 class PickleMiniDataCheckpointer(BaseMiniDataCheckpointer):
@@ -475,12 +560,14 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
 
     def __init__(
             self,
+            summary_checkpointer: BaseSummaryCheckpointer,
             data_input_checkpointer: BaseMiniDataCheckpointer,
             expected_output_checkpointer: BaseMiniDataCheckpointer = None
     ):
         execution_mode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM  # TODO: analyse if we need this or not ?
         BaseCheckpointer.__init__(self, execution_mode)
 
+        self.summary_checkpointer = summary_checkpointer
         self.data_input_checkpointer: BaseMiniDataCheckpointer = data_input_checkpointer
 
         if expected_output_checkpointer is None:
@@ -501,6 +588,11 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         """
         if not self.is_for_execution_mode(context.get_execution_mode()):
             return data_container
+
+        self.summary_checkpointer.save_summary(
+            checkpoint_path=context.get_path(),
+            data_container=data_container
+        )
 
         for current_id, data_input, expected_output in data_container:
             self.data_input_checkpointer.save_checkpoint(
@@ -531,7 +623,12 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         """
         data_container_checkpoint = ListDataContainer.empty()
 
-        for current_id in data_container.current_ids:
+        current_ids = self.summary_checkpointer.read_summary(
+            checkpoint_path=context.get_path(),
+            data_container=data_container
+        )
+
+        for current_id in current_ids:
             data_input = self.data_input_checkpointer.read_checkpoint(
                 checkpoint_path=self._get_data_input_checkpoint_path(context),
                 current_id=current_id
@@ -561,7 +658,15 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         :return: data container checkpoint
         :rtype: neuraxle.data_container.DataContainer
         """
-        for current_id in data_container.current_ids:
+        if not self.summary_checkpointer.checkpoint_exists(context.get_path(), data_container):
+            return False
+
+        current_ids = self.summary_checkpointer.read_summary(
+            checkpoint_path=context.get_path(),
+            data_container=data_container
+        )
+
+        for current_id in current_ids:
             if not self.data_input_checkpointer.checkpoint_exists(
                     checkpoint_path=self._get_data_input_checkpoint_path(context),
                     current_id=current_id
@@ -598,6 +703,7 @@ class DefaultCheckpoint(Checkpoint):
             all_checkpointers=[
                 StepSavingCheckpointer(),
                 MiniDataCheckpointerWrapper(
+                    summary_checkpointer=PickleSummaryCheckpointer(),
                     data_input_checkpointer=PickleMiniDataCheckpointer(),
                     expected_output_checkpointer=PickleMiniDataCheckpointer()
                 )

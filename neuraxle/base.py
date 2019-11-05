@@ -133,7 +133,7 @@ class HashlibMd5Hasher(BaseHasher):
             if isinstance(data_inputs, Iterable):
                 current_ids = [str(i) for i in range(len(data_inputs))]
             else:
-                current_ids = [0]
+                current_ids = [str(0)]
 
         if len(hyperparameters) == 0:
             return current_ids
