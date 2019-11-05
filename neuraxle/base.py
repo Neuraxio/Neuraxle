@@ -1398,7 +1398,7 @@ NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
 
 class ForceAlwaysHandleMixin:
     """
-    A pipeline step that only requires the implementation of handler methods :
+    A pipeline step that requires the implementation only of handler methods :
 
         - handle_transform
         - handle_fit_transform
