@@ -50,9 +50,6 @@ class OneHotEncoder(NonFittableMixin, BaseStep):
         data_inputs[data_inputs >= self.nb_columns] = self.nb_columns
         data_inputs[data_inputs < 0] = self.nb_columns
 
-        # round floats to integer for safety in the transform
-        data_inputs = np.rint(data_inputs)
-
         # finally, one hot encode data inputs
         outputs_ = np.eye(self.nb_columns + 1)[np.array(data_inputs, dtype=np.int32)]
 
