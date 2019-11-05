@@ -433,12 +433,14 @@ class NullMiniDataCheckpointer(BaseMiniDataCheckpointer):
 class PickleSummaryCheckpointer(BaseSummaryCheckpointer):
     def save_summary(self, checkpoint_path, data_container: DataContainer):
         with open(os.path.join(checkpoint_path, '{0}.txt'.format(data_container.summary_id)), 'w+') as file:
-            file.writelines(data_container.current_ids)
+            lines = [str(cuid) + '\n' for cuid in data_container.current_ids]
+            lines[-1] = str(data_container.current_ids[-1])
+            file.writelines(lines)
 
     def read_summary(self, checkpoint_path, data_container: DataContainer) -> List[str]:
         with open(os.path.join(checkpoint_path, '{0}.txt'.format(data_container.summary_id)), 'r') as file:
-            current_ids = file.readlines(data_container.current_ids)
-        return current_ids
+            current_ids = file.readlines()
+        return [cuid.strip() for cuid in current_ids]
 
     def checkpoint_exists(self, checkpoint_path, data_container: DataContainer) -> bool:
         return os.path.exists(
@@ -588,6 +590,8 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         """
         if not self.is_for_execution_mode(context.get_execution_mode()):
             return data_container
+
+        context.mkdir()
 
         self.summary_checkpointer.save_summary(
             checkpoint_path=context.get_path(),

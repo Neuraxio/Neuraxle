@@ -325,8 +325,7 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
                 index_latest_checkpoint = index
                 starting_step_data_container = copy(current_data_container)
 
-            current_ids = step.hash(current_data_container)
-            current_data_container.set_current_ids(current_ids)
+            current_data_container = self.hash_data_container(data_container)
 
         return index_latest_checkpoint, starting_step_data_container
 

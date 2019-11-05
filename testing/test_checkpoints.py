@@ -90,6 +90,13 @@ def given_fully_saved_checkpoints(tmpdir):
     os.makedirs(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', 'di'))
     os.makedirs(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', 'eo'))
 
+    with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint',
+                           '{0}.txt'.format('f90d89f61611cc0c196b1c6ba2d261ed')), 'w+') as file:
+        file.writelines([
+            '0\n',
+            '1'
+        ])
+
     with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', 'di', '0.pickle'), 'wb') as file:
         dump(0, file)
     with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', 'di', '1.pickle'), 'wb') as file:
