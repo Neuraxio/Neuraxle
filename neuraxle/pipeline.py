@@ -356,7 +356,6 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
 
     def __init__(self, steps: NamedTupleList):
         Pipeline.__init__(self, steps)
-        self.is_initialized = True
 
     def transform(self, data_inputs: Any):
         """
@@ -372,12 +371,31 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
 
         return data_container.data_inputs
 
+    def fit(self, data_inputs, expected_outputs=None) -> 'Pipeline':
+        """
+        :param data_inputs: the data input to fit on
+        :param expected_outputs: the expected data output to fit on
+        :return: the pipeline itself
+        """
+        self.setup()
+
+        data_container = DataContainer(current_ids=None, data_inputs=data_inputs, expected_outputs=expected_outputs)
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
+
+        context = ExecutionContext.create_from_root(self, ExecutionMode.FIT_TRANSFORM, self.cache_folder)
+        new_self, data_container = self.handle_fit(data_container, context)
+
+        return new_self
+
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('Pipeline', Any):
         """
         :param data_inputs: the data input to fit on
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
+        self.setup()
+
         data_container = DataContainer(current_ids=None, data_inputs=data_inputs, expected_outputs=expected_outputs)
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
@@ -408,6 +426,40 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
             data_container.set_current_ids(current_ids)
 
         return data_container
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> \
+            Tuple['MiniBatchSequentialPipeline', DataContainer]:
+        """
+        Fit all sub pipelines splitted by the Barrier steps.
+
+        :param data_container: data container to transform.
+        :param context: execution context
+        :return: data container
+        """
+        sub_pipelines = self._create_sub_pipelines()
+        index_start = 0
+
+        for sub_pipeline in sub_pipelines:
+            sub_context = context.push(sub_pipeline)
+            sub_pipeline.setup()
+
+            barrier = sub_pipeline[-1]
+            sub_pipeline, data_container = barrier.join_fit_transform(
+                step=sub_pipeline,
+                data_container=data_container,
+                context=sub_context
+            )
+            current_ids = self.hash(data_container)
+            data_container.set_current_ids(current_ids)
+
+            new_self = self[:index_start] + sub_pipeline
+            if index_start + len(sub_pipeline) < len(self):
+                new_self += self[index_start + len(sub_pipeline):]
+
+            self.steps_as_tuple = new_self.steps_as_tuple
+            index_start += len(sub_pipeline)
+
+        return self, data_container
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> \
             Tuple['MiniBatchSequentialPipeline', DataContainer]:
