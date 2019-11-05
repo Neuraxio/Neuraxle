@@ -25,7 +25,7 @@ import pickle
 import numpy as np
 from py._path.local import LocalPath
 
-from neuraxle.base import ExecutionContext, ExecutionMode
+from neuraxle.base import ExecutionContext, ExecutionMode, Identity
 from neuraxle.data_container import DataContainer
 from neuraxle.base import NonFittableMixin
 from neuraxle.checkpoints import DefaultCheckpoint
@@ -160,7 +160,6 @@ def test_when_hyperparams_and_saved_same_pipeline_should_load_checkpoint_pickle(
 
 def test_when_hyperparams_and_saved_different_pipeline_should_not_load_checkpoint_pickle(tmpdir: LocalPath):
     # Given
-    tape = TapeCallbackFunction()
 
     # When
     pipeline_save = create_pipeline(
@@ -172,11 +171,12 @@ def test_when_hyperparams_and_saved_different_pipeline_should_not_load_checkpoin
     )
     pipeline_save.fit_transform(data_inputs, expected_outputs)
 
+    tape = TapeCallbackFunction()
     pipeline_load = create_pipeline(
         tmpdir=tmpdir,
         pickle_checkpoint_step=DefaultCheckpoint(),
         tape=tape,
-        hyperparameters=HyperparameterSamples({"a__learning_rate": 1})
+        hyperparameters=HyperparameterSamples({"a__learning_rate": 2})
     )
     pipeline_load, actual_data_inputs = pipeline_load.fit_transform(data_inputs, expected_outputs)
 
@@ -194,7 +194,7 @@ def test_when_hyperparams_and_saved_no_pipeline_should_not_load_checkpoint_pickl
     # When
     pipeline_save = create_pipeline(
         tmpdir=tmpdir,
-        pickle_checkpoint_step=DefaultCheckpoint(),
+        pickle_checkpoint_step=Identity(),
         tape=TapeCallbackFunction(),
         hyperparameters=HyperparameterSamples({"a__learning_rate": 1}),
         different=True,

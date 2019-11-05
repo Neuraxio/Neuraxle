@@ -288,7 +288,8 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
             self._get_starting_step_info(data_container, context)
 
         loaded_pipeline = self.load(context)
-        if not self.are_steps_before_index_the_same(loaded_pipeline, new_starting_step_index):
+
+        if not self.are_steps_before_index_the_same(loaded_pipeline, new_starting_step_index + 1):
             return self.steps_as_tuple, data_container
 
         self._assign_loaded_pipeline_into_self(loaded_pipeline)
@@ -325,7 +326,7 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
                 index_latest_checkpoint = index
                 starting_step_data_container = copy(current_data_container)
 
-            current_data_container = self.hash_data_container(data_container)
+            current_data_container = step.hash_data_container(current_data_container)
 
         return index_latest_checkpoint, starting_step_data_container
 

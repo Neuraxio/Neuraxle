@@ -867,9 +867,9 @@ class BaseStep(ABC):
             data_container.set_summary_id(
                 data_container.summary_hash()
             )
-        else:
-            summary_id = self.summary_hash(data_container)
-            data_container.set_summary_id(summary_id)
+
+        summary_id = self.summary_hash(data_container)
+        data_container.set_summary_id(summary_id)
 
         return data_container
 
