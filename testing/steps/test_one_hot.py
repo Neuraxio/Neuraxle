@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from neuraxle.steps.encoding import OneHotEncoder
+from neuraxle.steps.numpy import OneHotEncoder
 
 
 @pytest.mark.parametrize("n_dims", [1, 2, 3])

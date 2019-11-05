@@ -4,10 +4,10 @@ from neuraxle.base import BaseStep, NonFittableMixin, ExecutionContext, Executio
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.output_handlers import OutputTransformerMixin
+from neuraxle.steps.output_handlers import InputAndOutputTransformerMixin
 
 
-class MultiplyBy2OutputTransformer(NonFittableMixin, OutputTransformerMixin, BaseStep):
+class MultiplyBy2OutputTransformer(NonFittableMixin, InputAndOutputTransformerMixin, BaseStep):
     def __init__(
             self,
             hyperparams: HyperparameterSamples = None,
@@ -16,7 +16,7 @@ class MultiplyBy2OutputTransformer(NonFittableMixin, OutputTransformerMixin, Bas
     ):
         NonFittableMixin.__init__(self)
         BaseStep.__init__(self, hyperparams, hyperparams_space, name)
-        OutputTransformerMixin.__init__(self)
+        InputAndOutputTransformerMixin.__init__(self)
 
     def transform(self, data_inputs) -> Tuple[Any, Any]:
         dis, eos = data_inputs
