@@ -71,8 +71,7 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
                 output.expected_outputs
             )
 
-        current_ids = self.hash(data_container)
-        output_data_container.set_current_ids(current_ids)
+        output_data_container = self.handle_after_any(output_data_container)
 
         return self, output_data_container
 
@@ -114,8 +113,7 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
                 output.expected_outputs
             )
 
-        current_ids = self.hash(data_container)
-        output_data_container.set_current_ids(current_ids)
+        output_data_container = self.handle_after_any(output_data_container)
 
         return output_data_container
 
@@ -165,10 +163,10 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
                 output.expected_outputs
             )
 
-        current_ids = self.hash(data_container)
-        output_data_container.set_current_ids(current_ids)
+        output_data_container = self.handle_after_any(output_data_container)
 
         return self, output_data_container
+
 
 class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
     def __init__(self, wrapped: BaseStep, copy_op=copy.deepcopy):

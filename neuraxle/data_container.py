@@ -47,12 +47,16 @@ class DataContainer:
         :class: `BaseStep`
     """
 
-    def __init__(self,
-                 current_ids,
-                 data_inputs: Any,
-                 expected_outputs: Any = None
-                 ):
+    def __init__(
+            self,
+            current_ids,
+            data_inputs: Any,
+            summary_id=None,
+            expected_outputs: Any = None
+    ):
         self.current_ids = current_ids
+        self.summary_id = summary_id
+
         self.data_inputs = data_inputs
         if expected_outputs is None and isinstance(data_inputs, Iterable):
             self.expected_outputs = [None] * len(data_inputs)
@@ -89,6 +93,15 @@ class DataContainer:
         """
         self.current_ids = current_ids
 
+    def set_summary_id(self, summary_id: str):
+        """
+        Set summary id.
+
+        :param summary_id: str
+        :return:
+        """
+        self.summary_id = summary_id
+
     def summary_hash(self):
         """
         Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together into one id.
@@ -98,7 +111,7 @@ class DataContainer:
         """
         m = hashlib.md5()
         for current_id in self.current_ids:
-            m.update(str.encode(current_id))
+            m.update(str.encode(str(current_id)))
         return m.hexdigest()
 
     def convolved_1d(self, stride, kernel_size) -> Iterable['DataContainer']:
@@ -120,6 +133,7 @@ class DataContainer:
         for current_ids, data_inputs, expected_outputs in zip(conv_current_ids, conv_data_inputs,
                                                               conv_expected_outputs):
             yield DataContainer(
+                summary_id=self.summary_id,
                 current_ids=current_ids,
                 data_inputs=data_inputs,
                 expected_outputs=expected_outputs
@@ -159,12 +173,14 @@ class ExpandedDataContainer(DataContainer):
     .. seealso::
         :class:`ExpandedDataContainer`,
     """
-    def __init__(self, current_ids, data_inputs, expected_outputs, old_current_ids):
+
+    def __init__(self, current_ids, data_inputs, expected_outputs, summary_id, old_current_ids):
         DataContainer.__init__(
             self,
-            current_ids,
-            data_inputs,
-            expected_outputs
+            current_ids=current_ids,
+            data_inputs=data_inputs,
+            expected_outputs=expected_outputs,
+            summary_id=summary_id
         )
 
         self.old_current_ids = old_current_ids
@@ -180,6 +196,7 @@ class ExpandedDataContainer(DataContainer):
             current_ids=self.old_current_ids,
             data_inputs=self.data_inputs[0],
             expected_outputs=self.expected_outputs[0],
+            summary_id=self.summary_id,
         )
 
     @staticmethod
@@ -193,9 +210,10 @@ class ExpandedDataContainer(DataContainer):
         :rtype: ExpandedDataContainer
         """
         return ExpandedDataContainer(
-            current_ids=[data_container.summary_hash()],
+            current_ids=[data_container.summary_id],
             data_inputs=[data_container.data_inputs],
             expected_outputs=[data_container.expected_outputs],
+            summary_id=data_container.summary_id,
             old_current_ids=data_container.current_ids
         )
 

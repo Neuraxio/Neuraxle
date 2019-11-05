@@ -26,8 +26,8 @@ from typing import Any, Tuple, List
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, NonFittableMixin, \
     ExecutionContext, ExecutionMode, NonTransformableMixin
-from neuraxle.data_container import DataContainer, ListDataContainer
 from neuraxle.checkpoints import Checkpoint
+from neuraxle.data_container import DataContainer, ListDataContainer
 
 DEFAULT_CACHE_FOLDER = 'cache'
 
@@ -66,8 +66,8 @@ class Pipeline(BasePipeline):
         :return: transformed data inputs
         """
         data_container = DataContainer(current_ids=None, data_inputs=data_inputs)
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+
+        data_container = self.hash_data_container(data_container)
 
         context = ExecutionContext.create_from_root(self, ExecutionMode.TRANSFORM, self.cache_folder)
 
@@ -88,8 +88,8 @@ class Pipeline(BasePipeline):
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         )
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+
+        data_container = self.hash_data_container(data_container)
 
         context = ExecutionContext.create_from_root(self, ExecutionMode.FIT_TRANSFORM, self.cache_folder)
 
@@ -110,8 +110,8 @@ class Pipeline(BasePipeline):
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         )
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+
+        data_container = self.hash_data_container(data_container)
 
         context = ExecutionContext.create_from_root(self, ExecutionMode.FIT, self.cache_folder)
 
@@ -141,8 +141,7 @@ class Pipeline(BasePipeline):
         """
         new_self, data_container = self._fit_core(data_container, context)
 
-        ids = self.hash(data_container)
-        data_container.set_current_ids(ids)
+        data_container = self.handle_after_any(data_container)
 
         return new_self, data_container
 
@@ -157,8 +156,7 @@ class Pipeline(BasePipeline):
         """
         new_self, data_container = self._fit_transform_core(data_container, context)
 
-        ids = self.hash(data_container)
-        data_container.set_current_ids(ids)
+        data_container = self.handle_after_any(data_container)
 
         return new_self, data_container
 
@@ -172,8 +170,7 @@ class Pipeline(BasePipeline):
         """
         data_container = self._transform_core(data_container, context)
 
-        ids = self.hash(data_container)
-        data_container.set_current_ids(ids)
+        data_container = self.handle_after_any(data_container)
 
         return data_container
 
@@ -364,8 +361,8 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         :return: transformed data inputs
         """
         data_container = DataContainer(current_ids=None, data_inputs=data_inputs)
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+
+        self.hash_data_container(data_container)
 
         context = ExecutionContext.create_from_root(self, ExecutionMode.TRANSFORM, self.cache_folder)
         data_container = self.handle_transform(data_container, context)
@@ -379,8 +376,8 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         :return: the pipeline itself
         """
         data_container = DataContainer(current_ids=None, data_inputs=data_inputs, expected_outputs=expected_outputs)
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+
+        data_container = self.hash_data_container(data_container)
 
         context = ExecutionContext.create_from_root(self, ExecutionMode.FIT_TRANSFORM, self.cache_folder)
         new_self, data_container = self.handle_fit_transform(data_container, context)
@@ -404,8 +401,8 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
                 data_container=data_container,
                 context=context
             )
-            current_ids = self.hash(data_container)
-            data_container.set_current_ids(current_ids)
+
+            data_container = self.hash_data_container(data_container)
 
         return data_container
 
@@ -431,8 +428,8 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
                 data_container=data_container,
                 context=sub_context
             )
-            current_ids = self.hash(data_container)
-            data_container.set_current_ids(current_ids)
+
+            data_container = self.hash_data_container(data_container)
 
             new_self = self[:index_start] + sub_pipeline
             if index_start + len(sub_pipeline) < len(self):
@@ -477,7 +474,8 @@ class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
     """
 
     @abstractmethod
-    def join_transform(self, step: TruncableSteps, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def join_transform(self, step: TruncableSteps, data_container: DataContainer,
+                       context: ExecutionContext) -> DataContainer:
         """
         Execute the given pipeline :func:`~neuraxle.pipeline.Pipeline.transform` with the given data container, and execution context.
 

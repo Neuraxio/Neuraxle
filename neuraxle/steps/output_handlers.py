@@ -42,8 +42,7 @@ class OutputTransformerMixin:
         data_container.set_data_inputs(new_data_inputs)
         data_container.set_expected_outputs(new_expected_outputs)
 
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+        data_container = self.handle_after_any(data_container)
 
         return data_container
 
@@ -62,7 +61,6 @@ class OutputTransformerMixin:
         data_container.set_data_inputs(new_data_inputs)
         data_container.set_expected_outputs(new_expected_outputs)
 
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+        data_container = self.handle_after_any(data_container)
 
         return new_self, data_container
