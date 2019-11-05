@@ -21,6 +21,7 @@ The flask wrapper classes are used to easily serve pipeline predictions using a 
 """
 from abc import ABC, abstractmethod
 
+import numpy as np
 from flask import Response
 
 from neuraxle.base import BaseStep, NonFittableMixin
@@ -59,7 +60,7 @@ class JSONDataResponseEncoder(NonFittableMixin, BaseStep, ABC):
         :return: flask response object
         """
         from flask import jsonify
-        return jsonify(self.encode(data_inputs))
+        return jsonify(self.encode(np.array(data_inputs).tolist()))
 
     @abstractmethod
     def encode(self, data_inputs) -> dict:
