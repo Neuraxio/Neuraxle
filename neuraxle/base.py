@@ -60,7 +60,7 @@ class BaseHasher(ABC):
     @abstractmethod
     def single_hash(self, current_id: str, hyperparameters: HyperparameterSamples) -> List[str]:
         """
-        Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together.
+        Hash summary id, and hyperparameters together.
 
         :param current_id: current hashed id
         :param hyperparameters: step hyperparameters to hash with current ids
@@ -104,6 +104,15 @@ class HashlibMd5Hasher(BaseHasher):
     """
 
     def single_hash(self, current_id: str, hyperparameters: HyperparameterSamples) -> List[str]:
+        """
+        Hash summary id, and hyperparameters together.
+
+        :param current_id: current hashed id
+        :param hyperparameters: step hyperparameters to hash with current ids
+        :type hyperparameters: HyperparameterSamples
+        :return: the new hashed current id
+        :rtype: str
+        """
         m = hashlib.md5()
 
         current_hyperparameters_hash = hashlib.md5(
@@ -860,6 +869,17 @@ class BaseStep(ABC):
         return self.hash_data_container(data_container)
 
     def hash_data_container(self, data_container):
+        """
+        Hash data container using self.hashers.
+
+        #. Hash current ids with hyperparams.
+        #. Hash summary id with hyperparams.
+
+        :param data_container: the data container to transform
+        :type data_container: DataContainer
+        :return: transformed data container
+        :rtype: DataContainer
+        """
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 

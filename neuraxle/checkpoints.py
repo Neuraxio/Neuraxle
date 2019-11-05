@@ -284,9 +284,9 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
 
 class BaseSummaryCheckpointer(ABC):
     """
-    Mini Data Checkpoint that uses pickle to create a checkpoint for a current id, and a data input or an expected output.
+    Summary Checkpointer to create a summary file that contains the list of all of the checkpoint current ids.
 
-    A mini data checkpointer must be wrapped with a :class:`MiniDataCheckpointerWrapper` to be added to a :class:`Checkpoint`
+    A summary checkpointer must be wrapped with a :class:`MiniDataCheckpointerWrapper` to be added to a :class:`Checkpoint`
     :py:attr:`~Checkpoint.data_checkpointers` :
 
     .. code:: python
@@ -295,6 +295,7 @@ class BaseSummaryCheckpointer(ABC):
             all_checkpointers=[
                 StepSavingCheckpointer(),
                 MiniDataCheckpointerWrapper(
+                    summary_checkpointer=TextSummaryCheckpointer(),
                     data_input_checkpointer=PickleMiniDataCheckpointer(),
                     expected_output_checkpointer=PickleMiniDataCheckpointer()
                 )
@@ -362,6 +363,7 @@ class BaseMiniDataCheckpointer(ABC):
             all_checkpointers=[
                 StepSavingCheckpointer(),
                 MiniDataCheckpointerWrapper(
+                    summary_checkpointer=PickleSummaryCheckpointer(),
                     data_input_checkpointer=PickleMiniDataCheckpointer(),
                     expected_output_checkpointer=PickleMiniDataCheckpointer()
                 )
@@ -430,19 +432,73 @@ class NullMiniDataCheckpointer(BaseMiniDataCheckpointer):
         return True
 
 
-class PickleSummaryCheckpointer(BaseSummaryCheckpointer):
+class TextSummaryCheckpointer(BaseSummaryCheckpointer):
+    """
+    Summary Checkpointer that uses a txt file to create a summary file that contains the list of all of the checkpoint current ids.
+    A summary checkpoint file is a txt file that contains the list of all of the current ids of the checkpoint.
+
+    A summary checkpointer must be wrapped with a :class:`MiniDataCheckpointerWrapper` to be added to a :class:`Checkpoint`
+    :py:attr:`~Checkpoint.data_checkpointers` :
+
+    .. code:: python
+
+        Checkpoint(
+            all_checkpointers=[
+                StepSavingCheckpointer(),
+                MiniDataCheckpointerWrapper(
+                    summary_checkpointer=TextSummaryCheckpointer(),
+                    data_input_checkpointer=PickleMiniDataCheckpointer(),
+                    expected_output_checkpointer=PickleMiniDataCheckpointer()
+                )
+            ]
+        )
+
+    .. seealso::
+        * :class:`BaseMiniDataCheckpointer`
+        * :class:`MiniDataCheckpointerWrapper`
+        * :class:`PickleMiniDataCheckpointer`
+    """
+
     def save_summary(self, checkpoint_path, data_container: DataContainer):
+        """
+        Save summary checkpoint file.
+
+        :param checkpoint_path: checkpoint path for saving
+        :type checkpoint_path: str
+        :param data_container: checkpoint data container
+        :type data_container: DataContainer
+        :return:
+        """
         with open(os.path.join(checkpoint_path, '{0}.txt'.format(data_container.summary_id)), 'w+') as file:
             lines = [str(cuid) + '\n' for cuid in data_container.current_ids]
             lines[-1] = str(data_container.current_ids[-1])
             file.writelines(lines)
 
     def read_summary(self, checkpoint_path, data_container: DataContainer) -> List[str]:
+        """
+        Read current ids inside a summary checkpoint file.
+
+        :param checkpoint_path: checkpoint path for saving
+        :type checkpoint_path: str
+        :param data_container: checkpoint data container
+        :type data_container: DataContainer
+        :return: checkpoint current ids
+        :rtype: List[str]
+        """
         with open(os.path.join(checkpoint_path, '{0}.txt'.format(data_container.summary_id)), 'r') as file:
             current_ids = file.readlines()
         return [cuid.strip() for cuid in current_ids]
 
     def checkpoint_exists(self, checkpoint_path, data_container: DataContainer) -> bool:
+        """
+        Returns true if the checkpoint summary file exists.
+
+        :param checkpoint_path: checkpoint path for saving
+        :type checkpoint_path: str
+        :param data_container: checkpoint data container
+        :type data_container: DataContainer
+        :return:
+        """
         return os.path.exists(
             os.path.join(
                 checkpoint_path, '{0}.txt'.format(data_container.summary_id)
@@ -463,6 +519,7 @@ class PickleMiniDataCheckpointer(BaseMiniDataCheckpointer):
             all_checkpointers=[
                 StepSavingCheckpointer(),
                 MiniDataCheckpointerWrapper(
+                    summary_checkpointer=TextSummaryCheckpointer(),
                     data_input_checkpointer=PickleMiniDataCheckpointer(),
                     expected_output_checkpointer=PickleMiniDataCheckpointer()
                 )
@@ -707,7 +764,7 @@ class DefaultCheckpoint(Checkpoint):
             all_checkpointers=[
                 StepSavingCheckpointer(),
                 MiniDataCheckpointerWrapper(
-                    summary_checkpointer=PickleSummaryCheckpointer(),
+                    summary_checkpointer=TextSummaryCheckpointer(),
                     data_input_checkpointer=PickleMiniDataCheckpointer(),
                     expected_output_checkpointer=PickleMiniDataCheckpointer()
                 )
