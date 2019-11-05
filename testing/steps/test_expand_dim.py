@@ -4,7 +4,7 @@ from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import ExpandDim
 from neuraxle.steps.misc import HandleCallbackStep, TapeCallbackFunction
 
-SUMMARY_ID = 'b79cdac314fb78f2cd38f23e74c5fc66'
+SUMMARY_ID = 'a327c5b4f069a55990b9f48d66ac34e4'
 
 
 def test_expand_dim_transform():

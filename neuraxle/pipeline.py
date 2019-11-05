@@ -289,7 +289,7 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
 
         loaded_pipeline = self.load(context)
 
-        if not self.are_steps_before_index_the_same(loaded_pipeline, new_starting_step_index + 1):
+        if not self.are_steps_before_index_the_same(loaded_pipeline, new_starting_step_index):
             return self.steps_as_tuple, data_container
 
         self._assign_loaded_pipeline_into_self(loaded_pipeline)
