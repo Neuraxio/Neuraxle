@@ -24,6 +24,7 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
 
 """
 from abc import abstractmethod
+from typing import OrderedDict, Union
 
 from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext
 from neuraxle.data_container import ExpandedDataContainer
@@ -230,6 +231,87 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
         step_names = list(self.keys())
         for step_name in step_names:
             self[step_name] = Optional(self[step_name])
+        self._refresh_steps()
+
+
+CHOICE_HYPERPARAM = 'choice'
+
+
+class ChooseOneStepOf(FeatureUnion):
+    """
+    A pipeline to allow choosing one step using an hyperparameter.
+
+    Example usage :
+
+    .. code-block:: python
+
+        p = Pipeline([
+            ChooseOneStepOf([
+                ('a', Identity()),
+                ('b', Identity())
+            ])
+        ])
+        p.set_hyperparams({
+            'ChooseOneOrManyStepsOf__choice': 'a',
+        })
+        # or
+        p.set_hyperparams({
+            'ChooseOneStepOf': {
+                'a': { 'enabled': True },
+                'b': { 'enabled': False }
+            }
+        })
+
+    .. seealso::
+        :class:`Pipeline`
+        :class:`Optional`
+    """
+
+    def __init__(self, steps, hyperparams=None):
+        FeatureUnion.__init__(self, steps)
+
+        self._make_all_steps_optional()
+
+        if hyperparams is None:
+            self.set_hyperparams(HyperparameterSamples({
+                CHOICE_HYPERPARAM: list(self.keys())[0]
+            }))
+
+    def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]):
+        """
+        Set chosen step hyperparams.
+
+        :param hyperparams: hyperparams
+        :type hyperparams: HyperparameterSamples
+        :return:
+        """
+        super().set_hyperparams(hyperparams)
+
+        step_names = list(self.keys())
+        chosen_step_name = self.hyperparams[CHOICE_HYPERPARAM]
+        if chosen_step_name not in step_names:
+            raise ValueError('Invalid Chosen Step in {0}'.format(self.name))
+
+        for step_name in step_names:
+            if step_name == chosen_step_name:
+                self[chosen_step_name].set_hyperparams({
+                    OPTIONAL_ENABLED_HYPERPARAM: True
+                })
+            else:
+                self[step_name].set_hyperparams({
+                    OPTIONAL_ENABLED_HYPERPARAM: False
+                })
+
+        return self
+
+    def _make_all_steps_optional(self):
+        """
+        Wrap all steps with :class:`Optional` wrapper.
+        """
+        step_names = list(self.keys())
+        for step_name in step_names:
+            self[step_name] = Optional(self[step_name])
+
         self._refresh_steps()
 
 
