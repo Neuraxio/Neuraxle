@@ -101,6 +101,33 @@ test_case_index_start_end = ColumnChooserTestCase(
     n_dimension=3
 )
 
+test_case_index_range = ColumnChooserTestCase(
+    data_inputs=np.array([
+        [0, 1, 2, 3],
+        [10, 11, 12, 13],
+        [20, 21, 22, 23]
+    ]),
+    expected_outputs=np.array([
+        [0, 1, 2, 3],
+        [10, 11, 12, 13],
+        [20, 21, 22, 23]
+    ]),
+    expected_processed_outputs=np.array([
+        [0, 2],
+        [20, 22],
+        [40, 42]
+    ]),
+    expected_fitted_data=[(
+        [[0, 1], [10, 11], [20, 21]],
+        [[0, 1, 2, 3], [10, 11, 12, 13], [20, 21, 22, 23]]
+    )],
+    expected_step_key='range(0, 2)_MultiplyBy2',
+    column_transformer_tuple_list=[
+        (range(2), MultiplyBy2())
+    ],
+    n_dimension=3
+)
+
 test_case_index_start = ColumnChooserTestCase(
     data_inputs=np.array([
         [0, 1, 2, 3],
@@ -215,6 +242,7 @@ test_case_list_of_columns = ColumnChooserTestCase(
     copy.deepcopy(test_case_index_int),
     copy.deepcopy(test_case_index_start_end),
     copy.deepcopy(test_case_index_start),
+    copy.deepcopy(test_case_index_range),
     copy.deepcopy(test_case_index_end),
     copy.deepcopy(test_case_index_last),
     copy.deepcopy(test_case_list_of_columns),
@@ -232,6 +260,7 @@ def test_column_transformer_transform_should_support_indexes(test_case: ColumnCh
     copy.deepcopy(test_case_index_int),
     copy.deepcopy(test_case_index_start_end),
     copy.deepcopy(test_case_index_start),
+    copy.deepcopy(test_case_index_range),
     copy.deepcopy(test_case_index_end),
     copy.deepcopy(test_case_index_last),
     copy.deepcopy(test_case_list_of_columns)
@@ -253,6 +282,7 @@ def test_column_transformer_fit_transform_should_support_indexes(test_case: Colu
     copy.deepcopy(test_case_index_int),
     copy.deepcopy(test_case_index_start_end),
     copy.deepcopy(test_case_index_start),
+    copy.deepcopy(test_case_index_range),
     copy.deepcopy(test_case_index_end),
     copy.deepcopy(test_case_index_last),
     copy.deepcopy(test_case_list_of_columns)

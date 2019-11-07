@@ -21,6 +21,12 @@ class ColumnSelector2D(NonFittableMixin, BaseStep):
         self.column_selection = columns_selection
 
     def transform(self, data_inputs):
+        if isinstance(self.column_selection, range):
+            indexes = []
+            for i in self.column_selection:
+                indexes.append(i)
+            self.column_selection = indexes
+
         if isinstance(self.column_selection, int):
             return np.expand_dims(np.array(data_inputs)[:, self.column_selection], axis=-1)
 
@@ -86,8 +92,6 @@ class ColumnTransformer(FeatureUnion):
             (3, CategoricalEnum(categories_count=5, starts_at_zero=True)),
             (4, CategoricalEnum(categories_count=5, starts_at_zero=True)),
             ([10, 13, 15], CategoricalEnum(categories_count=5, starts_at_zero=True)),
-            # The default case can be specified by using a "None" as index.
-            (None, Identity())
         ])
 
     .. seealso::
