@@ -21,6 +21,7 @@ The flask wrapper classes are used to easily serve pipeline predictions using a 
 """
 from abc import ABC, abstractmethod
 
+import numpy as np
 from flask import Response
 
 from neuraxle.base import BaseStep, NonFittableMixin

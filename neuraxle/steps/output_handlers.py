@@ -19,11 +19,78 @@ You can find here output handlers steps that changes especially the data outputs
     limitations under the License.
 
 """
-from neuraxle.base import ExecutionContext, BaseStep
+from neuraxle.base import ExecutionContext, BaseStep, MetaStepMixin
 from neuraxle.data_container import DataContainer
 
 
-class OutputTransformerMixin:
+class OutputTransformerWrapper(MetaStepMixin, BaseStep):
+    """
+    Transform expected output wrapper step that can sends the expected_outputs to the wrapped step
+    so that it can transform the expected outputs.
+    """
+
+    def __init__(self, wrapped):
+        MetaStepMixin.__init__(self, wrapped)
+        BaseStep.__init__(self)
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        new_expected_outputs_data_container = self.wrapped.handle_transform(
+            DataContainer(
+                current_ids=data_container.current_ids,
+                data_inputs=data_container.expected_outputs,
+                expected_outputs=None
+            ),
+            context.push(self.wrapped)
+        )
+
+        data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
+
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
+
+        return data_container
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
+        self.wrapped = self.wrapped.handle_fit(
+            DataContainer(
+                current_ids=data_container.current_ids,
+                data_inputs=data_container.expected_outputs,
+                expected_outputs=None
+            ),
+            context.push(self.wrapped)
+        )
+
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
+
+        return self, data_container
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+    BaseStep, DataContainer):
+        self.wrapped, new_expected_outputs_data_container = self.wrapped.handle_fit_transform(
+            DataContainer(
+                current_ids=data_container.current_ids,
+                data_inputs=data_container.expected_outputs,
+                expected_outputs=None
+            ),
+            context.push(self.wrapped)
+        )
+
+        data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
+
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
+
+        return self, data_container
+
+    def fit(self, data_inputs, expected_outputs=None):
+        raise NotImplementedError('must be used inside a pipeline')
+
+    def transform(self, data_inputs):
+        raise NotImplementedError('must be used inside a pipeline')
+
+
+class InputAndOutputTransformerMixin:
     """
     Base output transformer step that can modify data inputs, and expected_outputs at the same time.
     """
@@ -47,7 +114,8 @@ class OutputTransformerMixin:
 
         return data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseStep', DataContainer):
         """
         Handle transform by fitting the step,
         and updating the data inputs, and expected outputs inside the data container.
