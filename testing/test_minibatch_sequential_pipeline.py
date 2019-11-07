@@ -24,7 +24,7 @@ def test_mini_batch_sequential_pipeline_should_transform_steps_sequentially_for_
         MultiplyBy2TransformCallbackStep(tape3, ["3"]),
         MultiplyBy2TransformCallbackStep(tape4, ["4"]),
         Joiner(batch_size=10)
-    ], batch_size=10)
+    ])
 
     # When
     outputs = p.transform(range(20))
@@ -69,7 +69,7 @@ def test_mini_batch_sequential_pipeline_should_fit_transform_steps_sequentially_
         MultiplyBy2FitTransformCallbackStep(tape3, tape3_fit, ["3"]),
         MultiplyBy2FitTransformCallbackStep(tape4, tape4_fit, ["4"]),
         Joiner(batch_size=10)
-    ], batch_size=10)
+    ])
 
     # When
     p, outputs = p.fit_transform(range(20), range(20))
