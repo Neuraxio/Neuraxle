@@ -22,10 +22,11 @@ class ColumnSelector2D(NonFittableMixin, BaseStep):
 
     def transform(self, data_inputs):
         if isinstance(self.column_selection, range):
-            indexes = []
-            for i in self.column_selection:
-                indexes.append(i)
-            self.column_selection = indexes
+            self.column_selection = slice(
+                self.column_selection.start,
+                self.column_selection.stop,
+                self.column_selection.step
+            )
 
         if isinstance(self.column_selection, int):
             return np.expand_dims(np.array(data_inputs)[:, self.column_selection], axis=-1)
