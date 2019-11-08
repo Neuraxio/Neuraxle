@@ -224,7 +224,7 @@ class ModelStacking(FeatureUnion):
         return new_self, self.transform(data_container.data_inputs)
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
-        new_self, data_container = FeatureUnion.handle_fit_transform(self, data_container, context)
+        new_self, data_container = FeatureUnion.handle_fit(self, data_container, context)
 
         new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
 
