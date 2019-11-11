@@ -54,7 +54,6 @@ class BaseHasher(ABC):
     .. seealso::
         :class:`DataContainer`
 
-    .. todo:: potentially hash by source code
     """
 
     @abstractmethod
@@ -86,7 +85,6 @@ class HashlibMd5Hasher(BaseHasher):
         :class`BaseHasher`,
         :class:`DataContainer`
 
-    .. todo:: potentially hash by source code
     """
 
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None) -> List[str]:
@@ -604,7 +602,7 @@ class BaseStep(ABC):
         :return: the name, a string.
         :rtype: str
 
-        .. note:: A step name is the same value as the one in the keys of :any:`~neuraxle.pipeline.Pipeline.steps_as_tuple`
+        .. note:: A step name is the same value as the one in the keys of :class:`Pipeline`.steps_as_tuple
         """
         return self.name
 
@@ -901,7 +899,7 @@ class BaseStep(ABC):
             * an hyperparameter space has changed func:`~.set_hyperparams_space`
             * a call to the fit method func:`~.handle_fit`
             * a call to the fit_transform method func:`~.handle_fit_transform`
-            * the step name has changed func:`~.set_name`
+            * the step name has changed func:`~neuraxle.base.BaseStep.set_name`
 
         :return: if the step should be saved
         :rtype: bool
@@ -914,7 +912,7 @@ class BaseStep(ABC):
         The saving happens by looping through all of the step savers in the reversed order.
 
         Some savers just save parts of objects, some save it all or what remains.
-        The :any:`~neuraxle.base.ExecutionContext.stripped_saver` has to be called last because it needs a
+        The :class:`ExecutionContext`.stripped_saver has to be called last because it needs a
         stripped version of the step.
 
         :param context: context to save from
