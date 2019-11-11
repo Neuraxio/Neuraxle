@@ -217,11 +217,11 @@ class ModelStacking(FeatureUnion):
         self.judge: BaseStep = judge  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
-        new_self, data_container = FeatureUnion.handle_fit_transform(self, data_container, context)
+        new_self, _ = FeatureUnion.handle_fit_transform(self, data_container, context)
 
         new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
 
-        return new_self, self.transform(data_container.data_inputs)
+        return new_self, self.handle_transform(data_container)
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
         new_self, _ = FeatureUnion.handle_fit(self, data_container, context)
