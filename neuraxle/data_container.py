@@ -129,7 +129,7 @@ class DataContainer:
         return DataContainer(
             current_ids=self.current_ids,
             data_inputs=self.data_inputs,
-            expected_outputs=self.data_inputs,
+            expected_outputs=self.expected_outputs,
         )
 
     def __iter__(self):

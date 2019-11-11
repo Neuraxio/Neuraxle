@@ -224,17 +224,16 @@ class ModelStacking(FeatureUnion):
         return new_self, self.transform(data_container.data_inputs)
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
-        new_self, data_container = FeatureUnion.handle_fit(self, data_container, context)
+        new_self, _ = FeatureUnion.handle_fit(self, data_container, context)
 
         new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
 
-        return new_self
+        return new_self, data_container
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         data_container = FeatureUnion.handle_transform(self, data_container, context)
-
-        data_inputs = self.transform(data_container.data_inputs)
-        data_container.set_data_inputs(data_inputs)
+        results = self.judge.transform(data_container.data_inputs)
+        data_container.set_data_inputs(results)
 
         return data_container
 
