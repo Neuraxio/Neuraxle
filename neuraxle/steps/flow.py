@@ -24,7 +24,7 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
 
 """
 from abc import abstractmethod
-from typing import OrderedDict, Union
+from typing import Union
 
 from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext
 from neuraxle.data_container import ExpandedDataContainer
@@ -277,7 +277,7 @@ class ChooseOneStepOf(FeatureUnion):
                 CHOICE_HYPERPARAM: list(self.keys())[0]
             }))
 
-    def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]):
+    def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, dict]):
         """
         Set chosen step hyperparams.
 

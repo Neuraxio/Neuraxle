@@ -98,7 +98,7 @@ class FeatureUnion(TruncableSteps):
 
         new_current_ids = self.hash(data_container)
 
-        data_container = self.joiner.join_data_containers(data_containers, new_current_ids)
+        data_container = self.joiner.handle_transform(data_containers, new_current_ids)
 
         return data_container
 
@@ -123,8 +123,8 @@ class FeatureUnion(TruncableSteps):
 
         new_current_ids = self.hash(data_container)
 
-        data_containers  = [dc for _, dc in fitted_steps_data_containers]
-        data_container = self.joiner.join_data_containers(data_containers, new_current_ids)
+        data_containers = [dc for _, dc in fitted_steps_data_containers]
+        self.joiner, data_container = self.joiner.handle_fit_transform(data_containers, new_current_ids)
 
         # Save fitted steps
         for i, (fitted_step, _) in enumerate(fitted_steps_data_containers):
