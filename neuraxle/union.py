@@ -110,28 +110,9 @@ class FeatureUnion(TruncableSteps):
         :param context: execution context
         :return: the transformed data_inputs.
         """
-        if self.n_jobs != 1:
-            fitted_steps_data_containers = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
-                delayed(step.handle_fit_transform)(data_container.copy(), context.push(step))
-                for _, step in self.steps_as_tuple
-            )
-        else:
-            fitted_steps_data_containers = [
-                step.handle_fit_transform(data_container.copy(), context.push(step))
-                for _, step in self.steps_as_tuple
-            ]
-
-        new_current_ids = self.hash(data_container)
-
-        data_containers = [dc for _, dc in fitted_steps_data_containers]
-        self.joiner, data_container = self.joiner.handle_fit_transform(data_containers, new_current_ids)
-
-        # Save fitted steps
-        for i, (fitted_step, _) in enumerate(fitted_steps_data_containers):
-            self.steps_as_tuple[i] = (self.steps_as_tuple[i][0], fitted_step)
-        self._refresh_steps()
-
-        return self, data_container
+        new_self, _ = self.handle_fit(data_container, context)
+        data_container = self.handle_transform(data_container, context)
+        return new_self, data_container
 
     def fit(self, data_inputs, expected_outputs=None) -> 'FeatureUnion':
         """
