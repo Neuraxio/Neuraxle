@@ -56,6 +56,10 @@ ready to be sent to an instance of the pipeline to try and score it, for example
     See the License for the specific language governing permissions and
     limitations under the License.
 
+..
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+
 """
 
 from collections import OrderedDict

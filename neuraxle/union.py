@@ -18,6 +18,10 @@ This module contains steps to perform various feature unions and model stacking,
     See the License for the specific language governing permissions and
     limitations under the License.
 
+..
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+
 """
 
 from joblib import Parallel, delayed
