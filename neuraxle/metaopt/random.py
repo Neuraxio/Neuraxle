@@ -28,7 +28,8 @@ from typing import List, Callable, Tuple
 import numpy as np
 from sklearn.metrics import r2_score
 
-from neuraxle.base import MetaStepMixin, BaseStep
+from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, ExecutionMode, DEFAULT_CACHE_FOLDER
+from neuraxle.data_container import DataContainer
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnCustomAxis
 
@@ -71,6 +72,8 @@ class ValidationSplitWrapper(BaseValidation):
                 ValidationSplitWrapper(
                     Identity(),
                     test_size=0.1
+                    scoring_function=mean_absolute_relative_error,
+                    run_validation_split_in_test_mode=False
                 )
             )
         ])
@@ -86,7 +89,8 @@ class ValidationSplitWrapper(BaseValidation):
             self,
             wrapped: BaseStep,
             test_size: float,
-            scoring_function=r2_score
+            scoring_function=r2_score,
+            run_validation_split_in_test_mode=True
     ):
         """
         :param wrapped: wrapped step
@@ -95,6 +99,7 @@ class ValidationSplitWrapper(BaseValidation):
         """
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
+        self.run_validation_split_in_test_mode = run_validation_split_in_test_mode
         self.test_size = test_size
         self.scoring_function = scoring_function
 
@@ -106,6 +111,64 @@ class ValidationSplitWrapper(BaseValidation):
         :return: outputs
         """
         return self.wrapped.transform(data_inputs)
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        Fit Transform given data inputs without splitting.
+
+        :param context:
+        :param data_container: DataContainer
+        :type data_container: DataContainer
+        :type context: ExecutionContext
+        :return: outputs
+        """
+        new_self, _ = self.handle_fit(data_container, context)
+        data_container = self.handle_transform(data_container, context)
+
+        return new_self, data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Transform given data inputs without splitting.
+
+        :param context: execution context
+        :param data_container: DataContainer
+        :type data_container: DataContainer
+        :type context: ExecutionContext
+        :return: outputs
+        """
+        return self.wrapped.handle_transform(data_container, context.push(self.wrapped))
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('ValidationSplitWrapper', DataContainer):
+        """
+        Fit using the training split.
+        Calculate the scores using the validation split.
+
+        :param context: execution context
+        :param data_container: data container
+        :type context: ExecutionContext
+        :type data_container: DataContainer
+        :return: fitted self
+        """
+        train_data_container, validation_data_container = self.split_data_container(data_container)
+
+        self.wrapped, _ = self.wrapped.handle_fit(train_data_container, context.push(self.wrapped))
+
+        if self.run_validation_split_in_test_mode:
+            self.set_train(False)
+        results_data_container = self.wrapped.handle_transform(validation_data_container, context.push(self.wrapped))
+
+        self.set_train(True)
+
+        self.scores = [
+            self.scoring_function(a, b)
+            for a, b in zip(results_data_container.expected_outputs, results_data_container.data_inputs)
+        ]
+
+        self.scores_mean = np.mean(self.scores)
+        self.scores_std = np.std(self.scores)
+
+        return self, data_container
 
     def fit(self, data_inputs, expected_outputs=None) -> 'ValidationSplitWrapper':
         """
@@ -121,12 +184,37 @@ class ValidationSplitWrapper(BaseValidation):
 
         self.wrapped = self.wrapped.fit(train_data_inputs, train_expected_outputs)
 
-        results = self.wrapped.transform(validation_data_inputs)
-        self.scores = [self.scoring_function(a, b) for a, b in zip(results, validation_expected_outputs)]
+        results = self.transform(validation_data_inputs)
+
+        self.scores = [
+            self.scoring_function(a, b)
+            for a, b in zip(validation_expected_outputs, results)
+        ]
+
         self.scores_mean = np.mean(self.scores)
         self.scores_std = np.std(self.scores)
 
         return self
+
+    def split_data_container(self, data_container) -> Tuple[DataContainer, DataContainer]:
+        """
+        Split data container into a training set, and a validation set.
+
+        :param data_container: data container
+        :type data_container: DataContainer
+        :return: train_data_container, validation_data_container
+        """
+
+        train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = \
+            self.split(data_container.data_inputs, data_container.expected_outputs)
+
+        train_ids = self.train_split(data_container.current_ids)
+        train_data_container = DataContainer(train_ids, train_data_inputs, train_expected_outputs)
+
+        validation_ids = self.validation_split(data_container.current_ids)
+        validation_data_container = DataContainer(validation_ids, validation_data_inputs, validation_expected_outputs)
+
+        return train_data_container, validation_data_container
 
     def split(self, data_inputs, expected_outputs=None) -> Tuple[List, List, List, List]:
         """
@@ -136,43 +224,38 @@ class ValidationSplitWrapper(BaseValidation):
         :param expected_outputs: expected outputs to split
         :return: train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
         """
-        validation_data_inputs, validation_expected_outputs = self.validation_split(data_inputs, expected_outputs)
-        train_data_inputs, train_expected_outputs = self.train_split(data_inputs, expected_outputs)
+        validation_data_inputs = self.validation_split(data_inputs)
+        validation_expected_outputs = None
+        if expected_outputs is not None:
+            validation_expected_outputs = self.validation_split(expected_outputs)
+
+        train_data_inputs = self.train_split(data_inputs)
+        train_expected_outputs = None
+        if expected_outputs is not None:
+            train_expected_outputs = self.train_split(expected_outputs)
 
         return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
 
-    def train_split(self, data_inputs, expected_outputs) -> (List, List):
+    def train_split(self, data_inputs) -> List:
         """
         Split training set.
 
         :param data_inputs: data inputs to split
-        :param expected_outputs: expected outputs to split
-        :return: train_data_inputs, train_expected_outputs
+        :return: train_data_inputs
         """
         index_split = math.floor(len(data_inputs) * (1 - self.test_size))
-        train_data_inputs = data_inputs[0:index_split]
+        return data_inputs[0:index_split]
 
-        train_expected_outputs = None
-        if expected_outputs is not None:
-            train_expected_outputs = expected_outputs[0:index_split]
-
-        return train_data_inputs, train_expected_outputs
-
-    def validation_split(self, data_inputs, expected_outputs=None) -> (List, List):
+    def validation_split(self, data_inputs) -> List:
         """
         Split validation set.
 
         :param data_inputs: data inputs to split
-        :param expected_outputs: expected outputs to split
-        :return: validation_data_inputs, validation_expected_outputs, validation_data_inputs, validation_expected_outputs
+        :return: validation_data_inputs
         """
         index_split = math.floor(len(data_inputs) * self.test_size)
         validation_data_inputs = data_inputs[:index_split]
-        validation_expected_outputs = None
-        if expected_outputs is not None:
-            validation_expected_outputs = expected_outputs[:index_split]
-
-        return validation_data_inputs, validation_expected_outputs
+        return validation_data_inputs
 
 
 class BaseCrossValidationWrapper(BaseValidation, ABC):
