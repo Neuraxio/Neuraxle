@@ -1318,6 +1318,7 @@ class MetaStepMixin:
         """
         BaseStep.setup(self)
         self.wrapped.setup()
+        self.is_initialized = True
         return self
 
     def set_train(self, is_train: bool = True):
