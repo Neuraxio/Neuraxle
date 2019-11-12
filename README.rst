@@ -336,3 +336,10 @@ We thank these organisations for generously supporting the project:
 .. raw:: html
 
     <img src="https://uploads-ssl.webflow.com/5be35e61c9728278fc5f4150/5c6dabf76fc786262e6654a0_signature-courriel-logo-umaneo.png" width="200px">
+
+
+-  Solution Nexam Inc.: https://www.nexam.io/
+
+.. raw:: html
+
+    <img src="https://www.neuraxio.com/images/solution_nexam_io.jpg" width="180px">
