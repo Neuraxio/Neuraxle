@@ -154,19 +154,30 @@ class ValidationSplitWrapper(BaseValidation):
 
         self.wrapped, _ = self.wrapped.handle_fit(train_data_container, context.push(self.wrapped))
 
-        if self.run_validation_split_in_test_mode:
-            self.set_train(False)
-        results_data_container = self.wrapped.handle_transform(validation_data_container, context.push(self.wrapped))
+        results_data_container = self.wrapped.handle_transform(train_data_container, context.push(self.wrapped))
 
-        self.set_train(True)
-
-        self.scores = [
+        self.scores_train = [
             self.scoring_function(a, b)
             for a, b in zip(results_data_container.expected_outputs, results_data_container.data_inputs)
         ]
 
-        self.scores_mean = np.mean(self.scores)
-        self.scores_std = np.std(self.scores)
+        self.scores_train_mean = np.mean(self.scores_train)
+        self.scores_train_std = np.std(self.scores_train)
+
+        if self.run_validation_split_in_test_mode:
+            self.set_train(False)
+
+        results_data_container = self.wrapped.handle_transform(validation_data_container, context.push(self.wrapped))
+
+        self.set_train(True)
+
+        self.scores_validation = [
+            self.scoring_function(a, b)
+            for a, b in zip(results_data_container.expected_outputs, results_data_container.data_inputs)
+        ]
+
+        self.scores_validation_mean = np.mean(self.scores_validation)
+        self.scores_validation_std = np.std(self.scores_validation)
 
         return self, data_container
 
@@ -184,15 +195,25 @@ class ValidationSplitWrapper(BaseValidation):
 
         self.wrapped = self.wrapped.fit(train_data_inputs, train_expected_outputs)
 
-        results = self.transform(validation_data_inputs)
+        train_data_inputs = self.transform(train_data_inputs)
 
-        self.scores = [
+        self.scores_train = [
             self.scoring_function(a, b)
-            for a, b in zip(validation_expected_outputs, results)
+            for a, b in zip(train_expected_outputs, train_data_inputs)
         ]
 
-        self.scores_mean = np.mean(self.scores)
-        self.scores_std = np.std(self.scores)
+        self.scores_train_mean = np.mean(self.scores_train)
+        self.scores_train_std = np.std(self.scores_train)
+
+        validation_data_inputs = self.transform(validation_data_inputs)
+
+        self.scores_validation = [
+            self.scoring_function(a, b)
+            for a, b in zip(validation_expected_outputs, validation_data_inputs)
+        ]
+
+        self.scores_validation_mean = np.mean(self.scores_validation)
+        self.scores_validation_std = np.std(self.scores_validation)
 
         return self
 
