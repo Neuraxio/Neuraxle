@@ -113,7 +113,7 @@ ____________________________________________________________________
 
 
  Learn more:
- - https://www.neuraxio.com/en/neuraxle/stable/index.html
+ - https://www.neuraxle.org/stable/index.html
 
  Contribute:
  - https://gitter.im/Neuraxle/community
