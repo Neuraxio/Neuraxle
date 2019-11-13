@@ -112,7 +112,8 @@ class ValidationSplitWrapper(BaseValidation):
         """
         return self.wrapped.transform(data_inputs)
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseStep', DataContainer):
         """
         Fit Transform given data inputs without splitting.
 
@@ -139,7 +140,8 @@ class ValidationSplitWrapper(BaseValidation):
         """
         return self.wrapped.handle_transform(data_container, context.push(self.wrapped))
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('ValidationSplitWrapper', DataContainer):
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'ValidationSplitWrapper', DataContainer):
         """
         Fit using the training split.
         Calculate the scores using the validation split.
@@ -156,13 +158,7 @@ class ValidationSplitWrapper(BaseValidation):
 
         results_data_container = self.wrapped.handle_transform(train_data_container, context.push(self.wrapped))
 
-        self.scores_train = [
-            self.scoring_function(a, b)
-            for a, b in zip(results_data_container.expected_outputs, results_data_container.data_inputs)
-        ]
-
-        self.scores_train_mean = np.mean(self.scores_train)
-        self.scores_train_std = np.std(self.scores_train)
+        self._update_scores_train(results_data_container.data_inputs, results_data_container.expected_outputs)
 
         if self.run_validation_split_in_test_mode:
             self.set_train(False)
@@ -171,13 +167,7 @@ class ValidationSplitWrapper(BaseValidation):
 
         self.set_train(True)
 
-        self.scores_validation = [
-            self.scoring_function(a, b)
-            for a, b in zip(results_data_container.expected_outputs, results_data_container.data_inputs)
-        ]
-
-        self.scores_validation_mean = np.mean(self.scores_validation)
-        self.scores_validation_std = np.std(self.scores_validation)
+        self._update_scores_validation(results_data_container.data_inputs, results_data_container.expected_outputs)
 
         return self, data_container
 
@@ -197,25 +187,29 @@ class ValidationSplitWrapper(BaseValidation):
 
         train_data_inputs = self.transform(train_data_inputs)
 
-        self.scores_train = [
-            self.scoring_function(a, b)
-            for a, b in zip(train_expected_outputs, train_data_inputs)
-        ]
-
-        self.scores_train_mean = np.mean(self.scores_train)
-        self.scores_train_std = np.std(self.scores_train)
+        self._update_scores_train(train_data_inputs, train_expected_outputs)
 
         validation_data_inputs = self.transform(validation_data_inputs)
 
+        self._update_scores_validation(validation_data_inputs, validation_expected_outputs)
+
+        return self
+
+    def _update_scores_validation(self, data_inputs, expected_outputs):
         self.scores_validation = [
             self.scoring_function(a, b)
-            for a, b in zip(validation_expected_outputs, validation_data_inputs)
+            for a, b in zip(expected_outputs, data_inputs)
         ]
-
         self.scores_validation_mean = np.mean(self.scores_validation)
         self.scores_validation_std = np.std(self.scores_validation)
 
-        return self
+    def _update_scores_train(self, data_inputs, expected_outputs):
+        self.scores_train = [
+            self.scoring_function(a, b)
+            for a, b in zip(expected_outputs, data_inputs)
+        ]
+        self.scores_train_mean = np.mean(self.scores_train)
+        self.scores_train_std = np.std(self.scores_train)
 
     def split_data_container(self, data_container) -> Tuple[DataContainer, DataContainer]:
         """
