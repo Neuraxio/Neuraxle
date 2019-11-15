@@ -25,11 +25,12 @@ import time
 from abc import ABC, abstractmethod
 
 from neuraxle.pipeline import Pipeline
+from neuraxle.steps.flow import ForceMustHandleMixin
 
 VALUE_CACHING = 'value_caching'
 from typing import List, Any
 
-from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, ForceHandleMixin, ExecutionContext
+from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, ExecutionContext
 from neuraxle.data_container import DataContainer
 
 
@@ -218,14 +219,15 @@ class TapeCallbackFunction:
         """
         return self.name_tape
 
-class HandleCallbackStep(ForceHandleMixin, BaseStep):
+
+class HandleCallbackStep(ForceMustHandleMixin, BaseStep):
     def __init__(
             self,
             handle_fit_callback,
             handle_transform_callback,
             handle_fit_transform_callback
     ):
-        ForceHandleMixin.__init__(self)
+        ForceMustHandleMixin.__init__(self)
         BaseStep.__init__(self)
         self.handle_fit_callback = handle_fit_callback
         self.handle_fit_transform_callback = handle_fit_transform_callback
@@ -273,5 +275,3 @@ class Md5Hasher(BaseValueHasher):
         m.update(str.encode(str(data_input)))
 
         return m.hexdigest()
-
-
