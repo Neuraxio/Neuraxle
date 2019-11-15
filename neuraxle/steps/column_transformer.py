@@ -1,7 +1,8 @@
 """
 Neuraxle's Column Transformer Steps
 ====================================
-Pipeline steps to apply column transformations to different columns.
+
+Pipeline steps to apply N-Dimensional column transformations to different columns.
 
 ..
     Copyright 2019, Neuraxio Inc.
