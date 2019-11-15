@@ -55,7 +55,7 @@ class ForceAlwaysAlwaysHandleMixinStep(ForceAlwaysHandleMixin, BaseStep):
         Change the execution flow of the pipeline
         """
 
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
         return self, data_container
@@ -69,7 +69,7 @@ class ForceAlwaysAlwaysHandleMixinStep(ForceAlwaysHandleMixin, BaseStep):
         Change the execution flow of the pipeline
         """
 
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
         return data_container
@@ -83,7 +83,7 @@ class ForceAlwaysAlwaysHandleMixinStep(ForceAlwaysHandleMixin, BaseStep):
         Change the execution flow of the pipeline
         """
 
-        current_ids = self.hash(data_container.current_ids, self.hyperparams, data_container.data_inputs)
+        current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
         return self, data_container
