@@ -54,7 +54,6 @@ class BaseHasher(ABC):
     .. seealso::
         :class:`DataContainer`
 
-    .. todo:: potentially hash by source code
     """
 
     @abstractmethod
@@ -73,6 +72,7 @@ class BaseHasher(ABC):
         """
         raise NotImplementedError()
 
+
 class HashlibMd5Hasher(BaseHasher):
     """
     Class to hash hyperparamters, and data input ids together using md5 algorithm from hashlib :
@@ -86,7 +86,6 @@ class HashlibMd5Hasher(BaseHasher):
         :class`BaseHasher`,
         :class:`DataContainer`
 
-    .. todo:: potentially hash by source code
     """
 
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None) -> List[str]:
@@ -604,7 +603,7 @@ class BaseStep(ABC):
         :return: the name, a string.
         :rtype: str
 
-        .. note:: A step name is the same value as the one in the keys of :any:`~neuraxle.pipeline.Pipeline.steps_as_tuple`
+        .. note:: A step name is the same value as the one in the keys of :class:`Pipeline`.steps_as_tuple
         """
         return self.name
 
@@ -901,7 +900,7 @@ class BaseStep(ABC):
             * an hyperparameter space has changed func:`~.set_hyperparams_space`
             * a call to the fit method func:`~.handle_fit`
             * a call to the fit_transform method func:`~.handle_fit_transform`
-            * the step name has changed func:`~.set_name`
+            * the step name has changed func:`~neuraxle.base.BaseStep.set_name`
 
         :return: if the step should be saved
         :rtype: bool
@@ -914,7 +913,7 @@ class BaseStep(ABC):
         The saving happens by looping through all of the step savers in the reversed order.
 
         Some savers just save parts of objects, some save it all or what remains.
-        The :any:`~neuraxle.base.ExecutionContext.stripped_saver` has to be called last because it needs a
+        The :class:`ExecutionContext`.stripped_saver has to be called last because it needs a
         stripped version of the step.
 
         :param context: context to save from
@@ -1329,7 +1328,7 @@ class MetaStepMixin:
         """
         self.is_invalidated = True
 
-        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space.to_nested_dict())
+        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
 
         remainders = dict()
         for name, hparams in hyperparams_space.items():
@@ -1367,6 +1366,15 @@ class MetaStepMixin:
         self.wrapped: BaseStep = step
         return self
 
+    def get_step(self) -> BaseStep:
+        """
+        Get wrapped step
+
+        :return: self.wrapped
+        :rtype: BaseStep
+        """
+        return self.wrapped
+
     def get_best_model(self) -> BaseStep:
         return self.best_model
 
@@ -1386,7 +1394,7 @@ NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
 
 class ForceAlwaysHandleMixin:
     """
-    A pipeline step that only requires the implementation of handler methods :
+    A pipeline step that requires the implementation only of handler methods :
 
         - handle_transform
         - handle_fit_transform
@@ -1437,6 +1445,7 @@ class NonFittableMixin:
         """
         return self
 
+
 class NonTransformableMixin:
     """
     A pipeline step that has no effect at all but to return the same data without changes.
@@ -1475,37 +1484,6 @@ class NonTransformableMixin:
         :return: the ``processed_outputs``, unchanged.
         """
         return processed_outputs
-
-class ForceHandleMixin:
-    """
-    A pipeline step that only requires the implementation of handler methods :
-        - handle_transform
-        - handle_fit_transform
-        - handle_fit
-    .. seealso::
-        :class:`BaseStep`
-    """
-
-    @abstractmethod
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
-        raise NotImplementedError('Must implement handle_fit in {0}'.format(self.name))
-
-    @abstractmethod
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        raise NotImplementedError('Must implement handle_transform in {0}'.format(self.name))
-
-    @abstractmethod
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
-        raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
-
-    def transform(self, data_inputs) -> 'ForceHandleMixin':
-        raise Exception('Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(self.name))
-
-    def fit(self, data_inputs, expected_outputs=None) -> 'ForceHandleMixin':
-        raise Exception('Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(self.name))
-
-    def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceHandleMixin':
-        raise Exception('Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(self.name))
 
 
 class TruncableJoblibStepSaver(JoblibStepSaver):
@@ -1839,7 +1817,7 @@ class TruncableSteps(BaseStep, ABC):
         remainders = dict()
         for name, hparams in hyperparams.items():
             if name in self.steps.keys():
-                self.steps[name].set_hyperparams(hparams)
+                self.steps[name].set_hyperparams(HyperparameterSamples(hparams))
             else:
                 remainders[name] = hparams
         self.hyperparams = HyperparameterSamples(remainders)
@@ -1909,8 +1887,8 @@ class TruncableSteps(BaseStep, ABC):
 
         remainders = dict()
         for name, hparams in hyperparams_space.items():
-            if name in self.steps.keys():
-                self.steps[name].set_hyperparams_space(hparams)
+            if name in self.keys():
+                self.steps[name].set_hyperparams_space(HyperparameterSpace(hparams))
             else:
                 remainders[name] = hparams
         self.hyperparams_space = HyperparameterSpace(remainders)
@@ -1963,17 +1941,35 @@ class TruncableSteps(BaseStep, ABC):
         else:
             return BaseStep.mutate(self, new_method, method_to_assign_to, warn)
 
-    def _step_name_to_index(self, step_name):
-        for index, (current_step_name, step) in self.steps_as_tuple:
-            if current_step_name == step_name:
-                return index
-
     def _step_index_to_name(self, step_index):
         if step_index == len(self.items()):
             return None
 
         name, _ = self.steps_as_tuple[step_index]
         return name
+
+    def __setitem__(self, key: Union[slice, int, str], new_step: BaseStep):
+        """
+        Set one step with a key, and a value.
+
+        :param key: slice, index, or step name
+        :type key: Union[slice, int, str]
+        :param new_step: step
+        :type new_step: BaseStep
+        """
+        if isinstance(key, str):
+            index = 0
+            for step_index, (current_step_name, step) in enumerate(self.steps_as_tuple):
+                if current_step_name == key:
+                    index = step_index
+
+            new_step.set_name(key)
+            self.steps[index] = new_step
+            self.steps_as_tuple[index] = (key, new_step)
+        else:
+            raise ValueError(
+                'type {0} not supported yet in TruncableSteps.__setitem__, please implement it if you need it'.format(
+                    type(key)))
 
     def __getitem__(self, key: Union[slice, int, str]):
         """

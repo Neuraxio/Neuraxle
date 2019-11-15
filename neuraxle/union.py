@@ -26,7 +26,8 @@ This module contains steps to perform various feature unions and model stacking,
 
 from joblib import Parallel, delayed
 
-from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin, NamedTupleList, Identity
+from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin, NamedTupleList, Identity, ExecutionContext, \
+    DataContainer
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
@@ -52,6 +53,70 @@ class FeatureUnion(TruncableSteps):
         self.joiner = joiner  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
         self.n_jobs = n_jobs
         self.backend = backend
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Fit the parallel steps on the data. It will make use of some parallel processing.
+
+        :param data_container: The input data to fit onto
+        :param context: execution context
+        :return: self
+        """
+        # Actually fit:
+        if self.n_jobs != 1:
+            fitted_steps_data_containers = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
+                delayed(step.handle_fit)(data_container.copy(), context.push(step))
+                for _, step in self.steps_as_tuple
+            )
+        else:
+            fitted_steps_data_containers = [
+                step.handle_fit(data_container.copy(), context.push(step))
+                for _, step in self.steps_as_tuple
+            ]
+
+        # Save fitted steps
+        for i, (fitted_step, _) in enumerate(fitted_steps_data_containers):
+            self.steps_as_tuple[i] = (self.steps_as_tuple[i][0], fitted_step)
+        self._refresh_steps()
+
+        return self, data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Transform the data with the unions. It will make use of some parallel processing.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: the transformed data_inputs.
+        """
+        if self.n_jobs != 1:
+            data_containers = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
+                delayed(step.handle_transform)(data_container.copy(), context.push(step))
+                for _, step in self.steps_as_tuple
+            )
+        else:
+            data_containers = [
+                step.handle_transform(data_container.copy(), context.push(step))
+                for _, step in self.steps_as_tuple
+            ]
+
+        new_current_ids = self.hash(data_container)
+
+        data_container = self.joiner.handle_transform(data_containers, new_current_ids)
+
+        return data_container
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Transform the data with the unions. It will make use of some parallel processing.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: the transformed data_inputs.
+        """
+        new_self, _ = self.handle_fit(data_container, context)
+        data_container = self.handle_transform(data_container, context)
+        return new_self, data_container
 
     def fit(self, data_inputs, expected_outputs=None) -> 'FeatureUnion':
         """
@@ -135,6 +200,27 @@ class ModelStacking(FeatureUnion):
         """
         FeatureUnion.__init__(self, steps_as_tuple, **kwargs)
         self.judge: BaseStep = judge  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
+        new_self, _ = FeatureUnion.handle_fit_transform(self, data_container, context)
+
+        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
+
+        return new_self, self.handle_transform(data_container, context)
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
+        new_self, _ = FeatureUnion.handle_fit(self, data_container, context)
+
+        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
+
+        return new_self, data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        data_container = FeatureUnion.handle_transform(self, data_container, context)
+        results = self.judge.transform(data_container.data_inputs)
+        data_container.set_data_inputs(results)
+
+        return data_container
 
     def fit(self, data_inputs, expected_outputs=None) -> 'ModelStacking':
         """

@@ -129,13 +129,13 @@ class StepSavingCheckpointer(BaseCheckpointer):
     StepCheckpointer is used by the Checkpoint step to save the fitted steps contained in the context of type ExecutionContext.
 
     By default, StepCheckpointer saves the fitted steps when the execution mode is either FIT, or FIT_TRANSFORM :
-    ```
-    StepCheckpointer(ExecutionMode.FIT_OR_FIT_TRANSFORM)
 
-    # is equivalent to :
+    .. code:: python
 
-    StepCheckpointer()
-    ```
+        StepCheckpointer(ExecutionMode.FIT_OR_FIT_TRANSFORM)
+        # is equivalent to :
+        StepCheckpointer()
+
     """
 
     def __init__(
@@ -179,6 +179,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
     and saves a different data checkpoint with pickle data container checkpointers :
 
     .. code:: python
+
         Checkpoint(
             all_checkpointers=[
                 StepSavingCheckpointer(),
@@ -467,6 +468,7 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
     A :class:`BaseCheckpointer` to checkpoint data inputs, and expected outputs with mini data checkpointers.
 
     .. code:: python
+
         MiniDataCheckpointerWrapper(
             data_input_checkpointer=PickleMiniDataCheckpointer(),
             expected_output_checkpointer=PickleMiniDataCheckpointer()

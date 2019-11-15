@@ -26,7 +26,7 @@ Those steps works with NumPy (np) arrays.
 
 import numpy as np
 
-from neuraxle.base import NonFittableMixin, BaseStep
+from neuraxle.base import NonFittableMixin, BaseStep, DataContainer, ExecutionContext
 from neuraxle.hyperparams.space import HyperparameterSamples
 
 
@@ -54,6 +54,27 @@ class NumpyConcatenateOnCustomAxis(NonFittableMixin, BaseStep):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
 
+    def handle_transform(self, data_containers, context: ExecutionContext) -> DataContainer:
+        """
+        Handle transform.
+
+        :param data_containers: the data container to join
+        :param context: execution context
+        :return: transformed data container
+        """
+        data_inputs = self.transform([dc.data_inputs for dc in data_containers])
+        data_container = DataContainer(
+            current_ids=data_containers[-1].current_ids,
+            data_inputs=data_inputs,
+            expected_outputs=data_containers[-1].expected_outputs
+        )
+        data_container.set_data_inputs(data_inputs)
+
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
+
+        return data_container
+
     def transform(self, data_inputs):
         """
         Apply the concatenation transformation along the specified axis.
@@ -65,9 +86,10 @@ class NumpyConcatenateOnCustomAxis(NonFittableMixin, BaseStep):
     def _concat(self, data_inputs):
         return np.concatenate(data_inputs, axis=self.axis)
 
+
 class NumpyConcatenateInnerFeatures(NumpyConcatenateOnCustomAxis):
     """
-    Numpy concetenation step where the concatenation is performed along `axis=-1`.
+    Numpy concatenation step where the concatenation is performed along `axis=-1`.
     """
 
     def __init__(self):
@@ -78,6 +100,7 @@ class NumpyConcatenateInnerFeatures(NumpyConcatenateOnCustomAxis):
         # The concatenate is on the inner features so axis = -1.
         NumpyConcatenateOnCustomAxis.__init__(self, axis=-1)
 
+
 class NumpyConcatenateOuterBatch(NumpyConcatenateOnCustomAxis):
     """
     Numpy concetenation step where the concatenation is performed along `axis=0`.
@@ -85,7 +108,7 @@ class NumpyConcatenateOuterBatch(NumpyConcatenateOnCustomAxis):
 
     def __init__(self):
         """
-        Create a numpy concetenate outer batch object.
+        Create a numpy concatenate outer batch object.
         :return: NumpyConcatenateOnCustomAxis instance which is inherited by base step.
         """
         NumpyConcatenateOnCustomAxis.__init__(self, axis=0)
@@ -95,6 +118,27 @@ class NumpyTranspose(NonFittableMixin, BaseStep):
     def __init__(self):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
+
+    def handle_transform(self, data_containers, context: ExecutionContext) -> DataContainer:
+        """
+        Handle transform.
+
+        :param data_containers: the data container to join
+        :param context: execution context
+        :return: transformed data container
+        """
+        data_inputs = self.transform([dc.data_inputs for dc in data_containers])
+        data_container = DataContainer(
+            current_ids=data_containers[-1].current_ids,
+            data_inputs=data_inputs,
+            expected_outputs=data_containers[-1].expected_outputs
+        )
+        data_container.set_data_inputs(data_inputs)
+
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
+
+        return data_container
 
     def transform(self, data_inputs):
         return self._transpose(data_inputs)
@@ -126,6 +170,7 @@ class NumpyShapePrinter(NonFittableMixin, BaseStep):
 
     def _print_one(self, data_input):
         print(self.__class__.__name__ + " (one):", data_input.shape, self.custom_message)
+
 
 class MultiplyByN(NonFittableMixin, BaseStep):
     def __init__(self, multiply_by=1):

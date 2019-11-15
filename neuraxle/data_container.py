@@ -132,6 +132,13 @@ class DataContainer:
                 expected_outputs=expected_outputs
             )
 
+    def copy(self):
+        return DataContainer(
+            current_ids=self.current_ids,
+            data_inputs=self.data_inputs,
+            expected_outputs=self.expected_outputs,
+        )
+
     def __iter__(self):
         """
         Iter method returns a zip of all of the current_ids, data_inputs, and expected_outputs in the data container.
@@ -166,6 +173,7 @@ class ExpandedDataContainer(DataContainer):
     .. seealso::
         :class:`ExpandedDataContainer`,
     """
+
     def __init__(self, current_ids, data_inputs, expected_outputs, old_current_ids):
         DataContainer.__init__(
             self,

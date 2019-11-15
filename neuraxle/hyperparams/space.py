@@ -188,6 +188,15 @@ class HyperparameterSpace(HyperparameterSamples):
             new_items.append((k, v))
         return HyperparameterSamples(new_items)
 
+    def nullify(self):
+        new_items = []
+        for k, v in self.items():
+            if isinstance(v, HyperparameterDistribution) or isinstance(v, HyperparameterSpace):
+                v = v.nullify()
+            new_items.append((k, v))
+        return HyperparameterSamples(new_items)
+
+
     def narrow_space_from_best_guess(
             self, best_guesses: 'HyperparameterSpace', kept_space_ratio: float = 0.5
     ) -> 'HyperparameterSpace':
