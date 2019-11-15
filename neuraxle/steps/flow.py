@@ -77,6 +77,80 @@ class ForceMustHandleMixin:
 OPTIONAL_ENABLED_HYPERPARAM = 'enabled'
 
 
+class TrainOnlyWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
+    """
+    A wrapper to run wrapped step only in test mode
+
+    Execute only in test mode:
+
+    .. code-block:: python
+
+        p = Pipeline([
+            TrainOnlyWrapper(Identity())
+        ])
+
+    Execute only in train mode:
+
+    .. code-block:: python
+
+        p = Pipeline([
+            TrainOnlyWrapper(Identity(), test_only=False)
+        ])
+
+    """
+
+    def __init__(self, wrapped: BaseStep, train_only=True):
+        ForceMustHandleMixin.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
+        BaseStep.__init__(self)
+        self.test_only = train_only
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: step, data_container
+        :type: (BaseStep, DataContainer)
+        """
+        if self._should_execute_wrapped_step():
+            self.wrapped, data_container = self.wrapped.handle_fit(data_container, context)
+            return self, data_container
+        return data_container
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
+        """
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: step, data_container
+        :type: (BaseStep, DataContainer)
+        """
+        if self._should_execute_wrapped_step():
+            self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
+            return self, data_container
+        return data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: step, data_container
+        :type: DataContainer
+        """
+        if self._should_execute_wrapped_step():
+            return self.wrapped.handle_transform(data_container, context)
+        return data_container
+
+    def _should_execute_wrapped_step(self):
+        return (not self.is_train and self.test_only) or (self.is_train and not self.test_only)
+
+
 class Optional(ForceMustHandleMixin, MetaStepMixin, BaseStep):
     """
     A wrapper to nullify a step : nullify its hyperparams, and also nullify all of his behavior.
