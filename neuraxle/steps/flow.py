@@ -17,8 +17,8 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
     See the License for the specific language governing permissions and
     limitations under the License.
-..
 
+..
     Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 

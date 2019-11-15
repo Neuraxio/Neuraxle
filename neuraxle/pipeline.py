@@ -18,6 +18,10 @@ This is the core of Neuraxle's pipelines. You can chain steps to call them one a
     See the License for the specific language governing permissions and
     limitations under the License.
 
+..
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+
 """
 import shutil
 from abc import ABC, abstractmethod
