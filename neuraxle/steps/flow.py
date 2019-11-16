@@ -100,7 +100,6 @@ class TrainOnlyWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
     """
 
     def __init__(self, wrapped: BaseStep, train_only=True):
-        ForceMustHandleMixin.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
         self.test_only = train_only
@@ -117,7 +116,7 @@ class TrainOnlyWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
         if self._should_execute_wrapped_step():
             self.wrapped, data_container = self.wrapped.handle_fit(data_container, context)
             return self, data_container
-        return data_container
+        return self, data_container
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
             'BaseStep', DataContainer):
@@ -132,7 +131,7 @@ class TrainOnlyWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
         if self._should_execute_wrapped_step():
             self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
             return self, data_container
-        return data_container
+        return self, data_container
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
