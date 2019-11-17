@@ -33,11 +33,12 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from enum import Enum
-from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView
+from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable
 
 from joblib import dump, load
 from sklearn.base import BaseEstimator
 
+from build.lib.neuraxle.base import BaseStep
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
@@ -752,6 +753,30 @@ class BaseStep(ABC):
         """
         return self.hyperparams_space
 
+    def apply_method(self, method: Callable, *kargs) -> 'BaseStep':
+        """
+        Apply a method to a step and its children.
+
+        :param method: method to call with self
+        :param kargs: any additional arguments to be passed to the method
+        :return:
+        """
+        method(self, *kargs)
+        return self
+
+    def apply(self, method_name: str, *kargs) -> 'BaseStep':
+        """
+        Apply a method to a step and its children.
+
+        :param method_name: method name that need to be called on all steps
+        :param kargs: any additional arguments to be passed to the method
+        :return:
+        """
+        if hasattr(self.__class__, method_name) and callable(getattr(self.__class__, method_name)):
+            getattr(self, method_name)(*kargs)
+
+        return self
+
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
@@ -1378,6 +1403,30 @@ class MetaStepMixin:
     def get_best_model(self) -> BaseStep:
         return self.best_model
 
+    def apply(self, method_name: str, *kargs) -> 'BaseStep':
+        """
+        Apply the method name to the meta step and its wrapped step.
+
+        :param method_name: method name that need to be called on all steps
+        :param kargs: any additional arguments to be passed to the method
+        :return:
+        """
+        BaseStep.apply(self, method_name, *kargs)
+        self.wrapped.apply(method_name, *kargs)
+        return self
+
+    def apply_method(self, method: Callable, *kargs) -> 'BaseStep':
+        """
+        Apply method to the meta step and its wrapped step.
+
+        :param method: method to call with self
+        :param kargs: any additional arguments to be passed to the method
+        :return:
+        """
+        BaseStep.apply_method(self, method, *kargs)
+        self.wrapped = self.wrapped.apply_method(method, *kargs)
+        return self
+
     def __repr__(self):
         output = self.__class__.__name__ + "(\n\twrapped=" + repr(
             self.wrapped) + "," + "\n\thyperparameters=" + pprint.pformat(
@@ -1417,13 +1466,19 @@ class ForceAlwaysHandleMixin:
         raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
 
     def transform(self, data_inputs) -> 'ForceAlwaysHandleMixin':
-        raise Exception('Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(self.name))
+        raise Exception(
+            'Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(
+                self.name))
 
     def fit(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception('Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(self.name))
+        raise Exception(
+            'Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(
+                self.name))
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception('Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(self.name))
+        raise Exception(
+            'Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(
+                self.name))
 
 
 class NonFittableMixin:
@@ -1660,6 +1715,33 @@ class TruncableSteps(BaseStep, ABC):
         """
         for step_name, step in self.steps_as_tuple:
             step.teardown()
+
+        return self
+
+    def apply(self, method_name: str, *kargs) -> 'BaseStep':
+        """
+        Apply the method name to the pipeline step and all of its children.
+
+        :param method_name: method name that need to be called on all steps
+        :param kargs: any additional arguments to be passed to the method
+        :return:
+        """
+        BaseStep.apply(self, method_name, *kargs)
+        for step in self.values():
+            step.apply(method_name, *kargs)
+        return self
+
+    def apply_method(self, method: Callable, *kargs) -> 'BaseStep':
+        """
+        Apply a method to the pipeline step and all of its children.
+
+        :param method: method to call with self
+        :param kargs: any additional arguments to be passed to the method
+        :return:
+        """
+        BaseStep.apply_method(self, method, *kargs)
+        for step in self.values():
+            step.apply_method(method, *kargs)
 
         return self
 
