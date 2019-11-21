@@ -668,6 +668,7 @@ class BaseStep(ABC):
             }))
 
         :param hyperparams: hyperparameters
+        :type hyperparams: HyperparameterSamples
         :return: self
         :rtype: BaseStep
 
@@ -1327,7 +1328,7 @@ class MetaStepMixin:
 
     def update_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
         """
-        Set step hyperparameters, and wrapped step hyperparams with the given hyperparams.
+        Update step hyperparameters, and wrapped step hyperparams with the given hyperparams.
 
         Example :
 
@@ -1885,20 +1886,22 @@ class TruncableSteps(BaseStep, ABC):
 
     def update_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
         """
-        Set step hyperparameters to the given :class:`HyperparameterSamples`.
+        Update step hyperparameters with the given :class:`HyperparameterSamples`.
 
         Example :
 
         .. code-block:: python
 
             p = Pipeline([SomeStep()])
-            p.set_hyperparams(HyperparameterSamples({
+            p.update_hyperparams(HyperparameterSamples({
                 'learning_rate': 0.1,
                 'some_step__learning_rate': 0.2 # will set SomeStep() hyperparam 'learning_rate' to 0.2
             }))
 
-        :return: step hyperparameters
-        :rtype: HyperparameterSamples
+        :param hyperparams: hyperparams to update
+        :type hyperparams: HyperparameterSamples
+        :return: step
+        :rtype: BaseStep
 
         .. seealso::
             :class:`HyperparameterSamples`
