@@ -655,6 +655,29 @@ class BaseStep(ABC):
         self.hyperparams = HyperparameterSamples(hyperparams).to_flat()
         return self
 
+    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
+        """
+        Update the step hyperparameters.
+
+        Example :
+
+        .. code-block:: python
+
+            step.update_hyperparams(HyperparameterSamples({
+                'learning_rate': 0.10
+            }))
+
+        :param hyperparams: hyperparameters
+        :return: self
+        :rtype: BaseStep
+
+        .. seealso::
+            :class:`neuraxle.hyperparams.space.HyperparameterSamples`
+        """
+        self.hyperparams.update(hyperparams)
+        self.hyperparams = HyperparameterSamples(self.hyperparams).to_flat()
+        return self
+
     def get_hyperparams(self) -> HyperparameterSamples:
         """
         Get step hyperparameters as :class:`neuraxle.hyperparams.space.HyperparameterSamples`.
@@ -1302,6 +1325,42 @@ class MetaStepMixin:
 
         return self
 
+    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
+        """
+        Set step hyperparameters, and wrapped step hyperparams with the given hyperparams.
+
+        Example :
+
+        .. code-block:: python
+
+            step.set_hyperparams(HyperparameterSamples({
+                'learning_rate': 0.10
+                'wrapped__learning_rate': 0.10 # this will set the wrapped step 'learning_rate' hyperparam
+            }))
+
+        :param hyperparams: hyperparameters
+        :type hyperparams: HyperparameterSamples
+        :return: self
+        :rtype: BaseStep
+
+        .. seealso::
+            :class:`HyperparameterSamples`
+        """
+        self.is_invalidated = True
+
+        hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
+
+        remainders = dict()
+        for name, hparams in hyperparams.items():
+            if name == self.wrapped.name:
+                self.wrapped.update_hyperparams(hparams)
+            else:
+                remainders[name] = hparams
+
+        self.hyperparams.update(remainders)
+
+        return self
+
     def get_hyperparams(self) -> HyperparameterSamples:
         """
         Get step hyperparameters as :class:`HyperparameterSamples` with flattened hyperparams.
@@ -1821,6 +1880,40 @@ class TruncableSteps(BaseStep, ABC):
             else:
                 remainders[name] = hparams
         self.hyperparams = HyperparameterSamples(remainders)
+
+        return self
+
+    def update_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
+        """
+        Set step hyperparameters to the given :class:`HyperparameterSamples`.
+
+        Example :
+
+        .. code-block:: python
+
+            p = Pipeline([SomeStep()])
+            p.set_hyperparams(HyperparameterSamples({
+                'learning_rate': 0.1,
+                'some_step__learning_rate': 0.2 # will set SomeStep() hyperparam 'learning_rate' to 0.2
+            }))
+
+        :return: step hyperparameters
+        :rtype: HyperparameterSamples
+
+        .. seealso::
+            :class:`HyperparameterSamples`
+        """
+        self.is_invalidated = True
+
+        hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
+
+        remainders = dict()
+        for name, hparams in hyperparams.items():
+            if name in self.steps.keys():
+                self.steps[name].update_hyperparams(HyperparameterSamples(hparams))
+            else:
+                remainders[name] = hparams
+        self.hyperparams.update(remainders)
 
         return self
 

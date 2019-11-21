@@ -189,6 +189,90 @@ def test_pipeline_set_one_hyperparam_level_two_dict():
     assert p["c"].hyperparams == dict()
 
 
+def test_pipeline_update_hyperparam_level_one_flat():
+    p = Pipeline([
+        ("a", SomeStep()),
+        ("b", SomeStep()),
+        ("c", SomeStep())
+    ])
+    p.set_hyperparams({
+        "a__learning_rate": 7,
+        "a__other_hp": 8
+    })
+
+    p.update_hyperparams({
+        "a__learning_rate": 0.01
+    })
+
+    assert p["a"].hyperparams["learning_rate"] == 0.01
+    assert p["a"].hyperparams["other_hp"] == 8
+    assert p["b"].hyperparams == dict()
+    assert p["c"].hyperparams == dict()
+
+
+def test_pipeline_update_hyperparam_level_one_dict():
+    p = Pipeline([
+        ("a", SomeStep()),
+        ("b", SomeStep()),
+        ("c", SomeStep())
+    ])
+    p.set_hyperparams({"b": {"learning_rate": 7, "other_hp": 8}})
+
+    p.update_hyperparams({"b": {"learning_rate": 0.01}})
+
+    assert p["b"].hyperparams["learning_rate"] == 0.01
+    assert p["b"].hyperparams["other_hp"] == 8
+    assert p["a"].hyperparams == dict()
+    assert p["c"].hyperparams == dict()
+
+
+def test_pipeline_update_hyperparam_level_two_flat():
+    p = Pipeline([
+        ("a", SomeStep()),
+        ("b", Pipeline([
+            ("a", SomeStep()),
+            ("b", SomeStep()),
+            ("c", SomeStep())
+        ])),
+        ("c", SomeStep())
+    ])
+    p.set_hyperparams({
+        "b__a__learning_rate": 7,
+        "b__a__other_hp": 8,
+    })
+
+    p.update_hyperparams({
+        "b__a__learning_rate": 0.01
+    })
+
+    assert p["b"]["a"].hyperparams["learning_rate"] == 0.01
+    assert p["b"]["a"].hyperparams["other_hp"] == 8
+    assert p["b"]["c"].hyperparams == dict()
+    assert p["b"].hyperparams == dict()
+    assert p["c"].hyperparams == dict()
+
+
+def test_pipeline_update_hyperparam_level_two_dict():
+    p = Pipeline([
+        ("a", SomeStep()),
+        ("b", Pipeline([
+            ("a", SomeStep()),
+            ("b", SomeStep()),
+            ("c", SomeStep())
+        ])),
+        ("c", SomeStep())
+    ])
+    p.set_hyperparams({"b": {"a": {"learning_rate": 7, "other_hp": 8}, "learning_rate": 9}})
+
+    p.update_hyperparams({"b": {"a": {"learning_rate": 0.01}}})
+
+    assert p["b"]["a"].hyperparams["learning_rate"] == 0.01
+    assert p["b"]["a"].hyperparams["other_hp"] == 8
+    assert p["b"]["c"].hyperparams == dict()
+    assert p["b"].hyperparams["learning_rate"] == 9
+    assert p["c"].hyperparams == dict()
+
+
 def test_pipeline_tosklearn():
     import sklearn.pipeline
     the_step = SomeStep()

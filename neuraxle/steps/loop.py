@@ -174,6 +174,7 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
 
         return self, output_data_container
 
+
 class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
     def __init__(self, wrapped: BaseStep, copy_op=copy.deepcopy):
         BaseStep.__init__(self)
@@ -184,6 +185,11 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
         MetaStepMixin.set_hyperparams(self, hyperparams)
+        self.steps = [s.set_hyperparams(self.wrapped.get_hyperparams()) for s in self.steps]
+        return self
+
+    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
+        MetaStepMixin.update_hyperparams(self, hyperparams)
         self.steps = [s.set_hyperparams(self.wrapped.get_hyperparams()) for s in self.steps]
         return self
 
