@@ -34,7 +34,7 @@ from neuraxle.steps.flow import ForceMustHandleMixin
 VALUE_CACHING = 'value_caching'
 from typing import List, Any
 
-from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, ExecutionContext
+from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, ExecutionContext, MetaStepMixin
 from neuraxle.data_container import DataContainer
 
 
@@ -159,6 +159,83 @@ class FitTransformCallbackStep(BaseStep):
 
         return self, data_inputs
 
+    def inverse_transform(self, processed_outputs):
+        return processed_outputs
+
+
+class CallbackWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
+    def __init__(
+            self,
+            wrapped,
+            transform_callback_function,
+            fit_callback_function,
+            inverse_transform_callback_function=None,
+            more_arguments: List = tuple(),
+            hyperparams=None
+    ):
+        MetaStepMixin.__init__(self, wrapped)
+        BaseStep.__init__(self, hyperparams)
+        self.inverse_transform_callback_function = inverse_transform_callback_function
+        self.more_arguments = more_arguments
+        self.fit_callback_function = fit_callback_function
+        self.transform_callback_function = transform_callback_function
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: step, data_container
+        :type: (BaseStep, DataContainer)
+        """
+        self.fit_callback_function((data_container.data_inputs, data_container.expected_outputs), *self.more_arguments)
+        self.wrapped, data_container = self.wrapped.handle_fit(data_container, context)
+        return self, data_container
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
+        """
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: step, data_container
+        :type: (BaseStep, DataContainer)
+        """
+        self.fit_callback_function((data_container.data_inputs, data_container.expected_outputs), *self.more_arguments)
+        self.transform_callback_function(data_container.data_inputs, *self.more_arguments)
+        self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
+        return self, data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: step, data_container
+        :type: DataContainer
+        """
+        self.transform_callback_function(data_container.data_inputs, *self.more_arguments)
+        return self.wrapped.handle_transform(data_container, context.push(self.wrapped))
+
+    def handle_inverse_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        :param context: execution context
+        :type context: ExecutionContext
+        :param data_container: data containerj
+        :type data_container: DataContainer
+        :return: data container
+        :rtype: DataContainer
+        """
+        self.inverse_transform_callback_function(data_container.data_inputs, *self.more_arguments)
+        data_container = self.wrapped.handle_inverse_transform(data_container, context.push(self.wrapped))
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
+
+        return data_container
+
 
 class TapeCallbackFunction:
     """This class's purpose is to be sent to the callback to accumulate information.
@@ -222,6 +299,10 @@ class TapeCallbackFunction:
         :return: The list of names.
         """
         return self.name_tape
+
+    def reset(self):
+        self.data = []
+        self.name_tape = []
 
 
 class HandleCallbackStep(ForceMustHandleMixin, BaseStep):

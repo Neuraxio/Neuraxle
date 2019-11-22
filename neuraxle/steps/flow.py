@@ -459,8 +459,8 @@ class ReversiblePreprocessingWrapper(ForceMustHandleMixin, TruncableSteps):
         :return: self, data_container
         :rtype: (ReversiblePreprocessingWrapper, DataContainer)
         """
-        self.preprocessing_step, data_container = self.preprocessing_step.handle_fit(data_container, context)
-        self.post_processing_step, data_container = self.post_processing_step.handle_fit(data_container, context)
+        self.preprocessing_step, data_container = self.preprocessing_step.handle_fit_transform(data_container, context.push(self.preprocessing_step))
+        self.post_processing_step, data_container = self.post_processing_step.handle_fit(data_container, context.push(self.post_processing_step))
 
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
@@ -480,11 +480,10 @@ class ReversiblePreprocessingWrapper(ForceMustHandleMixin, TruncableSteps):
         :return: data_container
         :rtype: DataContainer
         """
-        data_container = self.preprocessing_step.handle_transform(data_container, context)
-        data_container = self.post_processing_step.handle_transform(data_container, context)
+        data_container = self.preprocessing_step.handle_transform(data_container, context.push(self.post_processing_step))
+        data_container = self.post_processing_step.handle_transform(data_container, context.push(self.post_processing_step))
 
-        processed_outputs = self.preprocessing_step.inverse_transform(data_container.data_inputs)
-        data_container.set_data_inputs(processed_outputs)
+        data_container = self.preprocessing_step.handle_inverse_transform(data_container, context.push(self.preprocessing_step))
 
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
@@ -504,13 +503,12 @@ class ReversiblePreprocessingWrapper(ForceMustHandleMixin, TruncableSteps):
         :return: (self, data_container)
         :rtype: (ReversiblePreprocessingWrapper, DataContainer)
         """
-        self.preprocessing_step, data_container = self.preprocessing_step.handle_fit_transform(data_container, context)
-        self.post_processing_step, data_container = self.post_processing_step.handle_fit_transform(data_container,
-                                                                                                   context)
+        self.preprocessing_step, data_container = self.preprocessing_step.handle_fit_transform(data_container, context.push(self.preprocessing_step))
+        self.post_processing_step, data_container = self.post_processing_step.handle_fit_transform(data_container, context.push(self.post_processing_step))
 
-        processed_outputs = self.preprocessing_step.inverse_transform(data_container.data_inputs)
-        data_container.set_data_inputs(processed_outputs)
+        data_container = self.preprocessing_step.handle_inverse_transform(data_container, context.push(self.preprocessing_step))
+
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
-        return data_container
+        return self, data_container
