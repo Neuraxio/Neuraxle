@@ -38,7 +38,6 @@ from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, Value
 from joblib import dump, load
 from sklearn.base import BaseEstimator
 
-from build.lib.neuraxle.base import BaseStep
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
