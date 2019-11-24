@@ -78,7 +78,11 @@ class ValidationSplitWrapper(BaseValidation):
                     test_size=0.1
                     scoring_function=mean_absolute_relative_error,
                     run_validation_split_in_test_mode=False
-                )
+                ),
+                n_iter= 10,
+                higher_score_is_better= True,
+                validation_technique=KFoldCrossValidationWrapper(),
+                refit=True
             )
         ])
 
@@ -116,36 +120,8 @@ class ValidationSplitWrapper(BaseValidation):
         """
         return self.wrapped.transform(data_inputs)
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
-        """
-        Fit Transform given data inputs without splitting.
-
-        :param context:
-        :param data_container: DataContainer
-        :type data_container: DataContainer
-        :type context: ExecutionContext
-        :return: outputs
-        """
-        new_self, _ = self.handle_fit(data_container, context)
-        data_container = self.handle_transform(data_container, context)
-
-        return new_self, data_container
-
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
-        """
-        Transform given data inputs without splitting.
-
-        :param context: execution context
-        :param data_container: DataContainer
-        :type data_container: DataContainer
-        :type context: ExecutionContext
-        :return: outputs
-        """
-        return self.wrapped.handle_transform(data_container, context.push(self.wrapped))
-
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'ValidationSplitWrapper', DataContainer):
+            'ValidationSplitWrapper', DataContainer):
         """
         Fit using the training split.
         Calculate the scores using the validation split.
@@ -155,6 +131,20 @@ class ValidationSplitWrapper(BaseValidation):
         :type context: ExecutionContext
         :type data_container: DataContainer
         :return: fitted self
+        """
+        new_self, results_data_container = self.handle_fit_transform(data_container, context)
+        return new_self, data_container
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
+        """
+        Fit Transform given data inputs without splitting.
+
+        :param context:
+        :param data_container: DataContainer
+        :type data_container: DataContainer
+        :type context: ExecutionContext
+        :return: outputs
         """
         train_data_container, validation_data_container = self.split_data_container(data_container)
 
@@ -173,7 +163,19 @@ class ValidationSplitWrapper(BaseValidation):
 
         self._update_scores_validation(results_data_container.data_inputs, results_data_container.expected_outputs)
 
-        return self, data_container
+        return self, results_data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Transform given data inputs without splitting.
+
+        :param context: execution context
+        :param data_container: DataContainer
+        :type data_container: DataContainer
+        :type context: ExecutionContext
+        :return: outputs
+        """
+        return self.wrapped.handle_transform(data_container, context.push(self.wrapped))
 
     def fit(self, data_inputs, expected_outputs=None) -> 'ValidationSplitWrapper':
         """
@@ -200,18 +202,12 @@ class ValidationSplitWrapper(BaseValidation):
         return self
 
     def _update_scores_validation(self, data_inputs, expected_outputs):
-        self.scores_validation = [
-            self.scoring_function(a, b)
-            for a, b in zip(expected_outputs, data_inputs)
-        ]
+        self.scores_validation = self.scoring_function(expected_outputs, data_inputs)
         self.scores_validation_mean = np.mean(self.scores_validation)
         self.scores_validation_std = np.std(self.scores_validation)
 
     def _update_scores_train(self, data_inputs, expected_outputs):
-        self.scores_train = [
-            self.scoring_function(a, b)
-            for a, b in zip(expected_outputs, data_inputs)
-        ]
+        self.scores_train = self.scoring_function(expected_outputs, data_inputs)
         self.scores_train_mean = np.mean(self.scores_train)
         self.scores_train_std = np.std(self.scores_train)
 
@@ -272,8 +268,8 @@ class ValidationSplitWrapper(BaseValidation):
         :param data_inputs: data inputs to split
         :return: validation_data_inputs
         """
-        index_split = math.floor(len(data_inputs) * self.test_size)
-        validation_data_inputs = data_inputs[:index_split]
+        index_split = math.floor(len(data_inputs) * (1 - self.test_size))
+        validation_data_inputs = data_inputs[index_split:]
         return validation_data_inputs
 
 

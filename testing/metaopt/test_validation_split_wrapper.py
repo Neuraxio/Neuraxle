@@ -30,10 +30,17 @@ def test_validation_split_wrapper_should_split_data():
 
     # should transform on test split
     assert np.array_equal(transform_callback.data[0], data_inputs[0:90])
-    assert np.array_equal(transform_callback.data[1], data_inputs[:10])
+    assert np.array_equal(transform_callback.data[1], data_inputs[90:])
 
     # should transform on all data at the end
     assert np.array_equal(transform_callback.data[2], data_inputs)
+
+    assert random_search.best_model.scores_train is not None
+    assert random_search.best_model.scores_validation is not None
+    assert random_search.best_model.scores_train_mean is not None
+    assert random_search.best_model.scores_validation_mean is not None
+    assert random_search.best_model.scores_train_std is not None
+    assert random_search.best_model.scores_validation_std is not None
 
 
 def test_validation_split_wrapper_handle_methods_should_split_data():
@@ -63,7 +70,14 @@ def test_validation_split_wrapper_handle_methods_should_split_data():
 
     # should transform on test split
     assert np.array_equal(transform_callback.data[0], data_inputs[0:90])
-    assert np.array_equal(transform_callback.data[1], data_inputs[:10])
+    assert np.array_equal(transform_callback.data[1], data_inputs[90:])
 
     # should transform on all data at the end
     assert np.array_equal(transform_callback.data[2], data_inputs)
+
+    assert validation_split_wrapper.scores_train is not None
+    assert validation_split_wrapper.scores_validation is not None
+    assert validation_split_wrapper.scores_train_mean is not None
+    assert validation_split_wrapper.scores_validation_mean is not None
+    assert validation_split_wrapper.scores_train_std is not None
+    assert validation_split_wrapper.scores_validation_std is not None
