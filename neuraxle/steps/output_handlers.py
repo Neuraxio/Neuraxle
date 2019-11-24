@@ -18,6 +18,10 @@ You can find here output handlers steps that changes especially the data outputs
     See the License for the specific language governing permissions and
     limitations under the License.
 
+..
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+
 """
 from neuraxle.base import ExecutionContext, BaseStep, MetaStepMixin
 from neuraxle.data_container import DataContainer
