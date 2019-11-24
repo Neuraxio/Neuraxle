@@ -20,6 +20,10 @@ the distribution.
     See the License for the specific language governing permissions and
     limitations under the License.
 
+..
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+
 """
 
 import copy
@@ -33,14 +37,16 @@ import math
 import numpy as np
 from scipy.stats import truncnorm
 
+
 class HyperparameterDistribution(metaclass=ABCMeta):
     """Base class for other hyperparameter distributions."""
 
-    def __init__(self):
+    def __init__(self, null_default_value):
         """
         Create a HyperparameterDistribution. This method should still be called with super if it gets overriden.
         """
         self.first_id = id(self)
+        self.null_default_value = null_default_value
 
     @abstractmethod
     def rvs(self):
@@ -50,6 +56,9 @@ class HyperparameterDistribution(metaclass=ABCMeta):
         :return: The randomly sampled value.
         """
         pass
+
+    def nullify(self):
+        return self.null_default_value
 
     @abstractmethod
     def pdf(self, x) -> float:
@@ -82,7 +91,7 @@ class HyperparameterDistribution(metaclass=ABCMeta):
         :param kept_space_ratio: what proportion of the space is kept. Should be between 0.0 and 1.0. Default is to keep only the best_guess (0.0).
         :return: a new HyperparameterDistribution object that has been narrowed down.
         """
-        return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
+        return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
 
     def was_narrowed_from(
             self, kept_space_ratio: float, original_hp: 'HyperparameterDistribution'
@@ -125,13 +134,13 @@ class HyperparameterDistribution(metaclass=ABCMeta):
 class FixedHyperparameter(HyperparameterDistribution):
     """This is an hyperparameter that won't change again, but that is still expressed as a distribution."""
 
-    def __init__(self, value):
+    def __init__(self, value, null_default_value=None):
         """
         Create a still hyperparameter
 
         :param value: what will be returned by calling ``.rvs()``.
         """
-        HyperparameterDistribution.__init__(self)
+        HyperparameterDistribution.__init__(self, null_default_value)
         self.value = value
 
     def rvs(self):
@@ -170,7 +179,6 @@ class FixedHyperparameter(HyperparameterDistribution):
         return 0.
 
 
-
 # TODO: Mixin this or something:
 # class DelayedAdditionOf(MalleableDistribution):
 #     """A HyperparameterDistribution (MalleableDistribution mixin) that """
@@ -195,6 +203,9 @@ class FixedHyperparameter(HyperparameterDistribution):
 
 class Boolean(HyperparameterDistribution):
     """Get a random boolean hyperparameter."""
+
+    def __init__(self, null_default_value=False):
+        HyperparameterDistribution.__init__(self, null_default_value)
 
     def rvs(self):
         """
@@ -232,6 +243,7 @@ class Boolean(HyperparameterDistribution):
 
         return 0.
 
+
 class Choice(HyperparameterDistribution):
     """Get a random value from a choice list of possible value for this hyperparameter.
 
@@ -240,13 +252,22 @@ class Choice(HyperparameterDistribution):
     the first item will be kept alone.
     """
 
-    def __init__(self, choice_list: List):
+    def __init__(self, choice_list: List, null_default_value=None):
         """
         Create a random choice hyperparameter from the given list.
 
         :param choice_list: a list of values to sample from.
+        :type choice_list: List
+        :param null_default_value: default value for distribution
+        :type null_default_value: default choice value. if None, default choice value will be the first choice
         """
-        HyperparameterDistribution.__init__(self)
+        if null_default_value is None:
+            HyperparameterDistribution.__init__(self, choice_list[0])
+        elif null_default_value in choice_list:
+            HyperparameterDistribution.__init__(self, null_default_value)
+        else:
+            raise ValueError('invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
+
         self.choice_list = choice_list
 
     def rvs(self):
@@ -270,7 +291,7 @@ class Choice(HyperparameterDistribution):
                 "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
         else:
             if x_in_choice:
-                return 1/(len(self.choice_list))
+                return 1 / (len(self.choice_list))
 
         return 0.
 
@@ -284,7 +305,8 @@ class Choice(HyperparameterDistribution):
         try:
             index = self.choice_list.index(x)
         except ValueError:
-            raise ValueError("Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
+            raise ValueError(
+                "Item not found in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
         except (NotImplementedError, NotImplemented):
             raise ValueError("A correct method for __eq__ should be defined for all item in the list.")
         except AttributeError:
@@ -306,7 +328,7 @@ class Choice(HyperparameterDistribution):
         new_narrowing = self.get_current_narrowing_value() * kept_space_ratio
 
         if len(self.choice_list) == 0 or len(self.choice_list) == 1 or new_narrowing <= 1.0 / len(self.choice_list):
-            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
+            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
 
         return copy.deepcopy(self).was_narrowed_from(kept_space_ratio, self)
 
@@ -326,14 +348,24 @@ class PriorityChoice(HyperparameterDistribution):
     unless there is a best guess that surpasses some of the top choices.
     """
 
-    def __init__(self, choice_list: List):
+    def __init__(self, choice_list: List, null_default_value=None):
         """
         Create a random choice hyperparameter from the given list (choice_list).
         The first parameters in the choice_list will be kept longer when narrowing the space.
 
-        :param choice_list: a list of values to sample from. First placed, first kept when space is narrowed.
+        :param choice_list: a list of values to sample from.
+        :type choice_list: List
+        :param null_default_value: default value for distribution
+        :type null_default_value: default choice value. if None, default choice value will be the first choice
         """
-        HyperparameterDistribution.__init__(self)
+        if null_default_value is None:
+            HyperparameterDistribution.__init__(self, choice_list[0])
+        elif null_default_value in choice_list:
+            HyperparameterDistribution.__init__(self, null_default_value)
+        else:
+            raise ValueError('invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
+
+        HyperparameterDistribution.__init__(self, null_default_value)
         self.choice_list = choice_list
 
     def rvs(self):
@@ -357,10 +389,9 @@ class PriorityChoice(HyperparameterDistribution):
                 "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
         else:
             if x_in_choice:
-                return 1/(len(self.choice_list))
+                return 1 / (len(self.choice_list))
 
         return 0.
-
 
     def cdf(self, x) -> float:
         """
@@ -372,7 +403,8 @@ class PriorityChoice(HyperparameterDistribution):
         try:
             index = self.choice_list.index(x)
         except ValueError:
-            raise ValueError("Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
+            raise ValueError(
+                "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
         except (NotImplementedError, NotImplemented):
             raise ValueError("A correct method for __eq__ should be defined for all item in the list.")
         except AttributeError:
@@ -398,7 +430,7 @@ class PriorityChoice(HyperparameterDistribution):
                 or new_size <= 1
                 or kept_space_ratio <= 1.0 / len(self.choice_list)
         ):
-            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
+            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
 
         # Bring best_guess to front
         idx = self.choice_list.index(best_guess)
@@ -419,7 +451,7 @@ class PriorityChoice(HyperparameterDistribution):
 
 
 class WrappedHyperparameterDistributions(HyperparameterDistribution):
-    def __init__(self, hd: HyperparameterDistribution = None, hds: List[HyperparameterDistribution] = None):
+    def __init__(self, hd: HyperparameterDistribution = None, hds: List[HyperparameterDistribution] = None, null_default_value=None):
         """
         Create a wrapper that will surround another HyperparameterDistribution.
         The wrapper might use one (hd) and/or many (hds) HyperparameterDistribution depending on the argument(s) used.
@@ -427,7 +459,7 @@ class WrappedHyperparameterDistributions(HyperparameterDistribution):
         :param hd: the other HyperparameterDistribution to wrap.
         :param hds: the others HyperparameterDistribution to wrap.
         """
-        HyperparameterDistribution.__init__(self)
+        HyperparameterDistribution.__init__(self, null_default_value)
         self.hd: HyperparameterDistribution = hd
         self.hds: List[HyperparameterDistribution] = hds
 
@@ -448,7 +480,6 @@ class Quantized(WrappedHyperparameterDistributions):
         :return: an integer.
         """
         return round(self.hd.rvs())
-
 
     def pdf(self, x) -> float:
         """
@@ -480,22 +511,29 @@ class Quantized(WrappedHyperparameterDistributions):
         :return:
         """
         return Quantized(
-            self.hd.narrow_space_from_best_guess(best_guess, kept_space_ratio)
+            self.hd.narrow_space_from_best_guess(best_guess, kept_space_ratio),
+            null_default_value=self.null_default_value
         ).was_narrowed_from(kept_space_ratio, self)
 
 
 class RandInt(HyperparameterDistribution):
     """Get a random integer within a range"""
 
-    def __init__(self, min_included: int, max_included: int):
+    def __init__(self, min_included: int, max_included: int, null_default_value: int=None):
         """
         Create a quantized random uniform distribution.
         A random integer between the two values inclusively will be returned.
 
         :param min_included: minimum integer, included.
         :param max_included: maximum integer, included.
+        :param null_default_value: null default value for distribution. if None, take the min_included
+        :type null_default_value: int
         """
-        HyperparameterDistribution.__init__(self)
+        if null_default_value is None:
+            HyperparameterDistribution.__init__(self, min_included)
+        else:
+            HyperparameterDistribution.__init__(self, null_default_value)
+
         self.min_included = min_included
         self.max_included = max_included
 
@@ -514,7 +552,7 @@ class RandInt(HyperparameterDistribution):
         :return: value of the probability mass function.
         """
 
-        possible_values = set(range(self.min_included, self.max_included+1))
+        possible_values = set(range(self.min_included, self.max_included + 1))
         if (isinstance(x, int) or x.is_integer()) and x in possible_values:
             return 1 / (self.max_included - self.min_included + 1)
 
@@ -546,22 +584,30 @@ class RandInt(HyperparameterDistribution):
         new_min_included = round(self.min_included * kept_space_ratio + best_guess * lost_space_ratio)
         new_max_included = round(self.max_included * kept_space_ratio + best_guess * lost_space_ratio)
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
-            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
-        return RandInt(new_min_included, new_max_included).was_narrowed_from(kept_space_ratio, self)
+            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
+        return RandInt(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
 
 
 class Uniform(HyperparameterDistribution):
     """Get a uniform distribution."""
 
-    def __init__(self, min_included: float, max_included: float):
+    def __init__(self, min_included: float, max_included: float, null_default_value=None):
         """
         Create a random uniform distribution.
         A random float between the two values somehow inclusively will be returned.
 
         :param min_included: minimum integer, included.
-        :param max_included: maximum integer, might be included - for more info, see https://docs.python.org/2/library/random.html#random.uniform
+        :type min_included: float
+        :param max_included: maximum integer, might be included - for more info, see `examples <https://docs.python.org/2/library/random.html#random.uniform>`__
+        :type max_included: float
+        :param null_default_value: null default value for distribution. if None, take the min_included
+        :type null_default_value: int
         """
-        HyperparameterDistribution.__init__(self)
+        if null_default_value is None:
+            HyperparameterDistribution.__init__(self, min_included)
+        else:
+            HyperparameterDistribution.__init__(self, null_default_value)
+
         self.min_included: float = min_included
         self.max_included: float = max_included
 
@@ -621,8 +667,8 @@ class Uniform(HyperparameterDistribution):
         new_min_included = self.min_included * kept_space_ratio + best_guess * lost_space_ratio
         new_max_included = self.max_included * kept_space_ratio + best_guess * lost_space_ratio
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
-            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
-        return Uniform(new_min_included, new_max_included).was_narrowed_from(kept_space_ratio, self)
+            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
+        return Uniform(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
 
 
 class LogUniform(HyperparameterDistribution):
@@ -630,15 +676,23 @@ class LogUniform(HyperparameterDistribution):
 
     For example, this is good for neural networks' learning rates: that vary exponentially."""
 
-    def __init__(self, min_included: float, max_included: float):
+    def __init__(self, min_included: float, max_included: float, null_default_value=None):
         """
         Create a quantized random log uniform distribution.
         A random float between the two values inclusively will be returned.
 
         :param min_included: minimum integer, should be somehow included.
         :param max_included: maximum integer, should be somehow included.
+        :param null_default_value: null default value for distribution. if None, take the min_included
+        :type null_default_value: int
         """
-        HyperparameterDistribution.__init__(self)
+        if null_default_value is None:
+            HyperparameterDistribution.__init__(self, math.log2(min_included))
+        else:
+            HyperparameterDistribution.__init__(self, math.log2(null_default_value))
+
+        self.min_included: float = min_included
+        self.max_included: float = max_included
         self.log2_min_included = math.log2(min_included)
         self.log2_max_included = math.log2(max_included)
 
@@ -695,24 +749,34 @@ class LogUniform(HyperparameterDistribution):
         new_min_included = self.log2_min_included * kept_space_ratio + log2_best_guess * lost_space_ratio
         new_max_included = self.log2_max_included * kept_space_ratio + log2_best_guess * lost_space_ratio
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
-            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
-        return LogUniform(2 ** new_min_included, 2 ** new_max_included).was_narrowed_from(kept_space_ratio, self)
+            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
+        return LogUniform(2 ** new_min_included, 2 ** new_max_included, 2 ** self.null_default_value).was_narrowed_from(kept_space_ratio, self)
 
 
 class Normal(HyperparameterDistribution):
     """Get a normal distribution."""
 
     def __init__(self, mean: float, std: float,
-                 hard_clip_min: float = None, hard_clip_max: float = None):
+                 hard_clip_min: float = None, hard_clip_max: float = None, null_default_value: float=None):
         """
         Create a normal distribution from mean and standard deviation.
 
         :param mean: the most common value to pop
+        :type mean: float
         :param std: the standard deviation (that is, the sqrt of the variance).
+        :type std: float
         :param hard_clip_min: if not none, rvs will return max(result, hard_clip_min).
+        :type hard_clip_min: float
         :param hard_clip_max: if not none, rvs will return min(result, hard_clip_min).
+        :type hard_clip_max: float
+        :param null_default_value: if none, null default value will be set to hard_clip_min.
+        :type null_default_value: float
         """
-        HyperparameterDistribution.__init__(self)
+        if null_default_value is None:
+            HyperparameterDistribution.__init__(self, hard_clip_min)
+        else:
+            HyperparameterDistribution.__init__(self, null_default_value)
+
         self.mean = mean
         self.std = std
         self.hard_clip_min = hard_clip_min
@@ -812,9 +876,9 @@ class Normal(HyperparameterDistribution):
         new_mean = self.mean * kept_space_ratio + best_guess * lost_space_ratio
         new_std = self.std * kept_space_ratio
         if new_std <= 0.0:
-            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
+            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
         return Normal(
-            new_mean, new_std, self.hard_clip_min, self.hard_clip_max
+            new_mean, new_std, self.hard_clip_min, self.hard_clip_max, self.null_default_value
         ).was_narrowed_from(kept_space_ratio, self)
 
 
@@ -822,7 +886,7 @@ class LogNormal(HyperparameterDistribution):
     """Get a LogNormal distribution."""
 
     def __init__(self, log2_space_mean: float, log2_space_std: float,
-                 hard_clip_min: float = None, hard_clip_max: float = None):
+                 hard_clip_min: float = None, hard_clip_max: float = None, null_default_value=None):
         """
         Create a LogNormal distribution. 
 
@@ -830,8 +894,13 @@ class LogNormal(HyperparameterDistribution):
         :param log2_space_std: the standard deviation of the most common value to pop, but before taking 2**value.
         :param hard_clip_min: if not none, rvs will return max(result, hard_clip_min). This value is not checked in logspace (so it is checked after the exp).
         :param hard_clip_max: if not none, rvs will return min(result, hard_clip_min). This value is not checked in logspace (so it is checked after the exp).
+        :param null_default_value: null default value for distribution. if None, take the hard_clip_min
+        :type null_default_value: int
         """
-        HyperparameterDistribution.__init__(self)
+        if null_default_value is None:
+            HyperparameterDistribution.__init__(self, hard_clip_min)
+        else:
+            HyperparameterDistribution.__init__(self, null_default_value)
         self.log2_space_mean = log2_space_mean
         self.log2_space_std = log2_space_std
         self.hard_clip_min = hard_clip_min
@@ -934,7 +1003,7 @@ class LogNormal(HyperparameterDistribution):
         new_mean = self.log2_space_mean * kept_space_ratio + log2_best_guess * lost_space_ratio
         new_std = self.log2_space_std * kept_space_ratio
         if new_std <= 0.0:
-            return FixedHyperparameter(best_guess).was_narrowed_from(kept_space_ratio, self)
+            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
         return Normal(
-            new_mean, new_std, self.hard_clip_min, self.hard_clip_max
+            new_mean, new_std, self.hard_clip_min, self.hard_clip_max, self.null_default_value
         ).was_narrowed_from(kept_space_ratio, self)
