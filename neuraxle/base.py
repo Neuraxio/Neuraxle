@@ -753,27 +753,31 @@ class BaseStep(ABC):
         """
         return self.hyperparams_space
 
-    def apply_method(self, method: Callable, *kargs) -> 'BaseStep':
+    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
         """
         Apply a method to a step and its children.
 
         :param method: method to call with self
         :param kargs: any additional arguments to be passed to the method
-        :return:
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
         """
-        method(self, *kargs)
+        method(self, *kargs, **kwargs)
         return self
 
-    def apply(self, method_name: str, *kargs) -> 'BaseStep':
+    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
         """
         Apply a method to a step and its children.
 
         :param method_name: method name that need to be called on all steps
         :param kargs: any additional arguments to be passed to the method
-        :return:
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
         """
-        if hasattr(self.__class__, method_name) and callable(getattr(self.__class__, method_name)):
-            getattr(self, method_name)(*kargs)
+        if hasattr(self, method_name) and callable(getattr(self, method_name)):
+            getattr(self, method_name)(*kargs, **kwargs)
 
         return self
 
@@ -1403,28 +1407,32 @@ class MetaStepMixin:
     def get_best_model(self) -> BaseStep:
         return self.best_model
 
-    def apply(self, method_name: str, *kargs) -> 'BaseStep':
+    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
         """
         Apply the method name to the meta step and its wrapped step.
 
         :param method_name: method name that need to be called on all steps
         :param kargs: any additional arguments to be passed to the method
-        :return:
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
         """
-        BaseStep.apply(self, method_name, *kargs)
-        self.wrapped.apply(method_name, *kargs)
+        BaseStep.apply(self, method_name, *kargs, **kwargs)
+        self.wrapped.apply(method_name, *kargs, **kwargs)
         return self
 
-    def apply_method(self, method: Callable, *kargs) -> 'BaseStep':
+    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
         """
         Apply method to the meta step and its wrapped step.
 
         :param method: method to call with self
         :param kargs: any additional arguments to be passed to the method
-        :return:
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
         """
-        BaseStep.apply_method(self, method, *kargs)
-        self.wrapped = self.wrapped.apply_method(method, *kargs)
+        BaseStep.apply_method(self, method, *kargs, **kwargs)
+        self.wrapped = self.wrapped.apply_method(method, *kargs, **kwargs)
         return self
 
     def __repr__(self):
@@ -1718,30 +1726,34 @@ class TruncableSteps(BaseStep, ABC):
 
         return self
 
-    def apply(self, method_name: str, *kargs) -> 'BaseStep':
+    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
         """
         Apply the method name to the pipeline step and all of its children.
 
         :param method_name: method name that need to be called on all steps
         :param kargs: any additional arguments to be passed to the method
-        :return:
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
         """
-        BaseStep.apply(self, method_name, *kargs)
+        BaseStep.apply(self, method_name, *kargs, **kwargs)
         for step in self.values():
-            step.apply(method_name, *kargs)
+            step.apply(method_name, *kargs, **kwargs)
         return self
 
-    def apply_method(self, method: Callable, *kargs) -> 'BaseStep':
+    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
         """
         Apply a method to the pipeline step and all of its children.
 
         :param method: method to call with self
         :param kargs: any additional arguments to be passed to the method
-        :return:
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
         """
-        BaseStep.apply_method(self, method, *kargs)
+        BaseStep.apply_method(self, method, *kargs, **kwargs)
         for step in self.values():
-            step.apply_method(method, *kargs)
+            step.apply_method(method, *kargs, **kwargs)
 
         return self
 
