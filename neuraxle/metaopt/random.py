@@ -163,7 +163,9 @@ class ValidationSplitWrapper(BaseValidation):
 
         self._update_scores_validation(results_data_container.data_inputs, results_data_container.expected_outputs)
 
-        return self, results_data_container
+        data_container = self.wrapped.handle_transform(data_container, context.push(self.wrapped))
+
+        return self, data_container
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
         """
