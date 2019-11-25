@@ -75,7 +75,7 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
                 output.expected_outputs
             )
 
-        output_data_container = self.handle_after_any(output_data_container)
+        output_data_container = self.hash_data_container(output_data_container)
 
         return self, output_data_container
 
@@ -117,7 +117,7 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
                 output.expected_outputs
             )
 
-        output_data_container = self.handle_after_any(output_data_container)
+        output_data_container = self.hash_data_container(output_data_container)
 
         return output_data_container
 
@@ -167,7 +167,7 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
                 output.expected_outputs
             )
 
-        output_data_container = self.handle_after_any(output_data_container)
+        output_data_container = self.hash_data_container(output_data_container)
 
         return self, output_data_container
 

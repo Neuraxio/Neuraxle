@@ -824,7 +824,7 @@ class BaseStep(ABC):
 
         new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
 
-        data_container = self.handle_after_any(data_container)
+        data_container = self.hash_data_container(data_container)
 
         return new_self, data_container
 
@@ -843,7 +843,7 @@ class BaseStep(ABC):
         new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
         data_container.set_data_inputs(out)
 
-        data_container = self.handle_after_any(data_container)
+        data_container = self.hash_data_container(data_container)
 
         return new_self, data_container
 
@@ -859,12 +859,9 @@ class BaseStep(ABC):
         out = self.transform(data_container.data_inputs)
         data_container.set_data_inputs(out)
 
-        data_container = self.handle_after_any(data_container)
+        data_container = self.hash_data_container(data_container)
 
         return data_container
-
-    def handle_after_any(self, data_container) -> DataContainer:
-        return self.hash_data_container(data_container)
 
     def hash_data_container(self, data_container):
         """
@@ -883,7 +880,7 @@ class BaseStep(ABC):
 
         if data_container.summary_id is None:
             data_container.set_summary_id(
-                data_container.summary_hash()
+                data_container.hash_summary()
             )
 
         summary_id = self.summary_hash(data_container)

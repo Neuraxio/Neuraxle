@@ -437,28 +437,13 @@ class NullMiniDataCheckpointer(BaseMiniDataCheckpointer):
         return True
 
 
-class TextSummaryCheckpointer(BaseSummaryCheckpointer):
+class TextFileSummaryCheckpointer(BaseSummaryCheckpointer):
     """
     Summary Checkpointer that uses a txt file to create a summary file that contains the list of all of the checkpoint current ids.
     A summary checkpoint file is a txt file that contains the list of all of the current ids of the checkpoint.
 
-    A summary checkpointer must be wrapped with a :class:`MiniDataCheckpointerWrapper` to be added to a :class:`Checkpoint`
-    :py:attr:`~Checkpoint.data_checkpointers` :
-
-    .. code:: python
-
-        Checkpoint(
-            all_checkpointers=[
-                StepSavingCheckpointer(),
-                MiniDataCheckpointerWrapper(
-                    summary_checkpointer=TextSummaryCheckpointer(),
-                    data_input_checkpointer=PickleMiniDataCheckpointer(),
-                    expected_output_checkpointer=PickleMiniDataCheckpointer()
-                )
-            ]
-        )
-
     .. seealso::
+        * :class:`BaseSummaryCheckpointer`
         * :class:`BaseMiniDataCheckpointer`
         * :class:`MiniDataCheckpointerWrapper`
         * :class:`PickleMiniDataCheckpointer`
@@ -770,7 +755,7 @@ class DefaultCheckpoint(Checkpoint):
             all_checkpointers=[
                 StepSavingCheckpointer(),
                 MiniDataCheckpointerWrapper(
-                    summary_checkpointer=TextSummaryCheckpointer(),
+                    summary_checkpointer=TextFileSummaryCheckpointer(),
                     data_input_checkpointer=PickleMiniDataCheckpointer(),
                     expected_output_checkpointer=PickleMiniDataCheckpointer()
                 )

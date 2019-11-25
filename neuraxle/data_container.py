@@ -102,7 +102,7 @@ class DataContainer:
         """
         self.summary_id = summary_id
 
-    def summary_hash(self):
+    def hash_summary(self):
         """
         Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together into one id.
 

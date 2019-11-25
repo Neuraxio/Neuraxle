@@ -113,7 +113,7 @@ class InputAndOutputTransformerMixin:
         data_container.set_data_inputs(new_data_inputs)
         data_container.set_expected_outputs(new_expected_outputs)
 
-        data_container = self.handle_after_any(data_container)
+        data_container = self.hash_data_container(data_container)
 
         return data_container
 
@@ -133,6 +133,6 @@ class InputAndOutputTransformerMixin:
         data_container.set_data_inputs(new_data_inputs)
         data_container.set_expected_outputs(new_expected_outputs)
 
-        data_container = self.handle_after_any(data_container)
+        data_container = self.hash_data_container(data_container)
 
         return new_self, data_container

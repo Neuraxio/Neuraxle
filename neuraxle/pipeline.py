@@ -145,7 +145,7 @@ class Pipeline(BasePipeline):
         """
         new_self, data_container = self._fit_core(data_container, context)
 
-        data_container = self.handle_after_any(data_container)
+        data_container = self.hash_data_container(data_container)
 
         return new_self, data_container
 
@@ -160,7 +160,7 @@ class Pipeline(BasePipeline):
         """
         new_self, data_container = self._fit_transform_core(data_container, context)
 
-        data_container = self.handle_after_any(data_container)
+        data_container = self.hash_data_container(data_container)
 
         return new_self, data_container
 
@@ -174,7 +174,7 @@ class Pipeline(BasePipeline):
         """
         data_container = self._transform_core(data_container, context)
 
-        data_container = self.handle_after_any(data_container)
+        data_container = self.hash_data_container(data_container)
 
         return data_container
 

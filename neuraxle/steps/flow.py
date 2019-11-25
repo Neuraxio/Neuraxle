@@ -353,14 +353,14 @@ class ExpandDim(
         :return: data container
         :rtype: DataContainer
         """
-        expanded_data_container = self._create_expanded_data_container(data_container)
+        expanded_data_container = ExpandedDataContainer.create_from(data_container)
 
         expanded_data_container = self.wrapped.handle_transform(
             expanded_data_container,
             context.push(self.wrapped)
         )
 
-        expanded_data_container = self.handle_after_any(expanded_data_container)
+        expanded_data_container = self.hash_data_container(expanded_data_container)
 
         return expanded_data_container.reduce_dim()
 
@@ -376,14 +376,14 @@ class ExpandDim(
         :return: data container
         :rtype: DataContainer
         """
-        expanded_data_container = self._create_expanded_data_container(data_container)
+        expanded_data_container = ExpandedDataContainer.create_from(data_container)
 
         self.wrapped, expanded_data_container = self.wrapped.handle_fit_transform(
             expanded_data_container,
             context.push(self.wrapped)
         )
 
-        expanded_data_container = self.handle_after_any(expanded_data_container)
+        expanded_data_container = self.hash_data_container(expanded_data_container)
 
         return self, expanded_data_container.reduce_dim()
 
@@ -399,28 +399,13 @@ class ExpandDim(
         :return: data container
         :rtype: DataContainer
         """
-        expanded_data_container = self._create_expanded_data_container(data_container)
+        expanded_data_container = ExpandedDataContainer.create_from(data_container)
 
         self.wrapped, expanded_data_container = self.wrapped.handle_fit(
             expanded_data_container,
             context.push(self.wrapped)
         )
 
-        expanded_data_container = self.handle_after_any(expanded_data_container)
+        expanded_data_container = self.hash_data_container(expanded_data_container)
 
         return self, expanded_data_container.reduce_dim()
-
-    def _create_expanded_data_container(self, data_container: DataContainer) -> ExpandedDataContainer:
-        """
-        Create expanded data container.
-
-        :param data_container: data container to expand
-        :type data_container: DataContainer
-        :return: expanded data container
-        :rtype: ExpandedDataContainer
-        """
-        data_container = self.hash_data_container(data_container)
-
-        expanded_data_container = ExpandedDataContainer.create_from(data_container)
-
-        return expanded_data_container
