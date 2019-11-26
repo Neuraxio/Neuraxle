@@ -65,12 +65,12 @@ class FeatureUnion(TruncableSteps):
         # Actually fit:
         if self.n_jobs != 1:
             fitted_steps_data_containers = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
-                delayed(step.handle_fit)(data_container.copy(), context.push(step))
+                delayed(step.handle_fit)(data_container.copy(), context)
                 for _, step in self.steps_as_tuple
             )
         else:
             fitted_steps_data_containers = [
-                step.handle_fit(data_container.copy(), context.push(step))
+                step.handle_fit(data_container.copy(), context)
                 for _, step in self.steps_as_tuple
             ]
 
@@ -91,12 +91,12 @@ class FeatureUnion(TruncableSteps):
         """
         if self.n_jobs != 1:
             data_containers = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
-                delayed(step.handle_transform)(data_container.copy(), context.push(step))
+                delayed(step.handle_transform)(data_container.copy(), context)
                 for _, step in self.steps_as_tuple
             )
         else:
             data_containers = [
-                step.handle_transform(data_container.copy(), context.push(step))
+                step.handle_transform(data_container.copy(), context)
                 for _, step in self.steps_as_tuple
             ]
 

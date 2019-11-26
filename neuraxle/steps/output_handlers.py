@@ -44,7 +44,7 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
                 data_inputs=data_container.expected_outputs,
                 expected_outputs=None
             ),
-            context.push(self.wrapped)
+            context
         )
 
         data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
@@ -61,7 +61,7 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
                 data_inputs=data_container.expected_outputs,
                 expected_outputs=None
             ),
-            context.push(self.wrapped)
+            context
         )
 
         current_ids = self.hash(data_container)
@@ -69,15 +69,14 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
 
         return self, data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-    BaseStep, DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
         self.wrapped, new_expected_outputs_data_container = self.wrapped.handle_fit_transform(
             DataContainer(
                 current_ids=data_container.current_ids,
                 data_inputs=data_container.expected_outputs,
                 expected_outputs=None
             ),
-            context.push(self.wrapped)
+            context
         )
 
         data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
@@ -118,7 +117,7 @@ class InputAndOutputTransformerMixin:
         return data_container
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+            'BaseStep', DataContainer):
         """
         Handle transform by fitting the step,
         and updating the data inputs, and expected outputs inside the data container.

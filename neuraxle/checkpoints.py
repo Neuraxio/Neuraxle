@@ -88,6 +88,8 @@ class BaseCheckpointer(NonFittableMixin, NonTransformableMixin, BaseStep):
                 ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM
             ]
 
+        return execution_mode == ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM
+
     @abstractmethod
     def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -215,6 +217,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :return: saved data container
         :rtype: neuraxle.data_container.DataContainer
         """
+        data_container, context = self.before_handle_fit(data_container, context)
         self.save_checkpoint(data_container, context)
         return self, data_container
 
@@ -227,6 +230,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :return: saved data container
         :rtype: neuraxle.data_container.DataContainer
         """
+        data_container, context = self.before_handle_transform(data_container, context)
         return self.save_checkpoint(data_container, context)
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
@@ -239,6 +243,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :return: saved data container
         :rtype: neuraxle.data_container.DataContainer
         """
+        data_container, context = self.before_handle_fit_transform(data_container, context)
         return self, self.save_checkpoint(data_container, context)
 
     def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext):
@@ -264,6 +269,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :return: loaded data container checkpoint
         :rtype: neuraxle.data_container.DataContainer
         """
+        context = context.push(self)
         for checkpointer in self.all_checkpointers:
             if checkpointer.is_for_execution_mode(context.get_execution_mode()):
                 data_container = checkpointer.read_checkpoint(data_container, context)
@@ -279,6 +285,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :return: if we can resume the checkpoint
         :rtype: bool
         """
+        context = context.push(self)
         for checkpointer in self.all_checkpointers:
             if checkpointer.is_for_execution_mode(context.get_execution_mode()):
                 if not checkpointer.should_resume(data_container, context):
@@ -712,6 +719,7 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         """
         if not self.summary_checkpointer.checkpoint_exists(context.get_path(), data_container):
             return False
+
 
         current_ids = self.summary_checkpointer.read_summary(
             checkpoint_path=context.get_path(),

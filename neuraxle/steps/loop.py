@@ -182,7 +182,9 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
         return output_data_container
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext):
-        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context.push(self.wrapped)):
+        context = context.push(self)
+
+        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context):
             return True
 
         return False
