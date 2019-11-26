@@ -148,6 +148,7 @@ class DataContainer:
 
     def copy(self):
         return DataContainer(
+            summary_id=self.summary_id,
             current_ids=self.current_ids,
             data_inputs=self.data_inputs,
             expected_outputs=self.expected_outputs,
@@ -174,7 +175,7 @@ class DataContainer:
         return str(self)
 
     def __str__(self):
-        return self.__class__.__name__ + "(current_ids=" + repr(list(self.current_ids)) + ", ...)"
+        return self.__class__.__name__ + "(current_ids=" + repr(list(self.current_ids)) + ", summary_id=" + repr(self.summary_id)
 
     def __len__(self):
         return len(self.data_inputs)

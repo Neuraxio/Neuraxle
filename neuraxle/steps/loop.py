@@ -25,12 +25,12 @@ Pipeline Steps For Looping
 import copy
 from typing import List, Any
 
-from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext
+from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin
 from neuraxle.data_container import ListDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
 
-class ForEachDataInput(MetaStepMixin, BaseStep):
+class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
     """
     Truncable step that fits/transforms each step for each of the data inputs, and expected outputs.
     """
@@ -74,6 +74,7 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
                 output.data_inputs,
                 output.expected_outputs
             )
+        output_data_container.summary_id = data_container.summary_id
 
         output_data_container = self.hash_data_container(output_data_container)
 
@@ -116,6 +117,7 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
                 output.data_inputs,
                 output.expected_outputs
             )
+        output_data_container.summary_id = data_container.summary_id
 
         output_data_container = self.hash_data_container(output_data_container)
 
@@ -167,9 +169,23 @@ class ForEachDataInput(MetaStepMixin, BaseStep):
                 output.expected_outputs
             )
 
+        output_data_container.summary_id = data_container.summary_id
+
         output_data_container = self.hash_data_container(output_data_container)
 
         return self, output_data_container
+
+    def hash_data_container(self, data_container):
+        output_data_container = self.wrapped.hash_data_container(data_container)
+        output_data_container.summary_id = data_container.summary_id
+
+        return output_data_container
+
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext):
+        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context.push(self.wrapped)):
+            return True
+
+        return False
 
 
 class StepClonerForEachDataInput(MetaStepMixin, BaseStep):

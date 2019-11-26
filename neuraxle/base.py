@@ -1455,6 +1455,12 @@ class MetaStepMixin:
     def get_best_model(self) -> BaseStep:
         return self.best_model
 
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext):
+        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context.push(self.wrapped)):
+            return True
+
+        return False
+
     def __repr__(self):
         output = self.__class__.__name__ + "(\n\twrapped=" + repr(
             self.wrapped) + "," + "\n\thyperparameters=" + pprint.pformat(

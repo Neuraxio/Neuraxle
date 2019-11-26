@@ -26,7 +26,7 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
 from abc import abstractmethod
 from typing import Union
 
-from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext
+from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext, ResumableStepMixin
 from neuraxle.data_container import ExpandedDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.union import FeatureUnion
@@ -316,6 +316,7 @@ class ChooseOneStepOf(FeatureUnion):
 
 
 class ExpandDim(
+    ResumableStepMixin,
     ForceMustHandleMixin,
     MetaStepMixin,
     BaseStep
@@ -409,3 +410,12 @@ class ExpandDim(
         expanded_data_container = self.hash_data_container(expanded_data_container)
 
         return self, expanded_data_container.reduce_dim()
+
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
+        expanded_data_container = ExpandedDataContainer.create_from(data_container)
+
+        if isinstance(self.wrapped, ResumableStepMixin) and \
+                self.wrapped.should_resume(expanded_data_container, context.push(self.wrapped)):
+            return True
+
+        return False
