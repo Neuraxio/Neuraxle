@@ -51,7 +51,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         return self
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
+    def fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
         Fit each step for each data inputs, and expected outputs
 
@@ -61,7 +61,6 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
         :type context: ExecutionContext
         :return: self
         """
-        data_container, context = self.will_fit_data_container(data_container, context)
         output_data_container = ListDataContainer.empty()
 
         for current_id, di, eo in data_container:
@@ -76,8 +75,6 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
                 output.expected_outputs
             )
         output_data_container.summary_id = data_container.summary_id
-
-        output_data_container = self.hash_data_container(output_data_container)
 
         return self, output_data_container
 
@@ -95,7 +92,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         return outputs
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
         Transform each step for each data inputs.
 
@@ -105,7 +102,6 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
         :type context: ExecutionContext
         :return: self
         """
-        data_container, context = self.will_transform_data_container(data_container, context)
         output_data_container = ListDataContainer.empty()
 
         for current_id, di, eo in data_container:
@@ -120,8 +116,6 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
                 output.expected_outputs
             )
         output_data_container.summary_id = data_container.summary_id
-
-        output_data_container = self.hash_data_container(output_data_container)
 
         return output_data_container
 
@@ -146,7 +140,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         return self
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
         Fit transform each step for each data inputs, and expected outputs
 
@@ -157,7 +151,6 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         :return: self, transformed_data_container
         """
-        data_container, context = self.will_fit_transform_data_container(data_container, context)
         output_data_container = ListDataContainer.empty()
 
         for current_id, di, eo in data_container:
@@ -173,8 +166,6 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
             )
 
         output_data_container.summary_id = data_container.summary_id
-
-        output_data_container = self.hash_data_container(output_data_container)
 
         return self, output_data_container
 

@@ -207,8 +207,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         BaseStep.__init__(self)
         self.all_checkpointers = all_checkpointers
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
-        'Checkpoint', DataContainer]:
+    def fit_data_container(self, data_container, context) -> Tuple['Checkpoint', DataContainer]:
         """
         Saves step, and data checkpointers for the FIT execution mode.
 
@@ -217,11 +216,10 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :return: saved data container
         :rtype: neuraxle.data_container.DataContainer
         """
-        data_container, context = self.will_fit_data_container(data_container, context)
         self.save_checkpoint(data_container, context)
         return self, data_container
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def transform_data_container(self, data_container, context):
         """
         Saves step, and data checkpointers for the TRANSORM execution mode.
 
@@ -230,11 +228,9 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :return: saved data container
         :rtype: neuraxle.data_container.DataContainer
         """
-        data_container, context = self.will_transform_data_container(data_container, context)
         return self.save_checkpoint(data_container, context)
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
-        'Checkpoint', DataContainer]:
+    def fit_transform_data_container(self, data_container, context) -> Tuple['Checkpoint', DataContainer]:
         """
         Saves step, and data checkpointers for the FIT_TRANSORM execution mode.
 
@@ -243,7 +239,6 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :return: saved data container
         :rtype: neuraxle.data_container.DataContainer
         """
-        data_container, context = self.will_fit_transform_data_container(data_container, context)
         return self, self.save_checkpoint(data_container, context)
 
     def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext):

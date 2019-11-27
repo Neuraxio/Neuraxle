@@ -317,7 +317,6 @@ class ChooseOneStepOf(FeatureUnion):
 
 class ExpandDim(
     ResumableStepMixin,
-    ForceMustHandleMixin,
     MetaStepMixin,
     BaseStep
 ):
@@ -343,61 +342,12 @@ class ExpandDim(
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
-        """
-        Send expanded data container to the wrapped handle_transform method, and returned the reduced transformed data container (back to it's orginal shape).
+    def will_process_data_container(self, data_container, context):
+        return ExpandedDataContainer.create_from(data_container), context
 
-        :param data_container: data container to transform
-        :type data_container: DataContainer
-        :param context: execution context
-        :type context: ExecutionContext
-        :return: data container
-        :rtype: DataContainer
-        """
-        data_container, context = self.will_transform_data_container(data_container, context)
-        expanded_data_container = ExpandedDataContainer.create_from(data_container)
-        expanded_data_container = self.wrapped.handle_transform(expanded_data_container, context)
-        expanded_data_container = self.hash_data_container(expanded_data_container)
-
-        return expanded_data_container.reduce_dim()
-
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
-        """
-        Send expanded data container to the wrapped handle_fit_transform method,
-        and returned the reduced transformed data container (back to it's orginal shape).
-
-        :param data_container: data container to fit_transform
-        :type data_container: DataContainer
-        :param context: execution context
-        :type context: ExecutionContext
-        :return: data container
-        :rtype: DataContainer
-        """
-        data_container, context = self.will_fit_transform_data_container(data_container, context)
-        expanded_data_container = ExpandedDataContainer.create_from(data_container)
-        self.wrapped, expanded_data_container = self.wrapped.handle_fit_transform(expanded_data_container, context)
-        expanded_data_container = self.hash_data_container(expanded_data_container)
-
-        return self, expanded_data_container.reduce_dim()
-
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
-        """
-        Send expanded data container to the wrapped handle_fit method,
-        and returned the reduced transformed data container (back to it's orginal shape).
-
-        :param data_container: data container to fit_transform
-        :type data_container: DataContainer
-        :param context: execution context
-        :type context: ExecutionContext
-        :return: data container
-        :rtype: DataContainer
-        """
-        data_container, context = self.will_fit_data_container(data_container, context)
-        expanded_data_container = ExpandedDataContainer.create_from(data_container)
-        self.wrapped, expanded_data_container = self.wrapped.handle_fit(expanded_data_container, context)
-        expanded_data_container = self.hash_data_container(expanded_data_container)
-
-        return self, expanded_data_container.reduce_dim()
+    def did_process_data_container(self, data_container, context):
+        data_container = BaseStep.did_process_data_container(self, data_container, context)
+        return data_container.reduce_dim()
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
         context = context.push(self)

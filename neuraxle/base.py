@@ -812,7 +812,7 @@ class BaseStep(ABC):
         data_container, context = self.will_process_data_container(data_container, context)
         data_container, context = self.will_fit_data_container(data_container, context)
 
-        new_self, data_container = self.fit_data_container(data_container)
+        new_self, data_container = self.fit_data_container(data_container, context)
 
         data_container = self.did_fit_data_container(data_container, context)
         data_container = self.did_process_data_container(data_container, context)
@@ -832,7 +832,7 @@ class BaseStep(ABC):
         data_container, context = self.will_process_data_container(data_container, context)
         data_container, context = self.will_fit_transform_data_container(data_container, context)
 
-        new_self, data_container = self.fit_transform_data_container(data_container)
+        new_self, data_container = self.fit_transform_data_container(data_container, context)
 
         data_container = self.did_fit_transform_data_container(data_container, context)
         data_container = self.did_process_data_container(data_container, context)
@@ -863,12 +863,10 @@ class BaseStep(ABC):
         return data_container, context.push(self)
 
     def did_fit_data_container(self, data_container, context):
-        self.is_invalidated = True
-        return data_container, context.push(self)
+        return data_container
 
-    def fit_data_container(self, data_container):
+    def fit_data_container(self, data_container, context):
         new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
-        data_container = self.hash_data_container(data_container)
         return new_self, data_container
 
     def will_fit_transform_data_container(self, data_container, context):
@@ -878,10 +876,9 @@ class BaseStep(ABC):
     def did_fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         return data_container
 
-    def fit_transform_data_container(self, data_container):
+    def fit_transform_data_container(self, data_container, context):
         new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
         data_container.set_data_inputs(out)
-        data_container = self.hash_data_container(data_container)
 
         return new_self, data_container
 
@@ -1500,6 +1497,30 @@ class MetaStepMixin:
     def get_best_model(self) -> BaseStep:
         return self.best_model
 
+    def fit_transform_data_container(self, data_container, context):
+        self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
+        return self, data_container
+
+    def fit_data_container(self, data_container, context):
+        self.wrapped, data_container = self.wrapped.handle_fit(data_container, context)
+        return self, data_container
+
+    def transform_data_container(self, data_container, context):
+        data_container = self.wrapped.handle_transform(data_container, context)
+        return data_container
+
+    def fit_transform(self, data_inputs, expected_outputs):
+        self.wrapped, data_inputs = self.wrapped.fit_transform(data_inputs, expected_outputs)
+        return self, data_inputs
+
+    def fit(self, data_inputs, expected_outputs):
+        self.wrapped, data_inputs = self.wrapped.fit(data_inputs, expected_outputs)
+        return self, data_inputs
+
+    def transform(self, data_inputs):
+        data_inputs = self.wrapped.transform(data_inputs)
+        return data_inputs
+
     def should_resume(self, data_container: DataContainer, context: ExecutionContext):
         context = context.push(self)
         if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context):
@@ -1567,9 +1588,8 @@ class NonFittableMixin:
     Note: fit methods are not implemented
     """
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
-        data_container, context = self.will_fit_transform_data_container(data_container, context)
-        return self, self.handle_transform(data_container, context)
+    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        return self, self.transform_data_container(data_container, context)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
         """
