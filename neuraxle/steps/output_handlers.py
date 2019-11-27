@@ -37,7 +37,7 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         new_expected_outputs_data_container = self.wrapped.handle_transform(
             DataContainer(
                 current_ids=data_container.current_ids,
@@ -46,15 +46,11 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
             ),
             context
         )
-
         data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
 
         return data_container
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
+    def fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
         self.wrapped = self.wrapped.handle_fit(
             DataContainer(
                 current_ids=data_container.current_ids,
@@ -64,12 +60,9 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
             context
         )
 
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
-
         return self, data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
+    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
         self.wrapped, new_expected_outputs_data_container = self.wrapped.handle_fit_transform(
             DataContainer(
                 current_ids=data_container.current_ids,
@@ -78,11 +71,7 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
             ),
             context
         )
-
         data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
 
         return self, data_container
 
@@ -98,7 +87,7 @@ class InputAndOutputTransformerMixin:
     Base output transformer step that can modify data inputs, and expected_outputs at the same time.
     """
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Handle transform by updating the data inputs, and expected outputs inside the data container.
 
@@ -112,11 +101,9 @@ class InputAndOutputTransformerMixin:
         data_container.set_data_inputs(new_data_inputs)
         data_container.set_expected_outputs(new_expected_outputs)
 
-        data_container = self.hash_data_container(data_container)
-
         return data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
             'BaseStep', DataContainer):
         """
         Handle transform by fitting the step,
@@ -131,7 +118,5 @@ class InputAndOutputTransformerMixin:
 
         data_container.set_data_inputs(new_data_inputs)
         data_container.set_expected_outputs(new_expected_outputs)
-
-        data_container = self.hash_data_container(data_container)
 
         return new_self, data_container
