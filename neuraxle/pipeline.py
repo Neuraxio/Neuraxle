@@ -140,7 +140,7 @@ class Pipeline(BasePipeline):
         :param context: execution context
         :return: tuple(fitted pipeline, transformed data container)
         """
-        data_container, context = self.before_handle_fit(data_container, context)
+        data_container, context = self.will_fit_data_container(data_container, context)
 
         new_self, data_container = self._fit_core(data_container, context)
         data_container = self.hash_data_container(data_container)
@@ -155,7 +155,7 @@ class Pipeline(BasePipeline):
         :param context: execution context
         :return: tuple(fitted pipeline, transformed data container)
         """
-        data_container, context = self.before_handle_fit_transform(data_container, context)
+        data_container, context = self.will_fit_transform_data_container(data_container, context)
 
         new_self, data_container = self._fit_transform_core(data_container, context)
         data_container = self.hash_data_container(data_container)
@@ -170,7 +170,7 @@ class Pipeline(BasePipeline):
         :param context: execution context
         :return: tuple(fitted pipeline, transformed data container)
         """
-        data_container, context = self.before_handle_transform(data_container, context)
+        data_container, context = self.will_transform_data_container(data_container, context)
 
         data_container = self._transform_core(data_container, context)
         data_container = self.hash_data_container(data_container)

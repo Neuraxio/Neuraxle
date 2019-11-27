@@ -354,6 +354,7 @@ class ExpandDim(
         :return: data container
         :rtype: DataContainer
         """
+        data_container, context = self.will_transform_data_container(data_container, context)
         expanded_data_container = ExpandedDataContainer.create_from(data_container)
         expanded_data_container = self.wrapped.handle_transform(expanded_data_container, context)
         expanded_data_container = self.hash_data_container(expanded_data_container)
@@ -372,6 +373,7 @@ class ExpandDim(
         :return: data container
         :rtype: DataContainer
         """
+        data_container, context = self.will_fit_transform_data_container(data_container, context)
         expanded_data_container = ExpandedDataContainer.create_from(data_container)
         self.wrapped, expanded_data_container = self.wrapped.handle_fit_transform(expanded_data_container, context)
         expanded_data_container = self.hash_data_container(expanded_data_container)
@@ -390,6 +392,7 @@ class ExpandDim(
         :return: data container
         :rtype: DataContainer
         """
+        data_container, context = self.will_fit_data_container(data_container, context)
         expanded_data_container = ExpandedDataContainer.create_from(data_container)
         self.wrapped, expanded_data_container = self.wrapped.handle_fit(expanded_data_container, context)
         expanded_data_container = self.hash_data_container(expanded_data_container)

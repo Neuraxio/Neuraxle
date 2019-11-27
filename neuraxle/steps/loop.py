@@ -61,6 +61,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
         :type context: ExecutionContext
         :return: self
         """
+        data_container, context = self.will_fit_data_container(data_container, context)
         output_data_container = ListDataContainer.empty()
 
         for current_id, di, eo in data_container:
@@ -104,6 +105,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
         :type context: ExecutionContext
         :return: self
         """
+        data_container, context = self.will_transform_data_container(data_container, context)
         output_data_container = ListDataContainer.empty()
 
         for current_id, di, eo in data_container:
@@ -155,6 +157,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         :return: self, transformed_data_container
         """
+        data_container, context = self.will_fit_transform_data_container(data_container, context)
         output_data_container = ListDataContainer.empty()
 
         for current_id, di, eo in data_container:

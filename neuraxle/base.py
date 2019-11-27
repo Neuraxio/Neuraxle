@@ -796,10 +796,6 @@ class BaseStep(ABC):
         """
         return self.hyperparams_space
 
-    def before_handle_fit(self, data_container, context):
-        self.is_invalidated = True
-        return data_container, context.push(self)
-
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
@@ -813,18 +809,18 @@ class BaseStep(ABC):
             :class:`DataContainer`,
             :class:`neuraxle.pipeline.Pipeline`
         """
-        data_container, context = self.before_handle_fit(data_container, context)
+        data_container, context = self.will_process_data_container(data_container, context)
+        data_container, context = self.will_fit_data_container(data_container, context)
 
-        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
-        data_container = self.hash_data_container(data_container)
+        new_self, data_container = self.fit_data_container(data_container)
+
+        data_container = self.did_fit_data_container(data_container, context)
+        data_container = self.did_process_data_container(data_container, context)
 
         return new_self, data_container
 
-    def before_handle_fit_transform(self, data_container, context):
-        self.is_invalidated = True
-        return data_container, context.push(self)
-
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
         """
         Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.fit_transform`.
         The default behavior is to rehash current ids with the step hyperparameters.
@@ -833,17 +829,15 @@ class BaseStep(ABC):
         :param context: execution context
         :return: tuple(fitted pipeline, data_container)
         """
-        data_container, context = self.before_handle_fit_transform(data_container, context)
+        data_container, context = self.will_process_data_container(data_container, context)
+        data_container, context = self.will_fit_transform_data_container(data_container, context)
 
-        new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
-        data_container.set_data_inputs(out)
+        new_self, data_container = self.fit_transform_data_container(data_container)
 
-        data_container = self.hash_data_container(data_container)
+        data_container = self.did_fit_transform_data_container(data_container, context)
+        data_container = self.did_process_data_container(data_container, context)
 
         return new_self, data_container
-
-    def before_handle_transform(self, data_container, context):
-        return data_container,  context.push(self)
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -854,12 +848,59 @@ class BaseStep(ABC):
         :param context: execution context
         :return: transformed data container
         """
-        data_container, context = self.before_handle_transform(data_container, context)
+        data_container, context = self.will_process_data_container(data_container, context)
+        data_container, context = self.will_transform_data_container(data_container, context)
 
+        data_container = self.transform_data_container(data_container, context)
+
+        data_container = self.did_transform_data_container(data_container, context)
+        data_container = self.did_process_data_container(data_container, context)
+
+        return data_container
+
+    def will_fit_data_container(self, data_container, context):
+        self.is_invalidated = True
+        return data_container, context.push(self)
+
+    def did_fit_data_container(self, data_container, context):
+        self.is_invalidated = True
+        return data_container, context.push(self)
+
+    def fit_data_container(self, data_container):
+        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
+        data_container = self.hash_data_container(data_container)
+        return new_self, data_container
+
+    def will_fit_transform_data_container(self, data_container, context):
+        self.is_invalidated = True
+        return data_container, context.push(self)
+
+    def did_fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        return data_container
+
+    def fit_transform_data_container(self, data_container):
+        new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
+        data_container.set_data_inputs(out)
+        data_container = self.hash_data_container(data_container)
+
+        return new_self, data_container
+
+    def will_transform_data_container(self, data_container, context):
+        return data_container, context.push(self)
+
+    def will_process_data_container(self, data_container, context):
+        return data_container, context
+
+    def did_process_data_container(self, data_container, context):
+        data_container = self.hash_data_container(data_container)
+        return data_container
+
+    def did_transform_data_container(self, data_container, context):
+        return data_container
+
+    def transform_data_container(self, data_container, context):
         out = self.transform(data_container.data_inputs)
         data_container.set_data_inputs(out)
-
-        data_container = self.hash_data_container(data_container)
 
         return data_container
 
@@ -1527,7 +1568,7 @@ class NonFittableMixin:
     """
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
-        data_container, context = self.before_handle_fit_transform(data_container, context)
+        data_container, context = self.will_fit_transform_data_container(data_container, context)
         return self, self.handle_transform(data_container, context)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':

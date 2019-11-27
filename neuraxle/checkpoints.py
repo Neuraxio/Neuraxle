@@ -217,7 +217,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :return: saved data container
         :rtype: neuraxle.data_container.DataContainer
         """
-        data_container, context = self.before_handle_fit(data_container, context)
+        data_container, context = self.will_fit_data_container(data_container, context)
         self.save_checkpoint(data_container, context)
         return self, data_container
 
@@ -230,7 +230,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :return: saved data container
         :rtype: neuraxle.data_container.DataContainer
         """
-        data_container, context = self.before_handle_transform(data_container, context)
+        data_container, context = self.will_transform_data_container(data_container, context)
         return self.save_checkpoint(data_container, context)
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
@@ -243,7 +243,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :return: saved data container
         :rtype: neuraxle.data_container.DataContainer
         """
-        data_container, context = self.before_handle_fit_transform(data_container, context)
+        data_container, context = self.will_fit_transform_data_container(data_container, context)
         return self, self.save_checkpoint(data_container, context)
 
     def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext):
