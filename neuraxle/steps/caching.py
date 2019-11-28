@@ -45,7 +45,7 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
             self,
             wrapped: BaseStep,
             cache_folder: str = DEFAULT_CACHE_FOLDER,
-            value_hasher: BaseValueHasher = None,
+            value_hasher: 'BaseValueHasher' = None,
     ):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
