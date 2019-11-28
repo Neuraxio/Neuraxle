@@ -25,15 +25,17 @@ Meta steps for hyperparameter tuning, such as random search.
 """
 
 import copy
-from abc import ABC, abstractmethod
-from typing import List
 import math
+from abc import ABC, abstractmethod
+from typing import List, Tuple
+
 import numpy as np
 from sklearn.metrics import r2_score
 
 from neuraxle.base import MetaStepMixin, BaseStep
-from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnCustomAxis
+from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.steps.loop import StepClonerForEachDataInput
+from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnCustomAxis
 
 
 class BaseCrossValidation(MetaStepMixin, BaseStep, ABC):
@@ -324,7 +326,7 @@ class RandomSearch(MetaStepMixin, BaseStep):
 
     def __init__(
             self,
-            wrapped = None,
+            wrapped=None,
             n_iter: int = 10,
             higher_score_is_better: bool = True,
             validation_technique: BaseCrossValidation = KFoldCrossValidation(),
@@ -377,3 +379,86 @@ class RandomSearch(MetaStepMixin, BaseStep):
         if self.best_validation_wrapper_of_model is None:
             raise Exception('Cannot transform RandomSearch before fit')
         return self.best_validation_wrapper_of_model.wrapped.transform(data_inputs)
+
+
+class HyperparamsRepository(ABC):
+    @abstractmethod
+    def create_new_trial(self, hyperparams: HyperparameterSamples):
+        pass
+
+    @abstractmethod
+    def load_all_trials(self) -> Tuple[List[HyperparameterSamples], List[float]]:
+        pass
+
+    @abstractmethod
+    def save_score_for_trial(self, hyperparams: HyperparameterSamples, score: float):
+        pass
+
+
+class HyperparamsJSONRepository(HyperparamsRepository):
+    def __init__(self, folder):
+        self.folder = folder
+
+    def create_new_trial(self, hyperparams: HyperparameterSamples):
+        hp_dict = hyperparams.to_flat_as_dict_primitive()
+        pass
+
+    def load_all_trials(self) -> Tuple[List[HyperparameterSamples], List[float]]:
+        pass
+
+    def save_score_for_trial(self, hyperparams: HyperparameterSamples, score: float):
+        pass
+
+
+class HyperparameterFeaturizer:
+    pass
+
+
+class AutoMLStrategyMixin:
+    @abstractmethod
+    def fit(self, hyperparameters: HyperparameterSamples, scores: List[float]):
+        pass
+
+    @abstractmethod
+    def guess_next_best_params(self, hyperparameters: HyperparameterSamples,
+                               scores: List[float]) -> HyperparameterSamples:
+        pass
+
+
+class AutoMLSequentialWrapper(MetaStepMixin, BaseStep):
+    def __init__(
+            self,
+            wrapped,
+            auto_ml_strategy,
+            validation_technique,
+            score_function,
+            hyperparams_repository,
+            n_iters
+    ):
+        MetaStepMixin.__init__(self, wrapped)
+        self.hyperparams_repository = hyperparams_repository
+        self.score_function = score_function
+        self.validation_technique = validation_technique
+        self.auto_ml_strategy = auto_ml_strategy
+        self.n_iters = n_iters
+
+    def fit(self, data_inputs, expected_outputs=None):
+        for i in self.n_iters:
+            hps, scores = self.hyperparams_repository.load_all_trials()
+
+            self.auto_ml_strategy = self.auto_ml_strategy.fit(hps, scores)
+
+            next_model_to_try_hps = self.auto_ml_strategy.guess_next_best_params(i, self.n_iters,
+                                                                                 self.wrapped.get_hyperparams_space())
+
+            self.hyperparams_repository.create_new_trial(next_model_to_try_hps)
+
+            validation_wrapper = self.validation_technique(
+                copy.copy(self.wrapped).set_hyperparams(next_model_to_try_hps)
+            )
+
+            validation_wrapper, predicted = validation_wrapper.fit_transform(data_inputs, expected_outputs)
+
+            score = self.score_function(expected_outputs, predicted)
+
+            self.hyperparams_repository.save_score_for_trial(next_model_to_try_hps, score)
