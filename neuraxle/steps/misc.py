@@ -24,11 +24,9 @@ You can find here misc. pipeline steps, for example, callbacks useful for debugg
 
 """
 
-import hashlib
 import time
-from abc import ABC, abstractmethod
+from abc import ABC
 
-from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import ForceMustHandleMixin
 
 VALUE_CACHING = 'value_caching'
@@ -223,6 +221,10 @@ class TapeCallbackFunction:
         """
         return self.name_tape
 
+    def reset(self):
+        self.data = []
+        self.name_tape = []
+
 
 class HandleCallbackStep(ForceMustHandleMixin, BaseStep):
     def __init__(
@@ -258,24 +260,3 @@ class Sleep(NonFittableMixin, BaseStep):
     def transform(self, data_inputs):
         time.sleep(self.sleep_time)
         return data_inputs
-
-
-class DataShuffler:
-    pass  # TODO.
-
-    def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
-        return pipeline
-
-
-class BaseValueHasher(ABC):
-    @abstractmethod
-    def hash(self, data_input):
-        raise NotImplementedError()
-
-
-class Md5Hasher(BaseValueHasher):
-    def hash(self, data_input):
-        m = hashlib.md5()
-        m.update(str.encode(str(data_input)))
-
-        return m.hexdigest()
