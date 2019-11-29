@@ -86,10 +86,14 @@ class ValidationSplitWrapper(BaseValidation):
             )
         ])
 
+    .. note::
+        The data is not shuffled before split. Please refer to the :class`DataShuffler` step for data shuffling.
+
     .. seealso::
-        :class`BaseValidation`
-        :class`BaseCrossValidationWrapper`
-        :class`RandomSearch`
+        :class`BaseValidation`,
+        :class`BaseCrossValidationWrapper`,
+        :class`RandomSearch`,
+        :class`DataShuffler`
 
     """
 
@@ -193,13 +197,13 @@ class ValidationSplitWrapper(BaseValidation):
 
         self.wrapped = self.wrapped.fit(train_data_inputs, train_expected_outputs)
 
-        train_data_inputs = self.transform(train_data_inputs)
+        train_predicted_outputs = self.wrapped.predict(train_data_inputs)
 
-        self._update_scores_train(train_data_inputs, train_expected_outputs)
+        self._update_scores_train(train_predicted_outputs, train_expected_outputs)
 
-        validation_data_inputs = self.transform(validation_data_inputs)
+        validation_predicted_outputs = self.wrapped.predict(validation_data_inputs)
 
-        self._update_scores_validation(validation_data_inputs, validation_expected_outputs)
+        self._update_scores_validation(validation_predicted_outputs, validation_expected_outputs)
 
         return self
 
@@ -260,8 +264,7 @@ class ValidationSplitWrapper(BaseValidation):
         :param data_inputs: data inputs to split
         :return: train_data_inputs
         """
-        index_split = math.floor(len(data_inputs) * (1 - self.test_size))
-        return data_inputs[0:index_split]
+        return data_inputs[0:self._get_index_split(data_inputs)]
 
     def validation_split(self, data_inputs) -> List:
         """
@@ -270,19 +273,21 @@ class ValidationSplitWrapper(BaseValidation):
         :param data_inputs: data inputs to split
         :return: validation_data_inputs
         """
-        index_split = math.floor(len(data_inputs) * (1 - self.test_size))
-        validation_data_inputs = data_inputs[index_split:]
-        return validation_data_inputs
+        return data_inputs[self._get_index_split(data_inputs):]
+
+    def _get_index_split(self, data_inputs):
+        return math.floor(len(data_inputs) * (1 - self.test_size))
 
 
 class BaseCrossValidationWrapper(BaseValidation, ABC):
-    # TODO: assert that set_step was called.
     # TODO: change default argument of scoring_function...
     def __init__(self, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch()):
         BaseValidation.__init__(self, scoring_function)
         self.joiner = joiner
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseCrossValidationWrapper':
+        assert self.wrapped is not None
+
         train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = self.split(
             data_inputs, expected_outputs)
 
