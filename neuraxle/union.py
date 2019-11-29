@@ -54,7 +54,7 @@ class FeatureUnion(TruncableSteps):
         self.n_jobs = n_jobs
         self.backend = backend
 
-    def fit_data_container(self, data_container, context):
+    def _fit_data_container(self, data_container, context):
         """
         Fit the parallel steps on the data. It will make use of some parallel processing.
 
@@ -81,7 +81,7 @@ class FeatureUnion(TruncableSteps):
 
         return self, data_container
 
-    def transform_data_container(self, data_container, context):
+    def _transform_data_container(self, data_container, context):
         """
         Transform the data with the unions. It will make use of some parallel processing.
 
@@ -107,11 +107,11 @@ class FeatureUnion(TruncableSteps):
             expected_outputs=data_container.expected_outputs
         )
 
-    def did_transform_data_container(self, data_container, context):
+    def _did_transform_data_container(self, data_container, context):
         data_container = self.joiner.handle_transform(data_container, context)
         return data_container
 
-    def fit_transform_data_container(self, data_container, context):
+    def _fit_transform_data_container(self, data_container, context):
         """
         Transform the data with the unions. It will make use of some parallel processing.
 
@@ -119,11 +119,11 @@ class FeatureUnion(TruncableSteps):
         :param context: execution context
         :return: the transformed data_inputs.
         """
-        new_self, _ = self.fit_data_container(data_container, context)
-        data_container = self.transform_data_container(data_container, context)
+        new_self, _ = self._fit_data_container(data_container, context)
+        data_container = self._transform_data_container(data_container, context)
         return new_self, data_container
 
-    def did_fit_transform_data_container(self, data_container, context):
+    def _did_fit_transform_data_container(self, data_container, context):
         self.joiner, data_container = self.joiner.handle_fit_transform(data_container, context)
         return data_container
 

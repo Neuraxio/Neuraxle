@@ -55,7 +55,7 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
 
         self.cache_folder = cache_folder
 
-    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit transform data container.
 
@@ -74,7 +74,7 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
 
         return self, data_container
 
-    def transform_data_container(self, data_container, context):
+    def _transform_data_container(self, data_container, context):
         """
         Transform data container.
 

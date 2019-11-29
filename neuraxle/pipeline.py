@@ -74,7 +74,7 @@ class Pipeline(BasePipeline):
         data_container = self.hash_data_container(data_container)
         context = ExecutionContext(root=self.cache_folder, execution_mode=ExecutionMode.TRANSFORM)
         context = context.push(self)
-        data_container = self.transform_data_container(data_container, context)
+        data_container = self._transform_data_container(data_container, context)
 
         return data_container.data_inputs
 
@@ -95,7 +95,7 @@ class Pipeline(BasePipeline):
         data_container = self.hash_data_container(data_container)
         context = ExecutionContext(root=self.cache_folder, execution_mode=ExecutionMode.FIT_TRANSFORM)
         context = context.push(self)
-        new_self, data_container = self.fit_transform_data_container(data_container, context)
+        new_self, data_container = self._fit_transform_data_container(data_container, context)
 
         return new_self, data_container.data_inputs
 
@@ -116,7 +116,7 @@ class Pipeline(BasePipeline):
         data_container = self.hash_data_container(data_container)
         context = ExecutionContext(self.cache_folder, ExecutionMode.FIT)
         context = context.push(self)
-        new_self, data_container = self.fit_data_container(data_container, context)
+        new_self, data_container = self._fit_data_container(data_container, context)
 
         return new_self
 
@@ -131,7 +131,7 @@ class Pipeline(BasePipeline):
             processed_outputs = step.inverse_transform(processed_outputs)
         return processed_outputs
 
-    def fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
         """
         After loading the last checkpoint, fit transform each pipeline steps,
         but only fit the last pipeline step.
@@ -162,7 +162,7 @@ class Pipeline(BasePipeline):
 
         return self, data_container
 
-    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
             'Pipeline', DataContainer):
         """
         After loading the last checkpoint, fit transform each pipeline steps
@@ -186,7 +186,7 @@ class Pipeline(BasePipeline):
 
         return self, data_container
 
-    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         After loading the last checkpoint, transform each pipeline steps
 
@@ -538,7 +538,7 @@ class Joiner(Barrier):
         output_data_container = ListDataContainer.empty()
         for data_container_batch in data_container_batches:
             output_data_container.concat(
-                step.transform_data_container(data_container_batch, context)
+                step._transform_data_container(data_container_batch, context)
             )
 
         return output_data_container

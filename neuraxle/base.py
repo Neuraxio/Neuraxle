@@ -809,18 +809,17 @@ class BaseStep(ABC):
             :class:`DataContainer`,
             :class:`neuraxle.pipeline.Pipeline`
         """
-        data_container, context = self.will_process_data_container(data_container, context)
-        data_container, context = self.will_fit_data_container(data_container, context)
+        data_container, context = self._will_process_data_container(data_container, context)
+        data_container, context = self._will_fit_data_container(data_container, context)
 
-        new_self, data_container = self.fit_data_container(data_container, context)
+        new_self, data_container = self._fit_data_container(data_container, context)
 
-        data_container = self.did_fit_data_container(data_container, context)
-        data_container = self.did_process_data_container(data_container, context)
+        data_container = self._did_fit_data_container(data_container, context)
+        data_container = self._did_process_data_container(data_container, context)
 
         return new_self, data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.fit_transform`.
         The default behavior is to rehash current ids with the step hyperparameters.
@@ -829,13 +828,13 @@ class BaseStep(ABC):
         :param context: execution context
         :return: tuple(fitted pipeline, data_container)
         """
-        data_container, context = self.will_process_data_container(data_container, context)
-        data_container, context = self.will_fit_transform_data_container(data_container, context)
+        data_container, context = self._will_process_data_container(data_container, context)
+        data_container, context = self._will_fit_transform_data_container(data_container, context)
 
-        new_self, data_container = self.fit_transform_data_container(data_container, context)
+        new_self, data_container = self._fit_transform_data_container(data_container, context)
 
-        data_container = self.did_fit_transform_data_container(data_container, context)
-        data_container = self.did_process_data_container(data_container, context)
+        data_container = self._did_fit_transform_data_container(data_container, context)
+        data_container = self._did_process_data_container(data_container, context)
 
         return new_self, data_container
 
@@ -848,54 +847,54 @@ class BaseStep(ABC):
         :param context: execution context
         :return: transformed data container
         """
-        data_container, context = self.will_process_data_container(data_container, context)
-        data_container, context = self.will_transform_data_container(data_container, context)
+        data_container, context = self._will_process_data_container(data_container, context)
+        data_container, context = self._will_transform_data_container(data_container, context)
 
-        data_container = self.transform_data_container(data_container, context)
+        data_container = self._transform_data_container(data_container, context)
 
-        data_container = self.did_transform_data_container(data_container, context)
-        data_container = self.did_process_data_container(data_container, context)
+        data_container = self._did_transform_data_container(data_container, context)
+        data_container = self._did_process_data_container(data_container, context)
 
         return data_container
 
-    def will_fit_data_container(self, data_container, context):
+    def _will_fit_data_container(self, data_container, context):
         self.is_invalidated = True
         return data_container, context.push(self)
 
-    def did_fit_data_container(self, data_container, context):
+    def _did_fit_data_container(self, data_container, context):
         return data_container
 
-    def fit_data_container(self, data_container, context):
+    def _fit_data_container(self, data_container, context):
         new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
         return new_self, data_container
 
-    def will_fit_transform_data_container(self, data_container, context):
+    def _will_fit_transform_data_container(self, data_container, context):
         self.is_invalidated = True
         return data_container, context.push(self)
 
-    def did_fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+    def _did_fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         return data_container
 
-    def fit_transform_data_container(self, data_container, context):
+    def _fit_transform_data_container(self, data_container, context):
         new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
         data_container.set_data_inputs(out)
 
         return new_self, data_container
 
-    def will_transform_data_container(self, data_container, context):
+    def _will_transform_data_container(self, data_container, context):
         return data_container, context.push(self)
 
-    def will_process_data_container(self, data_container, context):
+    def _will_process_data_container(self, data_container, context):
         return data_container, context
 
-    def did_process_data_container(self, data_container, context):
+    def _did_process_data_container(self, data_container, context):
         data_container = self.hash_data_container(data_container)
         return data_container
 
-    def did_transform_data_container(self, data_container, context):
+    def _did_transform_data_container(self, data_container, context):
         return data_container
 
-    def transform_data_container(self, data_container, context):
+    def _transform_data_container(self, data_container, context):
         out = self.transform(data_container.data_inputs)
         data_container.set_data_inputs(out)
 

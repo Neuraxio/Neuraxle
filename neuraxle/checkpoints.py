@@ -207,7 +207,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         BaseStep.__init__(self)
         self.all_checkpointers = all_checkpointers
 
-    def fit_data_container(self, data_container, context) -> Tuple['Checkpoint', DataContainer]:
+    def _fit_data_container(self, data_container, context) -> Tuple['Checkpoint', DataContainer]:
         """
         Saves step, and data checkpointers for the FIT execution mode.
 
@@ -219,7 +219,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         self.save_checkpoint(data_container, context)
         return self, data_container
 
-    def transform_data_container(self, data_container, context):
+    def _transform_data_container(self, data_container, context):
         """
         Saves step, and data checkpointers for the TRANSORM execution mode.
 
@@ -230,7 +230,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         """
         return self.save_checkpoint(data_container, context)
 
-    def fit_transform_data_container(self, data_container, context) -> Tuple['Checkpoint', DataContainer]:
+    def _fit_transform_data_container(self, data_container, context) -> Tuple['Checkpoint', DataContainer]:
         """
         Saves step, and data checkpointers for the FIT_TRANSORM execution mode.
 

@@ -54,7 +54,7 @@ class NumpyConcatenateOnCustomAxis(NonFittableMixin, BaseStep):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
 
-    def transform_data_container(self, data_container, context):
+    def _transform_data_container(self, data_container, context):
         """
         Handle transform.
 
@@ -116,7 +116,7 @@ class NumpyTranspose(NonFittableMixin, BaseStep):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
 
-    def transform_data_container(self, data_container, context):
+    def _transform_data_container(self, data_container, context):
         """
         Handle transform.
 

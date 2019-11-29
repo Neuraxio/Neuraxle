@@ -51,7 +51,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         return self
 
-    def fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
         Fit each step for each data inputs, and expected outputs
 
@@ -92,7 +92,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         return outputs
 
-    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
         Transform each step for each data inputs.
 
@@ -140,7 +140,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         return self
 
-    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
         Fit transform each step for each data inputs, and expected outputs
 

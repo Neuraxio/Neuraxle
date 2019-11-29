@@ -37,7 +37,7 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
 
-    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         new_expected_outputs_data_container = self.wrapped.handle_transform(
             DataContainer(
                 current_ids=data_container.current_ids,
@@ -50,7 +50,7 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
 
         return data_container
 
-    def fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
         self.wrapped = self.wrapped.handle_fit(
             DataContainer(
                 current_ids=data_container.current_ids,
@@ -62,7 +62,7 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
 
         return self, data_container
 
-    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
         self.wrapped, new_expected_outputs_data_container = self.wrapped.handle_fit_transform(
             DataContainer(
                 current_ids=data_container.current_ids,
