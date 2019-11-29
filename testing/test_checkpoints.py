@@ -5,6 +5,8 @@ from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.pipeline import ResumablePipeline
 from neuraxle.steps.misc import FitTransformCallbackStep, TapeCallbackFunction
 
+SUMMARY_ID = '6e4419c1957e7772f3957d63bb41efcd'
+
 
 def test_resumable_pipeline_with_checkpoint_fit_transform_should_save_data_inputs(tmpdir):
     test_case = create_checkpoint_test_case(tmpdir)
@@ -90,6 +92,13 @@ def given_fully_saved_checkpoints(tmpdir):
     os.makedirs(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', 'di'))
     os.makedirs(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', 'eo'))
 
+    with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint',
+                           '{0}.txt'.format(SUMMARY_ID)), 'w+') as file:
+        file.writelines([
+            '0\n',
+            '1'
+        ])
+
     with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', 'di', '0.pickle'), 'wb') as file:
         dump(0, file)
     with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', 'di', '1.pickle'), 'wb') as file:
@@ -137,6 +146,13 @@ def test_resumable_pipeline_with_checkpoint_transform_should_not_resume_partiall
 def given_partially_saved_checkpoints(tmpdir):
     os.makedirs(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', 'di'))
     os.makedirs(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', 'eo'))
+
+    with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint',
+                           '{0}.txt'.format(SUMMARY_ID)), 'w+') as file:
+        file.writelines([
+            '0\n',
+            '1'
+        ])
     with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', 'di', '0.pickle'), 'wb') as file:
         dump(0, file)
     with open(os.path.join(tmpdir, 'ResumablePipeline', 'checkpoint', 'eo', '1.pickle'), 'wb') as file:

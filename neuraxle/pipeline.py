@@ -30,8 +30,8 @@ from typing import Any, Tuple, List
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, NonFittableMixin, \
     ExecutionContext, ExecutionMode, NonTransformableMixin
-from neuraxle.data_container import DataContainer, ListDataContainer
 from neuraxle.checkpoints import Checkpoint
+from neuraxle.data_container import DataContainer, ListDataContainer
 
 DEFAULT_CACHE_FOLDER = 'cache'
 
@@ -70,8 +70,8 @@ class Pipeline(BasePipeline):
         :return: transformed data inputs
         """
         data_container = DataContainer(current_ids=None, data_inputs=data_inputs)
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+
+        data_container = self.hash_data_container(data_container)
 
         context = ExecutionContext.create_from_root(self, ExecutionMode.TRANSFORM, self.cache_folder)
 
@@ -92,8 +92,8 @@ class Pipeline(BasePipeline):
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         )
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+
+        data_container = self.hash_data_container(data_container)
 
         context = ExecutionContext.create_from_root(self, ExecutionMode.FIT_TRANSFORM, self.cache_folder)
 
@@ -114,8 +114,8 @@ class Pipeline(BasePipeline):
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         )
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+
+        data_container = self.hash_data_container(data_container)
 
         context = ExecutionContext.create_from_root(self, ExecutionMode.FIT, self.cache_folder)
 
@@ -171,8 +171,7 @@ class Pipeline(BasePipeline):
         """
         new_self, data_container = self._fit_core(data_container, context)
 
-        ids = self.hash(data_container)
-        data_container.set_current_ids(ids)
+        data_container = self.hash_data_container(data_container)
 
         return new_self, data_container
 
@@ -186,8 +185,7 @@ class Pipeline(BasePipeline):
         """
         new_self, data_container = self._fit_transform_core(data_container, context)
 
-        ids = self.hash(data_container)
-        data_container.set_current_ids(ids)
+        data_container = self.hash_data_container(data_container)
 
         return new_self, data_container
 
@@ -201,8 +199,7 @@ class Pipeline(BasePipeline):
         """
         data_container = self._transform_core(data_container, context)
 
-        ids = self.hash(data_container)
-        data_container.set_current_ids(ids)
+        data_container = self.hash_data_container(data_container)
 
         return data_container
 
@@ -320,6 +317,7 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
             self._get_starting_step_info(data_container, context)
 
         loaded_pipeline = self.load(context)
+
         if not self.are_steps_before_index_the_same(loaded_pipeline, new_starting_step_index):
             return self.steps_as_tuple, data_container
 
@@ -338,8 +336,7 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         self.hyperparams = loaded_self.hyperparams
         self.hyperparams_space = loaded_self.hyperparams_space
 
-    def _get_starting_step_info(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
-        int, DataContainer]:
+    def _get_starting_step_info(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[int, DataContainer]:
         """
         Find the index of the latest step that can be resumed
 
@@ -353,12 +350,11 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
 
         for index, (step_name, step) in enumerate(self.items()):
             sub_step_context = starting_step_context.push(step)
-            if isinstance(step, ResumableStepMixin) and step.should_resume(current_data_container, sub_step_context):
+            if isinstance(step, ResumableStepMixin) and step.should_resume(current_data_container.copy(), sub_step_context):
                 index_latest_checkpoint = index
                 starting_step_data_container = copy(current_data_container)
 
-            current_ids = step.hash(current_data_container)
-            current_data_container.set_current_ids(current_ids)
+            current_data_container = step.hash_data_container(current_data_container)
 
         return index_latest_checkpoint, starting_step_data_container
 
@@ -392,8 +388,8 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         :return: transformed data inputs
         """
         data_container = DataContainer(current_ids=None, data_inputs=data_inputs)
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+
+        self.hash_data_container(data_container)
 
         context = ExecutionContext.create_from_root(self, ExecutionMode.TRANSFORM, self.cache_folder)
         data_container = self.handle_transform(data_container, context)
@@ -426,8 +422,8 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
         self.setup()
 
         data_container = DataContainer(current_ids=None, data_inputs=data_inputs, expected_outputs=expected_outputs)
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+
+        data_container = self.hash_data_container(data_container)
 
         context = ExecutionContext.create_from_root(self, ExecutionMode.FIT_TRANSFORM, self.cache_folder)
         new_self, data_container = self.handle_fit_transform(data_container, context)
@@ -451,8 +447,8 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
                 data_container=data_container,
                 context=context
             )
-            current_ids = self.hash(data_container)
-            data_container.set_current_ids(current_ids)
+
+            data_container = self.hash_data_container(data_container)
 
         return data_container
 
@@ -512,8 +508,8 @@ class MiniBatchSequentialPipeline(NonFittableMixin, Pipeline):
                 data_container=data_container,
                 context=sub_context
             )
-            current_ids = self.hash(data_container)
-            data_container.set_current_ids(current_ids)
+
+            data_container = self.hash_data_container(data_container)
 
             new_self = self[:index_start] + sub_pipeline
             if index_start + len(sub_pipeline) < len(self):
@@ -558,7 +554,8 @@ class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
     """
 
     @abstractmethod
-    def join_transform(self, step: TruncableSteps, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def join_transform(self, step: TruncableSteps, data_container: DataContainer,
+                       context: ExecutionContext) -> DataContainer:
         """
         Execute the given pipeline :func:`~neuraxle.pipeline.Pipeline.transform` with the given data container, and execution context.
 
