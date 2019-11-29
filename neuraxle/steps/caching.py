@@ -72,8 +72,7 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
 
         data_container.set_data_inputs(outputs)
 
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+        data_container = self.hash_data_container(data_container)
 
         return self, data_container
 
@@ -92,8 +91,7 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
 
         data_container.set_data_inputs(outputs)
 
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+        data_container = self.hash_data_container(data_container)
 
         return data_container
 
