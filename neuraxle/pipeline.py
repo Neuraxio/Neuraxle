@@ -134,33 +134,6 @@ class Pipeline(BasePipeline):
             processed_outputs = step.inverse_transform(processed_outputs)
         return processed_outputs
 
-    def fit_data_container(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
-        """
-        Call :func:`~neuraxle.pipeline.Pipeline.handle_fit` with the given data container, and the default execution context.
-
-        :param data_container: data container to fit transform
-        :return: tuple(fitted pipeline, transformed data container)
-        """
-        return self.handle_fit(data_container, ExecutionContext.create_from_root(self, ExecutionMode.FIT, self.cache_folder))
-
-    def fit_transform_data_container(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
-        """
-        Call :func:`~neuraxle.pipeline.Pipeline.handle_fit_transform` with the given data container, and the default execution context.
-
-        :param data_container: data container to fit transform
-        :return: tuple(fitted pipeline, transformed data container)
-        """
-        return self.handle_fit_transform(data_container, ExecutionContext.create_from_root(self, ExecutionMode.FIT_TRANSFORM, self.cache_folder))
-
-    def transform_data_container(self, data_container: DataContainer) -> ('BaseStep', DataContainer):
-        """
-        Call :func:`~neuraxle.pipeline.Pipeline.handle_transform` with the given data container, and the default execution context.
-
-        :param data_container: data container to transform
-        :return: tuple(fitted pipeline, transformed data container)
-        """
-        return self.handle_transform(data_container, ExecutionContext.create_from_root(self, ExecutionMode.TRANSFORM, self.cache_folder))
-
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit transform then rehash ids with hyperparams and transformed data inputs
