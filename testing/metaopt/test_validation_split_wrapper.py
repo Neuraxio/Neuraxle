@@ -58,7 +58,7 @@ def test_validation_split_wrapper_handle_methods_should_split_data():
     expected_outputs = np.random.randint(1, 100, (100, 5))
 
     validation_split_wrapper, outputs = validation_split_wrapper.handle_fit_transform(
-        DataContainer(list(range(len(data_inputs))), data_inputs, expected_outputs),
+        DataContainer(current_ids=list(range(len(data_inputs))), data_inputs=data_inputs, expected_outputs=expected_outputs),
         ExecutionContext.create_from_root(validation_split_wrapper, ExecutionMode.FIT_TRANSFORM, DEFAULT_CACHE_FOLDER)
     )
 
