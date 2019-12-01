@@ -3,7 +3,7 @@ import pytest
 
 from neuraxle.base import ExecutionMode
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.flow import TrainOnlyWrapper
+from neuraxle.steps.flow import TrainOrTestOnlyWrapper
 from neuraxle.steps.misc import TapeCallbackFunction, FitTransformCallbackStep
 from testing.steps.neuraxle_test_case import NeuraxleTestCase
 
@@ -16,69 +16,7 @@ tape_fit = TapeCallbackFunction()
 
 @pytest.mark.parametrize('test_case', [
     NeuraxleTestCase(
-        pipeline=Pipeline([TrainOnlyWrapper(FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2))]),
-        more_arguments={'set_train': False},
-        callbacks=[tape_transform, tape_fit],
-        expected_callbacks_data=[DATA_INPUTS],
-        data_inputs=DATA_INPUTS,
-        expected_processed_outputs=DATA_INPUTS * 2,
-        execution_mode=ExecutionMode.TRANSFORM
-    ),
-    NeuraxleTestCase(
-        pipeline=Pipeline([TrainOnlyWrapper(
-            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2))]),
-        more_arguments={'set_train': False},
-        callbacks=[tape_transform, tape_fit],
-        data_inputs=DATA_INPUTS,
-        expected_outputs=EXPECTED_OUTPUTS,
-        expected_callbacks_data=[DATA_INPUTS, (DATA_INPUTS, EXPECTED_OUTPUTS)],
-        expected_processed_outputs=DATA_INPUTS * 2,
-        execution_mode=ExecutionMode.FIT_TRANSFORM
-    ),
-    NeuraxleTestCase(
-        pipeline=Pipeline([TrainOnlyWrapper(
-            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2))]),
-        more_arguments={'set_train': False},
-        callbacks=[tape_transform, tape_fit],
-        data_inputs=DATA_INPUTS,
-        expected_outputs=EXPECTED_OUTPUTS,
-        expected_callbacks_data=[[], (DATA_INPUTS, EXPECTED_OUTPUTS)],
-        execution_mode=ExecutionMode.FIT
-    ),
-    NeuraxleTestCase(
-        pipeline=Pipeline([TrainOnlyWrapper(
-            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2))]),
-        more_arguments={'set_train': True},
-        callbacks=[tape_transform, tape_fit],
-        expected_callbacks_data=[[], []],
-        data_inputs=DATA_INPUTS,
-        expected_processed_outputs=DATA_INPUTS,
-        execution_mode=ExecutionMode.TRANSFORM
-    ),
-    NeuraxleTestCase(
-        pipeline=Pipeline([TrainOnlyWrapper(
-            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2))]),
-        more_arguments={'set_train': True},
-        callbacks=[tape_transform, tape_fit],
-        data_inputs=DATA_INPUTS,
-        expected_outputs=EXPECTED_OUTPUTS,
-        expected_callbacks_data=[[], []],
-        expected_processed_outputs=DATA_INPUTS,
-        execution_mode=ExecutionMode.FIT_TRANSFORM
-    ),
-    NeuraxleTestCase(
-        pipeline=Pipeline([TrainOnlyWrapper(
-            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2))]),
-        more_arguments={'set_train': True},
-        callbacks=[tape_transform, tape_fit],
-        data_inputs=DATA_INPUTS,
-        expected_outputs=EXPECTED_OUTPUTS,
-        expected_callbacks_data=[[], []],
-        execution_mode=ExecutionMode.FIT
-    ),
-    NeuraxleTestCase(
-        pipeline=Pipeline([TrainOnlyWrapper(
-            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2), train_only=False)]),
+        pipeline=Pipeline([TrainOrTestOnlyWrapper(FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2))]),
         more_arguments={'set_train': True},
         callbacks=[tape_transform, tape_fit],
         expected_callbacks_data=[DATA_INPUTS],
@@ -87,8 +25,8 @@ tape_fit = TapeCallbackFunction()
         execution_mode=ExecutionMode.TRANSFORM
     ),
     NeuraxleTestCase(
-        pipeline=Pipeline([TrainOnlyWrapper(
-            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2), train_only=False)]),
+        pipeline=Pipeline([TrainOrTestOnlyWrapper(
+            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2))]),
         more_arguments={'set_train': True},
         callbacks=[tape_transform, tape_fit],
         data_inputs=DATA_INPUTS,
@@ -98,8 +36,8 @@ tape_fit = TapeCallbackFunction()
         execution_mode=ExecutionMode.FIT_TRANSFORM
     ),
     NeuraxleTestCase(
-        pipeline=Pipeline([TrainOnlyWrapper(
-            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2), train_only=False)]),
+        pipeline=Pipeline([TrainOrTestOnlyWrapper(
+            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2))]),
         more_arguments={'set_train': True},
         callbacks=[tape_transform, tape_fit],
         data_inputs=DATA_INPUTS,
@@ -108,8 +46,8 @@ tape_fit = TapeCallbackFunction()
         execution_mode=ExecutionMode.FIT
     ),
     NeuraxleTestCase(
-        pipeline=Pipeline([TrainOnlyWrapper(
-            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2), train_only=False)]),
+        pipeline=Pipeline([TrainOrTestOnlyWrapper(
+            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2))]),
         more_arguments={'set_train': False},
         callbacks=[tape_transform, tape_fit],
         expected_callbacks_data=[[], []],
@@ -118,8 +56,8 @@ tape_fit = TapeCallbackFunction()
         execution_mode=ExecutionMode.TRANSFORM
     ),
     NeuraxleTestCase(
-        pipeline=Pipeline([TrainOnlyWrapper(
-            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2), train_only=False)]),
+        pipeline=Pipeline([TrainOrTestOnlyWrapper(
+            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2))]),
         more_arguments={'set_train': False},
         callbacks=[tape_transform, tape_fit],
         data_inputs=DATA_INPUTS,
@@ -129,9 +67,71 @@ tape_fit = TapeCallbackFunction()
         execution_mode=ExecutionMode.FIT_TRANSFORM
     ),
     NeuraxleTestCase(
-        pipeline=Pipeline([TrainOnlyWrapper(
-            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2), train_only=False)]),
+        pipeline=Pipeline([TrainOrTestOnlyWrapper(
+            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2))]),
         more_arguments={'set_train': False},
+        callbacks=[tape_transform, tape_fit],
+        data_inputs=DATA_INPUTS,
+        expected_outputs=EXPECTED_OUTPUTS,
+        expected_callbacks_data=[[], []],
+        execution_mode=ExecutionMode.FIT
+    ),
+    NeuraxleTestCase(
+        pipeline=Pipeline([TrainOrTestOnlyWrapper(
+            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2), is_train_only=False)]),
+        more_arguments={'set_train': False},
+        callbacks=[tape_transform, tape_fit],
+        expected_callbacks_data=[DATA_INPUTS],
+        data_inputs=DATA_INPUTS,
+        expected_processed_outputs=DATA_INPUTS * 2,
+        execution_mode=ExecutionMode.TRANSFORM
+    ),
+    NeuraxleTestCase(
+        pipeline=Pipeline([TrainOrTestOnlyWrapper(
+            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2), is_train_only=False)]),
+        more_arguments={'set_train': False},
+        callbacks=[tape_transform, tape_fit],
+        data_inputs=DATA_INPUTS,
+        expected_outputs=EXPECTED_OUTPUTS,
+        expected_callbacks_data=[DATA_INPUTS, (DATA_INPUTS, EXPECTED_OUTPUTS)],
+        expected_processed_outputs=DATA_INPUTS * 2,
+        execution_mode=ExecutionMode.FIT_TRANSFORM
+    ),
+    NeuraxleTestCase(
+        pipeline=Pipeline([TrainOrTestOnlyWrapper(
+            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2), is_train_only=False)]),
+        more_arguments={'set_train': False},
+        callbacks=[tape_transform, tape_fit],
+        data_inputs=DATA_INPUTS,
+        expected_outputs=EXPECTED_OUTPUTS,
+        expected_callbacks_data=[[], (DATA_INPUTS, EXPECTED_OUTPUTS)],
+        execution_mode=ExecutionMode.FIT
+    ),
+    NeuraxleTestCase(
+        pipeline=Pipeline([TrainOrTestOnlyWrapper(
+            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2), is_train_only=False)]),
+        more_arguments={'set_train': True},
+        callbacks=[tape_transform, tape_fit],
+        expected_callbacks_data=[[], []],
+        data_inputs=DATA_INPUTS,
+        expected_processed_outputs=DATA_INPUTS,
+        execution_mode=ExecutionMode.TRANSFORM
+    ),
+    NeuraxleTestCase(
+        pipeline=Pipeline([TrainOrTestOnlyWrapper(
+            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2), is_train_only=False)]),
+        more_arguments={'set_train': True},
+        callbacks=[tape_transform, tape_fit],
+        data_inputs=DATA_INPUTS,
+        expected_outputs=EXPECTED_OUTPUTS,
+        expected_callbacks_data=[[], []],
+        expected_processed_outputs=DATA_INPUTS,
+        execution_mode=ExecutionMode.FIT_TRANSFORM
+    ),
+    NeuraxleTestCase(
+        pipeline=Pipeline([TrainOrTestOnlyWrapper(
+            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2), is_train_only=False)]),
+        more_arguments={'set_train': True},
         callbacks=[tape_transform, tape_fit],
         data_inputs=DATA_INPUTS,
         expected_outputs=EXPECTED_OUTPUTS,

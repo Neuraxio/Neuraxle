@@ -77,16 +77,16 @@ class ForceMustHandleMixin:
 OPTIONAL_ENABLED_HYPERPARAM = 'enabled'
 
 
-class TrainOnlyWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
+class TrainOrTestOnlyWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
     """
-    A wrapper to run wrapped step only in test mode
+    A wrapper to run wrapped step only in test mode, or only in train mode.
 
     Execute only in test mode:
 
     .. code-block:: python
 
         p = Pipeline([
-            TrainOnlyWrapper(Identity())
+            TrainOrTestOnlyWrapper(Identity(), is_train_only=True)
         ])
 
     Execute only in train mode:
@@ -97,12 +97,18 @@ class TrainOnlyWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
             TrainOnlyWrapper(Identity(), test_only=False)
         ])
 
+    .. seealso::
+        :class:`TrainOnlyWrapper`,
+        :class:`TestOnlyWrapper`,
+        :class:`ForceMustHandleMixin`,
+        :class:`MetaStepMixin`,
+        :class:`BaseStep`
     """
 
-    def __init__(self, wrapped: BaseStep, train_only=True):
+    def __init__(self, wrapped: BaseStep, is_train_only=True):
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
-        self.test_only = train_only
+        self.is_train_only = is_train_only
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
@@ -147,7 +153,47 @@ class TrainOnlyWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
         return data_container
 
     def _should_execute_wrapped_step(self):
-        return (not self.is_train and self.test_only) or (self.is_train and not self.test_only)
+        return (self.wrapped.is_train and self.is_train_only) or (not self.wrapped.is_train and not self.is_train_only)
+
+
+class TrainOnlyWrapper(TrainOrTestOnlyWrapper):
+    """
+    A wrapper to run wrapped step only in train mode
+
+    Execute only in train mode:
+
+    .. code-block:: python
+
+        p = Pipeline([
+            TrainOnlyWrapper(Identity())
+        ])
+
+    .. seealso::
+        :class:`TrainOrTestOnlyWrapper`,
+        :class:`TestOnlyWrapper`
+    """
+    def __init__(self, wrapped: BaseStep):
+        TrainOrTestOnlyWrapper.__init__(self, wrapped=wrapped, is_train_only=True)
+
+
+class TestOnlyWrapper(TrainOrTestOnlyWrapper):
+    """
+    A wrapper to run wrapped step only in test mode
+
+    Execute only in train mode:
+
+    .. code-block:: python
+
+        p = Pipeline([
+            TestOnlyWrapper(Identity())
+        ])
+
+    .. seealso::
+        :class:`TrainOrTestOnlyWrapper`,
+        :class:`TrainOnlyWrapper`
+    """
+    def __init__(self, wrapped: BaseStep):
+        TrainOrTestOnlyWrapper.__init__(self, wrapped=wrapped, is_train_only=False)
 
 
 class Optional(ForceMustHandleMixin, MetaStepMixin, BaseStep):
