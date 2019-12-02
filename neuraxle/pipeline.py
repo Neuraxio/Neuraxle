@@ -134,8 +134,7 @@ class Pipeline(BasePipeline):
             processed_outputs = step.inverse_transform(processed_outputs)
         return processed_outputs
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit transform then rehash ids with hyperparams and transformed data inputs
 
@@ -149,8 +148,7 @@ class Pipeline(BasePipeline):
 
         return new_self, data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit transform then rehash ids with hyperparams and transformed data inputs
 

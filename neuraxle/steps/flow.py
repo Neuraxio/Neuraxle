@@ -77,6 +77,125 @@ class ForceMustHandleMixin:
 OPTIONAL_ENABLED_HYPERPARAM = 'enabled'
 
 
+class TrainOrTestOnlyWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
+    """
+    A wrapper to run wrapped step only in test mode, or only in train mode.
+
+    Execute only in test mode:
+
+    .. code-block:: python
+
+        p = Pipeline([
+            TrainOrTestOnlyWrapper(Identity(), is_train_only=True)
+        ])
+
+    Execute only in train mode:
+
+    .. code-block:: python
+
+        p = Pipeline([
+            TrainOnlyWrapper(Identity(), test_only=False)
+        ])
+
+    .. seealso::
+        :class:`TrainOnlyWrapper`,
+        :class:`TestOnlyWrapper`,
+        :class:`ForceMustHandleMixin`,
+        :class:`MetaStepMixin`,
+        :class:`BaseStep`
+    """
+
+    def __init__(self, wrapped: BaseStep, is_train_only=True):
+        MetaStepMixin.__init__(self, wrapped)
+        BaseStep.__init__(self)
+        self.is_train_only = is_train_only
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: step, data_container
+        :type: (BaseStep, DataContainer)
+        """
+        if self._should_execute_wrapped_step():
+            self.wrapped, data_container = self.wrapped.handle_fit(data_container, context)
+            return self, data_container
+        return self, data_container
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
+        """
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: step, data_container
+        :type: (BaseStep, DataContainer)
+        """
+        if self._should_execute_wrapped_step():
+            self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
+            return self, data_container
+        return self, data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: step, data_container
+        :type: DataContainer
+        """
+        if self._should_execute_wrapped_step():
+            return self.wrapped.handle_transform(data_container, context)
+        return data_container
+
+    def _should_execute_wrapped_step(self):
+        return (self.wrapped.is_train and self.is_train_only) or (not self.wrapped.is_train and not self.is_train_only)
+
+
+class TrainOnlyWrapper(TrainOrTestOnlyWrapper):
+    """
+    A wrapper to run wrapped step only in train mode
+
+    Execute only in train mode:
+
+    .. code-block:: python
+
+        p = Pipeline([
+            TrainOnlyWrapper(Identity())
+        ])
+
+    .. seealso::
+        :class:`TrainOrTestOnlyWrapper`,
+        :class:`TestOnlyWrapper`
+    """
+    def __init__(self, wrapped: BaseStep):
+        TrainOrTestOnlyWrapper.__init__(self, wrapped=wrapped, is_train_only=True)
+
+
+class TestOnlyWrapper(TrainOrTestOnlyWrapper):
+    """
+    A wrapper to run wrapped step only in test mode
+
+    Execute only in train mode:
+
+    .. code-block:: python
+
+        p = Pipeline([
+            TestOnlyWrapper(Identity())
+        ])
+
+    .. seealso::
+        :class:`TrainOrTestOnlyWrapper`,
+        :class:`TrainOnlyWrapper`
+    """
+    def __init__(self, wrapped: BaseStep):
+        TrainOrTestOnlyWrapper.__init__(self, wrapped=wrapped, is_train_only=False)
+
+
 class Optional(ForceMustHandleMixin, MetaStepMixin, BaseStep):
     """
     A wrapper to nullify a step : nullify its hyperparams, and also nullify all of his behavior.

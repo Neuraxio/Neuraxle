@@ -39,7 +39,7 @@ from sklearn.utils import shuffle
 
 from neuraxle.hyperparams.distributions import RandInt, LogUniform, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.random import RandomSearch, KFoldCrossValidation
+from neuraxle.metaopt.random import RandomSearch, KFoldCrossValidationWrapper
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
@@ -91,7 +91,7 @@ def main():
     p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
         n_iter=10,
         higher_score_is_better=True,
-        validation_technique=KFoldCrossValidation(scoring_function=r2_score, k_fold=10)
+        validation_technique=KFoldCrossValidationWrapper(scoring_function=r2_score, k_fold=10)
     ))
     # Here is an alternative way to do it, more "pipeliney":
     # p = RandomSearch(
