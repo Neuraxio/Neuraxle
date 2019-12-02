@@ -25,27 +25,279 @@ Meta steps for hyperparameter tuning, such as random search.
 """
 
 import copy
-from abc import ABC, abstractmethod
-from typing import List
 import math
+from abc import ABC, abstractmethod
+from typing import List, Callable, Tuple
+
 import numpy as np
 from sklearn.metrics import r2_score
 
-from neuraxle.base import MetaStepMixin, BaseStep
-from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnCustomAxis
+from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, ExecutionMode, DEFAULT_CACHE_FOLDER
+from neuraxle.data_container import DataContainer
 from neuraxle.steps.loop import StepClonerForEachDataInput
+from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnCustomAxis
 
 
-class BaseCrossValidation(MetaStepMixin, BaseStep, ABC):
-    # TODO: assert that set_step was called.
-    # TODO: change default argument of scoring_function...
-    def __init__(self, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch()):
+class BaseValidation(MetaStepMixin, BaseStep, ABC):
+    """
+    Base class For validation wrappers.
+    It has a scoring function to calculate the score for the validation split.
+
+    .. seealso::
+        :class`ValidationSplitWrapper`,
+        :class`ValidationSplitWrapper`,
+        :class`KFoldCrossValidationWrapper`,
+        :class`AnchoredWalkForwardTimeSeriesCrossValidationWrapper`,
+        :class`WalkForwardTimeSeriesCrossValidationWrapper`
+
+    """
+
+    def __init__(self, scoring_function: Callable = r2_score):
+        """
+        Base class For validation wrappers.
+        It has a scoring function to calculate the score for the validation split.
+
+        :param scoring_function: scoring function with two arguments (y_true, y_pred)
+        :type scoring_function: Callable
+        """
         MetaStepMixin.__init__(self)
         BaseStep.__init__(self)
         self.scoring_function = scoring_function
+
+
+class ValidationSplitWrapper(BaseValidation):
+    """
+    Wrapper for validation split that calculates the score for the validation split.
+
+    .. code-block:: python
+
+        random_search = Pipeline([
+            RandomSearch(
+                ValidationSplitWrapper(
+                    Identity(),
+                    test_size=0.1
+                    scoring_function=mean_absolute_relative_error,
+                    run_validation_split_in_test_mode=False
+                ),
+                n_iter= 10,
+                higher_score_is_better= True,
+                validation_technique=KFoldCrossValidationWrapper(),
+                refit=True
+            )
+        ])
+
+    .. note::
+        The data is not shuffled before split. Please refer to the :class`DataShuffler` step for data shuffling.
+
+    .. seealso::
+        :class`BaseValidation`,
+        :class`BaseCrossValidationWrapper`,
+        :class`RandomSearch`,
+        :class`DataShuffler`
+
+    """
+
+    def __init__(
+            self,
+            wrapped: BaseStep,
+            test_size: float,
+            scoring_function=r2_score,
+            run_validation_split_in_test_mode=True
+    ):
+        """
+        :param wrapped: wrapped step
+        :param test_size: ratio for test size between 0 and 1
+        :param scoring_function: scoring function with two arguments (y_true, y_pred)
+        """
+        MetaStepMixin.__init__(self, wrapped)
+        BaseStep.__init__(self)
+        self.run_validation_split_in_test_mode = run_validation_split_in_test_mode
+        self.test_size = test_size
+        self.scoring_function = scoring_function
+
+    def transform(self, data_inputs):
+        """
+        Transform given data inputs without splitting.
+
+        :param data_inputs: data inputs
+        :return: outputs
+        """
+        return self.wrapped.transform(data_inputs)
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'ValidationSplitWrapper', DataContainer):
+        """
+        Fit using the training split.
+        Calculate the scores using the validation split.
+
+        :param context: execution context
+        :param data_container: data container
+        :type context: ExecutionContext
+        :type data_container: DataContainer
+        :return: fitted self
+        """
+        new_self, results_data_container = self.handle_fit_transform(data_container, context)
+        return new_self, data_container
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
+        """
+        Fit Transform given data inputs without splitting.
+
+        :param context:
+        :param data_container: DataContainer
+        :type data_container: DataContainer
+        :type context: ExecutionContext
+        :return: outputs
+        """
+        train_data_container, validation_data_container = self.split_data_container(data_container)
+
+        self.wrapped, _ = self.wrapped.handle_fit(train_data_container, context.push(self.wrapped))
+
+        results_data_container = self.wrapped.handle_transform(train_data_container, context.push(self.wrapped))
+
+        self._update_scores_train(results_data_container.data_inputs, results_data_container.expected_outputs)
+
+        if self.run_validation_split_in_test_mode:
+            self.set_train(False)
+
+        results_data_container = self.wrapped.handle_transform(validation_data_container, context.push(self.wrapped))
+
+        self.set_train(True)
+
+        self._update_scores_validation(results_data_container.data_inputs, results_data_container.expected_outputs)
+
+        data_container = self.wrapped.handle_transform(data_container, context.push(self.wrapped))
+
+        return self, data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Transform given data inputs without splitting.
+
+        :param context: execution context
+        :param data_container: DataContainer
+        :type data_container: DataContainer
+        :type context: ExecutionContext
+        :return: outputs
+        """
+        return self.wrapped.handle_transform(data_container, context.push(self.wrapped))
+
+    def fit(self, data_inputs, expected_outputs=None) -> 'ValidationSplitWrapper':
+        """
+        Fit using the training split.
+        Calculate the scores using the validation split.
+
+        :param data_inputs: data inputs
+        :param expected_outputs: expected outputs
+        :return: fitted self
+        """
+        train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = self.split(
+            data_inputs, expected_outputs)
+
+        self.wrapped = self.wrapped.fit(train_data_inputs, train_expected_outputs)
+
+        train_predicted_outputs = self.wrapped.predict(train_data_inputs)
+
+        self._update_scores_train(train_predicted_outputs, train_expected_outputs)
+
+        validation_predicted_outputs = self.wrapped.predict(validation_data_inputs)
+
+        self._update_scores_validation(validation_predicted_outputs, validation_expected_outputs)
+
+        return self
+
+    def _update_scores_validation(self, data_inputs, expected_outputs):
+        self.scores_validation = self.scoring_function(expected_outputs, data_inputs)
+        self.scores_validation_mean = np.mean(self.scores_validation)
+        self.scores_validation_std = np.std(self.scores_validation)
+
+    def _update_scores_train(self, data_inputs, expected_outputs):
+        self.scores_train = self.scoring_function(expected_outputs, data_inputs)
+        self.scores_train_mean = np.mean(self.scores_train)
+        self.scores_train_std = np.std(self.scores_train)
+
+    def split_data_container(self, data_container) -> Tuple[DataContainer, DataContainer]:
+        """
+        Split data container into a training set, and a validation set.
+
+        :param data_container: data container
+        :type data_container: DataContainer
+        :return: train_data_container, validation_data_container
+        """
+
+        train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = \
+            self.split(data_container.data_inputs, data_container.expected_outputs)
+
+        train_ids = self.train_split(data_container.current_ids)
+        train_data_container = DataContainer(
+            summary_id=data_container.summary_id,
+            current_ids=train_ids,
+            data_inputs=train_data_inputs,
+            expected_outputs=train_expected_outputs
+        )
+
+        validation_ids = self.validation_split(data_container.current_ids)
+        validation_data_container = DataContainer(
+            summary_id=data_container.summary_id,
+            current_ids=validation_ids,
+            data_inputs=validation_data_inputs,
+            expected_outputs=validation_expected_outputs
+        )
+
+        return train_data_container, validation_data_container
+
+    def split(self, data_inputs, expected_outputs=None) -> Tuple[List, List, List, List]:
+        """
+        Split data inputs, and expected outputs into a training set, and a validation set.
+
+        :param data_inputs: data inputs to split
+        :param expected_outputs: expected outputs to split
+        :return: train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
+        """
+        validation_data_inputs = self.validation_split(data_inputs)
+        validation_expected_outputs = None
+        if expected_outputs is not None:
+            validation_expected_outputs = self.validation_split(expected_outputs)
+
+        train_data_inputs = self.train_split(data_inputs)
+        train_expected_outputs = None
+        if expected_outputs is not None:
+            train_expected_outputs = self.train_split(expected_outputs)
+
+        return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
+
+    def train_split(self, data_inputs) -> List:
+        """
+        Split training set.
+
+        :param data_inputs: data inputs to split
+        :return: train_data_inputs
+        """
+        return data_inputs[0:self._get_index_split(data_inputs)]
+
+    def validation_split(self, data_inputs) -> List:
+        """
+        Split validation set.
+
+        :param data_inputs: data inputs to split
+        :return: validation_data_inputs
+        """
+        return data_inputs[self._get_index_split(data_inputs):]
+
+    def _get_index_split(self, data_inputs):
+        return math.floor(len(data_inputs) * (1 - self.test_size))
+
+
+class BaseCrossValidationWrapper(BaseValidation, ABC):
+    # TODO: change default argument of scoring_function...
+    def __init__(self, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch()):
+        BaseValidation.__init__(self, scoring_function)
         self.joiner = joiner
 
-    def fit(self, data_inputs, expected_outputs=None) -> 'BaseCrossValidation':
+    def fit(self, data_inputs, expected_outputs=None) -> 'BaseCrossValidationWrapper':
+        assert self.wrapped is not None
+
         train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = self.split(
             data_inputs, expected_outputs)
 
@@ -71,11 +323,11 @@ class BaseCrossValidation(MetaStepMixin, BaseStep, ABC):
         return self.joiner.transform(predicted_outputs_splitted)
 
 
-class KFoldCrossValidation(BaseCrossValidation):
+class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
 
     def __init__(self, scoring_function=r2_score, k_fold=3, joiner=NumpyConcatenateOuterBatch()):
         self.k_fold = k_fold
-        BaseCrossValidation.__init__(self, scoring_function=scoring_function, joiner=joiner)
+        BaseCrossValidationWrapper.__init__(self, scoring_function=scoring_function, joiner=joiner)
 
     def split(self, data_inputs, expected_outputs):
         validation_data_inputs, validation_expected_outputs = self.validation_split(
@@ -122,7 +374,7 @@ class KFoldCrossValidation(BaseCrossValidation):
         return splitted_data_inputs
 
 
-class AnchoredWalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
+class AnchoredWalkForwardTimeSeriesCrossValidationWrapper(BaseCrossValidationWrapper):
     """
     Prform an anchored walk forward cross validation by performing a forward rolling split.
     All training splits start at the beginning of the time series, but finish at different time. The finish time
@@ -155,7 +407,7 @@ class AnchoredWalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
         :param joiner the joiner callable that can join the different result together.
         :return: WalkForwardTimeSeriesCrossValidation instance.
         """
-        BaseCrossValidation.__init__(self, scoring_function=scoring_function, joiner=joiner)
+        BaseCrossValidationWrapper.__init__(self, scoring_function=scoring_function, joiner=joiner)
         self.minimum_training_size = minimum_training_size
         # If validation_window_size is None, we give the same value as training_window_size.
         self.validation_window_size = validation_window_size or self.minimum_training_size
@@ -259,7 +511,7 @@ class AnchoredWalkForwardTimeSeriesCrossValidation(BaseCrossValidation):
         return number_step
 
 
-class WalkForwardTimeSeriesCrossValidation(AnchoredWalkForwardTimeSeriesCrossValidation):
+class WalkForwardTimeSeriesCrossValidationWrapper(AnchoredWalkForwardTimeSeriesCrossValidationWrapper):
     """
     Perform a classic walk forward cross validation by performing a forward rolling split.
 
@@ -291,7 +543,7 @@ class WalkForwardTimeSeriesCrossValidation(AnchoredWalkForwardTimeSeriesCrossVal
         :param joiner the joiner callable that can join the different result together.
         :return: WalkForwardTimeSeriesCrossValidation instance.
         """
-        AnchoredWalkForwardTimeSeriesCrossValidation.__init__(
+        AnchoredWalkForwardTimeSeriesCrossValidationWrapper.__init__(
             self,
             training_window_size,
             validation_window_size=validation_window_size,
@@ -324,10 +576,10 @@ class RandomSearch(MetaStepMixin, BaseStep):
 
     def __init__(
             self,
-            wrapped = None,
+            wrapped=None,
             n_iter: int = 10,
             higher_score_is_better: bool = True,
-            validation_technique: BaseCrossValidation = KFoldCrossValidation(),
+            validation_technique: BaseCrossValidationWrapper = KFoldCrossValidationWrapper(),
             refit=True,
     ):
         if wrapped is not None:
@@ -335,7 +587,7 @@ class RandomSearch(MetaStepMixin, BaseStep):
         BaseStep.__init__(self)
         self.n_iter = n_iter
         self.higher_score_is_better = higher_score_is_better
-        self.validation_technique: BaseCrossValidation = validation_technique
+        self.validation_technique: BaseCrossValidationWrapper = validation_technique
         self.refit = refit
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
@@ -349,7 +601,7 @@ class RandomSearch(MetaStepMixin, BaseStep):
             new_hyperparams = step.get_hyperparams_space().rvs()
             step.set_hyperparams(new_hyperparams)
 
-            step: BaseCrossValidation = copy.copy(self.validation_technique).set_step(step)
+            step: BaseCrossValidationWrapper = copy.copy(self.validation_technique).set_step(step)
 
             step = step.fit(data_inputs, expected_outputs)
             score = step.scores_mean
