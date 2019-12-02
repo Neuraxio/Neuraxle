@@ -26,7 +26,7 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
 from abc import abstractmethod
 from typing import Union
 
-from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext, ResumableStepMixin
+from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin
 from neuraxle.data_container import ExpandedDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.union import FeatureUnion
@@ -538,3 +538,100 @@ class ExpandDim(
             return True
 
         return False
+
+
+class ReversiblePreprocessingWrapper(ForceMustHandleMixin, TruncableSteps):
+    """
+    TruncableSteps with a preprocessing step(1), and a postprocessing step(2)
+    that inverse transforms with the preprocessing step at the end (1, 2, reversed(1)).
+
+    Example usage :
+
+    .. code-block:: python
+
+        step = ReversiblePreprocessingWrapper(
+            preprocessing_step=MultiplyBy2(),
+            postprocessing_step=Add10()
+        )
+
+        outputs = step.transform(np.array(range(5)))
+
+        assert np.array_equal(outputs, np.array([5, 6, 7, 8, 9]))
+
+    """
+
+    def __init__(self, preprocessing_step, postprocessing_step):
+        ForceMustHandleMixin.__init__(self)
+        TruncableSteps.__init__(self, [
+            ("preprocessing_step", preprocessing_step),
+            ("postprocessing_step", postprocessing_step)
+        ])
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('ReversiblePreprocessingWrapper', DataContainer):
+        """
+        Handle fit by fitting preprocessing step, and postprocessing step.
+
+        :param data_container: data container to fit on
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: self, data_container
+        :rtype: (ReversiblePreprocessingWrapper, DataContainer)
+        """
+        self["preprocessing_step"], data_container = self["preprocessing_step"].handle_fit_transform(data_container, context.push(self["preprocessing_step"]))
+        self["postprocessing_step"], data_container = self["postprocessing_step"].handle_fit(data_container, context.push(self["postprocessing_step"]))
+
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
+
+        return self, data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        According to the idiom of `(1, 2, reversed(1))`, we do this, in order:
+
+            - `1`. Transform preprocessing step
+            - `2`. Transform postprocessing step
+            - `reversed(1)`. Inverse transform preprocessing step
+
+        :param data_container: data container to transform
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: data_container
+        :rtype: DataContainer
+        """
+        data_container = self["preprocessing_step"].handle_transform(data_container, context.push(self["preprocessing_step"]))
+        data_container = self["postprocessing_step"].handle_transform(data_container, context.push(self["postprocessing_step"]))
+
+        data_container = self["preprocessing_step"].handle_inverse_transform(data_container, context.push(self["preprocessing_step"]))
+
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
+
+        return data_container
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('ReversiblePreprocessingWrapper', DataContainer):
+        """
+        According to the idiom of `(1, 2, reversed(1))`, we do this, in order:
+
+            - `1`. Fit Transform preprocessing step
+            - `2`. Fit Transform postprocessing step
+            - `reversed(1)`. Inverse transform preprocessing step
+
+        :param data_container: data container to transform
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: (self, data_container)
+        :rtype: (ReversiblePreprocessingWrapper, DataContainer)
+        """
+        self["preprocessing_step"], data_container = self["preprocessing_step"].handle_fit_transform(data_container, context.push(self["preprocessing_step"]))
+        self["postprocessing_step"], data_container = self["postprocessing_step"].handle_fit_transform(data_container, context.push(self["postprocessing_step"]))
+
+        data_container = self["preprocessing_step"].handle_inverse_transform(data_container, context.push(self["preprocessing_step"]))
+
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
+
+        return self, data_container

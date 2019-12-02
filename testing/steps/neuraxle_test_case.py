@@ -32,7 +32,7 @@ class NeuraxleTestCase:
         for callback, expected_callback_data in zip(self.callbacks, self.expected_callbacks_data):
             if len(callback.data) > 0:
                 assert np.array_equal(
-                    np.array(callback.data[0]),
+                    np.array(callback.data),
                     expected_callback_data
                 )
             else:

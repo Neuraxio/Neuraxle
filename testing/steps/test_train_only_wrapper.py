@@ -19,7 +19,7 @@ tape_fit = TapeCallbackFunction()
         pipeline=Pipeline([TrainOrTestOnlyWrapper(FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2))]),
         more_arguments={'set_train': True},
         callbacks=[tape_transform, tape_fit],
-        expected_callbacks_data=[DATA_INPUTS],
+        expected_callbacks_data=[[DATA_INPUTS]],
         data_inputs=DATA_INPUTS,
         expected_processed_outputs=DATA_INPUTS * 2,
         execution_mode=ExecutionMode.TRANSFORM
@@ -31,7 +31,7 @@ tape_fit = TapeCallbackFunction()
         callbacks=[tape_transform, tape_fit],
         data_inputs=DATA_INPUTS,
         expected_outputs=EXPECTED_OUTPUTS,
-        expected_callbacks_data=[DATA_INPUTS, (DATA_INPUTS, EXPECTED_OUTPUTS)],
+        expected_callbacks_data=[[DATA_INPUTS], [(DATA_INPUTS, EXPECTED_OUTPUTS)]],
         expected_processed_outputs=DATA_INPUTS * 2,
         execution_mode=ExecutionMode.FIT_TRANSFORM
     ),
@@ -42,7 +42,7 @@ tape_fit = TapeCallbackFunction()
         callbacks=[tape_transform, tape_fit],
         data_inputs=DATA_INPUTS,
         expected_outputs=EXPECTED_OUTPUTS,
-        expected_callbacks_data=[[], (DATA_INPUTS, EXPECTED_OUTPUTS)],
+        expected_callbacks_data=[[], [(DATA_INPUTS, EXPECTED_OUTPUTS)]],
         execution_mode=ExecutionMode.FIT
     ),
     NeuraxleTestCase(
@@ -81,7 +81,7 @@ tape_fit = TapeCallbackFunction()
             FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2), is_train_only=False)]),
         more_arguments={'set_train': False},
         callbacks=[tape_transform, tape_fit],
-        expected_callbacks_data=[DATA_INPUTS],
+        expected_callbacks_data=[[DATA_INPUTS]],
         data_inputs=DATA_INPUTS,
         expected_processed_outputs=DATA_INPUTS * 2,
         execution_mode=ExecutionMode.TRANSFORM
@@ -93,7 +93,7 @@ tape_fit = TapeCallbackFunction()
         callbacks=[tape_transform, tape_fit],
         data_inputs=DATA_INPUTS,
         expected_outputs=EXPECTED_OUTPUTS,
-        expected_callbacks_data=[DATA_INPUTS, (DATA_INPUTS, EXPECTED_OUTPUTS)],
+        expected_callbacks_data=[[DATA_INPUTS], [(DATA_INPUTS, EXPECTED_OUTPUTS)]],
         expected_processed_outputs=DATA_INPUTS * 2,
         execution_mode=ExecutionMode.FIT_TRANSFORM
     ),
@@ -104,7 +104,7 @@ tape_fit = TapeCallbackFunction()
         callbacks=[tape_transform, tape_fit],
         data_inputs=DATA_INPUTS,
         expected_outputs=EXPECTED_OUTPUTS,
-        expected_callbacks_data=[[], (DATA_INPUTS, EXPECTED_OUTPUTS)],
+        expected_callbacks_data=[[], [(DATA_INPUTS, EXPECTED_OUTPUTS)]],
         execution_mode=ExecutionMode.FIT
     ),
     NeuraxleTestCase(
