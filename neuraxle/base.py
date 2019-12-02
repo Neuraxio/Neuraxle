@@ -57,6 +57,19 @@ class BaseHasher(ABC):
     """
 
     @abstractmethod
+    def single_hash(self, current_id: str, hyperparameters: HyperparameterSamples) -> List[str]:
+        """
+        Hash summary id, and hyperparameters together.
+
+        :param current_id: current hashed id
+        :param hyperparameters: step hyperparameters to hash with current ids
+        :type hyperparameters: HyperparameterSamples
+        :return: the new hashed current id
+        :rtype: str
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def hash(self, current_ids: List[str], hyperparameters: HyperparameterSamples, data_inputs: Iterable) -> List[str]:
         """
         Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together.
@@ -88,6 +101,27 @@ class HashlibMd5Hasher(BaseHasher):
 
     """
 
+    def single_hash(self, current_id: str, hyperparameters: HyperparameterSamples) -> List[str]:
+        """
+        Hash summary id, and hyperparameters together.
+
+        :param current_id: current hashed id
+        :param hyperparameters: step hyperparameters to hash with current ids
+        :type hyperparameters: HyperparameterSamples
+        :return: the new hashed current id
+        :rtype: str
+        """
+        m = hashlib.md5()
+
+        current_hyperparameters_hash = hashlib.md5(
+            str.encode(str(hyperparameters.to_flat_as_dict_primitive()))
+        ).hexdigest()
+
+        m.update(str.encode(str(current_id)))
+        m.update(str.encode(current_hyperparameters_hash))
+
+        return m.hexdigest()
+
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None) -> List[str]:
         """
         Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together
@@ -106,7 +140,7 @@ class HashlibMd5Hasher(BaseHasher):
             if isinstance(data_inputs, Iterable):
                 current_ids = [str(i) for i in range(len(data_inputs))]
             else:
-                current_ids = 0
+                current_ids = [str(0)]
 
         if len(hyperparameters) == 0:
             return current_ids
@@ -522,6 +556,28 @@ class BaseStep(ABC):
         self.is_invalidated = True
         self.is_train: bool = True
 
+    def summary_hash(self, data_container: DataContainer) -> str:
+        """
+        Hash data inputs, current ids, and hyperparameters together using self.hashers.
+        This is used to create unique ids for the data checkpoints.
+
+        :param data_container: data container
+        :type data_container: DataContainer
+        :return: hashed current ids
+        :rtype: List[str]
+
+        .. seealso::
+            :class:`neuraxle.checkpoints.Checkpoint`
+        """
+        summary_id = data_container.summary_id
+        for h in self.hashers:
+            summary_id = h.single_hash(
+                summary_id,
+                self.hyperparams
+            )
+
+        return summary_id
+
     def hash(self, data_container: DataContainer) -> List[str]:
         """
         Hash data inputs, current ids, and hyperparameters together using self.hashers.
@@ -776,7 +832,6 @@ class BaseStep(ABC):
 
             step.get_hyperparams_space()
 
-
         :return: step hyperparams space
         :rtype: HyperparameterSpace
 
@@ -803,8 +858,7 @@ class BaseStep(ABC):
 
         new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
 
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+        data_container = self.hash_data_container(data_container)
 
         return new_self, data_container
 
@@ -823,8 +877,7 @@ class BaseStep(ABC):
         new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
         data_container.set_data_inputs(out)
 
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+        data_container = self.hash_data_container(data_container)
 
         return new_self, data_container
 
@@ -840,8 +893,32 @@ class BaseStep(ABC):
         out = self.transform(data_container.data_inputs)
         data_container.set_data_inputs(out)
 
+        data_container = self.hash_data_container(data_container)
+
+        return data_container
+
+    def hash_data_container(self, data_container):
+        """
+        Hash data container using self.hashers.
+
+        #. Hash current ids with hyperparams.
+        #. Hash summary id with hyperparams.
+
+        :param data_container: the data container to transform
+        :type data_container: DataContainer
+        :return: transformed data container
+        :rtype: DataContainer
+        """
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
+
+        if data_container.summary_id is None:
+            data_container.set_summary_id(
+                data_container.hash_summary()
+            )
+
+        summary_id = self.summary_hash(data_container)
+        data_container.set_summary_id(summary_id)
 
         return data_container
 
@@ -1441,6 +1518,12 @@ class MetaStepMixin:
     def get_best_model(self) -> BaseStep:
         return self.best_model
 
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext):
+        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context.push(self.wrapped)):
+            return True
+
+        return False
+
     def __repr__(self):
         output = self.__class__.__name__ + "(\n\twrapped=" + repr(
             self.wrapped) + "," + "\n\thyperparameters=" + pprint.pformat(
@@ -1480,13 +1563,19 @@ class ForceAlwaysHandleMixin:
         raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
 
     def transform(self, data_inputs) -> 'ForceAlwaysHandleMixin':
-        raise Exception('Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(self.name))
+        raise Exception(
+            'Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(
+                self.name))
 
     def fit(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception('Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(self.name))
+        raise Exception(
+            'Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(
+                self.name))
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception('Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(self.name))
+        raise Exception(
+            'Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(
+                self.name))
 
 
 class NonFittableMixin:
