@@ -33,7 +33,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from enum import Enum
-from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView
+from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable
 
 from joblib import dump, load
 from sklearn.base import BaseEstimator
@@ -807,6 +807,34 @@ class BaseStep(ABC):
         """
         return self.hyperparams_space
 
+    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
+        """
+        Apply a method to a step and its children.
+
+        :param method: method to call with self
+        :param kargs: any additional arguments to be passed to the method
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
+        """
+        method(self, *kargs, **kwargs)
+        return self
+
+    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
+        """
+        Apply a method to a step and its children.
+
+        :param method_name: method name that need to be called on all steps
+        :param kargs: any additional arguments to be passed to the method
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
+        """
+        if hasattr(self, method_name) and callable(getattr(self, method_name)):
+            getattr(self, method_name)(*kargs, **kwargs)
+
+        return self
+
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
@@ -1455,8 +1483,37 @@ class MetaStepMixin:
     def get_best_model(self) -> BaseStep:
         return self.best_model
 
+    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
+        """
+        Apply the method name to the meta step and its wrapped step.
+
+        :param method_name: method name that need to be called on all steps
+        :param kargs: any additional arguments to be passed to the method
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
+        """
+        BaseStep.apply(self, method_name, *kargs, **kwargs)
+        self.wrapped.apply(method_name, *kargs, **kwargs)
+        return self
+
+    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
+        """
+        Apply method to the meta step and its wrapped step.
+
+        :param method: method to call with self
+        :param kargs: any additional arguments to be passed to the method
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
+        """
+        BaseStep.apply_method(self, method, *kargs, **kwargs)
+        self.wrapped = self.wrapped.apply_method(method, *kargs, **kwargs)
+        return self
+
     def should_resume(self, data_container: DataContainer, context: ExecutionContext):
-        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context.push(self.wrapped)):
+        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container,
+                                                                                       context.push(self.wrapped)):
             return True
 
         return False
@@ -1465,11 +1522,7 @@ class MetaStepMixin:
         output = self.__class__.__name__ + "(\n\twrapped=" + repr(
             self.wrapped) + "," + "\n\thyperparameters=" + pprint.pformat(
             self.hyperparams) + "\n)"
-
         return output
-
-    def __str__(self):
-        return self.__repr__()
 
 
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
@@ -1743,6 +1796,37 @@ class TruncableSteps(BaseStep, ABC):
         """
         for step_name, step in self.steps_as_tuple:
             step.teardown()
+
+        return self
+
+    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
+        """
+        Apply the method name to the pipeline step and all of its children.
+
+        :param method_name: method name that need to be called on all steps
+        :param kargs: any additional arguments to be passed to the method
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
+        """
+        BaseStep.apply(self, method_name, *kargs, **kwargs)
+        for step in self.values():
+            step.apply(method_name, *kargs, **kwargs)
+        return self
+
+    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
+        """
+        Apply a method to the pipeline step and all of its children.
+
+        :param method: method to call with self
+        :param kargs: any additional arguments to be passed to the method
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
+        """
+        BaseStep.apply_method(self, method, *kargs, **kwargs)
+        for step in self.values():
+            step.apply_method(method, *kargs, **kwargs)
 
         return self
 
