@@ -177,6 +177,8 @@ class BaseSaver(ABC):
         :type step: BaseStep
         :param context: execution context
         :type context: ExecutionContext
+        :param save_savers:
+        :type save_savers: bool
         :return:
         """
         raise NotImplementedError()
@@ -206,7 +208,17 @@ class BaseSaver(ABC):
         raise NotImplementedError()
 
 
-class JoblibStepSaver(BaseSaver):
+class FullDumpSaverMixin:
+    @abstractmethod
+    def save_step_savers(self, step, context) -> 'BaseStep':
+        raise NotImplementedError()
+
+    @abstractmethod
+    def load_step_savers(self, step, context) -> List[BaseSaver]:
+        raise NotImplementedError()
+
+
+class JoblibStepSaver(FullDumpSaverMixin, BaseSaver):
     """
     Saver that can save, or load a step with `joblib.load <https://joblib.readthedocs.io/en/latest/generated/joblib.load.html>`_,
     and `joblib.dump <https://joblib.readthedocs.io/en/latest/generated/joblib.dump.html>`_.
@@ -251,6 +263,19 @@ class JoblibStepSaver(BaseSaver):
         """
         return os.path.join(context.get_path(), '{0}.joblib'.format(step.name))
 
+    def _create_step_savers_path(self, context, step):
+        """
+        Create step savers path for the given context.
+
+        :param context: execution context
+        :type context: ExecutionContext
+        :param step: step to save, or load
+        :type step: BaseStep
+        :return: path
+        :rtype: str
+        """
+        return os.path.join(context.get_path(), '{0}_savers.joblib'.format(step.name))
+
     def save_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
         """
         Saved step stripped out of things that would make it unserializable.
@@ -268,6 +293,18 @@ class JoblibStepSaver(BaseSaver):
 
         return step
 
+    def save_step_savers(self, step, context) -> 'BaseStep':
+        context.mkdir()
+
+        step_savers_path = self._create_step_savers_path(context, step)
+        dump(step.savers, step_savers_path)
+
+        return step
+
+    def load_step_savers(self, step, context) -> List[BaseSaver]:
+        context.mkdir()
+        return load(self._create_step_savers_path(context, step))
+
     def load_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
         """
         Load stripped step.
@@ -282,8 +319,11 @@ class JoblibStepSaver(BaseSaver):
 
         # we need to keep the current steps in memory because they have been deleted before saving...
         # the steps that have not been saved yet need to be in memory while loading a truncable steps...
-        if isinstance(step, TruncableSteps):
-            loaded_step.steps = step.steps
+        if isinstance(loaded_step, TruncableSteps):
+            loaded_step.steps = [
+                Identity(savers=sub_step_savers).set_name(sub_step_name)
+                for sub_step_name, sub_step_savers in loaded_step.sub_steps_savers
+            ]
 
         return loaded_step
 
@@ -335,15 +375,17 @@ class ExecutionContext:
     def get_execution_mode(self) -> ExecutionMode:
         return self.execution_mode
 
-    def save_all_unsaved(self):
+    def save_all_unsaved(self, full_dump=False):
         """
         Save all unsaved steps in the parents of the execution context using :func:`~neuraxle.base.BaseStep.save`.
         This method is called from a step checkpointer inside a :class:`Checkpoint`.
 
+        :param full_dump: full dump of the step or not
+        :type full_dump: bool
         :return:
         """
         while not self.empty():
-            should_save_last_step = self.should_save_last_step()
+            should_save_last_step = full_dump or self.should_save_last_step()
             last_step = self.peek()
 
             self.pop()
@@ -597,6 +639,15 @@ class BaseStep(ABC):
         :rtype: BaseStep
         """
         self.is_initialized = True
+        return self
+
+    def invalidate(self) -> 'BaseStep':
+        """
+        Invalidate step for saving.
+
+        :return: self
+        :rtype: BaseStep
+        """
         self.is_invalidated = True
         return self
 
@@ -901,7 +952,8 @@ class BaseStep(ABC):
 
         return new_self
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
         """
         Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.fit_transform`.
         The default behavior is to rehash current ids with the step hyperparameters.
@@ -973,7 +1025,8 @@ class BaseStep(ABC):
         """
         return self.fit(data_container.data_inputs, data_container.expected_outputs)
 
-    def _will_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+    def _will_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            DataContainer, ExecutionContext):
         """
         Apply side effects before fit_transform is called.
 
@@ -996,7 +1049,8 @@ class BaseStep(ABC):
         """
         return data_container
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
         """
         Fit transform data container.
 
@@ -1010,7 +1064,8 @@ class BaseStep(ABC):
 
         return new_self, data_container
 
-    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
         """
         Apply side effects before transform.
 
@@ -1190,7 +1245,7 @@ class BaseStep(ABC):
         """
         return self.is_invalidated and self.is_initialized
 
-    def save(self, context: ExecutionContext) -> 'BaseStep':
+    def save(self, context: ExecutionContext, full_dump=False) -> 'BaseStep':
         """
         Save step using the execution context to create the directory to save the step into.
         The saving happens by looping through all of the step savers in the reversed order.
@@ -1201,6 +1256,8 @@ class BaseStep(ABC):
 
         :param context: context to save from
         :type context: ExecutionContext
+        :param full_dump: save full dump bool
+        :type full_dump: bool
         :return: self
         :rtype: BaseStep
 
@@ -1209,32 +1266,45 @@ class BaseStep(ABC):
             :class:`BaseSaver`
         """
         context = context.push(self)
+        self.is_invalidated = False
 
-        if self.is_invalidated and self.is_initialized:
-            self.is_invalidated = False
+        if full_dump:
+            self.apply_method(lambda step: step.setup() if not step.is_initialized else None)
+            self.apply_method(lambda step: step.invalidate())
+            self._save_step_savers(context)
 
-            context.mkdir()
-            stripped_step = copy(self)
+        return self._save_step(context)
 
-            # A final "visitor" saver will save anything that
-            # wasn't saved customly after stripping the rest.
-            savers_with_provided_default_stripped_saver = [context.stripped_saver] + self.savers
+    def _save_step_savers(self, context):
+        for saver in self.savers:
+            if isinstance(saver, FullDumpSaverMixin):
+                return saver.save_step_savers(self, context)
 
-            for saver in reversed(savers_with_provided_default_stripped_saver):
-                # Each saver strips the step a bit more if needs be.
-                stripped_step = saver.save_step(stripped_step, context)
+        raise Exception('Cannot Save Full Dump Properly. {} does not have any saver that inherit from FullDumpSaverMixin.'.format(self.name))
 
-            return stripped_step
+    def _save_step(self, context):
+        context.mkdir()
+        stripped_step = copy(self)
 
-        return self
+        # A final "visitor" saver will save anything that
+        # wasn't saved customly after stripping the rest.
+        savers_with_provided_default_stripped_saver = [context.stripped_saver] + self.savers
 
-    def load(self, context: ExecutionContext) -> 'BaseStep':
+        for saver in reversed(savers_with_provided_default_stripped_saver):
+            # Each saver strips the step a bit more if needs be.
+            stripped_step = saver.save_step(stripped_step, context)
+
+        return stripped_step
+
+    def load(self, context: ExecutionContext, full_dump=False) -> 'BaseStep':
         """
         Load step using the execution context to create the directory of the saved step.
         Warning:
 
         :param context: execution context to load step from
-        :return:
+        :param full_dump: save full dump bool
+        :type full_dump: bool
+        :return: loaded step
 
         .. warning::
             Please do not override this method because on loading it is an identity
@@ -1245,10 +1315,21 @@ class BaseStep(ABC):
             :class:`BaseSaver`
         """
         context = context.push(self)
+        if full_dump:
+            self.set_savers(self._load_step_savers(context))
 
+        return self._load_step(context)
+
+    def _load_step_savers(self, context):
+        for saver in self.savers:
+            if isinstance(saver, FullDumpSaverMixin):
+                return saver.load_step_savers(self, context)
+
+        raise Exception('Cannot Load Full Dump Properly. {} does not have any saver that inherit from FullDumpSaverMixin.'.format(self.name))
+
+    def _load_step(self, context):
         # A final "visitor" saver might reload anything that wasn't saved customly after stripping the rest.
         savers_with_provided_default_stripped_saver = [context.stripped_saver] + self.savers
-
         loaded_self = self
         for saver in savers_with_provided_default_stripped_saver:
             # Each saver unstrips the step a bit more if needed
@@ -1260,7 +1341,6 @@ class BaseStep(ABC):
                                                                                  self.__class__.__name__,
                                                                                  saver.__class__.__name__))
                 break
-
         return loaded_self
 
     def meta_fit(self, X_train, y_train, metastep: 'MetaStepMixin'):
@@ -1820,13 +1900,19 @@ class ForceAlwaysHandleMixin:
         raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
 
     def transform(self, data_inputs) -> 'ForceAlwaysHandleMixin':
-        raise Exception('Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(self.name))
+        raise Exception(
+            'Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(
+                self.name))
 
     def fit(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception('Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(self.name))
+        raise Exception(
+            'Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(
+                self.name))
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception('Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(self.name))
+        raise Exception(
+            'Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(
+                self.name))
 
 
 class NonFittableMixin:
@@ -1921,10 +2007,9 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         for i, (_, sub_step) in enumerate(step):
             if sub_step.should_save():
                 sub_steps_savers.append((step[i].name, step[i].get_savers()))
+                sub_step.save(context)
             else:
                 sub_steps_savers.append((step[i].name, None))
-
-            sub_step.save(context)
 
         step.sub_steps_savers = sub_steps_savers
 
@@ -2760,6 +2845,8 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
     """
 
     def __init__(self, savers=None, name=None):
+        if savers is None:
+            savers = [JoblibStepSaver()]
         NonTransformableMixin.__init__(self)
         NonFittableMixin.__init__(self)
         BaseStep.__init__(self, name=name, savers=savers)
