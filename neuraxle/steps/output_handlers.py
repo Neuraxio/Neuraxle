@@ -37,7 +37,7 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Handle transform by passing expected outputs to the wrapped step transform method.
         Update the expected outputs with the outputs.
@@ -53,17 +53,14 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
                 data_inputs=data_container.expected_outputs,
                 expected_outputs=None
             ),
-            context.push(self.wrapped)
+            context
         )
-
         data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
 
         return data_container
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    BaseStep, DataContainer):
         """
         Handle fit by passing expected outputs to the wrapped step fit method.
 
@@ -79,15 +76,13 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
                 data_inputs=data_container.expected_outputs,
                 expected_outputs=None
             ),
-            context.push(self.wrapped)
+            context
         )
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
 
         return self, data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    BaseStep, DataContainer):
         """
         Handle fit transform by passing expected outputs to the wrapped step fit method.
         Update the expected outputs with the outputs.
@@ -104,13 +99,9 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
                 data_inputs=data_container.expected_outputs,
                 expected_outputs=None
             ),
-            context.push(self.wrapped)
+            context
         )
-
         data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
 
         return self, data_container
 
@@ -158,28 +149,9 @@ class InputAndOutputTransformerMixin:
     Base output transformer step that can modify data inputs, and expected_outputs at the same time.
     """
 
-    def handle_inverse_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Handle inverse transform by updating the data inputs, and expected outputs inside the data container.
-
-        :param context: execution context
-        :param data_container:
-        :return:
-        """
-        di_eo = (data_container.data_inputs, data_container.expected_outputs)
-        new_data_inputs, new_expected_outputs = self.inverse_transform(di_eo)
-
-        data_container.set_data_inputs(new_data_inputs)
-        data_container.set_expected_outputs(new_expected_outputs)
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
-
-        return data_container
-
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        """
-        Handle transform by updating the data inputs, and expected outputs inside the data container.
 
         :param context: execution context
         :param data_container:
@@ -191,11 +163,21 @@ class InputAndOutputTransformerMixin:
         data_container.set_data_inputs(new_data_inputs)
         data_container.set_expected_outputs(new_expected_outputs)
 
-        data_container = self.hash_data_container(data_container)
-
         return data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        Handle transform by fitting the step,
+        and updating the data inputs, and expected outputs inside the data container.
+
+        :param context: execution context
+        :param data_container:
+        :return:
+        """
+        new_self = self.fit((data_container.data_inputs, data_container.expected_outputs), None)
+        return new_self, data_container
+
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Handle transform by fitting the step,
         and updating the data inputs, and expected outputs inside the data container.
@@ -209,8 +191,6 @@ class InputAndOutputTransformerMixin:
 
         data_container.set_data_inputs(new_data_inputs)
         data_container.set_expected_outputs(new_expected_outputs)
-
-        data_container = self.hash_data_container(data_container)
 
         return new_self, data_container
 

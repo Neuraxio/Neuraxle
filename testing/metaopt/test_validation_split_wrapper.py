@@ -6,7 +6,7 @@ from neuraxle.metaopt.random import ValidationSplitWrapper, RandomSearch
 from neuraxle.steps.misc import FitTransformCallbackStep, TapeCallbackFunction
 
 
-def test_validation_split_wrapper_should_split_data():
+def test_validation_split_wrapper_should_split_data(tmpdir):
     transform_callback = TapeCallbackFunction()
     fit_callback = TapeCallbackFunction()
     random_search = RandomSearch(ValidationSplitWrapper(
@@ -59,7 +59,7 @@ def test_validation_split_wrapper_handle_methods_should_split_data():
 
     validation_split_wrapper, outputs = validation_split_wrapper.handle_fit_transform(
         DataContainer(current_ids=list(range(len(data_inputs))), data_inputs=data_inputs, expected_outputs=expected_outputs),
-        ExecutionContext.create_from_root(validation_split_wrapper, ExecutionMode.FIT_TRANSFORM, DEFAULT_CACHE_FOLDER)
+        ExecutionContext(DEFAULT_CACHE_FOLDER)
     )
 
     assert np.array_equal(outputs.data_inputs, data_inputs * 2)

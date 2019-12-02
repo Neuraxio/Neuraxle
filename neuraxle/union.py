@@ -54,7 +54,7 @@ class FeatureUnion(TruncableSteps):
         self.n_jobs = n_jobs
         self.backend = backend
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
+    def _fit_data_container(self, data_container, context):
         """
         Fit the parallel steps on the data. It will make use of some parallel processing.
 
@@ -65,12 +65,12 @@ class FeatureUnion(TruncableSteps):
         # Actually fit:
         if self.n_jobs != 1:
             fitted_steps_data_containers = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
-                delayed(step.handle_fit)(data_container.copy(), context.push(step))
+                delayed(step.handle_fit)(data_container.copy(), context)
                 for _, step in self.steps_as_tuple
             )
         else:
             fitted_steps_data_containers = [
-                step.handle_fit(data_container.copy(), context.push(step))
+                step.handle_fit(data_container.copy(), context)
                 for _, step in self.steps_as_tuple
             ]
 
@@ -81,7 +81,7 @@ class FeatureUnion(TruncableSteps):
 
         return self, data_container
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+    def _transform_data_container(self, data_container, context):
         """
         Transform the data with the unions. It will make use of some parallel processing.
 
@@ -91,22 +91,27 @@ class FeatureUnion(TruncableSteps):
         """
         if self.n_jobs != 1:
             data_containers = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
-                delayed(step.handle_transform)(data_container.copy(), context.push(step))
+                delayed(step.handle_transform)(data_container.copy(), context)
                 for _, step in self.steps_as_tuple
             )
         else:
             data_containers = [
-                step.handle_transform(data_container.copy(), context.push(step))
+                step.handle_transform(data_container.copy(), context)
                 for _, step in self.steps_as_tuple
             ]
 
-        new_current_ids = self.hash(data_container)
+        return DataContainer(
+            summary_id=data_container.summary_id,
+            current_ids=data_container.current_ids,
+            data_inputs=data_containers,
+            expected_outputs=data_container.expected_outputs
+        )
 
-        data_container = self.joiner.handle_transform(data_containers, new_current_ids)
-
+    def _did_transform(self, data_container, context):
+        data_container = self.joiner.handle_transform(data_container, context)
         return data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+    def _fit_transform_data_container(self, data_container, context):
         """
         Transform the data with the unions. It will make use of some parallel processing.
 
@@ -114,9 +119,13 @@ class FeatureUnion(TruncableSteps):
         :param context: execution context
         :return: the transformed data_inputs.
         """
-        new_self, _ = self.handle_fit(data_container, context)
-        data_container = self.handle_transform(data_container, context)
+        new_self, _ = self._fit_data_container(data_container, context)
+        data_container = self._transform_data_container(data_container, context)
         return new_self, data_container
+
+    def _did_fit_transform(self, data_container, context):
+        self.joiner, data_container = self.joiner.handle_fit_transform(data_container, context)
+        return data_container
 
     def fit(self, data_inputs, expected_outputs=None) -> 'FeatureUnion':
         """

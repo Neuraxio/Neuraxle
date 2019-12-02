@@ -314,12 +314,15 @@ class ExecutionContext:
 
     def __init__(
             self,
-            execution_mode: ExecutionMode,
             root: str = DEFAULT_CACHE_FOLDER,
+            execution_mode: ExecutionMode = None,
             stripped_saver: BaseSaver = None,
-            parents=None,
+            parents=None
     ):
+        if execution_mode is None:
+            execution_mode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM
         self.execution_mode = execution_mode
+
         if stripped_saver is None:
             stripped_saver: BaseSaver = JoblibStepSaver()
 
@@ -332,14 +335,6 @@ class ExecutionContext:
     def get_execution_mode(self) -> ExecutionMode:
         return self.execution_mode
 
-    @staticmethod
-    def create_from_root(root_step: 'BaseStep', execution_mode, root_path) -> 'ExecutionContext':
-        return ExecutionContext(
-            execution_mode=execution_mode,
-            root=root_path,
-            parents=[root_step]
-        )
-
     def save_all_unsaved(self):
         """
         Save all unsaved steps in the parents of the execution context using :func:`~neuraxle.base.BaseStep.save`.
@@ -347,11 +342,13 @@ class ExecutionContext:
 
         :return:
         """
-        copy_self = copy(self)
-        while not copy_self.empty():
-            if copy_self.should_save_last_step():
-                copy_self.peek().save(copy_self)
-            copy_self.pop()
+        while not self.empty():
+            should_save_last_step = self.should_save_last_step()
+            last_step = self.peek()
+
+            self.pop()
+            if should_save_last_step:
+                last_step.save(self)
 
     def should_save_last_step(self) -> bool:
         """
@@ -393,18 +390,10 @@ class ExecutionContext:
         :return: self
         :rtype: ExecutionContext
         """
-        return ExecutionContext(
-            execution_mode=self.execution_mode,
-            root=self.root,
-            parents=self.parents + [step]
-        )
+        return ExecutionContext(root=self.root, execution_mode=self.execution_mode, parents=self.parents + [step])
 
     def copy(self):
-        return ExecutionContext(
-            execution_mode=self.execution_mode,
-            root=self.root,
-            parents=copy(self.parents),
-        )
+        return ExecutionContext(root=self.root, execution_mode=self.execution_mode, parents=copy(self.parents))
 
     def peek(self) -> 'BaseStep':
         """
@@ -905,16 +894,17 @@ class BaseStep(ABC):
             :class:`DataContainer`,
             :class:`neuraxle.pipeline.Pipeline`
         """
-        self.is_invalidated = True
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_fit(data_container, context)
 
-        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
+        new_self, data_container = self._fit_data_container(data_container, context)
 
-        data_container = self.hash_data_container(data_container)
+        data_container = self._did_fit(data_container, context)
+        data_container = self._did_process(data_container, context)
 
         return new_self, data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.fit_transform`.
         The default behavior is to rehash current ids with the step hyperparameters.
@@ -923,12 +913,13 @@ class BaseStep(ABC):
         :param context: execution context
         :return: tuple(fitted pipeline, data_container)
         """
-        self.is_invalidated = True
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_fit_transform(data_container, context)
 
-        new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
-        data_container.set_data_inputs(out)
+        new_self, data_container = self._fit_transform_data_container(data_container, context)
 
-        data_container = self.hash_data_container(data_container)
+        data_container = self._did_fit_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
 
         return new_self, data_container
 
@@ -941,10 +932,144 @@ class BaseStep(ABC):
         :param context: execution context
         :return: transformed data container
         """
-        out = self.transform(data_container.data_inputs)
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_transform_data_container(data_container, context)
+
+        data_container = self._transform_data_container(data_container, context)
+
+        data_container = self._did_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        return data_container
+
+    def _will_fit(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+        """
+        Before fit is called, apply side effects on the step, the data container, or the execution context.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (data container, execution context)
+        :rtype: (DataContainer, ExecutionContext)
+        """
+        self.is_invalidated = True
+        return data_container, context.push(self)
+
+    def _did_fit(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Apply side effects before fit is called.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (data container, execution context)
+        :rtype: (DataContainer, ExecutionContext)
+        """
+        return data_container
+
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        Fit data container.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (fitted self, data container)
+        :rtype: (BaseStep, DataContainer)
+        """
+        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
+        return new_self, data_container
+
+    def _will_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+        """
+        Apply side effects before fit_transform is called.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (data container, execution context)
+        :rtype: (DataContainer, ExecutionContext)
+        """
+        self.is_invalidated = True
+        return data_container, context.push(self)
+
+    def _did_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Apply side effects after fit transform.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (fitted self, data container)
+        :rtype: (BaseStep, DataContainer)
+        """
+        return data_container
+
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        Fit transform data container.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (fitted self, data container)
+        :rtype: (BaseStep, DataContainer)
+        """
+        new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
         data_container.set_data_inputs(out)
 
+        return new_self, data_container
+
+    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        Apply side effects before transform.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (data container, execution context)
+        :rtype: (DataContainer, ExecutionContext)
+        """
+        return data_container, context.push(self)
+
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        Apply side effects before any step method.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (data container, execution context)
+        :rtype: (DataContainer, ExecutionContext)
+        """
+        return data_container, context
+
+    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Apply side effects after any step method.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (data container, execution context)
+        :rtype: (DataContainer, ExecutionContext)
+        """
         data_container = self.hash_data_container(data_container)
+        return data_container
+
+    def _did_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Apply side effects after transform.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: data container
+        :rtype: DataContainer
+        """
+        return data_container
+
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Transform data container.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: data container
+        :rtype: DataContainer
+        """
+        out = self.transform(data_container.data_inputs)
+        data_container.set_data_inputs(out)
 
         return data_container
 
@@ -1087,6 +1212,8 @@ class BaseStep(ABC):
             :class:`ExecutionContext`,
             :class:`BaseSaver`
         """
+        context = context.push(self)
+
         if self.is_invalidated and self.is_initialized:
             self.is_invalidated = False
 
@@ -1121,6 +1248,8 @@ class BaseStep(ABC):
             :class:`ExecutionContext`,
             :class:`BaseSaver`
         """
+        context = context.push(self)
+
         # A final "visitor" saver might reload anything that wasn't saved customly after stripping the rest.
         savers_with_provided_default_stripped_saver = [context.stripped_saver] + self.savers
 
@@ -1569,6 +1698,36 @@ class MetaStepMixin:
     def get_best_model(self) -> BaseStep:
         return self.best_model
 
+    def _fit_transform_data_container(self, data_container, context):
+        self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
+        return self, data_container
+
+    def _fit_data_container(self, data_container, context):
+        self.wrapped, data_container = self.wrapped.handle_fit(data_container, context)
+        return self, data_container
+
+    def _transform_data_container(self, data_container, context):
+        data_container = self.wrapped.handle_transform(data_container, context)
+        return data_container
+
+    def fit_transform(self, data_inputs, expected_outputs):
+        self.wrapped, data_inputs = self.wrapped.fit_transform(data_inputs, expected_outputs)
+        return self, data_inputs
+
+    def fit(self, data_inputs, expected_outputs):
+        self.wrapped, data_inputs = self.wrapped.fit(data_inputs, expected_outputs)
+        return self, data_inputs
+
+    def transform(self, data_inputs):
+        data_inputs = self.wrapped.transform(data_inputs)
+        return data_inputs
+
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext):
+        context = context.push(self)
+        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context):
+            return True
+        return False
+
     def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
         """
         Apply the method name to the meta step and its wrapped step.
@@ -1596,13 +1755,6 @@ class MetaStepMixin:
         BaseStep.apply_method(self, method, *kargs, **kwargs)
         self.wrapped = self.wrapped.apply_method(method, *kargs, **kwargs)
         return self
-
-    def should_resume(self, data_container: DataContainer, context: ExecutionContext):
-        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container,
-                                                                                       context.push(self.wrapped)):
-            return True
-
-        return False
 
     def __repr__(self):
         output = self.__class__.__name__ + "(\n\twrapped=" + repr(
@@ -1654,8 +1806,8 @@ class NonFittableMixin:
     Note: fit methods are not implemented
     """
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
-        return self, self.handle_transform(data_container, context)
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        return self, self._transform_data_container(data_container, context)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
         """
@@ -1734,15 +1886,16 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         :type context: ExecutionContext
         :return:
         """
+
         # First, save all of the sub steps with the right execution context.
         sub_steps_savers = []
         for i, (_, sub_step) in enumerate(step):
             if sub_step.should_save():
-                sub_context = context.push(sub_step)
-                sub_step.save(sub_context)
                 sub_steps_savers.append((step[i].name, step[i].get_savers()))
             else:
                 sub_steps_savers.append((step[i].name, None))
+
+            sub_step.save(context)
 
         step.sub_steps_savers = sub_steps_savers
 
@@ -1773,9 +1926,7 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
             else:
                 # Load each sub step with their savers
                 sub_step_to_load = Identity(name=step_name, savers=savers)
-                subcontext = context.push(sub_step_to_load)
-
-                sub_step = sub_step_to_load.load(subcontext)
+                sub_step = sub_step_to_load.load(context)
                 step.steps_as_tuple.append((step_name, sub_step))
 
         step._refresh_steps()

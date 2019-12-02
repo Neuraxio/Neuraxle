@@ -83,10 +83,10 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     pipeline = ResumablePipeline([
         ('multiplication_1', MultiplyByN()),
         ('ForEach(sleep_1)', ForEachDataInput(Sleep(sleep_time))),
-        ExpandDim(DefaultCheckpoint()),
+        ('checkpoint1', ExpandDim(DefaultCheckpoint())),
         ('multiplication_2', MultiplyByN()),
         ('sleep_2', ForEachDataInput(Sleep(sleep_time))),
-        ExpandDim(DefaultCheckpoint()),
+        ('checkpoint2', ExpandDim(DefaultCheckpoint())),
         ('multiplication_3', MultiplyByN())
     ], cache_folder=tmpdir).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
@@ -110,4 +110,4 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
 
 
 if __name__ == "__main__":
-    main(DEFAULT_CACHE_FOLDER, sleep_time=0.001, n_iter=30)
+    main(DEFAULT_CACHE_FOLDER, sleep_time=0.001, n_iter=50)

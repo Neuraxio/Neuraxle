@@ -8,6 +8,7 @@ from neuraxle.base import BaseStep, TruncableJoblibStepSaver, NonFittableMixin
 from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import ResumablePipeline
+from neuraxle.steps.numpy import MultiplyByN
 
 OUTPUT = "OUTPUT"
 ROOT = 'ResumablePipeline'
@@ -59,20 +60,6 @@ def create_root_path(tmpdir, create_dir=False):
     if create_dir and not os.path.exists(os.path.join(tmpdir, ROOT)):
         os.makedirs(os.path.join(tmpdir, ROOT))
     return p
-
-
-class MultiplyByN(NonFittableMixin, BaseStep):
-    def __init__(self, multiply_by):
-        NonFittableMixin.__init__(self)
-        BaseStep.__init__(
-            self,
-            hyperparams=HyperparameterSamples({
-                'multiply_by': multiply_by
-            })
-        )
-
-    def transform(self, data_inputs):
-        return data_inputs * self.hyperparams['multiply_by']
 
 
 def test_resumable_pipeline_fit_transform_should_save_all_fitted_pipeline_steps(tmpdir: LocalPath):

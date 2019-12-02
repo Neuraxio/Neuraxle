@@ -27,7 +27,7 @@ Meta steps for hyperparameter tuning, such as random search.
 import copy
 import math
 from abc import ABC, abstractmethod
-from typing import List, Callable, Tuple
+from typing import List, Callable, Tuple, Iterable
 
 import numpy as np
 from sklearn.metrics import r2_score
@@ -115,17 +115,7 @@ class ValidationSplitWrapper(BaseValidation):
         self.test_size = test_size
         self.scoring_function = scoring_function
 
-    def transform(self, data_inputs):
-        """
-        Transform given data inputs without splitting.
-
-        :param data_inputs: data inputs
-        :return: outputs
-        """
-        return self.wrapped.transform(data_inputs)
-
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'ValidationSplitWrapper', DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('ValidationSplitWrapper', DataContainer):
         """
         Fit using the training split.
         Calculate the scores using the validation split.
@@ -136,11 +126,10 @@ class ValidationSplitWrapper(BaseValidation):
         :type data_container: DataContainer
         :return: fitted self
         """
-        new_self, results_data_container = self.handle_fit_transform(data_container, context)
+        new_self, results_data_container = self._fit_transform_data_container(data_container, context)
         return new_self, data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit Transform given data inputs without splitting.
 
@@ -171,7 +160,7 @@ class ValidationSplitWrapper(BaseValidation):
 
         return self, data_container
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
         Transform given data inputs without splitting.
 
@@ -206,6 +195,19 @@ class ValidationSplitWrapper(BaseValidation):
         self._update_scores_validation(validation_predicted_outputs, validation_expected_outputs)
 
         return self
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('ValidationSplitWrapper', Iterable):
+        """
+        Fit transform using the training split.
+        Calculate the scores using the validation split.
+
+        :param data_inputs: data inputs
+        :param expected_outputs: expected outputs
+        :return: fitted self
+        """
+        self.fit(data_inputs, expected_outputs)
+
+        return self, self.transform(data_inputs)
 
     def _update_scores_validation(self, data_inputs, expected_outputs):
         self.scores_validation = self.scoring_function(expected_outputs, data_inputs)
@@ -353,12 +355,12 @@ class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
 
         return train_data_inputs, train_expected_outputs
 
-    def validation_split(self, data_inputs, expected_outputs=None) -> List:
+    def validation_split(self, data_inputs, expected_outputs=None) -> (List, List):
         splitted_data_inputs = self._split(data_inputs)
         if expected_outputs is not None:
             splitted_expected_outputs = self._split(expected_outputs)
             return splitted_data_inputs, splitted_expected_outputs
-        return splitted_data_inputs
+        return splitted_data_inputs, [None] * len(splitted_data_inputs)
 
     def _split(self, data_inputs):
         splitted_data_inputs = []
@@ -589,6 +591,9 @@ class RandomSearch(MetaStepMixin, BaseStep):
         self.higher_score_is_better = higher_score_is_better
         self.validation_technique: BaseCrossValidationWrapper = validation_technique
         self.refit = refit
+
+    def fit_transform(self, data_inputs, expected_outputs):
+        return self.fit(data_inputs, expected_outputs), self.transform(data_inputs)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
         started = False

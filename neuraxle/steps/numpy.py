@@ -26,7 +26,7 @@ Those steps works with NumPy (np) arrays.
 
 import numpy as np
 
-from neuraxle.base import NonFittableMixin, BaseStep, DataContainer, ExecutionContext
+from neuraxle.base import NonFittableMixin, BaseStep, DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
 
 
@@ -54,24 +54,21 @@ class NumpyConcatenateOnCustomAxis(NonFittableMixin, BaseStep):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
 
-    def handle_transform(self, data_containers, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container, context):
         """
         Handle transform.
 
-        :param data_containers: the data container to join
+        :param data_container: the data container to join
         :param context: execution context
         :return: transformed data container
         """
-        data_inputs = self.transform([dc.data_inputs for dc in data_containers])
+        data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs])
         data_container = DataContainer(
-            current_ids=data_containers[-1].current_ids,
+            current_ids=data_container.current_ids,
             data_inputs=data_inputs,
-            expected_outputs=data_containers[-1].expected_outputs
+            expected_outputs=data_container.expected_outputs
         )
         data_container.set_data_inputs(data_inputs)
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
 
         return data_container
 
@@ -119,24 +116,21 @@ class NumpyTranspose(NonFittableMixin, BaseStep):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
 
-    def handle_transform(self, data_containers, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container, context):
         """
         Handle transform.
 
-        :param data_containers: the data container to join
+        :param data_container: the data container to join
         :param context: execution context
         :return: transformed data container
         """
-        data_inputs = self.transform([dc.data_inputs for dc in data_containers])
+        data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs])
         data_container = DataContainer(
-            current_ids=data_containers[-1].current_ids,
+            current_ids=data_container.current_ids,
             data_inputs=data_inputs,
-            expected_outputs=data_containers[-1].expected_outputs
+            expected_outputs=data_container.expected_outputs
         )
         data_container.set_data_inputs(data_inputs)
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
 
         return data_container
 
