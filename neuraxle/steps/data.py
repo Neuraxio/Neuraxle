@@ -18,10 +18,6 @@ You can find here steps that take action on data.
     See the License for the specific language governing permissions and
     limitations under the License.
 
-..
-    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
-    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
-
 """
 import random
 from typing import Iterable
@@ -36,25 +32,23 @@ class DataShuffler(NonFittableMixin, InputAndOutputTransformerMixin, BaseStep):
 
     .. code-block:: python
 
-        p = DataShuffler(
-            EpochRepeater(
-                ForecastingPipeline(),
-                epochs=EPOCHS
-            ),
-            seed=42,
-            increment_seed_after_each_fit=True
-        )
+        p = Pipeline([
+            TrainOnlyWrapper(DataShuffler(seed=42, increment_seed_after_each_fit=True)),
+            TrainOnlyWrapper(EpochRepeater(ForecastingPipeline(), epochs=EPOCHS))
+            TestOnlyWrapper(ForecastingPipeline())
+        ])
 
     .. warning::
         You probably always want to wrap this step by a :class:`TrainOnlyWrapper`
 
     .. seealso::
+        :class:`EpochRepeater`,
         :class:`TrainOnlyWrapper`,
         :class:`InputAndOutputTransformerMixin`,
         :class:`BaseStep`
     """
 
-    def __init__(self, seed, increment_seed_after_each_fit):
+    def __init__(self, seed, increment_seed_after_each_fit=True):
         InputAndOutputTransformerMixin.__init__(self)
         BaseStep.__init__(self)
         self.seed = seed
@@ -85,13 +79,17 @@ class EpochRepeater(MetaStepMixin, BaseStep):
 
     .. code-block:: python
 
-        p = EpochRepeater(
-            ForecastingPipeline(),
-            epochs=30
-        )
+        p = Pipeline([
+            TrainOnlyWrapper(DataShuffler(seed=42, increment_seed_after_each_fit=True)),
+            TrainOnlyWrapper(EpochRepeater(ForecastingPipeline(), epochs=EPOCHS))
+            TestOnlyWrapper(ForecastingPipeline())
+        ])
 
     .. seealso::
+        :class:`DataShuffler`,
         :class:`MetaStepMixin`,
+        :class:`TrainOnlyWrapper`,
+        :class:`TestOnlyWrapper`,
         :class:`BaseStep`
     """
 
@@ -109,9 +107,9 @@ class EpochRepeater(MetaStepMixin, BaseStep):
         :param expected_outputs: expected_outputs to fit on
         :return: fitted self
         """
-        for _ in range(self.epochs):
-            self.wrapped, data_inputs = self.wrapped.fit_transform(data_inputs, expected_outputs)
-        return self, data_inputs
+        for _ in range(self.epochs -1):
+            self.wrapped, data_inputs = self.wrapped.fit(data_inputs, expected_outputs)
+        return self, self.wrapped.fit_transform(data_inputs, expected_outputs)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
         """

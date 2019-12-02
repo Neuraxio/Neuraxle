@@ -117,8 +117,7 @@ class InputAndOutputTransformerMixin:
 
         return data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Handle transform by fitting the step,
         and updating the data inputs, and expected outputs inside the data container.
