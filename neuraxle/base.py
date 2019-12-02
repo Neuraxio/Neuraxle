@@ -33,7 +33,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from enum import Enum
-from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView
+from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable
 
 from joblib import dump, load
 from sklearn.base import BaseEstimator
@@ -700,6 +700,40 @@ class BaseStep(ABC):
         self.hyperparams = HyperparameterSamples(hyperparams).to_flat()
         return self
 
+    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
+        """
+        Update the step hyperparameters without removing the already-set hyperparameters.
+        This can be useful to add more hyperparameters to the existing ones without flushing the ones that were already set.
+
+        Example :
+
+        .. code-block:: python
+
+            step.set_hyperparams(HyperparameterSamples({
+                'learning_rate': 0.10
+                'weight_decay': 0.001
+            }))
+
+            step.update_hyperparams(HyperparameterSamples({
+                'learning_rate': 0.01
+            }))
+
+            assert step.get_hyperparams()['learning_rate'] == 0.01
+            assert step.get_hyperparams()['weight_decay'] == 0.001
+
+        :param hyperparams: hyperparameters
+        :type hyperparams: HyperparameterSamples
+        :return: self
+        :rtype: BaseStep
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`neuraxle.hyperparams.space.HyperparameterSamples`
+        """
+        self.hyperparams.update(hyperparams)
+        self.hyperparams = HyperparameterSamples(self.hyperparams).to_flat()
+        return self
+
     def get_hyperparams(self) -> HyperparameterSamples:
         """
         Get step hyperparameters as :class:`neuraxle.hyperparams.space.HyperparameterSamples`.
@@ -795,6 +829,57 @@ class BaseStep(ABC):
             :class:`neuraxle.hyperparams.distributions.HyperparameterDistribution`
         """
         return self.hyperparams_space
+
+    def handle_inverse_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.inverse_transform`.
+        The default behavior is to rehash current ids with the step hyperparameters.
+
+        :param data_container: the data container to inverse transform
+        :param context: execution context
+        :return: data_container
+
+        .. seealso::
+            :class:`DataContainer`,
+            :class:`neuraxle.pipeline.Pipeline`
+        """
+        self.is_invalidated = True
+
+        processed_outputs = self.inverse_transform(data_container.data_inputs)
+        data_container.set_data_inputs(processed_outputs)
+
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
+
+        return data_container
+
+    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
+        """
+        Apply a method to a step and its children.
+
+        :param method: method to call with self
+        :param kargs: any additional arguments to be passed to the method
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
+        """
+        method(self, *kargs, **kwargs)
+        return self
+
+    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
+        """
+        Apply a method to a step and its children.
+
+        :param method_name: method name that need to be called on all steps
+        :param kargs: any additional arguments to be passed to the method
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
+        """
+        if hasattr(self, method_name) and callable(getattr(self, method_name)):
+            getattr(self, method_name)(*kargs, **kwargs)
+
+        return self
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
@@ -1508,6 +1593,35 @@ class MetaStepMixin:
 
         return self
 
+    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
+        """
+        Update the step, and the wrapped step hyperparams without removing the already set hyperparameters.
+        Please refer to :func:`~BaseStep.update_hyperparams`.
+
+        :param hyperparams: hyperparameters
+        :type hyperparams: HyperparameterSamples
+        :return: self
+        :rtype: BaseStep
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`HyperparameterSamples`
+        """
+        self.is_invalidated = True
+
+        hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
+
+        remainders = dict()
+        for name, hparams in hyperparams.items():
+            if name == self.wrapped.name:
+                self.wrapped.update_hyperparams(hparams)
+            else:
+                remainders[name] = hparams
+
+        self.hyperparams.update(remainders)
+
+        return self
+
     def get_hyperparams(self) -> HyperparameterSamples:
         """
         Get step hyperparameters as :class:`HyperparameterSamples` with flattened hyperparams.
@@ -1612,18 +1726,41 @@ class MetaStepMixin:
         context = context.push(self)
         if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context):
             return True
-
         return False
+
+    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
+        """
+        Apply the method name to the meta step and its wrapped step.
+
+        :param method_name: method name that need to be called on all steps
+        :param kargs: any additional arguments to be passed to the method
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
+        """
+        BaseStep.apply(self, method_name, *kargs, **kwargs)
+        self.wrapped.apply(method_name, *kargs, **kwargs)
+        return self
+
+    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
+        """
+        Apply method to the meta step and its wrapped step.
+
+        :param method: method to call with self
+        :param kargs: any additional arguments to be passed to the method
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
+        """
+        BaseStep.apply_method(self, method, *kargs, **kwargs)
+        self.wrapped = self.wrapped.apply_method(method, *kargs, **kwargs)
+        return self
 
     def __repr__(self):
         output = self.__class__.__name__ + "(\n\twrapped=" + repr(
             self.wrapped) + "," + "\n\thyperparameters=" + pprint.pformat(
             self.hyperparams) + "\n)"
-
         return output
-
-    def __str__(self):
-        return self.__repr__()
 
 
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
@@ -1654,19 +1791,13 @@ class ForceAlwaysHandleMixin:
         raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
 
     def transform(self, data_inputs) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(
-                self.name))
+        raise Exception('Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(self.name))
 
     def fit(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(
-                self.name))
+        raise Exception('Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(self.name))
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(
-                self.name))
+        raise Exception('Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(self.name))
 
 
 class NonFittableMixin:
@@ -1905,6 +2036,37 @@ class TruncableSteps(BaseStep, ABC):
 
         return self
 
+    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
+        """
+        Apply the method name to the pipeline step and all of its children.
+
+        :param method_name: method name that need to be called on all steps
+        :param kargs: any additional arguments to be passed to the method
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
+        """
+        BaseStep.apply(self, method_name, *kargs, **kwargs)
+        for step in self.values():
+            step.apply(method_name, *kargs, **kwargs)
+        return self
+
+    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
+        """
+        Apply a method to the pipeline step and all of its children.
+
+        :param method: method to call with self
+        :param kargs: any additional arguments to be passed to the method
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: self (not a new step)
+        :rtype: BaseStep
+        """
+        BaseStep.apply_method(self, method, *kargs, **kwargs)
+        for step in self.values():
+            step.apply_method(method, *kargs, **kwargs)
+
+        return self
+
     def _wrap_non_base_steps(self, steps_as_tuple: List) -> NamedTupleList:
         """
         If some steps are not of type BaseStep, we'll try to make them of this type. For instance, sklearn objects
@@ -2063,6 +2225,34 @@ class TruncableSteps(BaseStep, ABC):
             else:
                 remainders[name] = hparams
         self.hyperparams = HyperparameterSamples(remainders)
+
+        return self
+
+    def update_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
+        """
+        Update the steps hyperparameters without removing the already-set hyperparameters.
+        Please refer to :func:`~BaseStep.update_hyperparams`.
+
+        :param hyperparams: hyperparams to update
+        :type hyperparams: HyperparameterSamples
+        :return: step
+        :rtype: BaseStep
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`HyperparameterSamples`
+        """
+        self.is_invalidated = True
+
+        hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
+
+        remainders = dict()
+        for name, hparams in hyperparams.items():
+            if name in self.steps.keys():
+                self.steps[name].update_hyperparams(HyperparameterSamples(hparams))
+            else:
+                remainders[name] = hparams
+        self.hyperparams.update(remainders)
 
         return self
 

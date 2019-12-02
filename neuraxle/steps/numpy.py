@@ -167,6 +167,24 @@ class NumpyShapePrinter(NonFittableMixin, BaseStep):
 
 
 class MultiplyByN(NonFittableMixin, BaseStep):
+    """
+    Step to multiply a numpy array.
+    Accepts an integer for the number to multiply by.
+
+    Example usage:
+
+    .. code-block:: python
+
+        pipeline = Pipeline([
+            MultiplyByN(3)
+        ])
+        outputs = pipeline.transform(np.array([1])
+        # outputs => np.array([3])
+
+    .. seealso::
+        :class:`NonFittableMixin`,
+        :class:`BaseStep`
+    """
     def __init__(self, multiply_by=1):
         NonFittableMixin.__init__(self)
         BaseStep.__init__(
@@ -187,6 +205,47 @@ class MultiplyByN(NonFittableMixin, BaseStep):
             data_inputs = np.array(data_inputs)
 
         return data_inputs / self.hyperparams['multiply_by']
+
+
+class AddN(NonFittableMixin, BaseStep):
+    """
+    Step to add a scalar to a numpy array.
+    Accepts an integer for the number to add to every data inputs.
+
+    Example usage:
+
+    .. code-block:: python
+
+        pipeline = Pipeline([
+            AddN(1)
+        ])
+        outputs = pipeline.transform(np.array([1])
+        # outputs => np.array([2])
+
+    .. seealso::
+        :class:`NonFittableMixin`,
+        :class:`BaseStep`
+    """
+    def __init__(self, add=1):
+        NonFittableMixin.__init__(self)
+        BaseStep.__init__(
+            self,
+            hyperparams=HyperparameterSamples({
+                'add': add
+            })
+        )
+
+    def transform(self, data_inputs):
+        if not isinstance(data_inputs, np.ndarray):
+            data_inputs = np.array(data_inputs)
+
+        return data_inputs + self.hyperparams['add']
+
+    def inverse_transform(self, data_inputs):
+        if not isinstance(data_inputs, np.ndarray):
+            data_inputs = np.array(data_inputs)
+
+        return data_inputs - self.hyperparams['add']
 
 
 class OneHotEncoder(NonFittableMixin, BaseStep):
