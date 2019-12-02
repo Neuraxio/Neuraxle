@@ -284,6 +284,14 @@ class TapeCallbackFunction:
         self.data.append(data)
         self.name_tape.append(name)
 
+    def reset(self):
+        """
+        Reset callback data.
+        :return: None
+        """
+        self.data = []
+        self.name_tape = []
+
     def get_data(self) -> List:
         """
         Get the data tape
