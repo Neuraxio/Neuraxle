@@ -87,7 +87,7 @@ class InputAndOutputTransformerMixin:
     Base output transformer step that can modify data inputs, and expected_outputs at the same time.
     """
 
-    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Handle transform by updating the data inputs, and expected outputs inside the data container.
 
@@ -103,8 +103,7 @@ class InputAndOutputTransformerMixin:
 
         return data_container
 
-    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Handle transform by fitting the step,
         and updating the data inputs, and expected outputs inside the data container.

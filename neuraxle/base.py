@@ -1584,15 +1584,15 @@ class MetaStepMixin:
     def get_best_model(self) -> BaseStep:
         return self.best_model
 
-    def fit_transform_data_container(self, data_container, context):
+    def _fit_transform_data_container(self, data_container, context):
         self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
         return self, data_container
 
-    def fit_data_container(self, data_container, context):
+    def _fit_data_container(self, data_container, context):
         self.wrapped, data_container = self.wrapped.handle_fit(data_container, context)
         return self, data_container
 
-    def transform_data_container(self, data_container, context):
+    def _transform_data_container(self, data_container, context):
         data_container = self.wrapped.handle_transform(data_container, context)
         return data_container
 
@@ -1675,8 +1675,8 @@ class NonFittableMixin:
     Note: fit methods are not implemented
     """
 
-    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
-        return self, self.transform_data_container(data_container, context)
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        return self, self._transform_data_container(data_container, context)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
         """

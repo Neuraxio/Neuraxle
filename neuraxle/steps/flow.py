@@ -339,6 +339,7 @@ class ExpandDim(
     """
 
     def __init__(self, wrapped: BaseStep):
+        ResumableStepMixin.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
 
