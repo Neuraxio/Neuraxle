@@ -657,15 +657,24 @@ class BaseStep(ABC):
 
     def update_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
         """
-        Update the step hyperparameters.
+        Update the step hyperparameters without removing the already-set hyperparameters.
+        This can be useful to add more hyperparameters to the existing ones without flushing the ones that were already set.
 
         Example :
 
         .. code-block:: python
 
-            step.update_hyperparams(HyperparameterSamples({
+            step.set_hyperparams(HyperparameterSamples({
                 'learning_rate': 0.10
+                'weight_decay': 0.001
             }))
+
+            step.update_hyperparams(HyperparameterSamples({
+                'learning_rate': 0.01
+            }))
+
+            assert step.get_hyperparams()['learning_rate'] == 0.01
+            assert step.get_hyperparams()['weight_decay'] == 0.001
 
         :param hyperparams: hyperparameters
         :type hyperparams: HyperparameterSamples
@@ -673,6 +682,7 @@ class BaseStep(ABC):
         :rtype: BaseStep
 
         .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
             :class:`neuraxle.hyperparams.space.HyperparameterSamples`
         """
         self.hyperparams.update(hyperparams)
@@ -1328,16 +1338,8 @@ class MetaStepMixin:
 
     def update_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
         """
-        Update step hyperparameters, and wrapped step hyperparams with the given hyperparams.
-
-        Example :
-
-        .. code-block:: python
-
-            step.set_hyperparams(HyperparameterSamples({
-                'learning_rate': 0.10
-                'wrapped__learning_rate': 0.10 # this will set the wrapped step 'learning_rate' hyperparam
-            }))
+        Update the step, and the wrapped step hyperparams without removing the already set hyperparameters.
+        Please refer to :func:`~BaseStep.update_hyperparams`.
 
         :param hyperparams: hyperparameters
         :type hyperparams: HyperparameterSamples
@@ -1345,6 +1347,7 @@ class MetaStepMixin:
         :rtype: BaseStep
 
         .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
             :class:`HyperparameterSamples`
         """
         self.is_invalidated = True
@@ -1886,17 +1889,8 @@ class TruncableSteps(BaseStep, ABC):
 
     def update_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
         """
-        Update step hyperparameters with the given :class:`HyperparameterSamples`.
-
-        Example :
-
-        .. code-block:: python
-
-            p = Pipeline([SomeStep()])
-            p.update_hyperparams(HyperparameterSamples({
-                'learning_rate': 0.1,
-                'some_step__learning_rate': 0.2 # will set SomeStep() hyperparam 'learning_rate' to 0.2
-            }))
+        Update the steps hyperparameters without removing the already-set hyperparameters.
+        Please refer to :func:`~BaseStep.update_hyperparams`.
 
         :param hyperparams: hyperparams to update
         :type hyperparams: HyperparameterSamples
@@ -1904,6 +1898,7 @@ class TruncableSteps(BaseStep, ABC):
         :rtype: BaseStep
 
         .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
             :class:`HyperparameterSamples`
         """
         self.is_invalidated = True

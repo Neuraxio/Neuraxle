@@ -190,12 +190,17 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
 
     def update_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
         """
-        Update step hyperparams, and wrapped step hyperparams with the given hyperparameters.
+        Update the step hyperparameters without removing the already-set hyperparameters.
+        Please refer to :func:`~BaseStep.update_hyperparams`.
 
         :param hyperparams: hyperparams to update
         :type hyperparams: HyperparameterSamples
         :return: self
         :rtype: BaseStep
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`HyperparameterSamples`
         """
         MetaStepMixin.update_hyperparams(self, hyperparams)
         self.steps = [s.set_hyperparams(self.wrapped.get_hyperparams()) for s in self.steps]
