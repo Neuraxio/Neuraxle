@@ -809,13 +809,13 @@ class BaseStep(ABC):
             :class:`DataContainer`,
             :class:`neuraxle.pipeline.Pipeline`
         """
-        data_container, context = self._will_process_data_container(data_container, context)
-        data_container, context = self._will_fit_data_container(data_container, context)
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_fit(data_container, context)
 
         new_self, data_container = self._fit_data_container(data_container, context)
 
-        data_container = self._did_fit_data_container(data_container, context)
-        data_container = self._did_process_data_container(data_container, context)
+        data_container = self._did_fit(data_container, context)
+        data_container = self._did_process(data_container, context)
 
         return new_self, data_container
 
@@ -828,13 +828,13 @@ class BaseStep(ABC):
         :param context: execution context
         :return: tuple(fitted pipeline, data_container)
         """
-        data_container, context = self._will_process_data_container(data_container, context)
-        data_container, context = self._will_fit_transform_data_container(data_container, context)
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_fit_transform(data_container, context)
 
         new_self, data_container = self._fit_transform_data_container(data_container, context)
 
-        data_container = self._did_fit_transform_data_container(data_container, context)
-        data_container = self._did_process_data_container(data_container, context)
+        data_container = self._did_fit_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
 
         return new_self, data_container
 
@@ -847,54 +847,142 @@ class BaseStep(ABC):
         :param context: execution context
         :return: transformed data container
         """
-        data_container, context = self._will_process_data_container(data_container, context)
+        data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_transform_data_container(data_container, context)
 
         data_container = self._transform_data_container(data_container, context)
 
-        data_container = self._did_transform_data_container(data_container, context)
-        data_container = self._did_process_data_container(data_container, context)
+        data_container = self._did_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
 
         return data_container
 
-    def _will_fit_data_container(self, data_container, context):
+    def _will_fit(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+        """
+        Before fit is called, apply side effects on the step, the data container, or the execution context.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (data container, execution context)
+        :rtype: (DataContainer, ExecutionContext)
+        """
         self.is_invalidated = True
         return data_container, context.push(self)
 
-    def _did_fit_data_container(self, data_container, context):
+    def _did_fit(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Apply side effects before fit is called.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (data container, execution context)
+        :rtype: (DataContainer, ExecutionContext)
+        """
         return data_container
 
-    def _fit_data_container(self, data_container, context):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        Fit data container.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (fitted self, data container)
+        :rtype: (BaseStep, DataContainer)
+        """
         new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
         return new_self, data_container
 
-    def _will_fit_transform_data_container(self, data_container, context):
+    def _will_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+        """
+        Apply side effects before fit_transform is called.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (data container, execution context)
+        :rtype: (DataContainer, ExecutionContext)
+        """
         self.is_invalidated = True
         return data_container, context.push(self)
 
-    def _did_fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+    def _did_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Apply side effects after fit transform.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (fitted self, data container)
+        :rtype: (BaseStep, DataContainer)
+        """
         return data_container
 
-    def _fit_transform_data_container(self, data_container, context):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        Fit transform data container.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (fitted self, data container)
+        :rtype: (BaseStep, DataContainer)
+        """
         new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
         data_container.set_data_inputs(out)
 
         return new_self, data_container
 
-    def _will_transform_data_container(self, data_container, context):
+    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        Apply side effects before transform.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (data container, execution context)
+        :rtype: (DataContainer, ExecutionContext)
+        """
         return data_container, context.push(self)
 
-    def _will_process_data_container(self, data_container, context):
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        Apply side effects before any step method.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (data container, execution context)
+        :rtype: (DataContainer, ExecutionContext)
+        """
         return data_container, context
 
-    def _did_process_data_container(self, data_container, context):
+    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Apply side effects after any step method.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (data container, execution context)
+        :rtype: (DataContainer, ExecutionContext)
+        """
         data_container = self.hash_data_container(data_container)
         return data_container
 
-    def _did_transform_data_container(self, data_container, context):
+    def _did_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Apply side effects after transform.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: data container
+        :rtype: DataContainer
+        """
         return data_container
 
-    def _transform_data_container(self, data_container, context):
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Transform data container.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: data container
+        :rtype: DataContainer
+        """
         out = self.transform(data_container.data_inputs)
         data_container.set_data_inputs(out)
 

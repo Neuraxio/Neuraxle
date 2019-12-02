@@ -107,7 +107,7 @@ class FeatureUnion(TruncableSteps):
             expected_outputs=data_container.expected_outputs
         )
 
-    def _did_transform_data_container(self, data_container, context):
+    def _did_transform(self, data_container, context):
         data_container = self.joiner.handle_transform(data_container, context)
         return data_container
 
@@ -123,7 +123,7 @@ class FeatureUnion(TruncableSteps):
         data_container = self._transform_data_container(data_container, context)
         return new_self, data_container
 
-    def _did_fit_transform_data_container(self, data_container, context):
+    def _did_fit_transform(self, data_container, context):
         self.joiner, data_container = self.joiner.handle_fit_transform(data_container, context)
         return data_container
 
