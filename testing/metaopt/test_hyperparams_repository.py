@@ -7,7 +7,6 @@ from neuraxle.metaopt.random import HyperparamsJSONRepository
 HYPERPARAMS = {'learning_rate': 0.01}
 FIRST_SCORE_FOR_TRIAL = 1
 
-
 def test_hyperparams_repository_should_create_new_trial(tmpdir):
     hyperparams_json_repository = HyperparamsJSONRepository(tmpdir)
     hyperparams = HyperparameterSamples(HYPERPARAMS)
