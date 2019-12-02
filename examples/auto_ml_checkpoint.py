@@ -35,14 +35,15 @@ from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.random import RandomSearch
 from neuraxle.pipeline import ResumablePipeline, DEFAULT_CACHE_FOLDER, Pipeline
+from neuraxle.steps.flow import ExpandDim
 from neuraxle.steps.loop import ForEachDataInput
 from neuraxle.steps.misc import Sleep
 from neuraxle.steps.numpy import MultiplyByN
 
 
 def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
-    DATA_INPUTS = np.array(range(10))
-    EXPECTED_OUTPUTS = np.array(range(10, 20))
+    DATA_INPUTS = np.array(range(100))
+    EXPECTED_OUTPUTS = np.array(range(100, 200))
 
     HYPERPARAMETER_SPACE = HyperparameterSpace({
         'multiplication_1__multiply_by': RandInt(1, 2),
@@ -76,17 +77,16 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     print('best hyperparams: {0}'.format(pipeline.get_hyperparams()))
 
     assert isinstance(actual_score, float)
-    assert isinstance(outputs, np.ndarray)
 
     print('Resumable Pipeline:')
 
     pipeline = ResumablePipeline([
         ('multiplication_1', MultiplyByN()),
-        ('sleep_1', ForEachDataInput(Sleep(sleep_time))),
-        DefaultCheckpoint(),
+        ('ForEach(sleep_1)', ForEachDataInput(Sleep(sleep_time))),
+        ExpandDim(DefaultCheckpoint()),
         ('multiplication_2', MultiplyByN()),
         ('sleep_2', ForEachDataInput(Sleep(sleep_time))),
-        DefaultCheckpoint(),
+        ExpandDim(DefaultCheckpoint()),
         ('multiplication_3', MultiplyByN())
     ], cache_folder=tmpdir).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
@@ -107,8 +107,7 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     print('best hyperparams: {0}'.format(pipeline.get_hyperparams()))
 
     assert isinstance(actual_score, float)
-    assert isinstance(outputs, np.ndarray)
 
 
 if __name__ == "__main__":
-    main(DEFAULT_CACHE_FOLDER, sleep_time=0.01, n_iter=30)
+    main(DEFAULT_CACHE_FOLDER, sleep_time=0.001, n_iter=30)
