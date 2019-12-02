@@ -126,9 +126,12 @@ class DataContainer:
         .. seealso::
             `<https://github.com/guillaume-chevalier/python-conv-lib>`_
         """
-        conv_current_ids = convolved_1d(stride=stride, iterable=self.current_ids, kernel_size=kernel_size, include_incomplete_pass=True)
-        conv_data_inputs = convolved_1d(stride=stride, iterable=self.data_inputs, kernel_size=kernel_size, include_incomplete_pass=True)
-        conv_expected_outputs = convolved_1d(stride=stride, iterable=self.expected_outputs, kernel_size=kernel_size, include_incomplete_pass=True)
+        conv_current_ids = convolved_1d(stride=stride, iterable=self.current_ids, kernel_size=kernel_size,
+                                        include_incomplete_pass=True)
+        conv_data_inputs = convolved_1d(stride=stride, iterable=self.data_inputs, kernel_size=kernel_size,
+                                        include_incomplete_pass=True)
+        conv_expected_outputs = convolved_1d(stride=stride, iterable=self.expected_outputs, kernel_size=kernel_size,
+                                             include_incomplete_pass=True)
 
         for current_ids, data_inputs, expected_outputs in zip(conv_current_ids, conv_data_inputs,
                                                               conv_expected_outputs):
@@ -175,7 +178,8 @@ class DataContainer:
         return str(self)
 
     def __str__(self):
-        return self.__class__.__name__ + "(current_ids=" + repr(list(self.current_ids)) + ", summary_id=" + repr(self.summary_id)
+        return self.__class__.__name__ + "(current_ids=" + repr(list(self.current_ids)) + ", summary_id=" + repr(
+            self.summary_id)
 
     def __len__(self):
         return len(self.data_inputs)

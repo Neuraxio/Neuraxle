@@ -51,7 +51,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         return self
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
         Fit each step for each data inputs, and expected outputs
 
@@ -76,8 +76,6 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
             )
         output_data_container.summary_id = data_container.summary_id
 
-        output_data_container = self.hash_data_container(output_data_container)
-
         return self, output_data_container
 
     def transform(self, data_inputs):
@@ -94,7 +92,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         return outputs
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
         Transform each step for each data inputs.
 
@@ -119,8 +117,6 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
             )
         output_data_container.summary_id = data_container.summary_id
 
-        output_data_container = self.hash_data_container(output_data_container)
-
         return output_data_container
 
     def fit_transform(self, data_inputs, expected_outputs=None):
@@ -144,7 +140,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         return self
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
         Fit transform each step for each data inputs, and expected outputs
 
@@ -171,8 +167,6 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         output_data_container.summary_id = data_container.summary_id
 
-        output_data_container = self.hash_data_container(output_data_container)
-
         return self, output_data_container
 
     def hash_data_container(self, data_container):
@@ -182,9 +176,10 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
         return output_data_container
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext):
-        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context.push(self.wrapped)):
-            return True
+        context = context.push(self)
 
+        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context):
+            return True
         return False
 
 
@@ -198,6 +193,24 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
         MetaStepMixin.set_hyperparams(self, hyperparams)
+        self.steps = [s.set_hyperparams(self.wrapped.get_hyperparams()) for s in self.steps]
+        return self
+
+    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
+        """
+        Update the step hyperparameters without removing the already-set hyperparameters.
+        Please refer to :func:`~BaseStep.update_hyperparams`.
+
+        :param hyperparams: hyperparams to update
+        :type hyperparams: HyperparameterSamples
+        :return: self
+        :rtype: BaseStep
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`HyperparameterSamples`
+        """
+        MetaStepMixin.update_hyperparams(self, hyperparams)
         self.steps = [s.set_hyperparams(self.wrapped.get_hyperparams()) for s in self.steps]
         return self
 

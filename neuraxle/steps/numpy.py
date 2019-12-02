@@ -26,7 +26,7 @@ Those steps works with NumPy (np) arrays.
 
 import numpy as np
 
-from neuraxle.base import NonFittableMixin, BaseStep, DataContainer, ExecutionContext
+from neuraxle.base import NonFittableMixin, BaseStep, DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
 
 
@@ -54,24 +54,21 @@ class NumpyConcatenateOnCustomAxis(NonFittableMixin, BaseStep):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
 
-    def handle_transform(self, data_containers, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container, context):
         """
         Handle transform.
 
-        :param data_containers: the data container to join
+        :param data_container: the data container to join
         :param context: execution context
         :return: transformed data container
         """
-        data_inputs = self.transform([dc.data_inputs for dc in data_containers])
+        data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs])
         data_container = DataContainer(
-            current_ids=data_containers[-1].current_ids,
+            current_ids=data_container.current_ids,
             data_inputs=data_inputs,
-            expected_outputs=data_containers[-1].expected_outputs
+            expected_outputs=data_container.expected_outputs
         )
         data_container.set_data_inputs(data_inputs)
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
 
         return data_container
 
@@ -119,24 +116,21 @@ class NumpyTranspose(NonFittableMixin, BaseStep):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
 
-    def handle_transform(self, data_containers, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container, context):
         """
         Handle transform.
 
-        :param data_containers: the data container to join
+        :param data_container: the data container to join
         :param context: execution context
         :return: transformed data container
         """
-        data_inputs = self.transform([dc.data_inputs for dc in data_containers])
+        data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs])
         data_container = DataContainer(
-            current_ids=data_containers[-1].current_ids,
+            current_ids=data_container.current_ids,
             data_inputs=data_inputs,
-            expected_outputs=data_containers[-1].expected_outputs
+            expected_outputs=data_container.expected_outputs
         )
         data_container.set_data_inputs(data_inputs)
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
 
         return data_container
 
@@ -173,6 +167,24 @@ class NumpyShapePrinter(NonFittableMixin, BaseStep):
 
 
 class MultiplyByN(NonFittableMixin, BaseStep):
+    """
+    Step to multiply a numpy array.
+    Accepts an integer for the number to multiply by.
+
+    Example usage:
+
+    .. code-block:: python
+
+        pipeline = Pipeline([
+            MultiplyByN(3)
+        ])
+        outputs = pipeline.transform(np.array([1])
+        # outputs => np.array([3])
+
+    .. seealso::
+        :class:`NonFittableMixin`,
+        :class:`BaseStep`
+    """
     def __init__(self, multiply_by=1):
         NonFittableMixin.__init__(self)
         BaseStep.__init__(
@@ -193,6 +205,47 @@ class MultiplyByN(NonFittableMixin, BaseStep):
             data_inputs = np.array(data_inputs)
 
         return data_inputs / self.hyperparams['multiply_by']
+
+
+class AddN(NonFittableMixin, BaseStep):
+    """
+    Step to add a scalar to a numpy array.
+    Accepts an integer for the number to add to every data inputs.
+
+    Example usage:
+
+    .. code-block:: python
+
+        pipeline = Pipeline([
+            AddN(1)
+        ])
+        outputs = pipeline.transform(np.array([1])
+        # outputs => np.array([2])
+
+    .. seealso::
+        :class:`NonFittableMixin`,
+        :class:`BaseStep`
+    """
+    def __init__(self, add=1):
+        NonFittableMixin.__init__(self)
+        BaseStep.__init__(
+            self,
+            hyperparams=HyperparameterSamples({
+                'add': add
+            })
+        )
+
+    def transform(self, data_inputs):
+        if not isinstance(data_inputs, np.ndarray):
+            data_inputs = np.array(data_inputs)
+
+        return data_inputs + self.hyperparams['add']
+
+    def inverse_transform(self, data_inputs):
+        if not isinstance(data_inputs, np.ndarray):
+            data_inputs = np.array(data_inputs)
+
+        return data_inputs - self.hyperparams['add']
 
 
 class OneHotEncoder(NonFittableMixin, BaseStep):
