@@ -54,10 +54,7 @@ class ForceAlwaysAlwaysHandleMixinStep(ForceAlwaysHandleMixin, BaseStep):
         And/or
         Change the execution flow of the pipeline
         """
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
-
+        data_container = self.hash_data_container(data_container)
         return self, data_container
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
@@ -68,10 +65,7 @@ class ForceAlwaysAlwaysHandleMixinStep(ForceAlwaysHandleMixin, BaseStep):
         And/or
         Change the execution flow of the pipeline
         """
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
-
+        data_container = self.hash_data_container(data_container)
         return data_container
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
@@ -82,10 +76,7 @@ class ForceAlwaysAlwaysHandleMixinStep(ForceAlwaysHandleMixin, BaseStep):
         And/or
         Change the execution flow of the pipeline
         """
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
-
+        data_container = self.hash_data_container(data_container)
         return self, data_container
 
 

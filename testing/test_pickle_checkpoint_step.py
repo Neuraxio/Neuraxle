@@ -23,9 +23,10 @@ import os
 import pickle
 
 import numpy as np
+import pytest
 from py._path.local import LocalPath
 
-from neuraxle.base import ExecutionContext, ExecutionMode
+from neuraxle.base import ExecutionContext, ExecutionMode, Identity
 from neuraxle.data_container import DataContainer
 from neuraxle.base import NonFittableMixin
 from neuraxle.checkpoints import DefaultCheckpoint
@@ -158,34 +159,6 @@ def test_when_hyperparams_and_saved_same_pipeline_should_load_checkpoint_pickle(
     assert actual_tape == EXPECTED_TAPE_AFTER_CHECKPOINT
 
 
-def test_when_hyperparams_and_saved_different_pipeline_should_not_load_checkpoint_pickle(tmpdir: LocalPath):
-    # Given
-    tape = TapeCallbackFunction()
-
-    # When
-    pipeline_save = create_pipeline(
-        tmpdir=tmpdir,
-        pickle_checkpoint_step=DefaultCheckpoint(),
-        tape=TapeCallbackFunction(),
-        hyperparameters=HyperparameterSamples({"a__learning_rate": 1}),
-        different=True
-    )
-    pipeline_save.fit_transform(data_inputs, expected_outputs)
-
-    pipeline_load = create_pipeline(
-        tmpdir=tmpdir,
-        pickle_checkpoint_step=DefaultCheckpoint(),
-        tape=tape,
-        hyperparameters=HyperparameterSamples({"a__learning_rate": 1})
-    )
-    pipeline_load, actual_data_inputs = pipeline_load.fit_transform(data_inputs, expected_outputs)
-
-    # Then
-    actual_tape = tape.get_name_tape()
-    assert np.array_equal(actual_data_inputs, data_inputs)
-    assert actual_tape == ["1", "2", "3"]
-
-
 def test_when_hyperparams_and_saved_no_pipeline_should_not_load_checkpoint_pickle(tmpdir: LocalPath):
     # Given
     tape = TapeCallbackFunction()
@@ -194,7 +167,7 @@ def test_when_hyperparams_and_saved_no_pipeline_should_not_load_checkpoint_pickl
     # When
     pipeline_save = create_pipeline(
         tmpdir=tmpdir,
-        pickle_checkpoint_step=DefaultCheckpoint(),
+        pickle_checkpoint_step=Identity(),
         tape=TapeCallbackFunction(),
         hyperparameters=HyperparameterSamples({"a__learning_rate": 1}),
         different=True,
