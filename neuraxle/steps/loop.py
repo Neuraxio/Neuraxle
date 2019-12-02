@@ -182,7 +182,8 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
         return output_data_container
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext):
-        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context.push(self.wrapped)):
+        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container,
+                                                                                       context.push(self.wrapped)):
             return True
 
         return False
@@ -198,6 +199,24 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
         MetaStepMixin.set_hyperparams(self, hyperparams)
+        self.steps = [s.set_hyperparams(self.wrapped.get_hyperparams()) for s in self.steps]
+        return self
+
+    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
+        """
+        Update the step hyperparameters without removing the already-set hyperparameters.
+        Please refer to :func:`~BaseStep.update_hyperparams`.
+
+        :param hyperparams: hyperparams to update
+        :type hyperparams: HyperparameterSamples
+        :return: self
+        :rtype: BaseStep
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`HyperparameterSamples`
+        """
+        MetaStepMixin.update_hyperparams(self, hyperparams)
         self.steps = [s.set_hyperparams(self.wrapped.get_hyperparams()) for s in self.steps]
         return self
 

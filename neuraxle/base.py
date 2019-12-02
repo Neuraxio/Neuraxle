@@ -711,6 +711,40 @@ class BaseStep(ABC):
         self.hyperparams = HyperparameterSamples(hyperparams).to_flat()
         return self
 
+    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
+        """
+        Update the step hyperparameters without removing the already-set hyperparameters.
+        This can be useful to add more hyperparameters to the existing ones without flushing the ones that were already set.
+
+        Example :
+
+        .. code-block:: python
+
+            step.set_hyperparams(HyperparameterSamples({
+                'learning_rate': 0.10
+                'weight_decay': 0.001
+            }))
+
+            step.update_hyperparams(HyperparameterSamples({
+                'learning_rate': 0.01
+            }))
+
+            assert step.get_hyperparams()['learning_rate'] == 0.01
+            assert step.get_hyperparams()['weight_decay'] == 0.001
+
+        :param hyperparams: hyperparameters
+        :type hyperparams: HyperparameterSamples
+        :return: self
+        :rtype: BaseStep
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`neuraxle.hyperparams.space.HyperparameterSamples`
+        """
+        self.hyperparams.update(hyperparams)
+        self.hyperparams = HyperparameterSamples(self.hyperparams).to_flat()
+        return self
+
     def get_hyperparams(self) -> HyperparameterSamples:
         """
         Get step hyperparameters as :class:`neuraxle.hyperparams.space.HyperparameterSamples`.
@@ -1407,6 +1441,35 @@ class MetaStepMixin:
 
         return self
 
+    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
+        """
+        Update the step, and the wrapped step hyperparams without removing the already set hyperparameters.
+        Please refer to :func:`~BaseStep.update_hyperparams`.
+
+        :param hyperparams: hyperparameters
+        :type hyperparams: HyperparameterSamples
+        :return: self
+        :rtype: BaseStep
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`HyperparameterSamples`
+        """
+        self.is_invalidated = True
+
+        hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
+
+        remainders = dict()
+        for name, hparams in hyperparams.items():
+            if name == self.wrapped.name:
+                self.wrapped.update_hyperparams(hparams)
+            else:
+                remainders[name] = hparams
+
+        self.hyperparams.update(remainders)
+
+        return self
+
     def get_hyperparams(self) -> HyperparameterSamples:
         """
         Get step hyperparameters as :class:`HyperparameterSamples` with flattened hyperparams.
@@ -1988,6 +2051,34 @@ class TruncableSteps(BaseStep, ABC):
             else:
                 remainders[name] = hparams
         self.hyperparams = HyperparameterSamples(remainders)
+
+        return self
+
+    def update_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
+        """
+        Update the steps hyperparameters without removing the already-set hyperparameters.
+        Please refer to :func:`~BaseStep.update_hyperparams`.
+
+        :param hyperparams: hyperparams to update
+        :type hyperparams: HyperparameterSamples
+        :return: step
+        :rtype: BaseStep
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`HyperparameterSamples`
+        """
+        self.is_invalidated = True
+
+        hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
+
+        remainders = dict()
+        for name, hparams in hyperparams.items():
+            if name in self.steps.keys():
+                self.steps[name].update_hyperparams(HyperparameterSamples(hparams))
+            else:
+                remainders[name] = hparams
+        self.hyperparams.update(remainders)
 
         return self
 
