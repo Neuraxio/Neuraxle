@@ -209,12 +209,41 @@ class BaseSaver(ABC):
 
 
 class FullDumpSaverMixin:
+    """
+    A class to represent a saver that can load, and save step savers.
+
+    .. seealso::
+        :func:`~neuraxle.base.BaseStep.save`,
+        :func:`~neuraxle.base.BaseStep.load`,
+        :class:`BaseSaver`,
+        :class:`JoblibStepSaver`,
+        :class:`ExecutionContext`
+        :class:`BaseStep`
+    """
+
     @abstractmethod
     def save_step_savers(self, step, context) -> 'BaseStep':
+        """
+        Save step savers.
+
+        :param step: step to save savers from
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: step
+        :rtype: BaseStep
+        """
         raise NotImplementedError()
 
     @abstractmethod
     def load_step_savers(self, step, context) -> List[BaseSaver]:
+        """
+        Load step savers.
+
+        :param step: step to load savers from
+        :param context: execution context
+        :return: list of savers
+        :rtype: List[BaseSaver]
+        """
         raise NotImplementedError()
 
 
@@ -294,6 +323,15 @@ class JoblibStepSaver(FullDumpSaverMixin, BaseSaver):
         return step
 
     def save_step_savers(self, step, context) -> 'BaseStep':
+        """
+        Save step savers.
+
+        :param step: step to save savers from
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: step
+        :rtype: BaseStep
+        """
         context.mkdir()
 
         step_savers_path = self._create_step_savers_path(context, step)
@@ -302,6 +340,14 @@ class JoblibStepSaver(FullDumpSaverMixin, BaseSaver):
         return step
 
     def load_step_savers(self, step, context) -> List[BaseSaver]:
+        """
+        Load step savers.
+
+        :param step: step to load savers from
+        :param context: execution context
+        :return: list of savers
+        :rtype: List[BaseSaver]
+        """
         context.mkdir()
         return load(self._create_step_savers_path(context, step))
 
@@ -320,10 +366,10 @@ class JoblibStepSaver(FullDumpSaverMixin, BaseSaver):
         # we need to keep the current steps in memory because they have been deleted before saving...
         # the steps that have not been saved yet need to be in memory while loading a truncable steps...
         if isinstance(loaded_step, TruncableSteps):
-            loaded_step.steps = [
-                Identity(savers=sub_step_savers).set_name(sub_step_name)
+            loaded_step.set_steps([
+                (sub_step_name, Identity(savers=sub_step_savers).set_name(sub_step_name))
                 for sub_step_name, sub_step_savers in loaded_step.sub_steps_savers
-            ]
+            ])
 
         return loaded_step
 
@@ -643,7 +689,7 @@ class BaseStep(ABC):
 
     def invalidate(self) -> 'BaseStep':
         """
-        Invalidate step for saving.
+        Invalidate step.
 
         :return: self
         :rtype: BaseStep
@@ -1261,7 +1307,7 @@ class BaseStep(ABC):
 
         :param context: context to save from
         :type context: ExecutionContext
-        :param full_dump: save full dump bool
+        :param full_dump: save full pipeline dump to be able to load everything without source code (false by default).
         :type full_dump: bool
         :return: self
         :rtype: BaseStep
@@ -1274,13 +1320,27 @@ class BaseStep(ABC):
         self.is_invalidated = False
 
         if full_dump:
+            # initialize and invalidate steps to make sure that all steps will be saved
             self.apply_method(lambda step: step.setup() if not step.is_initialized else None)
             self.apply_method(lambda step: step.invalidate())
+
+            # save the savers of the current step to be able to load the current step from scratch
             self._save_step_savers(context)
 
         return self._save_step(context)
 
     def _save_step_savers(self, context):
+        """
+        Save current step savers with a full dump saver. (:class:`FullDumpSaverMixin`).
+
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: self
+
+        .. seealso::
+            :class:`FullDumpSaverMixin`,
+            :class:`BaseSaver`
+        """
         for saver in self.savers:
             if isinstance(saver, FullDumpSaverMixin):
                 return saver.save_step_savers(self, context)
