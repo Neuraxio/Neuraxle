@@ -51,10 +51,15 @@ class NeuraxleTestCase:
     def assert_callback_data_is_as_expected(self):
         for callback, expected_callback_data in zip(self.callbacks, self.expected_callbacks_data):
             if len(callback.data) > 0:
-                assert np.array_equal(
-                    np.array(callback.data),
-                    expected_callback_data
-                )
+                if isinstance(callback.data[0], tuple):
+                    for (expected_di, expected_eo), (actual_di, actual_eo) in zip(expected_callback_data, callback.data):
+                        assert np.array_equal(expected_di, actual_di)
+                        assert np.array_equal(expected_eo, actual_eo)
+                else:
+                    assert np.array_equal(
+                        np.array(callback.data),
+                        expected_callback_data
+                    )
             else:
                 assert np.array_equal(
                     np.array([]),

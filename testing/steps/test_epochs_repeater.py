@@ -23,7 +23,7 @@ EPOCHS = 2
         callbacks=[callback_fit, callback_transform],
         expected_callbacks_data=[
             [(DATA_INPUTS, EXPECTED_OUTPUTS), (DATA_INPUTS, EXPECTED_OUTPUTS)],
-            [DATA_INPUTS, DATA_INPUTS]
+            [DATA_INPUTS]
         ],
         data_inputs=DATA_INPUTS,
         expected_outputs=EXPECTED_OUTPUTS,
@@ -72,7 +72,7 @@ EPOCHS = 2
         execution_mode=ExecutionMode.FIT
     )
 ])
-def test_epoch_repeater_should_shuffle_data_inputs_and_expected_outputs(test_case):
+def test_epoch_repeater(test_case):
     processed_outputs = test_case.execute()
 
     test_case.assert_expected_processed_outputs(processed_outputs)

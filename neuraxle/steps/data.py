@@ -112,8 +112,10 @@ class EpochRepeater(MetaStepMixin, BaseStep):
         :rtype: (BaseStep, DataContainer)
         """
         for _ in range(self.epochs - 1):
-            self.wrapped, data_inputs = self.wrapped.handle_fit_transform(data_container, context)
-        return self, self.wrapped.handle_fit_transform(data_container, context)
+            self.wrapped, _ = self.wrapped.handle_fit(data_container, context)
+
+        self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
+        return self, data_container
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Iterable):
         """
@@ -180,7 +182,7 @@ class EpochRepeater(MetaStepMixin, BaseStep):
         """
         if not self.fit_only:
             for _ in range(self.epochs):
-                data_container = self.wrapped.handle_transform(data_container)
+                data_container = self.wrapped.handle_transform(data_container, context)
         else:
-            data_container = self.wrapped.handle_transform(data_container)
+            data_container = self.wrapped.handle_transform(data_container, context)
         return data_container
