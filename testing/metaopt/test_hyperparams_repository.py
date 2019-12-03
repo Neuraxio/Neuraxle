@@ -2,7 +2,7 @@ import json
 import os
 
 from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.metaopt.random import HyperparamsJSONRepository
+from neuraxle.metaopt.auto_ml import HyperparamsJSONRepository
 
 HYPERPARAMS = {'learning_rate': 0.01}
 FIRST_SCORE_FOR_TRIAL = 1
