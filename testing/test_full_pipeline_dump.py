@@ -1,6 +1,6 @@
 import numpy as np
 
-from neuraxle.base import Identity, ExecutionContext, JoblibStepSaver
+from neuraxle.base import Identity, ExecutionContext, JoblibStepSaver, FullDumpLoader
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCallbackStep, TapeCallbackFunction
 from neuraxle.steps.output_handlers import OutputTransformerWrapper
@@ -27,7 +27,7 @@ def test_integrated_should_save_and_load_full_pipeline_dump(tmpdir):
     pipeline.save(ExecutionContext(tmpdir), full_dump=True)
 
     # Then
-    loaded_pipeline = Identity().set_name(PIPELINE_NAME).load(ExecutionContext(tmpdir), full_dump=True)
+    loaded_pipeline = FullDumpLoader(PIPELINE_NAME).load(ExecutionContext(tmpdir))
 
     assert isinstance(loaded_pipeline, Pipeline)
     assert isinstance(loaded_pipeline['step_a'], Identity)
