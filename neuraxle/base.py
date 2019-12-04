@@ -1427,7 +1427,7 @@ class MetaStepMixin:
         """
         return HyperparameterSpace({
             **self.hyperparams_space.to_flat_as_dict_primitive(),
-            self.wrapped.name: self.wrapped.hyperparams_space.to_flat_as_dict_primitive()
+            self.wrapped.name: self.wrapped.get_hyperparams_space().to_flat_as_dict_primitive()
         }).to_flat()
 
     def set_step(self, step: BaseStep) -> BaseStep:

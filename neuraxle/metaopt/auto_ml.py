@@ -6,7 +6,7 @@ import os
 from abc import ABC, abstractmethod
 from typing import Tuple, List
 
-from neuraxle.base import MetaStepMixin, BaseStep
+from neuraxle.base import MetaStepMixin, BaseStep, NonTransformableMixin
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.random import BaseCrossValidation, KFoldCrossValidation
 
@@ -62,7 +62,7 @@ class HyperparamsRepository(ABC):
         best_score = None
         best_hyperparams = None
 
-        for trial_hyperparam, trial_score in hyperparams:
+        for trial_hyperparam, trial_score in zip(hyperparams, scores):
             if best_score is None or higher_score_is_better == (trial_score > best_score):
                 best_score = trial_score
                 best_hyperparams = trial_hyperparam
@@ -140,7 +140,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
             }, outfile)
 
 
-class AutoMLStrategy(MetaStepMixin, BaseStep):
+class AutoMLStrategyMixin:
     """
     Base class for Automatic Machine Learning strategies.
     Implement your own custom intelligent search of hyperparameters to get most accurate predictive models.
@@ -153,13 +153,11 @@ class AutoMLStrategy(MetaStepMixin, BaseStep):
         :class:`BaseStep`
     """
 
-    def __init__(self, wrapped: BaseStep = None, validation_technique: BaseCrossValidation = None):
-        MetaStepMixin.__init__(self, wrapped)
-        BaseStep.__init__(self)
-
+    def __init__(self, validation_technique: BaseCrossValidation = None, higher_score_is_better=True):
         if validation_technique is None:
             validation_technique = KFoldCrossValidation()
         self.validation_technique = validation_technique
+        self.higher_score_is_better = higher_score_is_better
 
     @abstractmethod
     def find_next_best_hyperparams(self, trials_data_container: 'AutoMLDataContainer') -> HyperparameterSamples:
@@ -173,14 +171,14 @@ class AutoMLStrategy(MetaStepMixin, BaseStep):
         """
         raise NotImplementedError()
 
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('AutoMLStrategy', float):
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('AutoMLStrategyMixin', float):
         """
         Fit cross validation with wrapped step, and return the score.
 
         :param data_inputs: data inputs
         :param expected_outputs: expected outputs to fit on
         :return: self, step score
-        :rtype: (AutoMLStrategy, float)
+        :rtype: (AutoMLStrategyMixin, float)
         """
         step = copy.copy(self.wrapped)
         step: BaseCrossValidation = copy.copy(self.validation_technique).set_step(step)
@@ -188,25 +186,39 @@ class AutoMLStrategy(MetaStepMixin, BaseStep):
 
         return self, step.get_score()
 
+    def is_higher_score_better(self):
+        return self.higher_score_is_better
 
-class RandomSearchAutoMLStrategy(AutoMLStrategy):
+    def fit(self, data_inputs, expected_outputs=None):
+        return self
+
+    def transform(self, data_inputs, expected_outputs=None):
+        return data_inputs
+
+
+class RandomSearchBaseAutoMLStrategy(AutoMLStrategyMixin, MetaStepMixin, BaseStep):
     """
     Random Search Automatic Machine Learning Strategy that randomly samples the space of random variables.
 
     .. seealso::
-        :class:`AutoMLStrategy`,
+        :class:`AutoMLStrategyMixin`,
         :class:`AutoMLDataContainer`,
         :class:`HyperparameterSamples`,
         :class:`HyperparameterSpace`
     """
 
+    def __init__(self, validation_technique=None):
+        AutoMLStrategyMixin.__init__(self, validation_technique)
+        MetaStepMixin.__init__(self, None)
+        BaseStep.__init__(self)
+
     def find_next_best_hyperparams(self, trials_data_container: 'AutoMLDataContainer') -> HyperparameterSamples:
-        return trials_data_container.trial_hyperparam_space.rvs()
+        return trials_data_container.hyperparameter_space.rvs()
 
 
 class AutoMLDataContainer:
     """
-    Simple data container used by :class:`AutoMLStrategy`, and :class:`AutoMLSequentialWrapper`.
+    Simple data container used by :class:`AutoMLStrategyMixin`, and :class:`AutoMLSequentialWrapper`.
     """
 
     def __init__(
@@ -217,14 +229,14 @@ class AutoMLDataContainer:
             hyperparameter_space: HyperparameterSpace,
             n_iters: int
     ):
-        self.trial_hyperparams = hyperparams
-        self.trial_scores = scores
+        self.hyperparams = hyperparams
+        self.scores = scores
         self.trial_number = trial_number
-        self.trial_hyperparam_space = hyperparameter_space
+        self.hyperparameter_space = hyperparameter_space
         self.n_iters = n_iters
 
 
-class AutoMLSequentialWrapper(MetaStepMixin, BaseStep):
+class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
     """
     A step to execute any Automatic Machine Learning Algorithms.
 
@@ -245,7 +257,7 @@ class AutoMLSequentialWrapper(MetaStepMixin, BaseStep):
 
 
     .. seealso::
-        :class:`AutoMLStrategy`,
+        :class:`AutoMLStrategyMixin`,
         :class:`RandomSearchAutoMLStrategy`,
         :class:`HyperparamsRepository`,
         :class:`MetaStepMixin`,
@@ -254,11 +266,13 @@ class AutoMLSequentialWrapper(MetaStepMixin, BaseStep):
 
     def __init__(
             self,
-            auto_ml_strategy: AutoMLStrategy,
+            auto_ml_strategy: AutoMLStrategyMixin,
             step: BaseStep,
             hyperparams_repository: HyperparamsRepository,
             n_iters: int
     ):
+        NonTransformableMixin.__init__(self)
+
         auto_ml_strategy = auto_ml_strategy.set_step(step)
         MetaStepMixin.__init__(self, auto_ml_strategy)
 
@@ -278,7 +292,7 @@ class AutoMLSequentialWrapper(MetaStepMixin, BaseStep):
             auto_ml_trial_data_container = self._load_auto_ml_data(i)
 
             hyperparams = self.wrapped.find_next_best_hyperparams(auto_ml_trial_data_container)
-            self.wrapped.set_hyperparams(hyperparams)
+            self.wrapped = self.wrapped.set_hyperparams(hyperparams)
 
             self.hyperparams_repository.create_new_trial(hyperparams)
 
@@ -314,7 +328,10 @@ class AutoMLSequentialWrapper(MetaStepMixin, BaseStep):
         :return: best model step
         :rtype: BaseStep
         """
-        auto_ml_strategy: AutoMLStrategy = self.wrapped
-        auto_ml_strategy.set_hyperparams(self.hyperparams_repository.get_best_hyperparams())
+        auto_ml_strategy: AutoMLStrategyMixin = self.wrapped
+        is_higher_score_better = auto_ml_strategy.is_higher_score_better()
+
+        best_hyperparams = self.hyperparams_repository.get_best_hyperparams(is_higher_score_better)
+        auto_ml_strategy = auto_ml_strategy.set_hyperparams(best_hyperparams)
 
         return auto_ml_strategy.get_step()
