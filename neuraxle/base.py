@@ -447,6 +447,9 @@ class ExecutionContext:
         """
         return len(self) == 0
 
+    def load(self, name: str):
+        return FullDumpLoader(name).load(self, True)
+
     def __len__(self):
         return len(self.parents)
 
@@ -1276,9 +1279,8 @@ class BaseStep(ABC):
             :class:`BaseSaver`
         """
         context = context.push(self)
-        savers = [context.stripped_saver] + self.savers if not full_dump else \
-            self.savers
 
+        savers = [context.stripped_saver] + self.savers
         return self._load_step(context, savers)
 
     def _load_step(self, context, savers):
@@ -2774,6 +2776,5 @@ class FullDumpLoader(Identity):
             raise Exception('Cannot Load Full Dump For Step {}'.format(os.path.join(context.get_path(), self.name)))
 
         loaded_self = context.stripped_saver.load_step(self, context.push(self))
-        self.set_savers(loaded_self.savers)
 
         return loaded_self.load(context, full_dump)

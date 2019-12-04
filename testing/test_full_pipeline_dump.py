@@ -27,7 +27,7 @@ def test_integrated_should_save_and_load_full_pipeline_dump(tmpdir):
     pipeline.save(ExecutionContext(tmpdir), full_dump=True)
 
     # Then
-    loaded_pipeline = FullDumpLoader(PIPELINE_NAME).load(ExecutionContext(tmpdir))
+    loaded_pipeline = ExecutionContext(tmpdir).load(PIPELINE_NAME)
 
     assert isinstance(loaded_pipeline, Pipeline)
     assert isinstance(loaded_pipeline['step_a'], Identity)
