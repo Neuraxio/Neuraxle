@@ -8,7 +8,7 @@ from typing import Tuple, List
 
 from neuraxle.base import MetaStepMixin, BaseStep, NonTransformableMixin
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
-from neuraxle.metaopt.random import BaseCrossValidation, KFoldCrossValidation
+from neuraxle.metaopt.random import BaseCrossValidationWrapper, KFoldCrossValidationWrapper
 
 
 class HyperparamsRepository(ABC):
@@ -153,9 +153,9 @@ class AutoMLStrategyMixin:
         :class:`BaseStep`
     """
 
-    def __init__(self, validation_technique: BaseCrossValidation = None, higher_score_is_better=True):
+    def __init__(self, validation_technique: BaseCrossValidationWrapper = None, higher_score_is_better=True):
         if validation_technique is None:
-            validation_technique = KFoldCrossValidation()
+            validation_technique = KFoldCrossValidationWrapper()
         self.validation_technique = validation_technique
         self.higher_score_is_better = higher_score_is_better
 
@@ -181,7 +181,7 @@ class AutoMLStrategyMixin:
         :rtype: (AutoMLStrategyMixin, float)
         """
         step = copy.copy(self.wrapped)
-        step: BaseCrossValidation = copy.copy(self.validation_technique).set_step(step)
+        step: BaseCrossValidationWrapper = copy.copy(self.validation_technique).set_step(step)
         step = step.fit(data_inputs, expected_outputs)
 
         return self, step.get_score()
