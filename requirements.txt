@@ -1,8 +1,9 @@
 setuptools
 pytest==4.3.1
 pytest-cov==2.6.1
-numpy>=1.16.2
-scikit-learn>=0.20.3
+scikit-learn
+numpy
+scipy>=0.17
 joblib>=0.13.2
 flask>=1.1.1
 flask-restful>=0.3.7
