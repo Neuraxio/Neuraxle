@@ -188,7 +188,7 @@ class CallbackWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
         :type: (BaseStep, DataContainer)
         """
         self.fit_callback_function((data_container.data_inputs, data_container.expected_outputs), *self.more_arguments)
-        self.wrapped, data_container = self.wrapped.handle_fit(data_container, context)
+        self.wrapped = self.wrapped.handle_fit(data_container, context)
         return self, data_container
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (

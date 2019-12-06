@@ -881,7 +881,7 @@ class BaseStep(ABC):
 
         return self
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
         The default behavior is to rehash current ids with the step hyperparameters.
@@ -899,10 +899,7 @@ class BaseStep(ABC):
 
         new_self, data_container = self._fit_data_container(data_container, context)
 
-        data_container = self._did_fit(data_container, context)
-        data_container = self._did_process(data_container, context)
-
-        return new_self, data_container
+        return new_self
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
@@ -1703,8 +1700,8 @@ class MetaStepMixin:
         return self, data_container
 
     def _fit_data_container(self, data_container, context):
-        self.wrapped, data_container = self.wrapped.handle_fit(data_container, context)
-        return self, data_container
+        self.wrapped = self.wrapped.handle_fit(data_container, context)
+        return self
 
     def _transform_data_container(self, data_container, context):
         data_container = self.wrapped.handle_transform(data_container, context)

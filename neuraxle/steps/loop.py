@@ -64,7 +64,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
         output_data_container = ListDataContainer.empty()
 
         for current_id, di, eo in data_container:
-            self.wrapped, output = self.wrapped.handle_fit(
+            self.wrapped = self.wrapped.handle_fit(
                 DataContainer(current_ids=None, data_inputs=di, expected_outputs=eo),
                 context
             )
