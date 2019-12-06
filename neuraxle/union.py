@@ -79,7 +79,7 @@ class FeatureUnion(TruncableSteps):
             self.steps_as_tuple[i] = (self.steps_as_tuple[i][0], fitted_step)
         self._refresh_steps()
 
-        return self, data_container
+        return self
 
     def _transform_data_container(self, data_container, context):
         """
@@ -119,7 +119,7 @@ class FeatureUnion(TruncableSteps):
         :param context: execution context
         :return: the transformed data_inputs.
         """
-        new_self, _ = self._fit_data_container(data_container, context)
+        new_self = self._fit_data_container(data_container, context)
         data_container = self._transform_data_container(data_container, context)
         return new_self, data_container
 

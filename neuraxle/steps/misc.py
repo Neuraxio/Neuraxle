@@ -178,7 +178,7 @@ class CallbackWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
         self.fit_callback_function = fit_callback_function
         self.transform_callback_function = transform_callback_function
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         :param data_container: data container
         :type data_container: DataContainer
@@ -189,7 +189,7 @@ class CallbackWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
         """
         self.fit_callback_function((data_container.data_inputs, data_container.expected_outputs), *self.more_arguments)
         self.wrapped = self.wrapped.handle_fit(data_container, context)
-        return self, data_container
+        return self
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
             'BaseStep', DataContainer):

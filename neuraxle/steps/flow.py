@@ -516,7 +516,7 @@ class ReversiblePreprocessingWrapper(ForceMustHandleMixin, TruncableSteps):
         :return: self, data_container
         :rtype: (ReversiblePreprocessingWrapper, DataContainer)
         """
-        self["preprocessing_step"] = \
+        self["preprocessing_step"], data_container = \
             self["preprocessing_step"].handle_fit_transform(data_container, context.push(self["preprocessing_step"]))
         self["postprocessing_step"] = \
             self["postprocessing_step"].handle_fit(data_container, context.push(self["postprocessing_step"]))

@@ -897,7 +897,7 @@ class BaseStep(ABC):
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit(data_container, context)
 
-        new_self, data_container = self._fit_data_container(data_container, context)
+        new_self = self._fit_data_container(data_container, context)
 
         return new_self
 
@@ -962,7 +962,7 @@ class BaseStep(ABC):
         """
         return data_container
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         Fit data container.
 
@@ -971,8 +971,7 @@ class BaseStep(ABC):
         :return: (fitted self, data container)
         :rtype: (BaseStep, DataContainer)
         """
-        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
-        return new_self, data_container
+        return self.fit(data_container.data_inputs, data_container.expected_outputs)
 
     def _will_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
         """

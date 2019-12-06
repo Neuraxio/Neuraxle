@@ -51,7 +51,7 @@ EPOCHS = 2
         callbacks=[callback_fit, callback_transform],
         expected_callbacks_data=[
             [],
-            [DATA_INPUTS, DATA_INPUTS]
+            [DATA_INPUTS]
         ],
         data_inputs=DATA_INPUTS,
         expected_outputs=EXPECTED_OUTPUTS,

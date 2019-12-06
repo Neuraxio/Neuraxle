@@ -111,8 +111,9 @@ class EpochRepeater(MetaStepMixin, BaseStep):
         :return: (fitted self, data container)
         :rtype: (BaseStep, DataContainer)
         """
-        for _ in range(self.epochs - 1):
-            self.wrapped = self.wrapped.handle_fit(data_container, context)
+        if not self.fit_only:
+            for _ in range(self.epochs - 1):
+                self.wrapped = self.wrapped.handle_fit(data_container, context)
 
         self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
         return self, data_container
@@ -125,8 +126,10 @@ class EpochRepeater(MetaStepMixin, BaseStep):
         :param expected_outputs: expected_outputs to fit on
         :return: fitted self
         """
-        for _ in range(self.epochs - 1):
-            self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
+        if not self.fit_only:
+            for _ in range(self.epochs - 1):
+                self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
+
         self.wrapped, outputs = self.wrapped.fit_transform(data_inputs, expected_outputs)
 
         return self, outputs
@@ -157,34 +160,3 @@ class EpochRepeater(MetaStepMixin, BaseStep):
         for _ in range(self.epochs):
             self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
         return self
-
-    def transform(self, data_inputs):
-        """
-        Transform wrapped step self.epochs times if self.fit_only is False otherwise transform wrapped step only one time.
-
-        :param data_inputs: data inputs to transform
-        :return: transformed data inputs
-        """
-        if not self.fit_only:
-            for _ in range(self.epochs):
-                data_inputs = self.wrapped.transform(data_inputs)
-        else:
-            data_inputs = self.wrapped.transform(data_inputs)
-        return data_inputs
-
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        """
-        Transform wrapped step self.epochs times using wrapped step handle transform if self.fit_only is False otherwise transform wrapped step only one time.
-
-        :param data_container: data container
-        :type data_container: DataContainer
-        :param context: execution context
-        :type context: ExecutionContext
-        :return: transformed data inputs
-        """
-        if not self.fit_only:
-            for _ in range(self.epochs):
-                data_container = self.wrapped.handle_transform(data_container, context)
-        else:
-            data_container = self.wrapped.handle_transform(data_container, context)
-        return data_container
