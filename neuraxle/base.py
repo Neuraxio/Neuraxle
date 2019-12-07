@@ -340,20 +340,28 @@ class ExecutionContext:
     def get_execution_mode(self) -> ExecutionMode:
         return self.execution_mode
 
-    def save_all_unsaved(self):
+    def save(self, full_dump=False):
         """
         Save all unsaved steps in the parents of the execution context using :func:`~neuraxle.base.BaseStep.save`.
         This method is called from a step checkpointer inside a :class:`Checkpoint`.
 
+        :param full_dump: save full pipeline dump to be able to load everything without source code (false by default).
+        :type full_dump: bool
         :return:
+
+        .. seealso::
+            :class:`BaseStep`,
+            :func:`~neuraxle.base.BaseStep.save`
         """
         while not self.empty():
             should_save_last_step = self.should_save_last_step()
             last_step = self.peek()
+            if full_dump:
+                should_save_last_step = True
 
             self.pop()
             if should_save_last_step:
-                last_step.save(self)
+                last_step.save(self, full_dump)
 
     def should_save_last_step(self) -> bool:
         """

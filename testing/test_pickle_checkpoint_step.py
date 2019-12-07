@@ -23,7 +23,7 @@ import os
 import pickle
 
 import numpy as np
-from py._path.local import LocalPath
+from py.path import LocalPath
 
 from neuraxle.base import ExecutionContext, Identity
 from neuraxle.base import NonFittableMixin
