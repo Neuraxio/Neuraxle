@@ -98,11 +98,14 @@ Compatibility
     pipeline steps.
 
 This means that you can use
-`scikit-learn <https://scikit-learn.org/stable/>`__,
+`scikit-learn <https://arxiv.org/pdf/1201.0490v4.pdf>`__,
 `Keras <https://keras.io/>`__,
-`TensorFlow <https://www.tensorflow.org/>`__,
-`PyTorch <https://pytorch.org/>`__ and/or **any other machine learning
-library** you like within and throughout your Neuraxle pipelines.
+`TensorFlow <https://arxiv.org/pdf/1603.04467v2.pdf>`__,
+`PyTorch <https://openreview.net/pdf?id=BJJsrmfCZ>`__,
+`Hyperopt <https://pdfs.semanticscholar.org/d4f4/9717c9adb46137f49606ebbdf17e3598b5a5.pdf>`__,
+`Ray <https://arxiv.org/pdf/1712.05889v2.pdf>`__ 
+and/or **any other machine learning library** you like within and 
+throughout your Neuraxle pipelines.
 
 Parallel Computing
 ~~~~~~~~~~~~~~~~~~
