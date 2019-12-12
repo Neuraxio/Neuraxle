@@ -141,7 +141,7 @@ class ValidationSplitWrapper(BaseValidation):
         """
         train_data_container, validation_data_container = self.split_data_container(data_container)
 
-        self.wrapped, _ = self.wrapped.handle_fit(train_data_container, context.push(self.wrapped))
+        self.wrapped = self.wrapped.handle_fit(train_data_container, context.push(self.wrapped))
 
         results_data_container = self.wrapped.handle_transform(train_data_container, context.push(self.wrapped))
 

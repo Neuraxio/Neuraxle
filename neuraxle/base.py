@@ -881,7 +881,7 @@ class BaseStep(ABC):
 
         return self
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
         The default behavior is to rehash current ids with the step hyperparameters.
@@ -897,12 +897,9 @@ class BaseStep(ABC):
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit(data_container, context)
 
-        new_self, data_container = self._fit_data_container(data_container, context)
+        new_self = self._fit_data_container(data_container, context)
 
-        data_container = self._did_fit(data_container, context)
-        data_container = self._did_process(data_container, context)
-
-        return new_self, data_container
+        return new_self
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
@@ -965,7 +962,7 @@ class BaseStep(ABC):
         """
         return data_container
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         Fit data container.
 
@@ -974,8 +971,7 @@ class BaseStep(ABC):
         :return: (fitted self, data container)
         :rtype: (BaseStep, DataContainer)
         """
-        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
-        return new_self, data_container
+        return self.fit(data_container.data_inputs, data_container.expected_outputs)
 
     def _will_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
         """
@@ -1703,8 +1699,8 @@ class MetaStepMixin:
         return self, data_container
 
     def _fit_data_container(self, data_container, context):
-        self.wrapped, data_container = self.wrapped.handle_fit(data_container, context)
-        return self, data_container
+        self.wrapped = self.wrapped.handle_fit(data_container, context)
+        return self
 
     def _transform_data_container(self, data_container, context):
         data_container = self.wrapped.handle_transform(data_container, context)
@@ -1755,6 +1751,38 @@ class MetaStepMixin:
         BaseStep.apply_method(self, method, *kargs, **kwargs)
         self.wrapped = self.wrapped.apply_method(method, *kargs, **kwargs)
         return self
+
+
+    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
+        """
+        Mutate self, and self.wrapped. Please refer to :func:`~neuraxle.base.BaseStep.mutate` for more information.
+
+        :param new_method: the method to replace transform with, if there is no pending ``will_mutate_to`` call.
+        :param method_to_assign_to: the method to which the new method will be assigned to, if there is no pending ``will_mutate_to`` call.
+        :param warn: (verbose) wheter or not to warn about the inexistence of the method.
+        :return: self, a copy of self, or even perhaps a new or different BaseStep object.
+        """
+        new_self = BaseStep.mutate(self, new_method, method_to_assign_to, warn)
+        self.wrapped = self.wrapped.mutate(new_method, method_to_assign_to, warn)
+        return new_self
+
+    def will_mutate_to(
+            self, new_base_step: 'BaseStep' = None, new_method: str = None, method_to_assign_to: str = None
+    ) -> 'BaseStep':
+        """
+        Add pending mutate self, self.wrapped. Please refer to :func:`~neuraxle.base.BaseStep.will_mutate_to` for more information.
+
+        :param new_base_step: if it is not None, upon calling ``mutate``, the object it will mutate to will be this provided new_base_step.
+        :type new_base_step: BaseStep
+        :param method_to_assign_to: if it is not None, upon calling ``mutate``, the method_to_affect will be the one that is used on the provided new_base_step.
+        :type method_to_assign_to: str
+        :param new_method: if it is not None, upon calling ``mutate``, the new_method will be the one that is used on the provided new_base_step.
+        :type new_method: str
+        :return: self
+        :rtype: BaseStep
+        """
+        new_self = BaseStep.will_mutate_to(self, new_base_step, new_method, method_to_assign_to)
+        return new_self
 
     def __repr__(self):
         output = self.__class__.__name__ + "(\n\twrapped=" + repr(

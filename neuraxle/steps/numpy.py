@@ -280,4 +280,4 @@ class OneHotEncoder(NonFittableMixin, BaseStep):
         # delete the invalid values column, and zero hot the invalid values
         outputs_ = np.delete(outputs_, self.nb_columns, axis=-1)
 
-        return outputs_
+        return outputs_.squeeze()
