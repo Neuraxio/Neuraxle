@@ -25,6 +25,7 @@ Meta steps for hyperparameter tuning, such as random search.
 """
 
 import copy
+import json
 import math
 from abc import ABC, abstractmethod
 from typing import List, Callable, Tuple, Iterable
@@ -651,9 +652,11 @@ class RandomSearch(MetaStepMixin, BaseStep):
                 started = True
                 self.score = score
                 self.best_validation_wrapper_of_model = copy.copy(step)
-                print('score: {}'.format(score))
-                print('best_hyperparams: \n{}\n'.format(best_hyperparams))
+
+                print('\nbest_score: {}'.format(score))
                 best_hyperparams = new_hyperparams
+                print('best_hyperparams: ')
+                print(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4))
 
         self.best_validation_wrapper_of_model.wrapped.set_hyperparams(best_hyperparams)
 
