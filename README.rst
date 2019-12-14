@@ -346,3 +346,10 @@ We thank these organisations for generously supporting the project:
 .. raw:: html
 
     <img src="https://www.neuraxio.com/images/solution_nexam_io.jpg" width="180px">
+
+
+-  La Cité, LP: http://www.lacitelp.com/
+
+.. raw:: html
+
+    <img src="https://www.neuraxio.com/images/La-Cite-LP.png" width="260">
