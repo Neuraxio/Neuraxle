@@ -99,8 +99,8 @@ class ValidationSplitWrapper(BaseValidation):
 
     def __init__(
             self,
-            wrapped: BaseStep,
-            test_size: float,
+            wrapped: BaseStep = None,
+            test_size: float = 0.2,
             scoring_function=r2_score,
             run_validation_split_in_test_mode=True
     ):
@@ -218,6 +218,9 @@ class ValidationSplitWrapper(BaseValidation):
         self.scores_train = self.scoring_function(expected_outputs, data_inputs)
         self.scores_train_mean = np.mean(self.scores_train)
         self.scores_train_std = np.std(self.scores_train)
+
+    def get_score(self):
+        return self.scores_validation_mean
 
     def split_data_container(self, data_container) -> Tuple[DataContainer, DataContainer]:
         """

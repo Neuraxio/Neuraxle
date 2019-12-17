@@ -89,7 +89,7 @@ class HyperparamsRepository(ABC):
         return current_hyperparameters_hash
 
 
-class InMemoryHyperparamsJSONRepository(HyperparamsRepository):
+class InMemoryHyperparamsRepository(HyperparamsRepository):
     """
     In memory hyperparams repository that can print information about trials.
     Useful for debugging.
@@ -98,7 +98,7 @@ class InMemoryHyperparamsJSONRepository(HyperparamsRepository):
 
     .. code-block:: python
 
-        InMemoryHyperparamsJSONRepository(
+        InMemoryHyperparamsRepository(
             print_new_trial=True,
             print_success_trial=True,
             print_exception=True
@@ -422,18 +422,20 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
 
     def __init__(
             self,
-            step: BaseStep,
+            wrapped: BaseStep,
             auto_ml_algorithm: AutoMLAlgorithm,
-            hyperparams_repository: HyperparamsRepository,
-            n_iters: int,
+            hyperparams_repository: HyperparamsRepository = None,
+            n_iters: int = 100,
             refit=True
     ):
         NonTransformableMixin.__init__(self)
 
         self.refit = refit
-        auto_ml_algorithm = auto_ml_algorithm.set_step(step)
+        auto_ml_algorithm = auto_ml_algorithm.set_step(wrapped)
         MetaStepMixin.__init__(self, auto_ml_algorithm)
 
+        if hyperparams_repository is None:
+            hyperparams_repository = InMemoryHyperparamsRepository()
         self.hyperparams_repository = hyperparams_repository
         self.n_iters = n_iters
 
@@ -562,6 +564,8 @@ class RandomSearch(AutoMLSequentialWrapper):
         :class:`AutoMLSequentialWrapper`,
         :class:`AutoMLAlgorithm`,
         :class:`HyperparamsRepository`,
+        :class:`InMemoryHyperparamsRepository`,
+        :class:`HyperparamsJSONRepository`,
         :class:`RandomSearch`,
         :class:`BaseHyperparameterOptimizer`,
         :class:`RandomSearchHyperparameterOptimizer`
@@ -569,7 +573,7 @@ class RandomSearch(AutoMLSequentialWrapper):
 
     def __init__(
             self,
-            step: BaseStep,
+            wrapped: BaseStep,
             hyperparams_repository: HyperparamsRepository = None,
             validation_technique=None,
             higher_score_is_better=True,
@@ -577,7 +581,7 @@ class RandomSearch(AutoMLSequentialWrapper):
     ):
         AutoMLSequentialWrapper.__init__(
             self,
-            step=step,
+            wrapped=wrapped,
             auto_ml_algorithm=AutoMLAlgorithm(
                 hyperparameter_optimizer=RandomSearchHyperparameterOptimizer(),
                 validation_technique=validation_technique,
