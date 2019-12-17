@@ -624,8 +624,9 @@ class RandomSearch(MetaStepMixin, BaseStep):
 
         self.best_validation_wrapper_of_model.wrapped.set_hyperparams(best_hyperparams)
 
+        self.best_model = copy.copy(self.wrapped).set_hyperparams(best_hyperparams)
         if self.refit:
-            self.best_model = self.best_validation_wrapper_of_model.wrapped.handle_fit(data_container, context)
+            self.best_model = self.best_model.handle_fit(data_container, context)
 
         return self
 
@@ -660,11 +661,9 @@ class RandomSearch(MetaStepMixin, BaseStep):
 
         self.best_validation_wrapper_of_model.wrapped.set_hyperparams(best_hyperparams)
 
+        self.best_model = copy.copy(self.wrapped).set_hyperparams(best_hyperparams)
         if self.refit:
-            self.best_model = self.best_validation_wrapper_of_model.wrapped.fit(
-                data_inputs,
-                expected_outputs
-            )
+            self.best_model = self.best_model.fit(data_inputs, expected_outputs)
 
         return self
 
