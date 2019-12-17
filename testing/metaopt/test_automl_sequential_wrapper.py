@@ -2,7 +2,7 @@ import numpy as np
 
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import HyperparamsJSONRepository, AutoMLSequentialWrapper, RandomSearchBaseAutoMLStrategy
+from neuraxle.metaopt.auto_ml import HyperparamsJSONRepository, AutoMLSequentialWrapper, RandomSearch
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import MultiplyByN
 
@@ -24,12 +24,7 @@ def test_automl_sequential_wrapper(tmpdir):
         ('multiplication_3', MultiplyByN())
     ], cache_folder=tmpdir).set_hyperparams_space(hyperparameter_space)
 
-    auto_ml = AutoMLSequentialWrapper(
-        auto_ml_strategy=RandomSearchBaseAutoMLStrategy(),
-        step=pipeline,
-        hyperparams_repository=HyperparamsJSONRepository(tmpdir),
-        n_iters=100
-    )
+    auto_ml = RandomSearch(pipeline, hyperparams_repository=HyperparamsJSONRepository(tmpdir), n_iters=100)
 
     # When
     mse_before = ((data_inputs - expected_outputs) ** 2).mean()
