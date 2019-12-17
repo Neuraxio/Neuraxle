@@ -1764,6 +1764,7 @@ class MetaStepMixin:
         """
         new_self = BaseStep.mutate(self, new_method, method_to_assign_to, warn)
         self.wrapped = self.wrapped.mutate(new_method, method_to_assign_to, warn)
+
         return new_self
 
     def will_mutate_to(
