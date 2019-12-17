@@ -88,6 +88,56 @@ class HyperparamsRepository(ABC):
         return current_hyperparameters_hash
 
 
+class InMemoryHyperparamsJSONRepository(HyperparamsRepository):
+    """
+    In memory hyperparams repository that can print information about trials.
+    Useful for debugging.
+
+    Example usage :
+
+    .. code-block:: python
+
+        InMemoryHyperparamsJSONRepository(
+            print_new_trial=True,
+            print_success_trial=True,
+            print_exception=True
+        )
+
+
+    .. seealso::
+        :class:`HyperparamsRepository`,
+        :class:`HyperparameterSamples`,
+        :class:`AutoMLSequentialWrapper`
+    """
+
+    def __init__(self, print_new_trial=True, print_success_trial=True, print_exception=True):
+        HyperparamsRepository.__init__(self)
+        self.hyperparams = []
+        self.scores = []
+        self.print_new_trial = print_new_trial
+        self.print_success_trial = print_success_trial
+        self.print_exception = print_exception
+
+    def create_new_trial(self, hyperparams: HyperparameterSamples):
+        if self.print_new_trial:
+            print('new trial:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+
+    def load_all_trials(self) -> Tuple[List[HyperparameterSamples], List[float]]:
+        return self.hyperparams, self.scores
+
+    def save_score_for_success_trial(self, hyperparams: HyperparameterSamples, score: float):
+        self.hyperparams.append(hyperparams)
+        self.scores.append(score)
+
+        if self.print_success_trial:
+            print('score: {}'.format(score))
+            print('hyperparams:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+
+    def save_failure_for_trial(self, hyperparams: HyperparameterSamples, exception: Exception):
+        if self.print_exception:
+            print(exception)
+
+
 class HyperparamsJSONRepository(HyperparamsRepository):
     """
     Hyperparams repository that saves json files for every AutoML trial.
@@ -465,6 +515,7 @@ class RandomSearch(AutoMLSequentialWrapper):
         :class:`BaseHyperparameterOptimizer`,
         :class:`RandomSearchHyperparameterOptimizer`
     """
+
     def __init__(
             self,
             step: BaseStep,
