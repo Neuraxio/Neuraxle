@@ -38,7 +38,7 @@ class HyperparamsRepository(ABC):
 
     .. seealso::
         :class:`AutoMLSequentialWrapper`
-        :class:`AutoMLStrategyMixin`,
+        :class:`AutoMLAlgorithm`,
         :class:`BaseValidation`,
         :class:`RandomSearchBaseAutoMLStrategy`,
         :class:`HyperparameterSpace`,
@@ -208,12 +208,12 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
 class BaseHyperparameterOptimizer(ABC):
     @abstractmethod
-    def find_next_best_hyperparams(self, trials_data_container: 'AutoMLDataContainer') -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, trials_data_container: 'TrialsContainer') -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials.
 
         :param trials_data_container: trials data container
-        :type trials_data_container: AutoMLDataContainer
+        :type trials_data_container: TrialsContainer
         :return: next best hyperparams
         :rtype: HyperparameterSamples
         """
@@ -222,12 +222,18 @@ class BaseHyperparameterOptimizer(ABC):
 
 class AutoMLAlgorithm(MetaStepMixin, BaseStep):
     """
-    Base class for Automatic Machine Learning strategies.
-    Implement your own custom intelligent search of hyperparameters to get most accurate predictive models.
+    Pipeline step that executes Automatic Machine Learning strategy.
+    It uses an hyperparameter optimizer of type :class:`BaseHyperparameterOptimizer` to find the next best hyperparams.
+    It uses a validation technique of type :class:`BaseCrossValidationWrapper` to calculate the score.
+
+    Please refer to :class:`AutoMLSequentialWrapper` for a usage example.
 
     .. seealso::
-        :class:`BaseCrossValidation`,
+        :class:`BaseCrossValidationWrapper`,
         :class:`HyperparameterSamples`,
+        :class:`BaseHyperparameterOptimizer`,
+        :class:`BaseCrossValidationWrapper`,
+        :class:`TrialsContainer`,
         :class:`HyperparameterSpace`,
         :class:`MetaStepMixin`,
         :class:`BaseStep`
@@ -248,12 +254,12 @@ class AutoMLAlgorithm(MetaStepMixin, BaseStep):
         self.higher_score_is_better = higher_score_is_better
         self.hyperparameter_optimizer = hyperparameter_optimizer
 
-    def find_next_best_hyperparams(self, trials_data_container: 'AutoMLDataContainer') -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, trials_data_container: 'TrialsContainer') -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials.
 
         :param trials_data_container: trials data container
-        :type trials_data_container: AutoMLDataContainer
+        :type trials_data_container: TrialsContainer
         :return: next best hyperparams
         :rtype: HyperparameterSamples
         """
@@ -300,9 +306,16 @@ class AutoMLAlgorithm(MetaStepMixin, BaseStep):
         return data_inputs
 
 
-class AutoMLDataContainer:
+class TrialsContainer:
     """
-    Simple data container used by :class:`AutoMLStrategyMixin`, and :class:`AutoMLSequentialWrapper`.
+    Data object containing data about all of the auto ml trials. It also has the current trial number.
+
+    .. seealso::
+        :class:`AutoMLSequentialWrapper`,
+        :class:`RandomSearch`,
+        :class:`HyperparamsRepository`,
+        :class:`MetaStepMixin`,
+        :class:`BaseStep`
     """
 
     def __init__(
@@ -328,9 +341,13 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
 
     .. code-block:: python
 
-        auto_ml = AutoMLSequentialWrapper(
-            auto_ml_strategy=RandomSearchAutoMLStrategy(),
+        auto_ml: AutoMLSequentialWrapper = AutoMLSequentialWrapper(
             step=ForecastingPipeline(),
+            auto_ml_algorithm=AutoMLAlgorithm(
+                hyperparameter_optimizer=RandomSearchHyperparameterOptimizer(),
+                validation_technique=KFoldCrossValidationWrapper(),
+                higher_score_is_better=True
+            ),
             hyperparams_repository=HyperparamsJSONRepository(),
             n_iters=100
         )
@@ -341,10 +358,13 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
 
 
     .. seealso::
-        :class:`AutoMLStrategyMixin`,
-        :class:`RandomSearchAutoMLStrategy`,
+        :class:`AutoMLAlgorithm`,
         :class:`HyperparamsRepository`,
+        :class:`RandomSearch`,
+        :class:`BaseHyperparameterOptimizer`,
+        :class:`RandomSearchHyperparameterOptimizer`,
         :class:`MetaStepMixin`,
+        :class:`NonTransformableMixin`,
         :class:`BaseStep`
     """
 
@@ -388,18 +408,18 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
 
         return self
 
-    def _load_auto_ml_data(self, trial_number: int) -> AutoMLDataContainer:
+    def _load_auto_ml_data(self, trial_number: int) -> TrialsContainer:
         """
         Load data for all trials.
 
         :param trial_number: trial number
         :type trial_number: int
         :return: auto ml data container
-        :rtype: AutoMLDataContainer
+        :rtype: TrialsContainer
         """
         hps, scores = self.hyperparams_repository.load_all_trials()
 
-        return AutoMLDataContainer(
+        return TrialsContainer(
             trial_number=trial_number,
             scores=scores,
             hyperparams=hps,
@@ -427,12 +447,23 @@ class RandomSearch(AutoMLSequentialWrapper):
     """
     Random Search Automatic Machine Learning Algorithm that randomly samples the space of random variables.
 
+    Example usage :
+
+    .. code-block:: python
+
+        random_search = RandomSearch(
+            ForecastingPipeline(),
+            hyperparams_repository=HyperparamsJSONRepository(),
+            n_iters=100
+        )
+
     .. seealso::
         :class:`AutoMLSequentialWrapper`,
+        :class:`AutoMLAlgorithm`,
+        :class:`HyperparamsRepository`,
+        :class:`RandomSearch`,
         :class:`BaseHyperparameterOptimizer`,
-        :class:`AutoMLDataContainer`,
-        :class:`HyperparameterSamples`,
-        :class:`HyperparameterSpace`
+        :class:`RandomSearchHyperparameterOptimizer`
     """
     def __init__(
             self,
@@ -459,10 +490,13 @@ class RandomSearchHyperparameterOptimizer(BaseHyperparameterOptimizer):
     """
     AutoML Hyperparameter Optimizer that randomly samples the space of random variables.
 
+    Please refer to :class:`AutoMLSequentialWrapper` for a usage example.
+
     .. seealso::
-        :class:`AutoMLSequentialWrapper`,
+        :class:`AutoMLAlgorithm`,
         :class:`BaseHyperparameterOptimizer`,
-        :class:`AutoMLDataContainer`,
+        :class:`AutoMLSequentialWrapper`,
+        :class:`TrialsContainer`,
         :class:`HyperparameterSamples`,
         :class:`HyperparameterSpace`
     """
@@ -470,5 +504,13 @@ class RandomSearchHyperparameterOptimizer(BaseHyperparameterOptimizer):
     def __init__(self):
         BaseHyperparameterOptimizer.__init__(self)
 
-    def find_next_best_hyperparams(self, trials_data_container: 'AutoMLDataContainer') -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, trials_data_container: 'TrialsContainer') -> HyperparameterSamples:
+        """
+        Randomly sample the next hyperparams to try.
+
+        :param trials_data_container: trials data container
+        :type trials_data_container: TrialsContainer
+        :return: next best hyperparams
+        :rtype: HyperparameterSamples
+        """
         return trials_data_container.hyperparameter_space.rvs()
