@@ -1830,13 +1830,19 @@ class ForceAlwaysHandleMixin:
         raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
 
     def transform(self, data_inputs) -> 'ForceAlwaysHandleMixin':
-        raise Exception('Transform method is not supported for {0}, because it inherits from ForceAlwaysHandleMixin. Please use handle_transform instead.'.format(self.name))
+        raise Exception(
+            'Transform method is not supported for {0}, because it inherits from ForceAlwaysHandleMixin. Please use handle_transform instead.'.format(
+                self.name))
 
     def fit(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception('Fit method is not supported for {0}, because it inherits from ForceAlwaysHandleMixin. Please use handle_fit instead.'.format(self.name))
+        raise Exception(
+            'Fit method is not supported for {0}, because it inherits from ForceAlwaysHandleMixin. Please use handle_fit instead.'.format(
+                self.name))
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception('Fit transform method is not supported for {0}, because it inherits from ForceAlwaysHandleMixin. Please use handle_fit_transform instead.'.format(self.name))
+        raise Exception(
+            'Fit transform method is not supported for {0}, because it inherits from ForceAlwaysHandleMixin. Please use handle_fit_transform instead.'.format(
+                self.name))
 
 
 class NonFittableMixin:
@@ -2775,14 +2781,20 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
         NonFittableMixin.__init__(self)
         BaseStep.__init__(self, name=name, savers=savers)
 
+
 class FullDumpLoader(Identity):
-    def __init__(self, name):
-        Identity.__init__(self, name=name)
+    def __init__(self, name, stripped_saver=None):
+        if stripped_saver is None:
+            stripped_saver = JoblibStepSaver()
+        Identity.__init__(self, name=name, savers=[stripped_saver])
 
     def load(self, context: ExecutionContext, full_dump=True) -> BaseStep:
-        if not context.stripped_saver.can_load(self, context.push(self)):
+        if os.sep not in context.get_path():
+            context = context.push(self)
+
+        if not context.stripped_saver.can_load(self, context):
             raise Exception('Cannot Load Full Dump For Step {}'.format(os.path.join(context.get_path(), self.name)))
 
-        loaded_self = context.stripped_saver.load_step(self, context.push(self))
+        loaded_self = context.stripped_saver.load_step(self, context)
 
         return loaded_self.load(context, full_dump)
