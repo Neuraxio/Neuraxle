@@ -17,10 +17,11 @@ def test_saver_parallel_transform_should_parallelize():
     X = X.astype(np.float32)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffle=False)
 
-
     p = Pipeline([
         SaverParallelTransform(
-            SKLearnWrapper(PCA(n_components=2), HyperparameterSpace({"n_components": RandInt(1, 3)}))
+            SKLearnWrapper(PCA(n_components=2), HyperparameterSpace({"n_components": RandInt(1, 3)})),
+            n_jobs=10,
+            batch_size=10
         )
     ])
 
