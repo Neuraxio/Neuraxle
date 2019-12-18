@@ -35,7 +35,7 @@ class DataShuffler(NonFittableMixin, InputAndOutputTransformerMixin, BaseStep):
 
         p = Pipeline([
             TrainOnlyWrapper(DataShuffler(seed=42, increment_seed_after_each_fit=True, increment_seed_after_each_fit=False)),
-            EpochRepeater(ForecastingPipeline(), epochs=EPOCHS)
+            EpochRepeater(ForecastingPipeline(), epochs=EPOCHS, repeat_in_test_mode=False)
         ])
 
     .. warning::
@@ -81,7 +81,7 @@ class EpochRepeater(MetaStepMixin, BaseStep):
 
         p = Pipeline([
             TrainOnlyWrapper(DataShuffler(seed=42, increment_seed_after_each_fit=True, increment_seed_after_each_fit=False)),
-            EpochRepeater(ForecastingPipeline(), epochs=EPOCHS)
+            EpochRepeater(ForecastingPipeline(), epochs=EPOCHS, repeat_in_test_mode=False)
         ])
 
     .. seealso::
