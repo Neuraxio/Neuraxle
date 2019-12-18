@@ -25,7 +25,8 @@ import hashlib
 import json
 import os
 from abc import ABC, abstractmethod
-from typing import Tuple, List
+from enum import Enum
+from typing import List
 
 from neuraxle.base import MetaStepMixin, BaseStep, NonTransformableMixin, ExecutionContext
 from neuraxle.data_container import DataContainer
@@ -58,7 +59,7 @@ class HyperparamsRepository(ABC):
         pass
 
     @abstractmethod
-    def load_all_trials(self) -> Tuple[List[HyperparameterSamples], List[float]]:
+    def load_all_trials(self, status: 'TRIAL_STATUS') -> 'Trials':
         """
         Load all hyperparameter trials with their corresponding score.
 
@@ -113,8 +114,7 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
 
     def __init__(self, print_new_trial=True, print_success_trial=True, print_exception=True):
         HyperparamsRepository.__init__(self)
-        self.hyperparams = []
-        self.scores = []
+        self.trials = Trials()
         self.print_new_trial = print_new_trial
         self.print_success_trial = print_success_trial
         self.print_exception = print_exception
@@ -123,12 +123,11 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         if self.print_new_trial:
             print('new trial:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
-    def load_all_trials(self) -> Tuple[List[HyperparameterSamples], List[float]]:
-        return self.hyperparams, self.scores
+    def load_all_trials(self, status: 'TRIAL_STATUS' = None) -> 'Trials':
+        return self.trials.filter(status)
 
     def save_score_for_success_trial(self, hyperparams: HyperparameterSamples, score: float):
-        self.hyperparams.append(hyperparams)
-        self.scores.append(score)
+        self.trials.append(hyperparams, score, TRIAL_STATUS.SUCCESS)
 
         if self.print_success_trial:
             print('score: {}'.format(score))
@@ -162,25 +161,23 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         """
         self._create_trial_json(hyperparams)
 
-    def load_all_trials(self) -> Tuple[List[HyperparameterSamples], List[float]]:
+    def load_all_trials(self, status: 'TRIAL_STATUS' = None) -> 'Trials':
         """
         Load all hyperparameter trials with their corresponding score.
         Reads all the saved trial json files.
 
         :return: (hyperparams, scores)
         """
-        all_hyperparams = []
-        all_scores = []
+        trials = []
 
         for base_path in glob.glob(os.path.join(self.cache_folder, '*.json')):
             with open(base_path) as f:
                 trial_json = json.load(f)
 
-            if trial_json['score'] is not None:
-                all_hyperparams.append(HyperparameterSamples(trial_json['hyperparams']))
-                all_scores.append(trial_json['score'])
+            if status is None or trial_json['status'] == status.value:
+                trials.append(Trial.from_json(trial_json))
 
-        return all_hyperparams, all_scores
+        return Trials(trials)
 
     def save_score_for_success_trial(self, hyperparams: HyperparameterSamples, score: float):
         """
@@ -188,15 +185,15 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
         :return: (hyperparams, scores)
         """
-        self._save_trial_json(hyperparams, score)
+        self._save_successful_trial_json(hyperparams, score)
 
-    def save_failure_for_trial(self, hyperparams: HyperparameterSamples, score: float):
+    def save_failure_for_trial(self, hyperparams: HyperparameterSamples, exception: Exception):
         """
         Save hyperparams, and score for a failed trial.
 
         :return: (hyperparams, scores)
         """
-        pass
+        self._save_failed_trial_json(hyperparams, exception)
 
     def _create_trial_json(self, hyperparams):
         """
@@ -210,10 +207,11 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         with open(os.path.join(self._get_new_trial_json_path(current_hyperparameters_hash)), 'w+') as outfile:
             json.dump({
                 'hyperparams': hp_dict,
-                'score': None
+                'score': None,
+                'status': TRIAL_STATUS.PLANNED.value
             }, outfile)
 
-    def _save_trial_json(self, hyperparams, score):
+    def _save_successful_trial_json(self, hyperparams, score):
         """
         Save trial json file.
 
@@ -228,7 +226,8 @@ class HyperparamsJSONRepository(HyperparamsRepository):
                   'w+') as outfile:
             json.dump({
                 'hyperparams': hp_dict,
-                'score': score
+                'score': score,
+                'status': TRIAL_STATUS.SUCCESS.value
             }, outfile)
 
     def _remove_new_trial_json(self, current_hyperparameters_hash):
@@ -253,18 +252,19 @@ class HyperparamsJSONRepository(HyperparamsRepository):
             json.dump({
                 'hyperparams': hp_dict,
                 'score': None,
+                'status': TRIAL_STATUS.FAILED.value,
                 'exception': str(exception)
             }, outfile)
 
 
 class BaseHyperparameterOptimizer(ABC):
     @abstractmethod
-    def find_next_best_hyperparams(self, trials_data_container: 'TrialsContainer') -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials.
 
-        :param trials_data_container: trials data container
-        :type trials_data_container: TrialsContainer
+        :param auto_ml_container: trials data container
+        :type auto_ml_container: Trials
         :return: next best hyperparams
         :rtype: HyperparameterSamples
         """
@@ -305,16 +305,16 @@ class AutoMLAlgorithm(MetaStepMixin, BaseStep):
         self.higher_score_is_better = higher_score_is_better
         self.hyperparameter_optimizer = hyperparameter_optimizer
 
-    def find_next_best_hyperparams(self, trials_data_container: 'TrialsContainer') -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials.
 
-        :param trials_data_container: trials data container
-        :type trials_data_container: TrialsContainer
+        :param auto_ml_container: trials data container
+        :type auto_ml_container: Trials
         :return: next best hyperparams
         :rtype: HyperparameterSamples
         """
-        return self.hyperparameter_optimizer.find_next_best_hyperparams(trials_data_container)
+        return self.hyperparameter_optimizer.find_next_best_hyperparams(auto_ml_container)
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('AutoMLAlgorithm', float):
         """
@@ -332,24 +332,14 @@ class AutoMLAlgorithm(MetaStepMixin, BaseStep):
 
         return self, score
 
-    def get_best_hyperparams_from_trials(self, trials: Tuple[
-        List[HyperparameterSamples], List[float]]) -> HyperparameterSamples:
+    def get_best_hyperparams(self, trials: 'Trials') -> HyperparameterSamples:
         """
         Get the best hyperparams from all previous trials.
 
         :return: best hyperparams
         :rtype: HyperparameterSamples
         """
-        best_score = None
-        best_hyperparams = None
-        hyperparams, scores = trials
-
-        for trial_hyperparam, trial_score in zip(hyperparams, scores):
-            if best_score is None or self.higher_score_is_better == (trial_score > best_score):
-                best_score = trial_score
-                best_hyperparams = trial_hyperparam
-
-        return best_hyperparams
+        return trials.get_best_hyperparams(higher_score_is_better=self.higher_score_is_better)
 
     def fit(self, data_inputs, expected_outputs=None):
         return self
@@ -358,9 +348,15 @@ class AutoMLAlgorithm(MetaStepMixin, BaseStep):
         return data_inputs
 
 
-class TrialsContainer:
+class TRIAL_STATUS(Enum):
+    FAILED = 'failed'
+    SUCCESS = 'success'
+    PLANNED = 'planned'
+
+
+class AutoMLContainer:
     """
-    Data object containing data about all of the auto ml trials. It also has the current trial number.
+    Data object for auto ml.
 
     .. seealso::
         :class:`AutoMLSequentialWrapper`,
@@ -372,17 +368,86 @@ class TrialsContainer:
 
     def __init__(
             self,
-            trial_number: int,
-            scores: List[float],
-            hyperparams: List[HyperparameterSamples],
+            trials: 'Trials',
             hyperparameter_space: HyperparameterSpace,
-            n_iters: int
+            n_iters: int,
+            trial_number: int
     ):
-        self.hyperparams = hyperparams
-        self.scores = scores
-        self.trial_number = trial_number
+        self.trials = trials
         self.hyperparameter_space = hyperparameter_space
         self.n_iters = n_iters
+        self.trial_number = trial_number
+
+
+class Trial:
+    def __init__(self, hyperparams: HyperparameterSamples, score: int, status: TRIAL_STATUS):
+        self.hyperparams = hyperparams
+        self.score = score
+        self.status = status
+
+    def to_json(self) -> dict:
+        return {
+            'hyperparams': self.hyperparams,
+            'score': self.score,
+            'status': self.status
+        }
+
+    @staticmethod
+    def from_json(trial_json) -> 'Trial':
+        return Trial(
+            hyperparams=trial_json['hyperparams'],
+            score=trial_json['score'],
+            status=trial_json['status']
+        )
+
+
+class Trials:
+    """
+    Data object containing auto ml trials.
+
+    .. seealso::
+        :class:`AutoMLSequentialWrapper`,
+        :class:`RandomSearch`,
+        :class:`HyperparamsRepository`,
+        :class:`MetaStepMixin`,
+        :class:`BaseStep`
+    """
+
+    def __init__(
+        self,
+        trials: List[Trial] = None
+    ):
+        if trials is None:
+            trials = []
+        self.trials: List[Trial] = trials
+
+    def get_best_hyperparams(self, higher_score_is_better: bool) -> HyperparameterSamples:
+        best_score = None
+        best_hyperparams = None
+
+        for trial in self.trials:
+            if best_score is None or higher_score_is_better == (trial.score > best_score):
+                best_score = trial.score
+                best_hyperparams = trial.hyperparams
+
+        return best_hyperparams
+
+    def append(self, trial: Trial):
+        self.trials.append(trial)
+
+    def filter(self, status: TRIAL_STATUS) -> 'Trials':
+        trials = Trials()
+        for trial in self.trials:
+            if trial.status == status:
+                trials.append(trial)
+
+        return trials
+
+    def __getitem__(self, item):
+        return self.trials[item]
+
+    def __len__(self):
+        return len(self.trials)
 
 
 class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
@@ -451,7 +516,7 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
         :rtype: BaseStep
         """
         for i in range(self.n_iters):
-            auto_ml_trial_data_container = self._load_auto_ml_data(i)
+            auto_ml_trial_data_container: AutoMLContainer = self._load_auto_ml_data(i)
 
             hyperparams = self.wrapped.find_next_best_hyperparams(auto_ml_trial_data_container)
             self.wrapped = self.wrapped.set_hyperparams(hyperparams)
@@ -481,9 +546,9 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
         :rtype: BaseStep
         """
         for i in range(self.n_iters):
-            auto_ml_trial_data_container = self._load_auto_ml_data(i)
+            auto_ml_trial_container: AutoMLContainer = self._load_auto_ml_data(i)
 
-            hyperparams = self.wrapped.find_next_best_hyperparams(auto_ml_trial_data_container)
+            hyperparams: HyperparameterSamples = self.wrapped.find_next_best_hyperparams(auto_ml_trial_container)
             self.wrapped = self.wrapped.set_hyperparams(hyperparams)
 
             self.hyperparams_repository.create_new_trial(hyperparams)
@@ -499,21 +564,20 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
 
         return self
 
-    def _load_auto_ml_data(self, trial_number: int) -> TrialsContainer:
+    def _load_auto_ml_data(self, trial_number: int) -> AutoMLContainer:
         """
         Load data for all trials.
 
         :param trial_number: trial number
         :type trial_number: int
         :return: auto ml data container
-        :rtype: TrialsContainer
+        :rtype: Trials
         """
-        hps, scores = self.hyperparams_repository.load_all_trials()
+        trials = self.hyperparams_repository.load_all_trials(TRIAL_STATUS.SUCCESS)
 
-        return TrialsContainer(
+        return AutoMLContainer(
             trial_number=trial_number,
-            scores=scores,
-            hyperparams=hps,
+            trials=trials,
             hyperparameter_space=self.wrapped.get_hyperparams_space(),
             n_iters=self.n_iters
         )
@@ -525,9 +589,9 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
         :return: best model step
         :rtype: BaseStep
         """
-        trials = self.hyperparams_repository.load_all_trials()
+        trials: Trials = self.hyperparams_repository.load_all_trials(TRIAL_STATUS.SUCCESS)
         auto_ml_algorithm: AutoMLAlgorithm = self.wrapped
-        best_hyperparams = auto_ml_algorithm.get_best_hyperparams_from_trials(trials)
+        best_hyperparams = auto_ml_algorithm.get_best_hyperparams(trials)
         auto_ml_algorithm = auto_ml_algorithm.set_hyperparams(best_hyperparams)
 
         return copy.deepcopy(auto_ml_algorithm.get_step())
@@ -610,13 +674,13 @@ class RandomSearchHyperparameterOptimizer(BaseHyperparameterOptimizer):
     def __init__(self):
         BaseHyperparameterOptimizer.__init__(self)
 
-    def find_next_best_hyperparams(self, trials_data_container: 'TrialsContainer') -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
         """
         Randomly sample the next hyperparams to try.
 
-        :param trials_data_container: trials data container
-        :type trials_data_container: TrialsContainer
+        :param auto_ml_container: trials data container
+        :type auto_ml_container: Trials
         :return: next best hyperparams
         :rtype: HyperparameterSamples
         """
-        return trials_data_container.hyperparameter_space.rvs()
+        return auto_ml_container.hyperparameter_space.rvs()
