@@ -1,3 +1,23 @@
+"""
+Neuraxle Test Case Class
+========================================
+
+..
+    Copyright 2019, Neuraxio Inc.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+"""
 import numpy as np
 
 from neuraxle.base import ExecutionMode
@@ -31,10 +51,15 @@ class NeuraxleTestCase:
     def assert_callback_data_is_as_expected(self):
         for callback, expected_callback_data in zip(self.callbacks, self.expected_callbacks_data):
             if len(callback.data) > 0:
-                assert np.array_equal(
-                    np.array(callback.data),
-                    expected_callback_data
-                )
+                if isinstance(callback.data[0], tuple):
+                    for (expected_di, expected_eo), (actual_di, actual_eo) in zip(expected_callback_data, callback.data):
+                        assert np.array_equal(expected_di, actual_di)
+                        assert np.array_equal(expected_eo, actual_eo)
+                else:
+                    assert np.array_equal(
+                        np.array(callback.data),
+                        expected_callback_data
+                    )
             else:
                 assert np.array_equal(
                     np.array([]),
