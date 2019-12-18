@@ -127,7 +127,7 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         return self.trials.filter(status)
 
     def save_score_for_success_trial(self, hyperparams: HyperparameterSamples, score: float):
-        self.trials.append(hyperparams, score, TRIAL_STATUS.SUCCESS)
+        self.trials.append(Trial(hyperparams, score, TRIAL_STATUS.SUCCESS))
 
         if self.print_success_trial:
             print('score: {}'.format(score))
@@ -380,7 +380,7 @@ class AutoMLContainer:
 
 
 class Trial:
-    def __init__(self, hyperparams: HyperparameterSamples, score: int, status: TRIAL_STATUS):
+    def __init__(self, hyperparams: HyperparameterSamples, score: float, status: TRIAL_STATUS):
         self.hyperparams = hyperparams
         self.score = score
         self.status = status
