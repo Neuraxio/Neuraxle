@@ -192,6 +192,10 @@ class MemoryFSExecutionContext(ExecutionContext):
     def load(self, name: str):
         return FullDumpLoader(name=name, stripped_saver=MemoryFSJoblibSaver(self.memory_file_system)).load(self, True)
 
+    def save_last(self):
+        last_step = self.peek()
+        last_step.save(self, True)
+
 
 class SaverParallelTransform(NonFittableMixin, MetaStepMixin, BaseStep):
     """
@@ -217,10 +221,9 @@ class SaverParallelTransform(NonFittableMixin, MetaStepMixin, BaseStep):
         Save a full dump of the pipeline in memory.
         Send batches of the data container to `joblib.Parallel <https://joblib.readthedocs.io/en/latest/generated/joblib.Parallel.html>`_
         """
-        with MemoryFS() as memory_file_system:
+        with fs.open_fs('mem://', create=True) as memory_file_system:
             context = context.push(self.wrapped)
-            names = context.get_names()
-            self._save_shared_memory_execution_context(context, memory_file_system)
+            context = self._save_shared_memory_execution_context(context, memory_file_system)
 
             batch_size = self._get_batch_size(data_container)
             data_container_batches = data_container.convolved_1d(stride=batch_size, kernel_size=batch_size)
@@ -229,7 +232,7 @@ class SaverParallelTransform(NonFittableMixin, MetaStepMixin, BaseStep):
                 n_jobs=self.n_jobs,
                 batch_size=self.batch_size,
                 backend='multiprocessing',
-            )(delayed(receive)(names, data_container_batch) for data_container_batch in data_container_batches)
+            )(delayed(receive)(context.get_path(), data_container_batch) for data_container_batch in data_container_batches)
 
         return data_container.set_data_inputs(outputs)
 
@@ -264,7 +267,10 @@ class SaverParallelTransform(NonFittableMixin, MetaStepMixin, BaseStep):
             root=memory_file_system.root,
             parents=context.parents
         )
-        shared_memory_execution_context.save(full_dump=True)
+        identity = shared_memory_execution_context.to_identity()
+        shared_memory_execution_context.save_last()
+        return identity
+
 
     def transform(self, data_inputs):
         raise Exception(
@@ -272,12 +278,12 @@ class SaverParallelTransform(NonFittableMixin, MetaStepMixin, BaseStep):
                 repr(self)))
 
 
-def receive(step_names: str, data_container: DataContainer):
+def receive(step_path: str, data_container: DataContainer):
     """
     Save a full dump of the execution context in shared memory.
 
-    :param step_names: step names
-    :type step_names: List[str]
+    :param step_path: step names
+    :type step_path: List[str]
     :type data_container: DataContainer
     :param data_container: data container
     :return: transformed data container
@@ -286,9 +292,8 @@ def receive(step_names: str, data_container: DataContainer):
     memory_file_system = fs.open_fs('mem://')
     context = MemoryFSExecutionContext(
         memory_file_system=memory_file_system,
-        root=memory_file_system.root,
-        parents=[Identity(name=name, savers=[MemoryFSJoblibSaver(memory_file_system)]) for name in step_names]
+        root=memory_file_system.root
     )
-    step = context.load(context.get_path())
+    step = context.load(step_path)
 
     return step.handle_transform(data_container, ExecutionContext())
