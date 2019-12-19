@@ -171,10 +171,21 @@ class MemoryFSExecutionContext(ExecutionContext):
         )
 
     def to_identity(self) -> 'MemoryFSExecutionContext':
+        """
+        Create a fake execution context containing only identity steps.
+        Create the parents by using the path of the current execution context.
+
+        :return: fake identity execution context
+        :rtype: MemoryFSExecutionContext
+
+        .. seealso::
+            :class:`FullDumpLoader`,
+            :class:`Identity`
+        """
         step_names = self.get_path(False).split(os.sep)
 
         parents = [
-            Identity(name=name, savers=[self.stripped_saver])
+            Identity(name=name)
             for name in step_names
         ]
 

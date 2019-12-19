@@ -483,8 +483,10 @@ class ExecutionContext:
             :class:`Identity`
         """
         context_for_loading = self
+        context_for_loading = context_for_loading.push(Identity(name=path))
+
         if os.sep in path:
-            context_for_loading = self.push(Identity(name=path, savers=[self.stripped_saver])).to_identity()
+            context_for_loading = context_for_loading.to_identity()
             path = path.split(os.sep)[-1]
 
         return FullDumpLoader(
@@ -514,6 +516,7 @@ class ExecutionContext:
         return ExecutionContext(
             root=self.root,
             execution_mode=self.execution_mode,
+            stripped_saver=self.stripped_saver,
             parents=parents
         )
 
@@ -2853,4 +2856,5 @@ class FullDumpLoader(Identity):
 
         loaded_self = context.stripped_saver.load_step(self, context)
 
+        context.pop()
         return loaded_self.load(context, full_dump)
