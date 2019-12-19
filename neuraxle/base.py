@@ -284,11 +284,8 @@ class JoblibStepSaver(BaseSaver):
 
         # we need to keep the current steps in memory because they have been deleted before saving...
         # the steps that have not been saved yet need to be in memory while loading a truncable steps...
-        if isinstance(loaded_step, TruncableSteps):
-            loaded_step.set_steps([
-                (sub_step_name, Identity(savers=sub_step_savers).set_name(sub_step_name))
-                for sub_step_name, sub_step_savers in loaded_step.sub_steps_savers
-            ])
+        if isinstance(loaded_step, TruncableSteps) and hasattr(step, 'steps'):
+            loaded_step.steps = step.steps
 
         return loaded_step
 
@@ -509,7 +506,7 @@ class ExecutionContext:
         step_names = self.get_path(False).split(os.sep)
 
         parents = [
-            Identity(name=name, savers=[self.stripped_saver])
+            Identity(name=name)
             for name in step_names
         ]
 
