@@ -363,6 +363,17 @@ class ExecutionContext:
             if should_save_last_step:
                 last_step.save(self, full_dump)
 
+    def save_last(self):
+        """
+        Save only the last step in the execution context.
+
+        .. seealso::
+            :func:`~neuraxle.base.ExecutionContext.save`
+        """
+        last_step = self.peek()
+        self.pop()
+        last_step.save(self, True)
+
     def should_save_last_step(self) -> bool:
         """
         Returns True if the last step should be saved.
@@ -427,14 +438,17 @@ class ExecutionContext:
         if not os.path.exists(path):
             os.makedirs(path)
 
-    def get_path(self):
+    def get_path(self, with_root=True):
         """
         Creates the directory path for the current execution context.
 
         :return: current context path
         :rtype: str
         """
-        parents_with_path = [self.root] + [p.name for p in self.parents]
+        parents_with_path = [self.root] if with_root else []
+        parents_with_path += [p.name for p in self.parents]
+        if len(parents_with_path) == 0:
+            return '/'
         return os.path.join(*parents_with_path)
 
     def get_names(self):
@@ -455,8 +469,53 @@ class ExecutionContext:
         """
         return len(self) == 0
 
-    def load(self, name: str):
-        return FullDumpLoader(name).load(self, True)
+    def load(self, path: str) -> 'BaseStep':
+        """
+        Load full dump at the given path.
+
+        :param path: pipeline step path
+        :type path: str
+        :return: loaded step
+        :rtype: BaseStep
+
+        .. seealso::
+            :class:`FullDumpLoader`,
+            :class:`Identity`
+        """
+        context_for_loading = self
+        if os.sep in path:
+            context_for_loading = self.push(Identity(name=path, savers=[self.stripped_saver])).to_identity()
+            path = path.split(os.sep)[-1]
+
+        return FullDumpLoader(
+            name=path,
+            stripped_saver=self.stripped_saver
+        ).load(context_for_loading, True)
+
+    def to_identity(self) -> 'ExecutionContext':
+        """
+        Create a fake execution context containing only identity steps.
+        Create the parents by using the path of the current execution context.
+
+        :return: fake identity execution context
+        :rtype: ExecutionContext
+
+        .. seealso::
+            :class:`FullDumpLoader`,
+            :class:`Identity`
+        """
+        step_names = self.get_path(False).split(os.sep)
+
+        parents = [
+            Identity(name=name, savers=[self.stripped_saver])
+            for name in step_names
+        ]
+
+        return ExecutionContext(
+            root=self.root,
+            execution_mode=self.execution_mode,
+            parents=parents
+        )
 
     def __len__(self):
         return len(self.parents)
@@ -2817,9 +2876,6 @@ class FullDumpLoader(Identity):
         Identity.__init__(self, name=name, savers=[stripped_saver])
 
     def load(self, context: ExecutionContext, full_dump=True) -> BaseStep:
-        if os.sep not in context.get_path():
-            context = context.push(self)
-
         if not context.stripped_saver.can_load(self, context):
             raise Exception('Cannot Load Full Dump For Step {}'.format(os.path.join(context.get_path(), self.name)))
 

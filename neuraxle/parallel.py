@@ -22,9 +22,10 @@ Neuraxle Steps for parallel processing
 """
 import math
 import os
-from typing import List
+from typing import List, Iterable, Tuple
 
 import fs
+import numpy as np
 from fs.memoryfs import MemoryFS
 from joblib import dump, Parallel, delayed, load
 
@@ -66,6 +67,8 @@ class MemoryFSJoblibSaver(BaseSaver):
 
         self.memory_file_system.touch(step_path)
 
+        dump(step, step_path)
+
         with self.memory_file_system.openbin(step_path, mode='w') as file:
             dump(step, file)
 
@@ -82,7 +85,10 @@ class MemoryFSJoblibSaver(BaseSaver):
         :return: if we can load the step with the given context
         :rtype: bool
         """
-        return self.memory_file_system.exists(self._create_step_path(context, step))
+        return os.path.exists(
+            self._create_step_path(context, step)
+        )
+        # return self.memory_file_system.exists(self._create_step_path(context, step))
 
     def load_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
         """
@@ -96,7 +102,8 @@ class MemoryFSJoblibSaver(BaseSaver):
         """
         step_path = self._create_step_path(context, step)
 
-        return load(self.memory_file_system.openbin(step_path))
+        return load(step_path)
+        # return load(self.memory_file_system.openbin(step_path))
 
     def _create_step_path(self, context, step):
         return os.path.join(context.get_path(), '{0}.joblib'.format(step.name))
@@ -137,6 +144,7 @@ class MemoryFSExecutionContext(ExecutionContext):
 
         :return:
         """
+        super().mkdir()
         path = self.get_path()
         parts = path.split(os.sep)
 
@@ -162,23 +170,11 @@ class MemoryFSExecutionContext(ExecutionContext):
             parents=self.parents + [step],
         )
 
-    def get_path(self):
-        """
-        Creates the directory path for the current execution context.
-
-        :return: current context path
-        :rtype: str
-        """
-        parents_with_path = [p.name for p in self.parents]
-        if len(parents_with_path) == 0:
-            return '/'
-        return os.path.join(*parents_with_path)
-
     def to_identity(self) -> 'MemoryFSExecutionContext':
-        step_names = self.get_path().split(os.sep)
+        step_names = self.get_path(False).split(os.sep)
 
         parents = [
-            Identity(name=name, savers=[MemoryFSJoblibSaver(self.memory_file_system)])
+            Identity(name=name, savers=[self.stripped_saver])
             for name in step_names
         ]
 
@@ -188,13 +184,6 @@ class MemoryFSExecutionContext(ExecutionContext):
             execution_mode=self.execution_mode,
             parents=parents
         )
-
-    def load(self, name: str):
-        return FullDumpLoader(name=name, stripped_saver=MemoryFSJoblibSaver(self.memory_file_system)).load(self, True)
-
-    def save_last(self):
-        last_step = self.peek()
-        last_step.save(self, True)
 
 
 class SaverParallelTransform(NonFittableMixin, MetaStepMixin, BaseStep):
@@ -222,19 +211,40 @@ class SaverParallelTransform(NonFittableMixin, MetaStepMixin, BaseStep):
         Send batches of the data container to `joblib.Parallel <https://joblib.readthedocs.io/en/latest/generated/joblib.Parallel.html>`_
         """
         with fs.open_fs('mem://', create=True) as memory_file_system:
-            context = context.push(self.wrapped)
             context = self._save_shared_memory_execution_context(context, memory_file_system)
 
             batch_size = self._get_batch_size(data_container)
             data_container_batches = data_container.convolved_1d(stride=batch_size, kernel_size=batch_size)
+            step_path = context.get_path(with_root=False)
 
-            outputs = Parallel(
+            outputs_data_containers = Parallel(
                 n_jobs=self.n_jobs,
                 batch_size=self.batch_size,
                 backend='multiprocessing',
-            )(delayed(receive)(context.get_path(), data_container_batch) for data_container_batch in data_container_batches)
+            )(delayed(receive)(context.root, step_path, data_container_batch) for data_container_batch in
+              data_container_batches)
 
-        return data_container.set_data_inputs(outputs)
+        data_inputs, expected_outputs = self._join_output_data_containers(outputs_data_containers)
+        data_container.set_data_inputs(np.array(data_inputs))
+        data_container.set_expected_outputs(np.array(expected_outputs))
+
+        return data_container
+
+    def _join_output_data_containers(self, outputs_data_containers: List[DataContainer]) -> Tuple[Iterable, Iterable]:
+        """
+        Join output data containers together.
+
+        :return: joined_data_inputs, joined_expected_outputs
+        :rtype: Tuple[Iterable, Iterable]
+        """
+        data_inputs = []
+        expected_outputs = []
+
+        for output_data_container in outputs_data_containers:
+            data_inputs.extend(output_data_container.data_inputs)
+            expected_outputs.extend(output_data_container.expected_outputs)
+
+        return data_inputs, expected_outputs
 
     def _get_batch_size(self, data_container: DataContainer) -> int:
         """
@@ -264,13 +274,13 @@ class SaverParallelTransform(NonFittableMixin, MetaStepMixin, BaseStep):
         """
         shared_memory_execution_context = MemoryFSExecutionContext(
             memory_file_system=memory_file_system,
-            root=memory_file_system.root,
+            root=context.root,
             parents=context.parents
         )
         identity = shared_memory_execution_context.to_identity()
         shared_memory_execution_context.save_last()
-        return identity
 
+        return identity
 
     def transform(self, data_inputs):
         raise Exception(
@@ -278,10 +288,12 @@ class SaverParallelTransform(NonFittableMixin, MetaStepMixin, BaseStep):
                 repr(self)))
 
 
-def receive(step_path: str, data_container: DataContainer):
+def receive(cache_folder: str, step_path: str, data_container: DataContainer):
     """
     Save a full dump of the execution context in shared memory.
 
+    :param cache_folder: cache folder
+    :type cache_folder: List[str]
     :param step_path: step names
     :type step_path: List[str]
     :type data_container: DataContainer
@@ -290,10 +302,7 @@ def receive(step_path: str, data_container: DataContainer):
     :rtype: DataContainer
     """
     memory_file_system = fs.open_fs('mem://')
-    context = MemoryFSExecutionContext(
-        memory_file_system=memory_file_system,
-        root=memory_file_system.root
-    )
-    step = context.load(step_path)
+    context = MemoryFSExecutionContext(memory_file_system=memory_file_system, root=cache_folder)
+    step: SaverParallelTransform = context.load(step_path)
 
-    return step.handle_transform(data_container, ExecutionContext())
+    return step.wrapped.handle_transform(data_container, context)
