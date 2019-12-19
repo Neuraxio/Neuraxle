@@ -2870,12 +2870,30 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
 
 
 class FullDumpLoader(Identity):
+    """
+    Identity step that can load the full dump of a pipeline step.
+    Used by :func:`~neuraxle.base.BaseStep.load`.
+
+    .. seealso::
+        :class:`ExecutionContext`
+        :class:`BaseStep`,
+        :class:`Identity`
+    """
     def __init__(self, name, stripped_saver=None):
         if stripped_saver is None:
             stripped_saver = JoblibStepSaver()
         Identity.__init__(self, name=name, savers=[stripped_saver])
 
     def load(self, context: ExecutionContext, full_dump=True) -> BaseStep:
+        """
+        Load the full dump of a pipeline step.
+
+        :param context: execution context
+        :param full_dump: load full dump or not (always true, inherited from :class:`BaseStep`
+        :type full_dump: load full dump or not
+        :return: loaded step
+        :rtype: BaseStep
+        """
         if not context.stripped_saver.can_load(self, context):
             raise Exception('Cannot Load Full Dump For Step {}'.format(os.path.join(context.get_path(), self.name)))
 
