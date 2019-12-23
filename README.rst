@@ -373,3 +373,13 @@ We thank these organisations for generously supporting the project:
 .. raw:: html
 
     <img src="https://www.neuraxio.com/images/La-Cite-LP.png" width="260">
+
+Support Us
+~~~~~~~~~~~~
+
+-  `Get in touch with us <https://gitter.im/Neuraxle/community>`__.
+-  `Be a sponsor <https://www.neuraxio.com/en/>`__.
+-  Save this for later:
+
+.. image:: https://img.shields.io/github/watchers/Neuraxio/Neuraxle?style=social&   :alt: GitHub watchers
+    :target: https://github.com/Neuraxio/Neuraxle/watchers
