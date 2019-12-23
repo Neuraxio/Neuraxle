@@ -22,6 +22,9 @@ Neuraxle Steps for parallel processing
 """
 import math
 import os
+import tempfile
+import time
+import warnings
 from typing import List, Iterable, Tuple
 
 import fs
@@ -208,10 +211,18 @@ class SaverParallelTransform(NonFittableMixin, MetaStepMixin, BaseStep):
         :class:`BaseStep`
     """
 
-    def __init__(self, wrapped: BaseStep, n_jobs: int = None, batch_size=None):
+    def __init__(self, wrapped: BaseStep, mount_path=None, n_jobs: int = None, batch_size=None):
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
 
+        if mount_path is None:
+            mount_path = 'cache'
+
+        if not os.path.ismount(mount_path):
+            warnings.warn('SaverParallelTransform.mount_path not mounted.', RuntimeWarning, stacklevel=2)
+        else:
+            print('mounted !')
+        self.mount_path = mount_path
         self.n_jobs = n_jobs
         self.batch_size = batch_size
 
@@ -221,19 +232,30 @@ class SaverParallelTransform(NonFittableMixin, MetaStepMixin, BaseStep):
         Save a full dump of the pipeline in memory.
         Send batches of the data container to `joblib.Parallel <https://joblib.readthedocs.io/en/latest/generated/joblib.Parallel.html>`_
         """
-        with fs.open_fs('mem://', create=True) as memory_file_system:
-            context = self._save_shared_memory_execution_context(context, memory_file_system)
+        new_context = context.copy()
+        new_context.root = self.mount_path
+        a = time.time()
+        context = self._save_shared_memory_execution_context(new_context)
+        b = time.time()
+        print('WRITING')
+        print(b-a)
+        print('\n')
 
-            batch_size = self._get_batch_size(data_container)
-            data_container_batches = data_container.convolved_1d(stride=batch_size, kernel_size=batch_size)
-            step_path = context.get_path(with_root=False)
+        batch_size = self._get_batch_size(data_container)
+        data_container_batches = data_container.convolved_1d(stride=batch_size, kernel_size=batch_size)
+        step_path = context.get_path(with_root=False)
 
-            outputs_data_containers = Parallel(
+        a = time.time()
+        outputs_data_containers = Parallel(
                 n_jobs=self.n_jobs,
                 batch_size=self.batch_size,
                 backend='multiprocessing',
-            )(delayed(receive)(context.root, step_path, data_container_batch) for data_container_batch in
-              data_container_batches)
+        )(delayed(receive)(self.mount_path, step_path, data_container_batch) for data_container_batch in data_container_batches)
+        b = time.time()
+
+        print('READING')
+        print(b-a)
+        print('\n')
 
         data_inputs, expected_outputs = self._join_output_data_containers(outputs_data_containers)
         data_container.set_data_inputs(np.array(data_inputs))
@@ -272,7 +294,7 @@ class SaverParallelTransform(NonFittableMixin, MetaStepMixin, BaseStep):
             batch_size = self.batch_size
         return batch_size
 
-    def _save_shared_memory_execution_context(self, context: ExecutionContext, memory_file_system: MemoryFS):
+    def _save_shared_memory_execution_context(self, context: ExecutionContext):
         """
         Save a full dump of the execution context in shared memory.
 
@@ -283,14 +305,8 @@ class SaverParallelTransform(NonFittableMixin, MetaStepMixin, BaseStep):
         :return: batch_size
         :rtype: int
         """
-        shared_memory_execution_context = MemoryFSExecutionContext(
-            memory_file_system=memory_file_system,
-            root=context.root,
-            parents=context.parents
-        )
-        identity = shared_memory_execution_context.to_identity()
-        shared_memory_execution_context.save_last()
-
+        identity = context.to_identity()
+        context.save_last()
         return identity
 
     def transform(self, data_inputs):
@@ -312,8 +328,7 @@ def receive(cache_folder: str, step_path: str, data_container: DataContainer):
     :return: transformed data container
     :rtype: DataContainer
     """
-    memory_file_system = fs.open_fs('mem://')
-    context = MemoryFSExecutionContext(memory_file_system=memory_file_system, root=cache_folder)
+    context = ExecutionContext(cache_folder)
     step: SaverParallelTransform = context.load(step_path)
 
     return step.wrapped.handle_transform(data_container, context)
