@@ -22,17 +22,18 @@ Pipeline Steps For Caching
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
+import hashlib
 import os
 import pickle
 import shutil
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from typing import Iterable, Any
 
 from neuraxle.base import MetaStepMixin, BaseStep, NonFittableMixin, NonTransformableMixin, \
     ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.pipeline import DEFAULT_CACHE_FOLDER
-from neuraxle.steps.misc import BaseValueHasher, Md5Hasher, VALUE_CACHING
+from neuraxle.steps.misc import VALUE_CACHING
 
 
 class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin, BaseStep):
@@ -44,7 +45,7 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
             self,
             wrapped: BaseStep,
             cache_folder: str = DEFAULT_CACHE_FOLDER,
-            value_hasher: BaseValueHasher = None,
+            value_hasher: 'BaseValueHasher' = None,
     ):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
@@ -214,3 +215,17 @@ class PickleValueCachingWrapper(ValueCachingWrapper):
     def get_cache_path_for(self, data_input):
         hash_value = self._hash_value(data_input)
         return os.path.join(self.checkpoint_path, '{0}.pickle'.format(hash_value))
+
+
+class BaseValueHasher(ABC):
+    @abstractmethod
+    def hash(self, data_input):
+        raise NotImplementedError()
+
+
+class Md5Hasher(BaseValueHasher):
+    def hash(self, data_input):
+        m = hashlib.md5()
+        m.update(str.encode(str(data_input)))
+
+        return m.hexdigest()

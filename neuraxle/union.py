@@ -64,22 +64,22 @@ class FeatureUnion(TruncableSteps):
         """
         # Actually fit:
         if self.n_jobs != 1:
-            fitted_steps_data_containers = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
+            fitted_steps = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
                 delayed(step.handle_fit)(data_container.copy(), context)
                 for _, step in self.steps_as_tuple
             )
         else:
-            fitted_steps_data_containers = [
+            fitted_steps = [
                 step.handle_fit(data_container.copy(), context)
                 for _, step in self.steps_as_tuple
             ]
 
         # Save fitted steps
-        for i, (fitted_step, _) in enumerate(fitted_steps_data_containers):
+        for i, fitted_step in enumerate(fitted_steps):
             self.steps_as_tuple[i] = (self.steps_as_tuple[i][0], fitted_step)
         self._refresh_steps()
 
-        return self, data_container
+        return self
 
     def _transform_data_container(self, data_container, context):
         """
@@ -119,7 +119,7 @@ class FeatureUnion(TruncableSteps):
         :param context: execution context
         :return: the transformed data_inputs.
         """
-        new_self, _ = self._fit_data_container(data_container, context)
+        new_self = self._fit_data_container(data_container, context)
         data_container = self._transform_data_container(data_container, context)
         return new_self, data_container
 
@@ -213,16 +213,16 @@ class ModelStacking(FeatureUnion):
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
         new_self, _ = FeatureUnion.handle_fit_transform(self, data_container, context)
 
-        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
+        new_self = new_self.fit(data_container.data_inputs, data_container.expected_outputs)
 
-        return new_self, self.handle_transform(data_container, context)
+        return new_self, new_self.handle_transform(data_container, context)
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
-        new_self, _ = FeatureUnion.handle_fit(self, data_container, context)
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+        new_self = FeatureUnion.handle_fit(self, data_container, context)
 
-        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
+        new_self = new_self.fit(data_container.data_inputs, data_container.expected_outputs)
 
-        return new_self, data_container
+        return new_self
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         data_container = FeatureUnion.handle_transform(self, data_container, context)

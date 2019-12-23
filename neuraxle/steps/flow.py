@@ -120,7 +120,7 @@ class TrainOrTestOnlyWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
         :type: (BaseStep, DataContainer)
         """
         if self._should_execute_wrapped_step():
-            self.wrapped, data_container = self.wrapped.handle_fit(data_container, context)
+            self.wrapped = self.wrapped.handle_fit(data_container, context)
             return self, data_container
         return self, data_container
 
@@ -172,6 +172,7 @@ class TrainOnlyWrapper(TrainOrTestOnlyWrapper):
         :class:`TrainOrTestOnlyWrapper`,
         :class:`TestOnlyWrapper`
     """
+
     def __init__(self, wrapped: BaseStep):
         TrainOrTestOnlyWrapper.__init__(self, wrapped=wrapped, is_train_only=True)
 
@@ -192,6 +193,7 @@ class TestOnlyWrapper(TrainOrTestOnlyWrapper):
         :class:`TrainOrTestOnlyWrapper`,
         :class:`TrainOnlyWrapper`
     """
+
     def __init__(self, wrapped: BaseStep):
         TrainOrTestOnlyWrapper.__init__(self, wrapped=wrapped, is_train_only=False)
 
@@ -236,16 +238,12 @@ class Optional(ForceMustHandleMixin, MetaStepMixin, BaseStep):
         :type: (BaseStep, DataContainer)
         """
         if self.hyperparams[OPTIONAL_ENABLED_HYPERPARAM]:
-            self.wrapped, data_container = self.wrapped.handle_fit(data_container, context)
-            return self, data_container
+            self.wrapped = self.wrapped.handle_fit(data_container, context)
+            return self
 
         self._nullify_hyperparams()
 
-        return self, DataContainer(
-            current_ids=data_container.current_ids,
-            data_inputs=self.nullified_return_value,
-            expected_outputs=self.nullified_return_value
-        )
+        return self
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
             'BaseStep', DataContainer):
@@ -507,7 +505,7 @@ class ReversiblePreprocessingWrapper(ForceMustHandleMixin, TruncableSteps):
             ("postprocessing_step", postprocessing_step)
         ])
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('ReversiblePreprocessingWrapper', DataContainer):
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'ReversiblePreprocessingWrapper':
         """
         Handle fit by fitting preprocessing step, and postprocessing step.
 
@@ -518,13 +516,15 @@ class ReversiblePreprocessingWrapper(ForceMustHandleMixin, TruncableSteps):
         :return: self, data_container
         :rtype: (ReversiblePreprocessingWrapper, DataContainer)
         """
-        self["preprocessing_step"], data_container = self["preprocessing_step"].handle_fit_transform(data_container, context.push(self["preprocessing_step"]))
-        self["postprocessing_step"], data_container = self["postprocessing_step"].handle_fit(data_container, context.push(self["postprocessing_step"]))
+        self["preprocessing_step"], data_container = \
+            self["preprocessing_step"].handle_fit_transform(data_container, context.push(self["preprocessing_step"]))
+        self["postprocessing_step"] = \
+            self["postprocessing_step"].handle_fit(data_container, context.push(self["postprocessing_step"]))
 
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
-        return self, data_container
+        return self
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -541,17 +541,21 @@ class ReversiblePreprocessingWrapper(ForceMustHandleMixin, TruncableSteps):
         :return: data_container
         :rtype: DataContainer
         """
-        data_container = self["preprocessing_step"].handle_transform(data_container, context.push(self["preprocessing_step"]))
-        data_container = self["postprocessing_step"].handle_transform(data_container, context.push(self["postprocessing_step"]))
+        data_container = self["preprocessing_step"].handle_transform(data_container,
+                                                                     context.push(self["preprocessing_step"]))
+        data_container = self["postprocessing_step"].handle_transform(data_container,
+                                                                      context.push(self["postprocessing_step"]))
 
-        data_container = self["preprocessing_step"].handle_inverse_transform(data_container, context.push(self["preprocessing_step"]))
+        data_container = self["preprocessing_step"].handle_inverse_transform(data_container,
+                                                                             context.push(self["preprocessing_step"]))
 
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
         return data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('ReversiblePreprocessingWrapper', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'ReversiblePreprocessingWrapper', DataContainer):
         """
         According to the idiom of `(1, 2, reversed(1))`, we do this, in order:
 
@@ -566,10 +570,16 @@ class ReversiblePreprocessingWrapper(ForceMustHandleMixin, TruncableSteps):
         :return: (self, data_container)
         :rtype: (ReversiblePreprocessingWrapper, DataContainer)
         """
-        self["preprocessing_step"], data_container = self["preprocessing_step"].handle_fit_transform(data_container, context.push(self["preprocessing_step"]))
-        self["postprocessing_step"], data_container = self["postprocessing_step"].handle_fit_transform(data_container, context.push(self["postprocessing_step"]))
+        self["preprocessing_step"], data_container = self["preprocessing_step"].handle_fit_transform(data_container,
+                                                                                                     context.push(self[
+                                                                                                                      "preprocessing_step"]))
+        self["postprocessing_step"], data_container = self["postprocessing_step"].handle_fit_transform(data_container,
+                                                                                                       context.push(
+                                                                                                           self[
+                                                                                                               "postprocessing_step"]))
 
-        data_container = self["preprocessing_step"].handle_inverse_transform(data_container, context.push(self["preprocessing_step"]))
+        data_container = self["preprocessing_step"].handle_inverse_transform(data_container,
+                                                                             context.push(self["preprocessing_step"]))
 
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)

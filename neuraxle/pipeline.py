@@ -116,7 +116,7 @@ class Pipeline(BasePipeline):
         data_container = self.hash_data_container(data_container)
         context = ExecutionContext(self.cache_folder, ExecutionMode.FIT)
         context = context.push(self)
-        new_self, data_container = self._fit_data_container(data_container, context)
+        new_self = self._fit_data_container(data_container, context)
 
         return new_self
 
@@ -131,7 +131,7 @@ class Pipeline(BasePipeline):
             processed_outputs = step.inverse_transform(processed_outputs)
         return processed_outputs
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'Pipeline':
         """
         After loading the last checkpoint, fit transform each pipeline steps,
         but only fit the last pipeline step.
@@ -153,14 +153,14 @@ class Pipeline(BasePipeline):
             if index != index_last_step:
                 step, data_container = step.handle_fit_transform(data_container, context)
             else:
-                step, data_container = step.handle_fit(data_container, context)
+                step = step.handle_fit(data_container, context)
 
             new_steps_as_tuple.append((step_name, step))
 
         self.steps_as_tuple = self.steps_as_tuple[
                               :len(self.steps_as_tuple) - len(steps_left_to_do)] + new_steps_as_tuple
 
-        return self, data_container
+        return self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
             'Pipeline', DataContainer):
@@ -334,7 +334,7 @@ class MiniBatchSequentialPipeline(Pipeline):
         data_container.set_current_ids(current_ids)
 
         context = ExecutionContext(self.cache_folder, ExecutionMode.FIT_TRANSFORM)
-        new_self, data_container = self.handle_fit(data_container, context)
+        new_self = self.handle_fit(data_container, context)
 
         return new_self
 
