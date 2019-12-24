@@ -511,6 +511,17 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
         self.hyperparams_repository = hyperparams_repository
         self.n_iters = n_iters
 
+    def set_step(self, step: BaseStep) -> BaseStep:
+        self.wrapped.set_step(step)
+
+    def _fit_transform_data_container(self, data_container, context):
+        new_self = self._fit_data_container(data_container, context)
+        return new_self, new_self._transform_data_container(data_container, context)
+
+    def fit_transform(self, data_inputs, expected_outputs):
+        new_self = self.fit(data_inputs, expected_outputs)
+        return new_self, new_self.transform(data_inputs)
+
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
         Find the best hyperparams using the wrapped AutoML strategy.
@@ -644,11 +655,11 @@ class RandomSearch(AutoMLSequentialWrapper):
 
     def __init__(
             self,
-            wrapped: BaseStep,
-            hyperparams_repository: HyperparamsRepository = None,
+            wrapped: BaseStep = None,
             validation_technique=None,
+            hyperparams_repository: HyperparamsRepository = None,
             higher_score_is_better=True,
-            n_iters: int = 10
+            n_iter: int = 10
     ):
         AutoMLSequentialWrapper.__init__(
             self,
@@ -659,7 +670,7 @@ class RandomSearch(AutoMLSequentialWrapper):
                 higher_score_is_better=higher_score_is_better
             ),
             hyperparams_repository=hyperparams_repository,
-            n_iters=n_iters
+            n_iters=n_iter
         )
 
 
