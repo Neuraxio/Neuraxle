@@ -14,9 +14,10 @@ def test_hyperparams_repository_should_create_new_trial(tmpdir):
 
     hyperparams_json_repository.create_new_trial(hyperparams)
 
-    path_join = os.path.join(tmpdir, 'NEW_' + hyperparams_json_repository._get_trial_hash(
-        hyperparams.to_flat_as_dict_primitive()) + '.json')
-    with open(path_join) as f:
+    trial_hash = hyperparams_json_repository._get_trial_hash(hyperparams.to_flat_as_dict_primitive())
+    file_name = 'NEW_' + trial_hash + '.json'
+    path = os.path.join(tmpdir, file_name)
+    with open(path) as f:
         trial_json = json.load(f)
     assert trial_json['hyperparams'] == hyperparams.to_flat_as_dict_primitive()
     assert trial_json['score'] is None
@@ -43,11 +44,13 @@ def test_hyperparams_repository_should_save_failed_trial(tmpdir):
 
     hyperparams_json_repository._save_failed_trial_json(hyperparams, Exception('trial failed'))
 
-    path_join = os.path.join(tmpdir, 'FAILED_' + hyperparams_json_repository._get_trial_hash(
-        hyperparams.to_flat_as_dict_primitive()) + '.json')
-    with open(path_join) as f:
+    trial_hash = hyperparams_json_repository._get_trial_hash(hyperparams.to_flat_as_dict_primitive())
+    file_name = 'FAILED_' + trial_hash + '.json'
+    path = os.path.join(tmpdir, file_name)
+    with open(path) as f:
         trial_json = json.load(f)
     assert trial_json['hyperparams'] == hyperparams.to_flat_as_dict_primitive()
+    assert 'exception' in trial_json.keys()
     assert trial_json['score'] is None
 
 
@@ -57,9 +60,10 @@ def test_hyperparams_repository_should_save_success_trial(tmpdir):
 
     hyperparams_json_repository._save_successful_trial_json(hyperparams, FIRST_SCORE_FOR_TRIAL)
 
-    path_join = os.path.join(tmpdir, str(float(FIRST_SCORE_FOR_TRIAL)).replace('.', ',') + '_' + hyperparams_json_repository._get_trial_hash(
-        hyperparams.to_flat_as_dict_primitive()) + '.json')
-    with open(path_join) as f:
+    trial_hash = hyperparams_json_repository._get_trial_hash(hyperparams.to_flat_as_dict_primitive())
+    file_name = str(float(FIRST_SCORE_FOR_TRIAL)).replace('.', ',') + '_' + trial_hash + '.json'
+    path = os.path.join(tmpdir, file_name)
+    with open(path) as f:
         trial_json = json.load(f)
     assert trial_json['hyperparams'] == hyperparams.to_flat_as_dict_primitive()
     assert trial_json['score'] == FIRST_SCORE_FOR_TRIAL

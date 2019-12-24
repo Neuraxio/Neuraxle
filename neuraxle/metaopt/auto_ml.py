@@ -24,9 +24,10 @@ import glob
 import hashlib
 import json
 import os
+import traceback
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import List
+from typing import List, Callable
 
 from neuraxle.base import MetaStepMixin, BaseStep, NonTransformableMixin, ExecutionContext
 from neuraxle.data_container import DataContainer
@@ -112,8 +113,12 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         :class:`AutoMLSequentialWrapper`
     """
 
-    def __init__(self, print_new_trial=True, print_success_trial=True, print_exception=True):
+    def __init__(self, print_new_trial=True, print_success_trial=True, print_exception=True, print_func: Callable = None):
         HyperparamsRepository.__init__(self)
+        if print_func is None:
+           print_func = print
+        self.print_func = print_func
+
         self.trials = Trials()
         self.print_new_trial = print_new_trial
         self.print_success_trial = print_success_trial
@@ -121,7 +126,7 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
 
     def create_new_trial(self, hyperparams: HyperparameterSamples):
         if self.print_new_trial:
-            print('new trial:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+            self.print_func('new trial:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
     def load_all_trials(self, status: 'TRIAL_STATUS' = None) -> 'Trials':
         return self.trials.filter(status)
@@ -130,12 +135,14 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         self.trials.append(Trial(hyperparams, score, TRIAL_STATUS.SUCCESS))
 
         if self.print_success_trial:
-            print('score: {}'.format(score))
-            print('hyperparams:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+            self.print_func('score: {}'.format(score))
+            self.print_func('hyperparams:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
     def save_failure_for_trial(self, hyperparams: HyperparameterSamples, exception: Exception):
         if self.print_exception:
-            print(exception)
+            self.print_func(exception)
+            traceback_str = str(traceback.format_tb(exception.__traceback__))
+            self.print_func(traceback_str)
 
 
 class HyperparamsJSONRepository(HyperparamsRepository):

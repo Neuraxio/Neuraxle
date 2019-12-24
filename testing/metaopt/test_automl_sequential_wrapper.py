@@ -29,14 +29,13 @@ def test_automl_sequential_wrapper(tmpdir):
     auto_ml = RandomSearch(pipeline, hyperparams_repository=HyperparamsJSONRepository(tmpdir), n_iters=100)
 
     # When
-    mse_before = ((data_inputs - expected_outputs) ** 2).mean()
     auto_ml: AutoMLSequentialWrapper = auto_ml.fit(data_inputs, expected_outputs)
     best_model: Pipeline = auto_ml.get_best_model()
     predicted_outputs = best_model.transform(data_inputs)
 
     # Then
     actual_mse = ((predicted_outputs - expected_outputs) ** 2).mean()
-    assert actual_mse < mse_before
+    assert actual_mse < 5000
 
 
 def test_automl_sequential_wrapper_with_validation_split_wrapper(tmpdir):
