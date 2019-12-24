@@ -1,7 +1,27 @@
+
 Neuraxle Pipelines
 ==================
 
     Code Machine Learning Pipelines - The Right Way.
+
+.. image:: https://img.shields.io/github/workflow/status/Neuraxio/Neuraxle/Test%20Python%20Package/master?   :alt: Build
+    :target: https://github.com/Neuraxio/Neuraxle
+
+.. image:: https://img.shields.io/gitter/room/Neuraxio/Neuraxle?   :alt: Gitter
+    :target: https://gitter.im/Neuraxle/community
+
+.. image:: https://img.shields.io/pypi/l/neuraxle?   :alt: PyPI - License
+    :target: https://www.neuraxle.org/stable/Neuraxle/README.html#license
+
+.. image:: https://img.shields.io/pypi/dm/neuraxle?   :alt: PyPI - Downloads
+    :target: https://pypi.org/project/neuraxle/
+
+.. image:: https://img.shields.io/github/commit-activity/m/neuraxio/neuraxle?   :alt: GitHub commit activity
+    :target: https://github.com/Neuraxio/Neuraxle
+
+.. image:: https://img.shields.io/github/v/release/neuraxio/neuraxle?   :alt: GitHub release (latest by date)
+    :target: https://pypi.org/project/neuraxle/
+
 
 .. image:: https://www.neuraxio.com/en/blog/assets/pipeline_1_small.jpg
 
@@ -353,3 +373,13 @@ We thank these organisations for generously supporting the project:
 .. raw:: html
 
     <img src="https://www.neuraxio.com/images/La-Cite-LP.png" width="260">
+
+Support Us
+~~~~~~~~~~~~
+
+-  `Get in touch with us <https://gitter.im/Neuraxle/community>`__.
+-  `Be a sponsor <https://www.neuraxio.com/en/>`__.
+-  Save this for later:
+
+.. image:: https://img.shields.io/github/watchers/Neuraxio/Neuraxle?style=social&   :alt: GitHub watchers
+    :target: https://github.com/Neuraxio/Neuraxle/watchers

@@ -242,7 +242,7 @@ def test_transform_should_rehash_hyperparameters_for_each_steps(test_case: Resum
 def test_fit_should_rehash_hyperparameters_for_each_steps(test_case: ResumablePipelineTestCase, tmpdir):
     pipeline = ResumablePipelineWithMockHasher(steps=test_case.steps, cache_folder=tmpdir)
 
-    pipeline.fit(test_case.data_inputs, test_case.expected_outputs)
+    pipeline = pipeline.fit(test_case.data_inputs, test_case.expected_outputs)
 
     mocked_checkpoint = find_checkpoint(pipeline.steps_as_tuple)
     actual_rehashed_ids = mocked_checkpoint.saved_data_container.current_ids
