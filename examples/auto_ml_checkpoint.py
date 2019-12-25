@@ -33,7 +33,7 @@ from sklearn.metrics import mean_squared_error
 from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.random import RandomSearch
+from neuraxle.metaopt.auto_ml import RandomSearch
 from neuraxle.pipeline import ResumablePipeline, DEFAULT_CACHE_FOLDER, Pipeline
 from neuraxle.steps.flow import ExpandDim
 from neuraxle.steps.loop import ForEachDataInput

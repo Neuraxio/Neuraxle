@@ -24,8 +24,6 @@ Meta steps for hyperparameter tuning, such as random search.
 
 """
 
-import copy
-import json
 import math
 from abc import ABC, abstractmethod
 from typing import List, Callable, Tuple, Iterable
@@ -33,7 +31,7 @@ from typing import List, Callable, Tuple, Iterable
 import numpy as np
 from sklearn.metrics import r2_score
 
-from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, ExecutionMode, DEFAULT_CACHE_FOLDER
+from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnCustomAxis
@@ -100,8 +98,8 @@ class ValidationSplitWrapper(BaseValidation):
 
     def __init__(
             self,
-            wrapped: BaseStep,
-            test_size: float,
+            wrapped: BaseStep = None,
+            test_size: float = 0.2,
             scoring_function=r2_score,
             run_validation_split_in_test_mode=True
     ):
@@ -220,6 +218,9 @@ class ValidationSplitWrapper(BaseValidation):
         self.scores_train_mean = np.mean(self.scores_train)
         self.scores_train_std = np.std(self.scores_train)
 
+    def get_score(self):
+        return self.scores_validation_mean
+
     def split_data_container(self, data_container) -> Tuple[DataContainer, DataContainer]:
         """
         Split data container into a training set, and a validation set.
@@ -313,6 +314,12 @@ class BaseCrossValidationWrapper(BaseValidation, ABC):
         self.scores_std = np.std(self.scores)
 
         return self
+
+    def get_score(self):
+        return self.scores_mean
+
+    def get_scores_std(self):
+        return self.scores_std
 
     @abstractmethod
     def split(self, data_inputs, expected_outputs):
@@ -571,112 +578,3 @@ class WalkForwardTimeSeriesCrossValidationWrapper(AnchoredWalkForwardTimeSeriesC
             splitted_data_inputs.append(slice)
         return splitted_data_inputs
 
-
-class RandomSearch(MetaStepMixin, BaseStep):
-    """Perform a random hyperparameter search."""
-
-    # TODO: CV and rename to RandomSearchCV.
-
-    def __init__(
-            self,
-            wrapped=None,
-            n_iter: int = 10,
-            higher_score_is_better: bool = True,
-            validation_technique: BaseValidation = KFoldCrossValidationWrapper(),
-            refit=True,
-    ):
-        if wrapped is not None:
-            MetaStepMixin.__init__(self, wrapped)
-        BaseStep.__init__(self)
-        self.n_iter = n_iter
-        self.higher_score_is_better = higher_score_is_better
-        self.validation_technique: BaseValidation = validation_technique
-        self.refit = refit
-
-    def _fit_transform_data_container(self, data_container, context):
-        fitted_self = self._fit_data_container(data_container, context)
-        best_model_predictions_data_container = self._transform_data_container(data_container, context)
-        return fitted_self, best_model_predictions_data_container
-
-    def _fit_data_container(self, data_container, context):
-        started = False
-        best_hyperparams = None
-
-        for _ in range(self.n_iter):
-
-            step = copy.copy(self.wrapped)
-
-            new_hyperparams = step.get_hyperparams_space().rvs()
-            step.update_hyperparams(new_hyperparams)
-
-            step: BaseValidation = copy.copy(self.validation_technique).set_step(step)
-
-            step = step.handle_fit(data_container, context)
-            score = step.scores_mean
-
-            if not started or self.higher_score_is_better == (score > self.score):
-                started = True
-                self.score = score
-                self.best_validation_wrapper_of_model = copy.copy(step)
-                print('score: {}'.format(score))
-                best_hyperparams = new_hyperparams
-                print('best_hyperparams: \n{}\n'.format(best_hyperparams))
-
-        self.best_validation_wrapper_of_model.wrapped.update_hyperparams(best_hyperparams)
-
-        self.best_model = copy.copy(self.wrapped).update_hyperparams(best_hyperparams)
-        if self.refit:
-            self.best_model = self.best_model.handle_fit(data_container, context)
-
-        return self
-
-    def fit_transform(self, data_inputs, expected_outputs):
-        return self.fit(data_inputs, expected_outputs), self.transform(data_inputs)
-
-    def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
-        started = False
-        best_hyperparams = None
-
-        for _ in range(self.n_iter):
-
-            step = copy.copy(self.wrapped)
-
-            new_hyperparams = step.get_hyperparams_space().rvs()
-            step.set_hyperparams(new_hyperparams)
-
-            step: BaseValidation = copy.copy(self.validation_technique).set_step(step)
-
-            step = step.fit(data_inputs, expected_outputs)
-            score = step.scores_mean
-
-            if not started or self.higher_score_is_better == (score > self.score):
-                started = True
-                self.score = score
-                self.best_validation_wrapper_of_model = copy.copy(step)
-
-                print('\nbest_score: {}'.format(score))
-                best_hyperparams = new_hyperparams
-                print('best_hyperparams: ')
-                print(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4))
-
-        self.best_validation_wrapper_of_model.wrapped.set_hyperparams(best_hyperparams)
-
-        self.best_model = copy.copy(self.wrapped).set_hyperparams(best_hyperparams)
-        if self.refit:
-            self.best_model = self.best_model.fit(data_inputs, expected_outputs)
-
-        return self
-
-    def get_best_model(self):
-        return self.best_model
-
-    def transform(self, data_inputs):
-        if self.best_validation_wrapper_of_model is None:
-            raise Exception('Cannot transform RandomSearch before fit')
-        return self.best_validation_wrapper_of_model.wrapped.transform(data_inputs)
-
-    def _transform_data_container(self, data_container, context):
-        if self.best_validation_wrapper_of_model is None:
-            raise Exception('Cannot transform RandomSearch before fit')
-
-        return self.best_validation_wrapper_of_model.wrapped.handle_transform(data_container, context)
