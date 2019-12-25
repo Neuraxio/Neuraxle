@@ -537,7 +537,7 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
             auto_ml_trial_data_container: AutoMLContainer = self._load_auto_ml_data(i)
 
             hyperparams = self.wrapped.find_next_best_hyperparams(auto_ml_trial_data_container)
-            self.wrapped = self.wrapped.set_hyperparams(hyperparams)
+            self.wrapped = self.wrapped.update_hyperparams(hyperparams)
 
             self.hyperparams_repository.create_new_trial(hyperparams)
 
@@ -567,7 +567,7 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
             auto_ml_trial_container: AutoMLContainer = self._load_auto_ml_data(i)
 
             hyperparams: HyperparameterSamples = self.wrapped.find_next_best_hyperparams(auto_ml_trial_container)
-            self.wrapped = self.wrapped.set_hyperparams(hyperparams)
+            self.wrapped = self.wrapped.update_hyperparams(hyperparams)
 
             self.hyperparams_repository.create_new_trial(hyperparams)
 
@@ -610,7 +610,7 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
         trials: Trials = self.hyperparams_repository.load_all_trials(TRIAL_STATUS.SUCCESS)
         auto_ml_algorithm: AutoMLAlgorithm = self.wrapped
         best_hyperparams = auto_ml_algorithm.get_best_hyperparams(trials)
-        auto_ml_algorithm = auto_ml_algorithm.set_hyperparams(best_hyperparams)
+        auto_ml_algorithm = auto_ml_algorithm.update_hyperparams(best_hyperparams)
 
         return copy.deepcopy(auto_ml_algorithm.get_step())
 
