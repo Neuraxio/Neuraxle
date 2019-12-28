@@ -81,7 +81,7 @@ such:
 
     # Once it learned, the pipeline can process new and
     # unseen data for making predictions.
-    y_test_predicted = p.transform(X_test)
+    y_test_predicted = p.predict(X_test)
 
 Visit the
 `examples <https://www.neuraxle.org/stable/examples/index.html>`__
