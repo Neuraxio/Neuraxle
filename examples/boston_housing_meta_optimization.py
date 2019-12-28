@@ -105,8 +105,8 @@ def main():
     print("")
 
     print("Transforming train and test:")
-    y_train_predicted = p.transform(X_train)
-    y_test_predicted = p.transform(X_test)
+    y_train_predicted = p.predict(X_train)
+    y_test_predicted = p.predict(X_test)
 
     print("")
 
