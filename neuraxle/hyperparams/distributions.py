@@ -35,6 +35,7 @@ from scipy.stats import norm
 from scipy.integrate import quad
 import math
 import numpy as np
+from typing import List, Tuple, Union
 from scipy.stats import truncnorm
 
 
@@ -266,7 +267,8 @@ class Choice(HyperparameterDistribution):
         elif null_default_value in choice_list:
             HyperparameterDistribution.__init__(self, null_default_value)
         else:
-            raise ValueError('invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
+            raise ValueError(
+                'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
 
         self.choice_list = choice_list
 
@@ -363,7 +365,8 @@ class PriorityChoice(HyperparameterDistribution):
         elif null_default_value in choice_list:
             HyperparameterDistribution.__init__(self, null_default_value)
         else:
-            raise ValueError('invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
+            raise ValueError(
+                'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
 
         HyperparameterDistribution.__init__(self, null_default_value)
         self.choice_list = choice_list
@@ -451,7 +454,8 @@ class PriorityChoice(HyperparameterDistribution):
 
 
 class WrappedHyperparameterDistributions(HyperparameterDistribution):
-    def __init__(self, hd: HyperparameterDistribution = None, hds: List[HyperparameterDistribution] = None, null_default_value=None):
+    def __init__(self, hd: HyperparameterDistribution = None, hds: List[HyperparameterDistribution] = None,
+                 null_default_value=None):
         """
         Create a wrapper that will surround another HyperparameterDistribution.
         The wrapper might use one (hd) and/or many (hds) HyperparameterDistribution depending on the argument(s) used.
@@ -519,7 +523,7 @@ class Quantized(WrappedHyperparameterDistributions):
 class RandInt(HyperparameterDistribution):
     """Get a random integer within a range"""
 
-    def __init__(self, min_included: int, max_included: int, null_default_value: int=None):
+    def __init__(self, min_included: int, max_included: int, null_default_value: int = None):
         """
         Create a quantized random uniform distribution.
         A random integer between the two values inclusively will be returned.
@@ -585,7 +589,8 @@ class RandInt(HyperparameterDistribution):
         new_max_included = round(self.max_included * kept_space_ratio + best_guess * lost_space_ratio)
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
             return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return RandInt(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
+        return RandInt(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio,
+                                                                                                      self)
 
 
 class Uniform(HyperparameterDistribution):
@@ -668,7 +673,8 @@ class Uniform(HyperparameterDistribution):
         new_max_included = self.max_included * kept_space_ratio + best_guess * lost_space_ratio
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
             return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return Uniform(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
+        return Uniform(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio,
+                                                                                                      self)
 
 
 class LogUniform(HyperparameterDistribution):
@@ -750,14 +756,15 @@ class LogUniform(HyperparameterDistribution):
         new_max_included = self.log2_max_included * kept_space_ratio + log2_best_guess * lost_space_ratio
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
             return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return LogUniform(2 ** new_min_included, 2 ** new_max_included, 2 ** self.null_default_value).was_narrowed_from(kept_space_ratio, self)
+        return LogUniform(2 ** new_min_included, 2 ** new_max_included, 2 ** self.null_default_value).was_narrowed_from(
+            kept_space_ratio, self)
 
 
 class Normal(HyperparameterDistribution):
     """Get a normal distribution."""
 
     def __init__(self, mean: float, std: float,
-                 hard_clip_min: float = None, hard_clip_max: float = None, null_default_value: float=None):
+                 hard_clip_min: float = None, hard_clip_max: float = None, null_default_value: float = None):
         """
         Create a normal distribution from mean and standard deviation.
 
@@ -1007,3 +1014,138 @@ class LogNormal(HyperparameterDistribution):
         return Normal(
             new_mean, new_std, self.hard_clip_min, self.hard_clip_max, self.null_default_value
         ).was_narrowed_from(kept_space_ratio, self)
+
+
+class DistributionMixture(HyperparameterDistribution):
+    """Get a mixture of multiple distribution"""
+
+    def __init__(self, distributions: Union[List[HyperparameterDistribution], Tuple[HyperparameterDistribution, ...]],
+                 distribution_amplitudes: Union[List[float], Tuple[float, ...]]):
+        """
+        Create a mixture of multiple distributions.
+
+        :param distributions: list of multiple instantiated distribution.
+        :param distribution_amplitudes: list of float representing the amplitude for each distribution.
+        """
+        # Normalize distribution amplitude
+        distribution_amplitudes = np.array(distribution_amplitudes)
+        distribution_amplitudes = distribution_amplitudes / np.sum(distribution_amplitudes)
+        self.distributions = distributions
+        self.distribution_amplitudes = distribution_amplitudes
+
+    @staticmethod
+    def build_gaussian_mixture(distribution_amplitudes: Union[List[float], Tuple[float, ...]],
+                               means: Union[List[float], Tuple[float, ...]],
+                               stds: Union[List[float], Tuple[float, ...]],
+                               distributions_mins: Union[List[float], Tuple[float, ...]],
+                               distributions_max: Union[List[float], Tuple[float, ...]], use_logs: bool = False):
+
+        distribution_class = Normal
+
+        if use_logs:
+            distribution_class = LogNormal
+
+        distributions = []
+
+        for mean, std, single_min, single_max in zip(means, stds, distributions_mins, distributions_max):
+
+            if np.isneginf(single_min):
+                single_min = None
+
+            if np.isposinf(single_max):
+                single_max = None
+
+            distribution_instance = distribution_class(mean, std, hard_clip_min=single_min, hard_clip_max=single_max)
+
+            distributions.append(distribution_instance)
+
+        return DistributionMixture(distributions, distribution_amplitudes)
+
+    def rvs(self) -> float:
+        """
+        Will return a float value drawned from the distribution mixture.
+
+        :return: a float.
+        """
+        # Draw from which distribution to draw first using the amplitude as probabilities on how to draw from each.
+        distribution_index = np.random.choice(len(self.distributions), p=self.distribution_amplitudes, replace=True)
+
+        # Draw from distribution.
+        return self.distributions[distribution_index].rvs()
+
+    def pdf(self, x) -> float:
+        """
+        Calculate the mixture probability distribution value at position `x`.
+        :param x: value where the probability distribution function is evaluated.
+        :return: value of the probability distribution function.
+        """
+        pdf_result = 0
+
+        for distribution_amplitude, distribution in zip(self.distribution_amplitudes, self.distributions):
+            pdf_result += (distribution_amplitude * distribution.pdf(x))
+
+        return pdf_result
+
+    def cdf(self, x) -> float:
+        """
+        Calculate the mixture cumulative distribution value at position `x`.
+        :param x: value where the cumulative distribution function is evaluated.
+        :return: value of the cumulative distribution function.
+        """
+        cdf_result = 0
+
+        for distribution_amplitude, distribution in zip(self.distribution_amplitudes, self.distributions):
+            cdf_result += (distribution_amplitude * distribution.cdf(x))
+
+        return cdf_result
+
+    def mean(self) -> float:
+        """
+        Calculate mean of the mixture.
+        :return: mean value of the mixtture.
+        """
+        # Since mean is linear, the mean is simply the weighted summed (using distribution amplitude) of each distribution mean.
+        mean_result = 0
+
+        for distribution_amplitude, distribution in zip(self.distribution_amplitudes, self.distributions):
+            mean_result += (distribution_amplitude * distribution.mean())
+
+        return mean_result
+
+    def var(self) -> float:
+        """
+        Calculate variance of the mixture.
+        :return: standard deviation value of the mixtture.
+        """
+        # Usually the var will be the sum(Variance) + 2 sum(Covariance).
+        # But since all distribution function are independents, the equation is
+        # Var(a * X0 + b * X1 + c * X2) = a^2 * Var(X0) + b^2 Var(X1)+ c^2 Var(X2)
+        var_result = 0
+
+        for distribution_amplitude, distribution in zip(self.distribution_amplitudes, self.distributions):
+            var_result += (distribution_amplitude ** 2 * distribution.var())
+
+        return var_result
+
+    def std(self) -> float:
+        """
+        Calculate standard deviation of the mixture.
+        :return: standard deviation value of the mixtture.
+        """
+        return math.sqrt(self.var())
+
+    def min(self) -> float:
+        """
+        Calculate minimal domain value of the mixture.
+        :return: minimal domain value of the mixtture.
+        """
+        distributions_min = [distribution.min() for distribution in self.distributions]
+        return np.amin(distributions_min)
+
+    def max(self) -> float:
+        """
+        Calculate minimal domain value of the mixture.
+        :return: minimal domain value of the mixtture.
+        """
+        distributions_max = [distribution.msx() for distribution in self.distributions]
+        return np.amax(distributions_max)
