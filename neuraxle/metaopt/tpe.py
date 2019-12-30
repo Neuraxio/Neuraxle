@@ -13,16 +13,16 @@ from .auto_ml import BaseHyperparameterOptimizer, RandomSearchHyperparameterOpti
 class TreeParzenEstimatorHyperparameterOptimizer(BaseHyperparameterOptimizer):
 
     def __init__(self, number_of_initial_random_step: int = 40, quantile_threshold: float = 30,
-                 number_possible_hyperparams_sample=100,
-                 use_prior_normal_distribution: bool = True,
+                 number_possible_hyperparams_candidates=100,
+                 prior_weight: float = 0.,
                  use_linear_forgetting_weights: bool = False,
                  number_recent_trial_at_full_weights=25):
         super().__init__()
         self.initial_auto_ml_algo = RandomSearchHyperparameterOptimizer()
         self.number_of_initial_random_step = number_of_initial_random_step
         self.quantile_threshold = quantile_threshold
-        self.number_possible_hyperparams_sample = number_possible_hyperparams_sample
-        self.use_prior_normal_distribution = use_prior_normal_distribution
+        self.number_possible_hyperparams_candidates = number_possible_hyperparams_candidates
+        self.prior_weight = prior_weight
         self.use_linear_forgetting_weights = use_linear_forgetting_weights
         self.number_recent_trial_at_full_weights = number_recent_trial_at_full_weights
 
@@ -35,6 +35,7 @@ class TreeParzenEstimatorHyperparameterOptimizer(BaseHyperparameterOptimizer):
         percentile_thresholds = np.percentile(trials_scores, self.quantile_threshold)
 
         # In hyperopt they use this to split, where default_gamma_cap = 25. They clip the max of item they use in the good item.
+        # default_gamma_cap is link to the number of recent_trial_at_full_weight also.
         # n_below = min(int(np.ceil(gamma * np.sqrt(len(l_vals)))), gamma_cap)
 
         good_trials = []
@@ -47,9 +48,6 @@ class TreeParzenEstimatorHyperparameterOptimizer(BaseHyperparameterOptimizer):
         return good_trials, bad_trials
 
     def _create_posterior(self, flat_hyperparameter_space, trials):
-
-        # TODO: modify this to a class so we can rvs, pdf or cdf all togheter.
-
         # Create a list of all hyperparams and their trials.
 
         # Loop through all hyperparams
@@ -72,17 +70,16 @@ class TreeParzenEstimatorHyperparameterOptimizer(BaseHyperparameterOptimizer):
         return posterior_distributions
 
     def _reweights_categorical(self, hyperparam_distribution, distribution_trials):
+        # For discret categorical distribution
+        # We need to reweights probability depending on trial counts.
 
-    # For discret categorical distribution
-    # We need to reweights probability depending on trial counts.
-
-    def _create_gaussian_mixture(self, hyperparam_distribution, distribution_trials)
+    def _create_gaussian_mixture(self, hyperparam_distribution, distribution_trials):
 
         # TODO: add Condition if log distribution or not.
         use_logs = False
 
         # Find means, std, amplitudes, min and max.
-        distribution_amplitudes, means, stds, distributions_mins, distributions_max = self._adaptive_parzen_normal(
+        distribution_amplitudes, means, stds, distributions_mins, distributions_max = self._adaptive_parzen_normal(hyperparam_distribution,
             distribution_trials)
 
         # Create appropriate gaussian mixture that wrapped all hyperparams.
@@ -92,7 +89,42 @@ class TreeParzenEstimatorHyperparameterOptimizer(BaseHyperparameterOptimizer):
 
         return gmm
 
-    def _adaptive_parzen_normal(self, distribution_trials):
+    def _adaptive_parzen_normal(self, hyperparam_distribution, distribution_trials):
+
+        prior_sigma = hyperparam_distribution.std()
+
+        means = distribution_trials
+        distributions_mins = hyperparam_distribution.min() * len(means)
+        distributions_max = hyperparam_distribution.max() * len(means)
+
+        # TODO: calculate sigma which are calculated from the closest neighbours.
+
+        # Magic formula from hyperopt.
+        # -- magic formula:
+        # maxsigma = old_div(prior_sigma, 1.0)
+        # minsigma = old_div(prior_sigma, min(100.0, (1.0 + len(srtd_mus))))
+        #
+        # sigma = np.clip(sigma, minsigma, maxsigma)
+        # sigma[prior_pos] = prior_sigma
+
+        if self.use_linear_forgetting_weights:
+            # TODO: manage the linear forgetting weights.
+        else:
+            # TODO: not sure, if hyperopt really use the pdf to weights the gaussian distributions. Seems to only use forgetting weights.
+            # From tpe article : TPE substitutes an equally-weighted mixture of that prior with Gaussians centered at each observations.
+            distribution_amplitudes = np.ones(len(means))
+            # distribution_amplitudes = [hyperparam_distribution.pdf(mean) for mean in means]
+
+
+        if (self.prior_weight - 0.) > 1e-10:
+            # If prior weight is different than 0 we add the prior.
+            # TODO: code to add a normal with mean and std of the prior.
+
+        # Normalize distribution amplitudes.
+        distribution_amplitudes = np.array(distribution_amplitudes)
+        distribution_amplitudes /= np.sum(distribution_amplitudes)
+
+        return distribution_amplitudes, means, stds, distributions_mins, distributions_max
 
     def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
         """
@@ -126,7 +158,7 @@ class TreeParzenEstimatorHyperparameterOptimizer(BaseHyperparameterOptimizer):
         for (hyperparam_key, good_posterior) in good_posteriors.items():
             best_new_hyperparam_value = None
             best_ratio = None
-            for _ in range(self.number_possible_hyperparams_sample):
+            for _ in range(self.number_possible_hyperparams_candidates):
                 # Sample possible new hyperparams in the good_trials.
                 possible_new_hyperparm = good_posterior.rvs()
 
