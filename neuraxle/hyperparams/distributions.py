@@ -477,6 +477,8 @@ class WrappedHyperparameterDistributions(HyperparameterDistribution):
 class Quantized(WrappedHyperparameterDistributions):
     """A quantized wrapper for another distribution: will round() the rvs number."""
 
+    # TODO: Manage when hds is used.
+
     def rvs(self) -> int:
         """
         Will return an integer, rounded from the output of the previous distribution.
@@ -1038,7 +1040,7 @@ class DistributionMixture(HyperparameterDistribution):
                                means: Union[List[float], Tuple[float, ...]],
                                stds: Union[List[float], Tuple[float, ...]],
                                distributions_mins: Union[List[float], Tuple[float, ...]],
-                               distributions_max: Union[List[float], Tuple[float, ...]], use_logs: bool = False):
+                               distributions_max: Union[List[float], Tuple[float, ...]], use_logs: bool = False, use_quantized_distributions: bool = False):
 
         distribution_class = Normal
 
@@ -1056,6 +1058,9 @@ class DistributionMixture(HyperparameterDistribution):
                 single_max = None
 
             distribution_instance = distribution_class(mean, std, hard_clip_min=single_min, hard_clip_max=single_max)
+
+            if use_quantized_distributions:
+                distribution_instance = Quantized(distribution_instance)
 
             distributions.append(distribution_instance)
 
