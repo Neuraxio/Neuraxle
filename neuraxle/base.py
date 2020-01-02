@@ -207,6 +207,9 @@ class BaseSaver(ABC):
         """
         raise NotImplementedError()
 
+    def get_saved_files(self, step: 'BaseStep', context: 'ExecutionContext') -> List[Tuple[str, str]]:
+        raise NotImplementedError()
+
 
 class JoblibStepSaver(BaseSaver):
     """
@@ -225,6 +228,9 @@ class JoblibStepSaver(BaseSaver):
         :class:`ExecutionContext`
     """
 
+    def get_saved_files(self, step: 'BaseStep', context: 'ExecutionContext') -> List[Tuple[str, str]]:
+        return [(context.get_path(), self._create_step_path(step, context))]
+
     def can_load(self, step: 'BaseStep', context: 'ExecutionContext') -> bool:
         """
         Returns true if the given step has been saved with the given execution context.
@@ -237,10 +243,10 @@ class JoblibStepSaver(BaseSaver):
         :rtype: bool
         """
         return os.path.exists(
-            self._create_step_path(context, step)
+            self._create_step_path(step, context)
         )
 
-    def _create_step_path(self, context, step):
+    def _create_step_path(self, step, context):
         """
         Create step path for the given context.
 
@@ -265,7 +271,7 @@ class JoblibStepSaver(BaseSaver):
         """
         context.mkdir()
 
-        path = self._create_step_path(context, step)
+        path = self._create_step_path(step, context)
         dump(step, path)
 
         return step
@@ -280,7 +286,7 @@ class JoblibStepSaver(BaseSaver):
         :type context: ExecutionContext
         :return:
         """
-        loaded_step = load(self._create_step_path(context, step))
+        loaded_step = load(self._create_step_path(step, context))
 
         # we need to keep the current steps in memory because they have been deleted before saving...
         # the steps that have not been saved yet need to be in memory while loading a truncable steps...
@@ -360,7 +366,7 @@ class ExecutionContext:
             if should_save_last_step:
                 last_step.save(self, full_dump)
 
-    def save_last(self):
+    def save_last(self) -> 'BaseStep':
         """
         Save only the last step in the execution context.
 
@@ -369,7 +375,7 @@ class ExecutionContext:
         """
         last_step = self.peek()
         self.pop()
-        last_step.save(self, True)
+        return last_step.save(self, True)
 
     def should_save_last_step(self) -> bool:
         """
@@ -516,6 +522,16 @@ class ExecutionContext:
             stripped_saver=self.stripped_saver,
             parents=parents
         )
+
+    def get_all_saved_step_files(self) -> List[Tuple[str, str]]:
+        saved_files = []
+        last_step = self.peek()
+        for saver in last_step.savers:
+            saved_files.extend(saver.get_saved_files(last_step, self))
+
+        saved_files.extend(self.stripped_saver.get_saved_files(last_step, self))
+
+        return saved_files
 
     def __len__(self):
         return len(self.parents)
@@ -2035,6 +2051,20 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         step._refresh_steps()
 
         return step
+
+    def get_saved_files(self, step: 'BaseStep', context: 'ExecutionContext') -> List[Tuple[str, str]]:
+        saved_files = []
+        for step_name, savers in step.sub_steps_savers:
+            if savers is None:
+                savers = []
+
+            step_identity = Identity(name=step_name, savers=savers)
+            for saver in savers:
+                saved_files.extend(saver.get_saved_files(step_identity, context.push(step_identity)))
+
+            saved_files.extend(context.stripped_saver.get_saved_files(step_identity, context.push(step_identity)))
+
+        return saved_files
 
 
 class TruncableSteps(BaseStep, ABC):

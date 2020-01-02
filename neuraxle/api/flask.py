@@ -23,12 +23,15 @@ The flask wrapper classes are used to easily serve pipeline predictions using a 
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
+import json
 from abc import ABC, abstractmethod
+from urllib import request
 
 import numpy as np
 from flask import Response
 
-from neuraxle.base import BaseStep, NonFittableMixin
+from neuraxle.base import BaseStep, NonFittableMixin, ExecutionContext
+from neuraxle.data_container import DataContainer
 from neuraxle.pipeline import Pipeline
 
 
@@ -145,3 +148,43 @@ class FlaskRestApiWrapper(Pipeline):
         )
 
         return app
+
+
+class RestAPICaller(NonFittableMixin, BaseStep):
+    def __init__(self, url, method='GET'):
+        BaseStep.__init__(self)
+        self.url = url
+        self.method = method
+
+    def transform(self, data_inputs):
+        raise NotImplementedError('must be used inside a pipeline')
+
+    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        return data_container, context
+
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        data_dict = {
+            'path': context.get_path(False),
+            'data_inputs': np.array(data_container.data_inputs).tolist(),
+            'expected_outputs': np.array(data_container.expected_outputs).tolist(),
+            'current_ids': np.array(data_container.current_ids).tolist(),
+            'summary_id': data_container.summary_id
+        }
+        data = json.dumps(data_dict).encode('utf8')
+
+        req = request.Request(
+            self.url,
+            method=self.method,
+            headers={'content-type': 'application/json'},
+            data=data
+        )
+
+        response = request.urlopen(req)
+        results = json.loads(response.read())
+
+        return DataContainer(
+            summary_id=np.array(results['summary_id']),
+            current_ids=np.array(results['current_ids']),
+            data_inputs=np.array(results['data_inputs']),
+            expected_outputs=np.array(results['expected_outputs'])
+        )
