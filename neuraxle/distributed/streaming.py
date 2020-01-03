@@ -107,9 +107,17 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
 
         steps_as_tuple: NamedTupleList = []
         for name, n_workers, step in steps:
-            wrapped_step = QueueWorker(step, n_workers=n_workers, use_threading=self.use_threading, max_size=self.max_size)
-            if len(steps_as_tuple) > 0:
-                previous_step: Observer = steps_as_tuple[-1][1]
+            wrapped_step = QueueWorker(
+                step,
+                n_workers=n_workers,
+                use_threading=self.use_threading,
+                max_size=self.max_size
+            )
+
+            should_subsribe_to_previous_step = len(steps_as_tuple) > 0 and len(steps_as_tuple) != len(steps) - 1
+
+            if should_subsribe_to_previous_step:
+                _, previous_step = steps_as_tuple[-1]
                 wrapped_step.subscribe(previous_step)
 
             steps_as_tuple.append((name, wrapped_step))
