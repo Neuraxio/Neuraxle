@@ -48,6 +48,7 @@ class BaseClusteringScheduler(ABC):
         :class:`DataContainer`,
         :class:`ExecutionContext`
     """
+
     def __init__(self):
         self.started = False
 
@@ -76,6 +77,7 @@ class RestApiScheduler(BaseClusteringScheduler):
         :class:`ExecutionContext`,
         :class:`RestApiCaller`,
     """
+
     def __init__(self, hosts: List[str]):
         super().__init__()
         self.hosts = hosts
@@ -117,7 +119,8 @@ class RestApiScheduler(BaseClusteringScheduler):
         self.started = True
         for host in self.hosts:
             saved_step_files = context.get_all_saved_step_files()
-            files = {path.replace(str(context.root) + '/', ''): open(file_path, 'rb') for path, file_path in saved_step_files}
+            files = {path.replace(str(context.root) + '/', ''): open(file_path, 'rb') for path, file_path in
+                     saved_step_files}
             r = requests.post(host, files=files)
 
             for f in files.values():
@@ -256,6 +259,7 @@ class RestWorker:
         :class:`BaseStep`,
         :class:`DataContainer`
     """
+
     def __init__(self, ressource_name='pipeline', host: str = None, port: int = 5000):
         self.ressource_name = ressource_name
         self.host = host
@@ -353,4 +357,3 @@ class RestWorker:
         app = self.get_app()
         app.config['UPLOAD_FOLDER'] = upload_folder
         app.run(host=self.host, debug=False, port=self.port)
-
