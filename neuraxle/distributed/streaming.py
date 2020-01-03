@@ -32,24 +32,65 @@ from neuraxle.pipeline import Pipeline, CustomPipelineMixin
 
 
 class Observer:
+    """
+    Observer class that listens to :class:`Observable` events.
+
+    .. seealso::
+        :class:`Observable`
+    """
+
     @abstractmethod
     def on_next(self, value):
+        """
+        Method called by the observables to notifiy the observers.
+
+        :param value:
+        :return:
+        """
         pass
 
 
 class Observable:
+    """
+    Observable class that notifies observers of type :class:`Observer`.
+    """
     def __init__(self):
-        self.observers = []
+        self.observers: List[Observer] = []
 
     def subscribe(self, observer: Observer):
+        """
+        Add observer to the subscribed observers list.
+
+        :param observer: observer
+        :type observer: Observer
+        :return:
+        """
         self.observers.append(observer)
 
     def on_next(self, value):
+        """
+        Notify all of the observers.
+
+        :param value:
+        :return:
+        """
         for observer in self.observers:
             observer.on_next(value)
 
 
 class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
+    """
+    Start multiple Process or Thread that process items from the queue of batches to process.
+    It is both an observable, and observer.
+    It notifies the results of the wrapped step handle transform method.
+    It receives the next data container to process.
+
+    .. seealso::
+        :class:`Observer`,
+        :class:`Observable`,
+        :class:`MetaStepMixin`,
+        :class:`BaseStep`
+    """
     def __init__(self, wrapped: BaseStep, max_size: int, n_workers: int, use_threading: bool):
         Observer.__init__(self)
         Observable.__init__(self)
@@ -57,15 +98,29 @@ class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
         BaseStep.__init__(self)
 
         self.use_threading: bool = use_threading
-        self.worker_processes: List[Process] = []
+        self.workers: List[Process] = []
         self.batches_to_process: Queue = Queue(maxsize=max_size)
         self.n_workers: int = n_workers
 
     def on_next(self, value):
+        """
+        Add batch to process when the observer receives a value.
+
+        :param value: data container to process
+        :type value: DataContainer
+        :return:
+        """
         self.batches_to_process.put(value)
 
-    def start(self, context):
-        worker_processes = []
+    def start(self, context: ExecutionContext):
+        """
+        Start multiple processes or threads with the worker function as a target.
+
+        :param context: execution context
+        :type context: ExecutionContext
+        :return:
+        """
+        self.workers = []
         for _ in range(self.n_workers):
             if self.use_threading:
                 p = Thread(target=self.worker_func, args=(self.batches_to_process, context))
@@ -74,24 +129,72 @@ class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
 
             p.daemon = True
             p.start()
-            worker_processes.append(p)
+            self.workers.append(p)
 
     def stop(self):
+        """
+        Stop all of the workers.
+
+        :return:
+        """
         if not self.use_threading:
-            [w.kill() for w in self.worker_processes]
-        self.worker_processes = []
+            [w.kill() for w in self.workers]
+        self.workers = []
 
     def worker_func(self, batches_to_process, context: ExecutionContext):
+        """
+        Worker function that transforms the items inside the queue of items to process.
+
+        :param batches_to_process: multiprocessing queue
+        :param context: execution context
+        :type context: ExecutionContext
+        :return:
+        """
         while True:
             data_container = batches_to_process.get()
             data_container = self.handle_transform(data_container, context)
             Observable.on_next(self, data_container)
 
 
+# [step_name, n_workers, step]
 NameNWorkerStepTupleList = List[Tuple[str, int, BaseStep]]
 
 
 class QueuedPipeline(CustomPipelineMixin, Pipeline):
+    """
+    Sub class of :class:`Pipeline`.
+    Transform data in many pipeline steps at once in parallel in the pipeline using multiprocessing Queues.
+
+    Example usage :
+
+    .. code-block:: python
+
+        p = QueuedPipeline([
+            ('step_a', Identity()),
+            ('step_b', Identity()),
+        ], n_workers=1, batch_size=10, max_size=10)
+
+        # or
+
+        p = QueuedPipeline([
+            ('step_a', 1, Identity()),
+            ('step_b', 1, Identity()),
+        ], batch_size=10, max_size=10)
+
+        # or
+
+        p = QueuedPipeline([
+            ('step_a', 1, 10, Identity()),
+            ('step_b', 1, 10, Identity()),
+        ], batch_size=10)
+
+
+    .. seealso::
+        :class:`QueueWorker`,
+        :class:`QueueJoiner`,
+        :class:`CustomPipelineMixin`,
+        :class:`Pipeline`
+    """
     def __init__(self, steps: NameNWorkerStepTupleList, batch_size, max_size, use_threading=False, cache_folder=None):
         CustomPipelineMixin.__init__(self)
 
@@ -102,6 +205,14 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
         Pipeline.__init__(self, steps=self._initialize_steps_as_tuple(steps), cache_folder=cache_folder)
 
     def _initialize_steps_as_tuple(self, steps):
+        """
+        Wrap each step by a :class:`QueueWorker` to  allow data to flow in many pipeline steps at once in parallel.
+
+        :param steps: (name, n_workers, step)
+        :type steps: NameNWorkerStepTupleList
+        :return: steps as tuple
+        :rtype: NamedTupleList
+        """
         if not isinstance(steps, tuple):
             steps = [(step.name, step) for step in steps]
 
@@ -125,6 +236,15 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
         return steps_as_tuple
 
     def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        Start the :class:`QueueWorker` for each step before transforming the data container.
+
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return:
+        """
         for name, step in self:
             step.start(context)
 
@@ -133,7 +253,9 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
         Transform data container
 
         :param data_container: data container to transform.
+        :type data_container: DataContainer
         :param context: execution context
+        :type context: ExecutionContext
         :return: data container
         """
         data_container_batches = data_container.convolved_1d(stride=self.batch_size, kernel_size=self.batch_size)
@@ -150,6 +272,16 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
         return queue_joiner.join()
 
     def _did_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Stop all of the workers after transform.
+
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: data container
+        :rtype: DataContainer
+        """
         for name, step in self:
             step.stop()
 
@@ -157,6 +289,16 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
 
 
 class QueueJoiner(Observer):
+    """
+    Observe the results of the queue worker of type :class:`QueueWorker`.
+    Synchronize all of the workers together.
+
+    .. seealso::
+        :class:`QueuedPipeline`,
+        :class:`Observer`,
+        :class:`ListDataContainer`,
+        :class:`DataContainer`
+    """
     def __init__(self, n_batches):
         self.mutex_processing_in_progress = Lock()
         self.mutex_processing_in_progress.acquire()
@@ -169,6 +311,14 @@ class QueueJoiner(Observer):
         )
 
     def on_next(self, value):
+        """
+        Receive the final results of a batch processed by the queued pipeline.
+        Releases the mutex_processing_in_progress if there is no batches left to process.
+
+        :param value: transformed data container batch
+        :type value: DataContainer
+        :return:
+        """
         self.n_batches_left_to_do -= 1
 
         self.result.concat(value)
@@ -177,5 +327,11 @@ class QueueJoiner(Observer):
             self.mutex_processing_in_progress.release()
 
     def join(self) -> DataContainer:
+        """
+        Return the accumulated results received by the on next method of this observer.
+
+        :return: transformed data container
+        :rtype: DataContainer
+        """
         self.mutex_processing_in_progress.acquire()
         return self.result
