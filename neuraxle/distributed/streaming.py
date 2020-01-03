@@ -24,7 +24,7 @@ from abc import abstractmethod
 from multiprocessing import Queue, Lock
 from multiprocessing.context import Process
 from threading import Thread
-from typing import Tuple, List
+from typing import Tuple, List, Union
 
 from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin
 from neuraxle.data_container import DataContainer, ListDataContainer
@@ -157,7 +157,9 @@ class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
 
 
 # [step_name, n_workers, step]
-NameNWorkerStepTupleList = List[Tuple[str, int, BaseStep]]
+# [step_name, n_workers, max_size, step]
+# [step_name, step]
+QueuedPipelineStepsTupleList = Union[List[Tuple[str, int, BaseStep]], List[Tuple[str, int, int, BaseStep]], List[Tuple[str, BaseStep]]]
 
 
 class QueuedPipeline(CustomPipelineMixin, Pipeline):
@@ -195,7 +197,7 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
         :class:`CustomPipelineMixin`,
         :class:`Pipeline`
     """
-    def __init__(self, steps: NameNWorkerStepTupleList, batch_size, max_size, use_threading=False, cache_folder=None):
+    def __init__(self, steps: QueuedPipelineStepsTupleList, batch_size, max_size, use_threading=False, cache_folder=None):
         CustomPipelineMixin.__init__(self)
 
         self.max_size = max_size
@@ -213,9 +215,6 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
         :return: steps as tuple
         :rtype: NamedTupleList
         """
-        if not isinstance(steps, tuple):
-            steps = [(step.name, step) for step in steps]
-
         steps_as_tuple: NamedTupleList = []
         for name, n_workers, step in steps:
             wrapped_step = QueueWorker(
@@ -225,9 +224,9 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
                 max_size=self.max_size
             )
 
-            should_subsribe_to_previous_step = len(steps_as_tuple) > 0 and len(steps_as_tuple) != len(steps) - 1
+            should_subscribe_to_previous_step = len(steps_as_tuple) > 0 and len(steps_as_tuple) != len(steps) - 1
 
-            if should_subsribe_to_previous_step:
+            if should_subscribe_to_previous_step:
                 _, previous_step = steps_as_tuple[-1]
                 wrapped_step.subscribe(previous_step)
 
