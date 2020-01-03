@@ -162,8 +162,7 @@ class Pipeline(BasePipeline):
 
         return self, data_container
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'Pipeline', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
         """
         After loading the last checkpoint, fit transform each pipeline steps
 
@@ -200,8 +199,7 @@ class Pipeline(BasePipeline):
 
         return data_container
 
-    def _load_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> \
-            Tuple[NamedTupleList, DataContainer]:
+    def _load_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[NamedTupleList, DataContainer]:
         """
         Try loading a pipeline cache with the passed data container.
         If pipeline cache loading succeeds, find steps left to do,
@@ -260,8 +258,7 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         self.hyperparams = loaded_self.hyperparams
         self.hyperparams_space = loaded_self.hyperparams_space
 
-    def _get_starting_step_info(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
-        int, DataContainer]:
+    def _get_starting_step_info(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[int, DataContainer]:
         """
         Find the index of the latest step that can be resumed
 
@@ -299,14 +296,7 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         return False
 
 
-class MiniBatchSequentialPipeline(Pipeline):
-    """
-    Mini Batch Sequential Pipeline class to create a pipeline processing data inputs in batch.
-    """
-
-    def __init__(self, steps: NamedTupleList):
-        Pipeline.__init__(self, steps)
-
+class CustomPipelineMixin:
     def transform(self, data_inputs: Any):
         """
         :param data_inputs: the data input to transform
@@ -354,6 +344,16 @@ class MiniBatchSequentialPipeline(Pipeline):
         new_self, data_container = self.handle_fit_transform(data_container, context)
 
         return new_self, data_container.data_inputs
+
+
+class MiniBatchSequentialPipeline(CustomPipelineMixin, Pipeline):
+    """
+    Mini Batch Sequential Pipeline class to create a pipeline processing data inputs in batch.
+    """
+
+    def __init__(self, steps: NamedTupleList):
+        CustomPipelineMixin.__init__(self)
+        Pipeline.__init__(self, steps)
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """

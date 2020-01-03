@@ -24,6 +24,7 @@ Classes for containing the data that flows throught the pipeline steps.
 
 """
 import hashlib
+import math
 from typing import Any, Iterable, List
 
 from conv import convolved_1d
@@ -148,6 +149,9 @@ class DataContainer:
                 data_inputs=data_inputs,
                 expected_outputs=expected_outputs
             )
+
+    def get_n_baches(self, batch_size: int) -> int:
+        return math.ceil(self.data_inputs / batch_size)
 
     def copy(self):
         return DataContainer(
