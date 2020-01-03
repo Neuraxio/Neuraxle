@@ -50,7 +50,7 @@ class Observable:
 
 
 class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
-    def __init__(self, wrapped: BaseStep, n_workers: int, use_threading: bool):
+    def __init__(self, wrapped: BaseStep, max_size: int, n_workers: int, use_threading: bool):
         Observer.__init__(self)
         Observable.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
@@ -58,7 +58,7 @@ class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
 
         self.use_threading: bool = use_threading
         self.worker_processes: List[Process] = []
-        self.batches_to_process: Queue = Queue(n_workers)
+        self.batches_to_process: Queue = Queue(maxsize=max_size)
         self.n_workers: int = n_workers
 
     def on_next(self, value):
@@ -92,10 +92,10 @@ NameNWorkerStepTupleList = List[Tuple[str, int, BaseStep]]
 
 
 class QueuedPipeline(CustomPipelineMixin, Pipeline):
-    def __init__(self, steps: NameNWorkerStepTupleList, max_batches, batch_size, use_threading=False, cache_folder=None):
+    def __init__(self, steps: NameNWorkerStepTupleList, batch_size, max_size, use_threading=False, cache_folder=None):
         CustomPipelineMixin.__init__(self)
 
-        self.max_batches = max_batches
+        self.max_size = max_size
         self.batch_size = batch_size
         self.use_threading = use_threading
 
@@ -107,7 +107,7 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
 
         steps_as_tuple: NamedTupleList = []
         for name, n_workers, step in steps:
-            wrapped_step = QueueWorker(step, n_workers=n_workers, use_threading=self.use_threading)
+            wrapped_step = QueueWorker(step, n_workers=n_workers, use_threading=self.use_threading, max_size=self.max_size)
             if len(steps_as_tuple) > 0:
                 previous_step: Observer = steps_as_tuple[-1][1]
                 wrapped_step.subscribe(previous_step)
@@ -130,14 +130,13 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
         """
         data_container_batches = data_container.convolved_1d(stride=self.batch_size, kernel_size=self.batch_size)
         n_batches = data_container.get_n_baches(self.batch_size)
-        queue_joiner = QueueJoiner(n_batches=n_batches, max_batches=self.max_batches)
+        queue_joiner = QueueJoiner(n_batches=n_batches)
 
         batches_observable = Observable()
         batches_observable.subscribe(self[0])
         self[-1].subscribe(queue_joiner)
 
         for data_container_batch in data_container_batches:
-            queue_joiner.add_batch_in_progress()
             batches_observable.on_next(data_container_batch)
 
         return queue_joiner.join()
@@ -150,26 +149,25 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
 
 
 class QueueJoiner(Observer):
-    def __init__(self, n_batches, max_batches):
-        self.mutex = Lock()
-        self.mutex.acquire()
-        self.max_batches = max_batches
+    def __init__(self, n_batches):
+        self.mutex_processing_in_progress = Lock()
+        self.mutex_processing_in_progress.acquire()
         self.n_batches_left_to_do = n_batches
-        self.batches_in_progress = 0
-        self.result = ListDataContainer(current_ids=[], data_inputs=[], expected_outputs=[], summary_id=None)
-
-    def add_batch_in_progress(self):
-        self.batches_in_progress += 1
+        self.result = ListDataContainer(
+            current_ids=[],
+            data_inputs=[],
+            expected_outputs=[],
+            summary_id=None
+        )
 
     def on_next(self, value):
         self.n_batches_left_to_do -= 1
-        self.batches_in_progress -= 1
 
         self.result.concat(value)
 
         if self.n_batches_left_to_do == 0:
-            self.mutex.release()
+            self.mutex_processing_in_progress.release()
 
     def join(self) -> DataContainer:
-        self.mutex.acquire()
+        self.mutex_processing_in_progress.acquire()
         return self.result
