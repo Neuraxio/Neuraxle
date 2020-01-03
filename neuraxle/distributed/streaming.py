@@ -21,7 +21,7 @@ Neuraxle steps for streaming data in parallel in the pipeline
 
 """
 from abc import abstractmethod
-from multiprocessing import Queue
+from multiprocessing import Queue, Lock
 from multiprocessing.context import Process
 from typing import Tuple, List
 
@@ -143,6 +143,8 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
 
 class QueueJoiner(Observer):
     def __init__(self, n_batches, max_batches):
+        self.mutex = Lock()
+        self.mutex.acquire()
         self.max_batches = max_batches
         self.n_batches_left_to_do = n_batches
         self.batches_in_progress = 0
@@ -154,10 +156,12 @@ class QueueJoiner(Observer):
     def on_next(self, value):
         self.n_batches_left_to_do -= 1
         self.batches_in_progress -= 1
+
         self.result.concat(value)
 
-    def join(self) -> DataContainer:
-        while self.n_batches_left_to_do > 0:
-            pass
+        if self.n_batches_left_to_do == 0:
+            self.mutex.release()
 
+    def join(self) -> DataContainer:
+        self.mutex.acquire()
         return self.result
