@@ -108,8 +108,7 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
 
         return steps_as_tuple
 
-    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         for name, step in self:
             step.start(context)
 
@@ -123,20 +122,15 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
         """
         data_container_batches = data_container.convolved_1d(stride=self.batch_size, kernel_size=self.batch_size)
         n_batches = data_container.get_n_baches(self.batch_size)
-        queue_joiner = QueueJoiner(n_batches=n_batches)
+        queue_joiner = QueueJoiner(n_batches=n_batches, max_batches=self.max_batches)
 
         batches_observable = Observable()
         batches_observable.subscribe(self[0])
         self[-1].subscribe(queue_joiner)
 
-        n_batches_in_progress = 0
-        while n_batches_in_progress < self.max_batches:
-            n_batches_in_progress += 1
-            try:
-                batch = next(data_container_batches)
-                batches_observable.on_next(batch)
-            except StopIteration:
-                break
+        for data_container_batch in data_container_batches:
+            queue_joiner.add_batch_in_progress()
+            batches_observable.on_next(data_container_batch)
 
         return queue_joiner.join()
 
@@ -148,12 +142,18 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
 
 
 class QueueJoiner(Observer):
-    def __init__(self, n_batches):
+    def __init__(self, n_batches, max_batches):
+        self.max_batches = max_batches
         self.n_batches_left_to_do = n_batches
+        self.batches_in_progress = 0
         self.result = ListDataContainer(current_ids=[], data_inputs=[], expected_outputs=[], summary_id=None)
+
+    def add_batch_in_progress(self):
+        self.batches_in_progress += 1
 
     def on_next(self, value):
         self.n_batches_left_to_do -= 1
+        self.batches_in_progress -= 1
         self.result.concat(value)
 
     def join(self) -> DataContainer:
