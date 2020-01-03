@@ -23,6 +23,7 @@ Neuraxle steps for streaming data in parallel in the pipeline
 from abc import abstractmethod
 from multiprocessing import Queue, Lock
 from multiprocessing.context import Process
+from threading import Thread
 from typing import Tuple, List
 
 from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin
@@ -49,12 +50,13 @@ class Observable:
 
 
 class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
-    def __init__(self, wrapped: BaseStep, n_workers: int):
+    def __init__(self, wrapped: BaseStep, n_workers: int, use_threading: bool):
         Observer.__init__(self)
         Observable.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
 
+        self.use_threading: bool = use_threading
         self.worker_processes: List[Process] = []
         self.batches_to_process: Queue = Queue(n_workers)
         self.n_workers: int = n_workers
@@ -65,13 +67,18 @@ class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
     def start(self, context):
         worker_processes = []
         for _ in range(self.n_workers):
-            p = Process(target=self.worker_func, args=(self.batches_to_process, context))
+            if self.use_threading:
+                p = Thread(target=self.worker_func, args=(self.batches_to_process, context))
+            else:
+                p = Process(target=self.worker_func, args=(self.batches_to_process, context))
+
             p.daemon = True
             p.start()
             worker_processes.append(p)
 
     def stop(self):
-        [w.kill() for w in self.worker_processes]
+        if not self.use_threading:
+            [w.kill() for w in self.worker_processes]
         self.worker_processes = []
 
     def worker_func(self, batches_to_process, context: ExecutionContext):
@@ -85,11 +92,12 @@ NameNWorkerStepTupleList = List[Tuple[str, int, BaseStep]]
 
 
 class QueuedPipeline(CustomPipelineMixin, Pipeline):
-    def __init__(self, steps: NameNWorkerStepTupleList, max_batches, batch_size, cache_folder=None):
+    def __init__(self, steps: NameNWorkerStepTupleList, max_batches, batch_size, use_threading=False, cache_folder=None):
         CustomPipelineMixin.__init__(self)
 
         self.max_batches = max_batches
         self.batch_size = batch_size
+        self.use_threading = use_threading
 
         Pipeline.__init__(self, steps=self._initialize_steps_as_tuple(steps), cache_folder=cache_folder)
 
@@ -99,7 +107,7 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
 
         steps_as_tuple: NamedTupleList = []
         for name, n_workers, step in steps:
-            wrapped_step = QueueWorker(step, n_workers=n_workers)
+            wrapped_step = QueueWorker(step, n_workers=n_workers, use_threading=self.use_threading)
             if len(steps_as_tuple) > 0:
                 previous_step: Observer = steps_as_tuple[-1][1]
                 wrapped_step.subscribe(previous_step)
