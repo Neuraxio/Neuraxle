@@ -5,10 +5,11 @@ Code for tree parzen estimator auto ml.
 """
 import numpy as np
 from typing import Optional
+from copy import deepcopy
 from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.hyperparams.distributions import DistributionMixture
+from neuraxle.hyperparams.distributions import DistributionMixture, Choice
 from .auto_ml import BaseHyperparameterOptimizer, RandomSearchHyperparameterOptimizer, TRIAL_STATUS
-
+from collections import Counter
 
 def _linear_forgetting_Weights(number_samples, number_recent_trial_at_full_weights):
     """This part of code has been taken from Hyperopt (https://github.com/hyperopt) code."""
@@ -86,9 +87,40 @@ class TreeParzenEstimatorHyperparameterOptimizer(BaseHyperparameterOptimizer):
 
     def _reweights_categorical(self, hyperparam_distribution, distribution_trials):
 
-    # For discret categorical distribution
-    # We need to reweights probability depending on trial counts.
-    # TODO: need to add a way to access a list of all probabilities and a list of all values.
+        # For discret categorical distribution
+        # We need to reweights probability depending on trial counts.
+        # TODO: add a probas method to access all probas.
+        probas = hyperparam_distribution.probas()
+
+        # TODO: add a values method to acess all values.
+        values = hyperparam_distribution.values()
+
+        number_probas = len(probas)
+
+        # Since the reweighted is proportional to N*p_i + C_i,
+        # where N is the number of probas, p_i is the original probas and c_i is the count.
+        reweighted_probas = number_probas * probas
+
+        # Count number of occurence for each values.
+        count_trials = Counter(distribution_trials)
+        values_keys = list(count_trials.keys())
+        counts = list(count_trials.values())
+
+        for value_key, count in zip(values_keys, counts):
+            # find index in the orignal probas and values.
+            index_value = values.index(value_key)
+
+            # Calculate reweigthed proba.
+            reweighted_probas[index_value] += count
+
+        # Normalize reweighted probas
+        reweighted_probas = np.array(reweighted_probas)
+        reweighted_probas = reweighted_probas / np.sum(reweighted_probas)
+
+        # TODO: create a choice with list os probas.
+        return Choice(values, reweighted_probas)
+
+
 
     def _create_gaussian_mixture(self, hyperparam_distribution, distribution_trials):
 
@@ -113,6 +145,9 @@ class TreeParzenEstimatorHyperparameterOptimizer(BaseHyperparameterOptimizer):
 
     def _adaptive_parzen_normal(self, hyperparam_distribution, distribution_trials):
         """This part of code is enterily inspire from Hyperopt (https://github.com/hyperopt) code."""
+
+        # TODO: check if someone use the DistributionMixture how to manage it in here.
+        # TODO: Distribution Mixture : Treat has a standard distribution or prior distribution is all small gaussian for each distribution in the distribution mixture.
 
         use_prior = (self.prior_weight - 0.) > 1e-10
 
