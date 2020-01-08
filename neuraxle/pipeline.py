@@ -377,7 +377,7 @@ class MiniBatchSequentialPipeline(Pipeline):
 
         return data_container
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> Tuple['MiniBatchSequentialPipeline', DataContainer]:
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'MiniBatchSequentialPipeline':
         """
         Fit all sub pipelines splitted by the Barrier steps.
 
@@ -407,7 +407,7 @@ class MiniBatchSequentialPipeline(Pipeline):
             self.steps_as_tuple = new_self.steps_as_tuple
             index_start += len(sub_pipeline)
 
-        return self, data_container
+        return self
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> Tuple['MiniBatchSequentialPipeline', DataContainer]:
         """
