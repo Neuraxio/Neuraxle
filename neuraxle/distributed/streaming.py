@@ -20,15 +20,16 @@ Neuraxle steps for streaming data in parallel in the pipeline
     limitations under the License.
 
 """
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from multiprocessing import Queue, Lock
 from multiprocessing.context import Process
 from threading import Thread
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Callable
 
-from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin
+from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin, NonFittableMixin
 from neuraxle.data_container import DataContainer, ListDataContainer
 from neuraxle.pipeline import Pipeline, CustomPipelineMixin
+from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
 
 class Observer:
@@ -50,6 +51,17 @@ class Observer:
         pass
 
 
+class Subject(Observer):
+    def __init__(self, on_next_fun: Callable = None):
+        self.on_next_fun = on_next_fun
+        self.observable = Observable()
+
+    def on_next(self, value):
+        if self.on_next_fun is not None:
+            value = self.on_next_fun(value)
+        self.observable.on_next(value)
+
+
 class Observable:
     """
     Observable class that notifies observers of type :class:`Observer`.
@@ -58,7 +70,7 @@ class Observable:
     def __init__(self):
         self.observers: List[Observer] = []
 
-    def subscribe(self, observer: Observer):
+    def subscribe(self, observer: Observer) -> 'Observable':
         """
         Add observer to the subscribed observers list.
 
@@ -67,6 +79,7 @@ class Observable:
         :return:
         """
         self.observers.append(observer)
+        return self
 
     def on_next(self, value):
         """
@@ -77,6 +90,12 @@ class Observable:
         """
         for observer in self.observers:
             observer.on_next(value)
+
+    def map(self, map_fun: Callable):
+        mappped_observable = Subject(on_next_fun=map_fun)
+        self.subscribe(mappped_observable)
+
+        return mappped_observable
 
     def unsubscribe_all(self):
         self.observers = []
@@ -159,7 +178,7 @@ class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
         while True:
             data_container = batches_to_process.get()
             data_container = self.handle_transform(data_container, context)
-            Observable.on_next(self, data_container)
+            Observable.on_next(self, (self.wrapped.name, data_container))
 
 
 # (step_name, n_workers, step)
@@ -168,7 +187,7 @@ class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
 QueuedPipelineStepsTuple = Union[Tuple[str, int, BaseStep], Tuple[str, int, int, BaseStep], Tuple[str, BaseStep]]
 
 
-class QueuedPipeline(CustomPipelineMixin, Pipeline):
+class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
     """
     Sub class of :class:`Pipeline`.
     Transform data in many pipeline steps at once in parallel in the pipeline using multiprocessing Queues.
@@ -204,10 +223,22 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
         :class:`Pipeline`
     """
 
-    def __init__(self, steps: List[QueuedPipelineStepsTuple], batch_size, n_workers_per_step=None, max_size=None,
-                 use_threading=False, cache_folder=None):
+    def __init__(
+            self,
+            steps: List[QueuedPipelineStepsTuple],
+            batch_size,
+            n_workers_per_step=None,
+            max_size=None,
+            data_joiner=None,
+            use_threading=False,
+            cache_folder=None
+    ):
+        NonFittableMixin.__init__(self)
         CustomPipelineMixin.__init__(self)
 
+        if data_joiner is None:
+            data_joiner = NumpyConcatenateOuterBatch()
+        self.data_joiner = data_joiner
         self.max_size = max_size
         self.batch_size = batch_size
         self.n_workers_per_step = n_workers_per_step
@@ -276,9 +307,8 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
         :type context: ExecutionContext
         :return:
         """
+        self.connect_queue_workers()
         for i, (name, step) in enumerate(self):
-            if i != 0:
-                step.subscribe(self[i - 1])
             step.start(context)
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -292,18 +322,18 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
         :return: data container
         """
         data_container_batches = data_container.convolved_1d(stride=self.batch_size, kernel_size=self.batch_size)
-        n_batches = data_container.get_n_baches(self.batch_size)
+        n_batches = data_container.get_n_batches(self.batch_size)
 
         batches_observable = Observable()
-        batches_observable.subscribe(self[0])
+        self.connect_batches_observable(batches_observable)
 
         queue_joiner = QueueJoiner(n_batches=n_batches)
-        self[-1].subscribe(queue_joiner)
+        self.connect_queue_joiner(queue_joiner)
 
         for data_container_batch in data_container_batches:
             batches_observable.on_next(data_container_batch)
 
-        return queue_joiner.join()
+        return queue_joiner.join(original_data_container=data_container)
 
     def _did_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -319,7 +349,51 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
         for name, step in self:
             step.stop()
 
-        return data_container
+        return self.data_joiner.join(data_container)
+
+    def map_result(self, value):
+        return value[1]
+
+    @abstractmethod
+    def connect_queue_workers(self):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def connect_queue_joiner(self, queue_joiner):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def connect_batches_observable(self, batches_observable):
+        raise NotImplementedError()
+
+
+class SequentialQueuedPipeline(BaseQueuedPipeline):
+    def connect_queue_workers(self):
+        for i, (name, step) in enumerate(self):
+            if i != 0:
+                step.map(self.map_result).subscribe(self[i - 1])
+
+    def connect_queue_joiner(self, queue_joiner):
+        self[-1].subscribe(queue_joiner)
+
+    def connect_batches_observable(self, batches_observable):
+        batches_observable.subscribe(self[0])
+
+
+class ParallelQueuedPipeline(BaseQueuedPipeline):
+    def connect_queue_workers(self):
+        # nothing to do here, queue workers don't listen to each other in a ParallelQueuedPipeline
+        pass
+
+    def connect_queue_joiner(self, queue_joiner):
+        for i, (name, step) in enumerate(self):
+            if i != 0:
+                step.subscribe(queue_joiner)
+
+    def connect_batches_observable(self, batches_observable):
+        for i, (name, step) in enumerate(self):
+            if i != 0:
+                batches_observable.subscribe(step)
 
 
 class QueueJoiner(Observer):
@@ -338,12 +412,7 @@ class QueueJoiner(Observer):
         self.mutex_processing_in_progress = Lock()
         self.mutex_processing_in_progress.acquire()
         self.n_batches_left_to_do = n_batches
-        self.result = ListDataContainer(
-            current_ids=[],
-            data_inputs=[],
-            expected_outputs=[],
-            summary_id=None
-        )
+        self.result = {}
 
     def on_next(self, value):
         """
@@ -354,14 +423,24 @@ class QueueJoiner(Observer):
         :type value: DataContainer
         :return:
         """
+        step_name, result = value
+
         self.n_batches_left_to_do -= 1
 
-        self.result.concat(value)
+        if step_name not in result:
+            self.result[step_name] = ListDataContainer(
+                current_ids=[],
+                data_inputs=[],
+                expected_outputs=[],
+                summary_id=None
+            )
+
+        result[step_name].concat(value)
 
         if self.n_batches_left_to_do == 0:
             self.mutex_processing_in_progress.release()
 
-    def join(self) -> DataContainer:
+    def join(self, original_data_container: DataContainer) -> DataContainer:
         """
         Return the accumulated results received by the on next method of this observer.
 
@@ -369,4 +448,8 @@ class QueueJoiner(Observer):
         :rtype: DataContainer
         """
         self.mutex_processing_in_progress.acquire()
-        return self.result
+        data_containers = []
+        for data_container in self.result.values():
+            data_containers.append(data_container)
+
+        return original_data_container.set_data_inputs(data_containers)

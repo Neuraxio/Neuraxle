@@ -24,6 +24,7 @@ Classes for containing the data that flows throught the pipeline steps.
 
 """
 import hashlib
+import math
 from typing import Any, Iterable, List
 
 from conv import convolved_1d
@@ -72,6 +73,7 @@ class DataContainer:
         :return:
         """
         self.data_inputs = data_inputs
+        return self
 
     def set_expected_outputs(self, expected_outputs: Iterable):
         """
@@ -82,6 +84,7 @@ class DataContainer:
         :return:
         """
         self.expected_outputs = expected_outputs
+        return self
 
     def set_current_ids(self, current_ids: List[str]):
         """
@@ -92,6 +95,7 @@ class DataContainer:
         :return:
         """
         self.current_ids = current_ids
+        return self
 
     def set_summary_id(self, summary_id: str):
         """
@@ -101,6 +105,7 @@ class DataContainer:
         :return:
         """
         self.summary_id = summary_id
+        return self
 
     def hash_summary(self):
         """
@@ -148,6 +153,9 @@ class DataContainer:
                 data_inputs=data_inputs,
                 expected_outputs=expected_outputs
             )
+
+    def get_n_batches(self, batch_size: int) -> int:
+        return math.ceil(len(self.data_inputs) / batch_size)
 
     def copy(self):
         return DataContainer(
