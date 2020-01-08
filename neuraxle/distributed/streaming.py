@@ -54,6 +54,7 @@ class Observable:
     """
     Observable class that notifies observers of type :class:`Observer`.
     """
+
     def __init__(self):
         self.observers: List[Observer] = []
 
@@ -77,6 +78,9 @@ class Observable:
         for observer in self.observers:
             observer.on_next(value)
 
+    def unsubscribe_all(self):
+        self.observers = []
+
 
 class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
     """
@@ -91,6 +95,7 @@ class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
         :class:`MetaStepMixin`,
         :class:`BaseStep`
     """
+
     def __init__(self, wrapped: BaseStep, max_size: int, n_workers: int, use_threading: bool):
         Observer.__init__(self)
         Observable.__init__(self)
@@ -140,6 +145,7 @@ class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
         if not self.use_threading:
             [w.kill() for w in self.workers]
         self.workers = []
+        self.unsubscribe_all()
 
     def worker_func(self, batches_to_process, context: ExecutionContext):
         """
@@ -156,10 +162,10 @@ class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
             Observable.on_next(self, data_container)
 
 
-# [step_name, n_workers, step]
-# [step_name, n_workers, max_size, step]
-# [step_name, step]
-QueuedPipelineStepsTupleList = Union[List[Tuple[str, int, BaseStep]], List[Tuple[str, int, int, BaseStep]], List[Tuple[str, BaseStep]]]
+# (step_name, n_workers, step)
+# (step_name, n_workers, max_size, step)
+# (step_name, step)
+QueuedPipelineStepsTuple = Union[Tuple[str, int, BaseStep], Tuple[str, int, int, BaseStep], Tuple[str, BaseStep]]
 
 
 class QueuedPipeline(CustomPipelineMixin, Pipeline):
@@ -197,11 +203,14 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
         :class:`CustomPipelineMixin`,
         :class:`Pipeline`
     """
-    def __init__(self, steps: QueuedPipelineStepsTupleList, batch_size, max_size, use_threading=False, cache_folder=None):
+
+    def __init__(self, steps: List[QueuedPipelineStepsTuple], batch_size, n_workers_per_step=None, max_size=None,
+                 use_threading=False, cache_folder=None):
         CustomPipelineMixin.__init__(self)
 
         self.max_size = max_size
         self.batch_size = batch_size
+        self.n_workers_per_step = n_workers_per_step
         self.use_threading = use_threading
 
         Pipeline.__init__(self, steps=self._initialize_steps_as_tuple(steps), cache_folder=cache_folder)
@@ -216,23 +225,46 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
         :rtype: NamedTupleList
         """
         steps_as_tuple: NamedTupleList = []
-        for name, n_workers, step in steps:
-            wrapped_step = QueueWorker(
-                step,
-                n_workers=n_workers,
-                use_threading=self.use_threading,
-                max_size=self.max_size
-            )
-
-            should_subscribe_to_previous_step = len(steps_as_tuple) > 0 and len(steps_as_tuple) != len(steps) - 1
-
-            if should_subscribe_to_previous_step:
-                _, previous_step = steps_as_tuple[-1]
-                wrapped_step.subscribe(previous_step)
-
-            steps_as_tuple.append((name, wrapped_step))
+        for step in steps:
+            queue_worker = self._create_queue_worker(step)
+            steps_as_tuple.append((queue_worker.name, queue_worker))
 
         return steps_as_tuple
+
+    def _create_queue_worker(self, step: QueuedPipelineStepsTuple):
+        name, n_workers, max_size, actual_step = self._get_step_params(step)
+
+        return QueueWorker(
+            actual_step,
+            n_workers=n_workers,
+            use_threading=self.use_threading,
+            max_size=max_size
+        )
+
+    def _get_step_params(self, step):
+        """
+        Return all params necessary to create the QueuedPipeline for the given step.
+
+        :param step: tuple
+        :type step: QueuedPipelineStepsTupleList
+
+        :return: return name, n_workers, max_size, actual_step
+        :rtype: tuple(str, int, int, BaseStep)
+        """
+        if len(step) == 2:
+            name, actual_step = step
+            max_size = self.max_size
+            n_workers = self.n_workers_per_step
+        elif len(step) == 3:
+            name, n_workers, actual_step = step
+            max_size = self.max_size
+        elif len(step) == 4:
+            name, n_workers, max_size, actual_step = step
+        else:
+            raise Exception(
+                'Invalid Queued Pipeline Steps Shape. Please use one of the following: (step_name, n_workers, max_size, step), (step_name, n_workers, step), (step_name, step)')
+
+        return name, n_workers, max_size, actual_step
 
     def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
@@ -244,7 +276,9 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
         :type context: ExecutionContext
         :return:
         """
-        for name, step in self:
+        for i, (name, step) in enumerate(self):
+            if i != 0:
+                step.subscribe(self[i - 1])
             step.start(context)
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -259,10 +293,11 @@ class QueuedPipeline(CustomPipelineMixin, Pipeline):
         """
         data_container_batches = data_container.convolved_1d(stride=self.batch_size, kernel_size=self.batch_size)
         n_batches = data_container.get_n_baches(self.batch_size)
-        queue_joiner = QueueJoiner(n_batches=n_batches)
 
         batches_observable = Observable()
         batches_observable.subscribe(self[0])
+
+        queue_joiner = QueueJoiner(n_batches=n_batches)
         self[-1].subscribe(queue_joiner)
 
         for data_container_batch in data_container_batches:
@@ -298,6 +333,7 @@ class QueueJoiner(Observer):
         :class:`ListDataContainer`,
         :class:`DataContainer`
     """
+
     def __init__(self, n_batches):
         self.mutex_processing_in_progress = Lock()
         self.mutex_processing_in_progress.acquire()
