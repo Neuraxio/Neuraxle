@@ -1836,6 +1836,7 @@ class NonFittableMixin:
     """
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        data_container, context = self._will_transform_data_container(data_container, context)
         return self, self._transform_data_container(data_container, context)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':

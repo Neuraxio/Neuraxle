@@ -56,6 +56,9 @@ class Subject(Observer):
         self.on_next_fun = on_next_fun
         self.observable = Observable()
 
+    def subscribe(self, observer):
+        self.observable = self.observable.subscribe(observer)
+
     def on_next(self, value):
         if self.on_next_fun is not None:
             value = self.on_next_fun(value)
@@ -297,7 +300,7 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
 
         return name, n_workers, max_size, actual_step
 
-    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
         """
         Start the :class:`QueueWorker` for each step before transforming the data container.
 
@@ -310,6 +313,8 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
         self.connect_queue_workers()
         for i, (name, step) in enumerate(self):
             step.start(context)
+
+        return data_container, context
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
