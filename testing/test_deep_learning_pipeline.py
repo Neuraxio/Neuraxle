@@ -15,6 +15,10 @@ from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.union import AddFeatures, ModelStacking
 
+VALIDATION_SIZE = 0.1
+
+BATCH_SIZE = 32
+
 N_EPOCHS = 5
 
 
@@ -59,8 +63,8 @@ def test_deep_learning_pipeline():
 
     p = DeepLearningPipeline(
         pipeline,
-        validation_size=0.1,
-        batch_size=32,
+        validation_size=VALIDATION_SIZE,
+        batch_size=BATCH_SIZE,
         batch_metrics={'mse': to_numpy_metric_wrapper(mean_squared_error)},
         shuffle_in_each_epoch_at_train=True,
         n_epochs=N_EPOCHS,
@@ -80,6 +84,12 @@ def test_deep_learning_pipeline():
 
     assert len(epoch_mse_train) == N_EPOCHS
     assert len(epoch_mse_validation) == N_EPOCHS
+
+    expected_len_batch_mse_train = (len(data_inputs) / BATCH_SIZE) * (1 - VALIDATION_SIZE)
+    expected_len_batch_mse_validation = (len(data_inputs) / BATCH_SIZE) * VALIDATION_SIZE
+
+    assert len(batch_mse_train) == expected_len_batch_mse_train
+    assert len(batch_mse_validation) == expected_len_batch_mse_validation
 
     assert batch_mse_train[-1] < 100
     assert batch_mse_validation[-1] < 100

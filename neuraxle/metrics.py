@@ -21,30 +21,27 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
         self.print_fun = print_fun
         self.metrics_results_train = []
         self.metrics_results_validation = []
+        self.enabled = True
 
-    def _did_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        self._calculate_metrics_results(data_container)
-
-        return data_container
-
-    def _did_fit(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        self._calculate_metrics_results(data_container)
-
-        return data_container
-
-    def _did_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        self._calculate_metrics_results(data_container)
+    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        if data_container.expected_outputs is not None and len(data_container.expected_outputs) > 0:
+            self._calculate_metrics_results(data_container)
 
         return data_container
 
     def _calculate_metrics_results(self, data_container):
+        if not self.enabled:
+            return
+
         result = {}
         for metric_name, metric_fun in self.metrics.items():
             result[metric_name] = metric_fun(data_container.data_inputs, data_container.expected_outputs)
+
         if self.is_train:
             self.metrics_results_train.append(result)
         else:
             self.metrics_results_validation.append(result)
+
         if self.print_metrics:
             self.print_fun(result)
 
@@ -61,3 +58,6 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
             results.append(m[metric_name])
 
         return results
+
+    def toggle_metrics(self):
+        self.enabled = not self.enabled

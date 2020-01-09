@@ -140,22 +140,19 @@ class ValidationSplitWrapper(BaseValidation):
         """
         train_data_container, validation_data_container = self.split_data_container(data_container)
 
-        self.wrapped = self.wrapped.handle_fit(train_data_container, context.push(self.wrapped))
-
-        results_data_container = self.wrapped.handle_transform(train_data_container, context.push(self.wrapped))
+        self.wrapped, results_data_container = self.wrapped.handle_fit_transform(train_data_container, context.push(self.wrapped))
 
         self._update_scores_train(results_data_container.data_inputs, results_data_container.expected_outputs)
 
-        if self.run_validation_split_in_test_mode:
-            self.set_train(False)
-
+        self.set_train(False)
         results_data_container = self.wrapped.handle_transform(validation_data_container, context.push(self.wrapped))
-
         self.set_train(True)
 
         self._update_scores_validation(results_data_container.data_inputs, results_data_container.expected_outputs)
 
+        self.apply('toggle_metrics')
         data_container = self.wrapped.handle_transform(data_container, context.push(self.wrapped))
+        self.apply('toggle_metrics')
 
         return self, data_container
 
