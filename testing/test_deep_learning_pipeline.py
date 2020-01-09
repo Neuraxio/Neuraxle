@@ -100,9 +100,7 @@ def test_deep_learning_pipeline():
     assert last_batch_mse_train < last_batch_mse_validation
     assert last_epoch_mse_train < last_epoch_mse_validation
     assert last_batch_mse_train < 1
-    assert last_batch_mse_validation < 50
     assert last_epoch_mse_train < 1
-    assert last_epoch_mse_validation < 50
 
 
 def to_numpy_metric_wrapper(metric_fun):
