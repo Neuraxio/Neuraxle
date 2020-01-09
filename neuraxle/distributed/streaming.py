@@ -373,10 +373,13 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
 
 
 class SequentialQueuedPipeline(BaseQueuedPipeline):
+    """
+    Run all steps sequentially using QueueWorkers.
+    """
     def connect_queue_workers(self):
         for i, (name, step) in enumerate(self):
             if i != 0:
-                step.map(self.map_result).subscribe(self[i - 1])
+                self[i - 1].map(self.map_result).subscribe(step)
 
     def connect_queue_joiner(self, queue_joiner):
         self[-1].subscribe(queue_joiner)
@@ -386,19 +389,20 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
 
 
 class ParallelQueuedPipeline(BaseQueuedPipeline):
+    """
+    Run all steps in parallel using QueueWorkers.
+    """
     def connect_queue_workers(self):
         # nothing to do here, queue workers don't listen to each other in a ParallelQueuedPipeline
         pass
 
     def connect_queue_joiner(self, queue_joiner):
         for i, (name, step) in enumerate(self):
-            if i != 0:
-                step.subscribe(queue_joiner)
+            step.subscribe(queue_joiner)
 
     def connect_batches_observable(self, batches_observable):
         for i, (name, step) in enumerate(self):
-            if i != 0:
-                batches_observable.subscribe(step)
+            batches_observable.subscribe(step)
 
 
 class QueueJoiner(Observer):
