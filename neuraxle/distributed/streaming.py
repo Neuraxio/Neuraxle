@@ -20,11 +20,11 @@ Neuraxle steps for streaming data in parallel in the pipeline
     limitations under the License.
 
 """
-from abc import abstractmethod, ABC
+from abc import abstractmethod
 from multiprocessing import Queue, Lock
 from multiprocessing.context import Process
 from threading import Thread
-from typing import Tuple, List, Union, Callable
+from typing import Tuple, List, Union
 
 from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin, NonFittableMixin
 from neuraxle.data_container import DataContainer, ListDataContainer
@@ -32,79 +32,24 @@ from neuraxle.pipeline import Pipeline, CustomPipelineMixin
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
 
-class Observer:
-    """
-    Observer class that listens to :class:`Observable` events.
-
-    .. seealso::
-        :class:`Observable`
-    """
-
-    @abstractmethod
-    def on_next(self, value):
-        """
-        Method called by the observables to notifiy the observers.
-
-        :param value:
-        :return:
-        """
-        pass
-
-
-class Subject(Observer):
-    def __init__(self, on_next_fun: Callable = None):
-        self.on_next_fun = on_next_fun
-        self.observable = Observable()
-
-    def subscribe(self, observer):
-        self.observable = self.observable.subscribe(observer)
-
-    def on_next(self, value):
-        if self.on_next_fun is not None:
-            value = self.on_next_fun(value)
-        self.observable.on_next(value)
-
-
-class Observable:
-    """
-    Observable class that notifies observers of type :class:`Observer`.
-    """
-
-    def __init__(self):
-        self.observers: List[Observer] = []
-
-    def subscribe(self, observer: Observer) -> 'Observable':
-        """
-        Add observer to the subscribed observers list.
-
-        :param observer: observer
-        :type observer: Observer
-        :return:
-        """
-        self.observers.append(observer)
-        return self
-
-    def on_next(self, value):
-        """
-        Notify all of the observers.
-
-        :param value:
-        :return:
-        """
-        for observer in self.observers:
-            observer.on_next(value)
-
-    def map(self, map_fun: Callable):
-        mappped_observable = Subject(on_next_fun=map_fun)
-        self.subscribe(mappped_observable)
-
-        return mappped_observable
-
-    def unsubscribe_all(self):
+class ObservableQueue:
+    def __init__(self, queue):
+        self.queue = queue
         self.observers = []
 
+    def subscribe(self, queue_worker: 'ObservableQueue') -> 'ObservableQueue':
+        self.observers.append(queue_worker.queue)
+        return self
 
-class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
+    def put(self, value):
+        self.queue.put(value)
+
+    def notify(self, value):
+        for observer in self.observers:
+            observer.put(value)
+
+
+class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
     """
     Start multiple Process or Thread that process items from the queue of batches to process.
     It is both an observable, and observer.
@@ -119,25 +64,14 @@ class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
     """
 
     def __init__(self, wrapped: BaseStep, max_size: int, n_workers: int, use_threading: bool):
-        Observer.__init__(self)
-        Observable.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
+        ObservableQueue.__init__(self, Queue(maxsize=max_size))
 
         self.use_threading: bool = use_threading
         self.workers: List[Process] = []
-        self.batches_to_process: Queue = Queue(maxsize=max_size)
         self.n_workers: int = n_workers
-
-    def on_next(self, value):
-        """
-        Add batch to process when the observer receives a value.
-
-        :param value: data container to process
-        :type value: DataContainer
-        :return:
-        """
-        self.batches_to_process.put(value)
+        self.observers: List[Queue] = []
 
     def start(self, context: ExecutionContext):
         """
@@ -150,9 +84,9 @@ class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
         self.workers = []
         for _ in range(self.n_workers):
             if self.use_threading:
-                p = Thread(target=self.worker_func, args=(self.batches_to_process, context))
+                p = Thread(target=self.worker_func, args=(self.queue, context))
             else:
-                p = Process(target=self.worker_func, args=(self.batches_to_process, context))
+                p = Process(target=self.worker_func, args=(self.queue, context))
 
             p.daemon = True
             p.start()
@@ -167,7 +101,7 @@ class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
         if not self.use_threading:
             [w.kill() for w in self.workers]
         self.workers = []
-        self.unsubscribe_all()
+        self.observers = []
 
     def worker_func(self, batches_to_process, context: ExecutionContext):
         """
@@ -179,9 +113,9 @@ class QueueWorker(Observer, Observable, MetaStepMixin, BaseStep):
         :return:
         """
         while True:
-            data_container = batches_to_process.get()
+            _, data_container = batches_to_process.get()
             data_container = self.handle_transform(data_container, context)
-            Observable.on_next(self, (self.wrapped.name, data_container))
+            self.notify((self.wrapped.name, data_container))
 
 
 # (step_name, n_workers, step)
@@ -300,7 +234,8 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
 
         return name, n_workers, max_size, actual_step
 
-    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+            DataContainer, ExecutionContext):
         """
         Start the :class:`QueueWorker` for each step before transforming the data container.
 
@@ -329,14 +264,11 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
         data_container_batches = data_container.convolved_1d(stride=self.batch_size, kernel_size=self.batch_size)
         n_batches = data_container.get_n_batches(self.batch_size)
 
-        batches_observable = Observable()
-        self.connect_batches_observable(batches_observable)
-
         queue_joiner = QueueJoiner(n_batches=n_batches)
         self.connect_queue_joiner(queue_joiner)
 
         for data_container_batch in data_container_batches:
-            batches_observable.on_next(data_container_batch)
+            self.notify_new_batch_to_process(data_container_batch)
 
         return queue_joiner.join(original_data_container=data_container)
 
@@ -368,44 +300,62 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
         raise NotImplementedError()
 
     @abstractmethod
-    def connect_batches_observable(self, batches_observable):
+    def notify_new_batch_to_process(self, batches_observable):
         raise NotImplementedError()
 
 
 class SequentialQueuedPipeline(BaseQueuedPipeline):
     """
-    Run all steps sequentially using QueueWorkers.
+    Using :class:`QueueWorker`, run all steps sequentially even if they are in separate processes or threads.
+
+    .. seealso::
+        :class:`QueueWorker`,
+        :class:`BaseQueuedPipeline`,
+        :class:`ParallelQueuedPipeline`,
+        :class:`QueueJoiner`,
+        :class:`Observer`,
+        :class:`Observable`
     """
+
     def connect_queue_workers(self):
         for i, (name, step) in enumerate(self):
             if i != 0:
-                self[i - 1].map(self.map_result).subscribe(step)
+                self[i - 1].subscribe(step)
 
-    def connect_queue_joiner(self, queue_joiner):
+    def connect_queue_joiner(self, queue_joiner: 'QueueJoiner'):
         self[-1].subscribe(queue_joiner)
 
-    def connect_batches_observable(self, batches_observable):
-        batches_observable.subscribe(self[0])
+    def notify_new_batch_to_process(self, data_container_batch: DataContainer):
+        self[0].put(data_container_batch)
 
 
 class ParallelQueuedPipeline(BaseQueuedPipeline):
     """
-    Run all steps in parallel using QueueWorkers.
+    Using :class:`QueueWorker`, run all steps in parallel using QueueWorkers.
+
+    .. seealso::
+        :class:`QueueWorker`,
+        :class:`BaseQueuedPipeline`,
+        :class:`SequentialQueuedPipeline`,
+        :class:`QueueJoiner`,
+        :class:`Observer`,
+        :class:`Observable`
     """
+
     def connect_queue_workers(self):
         # nothing to do here, queue workers don't listen to each other in a ParallelQueuedPipeline
         pass
 
-    def connect_queue_joiner(self, queue_joiner):
+    def connect_queue_joiner(self, queue_joiner: 'QueueJoiner'):
         for i, (name, step) in enumerate(self):
             step.subscribe(queue_joiner)
 
-    def connect_batches_observable(self, batches_observable):
+    def notify_new_batch_to_process(self, batches_observable):
         for i, (name, step) in enumerate(self):
-            batches_observable.subscribe(step)
+            step.put(batches_observable)
 
 
-class QueueJoiner(Observer):
+class QueueJoiner(ObservableQueue):
     """
     Observe the results of the queue worker of type :class:`QueueWorker`.
     Synchronize all of the workers together.
@@ -422,32 +372,7 @@ class QueueJoiner(Observer):
         self.mutex_processing_in_progress.acquire()
         self.n_batches_left_to_do = n_batches
         self.result = {}
-
-    def on_next(self, value):
-        """
-        Receive the final results of a batch processed by the queued pipeline.
-        Releases the mutex_processing_in_progress if there is no batches left to process.
-
-        :param value: transformed data container batch
-        :type value: DataContainer
-        :return:
-        """
-        step_name, result = value
-
-        self.n_batches_left_to_do -= 1
-
-        if step_name not in result:
-            self.result[step_name] = ListDataContainer(
-                current_ids=[],
-                data_inputs=[],
-                expected_outputs=[],
-                summary_id=None
-            )
-
-        result[step_name].concat(value)
-
-        if self.n_batches_left_to_do == 0:
-            self.mutex_processing_in_progress.release()
+        ObservableQueue.__init__(self, Queue())
 
     def join(self, original_data_container: DataContainer) -> DataContainer:
         """
@@ -456,9 +381,26 @@ class QueueJoiner(Observer):
         :return: transformed data container
         :rtype: DataContainer
         """
-        self.mutex_processing_in_progress.acquire()
+        while self.n_batches_left_to_do > 0:
+            step_name, result = self.queue.get()
+            self.n_batches_left_to_do -= 1
+
+            if step_name not in result:
+                self.result[step_name] = ListDataContainer(
+                    current_ids=[],
+                    data_inputs=[],
+                    expected_outputs=[],
+                    summary_id=None
+                )
+
+            self.result[step_name].concat(result)
+
+        data_containers = self._get_resulting_data_containers()
+        return original_data_container.set_data_inputs(data_containers)
+
+    def _get_resulting_data_containers(self):
         data_containers = []
         for data_container in self.result.values():
             data_containers.append(data_container)
 
-        return original_data_container.set_data_inputs(data_containers)
+        return data_containers
