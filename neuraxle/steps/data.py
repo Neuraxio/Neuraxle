@@ -24,6 +24,8 @@ from typing import Iterable
 
 from neuraxle.base import BaseStep, MetaStepMixin, NonFittableMixin, ExecutionContext
 from neuraxle.data_container import DataContainer
+from neuraxle.pipeline import Pipeline
+from neuraxle.steps.flow import TrainOnlyWrapper
 from neuraxle.steps.output_handlers import InputAndOutputTransformerMixin
 
 
@@ -48,9 +50,11 @@ class DataShuffler(NonFittableMixin, InputAndOutputTransformerMixin, BaseStep):
         :class:`BaseStep`
     """
 
-    def __init__(self, seed, increment_seed_after_each_fit=True):
+    def __init__(self, seed=None, increment_seed_after_each_fit=True):
         InputAndOutputTransformerMixin.__init__(self)
         BaseStep.__init__(self)
+        if seed is None:
+            seed = 42
         self.seed = seed
         self.increment_seed_after_each_fit = increment_seed_after_each_fit
 
@@ -99,7 +103,8 @@ class EpochRepeater(MetaStepMixin, BaseStep):
         self.fit_only = fit_only
         self.epochs = epochs
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseStep', DataContainer):
         """
         Fit transform wrapped step self.epochs times using wrapped step handle fit transform method.
 
@@ -173,3 +178,11 @@ class EpochRepeater(MetaStepMixin, BaseStep):
 
     def _should_repeat_fit(self):
         return self.is_train or not self.is_train and self.repeat_in_test_mode
+
+
+class TrainShuffled(Pipeline):
+    def __init__(self, wrapped, seed=None):
+        Pipeline.__init__(self, [
+            TrainOnlyWrapper(DataShuffler(seed=seed)),
+            wrapped
+        ])

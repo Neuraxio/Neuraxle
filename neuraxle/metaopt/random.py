@@ -221,6 +221,12 @@ class ValidationSplitWrapper(BaseValidation):
     def get_score(self):
         return self.scores_validation_mean
 
+    def get_score_validation(self):
+        return self.scores_validation_mean
+
+    def get_score_train(self):
+        return self.scores_validation_mean
+
     def split_data_container(self, data_container) -> Tuple[DataContainer, DataContainer]:
         """
         Split data container into a training set, and a validation set.

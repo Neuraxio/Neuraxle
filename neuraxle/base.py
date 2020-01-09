@@ -33,7 +33,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from enum import Enum
-from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable
+from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Optional
 
 from joblib import dump, load
 from sklearn.base import BaseEstimator
@@ -881,6 +881,11 @@ class BaseStep(ABC):
 
         return self
 
+    def get_step_by_name(self, name):
+        if self.name == name:
+            return self
+        return None
+
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
@@ -901,7 +906,8 @@ class BaseStep(ABC):
 
         return new_self
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
         """
         Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.fit_transform`.
         The default behavior is to rehash current ids with the step hyperparameters.
@@ -973,7 +979,8 @@ class BaseStep(ABC):
         """
         return self.fit(data_container.data_inputs, data_container.expected_outputs)
 
-    def _will_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+    def _will_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            DataContainer, ExecutionContext):
         """
         Apply side effects before fit_transform is called.
 
@@ -996,7 +1003,8 @@ class BaseStep(ABC):
         """
         return data_container
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
         """
         Fit transform data container.
 
@@ -1010,7 +1018,8 @@ class BaseStep(ABC):
 
         return new_self, data_container
 
-    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
         """
         Apply side effects before transform.
 
@@ -1752,6 +1761,10 @@ class MetaStepMixin:
         self.wrapped = self.wrapped.apply_method(method, *kargs, **kwargs)
         return self
 
+    def get_step_by_name(self, name):
+        if self.wrapped.name == name:
+            return self.wrapped
+        return self.wrapped.get_step_by_name(name)
 
     def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
         """
@@ -1820,13 +1833,19 @@ class ForceAlwaysHandleMixin:
         raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
 
     def transform(self, data_inputs) -> 'ForceAlwaysHandleMixin':
-        raise Exception('Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(self.name))
+        raise Exception(
+            'Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(
+                self.name))
 
     def fit(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception('Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(self.name))
+        raise Exception(
+            'Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(
+                self.name))
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception('Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(self.name))
+        raise Exception(
+            'Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(
+                self.name))
 
 
 class NonFittableMixin:
@@ -2095,6 +2114,17 @@ class TruncableSteps(BaseStep, ABC):
             step.apply_method(method, *kargs, **kwargs)
 
         return self
+
+    def get_step_by_name(self, name):
+        for step in self.values():
+            if step.name == name:
+                return step
+
+            found_step = step.get_step_by_name()
+            if found_step is not None:
+                return found_step
+
+        return None
 
     def _wrap_non_base_steps(self, steps_as_tuple: List) -> NamedTupleList:
         """
