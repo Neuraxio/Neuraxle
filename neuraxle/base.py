@@ -1720,8 +1720,8 @@ class MetaStepMixin:
         return self, data_inputs
 
     def fit(self, data_inputs, expected_outputs):
-        self.wrapped, data_inputs = self.wrapped.fit(data_inputs, expected_outputs)
-        return self, data_inputs
+        self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
+        return self
 
     def transform(self, data_inputs):
         data_inputs = self.wrapped.transform(data_inputs)
@@ -2120,7 +2120,7 @@ class TruncableSteps(BaseStep, ABC):
             if step.name == name:
                 return step
 
-            found_step = step.get_step_by_name()
+            found_step = step.get_step_by_name(name)
             if found_step is not None:
                 return found_step
 

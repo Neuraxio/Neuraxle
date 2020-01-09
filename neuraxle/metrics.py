@@ -36,3 +36,17 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
             self.print_fun(result)
 
         return data_container
+
+    def get_metric_validation(self, metric_name):
+        results = []
+        for m in self.metrics_results_validation:
+            results.append(m[metric_name])
+
+        return results
+
+    def get_metric_train(self, metric_name):
+        results = []
+        for m in self.metrics_results_train:
+            results.append(m[metric_name])
+
+        return results

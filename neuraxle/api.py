@@ -1,10 +1,10 @@
 from typing import Dict, List, Tuple
 
-from neuraxle.base import BaseStep, MetaStepMixin, ExecutionContext
+from neuraxle.base import BaseStep, ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.metaopt.random import ValidationSplitWrapper
 from neuraxle.metrics import MetricsWrapper
-from neuraxle.pipeline import MiniBatchSequentialPipeline
+from neuraxle.pipeline import MiniBatchSequentialPipeline, Pipeline, CustomPipelineMixin
 from neuraxle.steps.data import EpochRepeater, TrainShuffled
 
 VALIDATION_SPLIT_STEP_NAME = 'validation_split_wrapper'
@@ -12,7 +12,7 @@ EPOCH_METRICS_STEP_NAME = 'epoch_metrics'
 BATCH_METRICS_STEP_NAME = 'batch_metrics'
 
 
-class DeepLearningPipeline(MetaStepMixin, BaseStep):
+class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
     def __init__(
             self,
             pipeline,
@@ -25,7 +25,8 @@ class DeepLearningPipeline(MetaStepMixin, BaseStep):
             epochs_metrics=None,
             scoring_function=None,
             final_scoring_metrics=None,
-            metrics_plotting_step=None
+            metrics_plotting_step=None,
+            cache_folder=None
     ):
         if epochs_metrics is None:
             epochs_metrics = []
@@ -55,7 +56,7 @@ class DeepLearningPipeline(MetaStepMixin, BaseStep):
         wrapped = self._create_epoch_repeater(wrapped)
 
         BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, wrapped)
+        Pipeline.__init__(self, [wrapped], cache_folder=cache_folder)
 
     def _create_mini_batch_pipeline(self, wrapped):
         if self.batch_size is not None:
