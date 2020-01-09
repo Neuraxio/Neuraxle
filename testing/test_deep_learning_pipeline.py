@@ -4,7 +4,7 @@ from sklearn.datasets import load_boston
 from sklearn.decomposition import PCA, FastICA
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.linear_model import Ridge
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import mean_squared_error
 from sklearn.utils import shuffle
 
 from neuraxle.api import DeepLearningPipeline
@@ -17,8 +17,10 @@ from neuraxle.union import AddFeatures, ModelStacking
 
 
 def test_deep_learning_pipeline():
+    # Given
     boston = load_boston()
     data_inputs, expected_outputs = shuffle(boston.data, boston.target, random_state=13)
+    expected_outputs = expected_outputs.astype(np.float32)
     data_inputs = data_inputs.astype(np.float32)
 
     pipeline = Pipeline([
@@ -41,7 +43,7 @@ def test_deep_learning_pipeline():
                 })
             ),
             SKLearnWrapper(
-                KMeans(),
+                KMeans(n_clusters=7),
                 HyperparameterSpace({"n_clusters": RandInt(5, 10)})
             ),
         ],
@@ -57,12 +59,31 @@ def test_deep_learning_pipeline():
         pipeline,
         validation_size=0.1,
         batch_size=32,
-        batch_metrics={'accuracy': accuracy_score},
+        batch_metrics={'mse': to_numpy_metric_wrapper(mean_squared_error)},
         shuffle_in_each_epoch_at_train=True,
         n_epochs=100,
-        epochs_metrics={'accuracy': accuracy_score},
-        scoring_function=accuracy_score,
+        epochs_metrics={'mse': to_numpy_metric_wrapper(mean_squared_error)},
+        scoring_function=to_numpy_metric_wrapper(mean_squared_error),
     )
 
-    p.fit_transform(data_inputs, expected_outputs)
+    # When
+    p, outputs = p.fit_transform(data_inputs, expected_outputs)
 
+    # Then
+    batch_mse_train = p.get_step_by_name('batch_metrics').get_metric_train('mse')
+    epoch_mse_train = p.get_step_by_name('epoch_metrics').get_metric_train('mse')
+
+    batch_mse_validation = p.get_step_by_name('batch_metrics').get_metric_validation('mse')
+    epoch_mse_validation = p.get_step_by_name('epoch_metrics').get_metric_validation('mse')
+
+    assert batch_mse_train[-1] < 0.03
+    assert batch_mse_validation[-1] < 0.03
+    assert epoch_mse_train[-1] < 0.03
+    assert epoch_mse_validation[-1] < 0.03
+
+
+def to_numpy_metric_wrapper(metric_fun):
+    def metric(data_inputs, expected_outputs):
+        return metric_fun(np.array(data_inputs), np.array(expected_outputs))
+
+    return metric
