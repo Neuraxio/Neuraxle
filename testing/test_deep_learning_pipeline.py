@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.datasets import load_boston
@@ -16,10 +18,8 @@ from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.union import AddFeatures, ModelStacking
 
 VALIDATION_SIZE = 0.1
-
 BATCH_SIZE = 32
-
-N_EPOCHS = 5
+N_EPOCHS = 10
 
 
 def test_deep_learning_pipeline():
@@ -85,16 +85,24 @@ def test_deep_learning_pipeline():
     assert len(epoch_mse_train) == N_EPOCHS
     assert len(epoch_mse_validation) == N_EPOCHS
 
-    expected_len_batch_mse_train = (len(data_inputs) / BATCH_SIZE) * (1 - VALIDATION_SIZE)
-    expected_len_batch_mse_validation = (len(data_inputs) / BATCH_SIZE) * VALIDATION_SIZE
+    expected_len_batch_mse_train = math.ceil((len(data_inputs) / BATCH_SIZE) * (1 - VALIDATION_SIZE)) * N_EPOCHS
+    expected_len_batch_mse_validation = math.ceil((len(data_inputs) / BATCH_SIZE) * VALIDATION_SIZE) * N_EPOCHS
 
     assert len(batch_mse_train) == expected_len_batch_mse_train
     assert len(batch_mse_validation) == expected_len_batch_mse_validation
 
-    assert batch_mse_train[-1] < 100
-    assert batch_mse_validation[-1] < 100
-    assert epoch_mse_train[-1] < 100
-    assert epoch_mse_validation[-1] < 100
+    last_batch_mse_validation = batch_mse_validation[-1]
+    last_batch_mse_train = batch_mse_train[-1]
+
+    last_epoch_mse_train = epoch_mse_train[-1]
+    last_epoch_mse_validation = epoch_mse_validation[-1]
+
+    assert last_batch_mse_train < last_batch_mse_validation
+    assert last_epoch_mse_train < last_epoch_mse_validation
+    assert last_batch_mse_train < 1
+    assert last_batch_mse_validation < 50
+    assert last_epoch_mse_train < 1
+    assert last_epoch_mse_validation < 50
 
 
 def to_numpy_metric_wrapper(metric_fun):
