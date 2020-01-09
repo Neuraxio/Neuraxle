@@ -103,8 +103,7 @@ class EpochRepeater(MetaStepMixin, BaseStep):
         self.fit_only = fit_only
         self.epochs = epochs
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit transform wrapped step self.epochs times using wrapped step handle fit transform method.
 

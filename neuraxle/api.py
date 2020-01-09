@@ -24,19 +24,15 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
             n_epochs=1,
             epochs_metrics=None,
             scoring_function=None,
-            final_scoring_metrics=None,
             metrics_plotting_step=None,
             cache_folder=None
     ):
         if epochs_metrics is None:
-            epochs_metrics = []
+            epochs_metrics = {}
         if batch_metrics is None:
-            batch_metrics = []
-        if final_scoring_metrics is None:
-            final_scoring_metrics = []
+            batch_metrics = {}
 
         self.final_scoring_metric = scoring_function
-        self.final_scoring_metrics = final_scoring_metrics
         self.epochs_metrics = epochs_metrics
         self.n_epochs = n_epochs
         self.shuffle_in_each_epoch_at_train = shuffle_in_each_epoch_at_train
@@ -70,7 +66,7 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
 
     def _create_validation_split(self, wrapped):
         if self.validation_size != 0.0:
-            wrapped = MetricsWrapper(wrapped=wrapped, metrics=self.final_scoring_metrics, name=EPOCH_METRICS_STEP_NAME)
+            wrapped = MetricsWrapper(wrapped=wrapped, metrics=self.epochs_metrics, name=EPOCH_METRICS_STEP_NAME)
             wrapped = ValidationSplitWrapper(
                 wrapped=wrapped,
                 test_size=self.validation_size,
@@ -81,7 +77,7 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
 
     def _create_epoch_repeater(self, wrapped):
         if self.n_epochs is not None:
-            wrapped = EpochRepeater(wrapped, epochs=self.n_epochs)
+            wrapped = EpochRepeater(wrapped, epochs=self.n_epochs, fit_only=False)
         return wrapped
 
     def _did_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:

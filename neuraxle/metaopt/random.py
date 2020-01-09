@@ -126,7 +126,7 @@ class ValidationSplitWrapper(BaseValidation):
         :return: fitted self
         """
         new_self, results_data_container = self._fit_transform_data_container(data_container, context)
-        return new_self, data_container
+        return new_self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
