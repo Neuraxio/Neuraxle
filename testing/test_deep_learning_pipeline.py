@@ -57,10 +57,10 @@ def test_deep_learning_pipeline():
         pipeline,
         validation_size=0.1,
         batch_size=32,
-        batch_metrics=[accuracy_score],
+        batch_metrics={'accuracy': accuracy_score},
         shuffle_in_each_epoch_at_train=True,
         n_epochs=100,
-        epochs_metrics=[accuracy_score],
+        epochs_metrics={'accuracy': accuracy_score},
         scoring_function=accuracy_score,
     )
 

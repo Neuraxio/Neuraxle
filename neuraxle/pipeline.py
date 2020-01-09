@@ -330,7 +330,7 @@ class MiniBatchSequentialPipeline(Pipeline):
             return
 
         for step in self.steps:
-            if issubclass(step, Barrier):
+            if isinstance(step, Barrier):
                 if step.batch_size is None:
                     raise Exception(
                         'Invalid Joiner batch size {}[{}]. Please provide a default batch size to MiniBatchSequentialPipeline, or add a batch size to {}[{}].'.format(
@@ -341,7 +341,7 @@ class MiniBatchSequentialPipeline(Pipeline):
             return
 
         for step in self.steps:
-            if issubclass(step, Barrier):
+            if isinstance(step, Barrier):
                 if step.batch_size is not None:
                     warnings.warn(
                         'Replacing {}[{}].batch_size by {}.batch_size.'.format(self.name, step.name, self.name))
@@ -349,14 +349,15 @@ class MiniBatchSequentialPipeline(Pipeline):
 
     def __patch_missing_barrier(self, batch_size):
         has_barrier = False
-        self._refresh_steps()
 
         for step in self.steps:
-            if issubclass(step, Barrier):
+            if isinstance(step, Barrier):
                 has_barrier = True
 
         if not has_barrier:
             self.steps_as_tuple.append(('Joiner', Joiner(batch_size)))
+
+        self._refresh_steps()
 
     def transform(self, data_inputs: Any):
         """
@@ -428,8 +429,7 @@ class MiniBatchSequentialPipeline(Pipeline):
 
         return data_container
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
-        'MiniBatchSequentialPipeline', DataContainer]:
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> Tuple['MiniBatchSequentialPipeline', DataContainer]:
         """
         Fit all sub pipelines splitted by the Barrier steps.
 
@@ -461,8 +461,7 @@ class MiniBatchSequentialPipeline(Pipeline):
 
         return self, data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
-        'MiniBatchSequentialPipeline', DataContainer]:
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> Tuple['MiniBatchSequentialPipeline', DataContainer]:
         """
         Transform all sub pipelines splitted by the Barrier steps.
 
