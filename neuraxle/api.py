@@ -273,3 +273,39 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
         :return:
         """
         return self.get_step_by_name(EPOCH_METRICS_STEP_NAME).get_metric_validation(name)
+
+    def get_all_epoch_metrics_train(self) -> Dict:
+        """
+        Get all training epoch metrics.
+
+        :return: metrics results dict
+        :rtype: Dict
+        """
+        return self.get_step_by_name(EPOCH_METRICS_STEP_NAME).get_all_metrics_train()
+
+    def get_all_batch_metrics_train(self) -> Dict:
+        """
+        Get all training batch metrics.
+
+        :return: metrics results dict
+        :rtype: Dict
+        """
+        return self.get_step_by_name(BATCH_METRICS_STEP_NAME).get_all_metrics_train()
+
+    def get_all_epoch_metrics_validation(self) -> Dict:
+        """
+        Get all validation epoch metrics.
+
+        :return: metrics results dict
+        :rtype: Dict
+        """
+        return self.get_step_by_name(EPOCH_METRICS_STEP_NAME).get_all_metrics_validation()
+
+    def get_all_batch_metrics_validation(self) -> Dict:
+        """
+        Get all validation batch metrics.
+
+        :return: metrics results dict
+        :rtype: Dict
+        """
+        return self.get_step_by_name(BATCH_METRICS_STEP_NAME).get_all_metrics_validation()

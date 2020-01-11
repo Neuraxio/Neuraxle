@@ -117,7 +117,7 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
         if self.print_metrics:
             self.print_fun(result)
 
-    def get_all_metrics_train(self) -> Dict[List]:
+    def get_all_metrics_train(self):
         """
         Get all train metrics results.
 
@@ -126,7 +126,7 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
         """
         return self.metrics_results_train
 
-    def get_all_metrics_validation(self) -> Dict[List]:
+    def get_all_metrics_validation(self):
         """
         Get all validation metrics results.
 
