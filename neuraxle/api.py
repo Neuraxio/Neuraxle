@@ -19,9 +19,9 @@ The neuraxle higher level api classes.
     limitations under the License.
 
 """
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Callable, Union
 
-from neuraxle.base import BaseStep, ExecutionContext
+from neuraxle.base import BaseStep, ExecutionContext, NamedTupleList
 from neuraxle.data_container import DataContainer
 from neuraxle.metaopt.random import ValidationSplitWrapper
 from neuraxle.metrics import MetricsWrapper
@@ -71,20 +71,24 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
         :class:`CustomPipelineMixin`,
         :class:`MetricsWrapper`
     """
+
     def __init__(
             self,
-            pipeline,
-            validation_size=0.0,
-            batch_size=None,
-            batch_metrics=None,
-            shuffle_in_each_epoch_at_train=True,
-            seed=None,
-            n_epochs=1,
-            epochs_metrics=None,
-            scoring_function=None,
-            metrics_plotting_step=None,
-            cache_folder=None
+            pipeline: Union[BaseStep, NamedTupleList],
+            validation_size: float = 0.0,
+            batch_size: int = None,
+            batch_metrics: Dict[str, Callable] = None,
+            shuffle_in_each_epoch_at_train: bool = True,
+            seed: int = None,
+            n_epochs: int = 1,
+            epochs_metrics: Dict[str, Callable] = None,
+            scoring_function: Callable = None,
+            metrics_plotting_step: BaseStep = None,
+            cache_folder: str = None,
+            print_epoch_metrics=False,
+            print_batch_metrics=False
     ):
+
         if epochs_metrics is None:
             epochs_metrics = {}
         if batch_metrics is None:
@@ -99,6 +103,8 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
         self.validation_size = validation_size
         self.pipeline = pipeline
         self.metrics_plotting_step = metrics_plotting_step
+        self.print_batch_metrics = print_batch_metrics
+        self.print_epoch_metrics = print_epoch_metrics
 
         wrapped = pipeline
         wrapped = self._create_mini_batch_pipeline(wrapped)
@@ -122,7 +128,7 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
         :rtype: MetricsWrapper
         """
         if self.batch_size is not None:
-            wrapped = MetricsWrapper(wrapped=wrapped, metrics=self.batch_metrics, name=BATCH_METRICS_STEP_NAME)
+            wrapped = MetricsWrapper(wrapped=wrapped, metrics=self.batch_metrics, name=BATCH_METRICS_STEP_NAME, print_metrics=self.print_batch_metrics)
             wrapped = MiniBatchSequentialPipeline(
                 [wrapped],
                 batch_size=self.batch_size
@@ -140,7 +146,7 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
         :rtype: MetricsWrapper
         """
         if self.validation_size != 0.0:
-            wrapped = MetricsWrapper(wrapped=wrapped, metrics=self.epochs_metrics, name=EPOCH_METRICS_STEP_NAME)
+            wrapped = MetricsWrapper(wrapped=wrapped, metrics=self.epochs_metrics, name=EPOCH_METRICS_STEP_NAME, print_metrics=self.print_epoch_metrics)
             wrapped = ValidationSplitWrapper(
                 wrapped=wrapped,
                 test_size=self.validation_size,
