@@ -1,3 +1,24 @@
+"""
+Neuraxle's api classes
+========================================
+The neuraxle higher level api classes.
+
+..
+    Copyright 2019, Neuraxio Inc.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+"""
 from typing import Dict, List, Tuple
 
 from neuraxle.base import BaseStep, ExecutionContext
@@ -47,7 +68,8 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
         :class:`ValidationSplitWrapper`,
         :class:`MiniBatchSequentialPipeline`,
         :class:`Pipeline`,
-        :class:`CustomPipelineMixin`
+        :class:`CustomPipelineMixin`,
+        :class:`MetricsWrapper`
     """
     def __init__(
             self,
@@ -190,22 +212,64 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
         return batch_metrics, epoch_metrics
 
     def get_score(self):
+        """
+        Get latest score. This function had to be defined for the hyperparameter optimization steps.
+
+        :return: score
+        :rtype: float
+        """
         return self.get_step_by_name(VALIDATION_SPLIT_STEP_NAME).get_score()
 
     def get_score_validation(self):
+        """
+        Get latest score validation.
+
+        :return: score
+        :rtype: float
+        """
         return self.get_step_by_name(VALIDATION_SPLIT_STEP_NAME).get_score_validation()
 
-    def get_score_train(self):
+    def get_score_train(self) -> float:
+        """
+        Get latest score train.
+
+        :return: score
+        :rtype: float
+        """
         return self.get_step_by_name(VALIDATION_SPLIT_STEP_NAME).get_score_train()
 
-    def get_batch_metric_train(self, name):
+    def get_batch_metric_train(self, name) -> List:
+        """
+        Get training batch metric results for a given batch metric name.
+
+        :return: score
+        :rtype: float
+        """
         return self.get_step_by_name(BATCH_METRICS_STEP_NAME).get_metric_train(name)
 
-    def get_epoch_metric_train(self, name):
+    def get_epoch_metric_train(self, name) -> List:
+        """
+        Get training epoch metric results for a given epoch metric name.
+
+        :return: score
+        :rtype: float
+        """
         return self.get_step_by_name(EPOCH_METRICS_STEP_NAME).get_metric_train(name)
 
-    def get_batch_metric_validation(self, name):
+    def get_batch_metric_validation(self, name) -> List:
+        """
+        Get validation batch metric for a given metric name.
+
+        :return: score
+        :rtype: float
+        """
         return self.get_step_by_name(BATCH_METRICS_STEP_NAME).get_metric_validation(name)
 
-    def get_epoch_metric_validation(self, name):
+    def get_epoch_metric_validation(self, name) -> List:
+        """
+        Get validation epoch metric for a given metric name.
+
+        :param name:
+        :return:
+        """
         return self.get_step_by_name(EPOCH_METRICS_STEP_NAME).get_metric_validation(name)
