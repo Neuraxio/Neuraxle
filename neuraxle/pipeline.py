@@ -329,7 +329,7 @@ class MiniBatchSequentialPipeline(Pipeline):
         if batch_size is not None:
             return
 
-        for step in self.steps:
+        for _, step in self:
             if isinstance(step, Barrier):
                 if step.batch_size is None:
                     raise Exception(
@@ -340,7 +340,7 @@ class MiniBatchSequentialPipeline(Pipeline):
         if batch_size is None:
             return
 
-        for step in self.steps:
+        for _, step in self:
             if isinstance(step, Barrier):
                 if step.batch_size is not None:
                     warnings.warn(
@@ -350,7 +350,7 @@ class MiniBatchSequentialPipeline(Pipeline):
     def __patch_missing_barrier(self, batch_size):
         has_barrier = False
 
-        for step in self.steps:
+        for _, step in self:
             if isinstance(step, Barrier):
                 has_barrier = True
 
@@ -429,8 +429,7 @@ class MiniBatchSequentialPipeline(Pipeline):
 
         return data_container
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
-        'MiniBatchSequentialPipeline', DataContainer]:
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> Tuple['MiniBatchSequentialPipeline', DataContainer]:
         """
         Fit all sub pipelines splitted by the Barrier steps.
 
@@ -462,8 +461,7 @@ class MiniBatchSequentialPipeline(Pipeline):
 
         return self
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
-        'MiniBatchSequentialPipeline', DataContainer]:
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> Tuple['MiniBatchSequentialPipeline', DataContainer]:
         """
         Transform all sub pipelines splitted by the Barrier steps.
 
@@ -529,8 +527,7 @@ class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
     """
 
     @abstractmethod
-    def join_transform(self, step: TruncableSteps, data_container: DataContainer,
-                       context: ExecutionContext) -> DataContainer:
+    def join_transform(self, step: TruncableSteps, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Execute the given pipeline :func:`~neuraxle.pipeline.Pipeline.transform` with the given data container, and execution context.
 
@@ -546,8 +543,7 @@ class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple[
-        'Any', DataContainer]:
+    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple['Any', DataContainer]:
         """
         Execute the given pipeline :func:`~neuraxle.pipeline.Pipeline.fit_transform` with the given data container, and execution context.
 
@@ -599,8 +595,7 @@ class Joiner(Barrier):
 
         return output_data_container
 
-    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple[
-        'Any', DataContainer]:
+    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple['Any', DataContainer]:
         """
         Concatenate the pipeline fit transform output of each batch of self.batch_size together.
 
