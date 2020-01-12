@@ -59,8 +59,8 @@ class BaseValidation(MetaStepMixin, BaseStep, ABC):
         :param scoring_function: scoring function with two arguments (y_true, y_pred)
         :type scoring_function: Callable
         """
-        MetaStepMixin.__init__(self)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self)
         self.scoring_function = scoring_function
 
 
@@ -108,8 +108,9 @@ class ValidationSplitWrapper(BaseValidation):
         :param test_size: ratio for test size between 0 and 1
         :param scoring_function: scoring function with two arguments (y_true, y_pred)
         """
-        MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
+
         self.run_validation_split_in_test_mode = run_validation_split_in_test_mode
         self.test_size = test_size
         self.scoring_function = scoring_function

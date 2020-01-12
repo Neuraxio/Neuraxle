@@ -303,8 +303,8 @@ class AutoMLAlgorithm(MetaStepMixin, BaseStep):
             validation_technique: BaseCrossValidationWrapper = None,
             higher_score_is_better=True
     ):
-        MetaStepMixin.__init__(self, None)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self, None)
 
         if validation_technique is None:
             validation_technique = KFoldCrossValidationWrapper()

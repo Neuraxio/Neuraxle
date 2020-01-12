@@ -1517,7 +1517,12 @@ class MetaStepMixin:
             wrapped: BaseStep = None
     ):
         self.wrapped: BaseStep = wrapped
-        self.savers.append(MetaStepJoblibStepSaver())
+
+        if not hasattr(self, 'savers'):
+            self.savers = [MetaStepJoblibStepSaver()]
+        else:
+            warnings.warn('Please initialize Mixins in the reverse order. MetaStepMixin was initialized after BaseStep. Appending the MetaStepJoblibStepSaver to the savers.')
+            self.savers.append(MetaStepJoblibStepSaver())
 
     def setup(self) -> BaseStep:
         """

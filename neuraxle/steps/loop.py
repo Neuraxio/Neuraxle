@@ -39,8 +39,8 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
             self,
             wrapped: BaseStep
     ):
-        MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
 
     def fit(self, data_inputs, expected_outputs=None):
         if expected_outputs is None:

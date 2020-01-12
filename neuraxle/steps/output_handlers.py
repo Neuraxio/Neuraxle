@@ -34,8 +34,8 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
     """
 
     def __init__(self, wrapped):
-        MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
