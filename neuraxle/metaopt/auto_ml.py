@@ -500,6 +500,7 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
             n_iters: int = 100,
             refit=True
     ):
+        BaseStep.__init__(self)
         NonTransformableMixin.__init__(self)
 
         self.refit = refit
