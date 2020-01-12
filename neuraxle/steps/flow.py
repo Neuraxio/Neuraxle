@@ -106,8 +106,9 @@ class TrainOrTestOnlyWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
     """
 
     def __init__(self, wrapped: BaseStep, is_train_only=True):
-        MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
+
         self.is_train_only = is_train_only
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
@@ -213,14 +214,14 @@ class Optional(ForceMustHandleMixin, MetaStepMixin, BaseStep):
     """
 
     def __init__(self, wrapped: BaseStep, enabled: bool = True, nullified_return_value=None):
-        ForceMustHandleMixin.__init__(self)
-        MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(
             self,
             hyperparams=HyperparameterSamples({
                 OPTIONAL_ENABLED_HYPERPARAM: enabled
             })
         )
+        MetaStepMixin.__init__(self, wrapped)
+        ForceMustHandleMixin.__init__(self)
 
         if nullified_return_value is None:
             nullified_return_value = []
@@ -456,9 +457,9 @@ class ExpandDim(
     """
 
     def __init__(self, wrapped: BaseStep):
-        ResumableStepMixin.__init__(self)
-        MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
+        ResumableStepMixin.__init__(self)
 
     def _will_process(self, data_container, context):
         return ExpandedDataContainer.create_from(data_container), context

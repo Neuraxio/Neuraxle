@@ -1523,6 +1523,12 @@ class MetaStepMixin:
     ):
         self.wrapped: BaseStep = wrapped
 
+        if not hasattr(self, 'savers'):
+            warnings.warn('Please initialize Mixins in the reverse order. MetaStepMixin should be initialized after BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers.'.format(self.wrapped.name))
+            self.savers = [MetaStepJoblibStepSaver()]
+        else:
+            self.savers.append(MetaStepJoblibStepSaver())
+
     def setup(self) -> BaseStep:
         """
         Initialize step before it runs. Also initialize the wrapped step.
@@ -1803,6 +1809,72 @@ class MetaStepMixin:
             self.wrapped) + "," + "\n\thyperparameters=" + pprint.pformat(
             self.hyperparams) + "\n)"
         return output
+
+
+class MetaStepJoblibStepSaver(JoblibStepSaver):
+    """
+    Custom saver for meta step mixin.
+    """
+    def __init__(self):
+        JoblibStepSaver.__init__(self)
+
+    def save_step(self, step: 'MetaStepMixin', context: ExecutionContext) -> MetaStepMixin:
+        """
+        Save MetaStepMixin.
+
+        #. Save wrapped step.
+        #. Strip wrapped step form the meta step mixin.
+        #. Save meta step with wrapped step savers.
+
+        :param step: meta step to save
+        :type step: MetaStepMixin
+        :param context: execution context
+        :type context: ExecutionContext
+        :return:
+        """
+        # First, save the wrapped step savers
+        wrapped_step_savers = []
+        if step.wrapped.should_save():
+            wrapped_step_savers.extend(step.wrapped.get_savers())
+        else:
+            wrapped_step_savers.append(None)
+
+        # Second, save the wrapped step
+        step.wrapped.save(context)
+
+        step.wrapped_step_name_and_savers = (step.wrapped.name, wrapped_step_savers)
+
+        # Third, strip the wrapped step from the meta step
+        del step.wrapped
+
+        return step
+
+    def load_step(self, step: 'MetaStepMixin', context: ExecutionContext) -> 'MetaStepMixin':
+        """
+        Load MetaStepMixin.
+
+        #. Loop through all of the sub steps savers, and only load the sub steps that have been saved.
+        #. Refresh steps
+
+        :param step: step to load
+        :type step: BaseStep
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: loaded truncable steps
+        :rtype: TruncableSteps
+        """
+        step_name, savers = step.wrapped_step_name_and_savers
+
+        if savers is None:
+            # keep wrapped step as it is if it hasn't been saved
+            pass
+        else:
+            # load each sub step with their savers
+            sub_step_to_load = Identity(name=step_name, savers=savers)
+            sub_step = sub_step_to_load.load(context)
+            step.wrapped = sub_step
+
+        return step
 
 
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
