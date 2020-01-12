@@ -1825,7 +1825,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
         # First, save the wrapped step savers
         wrapped_step_savers = []
         if step.wrapped.should_save():
-            wrapped_step_savers.append(wrapped_step_savers.get_savers())
+            wrapped_step_savers.extend(step.wrapped.get_savers())
         else:
             wrapped_step_savers.append(None)
 
@@ -1853,8 +1853,6 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
         :return: loaded truncable steps
         :rtype: TruncableSteps
         """
-        step.steps_as_tuple = []
-
         step_name, savers = step.wrapped_step_name_and_savers
 
         if savers is None:

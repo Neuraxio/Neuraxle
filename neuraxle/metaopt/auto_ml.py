@@ -501,11 +501,12 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
             refit=True
     ):
         BaseStep.__init__(self)
-        NonTransformableMixin.__init__(self)
 
         self.refit = refit
         auto_ml_algorithm = auto_ml_algorithm.set_step(wrapped)
+
         MetaStepMixin.__init__(self, auto_ml_algorithm)
+        NonTransformableMixin.__init__(self)
 
         if hyperparams_repository is None:
             hyperparams_repository = InMemoryHyperparamsRepository()
