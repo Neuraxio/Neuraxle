@@ -901,8 +901,7 @@ class BaseStep(ABC):
 
         return new_self
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.fit_transform`.
         The default behavior is to rehash current ids with the step hyperparameters.
@@ -974,8 +973,7 @@ class BaseStep(ABC):
         """
         return self.fit(data_container.data_inputs, data_container.expected_outputs)
 
-    def _will_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-    DataContainer, ExecutionContext):
+    def _will_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
         """
         Apply side effects before fit_transform is called.
 
@@ -998,8 +996,7 @@ class BaseStep(ABC):
         """
         return data_container
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit transform data container.
 
@@ -1013,8 +1010,7 @@ class BaseStep(ABC):
 
         return new_self, data_container
 
-    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Apply side effects before transform.
 
