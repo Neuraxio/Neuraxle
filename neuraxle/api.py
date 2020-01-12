@@ -101,7 +101,6 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
         self.batch_size = batch_size
         self.batch_metrics = batch_metrics
         self.validation_size = validation_size
-        self.pipeline = pipeline
         self.metrics_plotting_step = metrics_plotting_step
         self.print_batch_metrics = print_batch_metrics
         self.print_epoch_metrics = print_epoch_metrics
