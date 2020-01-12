@@ -178,6 +178,7 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
     def __init__(self, wrapped: BaseStep, copy_op=copy.deepcopy):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
+
         self.set_step(wrapped)
         self.steps: List[BaseStep] = []
         self.copy_op = copy_op
