@@ -104,12 +104,8 @@ class FeatureUnion(TruncableSteps):
                 for _, step in self.steps_as_tuple
             ]
 
-        return DataContainer(
-            summary_id=data_container.summary_id,
-            current_ids=data_container.current_ids,
-            data_inputs=data_containers,
-            expected_outputs=data_container.expected_outputs
-        )
+        return DataContainer(data_inputs=data_containers, current_ids=data_container.current_ids,
+                             summary_id=data_container.summary_id, expected_outputs=data_container.expected_outputs)
 
     def _did_transform(self, data_container, context):
         data_container = self.joiner.handle_transform(data_container, context)

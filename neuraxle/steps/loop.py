@@ -63,7 +63,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
         """
         for current_id, di, eo in data_container:
             self.wrapped = self.wrapped.handle_fit(
-                DataContainer(current_ids=None, data_inputs=di, expected_outputs=eo),
+                DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
                 context
             )
 
@@ -97,7 +97,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         for current_id, di, eo in data_container:
             output = self.wrapped.handle_transform(
-                DataContainer(current_ids=None, data_inputs=di, expected_outputs=eo),
+                DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
                 context
             )
 
@@ -146,7 +146,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         for current_id, di, eo in data_container:
             self.wrapped, output = self.wrapped.handle_fit_transform(
-                DataContainer(current_ids=None, data_inputs=di, expected_outputs=eo),
+                DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
                 context
             )
 

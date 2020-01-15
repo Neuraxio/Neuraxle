@@ -238,20 +238,14 @@ class ValidationSplitWrapper(BaseValidation):
             self.split(data_container.data_inputs, data_container.expected_outputs)
 
         train_ids = self.train_split(data_container.current_ids)
-        train_data_container = DataContainer(
-            summary_id=data_container.summary_id,
-            current_ids=train_ids,
-            data_inputs=train_data_inputs,
-            expected_outputs=train_expected_outputs
-        )
+        train_data_container = DataContainer(data_inputs=train_data_inputs, current_ids=train_ids,
+                                             summary_id=data_container.summary_id,
+                                             expected_outputs=train_expected_outputs)
 
         validation_ids = self.validation_split(data_container.current_ids)
-        validation_data_container = DataContainer(
-            summary_id=data_container.summary_id,
-            current_ids=validation_ids,
-            data_inputs=validation_data_inputs,
-            expected_outputs=validation_expected_outputs
-        )
+        validation_data_container = DataContainer(data_inputs=validation_data_inputs, current_ids=validation_ids,
+                                                  summary_id=data_container.summary_id,
+                                                  expected_outputs=validation_expected_outputs)
 
         return train_data_container, validation_data_container
 

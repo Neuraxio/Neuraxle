@@ -264,11 +264,8 @@ class Optional(ForceMustHandleMixin, MetaStepMixin, BaseStep):
 
         self._nullify_hyperparams()
 
-        return self, DataContainer(
-            current_ids=data_container.current_ids,
-            data_inputs=self.nullified_return_value,
-            expected_outputs=self.nullified_return_value
-        )
+        return self, DataContainer(data_inputs=self.nullified_return_value, current_ids=data_container.current_ids,
+                                   expected_outputs=self.nullified_return_value)
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -287,11 +284,8 @@ class Optional(ForceMustHandleMixin, MetaStepMixin, BaseStep):
         self._nullify_hyperparams()
         data_container.set_data_inputs(self.nullified_return_value)
 
-        return DataContainer(
-            current_ids=data_container.current_ids,
-            data_inputs=self.nullified_return_value,
-            expected_outputs=self.nullified_return_value
-        )
+        return DataContainer(data_inputs=self.nullified_return_value, current_ids=data_container.current_ids,
+                             expected_outputs=self.nullified_return_value)
 
     def _nullify_hyperparams(self):
         """

@@ -63,11 +63,8 @@ class NumpyConcatenateOnCustomAxis(NonFittableMixin, BaseStep):
         :return: transformed data container
         """
         data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs])
-        data_container = DataContainer(
-            current_ids=data_container.current_ids,
-            data_inputs=data_inputs,
-            expected_outputs=data_container.expected_outputs
-        )
+        data_container = DataContainer(data_inputs=data_inputs, current_ids=data_container.current_ids,
+                                       expected_outputs=data_container.expected_outputs)
         data_container.set_data_inputs(data_inputs)
 
         return data_container
@@ -125,11 +122,8 @@ class NumpyTranspose(NonFittableMixin, BaseStep):
         :return: transformed data container
         """
         data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs])
-        data_container = DataContainer(
-            current_ids=data_container.current_ids,
-            data_inputs=data_inputs,
-            expected_outputs=data_container.expected_outputs
-        )
+        data_container = DataContainer(data_inputs=data_inputs, current_ids=data_container.current_ids,
+                                       expected_outputs=data_container.expected_outputs)
         data_container.set_data_inputs(data_inputs)
 
         return data_container
