@@ -462,6 +462,7 @@ class ExpandDim(
         ResumableStepMixin.__init__(self)
 
     def _will_process(self, data_container, context):
+        data_container, context = BaseStep._will_process(self, data_container, context)
         return ExpandedDataContainer.create_from(data_container), context
 
     def _did_process(self, data_container, context):

@@ -1039,6 +1039,7 @@ class BaseStep(ABC):
         :return: (data container, execution context)
         :rtype: (DataContainer, ExecutionContext)
         """
+        self.setup()
         return data_container, context
 
     def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
