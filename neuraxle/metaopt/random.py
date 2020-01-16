@@ -59,8 +59,8 @@ class BaseValidation(MetaStepMixin, BaseStep, ABC):
         :param scoring_function: scoring function with two arguments (y_true, y_pred)
         :type scoring_function: Callable
         """
-        MetaStepMixin.__init__(self)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self)
         self.scoring_function = scoring_function
 
 
@@ -108,8 +108,9 @@ class ValidationSplitWrapper(BaseValidation):
         :param test_size: ratio for test size between 0 and 1
         :param scoring_function: scoring function with two arguments (y_true, y_pred)
         """
-        MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
+
         self.run_validation_split_in_test_mode = run_validation_split_in_test_mode
         self.test_size = test_size
         self.scoring_function = scoring_function
@@ -237,20 +238,14 @@ class ValidationSplitWrapper(BaseValidation):
             self.split(data_container.data_inputs, data_container.expected_outputs)
 
         train_ids = self.train_split(data_container.current_ids)
-        train_data_container = DataContainer(
-            summary_id=data_container.summary_id,
-            current_ids=train_ids,
-            data_inputs=train_data_inputs,
-            expected_outputs=train_expected_outputs
-        )
+        train_data_container = DataContainer(data_inputs=train_data_inputs, current_ids=train_ids,
+                                             summary_id=data_container.summary_id,
+                                             expected_outputs=train_expected_outputs)
 
         validation_ids = self.validation_split(data_container.current_ids)
-        validation_data_container = DataContainer(
-            summary_id=data_container.summary_id,
-            current_ids=validation_ids,
-            data_inputs=validation_data_inputs,
-            expected_outputs=validation_expected_outputs
-        )
+        validation_data_container = DataContainer(data_inputs=validation_data_inputs, current_ids=validation_ids,
+                                                  summary_id=data_container.summary_id,
+                                                  expected_outputs=validation_expected_outputs)
 
         return train_data_container, validation_data_container
 

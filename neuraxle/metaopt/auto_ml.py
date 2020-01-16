@@ -303,8 +303,8 @@ class AutoMLAlgorithm(MetaStepMixin, BaseStep):
             validation_technique: BaseCrossValidationWrapper = None,
             higher_score_is_better=True
     ):
-        MetaStepMixin.__init__(self, None)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self, None)
 
         if validation_technique is None:
             validation_technique = KFoldCrossValidationWrapper()
@@ -500,11 +500,13 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
             n_iters: int = 100,
             refit=True
     ):
-        NonTransformableMixin.__init__(self)
+        BaseStep.__init__(self)
 
         self.refit = refit
         auto_ml_algorithm = auto_ml_algorithm.set_step(wrapped)
+
         MetaStepMixin.__init__(self, auto_ml_algorithm)
+        NonTransformableMixin.__init__(self)
 
         if hyperparams_repository is None:
             hyperparams_repository = InMemoryHyperparamsRepository()
