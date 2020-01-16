@@ -96,7 +96,7 @@ class EpochRepeater(MetaStepMixin, BaseStep):
         :class:`BaseStep`
     """
 
-    def __init__(self, wrapped, epochs, fit_only=True, repeat_in_test_mode=False):
+    def __init__(self, wrapped, epochs, fit_only=False, repeat_in_test_mode=False):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         self.repeat_in_test_mode = repeat_in_test_mode
