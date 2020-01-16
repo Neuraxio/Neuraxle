@@ -1,5 +1,5 @@
 """
-Neuraxle's api classes
+Neuraxle's API classes
 ========================================
 The neuraxle higher level api classes.
 
