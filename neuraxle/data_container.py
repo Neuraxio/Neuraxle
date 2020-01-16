@@ -179,8 +179,9 @@ class ExpandedDataContainer(DataContainer):
         :class:`ExpandedDataContainer`,
     """
 
-    def __init__(self, data_inputs, current_ids, summary_id=None, expected_outputs=None):
-        DataContainer.__init__(data_inputs=data_inputs, current_ids=current_ids, summary_id=summary_id,
+    def __init__(self,  data_inputs, current_ids, expected_outputs, summary_id, old_current_ids):
+
+        DataContainer.__init__(self, data_inputs=data_inputs, current_ids=current_ids, summary_id=summary_id,
                                expected_outputs=expected_outputs)
 
         self.old_current_ids = old_current_ids
@@ -207,7 +208,7 @@ class ExpandedDataContainer(DataContainer):
         """
         return ExpandedDataContainer(data_inputs=[data_container.data_inputs], current_ids=[data_container.summary_id],
                                      summary_id=data_container.summary_id,
-                                     expected_outputs=[data_container.expected_outputs])
+                                     expected_outputs=[data_container.expected_outputs], old_current_ids=data_container.current_ids)
 
 
 class ListDataContainer(DataContainer):
