@@ -1,7 +1,7 @@
 """
 Neuraxle's API classes
 ========================================
-The neuraxle higher level api classes.
+Neuraxle's high-level API classes. Useful to make complex Deep Learning pipelines by calling just a few minimal things.
 
 ..
     Copyright 2019, Neuraxio Inc.
