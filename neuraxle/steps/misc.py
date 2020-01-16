@@ -171,8 +171,9 @@ class CallbackWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
             more_arguments: List = tuple(),
             hyperparams=None
     ):
-        MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self, hyperparams)
+        MetaStepMixin.__init__(self, wrapped)
+
         self.inverse_transform_callback_function = inverse_transform_callback_function
         self.more_arguments = more_arguments
         self.fit_callback_function = fit_callback_function
