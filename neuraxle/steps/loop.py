@@ -39,8 +39,8 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
             self,
             wrapped: BaseStep
     ):
-        MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
 
     def fit(self, data_inputs, expected_outputs=None):
         if expected_outputs is None:
@@ -63,7 +63,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
         """
         for current_id, di, eo in data_container:
             self.wrapped = self.wrapped.handle_fit(
-                DataContainer(current_ids=None, data_inputs=di, expected_outputs=eo),
+                DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
                 context
             )
 
@@ -97,7 +97,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         for current_id, di, eo in data_container:
             output = self.wrapped.handle_transform(
-                DataContainer(current_ids=None, data_inputs=di, expected_outputs=eo),
+                DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
                 context
             )
 
@@ -146,7 +146,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         for current_id, di, eo in data_container:
             self.wrapped, output = self.wrapped.handle_fit_transform(
-                DataContainer(current_ids=None, data_inputs=di, expected_outputs=eo),
+                DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
                 context
             )
 
@@ -178,6 +178,7 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
     def __init__(self, wrapped: BaseStep, copy_op=copy.deepcopy):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
+
         self.set_step(wrapped)
         self.steps: List[BaseStep] = []
         self.copy_op = copy_op

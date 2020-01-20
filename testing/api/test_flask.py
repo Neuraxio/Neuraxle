@@ -21,7 +21,7 @@ Tests for Flask.
 
 import numpy as np
 
-from neuraxle.api.flask import JSONDataResponseEncoder, JSONDataBodyDecoder, FlaskRestApiWrapper
+from neuraxle.rest.flask import JSONDataResponseEncoder, JSONDataBodyDecoder, FlaskRestApiWrapper
 from neuraxle.base import BaseStep, NonFittableMixin
 
 
