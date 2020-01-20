@@ -39,7 +39,8 @@ from sklearn.utils import shuffle
 
 from neuraxle.hyperparams.distributions import RandInt, LogUniform, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.random import RandomSearch, KFoldCrossValidationWrapper
+from neuraxle.metaopt.auto_ml import RandomSearch
+from neuraxle.metaopt.random import KFoldCrossValidationWrapper
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
@@ -104,8 +105,8 @@ def main():
     print("")
 
     print("Transforming train and test:")
-    y_train_predicted = p.transform(X_train)
-    y_test_predicted = p.transform(X_test)
+    y_train_predicted = p.predict(X_train)
+    y_test_predicted = p.predict(X_test)
 
     print("")
 

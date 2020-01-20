@@ -207,7 +207,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         BaseStep.__init__(self)
         self.all_checkpointers = all_checkpointers
 
-    def _fit_data_container(self, data_container, context) -> Tuple['Checkpoint', DataContainer]:
+    def _fit_data_container(self, data_container, context) -> 'Checkpoint':
         """
         Saves step, and data checkpointers for the FIT execution mode.
 
@@ -217,7 +217,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :rtype: neuraxle.data_container.DataContainer
         """
         self.save_checkpoint(data_container, context)
-        return self, data_container
+        return self
 
     def _transform_data_container(self, data_container, context):
         """
@@ -714,7 +714,6 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         """
         if not self.summary_checkpointer.checkpoint_exists(context.get_path(), data_container):
             return False
-
 
         current_ids = self.summary_checkpointer.read_summary(
             checkpoint_path=context.get_path(),

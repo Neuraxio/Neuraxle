@@ -33,7 +33,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from enum import Enum
-from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable
+from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Optional
 
 from joblib import dump, load
 from sklearn.base import BaseEstimator
@@ -981,7 +981,12 @@ class BaseStep(ABC):
 
         return self
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def get_step_by_name(self, name):
+        if self.name == name:
+            return self
+        return None
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
         The default behavior is to rehash current ids with the step hyperparameters.
@@ -997,12 +1002,9 @@ class BaseStep(ABC):
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit(data_container, context)
 
-        new_self, data_container = self._fit_data_container(data_container, context)
+        new_self = self._fit_data_container(data_container, context)
 
-        data_container = self._did_fit(data_container, context)
-        data_container = self._did_process(data_container, context)
-
-        return new_self, data_container
+        return new_self
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
             'BaseStep', DataContainer):
@@ -1066,8 +1068,7 @@ class BaseStep(ABC):
         """
         return data_container
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         Fit data container.
 
@@ -1076,8 +1077,7 @@ class BaseStep(ABC):
         :return: (fitted self, data container)
         :rtype: (BaseStep, DataContainer)
         """
-        new_self = self.fit(data_container.data_inputs, data_container.expected_outputs)
-        return new_self, data_container
+        return self.fit(data_container.data_inputs, data_container.expected_outputs)
 
     def _will_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
             DataContainer, ExecutionContext):
@@ -1139,6 +1139,7 @@ class BaseStep(ABC):
         :return: (data container, execution context)
         :rtype: (DataContainer, ExecutionContext)
         """
+        self.setup()
         return data_container, context
 
     def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -1632,6 +1633,12 @@ class MetaStepMixin:
     ):
         self.wrapped: BaseStep = wrapped
 
+        if not hasattr(self, 'savers'):
+            warnings.warn('Please initialize Mixins in the reverse order. MetaStepMixin should be initialized after BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers.'.format(self.wrapped.name))
+            self.savers = [MetaStepJoblibStepSaver()]
+        else:
+            self.savers.append(MetaStepJoblibStepSaver())
+
     def setup(self) -> BaseStep:
         """
         Initialize step before it runs. Also initialize the wrapped step.
@@ -1748,7 +1755,7 @@ class MetaStepMixin:
         """
         return HyperparameterSamples({
             **self.hyperparams.to_flat_as_dict_primitive(),
-            self.wrapped.name: self.wrapped.hyperparams.to_flat_as_dict_primitive()
+            self.wrapped.name: self.wrapped.get_hyperparams().to_flat_as_dict_primitive()
         }).to_flat()
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
@@ -1784,7 +1791,7 @@ class MetaStepMixin:
         """
         return HyperparameterSpace({
             **self.hyperparams_space.to_flat_as_dict_primitive(),
-            self.wrapped.name: self.wrapped.hyperparams_space.to_flat_as_dict_primitive()
+            self.wrapped.name: self.wrapped.get_hyperparams_space().to_flat_as_dict_primitive()
         }).to_flat()
 
     def set_step(self, step: BaseStep) -> BaseStep:
@@ -1817,8 +1824,8 @@ class MetaStepMixin:
         return self, data_container
 
     def _fit_data_container(self, data_container, context):
-        self.wrapped, data_container = self.wrapped.handle_fit(data_container, context)
-        return self, data_container
+        self.wrapped = self.wrapped.handle_fit(data_container, context)
+        return self
 
     def _transform_data_container(self, data_container, context):
         data_container = self.wrapped.handle_transform(data_container, context)
@@ -1829,8 +1836,8 @@ class MetaStepMixin:
         return self, data_inputs
 
     def fit(self, data_inputs, expected_outputs):
-        self.wrapped, data_inputs = self.wrapped.fit(data_inputs, expected_outputs)
-        return self, data_inputs
+        self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
+        return self
 
     def transform(self, data_inputs):
         data_inputs = self.wrapped.transform(data_inputs)
@@ -1870,11 +1877,114 @@ class MetaStepMixin:
         self.wrapped = self.wrapped.apply_method(method, *kargs, **kwargs)
         return self
 
+    def get_step_by_name(self, name):
+        if self.wrapped.name == name:
+            return self.wrapped
+        return self.wrapped.get_step_by_name(name)
+
+    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
+        """
+        Mutate self, and self.wrapped. Please refer to :func:`~neuraxle.base.BaseStep.mutate` for more information.
+
+        :param new_method: the method to replace transform with, if there is no pending ``will_mutate_to`` call.
+        :param method_to_assign_to: the method to which the new method will be assigned to, if there is no pending ``will_mutate_to`` call.
+        :param warn: (verbose) wheter or not to warn about the inexistence of the method.
+        :return: self, a copy of self, or even perhaps a new or different BaseStep object.
+        """
+        new_self = BaseStep.mutate(self, new_method, method_to_assign_to, warn)
+        self.wrapped = self.wrapped.mutate(new_method, method_to_assign_to, warn)
+
+        return new_self
+
+    def will_mutate_to(
+            self, new_base_step: 'BaseStep' = None, new_method: str = None, method_to_assign_to: str = None
+    ) -> 'BaseStep':
+        """
+        Add pending mutate self, self.wrapped. Please refer to :func:`~neuraxle.base.BaseStep.will_mutate_to` for more information.
+
+        :param new_base_step: if it is not None, upon calling ``mutate``, the object it will mutate to will be this provided new_base_step.
+        :type new_base_step: BaseStep
+        :param method_to_assign_to: if it is not None, upon calling ``mutate``, the method_to_affect will be the one that is used on the provided new_base_step.
+        :type method_to_assign_to: str
+        :param new_method: if it is not None, upon calling ``mutate``, the new_method will be the one that is used on the provided new_base_step.
+        :type new_method: str
+        :return: self
+        :rtype: BaseStep
+        """
+        new_self = BaseStep.will_mutate_to(self, new_base_step, new_method, method_to_assign_to)
+        return new_self
+
     def __repr__(self):
         output = self.__class__.__name__ + "(\n\twrapped=" + repr(
             self.wrapped) + "," + "\n\thyperparameters=" + pprint.pformat(
             self.hyperparams) + "\n)"
         return output
+
+
+class MetaStepJoblibStepSaver(JoblibStepSaver):
+    """
+    Custom saver for meta step mixin.
+    """
+    def __init__(self):
+        JoblibStepSaver.__init__(self)
+
+    def save_step(self, step: 'MetaStepMixin', context: ExecutionContext) -> MetaStepMixin:
+        """
+        Save MetaStepMixin.
+
+        #. Save wrapped step.
+        #. Strip wrapped step form the meta step mixin.
+        #. Save meta step with wrapped step savers.
+
+        :param step: meta step to save
+        :type step: MetaStepMixin
+        :param context: execution context
+        :type context: ExecutionContext
+        :return:
+        """
+        # First, save the wrapped step savers
+        wrapped_step_savers = []
+        if step.wrapped.should_save():
+            wrapped_step_savers.extend(step.wrapped.get_savers())
+        else:
+            wrapped_step_savers.append(None)
+
+        # Second, save the wrapped step
+        step.wrapped.save(context)
+
+        step.wrapped_step_name_and_savers = (step.wrapped.name, wrapped_step_savers)
+
+        # Third, strip the wrapped step from the meta step
+        del step.wrapped
+
+        return step
+
+    def load_step(self, step: 'MetaStepMixin', context: ExecutionContext) -> 'MetaStepMixin':
+        """
+        Load MetaStepMixin.
+
+        #. Loop through all of the sub steps savers, and only load the sub steps that have been saved.
+        #. Refresh steps
+
+        :param step: step to load
+        :type step: BaseStep
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: loaded truncable steps
+        :rtype: TruncableSteps
+        """
+        step_name, savers = step.wrapped_step_name_and_savers
+
+        if savers is None:
+            # keep wrapped step as it is if it hasn't been saved
+            pass
+        else:
+            # load each sub step with their savers
+            sub_step_to_load = Identity(name=step_name, savers=savers)
+            sub_step = sub_step_to_load.load(context)
+            step.wrapped = sub_step
+
+        return step
 
 
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
@@ -1905,19 +2015,13 @@ class ForceAlwaysHandleMixin:
         raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
 
     def transform(self, data_inputs) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Transform method is not supported for {0}, because it inherits from ForceAlwaysHandleMixin. Please use handle_transform instead.'.format(
-                self.name))
+        raise Exception('Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(self.name))
 
     def fit(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Fit method is not supported for {0}, because it inherits from ForceAlwaysHandleMixin. Please use handle_fit instead.'.format(
-                self.name))
+        raise Exception('Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(self.name))
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Fit transform method is not supported for {0}, because it inherits from ForceAlwaysHandleMixin. Please use handle_fit_transform instead.'.format(
-                self.name))
+        raise Exception('Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(self.name))
 
 
 class NonFittableMixin:
@@ -1926,8 +2030,16 @@ class NonFittableMixin:
     Note: fit methods are not implemented
     """
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
-        return self, self._transform_data_container(data_container, context)
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_transform_data_container(data_container, context)
+
+        data_container = self._transform_data_container(data_container, context)
+
+        data_container = self._did_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        return self, data_container
 
     def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
         """
@@ -2199,6 +2311,17 @@ class TruncableSteps(BaseStep, ABC):
             step.apply_method(method, *kargs, **kwargs)
 
         return self
+
+    def get_step_by_name(self, name):
+        for step in self.values():
+            if step.name == name:
+                return step
+
+            found_step = step.get_step_by_name(name)
+            if found_step is not None:
+                return found_step
+
+        return None
 
     def _wrap_non_base_steps(self, steps_as_tuple: List) -> NamedTupleList:
         """

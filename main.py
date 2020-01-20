@@ -1,5 +1,4 @@
-from neuraxle.distributed import RestWorker
-
+from neuraxle.distributed.clustering import RestWorker
 
 if __name__ == '__main__':
     worker = RestWorker(port=5000)

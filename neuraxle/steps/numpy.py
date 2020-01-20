@@ -63,11 +63,8 @@ class NumpyConcatenateOnCustomAxis(NonFittableMixin, BaseStep):
         :return: transformed data container
         """
         data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs])
-        data_container = DataContainer(
-            current_ids=data_container.current_ids,
-            data_inputs=data_inputs,
-            expected_outputs=data_container.expected_outputs
-        )
+        data_container = DataContainer(data_inputs=data_inputs, current_ids=data_container.current_ids,
+                                       expected_outputs=data_container.expected_outputs)
         data_container.set_data_inputs(data_inputs)
 
         return data_container
@@ -125,11 +122,8 @@ class NumpyTranspose(NonFittableMixin, BaseStep):
         :return: transformed data container
         """
         data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs])
-        data_container = DataContainer(
-            current_ids=data_container.current_ids,
-            data_inputs=data_inputs,
-            expected_outputs=data_container.expected_outputs
-        )
+        data_container = DataContainer(data_inputs=data_inputs, current_ids=data_container.current_ids,
+                                       expected_outputs=data_container.expected_outputs)
         data_container.set_data_inputs(data_inputs)
 
         return data_container
@@ -253,6 +247,34 @@ class OneHotEncoder(NonFittableMixin, BaseStep):
     Step to one hot a set of columns.
     Accepts Integer Columns and converts it ot a one_hot.
     Rounds floats  to integer for safety in the transform.
+    
+    Example usage: 
+    
+    1. Set up data
+
+    .. code-block:: python
+
+       import numpy as np
+       a = np.array([1,0,3])
+       b = np.array([[0,1,0,0], [1,0,0,0], [0,0,0,1]])
+
+    2. **Do the actual conversion**
+
+    .. code-block:: python
+
+       from neuraxle.steps.numpy import OneHotEncoder
+       encoder = OneHotEncoder(nb_columns=4)
+       b_pred = encoder.transform(a)
+
+    3. Assert it works
+
+    .. code-block:: python
+
+       assert b_pred == b
+    
+    .. seealso::
+        `StackOverflow answer about one hot encoding <https://stackoverflow.com/a/59262363/2476920>`__
+    
     """
 
     def __init__(self, nb_columns, name):
@@ -280,4 +302,4 @@ class OneHotEncoder(NonFittableMixin, BaseStep):
         # delete the invalid values column, and zero hot the invalid values
         outputs_ = np.delete(outputs_, self.nb_columns, axis=-1)
 
-        return outputs_
+        return outputs_.squeeze()

@@ -24,11 +24,9 @@ You can find here misc. pipeline steps, for example, callbacks useful for debugg
 
 """
 
-import hashlib
 import time
-from abc import ABC, abstractmethod
+from abc import ABC
 
-from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import ForceMustHandleMixin
 
 VALUE_CACHING = 'value_caching'
@@ -173,14 +171,15 @@ class CallbackWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
             more_arguments: List = tuple(),
             hyperparams=None
     ):
-        MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self, hyperparams)
+        MetaStepMixin.__init__(self, wrapped)
+
         self.inverse_transform_callback_function = inverse_transform_callback_function
         self.more_arguments = more_arguments
         self.fit_callback_function = fit_callback_function
         self.transform_callback_function = transform_callback_function
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         :param data_container: data container
         :type data_container: DataContainer
@@ -190,8 +189,8 @@ class CallbackWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
         :type: (BaseStep, DataContainer)
         """
         self.fit_callback_function((data_container.data_inputs, data_container.expected_outputs), *self.more_arguments)
-        self.wrapped, data_container = self.wrapped.handle_fit(data_container, context)
-        return self, data_container
+        self.wrapped = self.wrapped.handle_fit(data_container, context)
+        return self
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
             'BaseStep', DataContainer):
@@ -347,24 +346,3 @@ class Sleep(NonFittableMixin, BaseStep):
     def transform(self, data_inputs):
         time.sleep(self.sleep_time)
         return data_inputs
-
-
-class DataShuffler:
-    pass  # TODO.
-
-    def load(self, pipeline: 'Pipeline', data_container: DataContainer) -> 'Pipeline':
-        return pipeline
-
-
-class BaseValueHasher(ABC):
-    @abstractmethod
-    def hash(self, data_input):
-        raise NotImplementedError()
-
-
-class Md5Hasher(BaseValueHasher):
-    def hash(self, data_input):
-        m = hashlib.md5()
-        m.update(str.encode(str(data_input)))
-
-        return m.hexdigest()

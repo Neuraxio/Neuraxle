@@ -48,13 +48,7 @@ class DataContainer:
         :class: `BaseStep`
     """
 
-    def __init__(
-            self,
-            current_ids,
-            data_inputs: Any,
-            summary_id=None,
-            expected_outputs: Any = None
-    ):
+    def __init__(self, data_inputs: Any, current_ids=None, summary_id=None, expected_outputs: Any = None):
         self.current_ids = current_ids
         self.summary_id = summary_id
 
@@ -73,6 +67,7 @@ class DataContainer:
         :return:
         """
         self.data_inputs = data_inputs
+        return self
 
     def set_expected_outputs(self, expected_outputs: Iterable):
         """
@@ -83,6 +78,7 @@ class DataContainer:
         :return:
         """
         self.expected_outputs = expected_outputs
+        return self
 
     def set_current_ids(self, current_ids: List[str]):
         """
@@ -93,6 +89,7 @@ class DataContainer:
         :return:
         """
         self.current_ids = current_ids
+        return self
 
     def set_summary_id(self, summary_id: str):
         """
@@ -102,6 +99,7 @@ class DataContainer:
         :return:
         """
         self.summary_id = summary_id
+        return self
 
     def hash_summary(self):
         """
@@ -143,23 +141,18 @@ class DataContainer:
                     expected_outputs = expected_outputs[:i]
                     break
 
-            yield DataContainer(
-                summary_id=self.summary_id,
-                current_ids=current_ids,
-                data_inputs=data_inputs,
-                expected_outputs=expected_outputs
-            )
+            yield DataContainer(data_inputs=data_inputs, current_ids=current_ids, summary_id=self.summary_id,
+                                expected_outputs=expected_outputs)
+
+    def get_n_batches(self, batch_size: int) -> int:
+        return math.ceil(len(self.data_inputs) / batch_size)
 
     def get_n_baches(self, batch_size: int) -> int:
         return math.ceil(self.data_inputs / batch_size)
 
     def copy(self):
-        return DataContainer(
-            summary_id=self.summary_id,
-            current_ids=self.current_ids,
-            data_inputs=self.data_inputs,
-            expected_outputs=self.expected_outputs,
-        )
+        return DataContainer(data_inputs=self.data_inputs, current_ids=self.current_ids, summary_id=self.summary_id,
+                             expected_outputs=self.expected_outputs)
 
     def __iter__(self):
         """
@@ -197,14 +190,10 @@ class ExpandedDataContainer(DataContainer):
         :class:`ExpandedDataContainer`,
     """
 
-    def __init__(self, current_ids, data_inputs, expected_outputs, summary_id, old_current_ids):
-        DataContainer.__init__(
-            self,
-            current_ids=current_ids,
-            data_inputs=data_inputs,
-            expected_outputs=expected_outputs,
-            summary_id=summary_id
-        )
+    def __init__(self,  data_inputs, current_ids, expected_outputs, summary_id, old_current_ids):
+
+        DataContainer.__init__(self, data_inputs=data_inputs, current_ids=current_ids, summary_id=summary_id,
+                               expected_outputs=expected_outputs)
 
         self.old_current_ids = old_current_ids
 
@@ -215,12 +204,8 @@ class ExpandedDataContainer(DataContainer):
         :return: reduced data container
         :rtype: DataContainer
         """
-        return DataContainer(
-            current_ids=self.old_current_ids,
-            data_inputs=self.data_inputs[0],
-            expected_outputs=self.expected_outputs[0],
-            summary_id=self.summary_id,
-        )
+        return DataContainer(data_inputs=self.data_inputs[0], current_ids=self.old_current_ids,
+                             summary_id=self.summary_id, expected_outputs=self.expected_outputs[0])
 
     @staticmethod
     def create_from(data_container: DataContainer) -> 'ExpandedDataContainer':
@@ -232,13 +217,9 @@ class ExpandedDataContainer(DataContainer):
         :return: expanded data container
         :rtype: ExpandedDataContainer
         """
-        return ExpandedDataContainer(
-            current_ids=[data_container.summary_id],
-            data_inputs=[data_container.data_inputs],
-            expected_outputs=[data_container.expected_outputs],
-            summary_id=data_container.summary_id,
-            old_current_ids=data_container.current_ids
-        )
+        return ExpandedDataContainer(data_inputs=[data_container.data_inputs], current_ids=[data_container.summary_id],
+                                     summary_id=data_container.summary_id,
+                                     expected_outputs=[data_container.expected_outputs], old_current_ids=data_container.current_ids)
 
 
 class ListDataContainer(DataContainer):
@@ -267,6 +248,9 @@ class ListDataContainer(DataContainer):
         self.current_ids.append(current_id)
         self.data_inputs.append(data_input)
         self.expected_outputs.append(expected_output)
+
+    def append_data_container(self, data_container: DataContainer):
+        self.data_inputs.append(data_container)
 
     def concat(self, data_container: DataContainer):
         """

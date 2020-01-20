@@ -24,7 +24,6 @@ Meta steps for hyperparameter tuning, such as random search.
 
 """
 
-import copy
 import math
 from abc import ABC, abstractmethod
 from typing import List, Callable, Tuple, Iterable
@@ -32,7 +31,7 @@ from typing import List, Callable, Tuple, Iterable
 import numpy as np
 from sklearn.metrics import r2_score
 
-from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, ExecutionMode, DEFAULT_CACHE_FOLDER
+from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnCustomAxis
@@ -60,8 +59,8 @@ class BaseValidation(MetaStepMixin, BaseStep, ABC):
         :param scoring_function: scoring function with two arguments (y_true, y_pred)
         :type scoring_function: Callable
         """
-        MetaStepMixin.__init__(self)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self)
         self.scoring_function = scoring_function
 
 
@@ -99,8 +98,8 @@ class ValidationSplitWrapper(BaseValidation):
 
     def __init__(
             self,
-            wrapped: BaseStep,
-            test_size: float,
+            wrapped: BaseStep = None,
+            test_size: float = 0.2,
             scoring_function=r2_score,
             run_validation_split_in_test_mode=True
     ):
@@ -109,8 +108,9 @@ class ValidationSplitWrapper(BaseValidation):
         :param test_size: ratio for test size between 0 and 1
         :param scoring_function: scoring function with two arguments (y_true, y_pred)
         """
-        MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
+
         self.run_validation_split_in_test_mode = run_validation_split_in_test_mode
         self.test_size = test_size
         self.scoring_function = scoring_function
@@ -127,7 +127,7 @@ class ValidationSplitWrapper(BaseValidation):
         :return: fitted self
         """
         new_self, results_data_container = self._fit_transform_data_container(data_container, context)
-        return new_self, data_container
+        return new_self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
@@ -141,22 +141,19 @@ class ValidationSplitWrapper(BaseValidation):
         """
         train_data_container, validation_data_container = self.split_data_container(data_container)
 
-        self.wrapped, _ = self.wrapped.handle_fit(train_data_container, context.push(self.wrapped))
-
-        results_data_container = self.wrapped.handle_transform(train_data_container, context.push(self.wrapped))
+        self.wrapped, results_data_container = self.wrapped.handle_fit_transform(train_data_container, context.push(self.wrapped))
 
         self._update_scores_train(results_data_container.data_inputs, results_data_container.expected_outputs)
 
-        if self.run_validation_split_in_test_mode:
-            self.set_train(False)
-
+        self.set_train(False)
         results_data_container = self.wrapped.handle_transform(validation_data_container, context.push(self.wrapped))
-
         self.set_train(True)
 
         self._update_scores_validation(results_data_container.data_inputs, results_data_container.expected_outputs)
 
+        self.apply('toggle_metrics')
         data_container = self.wrapped.handle_transform(data_container, context.push(self.wrapped))
+        self.apply('toggle_metrics')
 
         return self, data_container
 
@@ -219,6 +216,15 @@ class ValidationSplitWrapper(BaseValidation):
         self.scores_train_mean = np.mean(self.scores_train)
         self.scores_train_std = np.std(self.scores_train)
 
+    def get_score(self):
+        return self.scores_validation_mean
+
+    def get_score_validation(self):
+        return self.scores_validation_mean
+
+    def get_score_train(self):
+        return self.scores_validation_mean
+
     def split_data_container(self, data_container) -> Tuple[DataContainer, DataContainer]:
         """
         Split data container into a training set, and a validation set.
@@ -232,20 +238,14 @@ class ValidationSplitWrapper(BaseValidation):
             self.split(data_container.data_inputs, data_container.expected_outputs)
 
         train_ids = self.train_split(data_container.current_ids)
-        train_data_container = DataContainer(
-            summary_id=data_container.summary_id,
-            current_ids=train_ids,
-            data_inputs=train_data_inputs,
-            expected_outputs=train_expected_outputs
-        )
+        train_data_container = DataContainer(data_inputs=train_data_inputs, current_ids=train_ids,
+                                             summary_id=data_container.summary_id,
+                                             expected_outputs=train_expected_outputs)
 
         validation_ids = self.validation_split(data_container.current_ids)
-        validation_data_container = DataContainer(
-            summary_id=data_container.summary_id,
-            current_ids=validation_ids,
-            data_inputs=validation_data_inputs,
-            expected_outputs=validation_expected_outputs
-        )
+        validation_data_container = DataContainer(data_inputs=validation_data_inputs, current_ids=validation_ids,
+                                                  summary_id=data_container.summary_id,
+                                                  expected_outputs=validation_expected_outputs)
 
         return train_data_container, validation_data_container
 
@@ -312,6 +312,12 @@ class BaseCrossValidationWrapper(BaseValidation, ABC):
         self.scores_std = np.std(self.scores)
 
         return self
+
+    def get_score(self):
+        return self.scores_mean
+
+    def get_scores_std(self):
+        return self.scores_std
 
     @abstractmethod
     def split(self, data_inputs, expected_outputs):
@@ -570,67 +576,3 @@ class WalkForwardTimeSeriesCrossValidationWrapper(AnchoredWalkForwardTimeSeriesC
             splitted_data_inputs.append(slice)
         return splitted_data_inputs
 
-
-class RandomSearch(MetaStepMixin, BaseStep):
-    """Perform a random hyperparameter search."""
-
-    # TODO: CV and rename to RandomSearchCV.
-
-    def __init__(
-            self,
-            wrapped=None,
-            n_iter: int = 10,
-            higher_score_is_better: bool = True,
-            validation_technique: BaseCrossValidationWrapper = KFoldCrossValidationWrapper(),
-            refit=True,
-    ):
-        if wrapped is not None:
-            MetaStepMixin.__init__(self, wrapped)
-        BaseStep.__init__(self)
-        self.n_iter = n_iter
-        self.higher_score_is_better = higher_score_is_better
-        self.validation_technique: BaseCrossValidationWrapper = validation_technique
-        self.refit = refit
-
-    def fit_transform(self, data_inputs, expected_outputs):
-        return self.fit(data_inputs, expected_outputs), self.transform(data_inputs)
-
-    def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
-        started = False
-        best_hyperparams = None
-
-        for _ in range(self.n_iter):
-
-            step = copy.copy(self.wrapped)
-
-            new_hyperparams = step.get_hyperparams_space().rvs()
-            step.set_hyperparams(new_hyperparams)
-
-            step: BaseCrossValidationWrapper = copy.copy(self.validation_technique).set_step(step)
-
-            step = step.fit(data_inputs, expected_outputs)
-            score = step.scores_mean
-
-            if not started or self.higher_score_is_better == (score > self.score):
-                started = True
-                self.score = score
-                self.best_validation_wrapper_of_model = copy.copy(step)
-                best_hyperparams = new_hyperparams
-
-        self.best_validation_wrapper_of_model.wrapped.set_hyperparams(best_hyperparams)
-
-        if self.refit:
-            self.best_model = self.best_validation_wrapper_of_model.wrapped.fit(
-                data_inputs,
-                expected_outputs
-            )
-
-        return self
-
-    def get_best_model(self):
-        return self.best_model
-
-    def transform(self, data_inputs):
-        if self.best_validation_wrapper_of_model is None:
-            raise Exception('Cannot transform RandomSearch before fit')
-        return self.best_validation_wrapper_of_model.wrapped.transform(data_inputs)

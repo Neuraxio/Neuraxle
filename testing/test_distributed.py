@@ -4,7 +4,7 @@ from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 
-from neuraxle.distributed import ClusteringWrapper, RestApiScheduler
+from neuraxle.distributed.clustering import ClusteringWrapper
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.pipeline import Pipeline
@@ -23,10 +23,11 @@ def test_clustering_wrapper(tmpdir):
     p = Pipeline([
         ClusteringWrapper(
             sklearn_pca,
-            scheduler=RestApiScheduler(['http://127.0.0.1:5000/pipeline']),
+            hosts=['http://127.0.0.1:5000/pipeline'],
             joiner=NumpyConcatenateOuterBatch(),
             n_jobs=10,
-            batch_size=10
+            batch_size=10,
+            n_workers_per_step=1
         )
     ], cache_folder=tmpdir)
 

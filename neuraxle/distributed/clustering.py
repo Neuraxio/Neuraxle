@@ -20,52 +20,22 @@ Neuraxle Steps for distributed computing in the cloud
     limitations under the License.
 
 """
-import math
 import os
-from abc import ABC, abstractmethod
-from queue import Queue
-from typing import List, Iterable
+from typing import List
 
 import numpy as np
 import requests
 from flask import jsonify
 from werkzeug.utils import secure_filename
 
-from neuraxle.api.flask import RestAPICaller
 from neuraxle.base import MetaStepMixin, BaseStep, NonFittableMixin, ExecutionContext
 from neuraxle.data_container import DataContainer
+from neuraxle.distributed.streaming import ParallelQueuedPipeline
+from neuraxle.rest.flask import RestAPICaller
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
-class BaseClusteringScheduler(ABC):
-    """
-    Base class for a clustering scheduler that distributes task to multiple workers.
-    Used by the :class:`ClusteringWrapper` for distributed processing.
-
-    .. seealso::
-        :class:`RestApiScheduler`,
-        :class:`ClusteringWrapper`,
-        :class:`DataContainer`,
-        :class:`ExecutionContext`
-    """
-
-    def __init__(self):
-        self.started = False
-
-    @abstractmethod
-    def spawn(self, context: ExecutionContext):
-        pass
-
-    @abstractmethod
-    def dispatch(self, batches: Iterable[DataContainer], context: ExecutionContext) -> List[DataContainer]:
-        pass
-
-    @abstractmethod
-    def kill(self, context: ExecutionContext):
-        pass
-
-
-class RestApiScheduler(BaseClusteringScheduler):
+class RestApiScheduler(ParallelQueuedPipeline):
     """
     Clustering scheduler that calls rest api endpoints for distributed processing.
 
@@ -78,35 +48,35 @@ class RestApiScheduler(BaseClusteringScheduler):
         :class:`RestApiCaller`,
     """
 
-    def __init__(self, hosts: List[str]):
-        super().__init__()
+    def __init__(self, hosts: List[str], batch_size, n_workers_per_step, max_size, data_joiner):
         self.hosts = hosts
-        self.workers = Queue()
+        ParallelQueuedPipeline.__init__(
+            self,
+            steps=[('rest', RestAPICaller(host)) for host in hosts],
+            batch_size=batch_size,
+            n_workers_per_step=n_workers_per_step,
+            max_size=max_size,
+            data_joiner=data_joiner
+        )
 
-    def dispatch(self, batches: Iterable[DataContainer], context: ExecutionContext) -> List[DataContainer]:
-        """
-        Dispatch tasks to the workers using rest api calls.
+    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        data_container = ParallelQueuedPipeline._did_process(self, data_container, context)
+        self._kill(context)
 
-        :param batches: an iterable list of data containers
-        :param context: execution context
-        :type context: ExecutionContext
-        :return: list of data container
-        :rtype: List[DataContainer]
-        """
-        results = []
+        return data_container
 
-        for batch in batches:
-            worker = self.workers.get()
-            results.append(worker.handle_transform(batch, context))
-            self.workers.put(worker)
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext):
+        data_container, context = ParallelQueuedPipeline._will_process(self, data_container, context)
+        self._spawn(context)
+        context.pop()
 
-        return results
+        return data_container, context
 
-    def kill(self, context: ExecutionContext):
+    def _kill(self, context: ExecutionContext):
         # TODO: what is there to kill here ?
         pass
 
-    def spawn(self, context: ExecutionContext):
+    def _spawn(self, context: ExecutionContext):
         """
         Spawn a worker for each host.
 
@@ -126,11 +96,11 @@ class RestApiScheduler(BaseClusteringScheduler):
             for f in files.values():
                 f.close()
 
-            if r.status_code == 201:
-                self.workers.put(RestAPICaller(host))
+            if r.status_code != 201:
+                raise Exception('Cannot Spawn Host: {}, status code: {}'.format(host, r.status_code))
 
 
-class ClusteringWrapper(MetaStepMixin, BaseStep):
+class ClusteringWrapper(NonFittableMixin, MetaStepMixin, BaseStep):
     """
     Wrapper step for distributed processing. A :class:`BaseClusteringScheduler`, distributes the transform method to multiple workers.
 
@@ -141,10 +111,12 @@ class ClusteringWrapper(MetaStepMixin, BaseStep):
         p = Pipeline([
             ClusteringWrapper(
                 Pipeline([..]),
-                scheduler=RestApiScheduler(['http://127.0.0.1:5000/pipeline']),
+                hosts=['http://127.0.0.1:5000/pipeline'],
                 joiner=NumpyConcatenateOuterBatch(),
                 n_jobs=10,
-                batch_size=10
+                batch_size=10,
+                n_workers_per_step=1,
+                max_size=10
             )
         ])
 
@@ -160,26 +132,31 @@ class ClusteringWrapper(MetaStepMixin, BaseStep):
     def __init__(
             self,
             wrapped: BaseStep,
-            scheduler: BaseClusteringScheduler,
+            hosts: List[str],
             joiner: NonFittableMixin = None,
             n_jobs: int = 10,
-            batch_size=None
+            batch_size=None,
+            n_workers_per_step=None,
+            max_size=None,
     ):
-        MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
-        self.scheduler = scheduler
+        MetaStepMixin.__init__(self, wrapped)
+        NonFittableMixin.__init__(self)
+
+        self.scheduler = RestApiScheduler(
+            hosts=hosts,
+            batch_size=batch_size,
+            n_workers_per_step=n_workers_per_step,
+            max_size=max_size,
+            data_joiner=joiner
+        )
+
         if joiner is None:
             joiner = NumpyConcatenateInnerFeatures()
         self.joiner = joiner
 
         self.batch_size = batch_size
         self.n_jobs = n_jobs
-
-    def _fit_transform_data_container(self, data_container, context):
-        raise Exception('fit not supported by ClusteringWrapper')
-
-    def _fit_data_container(self, data_container, context):
-        raise Exception('fit not supported by ClusteringWrapper')
 
     def _transform_data_container(self, data_container, context):
         """
@@ -192,50 +169,9 @@ class ClusteringWrapper(MetaStepMixin, BaseStep):
         wrapped_context = context.push(self.wrapped)
         wrapped_context = wrapped_context.push(wrapped_context.save_last())
 
-        self.scheduler.spawn(wrapped_context)
+        data_container = self.scheduler.handle_transform(data_container, wrapped_context)
 
-        # create batches to transform
-        batch_size = self._get_batch_size(data_container)
-        data_container_batches = data_container.convolved_1d(stride=batch_size, kernel_size=batch_size)
-
-        # dispatch batches to transform
-        data_containers = self.scheduler.dispatch(data_container_batches, wrapped_context)
-
-        # kill all the workers
-        self.scheduler.kill(wrapped_context)
-
-        # return the resulting data containers for each task
-        return DataContainer(
-            summary_id=data_container.summary_id,
-            current_ids=data_container.current_ids,
-            data_inputs=data_containers,
-            expected_outputs=data_container.expected_outputs
-        )
-
-    def _did_transform(self, data_container, context):
-        """
-        Join results together using the joiner.
-
-        :param data_container:
-        :param context:
-        :return:
-        """
-        return self.joiner.handle_transform(data_container, context)
-
-    def _get_batch_size(self, data_container: DataContainer) -> int:
-        """
-        Get batch size.
-
-        :param data_container: data container
-        :type data_container: DataContainer
-        :return: batch_size
-        :rtype: int
-        """
-        if self.batch_size is None:
-            batch_size = math.ceil(len(data_container) / self.n_jobs)
-        else:
-            batch_size = self.batch_size
-        return batch_size
+        return data_container
 
 
 class RestWorker:

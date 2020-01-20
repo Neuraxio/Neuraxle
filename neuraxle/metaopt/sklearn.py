@@ -36,8 +36,9 @@ class MetaSKLearnWrapper(MetaStepMixin, BaseStep):
         
         :param wrapped: a scikit-learn object of type "MetaEstimatorMixin". 
         """
-        MetaStepMixin.__init__(self)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self)
+
         self.wrapped_sklearn_metaestimator = wrapped  # TODO: use self.set_step of the MetaStepMixin instead?
         # sklearn.model_selection.RandomizedSearchCV
 

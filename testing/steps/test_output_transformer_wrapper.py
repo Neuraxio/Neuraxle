@@ -36,11 +36,7 @@ def test_output_transformer_should_zip_data_input_and_expected_output_in_the_tra
     ])
 
     pipeline, new_data_container = pipeline.handle_fit_transform(
-        DataContainer(
-            current_ids=[0, 1, 2],
-            data_inputs=[1, 2, 3],
-            expected_outputs=[2, 3, 4]
-        ),
+        DataContainer(data_inputs=[1, 2, 3], current_ids=[0, 1, 2], expected_outputs=[2, 3, 4]),
         ExecutionContext(tmpdir)
     )
 

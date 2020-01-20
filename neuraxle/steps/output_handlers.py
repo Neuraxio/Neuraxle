@@ -34,8 +34,8 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
     """
 
     def __init__(self, wrapped):
-        MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -48,11 +48,8 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
         :rtype: DataContainer
         """
         new_expected_outputs_data_container = self.wrapped.handle_transform(
-            DataContainer(
-                current_ids=data_container.current_ids,
-                data_inputs=data_container.expected_outputs,
-                expected_outputs=None
-            ),
+            DataContainer(data_inputs=data_container.expected_outputs, current_ids=data_container.current_ids,
+                          expected_outputs=None),
             context
         )
         data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
@@ -71,11 +68,8 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
         :rtype: (BaseStep, DataContainer)
         """
         self.wrapped = self.wrapped.handle_fit(
-            DataContainer(
-                current_ids=data_container.current_ids,
-                data_inputs=data_container.expected_outputs,
-                expected_outputs=None
-            ),
+            DataContainer(data_inputs=data_container.expected_outputs, current_ids=data_container.current_ids,
+                          expected_outputs=None),
             context
         )
 
@@ -94,11 +88,8 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
         :rtype: (BaseStep, DataContainer)
         """
         self.wrapped, new_expected_outputs_data_container = self.wrapped.handle_fit_transform(
-            DataContainer(
-                current_ids=data_container.current_ids,
-                data_inputs=data_container.expected_outputs,
-                expected_outputs=None
-            ),
+            DataContainer(data_inputs=data_container.expected_outputs, current_ids=data_container.current_ids,
+                          expected_outputs=None),
             context
         )
         data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
@@ -116,11 +107,8 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
         :rtype: DataContainer
         """
         new_expected_outputs_data_container = self.wrapped.handle_inverse_transform(
-            DataContainer(
-                current_ids=data_container.current_ids,
-                data_inputs=data_container.expected_outputs,
-                expected_outputs=None
-            ),
+            DataContainer(data_inputs=data_container.expected_outputs, current_ids=data_container.current_ids,
+                          expected_outputs=None),
             context.push(self.wrapped)
         )
 
