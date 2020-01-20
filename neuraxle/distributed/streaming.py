@@ -121,7 +121,9 @@ class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
         """
         while True:
             task: QueuedPipelineTask = batches_to_process.get()
+            summary_id = task.data_container.summary_id
             data_container = self.handle_transform(task.data_container, context)
+            data_container = data_container.set_summary_id(summary_id)
             self.notify(QueuedPipelineTask(step_name=self.wrapped.name, data_container=data_container))
 
 
@@ -276,7 +278,7 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
             step.start(context)
 
         for data_container_batch in data_container_batches:
-            self.notify_new_batch_to_process(data_container_batch)
+            self.notify_new_batch_to_process(data_container=data_container_batch, queue_joiner=queue_joiner)
 
         return queue_joiner.join(original_data_container=data_container)
 
@@ -305,7 +307,7 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
         raise NotImplementedError()
 
     @abstractmethod
-    def notify_new_batch_to_process(self, batches_observable):
+    def notify_new_batch_to_process(self, data_container, queue_joiner):
         raise NotImplementedError()
 
 
@@ -330,8 +332,10 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
     def connect_queue_joiner(self, queue_joiner: 'QueueJoiner'):
         self[-1].subscribe(queue_joiner)
 
-    def notify_new_batch_to_process(self, data_container_batch: DataContainer):
-        self[0].put(QueuedPipelineTask(step_name=self[0].name, data_container=data_container_batch))
+    def notify_new_batch_to_process(self, data_container: DataContainer, queue_joiner: 'QueueJoiner'):
+        data_container = data_container.set_summary_id(data_container.hash_summary())
+        queue_joiner.summary_ids.append(data_container.summary_id)
+        self[0].put(QueuedPipelineTask(step_name=self[0].name, data_container=data_container))
 
 
 class ParallelQueuedPipeline(BaseQueuedPipeline):
@@ -355,9 +359,11 @@ class ParallelQueuedPipeline(BaseQueuedPipeline):
         for i, (name, step) in enumerate(self):
             step.subscribe(queue_joiner)
 
-    def notify_new_batch_to_process(self, data_container_batch):
+    def notify_new_batch_to_process(self, data_container, queue_joiner: 'QueueJoiner'):
         for i, (name, step) in enumerate(self):
-            step.put(QueuedPipelineTask(step_name=step.name, data_container=data_container_batch))
+            data_container = data_container.set_summary_id(data_container.hash_summary())
+            queue_joiner.summary_ids.append(data_container.summary_id)
+            step.put(QueuedPipelineTask(step_name=step.name, data_container=data_container))
 
 
 class QueueJoiner(ObservableQueue):
@@ -376,6 +382,7 @@ class QueueJoiner(ObservableQueue):
         self.mutex_processing_in_progress = Lock()
         self.mutex_processing_in_progress.acquire()
         self.n_batches_left_to_do = n_batches
+        self.summary_ids = []
         self.result = {}
         ObservableQueue.__init__(self, Queue())
 
@@ -395,22 +402,34 @@ class QueueJoiner(ObservableQueue):
                     current_ids=[],
                     data_inputs=[],
                     expected_outputs=[],
-                    summary_id=None
+                    summary_id=task.data_container.summary_id
                 )
 
-            self.result[task.step_name].concat(task.data_container)
+            self.result[task.step_name].append_data_container(task.data_container)
 
-        data_containers = self._get_resulting_data_containers()
+        data_containers = self._join_all_step_results()
         return original_data_container.set_data_inputs(data_containers)
 
-    def _get_resulting_data_containers(self):
+    def _join_all_step_results(self):
         """
         Concatenate all resulting data containers together.
 
         :return:
         """
-        data_containers = []
-        for data_container in self.result.values():
-            data_containers.append(data_container)
+        results = ListDataContainer.empty()
+        for step_name, data_containers in self.result.items():
+            step_results = self._join_step_results(data_containers)
+            results.append_data_container(step_results)
 
-        return data_containers
+        return results
+
+    def _join_step_results(self, data_containers):
+        # reorder results by summary id
+        list(data_containers.data_inputs).sort(key=lambda dc: self.summary_ids.index(dc.summary_id))
+
+        step_results = ListDataContainer.empty()
+        for data_container in data_containers.data_inputs:
+            data_container = data_container.set_summary_id(data_containers.data_inputs[-1].summary_id)
+            step_results.concat(data_container)
+
+        return step_results

@@ -272,6 +272,9 @@ class ListDataContainer(DataContainer):
         self.data_inputs.append(data_input)
         self.expected_outputs.append(expected_output)
 
+    def append_data_container(self, data_container: DataContainer):
+        self.data_inputs.append(data_container)
+
     def concat(self, data_container: DataContainer):
         """
         Concat the given data container to the current data container.
