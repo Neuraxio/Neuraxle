@@ -1835,9 +1835,16 @@ class NonFittableMixin:
     Note: fit methods are not implemented
     """
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+        data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_transform_data_container(data_container, context)
-        return self, self._transform_data_container(data_container, context)
+
+        data_container = self._transform_data_container(data_container, context)
+
+        data_container = self._did_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        return self, data_container
 
     def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
         """

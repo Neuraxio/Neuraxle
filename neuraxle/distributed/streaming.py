@@ -49,6 +49,12 @@ class ObservableQueue:
             observer.put(value)
 
 
+class QueuedPipelineTask(object):
+    def __init__(self, step_name, data_container):
+        self.step_name = step_name
+        self.data_container = data_container
+
+
 class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
     """
     Start multiple Process or Thread that process items from the queue of batches to process.
@@ -99,11 +105,12 @@ class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
         :return:
         """
         if not self.use_threading:
-            [w.kill() for w in self.workers]
+            [w.terminate() for w in self.workers]
+
         self.workers = []
         self.observers = []
 
-    def worker_func(self, batches_to_process, context: ExecutionContext):
+    def worker_func(self, batches_to_process: Queue, context: ExecutionContext):
         """
         Worker function that transforms the items inside the queue of items to process.
 
@@ -113,9 +120,9 @@ class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
         :return:
         """
         while True:
-            _, data_container = batches_to_process.get()
-            data_container = self.handle_transform(data_container, context)
-            self.notify((self.wrapped.name, data_container))
+            task: QueuedPipelineTask = batches_to_process.get()
+            data_container = self.handle_transform(task.data_container, context)
+            self.notify(QueuedPipelineTask(step_name=self.wrapped.name, data_container=data_container))
 
 
 # (step_name, n_workers, step)
@@ -246,8 +253,6 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
         :return:
         """
         self.connect_queue_workers()
-        for i, (name, step) in enumerate(self):
-            step.start(context)
 
         return data_container, context
 
@@ -266,6 +271,9 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
 
         queue_joiner = QueueJoiner(n_batches=n_batches)
         self.connect_queue_joiner(queue_joiner)
+
+        for i, (name, step) in enumerate(self):
+            step.start(context)
 
         for data_container_batch in data_container_batches:
             self.notify_new_batch_to_process(data_container_batch)
@@ -286,10 +294,7 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
         for name, step in self:
             step.stop()
 
-        return self.data_joiner.join(data_container)
-
-    def map_result(self, value):
-        return value[1]
+        return self.data_joiner.handle_transform(data_container, context)
 
     @abstractmethod
     def connect_queue_workers(self):
@@ -326,7 +331,7 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
         self[-1].subscribe(queue_joiner)
 
     def notify_new_batch_to_process(self, data_container_batch: DataContainer):
-        self[0].put(data_container_batch)
+        self[0].put(QueuedPipelineTask(step_name=self[0].name, data_container=data_container_batch))
 
 
 class ParallelQueuedPipeline(BaseQueuedPipeline):
@@ -350,9 +355,9 @@ class ParallelQueuedPipeline(BaseQueuedPipeline):
         for i, (name, step) in enumerate(self):
             step.subscribe(queue_joiner)
 
-    def notify_new_batch_to_process(self, batches_observable):
+    def notify_new_batch_to_process(self, data_container_batch):
         for i, (name, step) in enumerate(self):
-            step.put(batches_observable)
+            step.put(QueuedPipelineTask(step_name=step.name, data_container=data_container_batch))
 
 
 class QueueJoiner(ObservableQueue):
@@ -382,23 +387,28 @@ class QueueJoiner(ObservableQueue):
         :rtype: DataContainer
         """
         while self.n_batches_left_to_do > 0:
-            step_name, result = self.queue.get()
+            task: QueuedPipelineTask = self.queue.get()
             self.n_batches_left_to_do -= 1
 
-            if step_name not in result:
-                self.result[step_name] = ListDataContainer(
+            if task.step_name not in self.result:
+                self.result[task.step_name] = ListDataContainer(
                     current_ids=[],
                     data_inputs=[],
                     expected_outputs=[],
                     summary_id=None
                 )
 
-            self.result[step_name].concat(result)
+            self.result[task.step_name].concat(task.data_container)
 
         data_containers = self._get_resulting_data_containers()
         return original_data_container.set_data_inputs(data_containers)
 
     def _get_resulting_data_containers(self):
+        """
+        Concatenate all resulting data containers together.
+
+        :return:
+        """
         data_containers = []
         for data_container in self.result.values():
             data_containers.append(data_container)
