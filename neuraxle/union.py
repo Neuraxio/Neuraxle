@@ -56,6 +56,13 @@ class FeatureUnion(TruncableSteps):
         self.backend = backend
 
     def apply(self, method_name: str, *kargs, **kwargs) -> Union[Dict, Iterable]:
+        """
+        TODO: fix issue #235
+        :param method_name:
+        :param kargs:
+        :param kwargs:
+        :return:
+        """
         results = BaseStep.apply(self, method_name, *kargs, **kwargs)
         other_results = self.joiner.apply(method_name, *kargs, **kwargs)
         results = join_apply_results(results, other_results)

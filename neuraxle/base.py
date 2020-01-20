@@ -861,8 +861,8 @@ class BaseStep(ABC):
         :param method: method to call with self
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Union[Dict, Iterable]
         """
         results = method(self, *kargs, **kwargs)
         return results
@@ -874,8 +874,8 @@ class BaseStep(ABC):
         :param method_name: method name that need to be called on all steps
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Union[Dict, Iterable]
         """
         results = None
         if hasattr(self, method_name) and callable(getattr(self, method_name)):
@@ -1748,8 +1748,8 @@ class MetaStepMixin:
         :param method_name: method name that need to be called on all steps
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Union[Dict, Iterable]
         """
         results = BaseStep.apply(self, method_name, *kargs, **kwargs)
         wrapped_results = self.wrapped.apply(method_name, *kargs, **kwargs)
@@ -1762,8 +1762,8 @@ class MetaStepMixin:
         :param method: method to call with self
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Union[Dict, Iterable]
         """
         results = BaseStep.apply_method(self, method, *kargs, **kwargs)
         wrapped_results = self.wrapped.apply_method(method, *kargs, **kwargs)
@@ -2056,17 +2056,24 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         return step
 
 
-def join_apply_results(results, sub_step_results):
+def join_apply_results(results, new_results) -> Union[Dict, Iterable]:
+    """
+    Join results returned from apply method.
+
+    :param results: dict, list or None for the current accumulated results
+    :param new_results: dict, list or None for the new results to be joined with the current accumulated results
+    :return:
+    """
     if results is None:
-        results = sub_step_results
-    elif sub_step_results is None:
+        results = new_results
+    elif new_results is None:
         pass
     elif isinstance(results, dict):
-        results.update(sub_step_results)
+        results.update(new_results)
     elif isinstance(results, list):
-        results.append(sub_step_results)
+        results.append(new_results)
     elif isinstance(results, list):
-        results = np.append(results, sub_step_results)
+        results = np.append(results, new_results)
     return results
 
 
@@ -2179,8 +2186,8 @@ class TruncableSteps(BaseStep, ABC):
         :param method_name: method name that need to be called on all steps
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Union[Dict, Iterable]
         """
         results = BaseStep.apply(self, method_name, *kargs, **kwargs)
         for step in self.values():
@@ -2196,8 +2203,8 @@ class TruncableSteps(BaseStep, ABC):
         :param method: method to call with self
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Union[Dict, Iterable]
         """
         results = BaseStep.apply_method(self, method, *kargs, **kwargs)
         for step in self.values():
