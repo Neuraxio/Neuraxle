@@ -45,6 +45,7 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
         :class:`MetaStepMixin`,
         :class:`BaseStep`
     """
+
     def __init__(
             self,
             wrapped: BaseStep,
@@ -78,6 +79,18 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
             self.metrics_results_train[m] = []
             self.metrics_results_validation[m] = []
 
+    def _did_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Calculate metrics results after transform if there is an expected outputs in the data container.
+
+        :param data_container: data container to calculate metrics for
+        :type data_container: DataContainer
+        :param context: execution context
+        :return: data container
+        :rtype: DataContainer
+        """
+        return self._did_fit_transform_or_transform(data_container)
+
     def _did_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Calculate metrics results after transform if there is an expected outputs in the data container.
@@ -88,24 +101,11 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
         :return: data container
         :rtype: DataContainer
         """
+        return self._did_fit_transform_or_transform(data_container)
+
+    def _did_fit_transform_or_transform(self, data_container):
         if data_container.expected_outputs is not None and len(data_container.expected_outputs) > 0:
             self._calculate_metrics_results(data_container)
-
-        return data_container
-
-    def _did_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        """
-        Calculate metrics results after fit_transform if there is an expected outputs in the data container.
-
-        :param data_container: data container to calculate metrics for
-        :type data_container: DataContainer
-        :param context: execution context
-        :return: data container
-        :rtype: DataContainer
-        """
-        if data_container.expected_outputs is not None and len(data_container.expected_outputs) > 0:
-            self._calculate_metrics_results(data_container)
-
         return data_container
 
     def _calculate_metrics_results(self, data_container: DataContainer):
@@ -132,39 +132,19 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
         if self.print_metrics:
             self.print_fun(result)
 
-    def get_all_metrics_train(self):
+    def get_metrics(self) -> Dict:
         """
-        Get all train metrics results.
+        Get all metrics results using the transformed data container, and the metrics function dict.
+        To be used with :func:`neuraxle.base.BaseStep.apply` method.
 
-        :return: dict of all train metrics results
-        :rtype: Dict[List]
+        :return: dict with the step name as key, and all of the training, and validation metrics as values
         """
-        return self.metrics_results_train
-
-    def get_all_metrics_validation(self):
-        """
-        Get all validation metrics results.
-
-        :return: dict of all validation metrics results
-        :rtype: Dict[List]
-        """
-        return self.metrics_results_validation
-
-    def get_metric_validation(self, metric_name) -> List:
-        """
-        Get validation result for a given metric name.
-
-        :return: list of results
-        """
-        return self.metrics_results_validation[metric_name]
-
-    def get_metric_train(self, metric_name) -> List:
-        """
-        Get train result for a given metric name.
-
-        :return: list of results
-        """
-        return self.metrics_results_train[metric_name]
+        return {
+            self.name: {
+                'train': self.metrics_results_train,
+                'validation': self.metrics_results_validation
+            }
+        }
 
     def toggle_metrics(self):
         """

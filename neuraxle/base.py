@@ -33,8 +33,9 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from enum import Enum
-from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Optional
+from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Optional, Dict
 
+import numpy as np
 from joblib import dump, load
 from sklearn.base import BaseEstimator
 
@@ -853,7 +854,7 @@ class BaseStep(ABC):
 
         return data_container
 
-    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
+    def apply_method(self, method: Callable, *kargs, **kwargs) -> Union[Dict, Iterable]:
         """
         Apply a method to a step and its children.
 
@@ -863,10 +864,10 @@ class BaseStep(ABC):
         :return: self (not a new step)
         :rtype: BaseStep
         """
-        method(self, *kargs, **kwargs)
-        return self
+        results = method(self, *kargs, **kwargs)
+        return results
 
-    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
+    def apply(self, method_name: str, *kargs, **kwargs) -> Union[Dict, Iterable]:
         """
         Apply a method to a step and its children.
 
@@ -876,10 +877,11 @@ class BaseStep(ABC):
         :return: self (not a new step)
         :rtype: BaseStep
         """
+        results = None
         if hasattr(self, method_name) and callable(getattr(self, method_name)):
-            getattr(self, method_name)(*kargs, **kwargs)
+            results = getattr(self, method_name)(*kargs, **kwargs)
 
-        return self
+        return results
 
     def get_step_by_name(self, name):
         if self.name == name:
@@ -906,8 +908,7 @@ class BaseStep(ABC):
 
         return new_self
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.fit_transform`.
         The default behavior is to rehash current ids with the step hyperparameters.
@@ -1740,7 +1741,7 @@ class MetaStepMixin:
             return True
         return False
 
-    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
+    def apply(self, method_name: str, *kargs, **kwargs) -> Union[Dict, Iterable]:
         """
         Apply the method name to the meta step and its wrapped step.
 
@@ -1750,11 +1751,11 @@ class MetaStepMixin:
         :return: self (not a new step)
         :rtype: BaseStep
         """
-        BaseStep.apply(self, method_name, *kargs, **kwargs)
-        self.wrapped.apply(method_name, *kargs, **kwargs)
-        return self
+        results = BaseStep.apply(self, method_name, *kargs, **kwargs)
+        wrapped_results = self.wrapped.apply(method_name, *kargs, **kwargs)
+        return join_apply_results(results, wrapped_results)
 
-    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
+    def apply_method(self, method: Callable, *kargs, **kwargs) -> Union[Dict, Iterable]:
         """
         Apply method to the meta step and its wrapped step.
 
@@ -1764,9 +1765,9 @@ class MetaStepMixin:
         :return: self (not a new step)
         :rtype: BaseStep
         """
-        BaseStep.apply_method(self, method, *kargs, **kwargs)
-        self.wrapped = self.wrapped.apply_method(method, *kargs, **kwargs)
-        return self
+        results = BaseStep.apply_method(self, method, *kargs, **kwargs)
+        wrapped_results = self.wrapped.apply_method(method, *kargs, **kwargs)
+        return join_apply_results(results, wrapped_results)
 
     def get_step_by_name(self, name):
         if self.wrapped.name == name:
@@ -2055,6 +2056,20 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         return step
 
 
+def join_apply_results(results, sub_step_results):
+    if results is None:
+        results = sub_step_results
+    elif sub_step_results is None:
+        pass
+    elif isinstance(results, dict):
+        results.update(sub_step_results)
+    elif isinstance(results, list):
+        results.append(sub_step_results)
+    elif isinstance(results, list):
+        results = np.append(results, sub_step_results)
+    return results
+
+
 class TruncableSteps(BaseStep, ABC):
     """
     Step that contains multiple steps. :class:`Pipeline` inherits form this class.
@@ -2157,7 +2172,7 @@ class TruncableSteps(BaseStep, ABC):
 
         return self
 
-    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
+    def apply(self, method_name: str, *kargs, **kwargs) -> Union[Dict, Iterable]:
         """
         Apply the method name to the pipeline step and all of its children.
 
@@ -2167,12 +2182,14 @@ class TruncableSteps(BaseStep, ABC):
         :return: self (not a new step)
         :rtype: BaseStep
         """
-        BaseStep.apply(self, method_name, *kargs, **kwargs)
+        results = BaseStep.apply(self, method_name, *kargs, **kwargs)
         for step in self.values():
-            step.apply(method_name, *kargs, **kwargs)
-        return self
+            sub_step_results = step.apply(method_name, *kargs, **kwargs)
+            results = join_apply_results(results, sub_step_results)
 
-    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
+        return results
+
+    def apply_method(self, method: Callable, *kargs, **kwargs) -> Union[Dict, Iterable]:
         """
         Apply a method to the pipeline step and all of its children.
 
@@ -2182,11 +2199,12 @@ class TruncableSteps(BaseStep, ABC):
         :return: self (not a new step)
         :rtype: BaseStep
         """
-        BaseStep.apply_method(self, method, *kargs, **kwargs)
+        results = BaseStep.apply_method(self, method, *kargs, **kwargs)
         for step in self.values():
-            step.apply_method(method, *kargs, **kwargs)
+            sub_step_results = step.apply_method(method, *kargs, **kwargs)
+            results = join_apply_results(results, sub_step_results)
 
-        return self
+        return results
 
     def get_step_by_name(self, name):
         for step in self.values():

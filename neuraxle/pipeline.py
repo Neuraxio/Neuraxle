@@ -328,7 +328,7 @@ class MiniBatchSequentialPipeline(Pipeline):
     def __init__(self, steps: NamedTupleList, batch_size=None):
         Pipeline.__init__(self, steps)
         self.__validate_barriers_batch_size(batch_size)
-        self.__patch_missing_barrier(batch_size)
+        self._patch_missing_barrier(batch_size)
         self.__patch_barriers_batch_size(batch_size)
 
     def __validate_barriers_batch_size(self, batch_size):
@@ -353,7 +353,7 @@ class MiniBatchSequentialPipeline(Pipeline):
                         'Replacing {}[{}].batch_size by {}.batch_size.'.format(self.name, step.name, self.name))
                 step.batch_size = batch_size
 
-    def __patch_missing_barrier(self, batch_size):
+    def _patch_missing_barrier(self, batch_size):
         has_barrier = False
 
         for _, step in self:
@@ -603,8 +603,7 @@ class Joiner(Barrier):
 
         return output_data_container
 
-    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple[
-        'Any', DataContainer]:
+    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple['Any', DataContainer]:
         """
         Concatenate the pipeline fit transform output of each batch of self.batch_size together.
 
@@ -634,6 +633,13 @@ class Joiner(Barrier):
 
 
 class CustomPipelineMixin:
+    """
+    Boilerplate code for custom pipelines that only implements handle methods.
+
+    .. seealso::
+        :class:`neuraxle.pipeline.MiniBatchSequentialPipeline`,
+        :class:`neuraxle.api.DeepLearningPipeline`
+    """
     def transform(self, data_inputs: Any):
         """
         :param data_inputs: the data input to transform

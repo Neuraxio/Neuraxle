@@ -23,11 +23,12 @@ This module contains steps to perform various feature unions and model stacking,
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
+from typing import Iterable, Dict, Union
 
 from joblib import Parallel, delayed
 
 from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin, NamedTupleList, Identity, ExecutionContext, \
-    DataContainer
+    DataContainer, join_apply_results
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
@@ -54,9 +55,12 @@ class FeatureUnion(TruncableSteps):
         self.n_jobs = n_jobs
         self.backend = backend
 
-    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
-        BaseStep.apply(self, method_name, *kargs, **kwargs)
-        self.joiner.apply(method_name, *kargs, **kwargs)
+    def apply(self, method_name: str, *kargs, **kwargs) -> Union[Dict, Iterable]:
+        results = BaseStep.apply(self, method_name, *kargs, **kwargs)
+        other_results = self.joiner.apply(method_name, *kargs, **kwargs)
+        results = join_apply_results(results, other_results)
+
+        return results
 
     def _fit_data_container(self, data_container, context):
         """

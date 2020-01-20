@@ -49,12 +49,14 @@ def test_deep_learning_pipeline():
     # When
     p, outputs = p.fit_transform(data_inputs, expected_outputs)
 
-    # Then
-    batch_mse_train = p.get_batch_metric_train('mse')
-    epoch_mse_train = p.get_epoch_metric_train('mse')
+    metrics = p.apply('get_metrics')
 
-    batch_mse_validation = p.get_batch_metric_validation('mse')
-    epoch_mse_validation = p.get_epoch_metric_validation('mse')
+    # Then
+    batch_mse_train = metrics['batch_metrics']['train']['mse']
+    epoch_mse_train = metrics['epoch_metrics']['train']['mse']
+
+    batch_mse_validation = metrics['batch_metrics']['validation']['mse']
+    epoch_mse_validation = metrics['epoch_metrics']['validation']['mse']
 
     assert len(epoch_mse_train) == N_EPOCHS
     assert len(epoch_mse_validation) == N_EPOCHS

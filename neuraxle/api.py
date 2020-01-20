@@ -19,10 +19,9 @@ Neuraxle's high-level API classes. Useful to make complex Deep Learning pipeline
     limitations under the License.
 
 """
-from typing import Dict, List, Tuple, Callable, Union
+from typing import Dict, Callable, Union
 
-from neuraxle.base import BaseStep, ExecutionContext, NamedTupleList
-from neuraxle.data_container import DataContainer
+from neuraxle.base import BaseStep, NamedTupleList
 from neuraxle.metaopt.random import ValidationSplitWrapper
 from neuraxle.metrics import MetricsWrapper
 from neuraxle.pipeline import MiniBatchSequentialPipeline, Pipeline, CustomPipelineMixin
@@ -167,55 +166,6 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
             wrapped = EpochRepeater(wrapped, epochs=self.n_epochs, fit_only=False)
         return wrapped
 
-    def _did_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        """
-        Visualize metrics after fit transform if there is a metrics plotting step.
-
-        :param data_container: data container
-        :type data_container: DataContainer
-        :param context: execution context
-        :type context: ExecutionContext
-        :return: data container
-        """
-        self._visualize_metrics()
-        return data_container
-
-    def _did_fit(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        """
-        Visualize metrics after fit if there is a metrics plotting step.
-
-        :param data_container: data container
-        :type data_container: DataContainer
-        :param context: execution context
-        :type context: ExecutionContext
-        :return: data container
-        """
-        self._visualize_metrics()
-        return data_container
-
-    def _visualize_metrics(self):
-        """
-        Visualize epoch metrics, and batch metrics using the metrics plotting step.
-        """
-        batch_metrics, epoch_metrics = self._get_metrics_results()
-
-        if self.metrics_plotting_step is not None:
-            self.metrics_plotting_step.transform((batch_metrics, epoch_metrics))
-
-    def _get_metrics_results(self) -> Tuple[List[Dict], List[Dict]]:
-        """
-        Get epoch metrics, and batch metrics using :func:`~neuraxle.base.BaseStep.get_step_by_name`.
-        """
-        batch_metrics = []
-        if self.validation_size != 0.0:
-            batch_metrics = self.get_step_by_name(BATCH_METRICS_STEP_NAME)
-
-        epoch_metrics = []
-        if self.batch_size is not None:
-            epoch_metrics = self.get_step_by_name(EPOCH_METRICS_STEP_NAME)
-
-        return batch_metrics, epoch_metrics
-
     def get_score(self):
         """
         Get latest score. This function had to be defined for the hyperparameter optimization steps.
@@ -243,74 +193,3 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
         """
         return self.get_step_by_name(VALIDATION_SPLIT_STEP_NAME).get_score_train()
 
-    def get_batch_metric_train(self, name) -> List:
-        """
-        Get training batch metric results for a given batch metric name.
-
-        :return: score
-        :rtype: float
-        """
-        return self.get_step_by_name(BATCH_METRICS_STEP_NAME).get_metric_train(name)
-
-    def get_epoch_metric_train(self, name) -> List:
-        """
-        Get training epoch metric results for a given epoch metric name.
-
-        :return: score
-        :rtype: float
-        """
-        return self.get_step_by_name(EPOCH_METRICS_STEP_NAME).get_metric_train(name)
-
-    def get_batch_metric_validation(self, name) -> List:
-        """
-        Get validation batch metric for a given metric name.
-
-        :return: score
-        :rtype: float
-        """
-        return self.get_step_by_name(BATCH_METRICS_STEP_NAME).get_metric_validation(name)
-
-    def get_epoch_metric_validation(self, name) -> List:
-        """
-        Get validation epoch metric for a given metric name.
-
-        :param name:
-        :return:
-        """
-        return self.get_step_by_name(EPOCH_METRICS_STEP_NAME).get_metric_validation(name)
-
-    def get_all_epoch_metrics_train(self) -> Dict:
-        """
-        Get all training epoch metrics.
-
-        :return: metrics results dict
-        :rtype: Dict
-        """
-        return self.get_step_by_name(EPOCH_METRICS_STEP_NAME).get_all_metrics_train()
-
-    def get_all_batch_metrics_train(self) -> Dict:
-        """
-        Get all training batch metrics.
-
-        :return: metrics results dict
-        :rtype: Dict
-        """
-        return self.get_step_by_name(BATCH_METRICS_STEP_NAME).get_all_metrics_train()
-
-    def get_all_epoch_metrics_validation(self) -> Dict:
-        """
-        Get all validation epoch metrics.
-
-        :return: metrics results dict
-        :rtype: Dict
-        """
-        return self.get_step_by_name(EPOCH_METRICS_STEP_NAME).get_all_metrics_validation()
-
-    def get_all_batch_metrics_validation(self) -> Dict:
-        """
-        Get all validation batch metrics.
-
-        :return: metrics results dict
-        :rtype: Dict
-        """
-        return self.get_step_by_name(BATCH_METRICS_STEP_NAME).get_all_metrics_validation()
