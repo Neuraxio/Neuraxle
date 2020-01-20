@@ -1,68 +1,42 @@
 import math
 
 import numpy as np
-from sklearn.cluster import KMeans
-from sklearn.datasets import load_boston
-from sklearn.decomposition import PCA, FastICA
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.linear_model import Ridge
+from sklearn import linear_model
 from sklearn.metrics import mean_squared_error
-from sklearn.utils import shuffle
 
 from neuraxle.api import DeepLearningPipeline
-from neuraxle.hyperparams.distributions import RandInt, LogUniform, Boolean
-from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.numpy import NumpyTranspose
-from neuraxle.steps.sklearn import SKLearnWrapper
-from neuraxle.union import AddFeatures, ModelStacking
+
+TIMESTEPS = 10
 
 VALIDATION_SIZE = 0.1
 BATCH_SIZE = 32
 N_EPOCHS = 10
 
+DATA_INPUTS_PAST_SHAPE = (BATCH_SIZE, TIMESTEPS)
+
 
 def test_deep_learning_pipeline():
     # Given
-    boston = load_boston()
-    data_inputs, expected_outputs = shuffle(boston.data, boston.target, random_state=13)
+    i = 0
+    data_inputs = []
+    for batch_index in range(BATCH_SIZE):
+        batch = []
+        for _ in range(TIMESTEPS):
+            batch.append(i)
+            i += 1
+        data_inputs.append(batch)
+    data_inputs = np.array(data_inputs)
+
+    random_noise = np.random.random(DATA_INPUTS_PAST_SHAPE)
+    expected_outputs = 3 * data_inputs + 4 * random_noise
     expected_outputs = expected_outputs.astype(np.float32)
     data_inputs = data_inputs.astype(np.float32)
 
-    pipeline = Pipeline([
-        AddFeatures([
-            SKLearnWrapper(
-                PCA(n_components=2),
-                HyperparameterSpace({"n_components": RandInt(1, 3)})
-            ),
-            SKLearnWrapper(
-                FastICA(n_components=2),
-                HyperparameterSpace({"n_components": RandInt(1, 3)})
-            ),
-        ]),
-        ModelStacking([
-            SKLearnWrapper(
-                GradientBoostingRegressor(),
-                HyperparameterSpace({
-                    "n_estimators": RandInt(50, 600), "max_depth": RandInt(1, 10),
-                    "learning_rate": LogUniform(0.07, 0.7)
-                })
-            ),
-            SKLearnWrapper(
-                KMeans(n_clusters=7),
-                HyperparameterSpace({"n_clusters": RandInt(5, 10)})
-            ),
-        ],
-            joiner=NumpyTranspose(),
-            judge=SKLearnWrapper(
-                Ridge(),
-                HyperparameterSpace({"alpha": LogUniform(0.7, 1.4), "fit_intercept": Boolean()})
-            ),
-        )
-    ])
-
     p = DeepLearningPipeline(
-        pipeline,
+        Pipeline([
+            linear_model.LinearRegression()
+        ]),
         validation_size=VALIDATION_SIZE,
         batch_size=BATCH_SIZE,
         batch_metrics={'mse': to_numpy_metric_wrapper(mean_squared_error)},
@@ -99,8 +73,6 @@ def test_deep_learning_pipeline():
 
     assert last_batch_mse_train < last_batch_mse_validation
     assert last_epoch_mse_train < last_epoch_mse_validation
-    assert last_batch_mse_train < 1
-    assert last_epoch_mse_train < 1
 
 
 def to_numpy_metric_wrapper(metric_fun):
