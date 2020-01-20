@@ -4,6 +4,7 @@ from neuraxle.distributed.streaming import SequentialQueuedPipeline, ParallelQue
 from neuraxle.steps.misc import TapeCallbackFunction, FitTransformCallbackStep
 
 EXPECTED_OUTPUTS = np.array(range(100)) * 2 * 2 * 2 * 2
+EXPECTED_OUTPUTS_PARALLEL = np.array((np.array(range(100)) * 2).tolist() * 4)
 
 
 class MultiplyBy2CallbackStep(FitTransformCallbackStep):
@@ -114,7 +115,7 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_max_size():
     # When
     p, outputs = p.fit_transform(list(range(100)), list(range(100)))
 
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
 
 
 def test_parallel_queued_pipeline_with_step_name_n_worker_with_step_name_n_workers_and_default_max_size():
@@ -138,7 +139,7 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_with_step_name_n_worke
     # When
     p, outputs = p.fit_transform(list(range(100)), list(range(100)))
 
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
 
 
 def test_parallel_queued_pipeline_with_step_name_n_worker_with_default_n_workers_and_default_max_size():
@@ -162,4 +163,4 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_with_default_n_workers
     # When
     p, outputs = p.fit_transform(list(range(100)), list(range(100)))
 
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)

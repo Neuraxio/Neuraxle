@@ -124,7 +124,7 @@ class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
             summary_id = task.data_container.summary_id
             data_container = self.handle_transform(task.data_container, context)
             data_container = data_container.set_summary_id(summary_id)
-            self.notify(QueuedPipelineTask(step_name=self.wrapped.name, data_container=data_container))
+            self.notify(QueuedPipelineTask(step_name=self.name, data_container=data_container))
 
 
 # (step_name, n_workers, step)
@@ -216,7 +216,7 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
             n_workers=n_workers,
             use_threading=self.use_threading,
             max_size=max_size
-        )
+        ).set_name('QueueWorker{}'.format(name))
 
     def _get_step_params(self, step):
         """
@@ -269,7 +269,7 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
         :return: data container
         """
         data_container_batches = data_container.convolved_1d(stride=self.batch_size, kernel_size=self.batch_size)
-        n_batches = data_container.get_n_batches(self.batch_size)
+        n_batches = self.get_n_batches(data_container)
 
         queue_joiner = QueueJoiner(n_batches=n_batches)
         self.connect_queue_joiner(queue_joiner)
@@ -299,6 +299,10 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
         return self.data_joiner.handle_transform(data_container, context)
 
     @abstractmethod
+    def get_n_batches(self, data_container):
+        raise NotImplementedError()
+
+    @abstractmethod
     def connect_queue_workers(self):
         raise NotImplementedError()
 
@@ -324,6 +328,9 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
         :class:`Observable`
     """
 
+    def get_n_batches(self, data_container):
+        return data_container.get_n_batches(self.batch_size)
+
     def connect_queue_workers(self):
         for i, (name, step) in enumerate(self):
             if i != 0:
@@ -335,7 +342,7 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
     def notify_new_batch_to_process(self, data_container: DataContainer, queue_joiner: 'QueueJoiner'):
         data_container = data_container.set_summary_id(data_container.hash_summary())
         queue_joiner.summary_ids.append(data_container.summary_id)
-        self[0].put(QueuedPipelineTask(step_name=self[0].name, data_container=data_container))
+        self[0].put(QueuedPipelineTask(step_name=self[0].name, data_container=data_container.copy()))
 
 
 class ParallelQueuedPipeline(BaseQueuedPipeline):
@@ -351,6 +358,9 @@ class ParallelQueuedPipeline(BaseQueuedPipeline):
         :class:`Observable`
     """
 
+    def get_n_batches(self, data_container):
+        return data_container.get_n_batches(self.batch_size) * len(self)
+
     def connect_queue_workers(self):
         # nothing to do here, queue workers don't listen to each other in a ParallelQueuedPipeline
         pass
@@ -363,7 +373,7 @@ class ParallelQueuedPipeline(BaseQueuedPipeline):
         for i, (name, step) in enumerate(self):
             data_container = data_container.set_summary_id(data_container.hash_summary())
             queue_joiner.summary_ids.append(data_container.summary_id)
-            step.put(QueuedPipelineTask(step_name=step.name, data_container=data_container))
+            step.put(QueuedPipelineTask(step_name=step.name, data_container=data_container.copy()))
 
 
 class QueueJoiner(ObservableQueue):
@@ -396,16 +406,17 @@ class QueueJoiner(ObservableQueue):
         while self.n_batches_left_to_do > 0:
             task: QueuedPipelineTask = self.queue.get()
             self.n_batches_left_to_do -= 1
+            step_name = task.step_name
 
-            if task.step_name not in self.result:
-                self.result[task.step_name] = ListDataContainer(
+            if step_name not in self.result:
+                self.result[step_name] = ListDataContainer(
                     current_ids=[],
                     data_inputs=[],
                     expected_outputs=[],
                     summary_id=task.data_container.summary_id
                 )
 
-            self.result[task.step_name].append_data_container(task.data_container)
+            self.result[step_name].append_data_container(task.data_container)
 
         data_containers = self._join_all_step_results()
         return original_data_container.set_data_inputs(data_containers)
@@ -416,10 +427,10 @@ class QueueJoiner(ObservableQueue):
 
         :return:
         """
-        results = ListDataContainer.empty()
+        results = []
         for step_name, data_containers in self.result.items():
             step_results = self._join_step_results(data_containers)
-            results.append_data_container(step_results)
+            results.append(step_results)
 
         return results
 
