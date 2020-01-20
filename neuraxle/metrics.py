@@ -36,8 +36,12 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
         wrapped = MetricsWrapper(wrapped=wrapped, metrics=self.batch_metrics, name=BATCH_METRICS_STEP_NAME)
         wrapped = MiniBatchSequentialPipeline(
             [wrapped],
-            batch_size=self.batch_size
+            batch_size=self.batch_size,
+            enabled=True
         )
+
+        # toggle metrics on, and off
+        wrapped.apply('toggle_metrics')
 
 
     .. seealso::
@@ -120,8 +124,8 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
             return
 
         result = {}
-        for metric_name, metric_fun in self.metrics.items():
-            result_metric = metric_fun(data_container.data_inputs, data_container.expected_outputs)
+        for metric_name, metric_fun_function in self.metrics.items():
+            result_metric = metric_fun_function(data_container.data_inputs, data_container.expected_outputs)
             result[metric_name] = result_metric
 
             if self.is_train:
