@@ -3020,7 +3020,8 @@ class FullDumpLoader(Identity):
         :rtype: BaseStep
         """
         if not context.stripped_saver.can_load(self, context):
-            raise Exception('Cannot Load Full Dump For Step {}'.format(os.path.join(context.get_path(), self.name)))
+            path = os.path.join(context.get_path(), self.name)
+            raise Exception('Cannot Load Full Dump For Step {}'.format(path))
 
         loaded_self = context.stripped_saver.load_step(self, context)
 

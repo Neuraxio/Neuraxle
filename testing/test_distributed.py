@@ -1,35 +1,70 @@
 import numpy as np
-from sklearn.datasets import load_boston
-from sklearn.decomposition import PCA
-from sklearn.model_selection import train_test_split
-from sklearn.utils import shuffle
+from sklearn import linear_model
 
-from neuraxle.distributed.clustering import ClusteringWrapper
-from neuraxle.hyperparams.distributions import RandInt
-from neuraxle.hyperparams.space import HyperparameterSpace
+from neuraxle.distributed.clustering import ClusteringWrapper, RestWorker
 from neuraxle.pipeline import Pipeline
+from neuraxle.rest.flask import RequestWrapper
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
-from neuraxle.steps.sklearn import SKLearnWrapper
+
+TIMESTEPS = 10
+VALIDATION_SIZE = 0.1
+BATCH_SIZE = 32
+N_EPOCHS = 10
+
+DATA_INPUTS_PAST_SHAPE = (BATCH_SIZE, TIMESTEPS)
 
 
-def test_clustering_wrapper(tmpdir):
-    boston = load_boston()
-    X, y = shuffle(boston.data, boston.target, random_state=13)
-    X = X.astype(np.float32)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffle=False)
-    sklearn_pca = Pipeline([SKLearnWrapper(PCA(n_components=2), HyperparameterSpace({"n_components": RandInt(1, 3)}))]).fit(X_train, y_train)
-    sklearn_pca = sklearn_pca.fit(X_train, y_train)
+class TestClientRequestWrapper(RequestWrapper):
+    def __init__(self, test_client):
+        self.test_client = test_client
+
+    def post(self, url, files):
+        files = ((name, content) for name, content in files.items())
+        for name, content in files:
+            r = self.test_client.post(url, data={'file': content}, content_type='multipart/form-data')
+        return r
+
+    def get(self, url, method, headers, data):
+        r = self.test_client.get(url, data=data, headers=headers)
+        return r
+
+
+def test_rest_worker(tmpdir):
+    app = RestWorker().get_app()
+    app.config['UPLOAD_FOLDER'] = tmpdir
+    app = app.test_client()
+    app.post()
+    data_inputs, expected_outputs = create_data()
+    model_pipeline = Pipeline([linear_model.LinearRegression()])
+    model_pipeline = model_pipeline.fit(data_inputs, expected_outputs)
 
     p = Pipeline([
         ClusteringWrapper(
-            sklearn_pca,
-            hosts=['http://127.0.0.1:5000/pipeline'],
+            model_pipeline,
+            hosts=['/pipeline'],
             joiner=NumpyConcatenateOuterBatch(),
             n_jobs=10,
             batch_size=10,
-            n_workers_per_step=1
+            n_workers=1,
+            request=TestClientRequestWrapper(app)
         )
     ], cache_folder=tmpdir)
+    outputs = p.transform(data_inputs)
 
-    outputs = p.transform(X_train)
+    assert len(outputs) == len(data_inputs)
 
+
+def create_data():
+    i = 0
+    data_inputs = []
+    for batch_index in range(BATCH_SIZE):
+        batch = []
+        for _ in range(TIMESTEPS):
+            batch.append(i)
+            i += 1
+        data_inputs.append(batch)
+    data_inputs = np.array(data_inputs)
+    random_noise = np.random.random(DATA_INPUTS_PAST_SHAPE)
+    expected_outputs = 3 * data_inputs + 4 * random_noise
+
+    return data_inputs, expected_outputs

@@ -24,14 +24,13 @@ import os
 from typing import List
 
 import numpy as np
-import requests
 from flask import jsonify
 from werkzeug.utils import secure_filename
 
 from neuraxle.base import MetaStepMixin, BaseStep, NonFittableMixin, ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.distributed.streaming import ParallelQueuedPipeline
-from neuraxle.rest.flask import RestAPICaller
+from neuraxle.rest.flask import RestAPICaller, RequestWrapper, UrllibRequestWrapper
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
@@ -48,11 +47,22 @@ class RestApiScheduler(ParallelQueuedPipeline):
         :class:`RestApiCaller`,
     """
 
-    def __init__(self, hosts: List[str], batch_size, n_workers_per_step, max_size, data_joiner):
+    def __init__(
+            self,
+            hosts: List[str],
+            batch_size,
+            n_workers_per_step,
+            max_size,
+            data_joiner,
+            request
+    ):
+        if request is None:
+            request = UrllibRequestWrapper()
+        self.request = request
         self.hosts = hosts
         ParallelQueuedPipeline.__init__(
             self,
-            steps=[('rest', RestAPICaller(host)) for host in hosts],
+            steps=[('rest', ClusteringRestApiCaller(url=host, request=request)) for host in hosts],
             batch_size=batch_size,
             n_workers_per_step=n_workers_per_step,
             max_size=max_size,
@@ -91,7 +101,7 @@ class RestApiScheduler(ParallelQueuedPipeline):
             saved_step_files = context.get_all_saved_step_files()
             files = {path.replace(str(context.root) + '/', ''): open(file_path, 'rb') for path, file_path in
                      saved_step_files}
-            r = requests.post(host, files=files)
+            r = self.request.post(host, files=files)
 
             for f in files.values():
                 f.close()
@@ -136,8 +146,9 @@ class ClusteringWrapper(NonFittableMixin, MetaStepMixin, BaseStep):
             joiner: NonFittableMixin = None,
             n_jobs: int = 10,
             batch_size=None,
-            n_workers_per_step=None,
+            n_workers=None,
             max_size=None,
+            request: RequestWrapper = None
     ):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
@@ -146,9 +157,10 @@ class ClusteringWrapper(NonFittableMixin, MetaStepMixin, BaseStep):
         self.scheduler = RestApiScheduler(
             hosts=hosts,
             batch_size=batch_size,
-            n_workers_per_step=n_workers_per_step,
+            n_workers_per_step=n_workers,
             max_size=max_size,
-            data_joiner=joiner
+            data_joiner=joiner,
+            request=request
         )
 
         if joiner is None:
@@ -224,15 +236,19 @@ class RestWorker:
                     response.status_code = 400
                     return response
 
-                for file in request.files:
-                    filename = secure_filename(request.files[file].filename)
-                    upload_path = os.path.join(app.config['UPLOAD_FOLDER'], file.replace(filename, ''))
+                for file, content in request.files.items():
+                    filename = content.filename.split(os.path.sep)[-1]
+                    upload_folder = str(app.config['UPLOAD_FOLDER'])
+                    file_path = content.filename.replace(upload_folder, '').replace(filename, '')
+                    if file_path[0] == os.sep:
+                        file_path = file_path[1:]
+                    upload_path = os.path.join(upload_folder, file_path)
 
                     if not os.path.exists(upload_path):
                         os.makedirs(upload_path)
 
                     file_path = os.path.join(upload_path, filename)
-                    request.files[file].save(file_path)
+                    content.save(file_path)
 
                 response = jsonify({'message': 'Files successfully uploaded'})
                 response.status_code = 201
@@ -293,3 +309,13 @@ class RestWorker:
         app = self.get_app()
         app.config['UPLOAD_FOLDER'] = upload_folder
         app.run(host=self.host, debug=False, port=self.port)
+
+
+class ClusteringRestApiCaller(RestAPICaller):
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        data_container, context = RestAPICaller._will_process(self, data_container, context)
+
+        # remove QueuedWorker from the context
+        context.pop()
+
+        return data_container, context

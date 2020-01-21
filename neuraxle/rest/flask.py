@@ -24,6 +24,7 @@ The flask wrapper classes are used to easily serve pipeline predictions using a 
 
 """
 import json
+import urllib
 from abc import ABC, abstractmethod
 from urllib import request
 
@@ -151,10 +152,13 @@ class FlaskRestApiWrapper(Pipeline):
 
 
 class RestAPICaller(NonFittableMixin, BaseStep):
-    def __init__(self, url, method='GET'):
+    def __init__(self, url, method='GET', request= None):
         BaseStep.__init__(self)
         self.url = url
         self.method = method
+        if request is None:
+            request = urllib.request
+        self.request = request
 
     def transform(self, data_inputs):
         raise NotImplementedError('must be used inside a pipeline')
@@ -172,15 +176,12 @@ class RestAPICaller(NonFittableMixin, BaseStep):
         }
         data = json.dumps(data_dict).encode('utf8')
 
-        req = request.Request(
+        results = self.request.get(
             self.url,
             method=self.method,
             headers={'content-type': 'application/json'},
             data=data
         )
-
-        response = request.urlopen(req)
-        results = json.loads(response.read())
 
         return DataContainer(
             summary_id=np.array(results['summary_id']),
@@ -188,3 +189,28 @@ class RestAPICaller(NonFittableMixin, BaseStep):
             data_inputs=np.array(results['data_inputs']),
             expected_outputs=np.array(results['expected_outputs'])
         )
+
+
+class RequestWrapper(ABC):
+    @abstractmethod
+    def post(self, host, files):
+        pass
+
+    @abstractmethod
+    def get(self, url, method, headers, data):
+        pass
+
+
+class UrllibRequestWrapper(RequestWrapper):
+    def __init__(self):
+        pass
+
+    def post(self, url, files):
+        pass
+
+    def get(self, url, method, headers, data):
+        req = request.Request(url, method=method, headers=headers, data=data)
+        response = request.urlopen(req)
+        results = json.loads(response.read())
+
+        return results
