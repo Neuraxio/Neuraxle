@@ -26,7 +26,7 @@ from multiprocessing.context import Process
 from threading import Thread
 from typing import Tuple, List, Union, Iterable
 
-from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin, NonFittableMixin, FullDumpLoader
+from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin, NonFittableMixin
 from neuraxle.data_container import DataContainer, ListDataContainer
 from neuraxle.pipeline import Pipeline, CustomPipelineMixin
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
@@ -101,9 +101,9 @@ class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
         :return:
         """
         target_function = worker_function
-        if self.use_savers:
-            self.wrapped.save(context, full_dump=True)
-            target_function = with_step_loading(worker_function)
+        # if self.use_savers:
+        #    self.wrapped.save(context, full_dump=True)
+        #    target_function = with_step_loading(worker_function)
 
         self.workers = []
         for _, worker_arguments in zip(range(self.n_workers), self.additional_worker_arguments):
@@ -130,12 +130,12 @@ class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
         self.observers = []
 
 
-def with_step_loading(wrapped_function):
-    def wrapped_worker_function(step: QueueWorker, batches_to_process: Queue, context: ExecutionContext, additional_worker_arguments):
-        step.set_step(FullDumpLoader(step.wrapped.name).load(context))
-        wrapped_function(step, batches_to_process, context, additional_worker_arguments)
+# def with_step_loading(wrapped_function):
+#    def wrapped_worker_function(step: QueueWorker, batches_to_process: Queue, context: ExecutionContext, additional_worker_arguments):
+#        step.set_step(FullDumpLoader(step.wrapped.name).load(context))
+#        wrapped_function(step, batches_to_process, context, additional_worker_arguments)
 
-    return wrapped_worker_function
+#    return wrapped_worker_function
 
 
 def worker_function(step, batches_to_process: Queue, context: ExecutionContext, additional_worker_arguments):
