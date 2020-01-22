@@ -152,7 +152,7 @@ def worker_function(step, batches_to_process: Queue, context: ExecutionContext, 
     additional_worker_arguments = tuple(
         additional_worker_arguments[i: i + 2] for i in range(0, len(additional_worker_arguments), 2))
     for argument_name, argument_value in additional_worker_arguments:
-        step.__dict__.update({argument_name: argument_value})
+        step.get_step().__dict__.update({argument_name: argument_value})
 
     while True:
         task: QueuedPipelineTask = batches_to_process.get()
@@ -265,6 +265,7 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
 
     def _create_queue_worker(self, step: QueuedPipelineStepsTuple):
         name, n_workers, additional_worker_arguments, max_size, actual_step = self._get_step_params(step)
+        assert n_workers == len(additional_worker_arguments)
 
         return QueueWorker(
             actual_step,
