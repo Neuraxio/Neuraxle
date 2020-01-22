@@ -24,9 +24,9 @@ from abc import abstractmethod
 from multiprocessing import Queue, Lock
 from multiprocessing.context import Process
 from threading import Thread
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Iterable
 
-from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin, NonFittableMixin
+from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin, NonFittableMixin, FullDumpLoader
 from neuraxle.data_container import DataContainer, ListDataContainer
 from neuraxle.pipeline import Pipeline, CustomPipelineMixin
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
@@ -69,7 +69,18 @@ class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
         :class:`BaseStep`
     """
 
-    def __init__(self, wrapped: BaseStep, max_size: int, n_workers: int, use_threading: bool):
+    def __init__(
+            self,
+            wrapped: BaseStep,
+            max_size: int,
+            n_workers: int,
+            use_threading: bool,
+            additional_worker_arguments=None,
+            use_savers=False
+    ):
+        if additional_worker_arguments is None:
+            additional_worker_arguments = []
+
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
         ObservableQueue.__init__(self, Queue(maxsize=max_size))
@@ -78,6 +89,8 @@ class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
         self.workers: List[Process] = []
         self.n_workers: int = n_workers
         self.observers: List[Queue] = []
+        self.additional_worker_arguments = additional_worker_arguments
+        self.use_savers = use_savers
 
     def start(self, context: ExecutionContext):
         """
@@ -87,12 +100,18 @@ class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
         :type context: ExecutionContext
         :return:
         """
+        target_function = worker_function
+        if self.use_savers:
+            self.wrapped.save(context, full_dump=True)
+            target_function = with_step_loading(worker_function)
+
         self.workers = []
-        for _ in range(self.n_workers):
+        for _, worker_arguments in zip(range(self.n_workers), self.additional_worker_arguments):
+
             if self.use_threading:
-                p = Thread(target=self.worker_func, args=(self.queue, context))
+                p = Thread(target=target_function, args=(self, self.queue, context, worker_arguments))
             else:
-                p = Process(target=self.worker_func, args=(self.queue, context))
+                p = Process(target=target_function, args=(self, self.queue, context, worker_arguments))
 
             p.daemon = True
             p.start()
@@ -110,27 +129,49 @@ class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
         self.workers = []
         self.observers = []
 
-    def worker_func(self, batches_to_process: Queue, context: ExecutionContext):
-        """
-        Worker function that transforms the items inside the queue of items to process.
 
-        :param batches_to_process: multiprocessing queue
-        :param context: execution context
-        :type context: ExecutionContext
-        :return:
-        """
-        while True:
-            task: QueuedPipelineTask = batches_to_process.get()
-            summary_id = task.data_container.summary_id
-            data_container = self.handle_transform(task.data_container, context)
-            data_container = data_container.set_summary_id(summary_id)
-            self.notify(QueuedPipelineTask(step_name=self.name, data_container=data_container))
+def with_step_loading(wrapped_function):
+    def wrapped_worker_function(step: QueueWorker, batches_to_process: Queue, context: ExecutionContext, additional_worker_arguments):
+        step.set_step(FullDumpLoader(step.wrapped.name).load(context))
+        wrapped_function(step, batches_to_process, context, additional_worker_arguments)
+
+    return wrapped_worker_function
+
+
+def worker_function(step, batches_to_process: Queue, context: ExecutionContext, additional_worker_arguments):
+    """
+    Worker function that transforms the items inside the queue of items to process.
+
+    :param step: step to transform
+    :param additional_worker_arguments: any additional arguments that need to be passed to the workers
+    :param batches_to_process: multiprocessing queue
+    :param context: execution context
+    :type context: ExecutionContext
+    :return:
+    """
+    additional_worker_arguments = tuple(
+        additional_worker_arguments[i: i + 2] for i in range(0, len(additional_worker_arguments), 2))
+    for argument_name, argument_value in additional_worker_arguments:
+        step.__dict__.update({argument_name: argument_value})
+
+    while True:
+        task: QueuedPipelineTask = batches_to_process.get()
+        summary_id = task.data_container.summary_id
+        data_container = step.handle_transform(task.data_container, context)
+        data_container = data_container.set_summary_id(summary_id)
+        step.notify(QueuedPipelineTask(step_name=step.name, data_container=data_container))
 
 
 # (step_name, n_workers, step)
 # (step_name, n_workers, max_size, step)
 # (step_name, step)
-QueuedPipelineStepsTuple = Union[Tuple[str, int, BaseStep], Tuple[str, int, int, BaseStep], Tuple[str, BaseStep]]
+QueuedPipelineStepsTuple = Union[
+    Tuple[str, int, BaseStep],
+    Tuple[str, int, int, BaseStep],
+    Tuple[str, int, List[Tuple], BaseStep],
+    Tuple[str, int, List[Tuple], BaseStep],
+    Tuple[str, BaseStep]
+]
 
 
 class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
@@ -142,23 +183,37 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
 
     .. code-block:: python
 
+        # step name, step
+
         p = QueuedPipeline([
             ('step_a', Identity()),
             ('step_b', Identity()),
         ], n_workers=1, batch_size=10, max_size=10)
 
-        # or
+        # number of workers
 
         p = QueuedPipeline([
             ('step_a', 1, Identity()),
             ('step_b', 1, Identity()),
         ], batch_size=10, max_size=10)
 
-        # or
+        # number of workers, and max size
 
         p = QueuedPipeline([
             ('step_a', 1, 10, Identity()),
             ('step_b', 1, 10, Identity()),
+        ], batch_size=10)
+
+        # number of workers for each step, and additional argument for each worker
+
+        p = QueuedPipeline([
+            ('step_a', 1, [('host', 'host1'), ('host', 'host2')], 10, Identity())
+        ], batch_size=10)
+
+        # number of workers for each step, additional argument for each worker, and max size
+
+        p = QueuedPipeline([
+            ('step_a', 1, [('host', 'host1'), ('host', 'host2')], 10, Identity())
         ], batch_size=10)
 
 
@@ -209,13 +264,14 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
         return steps_as_tuple
 
     def _create_queue_worker(self, step: QueuedPipelineStepsTuple):
-        name, n_workers, max_size, actual_step = self._get_step_params(step)
+        name, n_workers, additional_worker_arguments, max_size, actual_step = self._get_step_params(step)
 
         return QueueWorker(
             actual_step,
             n_workers=n_workers,
             use_threading=self.use_threading,
-            max_size=max_size
+            max_size=max_size,
+            additional_worker_arguments=additional_worker_arguments
         ).set_name('QueueWorker{}'.format(name))
 
     def _get_step_params(self, step):
@@ -232,16 +288,24 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
             name, actual_step = step
             max_size = self.max_size
             n_workers = self.n_workers_per_step
+            additional_arguments = []
         elif len(step) == 3:
             name, n_workers, actual_step = step
             max_size = self.max_size
+            additional_arguments = []
         elif len(step) == 4:
-            name, n_workers, max_size, actual_step = step
+            if isinstance(step[2], Iterable):
+                name, n_workers, additional_arguments, actual_step = step
+                max_size = self.max_size
+            else:
+                name, n_workers, max_size, actual_step = step
+        elif len(step) == 5:
+            name, n_workers, additional_arguments, max_size, actual_step = step
         else:
             raise Exception(
                 'Invalid Queued Pipeline Steps Shape. Please use one of the following: (step_name, n_workers, max_size, step), (step_name, n_workers, step), (step_name, step)')
 
-        return name, n_workers, max_size, actual_step
+        return name, n_workers, additional_arguments, max_size, actual_step
 
     def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
             DataContainer, ExecutionContext):
