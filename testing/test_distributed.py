@@ -26,10 +26,11 @@ class TestClientRequestWrapper(RequestWrapper):
 
     def get(self, url, method, headers, data):
         r = self.test_client.get(url, data=data, headers=headers)
-        return r
+        return r.json
 
 
 def test_rest_worker(tmpdir):
+    # Given
     app = RestWorker().get_app()
     app.config['UPLOAD_FOLDER'] = tmpdir
     app = app.test_client()
@@ -38,6 +39,7 @@ def test_rest_worker(tmpdir):
     model_pipeline = Pipeline([linear_model.LinearRegression()])
     model_pipeline = model_pipeline.fit(data_inputs, expected_outputs)
 
+    # When
     p = Pipeline([
         ClusteringWrapper(
             model_pipeline,
@@ -51,6 +53,7 @@ def test_rest_worker(tmpdir):
     ], cache_folder=tmpdir)
     outputs = p.transform(data_inputs)
 
+    # Then
     assert len(outputs) == len(data_inputs)
 
 

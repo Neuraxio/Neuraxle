@@ -25,7 +25,6 @@ from typing import List
 
 import numpy as np
 from flask import jsonify
-from werkzeug.utils import secure_filename
 
 from neuraxle.base import MetaStepMixin, BaseStep, NonFittableMixin, ExecutionContext
 from neuraxle.data_container import DataContainer
@@ -78,7 +77,6 @@ class RestApiScheduler(ParallelQueuedPipeline):
     def _will_process(self, data_container: DataContainer, context: ExecutionContext):
         data_container, context = ParallelQueuedPipeline._will_process(self, data_container, context)
         self._spawn(context)
-        context.pop()
 
         return data_container, context
 
