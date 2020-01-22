@@ -120,15 +120,24 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_max_size():
 
 
 def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments_max_size():
-    # Given
     n_workers = 4
     worker_arguments = [('multiply_by', 2) for _ in range(n_workers)]
-
     p = ParallelQueuedPipeline([
-        ('1', n_workers,  worker_arguments, 5, MultiplyByN()),
+        ('1', n_workers, worker_arguments, 5, MultiplyByN()),
     ], batch_size=10)
 
-    # When
+    p, outputs = p.fit_transform(list(range(100)), list(range(100)))
+
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
+
+
+def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments():
+    n_workers = 4
+    worker_arguments = [('multiply_by', 2) for _ in range(n_workers)]
+    p = ParallelQueuedPipeline([
+        ('1', n_workers, worker_arguments, MultiplyByN()),
+    ], batch_size=10, max_size=5)
+
     p, outputs = p.fit_transform(list(range(100)), list(range(100)))
 
     assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
