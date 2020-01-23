@@ -78,8 +78,8 @@ class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
             additional_worker_arguments=None,
             use_savers=False
     ):
-        if additional_worker_arguments is None:
-            additional_worker_arguments = []
+        if not additional_worker_arguments:
+            additional_worker_arguments = [[] for _ in range(n_workers)]
 
         MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
@@ -107,11 +107,10 @@ class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
 
         self.workers = []
         for _, worker_arguments in zip(range(self.n_workers), self.additional_worker_arguments):
-
             if self.use_threading:
-                p = Thread(target=target_function, args=(self, self.queue, context, worker_arguments))
+                p = Thread(target=target_function, args=(self, context, worker_arguments))
             else:
-                p = Process(target=target_function, args=(self, self.queue, context, worker_arguments))
+                p = Process(target=target_function, args=(self, context, worker_arguments))
 
             p.daemon = True
             p.start()
@@ -138,24 +137,25 @@ class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
 #    return wrapped_worker_function
 
 
-def worker_function(step, batches_to_process: Queue, context: ExecutionContext, additional_worker_arguments):
+def worker_function(step: QueueWorker, context: ExecutionContext, additional_worker_arguments):
     """
     Worker function that transforms the items inside the queue of items to process.
 
     :param step: step to transform
     :param additional_worker_arguments: any additional arguments that need to be passed to the workers
-    :param batches_to_process: multiprocessing queue
     :param context: execution context
     :type context: ExecutionContext
     :return:
     """
     additional_worker_arguments = tuple(
-        additional_worker_arguments[i: i + 2] for i in range(0, len(additional_worker_arguments), 2))
+        additional_worker_arguments[i: i + 2] for i in range(0, len(additional_worker_arguments), 2)
+    )
+
     for argument_name, argument_value in additional_worker_arguments:
         step.get_step().__dict__.update({argument_name: argument_value})
 
     while True:
-        task: QueuedPipelineTask = batches_to_process.get()
+        task: QueuedPipelineTask = step.queue.get()
         summary_id = task.data_container.summary_id
         data_container = step.handle_transform(task.data_container, context)
         data_container = data_container.set_summary_id(summary_id)
@@ -265,7 +265,6 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
 
     def _create_queue_worker(self, step: QueuedPipelineStepsTuple):
         name, n_workers, additional_worker_arguments, max_size, actual_step = self._get_step_params(step)
-        assert n_workers == len(additional_worker_arguments)
 
         return QueueWorker(
             actual_step,
@@ -300,6 +299,7 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
                 max_size = self.max_size
             else:
                 name, n_workers, max_size, actual_step = step
+                additional_arguments = []
         elif len(step) == 5:
             name, n_workers, additional_arguments, max_size, actual_step = step
         else:
