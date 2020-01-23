@@ -501,7 +501,7 @@ class QueueJoiner(ObservableQueue):
 
     def _join_step_results(self, data_containers):
         # reorder results by summary id
-        list(data_containers.data_inputs).sort(key=lambda dc: self.summary_ids.index(dc.summary_id))
+        data_containers.data_inputs.sort(key=lambda dc: self.summary_ids.index(dc.summary_id))
 
         step_results = ListDataContainer.empty()
         for data_container in data_containers.data_inputs:
