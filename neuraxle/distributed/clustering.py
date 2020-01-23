@@ -59,26 +59,46 @@ class RestApiScheduler(ParallelQueuedPipeline):
             request = UrllibRequestWrapper()
         self.request = request
         self.hosts = hosts
+
+        step_name = 'rest'
+        n_workers = len(hosts)
+        additional_arguments = [('url', host) for host in hosts]
+        step = ClusteringRestApiCaller(url=None, request=request)
+
         ParallelQueuedPipeline.__init__(
             self,
-            steps=[('rest', ClusteringRestApiCaller(url=host, request=request)) for host in hosts],
+            steps=[(step_name, n_workers, additional_arguments, step)],
             batch_size=batch_size,
             n_workers_per_step=n_workers_per_step,
             max_size=max_size,
             data_joiner=data_joiner
         )
 
-    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        data_container = ParallelQueuedPipeline._did_process(self, data_container, context)
-        self._kill(context)
-
-        return data_container
-
     def _will_process(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Spawn a worker for each host at the beginning of the processing.
+
+        :param data_container:
+        :param context:
+        :return:
+        """
         data_container, context = ParallelQueuedPipeline._will_process(self, data_container, context)
         self._spawn(context)
 
         return data_container, context
+
+    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Kill all clusters at the end of the processing.
+
+        :param data_container:
+        :param context:
+        :return:
+        """
+        data_container = ParallelQueuedPipeline._did_process(self, data_container, context)
+        self._kill(context)
+
+        return data_container
 
     def _kill(self, context: ExecutionContext):
         # TODO: what is there to kill here ?

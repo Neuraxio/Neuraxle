@@ -29,7 +29,7 @@ class TestClientRequestWrapper(RequestWrapper):
         return r.json
 
 
-def test_rest_worker(tmpdir):
+def test_clustering_wrapper(tmpdir):
     # Given
     app = RestWorker().get_app()
     app.config['UPLOAD_FOLDER'] = tmpdir
