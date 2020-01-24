@@ -28,7 +28,7 @@ from typing import Tuple, List, Union, Iterable
 
 from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin, NonFittableMixin
 from neuraxle.data_container import DataContainer, ListDataContainer
-from neuraxle.pipeline import Pipeline, CustomPipelineMixin
+from neuraxle.pipeline import Pipeline, CustomPipelineMixin, MiniBatchSequentialPipeline, Barrier, Joiner
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
 
@@ -162,19 +162,18 @@ def worker_function(step: QueueWorker, context: ExecutionContext, additional_wor
         step.notify(QueuedPipelineTask(step_name=step.name, data_container=data_container))
 
 
-# (step_name, n_workers, step)
-# (step_name, n_workers, max_size, step)
-# (step_name, step)
 QueuedPipelineStepsTuple = Union[
-    Tuple[str, int, BaseStep],
-    Tuple[str, int, int, BaseStep],
-    Tuple[str, int, List[Tuple], BaseStep],
-    Tuple[str, int, List[Tuple], BaseStep],
-    Tuple[str, BaseStep]
+    BaseStep,  # step
+    Tuple[int, BaseStep],  # (n_workers, step)
+    Tuple[str, BaseStep],  # (step_name, step)
+    Tuple[str, int, BaseStep],  # (step_name, n_workers, step)
+    Tuple[str, int, int, BaseStep],  # (step_name, n_workers, max_size, step)
+    Tuple[str, int, List[Tuple], BaseStep],  # (step_name, n_workers, additional_worker_arguments, step)
+    Tuple[str, int, List[Tuple], BaseStep]  # (step_name, n_workers, additional_worker_arguments, step)
 ]
 
 
-class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
+class BaseQueuedPipeline(MiniBatchSequentialPipeline):
     """
     Sub class of :class:`Pipeline`.
     Transform data in many pipeline steps at once in parallel in the pipeline using multiprocessing Queues.
@@ -190,27 +189,27 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
             ('step_b', Identity()),
         ], n_workers=1, batch_size=10, max_size=10)
 
-        # number of workers
+        # step name, number of workers, step
 
         p = QueuedPipeline([
             ('step_a', 1, Identity()),
             ('step_b', 1, Identity()),
         ], batch_size=10, max_size=10)
 
-        # number of workers, and max size
+        # step name, number of workers, and max size
 
         p = QueuedPipeline([
             ('step_a', 1, 10, Identity()),
             ('step_b', 1, 10, Identity()),
         ], batch_size=10)
 
-        # number of workers for each step, and additional argument for each worker
+        # step name, number of workers for each step, and additional argument for each worker
 
         p = QueuedPipeline([
             ('step_a', 1, [('host', 'host1'), ('host', 'host2')], 10, Identity())
         ], batch_size=10)
 
-        # number of workers for each step, additional argument for each worker, and max size
+        # step name, number of workers for each step, additional argument for each worker, and max size
 
         p = QueuedPipeline([
             ('step_a', 1, [('host', 'host1'), ('host', 'host2')], 10, Identity())
@@ -245,7 +244,7 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
         self.n_workers_per_step = n_workers_per_step
         self.use_threading = use_threading
 
-        Pipeline.__init__(self, steps=self._initialize_steps_as_tuple(steps), cache_folder=cache_folder)
+        MiniBatchSequentialPipeline.__init__(self, steps=self._initialize_steps_as_tuple(steps), cache_folder=cache_folder)
 
     def _initialize_steps_as_tuple(self, steps):
         """
@@ -260,6 +259,8 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
         for step in steps:
             queue_worker = self._create_queue_worker(step)
             steps_as_tuple.append((queue_worker.name, queue_worker))
+
+        steps_as_tuple.append(('queue_joiner', QueueJoiner(batch_size=self.batch_size)))
 
         return steps_as_tuple
 
@@ -284,10 +285,20 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
         :return: return name, n_workers, max_size, actual_step
         :rtype: tuple(str, int, int, BaseStep)
         """
-        if len(step) == 2:
-            name, actual_step = step
+        if isinstance(step, BaseStep):
+            actual_step = step
+            name = step.name
             max_size = self.max_size
             n_workers = self.n_workers_per_step
+            additional_arguments = []
+        elif len(step) == 2:
+            if isinstance(step[0], str):
+                name, actual_step = step
+                n_workers = self.n_workers_per_step
+            else:
+                n_workers, actual_step = step
+                name = step.name
+            max_size = self.max_size
             additional_arguments = []
         elif len(step) == 3:
             name, n_workers, actual_step = step
@@ -303,15 +314,23 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
         elif len(step) == 5:
             name, n_workers, additional_arguments, max_size, actual_step = step
         else:
-            raise Exception(
-                'Invalid Queued Pipeline Steps Shape. Please use one of the following: (step_name, n_workers, max_size, step), (step_name, n_workers, step), (step_name, step)')
+            raise Exception('Invalid Queued Pipeline Steps Shape.')
 
         return name, n_workers, additional_arguments, max_size, actual_step
 
-    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            DataContainer, ExecutionContext):
+    def setup(self) -> 'BaseStep':
         """
-        Start the :class:`QueueWorker` for each step before transforming the data container.
+        Connect the queued workers together so that the data can correctly flow through the pipeline.
+
+        :return: step
+        :rtype: BaseStep
+        """
+        self.connect_queued_pipeline()
+        return self
+
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
+        """
+        Fit transform sequentially if any step is fittable. Otherwise transform in parallel.
 
         :param data_container: data container
         :type data_container: DataContainer
@@ -319,9 +338,16 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
         :type context: ExecutionContext
         :return:
         """
-        self.connect_queue_workers()
+        all_steps_are_not_fittable = True
+        for _, step in self[:-1]:
+            if not isinstance(step.get_step(), NonFittableMixin):
+                all_steps_are_not_fittable = False
 
-        return data_container, context
+        if all_steps_are_not_fittable:
+            data_container, context = self._will_transform_data_container(data_container, context)
+            return self, self._transform_data_container(data_container, context)
+
+        return super()._fit_transform_data_container(data_container, context)
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -334,18 +360,18 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
         :return: data container
         """
         data_container_batches = data_container.convolved_1d(stride=self.batch_size, kernel_size=self.batch_size)
+
         n_batches = self.get_n_batches(data_container)
+        self[-1].set_n_batches(n_batches)
 
-        queue_joiner = QueueJoiner(n_batches=n_batches)
-        self.connect_queue_joiner(queue_joiner)
-
-        for i, (name, step) in enumerate(self):
+        for i, (name, step) in enumerate(self[:-1]):
             step.start(context)
 
         for data_container_batch in data_container_batches:
-            self.notify_new_batch_to_process(data_container=data_container_batch, queue_joiner=queue_joiner)
+            self.send_batch_to_queued_pipeline(data_container=data_container_batch)
 
-        return queue_joiner.join(original_data_container=data_container)
+        data_container = self[-1].join(original_data_container=data_container)
+        return data_container
 
     def _did_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -358,25 +384,48 @@ class BaseQueuedPipeline(NonFittableMixin, CustomPipelineMixin, Pipeline):
         :return: data container
         :rtype: DataContainer
         """
+        return self.data_joiner.handle_transform(data_container, context)
+
+    def teardown(self) -> 'BaseStep':
+        """
+        Stop all workers on teardown.
+
+        :return:
+        """
         for name, step in self:
             step.stop()
 
-        return self.data_joiner.handle_transform(data_container, context)
+        return self
 
     @abstractmethod
-    def get_n_batches(self, data_container):
+    def get_n_batches(self, data_container) -> int:
+        """
+        Get the total number of batches that the queue joiner is supposed to receive.
+
+        :param data_container: data container to transform
+        :type data_container: DataContainer
+        :return:
+        """
         raise NotImplementedError()
 
     @abstractmethod
-    def connect_queue_workers(self):
+    def connect_queued_pipeline(self):
+        """
+        Connect all the queued workers together so that the data can flow through each step.
+
+        :return:
+        """
         raise NotImplementedError()
 
     @abstractmethod
-    def connect_queue_joiner(self, queue_joiner):
-        raise NotImplementedError()
+    def send_batch_to_queued_pipeline(self, data_container):
+        """
+        Send batch to process to queued pipeline.
+        It is blocking if there is no more space available in the multiprocessing queues.
 
-    @abstractmethod
-    def notify_new_batch_to_process(self, data_container, queue_joiner):
+        :param data_container:
+        :return:
+        """
         raise NotImplementedError()
 
 
@@ -396,17 +445,14 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
     def get_n_batches(self, data_container):
         return data_container.get_n_batches(self.batch_size)
 
-    def connect_queue_workers(self):
+    def connect_queued_pipeline(self):
         for i, (name, step) in enumerate(self):
             if i != 0:
                 self[i - 1].subscribe(step)
 
-    def connect_queue_joiner(self, queue_joiner: 'QueueJoiner'):
-        self[-1].subscribe(queue_joiner)
-
-    def notify_new_batch_to_process(self, data_container: DataContainer, queue_joiner: 'QueueJoiner'):
+    def send_batch_to_queued_pipeline(self, data_container: DataContainer):
         data_container = data_container.set_summary_id(data_container.hash_summary())
-        queue_joiner.summary_ids.append(data_container.summary_id)
+        self[-1].summary_ids.append(data_container.summary_id)
         self[0].put(QueuedPipelineTask(step_name=self[0].name, data_container=data_container.copy()))
 
 
@@ -426,22 +472,18 @@ class ParallelQueuedPipeline(BaseQueuedPipeline):
     def get_n_batches(self, data_container):
         return data_container.get_n_batches(self.batch_size) * len(self)
 
-    def connect_queue_workers(self):
-        # nothing to do here, queue workers don't listen to each other in a ParallelQueuedPipeline
-        pass
+    def connect_queued_pipeline(self):
+        for i, (name, step) in enumerate(self[:-1]):
+            step.subscribe(self[-1])
 
-    def connect_queue_joiner(self, queue_joiner: 'QueueJoiner'):
-        for i, (name, step) in enumerate(self):
-            step.subscribe(queue_joiner)
-
-    def notify_new_batch_to_process(self, data_container, queue_joiner: 'QueueJoiner'):
-        for i, (name, step) in enumerate(self):
+    def send_batch_to_queued_pipeline(self, data_container):
+        for i, (name, step) in enumerate(self[:-1]):
             data_container = data_container.set_summary_id(data_container.hash_summary())
-            queue_joiner.summary_ids.append(data_container.summary_id)
+            self[-1].summary_ids.append(data_container.summary_id)
             step.put(QueuedPipelineTask(step_name=step.name, data_container=data_container.copy()))
 
 
-class QueueJoiner(ObservableQueue):
+class QueueJoiner(ObservableQueue, Joiner):
     """
     Observe the results of the queue worker of type :class:`QueueWorker`.
     Synchronize all of the workers together.
@@ -453,13 +495,17 @@ class QueueJoiner(ObservableQueue):
         :class:`DataContainer`
     """
 
-    def __init__(self, n_batches):
+    def __init__(self, batch_size, n_batches=None):
         self.mutex_processing_in_progress = Lock()
         self.mutex_processing_in_progress.acquire()
         self.n_batches_left_to_do = n_batches
         self.summary_ids = []
         self.result = {}
+        Joiner.__init__(self, batch_size=batch_size)
         ObservableQueue.__init__(self, Queue())
+
+    def set_n_batches(self, n_batches):
+        self.n_batches_left_to_do = n_batches
 
     def join(self, original_data_container: DataContainer) -> DataContainer:
         """

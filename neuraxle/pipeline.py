@@ -169,8 +169,7 @@ class Pipeline(BasePipeline):
 
         return self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'Pipeline', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
         """
         After loading the last checkpoint, fit transform each pipeline steps
 
@@ -375,8 +374,8 @@ class MiniBatchSequentialPipeline(CustomPipelineMixin, Pipeline):
         :class:`ExecutionContext`
     """
 
-    def __init__(self, steps: NamedTupleList, batch_size=None):
-        Pipeline.__init__(self, steps)
+    def __init__(self, steps: NamedTupleList, batch_size=None, cache_folder=None):
+        Pipeline.__init__(self, steps, cache_folder=cache_folder)
         CustomPipelineMixin.__init__(self)
         self.__validate_barriers_batch_size(batch_size)
         self.__patch_missing_barrier(batch_size)
@@ -416,7 +415,7 @@ class MiniBatchSequentialPipeline(CustomPipelineMixin, Pipeline):
 
         self._refresh_steps()
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Transform all sub pipelines splitted by the Barrier steps.
 
@@ -438,7 +437,7 @@ class MiniBatchSequentialPipeline(CustomPipelineMixin, Pipeline):
 
         return data_container
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'MiniBatchSequentialPipeline':
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'Pipeline':
         """
         Fit all sub pipelines splitted by the Barrier steps.
 
@@ -470,7 +469,7 @@ class MiniBatchSequentialPipeline(CustomPipelineMixin, Pipeline):
 
         return self
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> Tuple['MiniBatchSequentialPipeline', DataContainer]:
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
         """
         Transform all sub pipelines splitted by the Barrier steps.
 
@@ -511,9 +510,7 @@ class MiniBatchSequentialPipeline(CustomPipelineMixin, Pipeline):
         sub_pipelines: List[MiniBatchSequentialPipeline] = self.split(Barrier)
         for sub_pipeline in sub_pipelines:
             if not sub_pipeline.ends_with(Barrier):
-                raise Exception(
-                    'At least one Barrier step needs to be at the end of a streaming pipeline.'
-                )
+                raise Exception('At least one Barrier step needs to be at the end of a streaming pipeline.')
 
         return sub_pipelines
 
