@@ -21,41 +21,79 @@ Neuraxle steps for streaming data in parallel in the pipeline
 
 """
 from abc import abstractmethod
-from multiprocessing import Queue, Lock
+from multiprocessing import Queue
 from multiprocessing.context import Process
 from threading import Thread
 from typing import Tuple, List, Union, Iterable
 
 from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin, NonFittableMixin
 from neuraxle.data_container import DataContainer, ListDataContainer
-from neuraxle.pipeline import Pipeline, CustomPipelineMixin, MiniBatchSequentialPipeline, Barrier, Joiner
+from neuraxle.pipeline import Pipeline, CustomPipelineMixin, MiniBatchSequentialPipeline, Joiner
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
 
-class ObservableQueue:
+class ObservableQueueMixin:
+    """
+    A class to represent a step that can put items in a queue.
+    It can also notify other queues that have subscribed to him using subscribe.
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`QueuedPipelineTask`,
+        :class:`QueueWorker`,
+        :class:`BaseQueuedPipeline`,
+        :class:`ParallelQueuedPipeline`,
+        :class:`SequentialQueuedPipeline`
+    """
     def __init__(self, queue):
+        BaseStep.__init__(self)
         self.queue = queue
         self.observers = []
 
-    def subscribe(self, queue_worker: 'ObservableQueue') -> 'ObservableQueue':
+    def subscribe(self, queue_worker: 'ObservableQueueMixin') -> 'ObservableQueueMixin':
+        """
+        Subscribe a queue worker.
+        The subscribed queue workers get notified when :func:`~neuraxle.distributed.streaming.ObservableQueueMixin.notify` is called.
+        """
         self.observers.append(queue_worker.queue)
         return self
 
-    def put(self, value):
-        self.queue.put(value)
+    def get(self) -> 'QueuedPipelineTask':
+        """
+        Get last item in queue.
+        """
+        return self.queue.get()
+
+    def put(self, value: DataContainer):
+        """
+        Put a queued pipeline task in queue.
+        """
+        self.queue.put(QueuedPipelineTask(step_name=self.name, data_container=value.copy()))
 
     def notify(self, value):
+        """
+        Notify all subscribed queue workers
+        """
         for observer in self.observers:
             observer.put(value)
 
 
 class QueuedPipelineTask(object):
-    def __init__(self, step_name, data_container):
+    """
+    Data object to contain the tasks processed by the queued pipeline.
+
+    .. seealso::
+        :class:`QueueWorker`,
+        :class:`BaseQueuedPipeline`,
+        :class:`ParallelQueuedPipeline`,
+        :class:`SequentialQueuedPipeline`
+    """
+    def __init__(self,  data_container, step_name=None):
         self.step_name = step_name
         self.data_container = data_container
 
 
-class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
+class QueueWorker(MetaStepMixin, ObservableQueueMixin, BaseStep):
     """
     Start multiple Process or Thread that process items from the queue of batches to process.
     It is both an observable, and observer.
@@ -81,9 +119,9 @@ class QueueWorker(ObservableQueue, MetaStepMixin, BaseStep):
         if not additional_worker_arguments:
             additional_worker_arguments = [[] for _ in range(n_workers)]
 
-        MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
-        ObservableQueue.__init__(self, Queue(maxsize=max_size))
+        ObservableQueueMixin.__init__(self, Queue(maxsize=max_size))
+        MetaStepMixin.__init__(self, wrapped)
 
         self.use_threading: bool = use_threading
         self.workers: List[Process] = []
@@ -155,7 +193,7 @@ def worker_function(step: QueueWorker, context: ExecutionContext, additional_wor
         step.get_step().__dict__.update({argument_name: argument_value})
 
     while True:
-        task: QueuedPipelineTask = step.queue.get()
+        task: QueuedPipelineTask = step.get()
         summary_id = task.data_container.summary_id
         data_container = step.handle_transform(task.data_container, context)
         data_container = data_container.set_summary_id(summary_id)
@@ -416,10 +454,11 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
     @abstractmethod
     def send_batch_to_queued_pipeline(self, data_container):
         """
-        Send batch to process to queued pipeline.
-        It is blocking if there is no more space available in the multiprocessing queues.
+        Send batches to queued pipeline. It is blocking if there is no more space available in the multiprocessing queues.
+        Workers might return batches in a different order, but the queue joiner will reorder them at the end.
+        The queue joiner will use the summary ids to reorder all of the received batches.
 
-        :param data_container:
+        :param data_container: data container batch
         :return:
         """
         raise NotImplementedError()
@@ -438,17 +477,34 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
         :class:`Observable`
     """
 
-    def get_n_batches(self, data_container):
+    def get_n_batches(self, data_container) -> int:
+        """
+        Get the number of batches to process.
+
+        :param data_container: data container to transform
+        :return: number of batches
+        """
         return data_container.get_n_batches(self.batch_size)
 
     def connect_queued_pipeline(self):
+        """
+        Sequentially connect of the queued workers.
+
+        :return:
+        """
         for i, (name, step) in enumerate(self[1:]):
             self[i].subscribe(step)
 
     def send_batch_to_queued_pipeline(self, data_container: DataContainer):
+        """
+        Send batches to process to the first queued worker.
+
+        :param data_container: data container batch
+        :return:
+        """
         data_container = data_container.set_summary_id(data_container.hash_summary())
         self[-1].summary_ids.append(data_container.summary_id)
-        self[0].put(QueuedPipelineTask(step_name=self[0].name, data_container=data_container.copy()))
+        self[0].put(data_container)
 
 
 class ParallelQueuedPipeline(BaseQueuedPipeline):
@@ -465,20 +521,36 @@ class ParallelQueuedPipeline(BaseQueuedPipeline):
     """
 
     def get_n_batches(self, data_container):
+        """
+        Get the number of batches to process by the queue joiner.
+
+        :return:
+        """
         return data_container.get_n_batches(self.batch_size) * (len(self) - 1)
 
     def connect_queued_pipeline(self):
+        """
+        Connect the queue joiner to all of the queued workers to process data in parallel.
+
+        :return:
+        """
         for name, step in self[:-1]:
             step.subscribe(self[-1])
 
     def send_batch_to_queued_pipeline(self, data_container):
+        """
+        Send batches to process to all of the queued workers.
+
+        :param data_container: data container batch
+        :return:
+        """
         for name, step in self[:-1]:
             data_container = data_container.set_summary_id(data_container.hash_summary())
             self[-1].summary_ids.append(data_container.summary_id)
-            step.put(QueuedPipelineTask(step_name=step.name, data_container=data_container.copy()))
+            step.put(data_container)
 
 
-class QueueJoiner(ObservableQueue, Joiner):
+class QueueJoiner(Joiner, ObservableQueueMixin):
     """
     Observe the results of the queue worker of type :class:`QueueWorker`.
     Synchronize all of the workers together.
@@ -491,13 +563,11 @@ class QueueJoiner(ObservableQueue, Joiner):
     """
 
     def __init__(self, batch_size, n_batches=None):
-        self.mutex_processing_in_progress = Lock()
-        self.mutex_processing_in_progress.acquire()
         self.n_batches_left_to_do = n_batches
         self.summary_ids = []
         self.result = {}
         Joiner.__init__(self, batch_size=batch_size)
-        ObservableQueue.__init__(self, Queue())
+        ObservableQueueMixin.__init__(self, Queue())
 
     def set_n_batches(self, n_batches):
         self.n_batches_left_to_do = n_batches

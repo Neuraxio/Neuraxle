@@ -26,6 +26,19 @@ class MultiplyBy(NonFittableMixin, BaseStep):
         return data_inputs / self.multiply_by
 
 
+def test_queued_pipeline_with_step_incomplete_batch():
+    p = SequentialQueuedPipeline([
+        MultiplyBy(2),
+        MultiplyBy(2),
+        MultiplyBy(2),
+        MultiplyBy(2)
+    ], batch_size=10, n_workers_per_step=1, max_size=5)
+
+    p, outputs = p.fit_transform(list(range(15)), list(range(15)))
+
+    assert np.array_equal(outputs, np.array(range(15)) * 2 * 2 * 2 * 2)
+
+
 def test_queued_pipeline_with_step():
     p = SequentialQueuedPipeline([
         MultiplyBy(2),
