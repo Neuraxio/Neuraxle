@@ -169,7 +169,8 @@ class Pipeline(BasePipeline):
 
         return self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'Pipeline', DataContainer):
         """
         After loading the last checkpoint, fit transform each pipeline steps
 
@@ -355,7 +356,55 @@ class CustomPipelineMixin:
         return new_self, data_container.data_inputs
 
 
-class MiniBatchSequentialPipeline(CustomPipelineMixin, Pipeline):
+class CustomHandleMethodsMixin:
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_transform_data_container(data_container, context)
+
+        data_container = self.transform_data_container(data_container, context)
+
+        data_container = self._did_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        return data_container
+
+    @abstractmethod
+    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        raise NotImplementedError()
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_fit_data_container(data_container, context)
+
+        new_self = self.fit_data_container(data_container, context)
+
+        data_container = self._did_fit(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        return new_self
+
+    @abstractmethod
+    def fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+        raise NotImplementedError()
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_fit(data_container, context)
+
+        new_self, data_container = self.fit_transform_data_container(data_container, context)
+
+        data_container = self._did_fit_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        return new_self, data_container
+
+    @abstractmethod
+    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[BaseStep, DataContainer]:
+        raise NotImplementedError()
+
+
+class MiniBatchSequentialPipeline(CustomHandleMethodsMixin, CustomPipelineMixin, Pipeline):
     """
     Mini Batch Sequential Pipeline class to create a pipeline processing data inputs in batch.
     Provide a default batch size :
@@ -377,6 +426,7 @@ class MiniBatchSequentialPipeline(CustomPipelineMixin, Pipeline):
     def __init__(self, steps: NamedTupleList, batch_size=None, cache_folder=None):
         Pipeline.__init__(self, steps, cache_folder=cache_folder)
         CustomPipelineMixin.__init__(self)
+        CustomHandleMethodsMixin.__init__(self)
         self.__validate_barriers_batch_size(batch_size)
         self.__patch_missing_barrier(batch_size)
         self.__patch_barriers_batch_size(batch_size)
@@ -415,7 +465,7 @@ class MiniBatchSequentialPipeline(CustomPipelineMixin, Pipeline):
 
         self._refresh_steps()
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Transform all sub pipelines splitted by the Barrier steps.
 
@@ -437,7 +487,7 @@ class MiniBatchSequentialPipeline(CustomPipelineMixin, Pipeline):
 
         return data_container
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'Pipeline':
+    def fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
         """
         Fit all sub pipelines splitted by the Barrier steps.
 
@@ -445,6 +495,9 @@ class MiniBatchSequentialPipeline(CustomPipelineMixin, Pipeline):
         :param context: execution context
         :return: data container
         """
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_transform_data_container(data_container, context)
+
         sub_pipelines = self._create_sub_pipelines()
         index_start = 0
 
@@ -467,9 +520,12 @@ class MiniBatchSequentialPipeline(CustomPipelineMixin, Pipeline):
             self.steps_as_tuple = new_self.steps_as_tuple
             index_start += len(sub_pipeline)
 
+        data_container = self._did_fit(data_container, context)
+        self._did_process(data_container, context)
+
         return self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
+    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[BaseStep, DataContainer]:
         """
         Transform all sub pipelines splitted by the Barrier steps.
 
@@ -477,6 +533,9 @@ class MiniBatchSequentialPipeline(CustomPipelineMixin, Pipeline):
         :param context: execution context
         :return: data container
         """
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_transform_data_container(data_container, context)
+
         sub_pipelines = self._create_sub_pipelines()
         index_start = 0
 
@@ -498,6 +557,9 @@ class MiniBatchSequentialPipeline(CustomPipelineMixin, Pipeline):
 
             self.steps_as_tuple = new_self.steps_as_tuple
             index_start += len(sub_pipeline)
+
+        data_container = self._did_fit_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
 
         return self, data_container
 

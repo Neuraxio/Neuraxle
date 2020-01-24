@@ -369,7 +369,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         self.is_initialized = True
         return self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
+    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
         """
         Fit transform sequentially if any step is fittable. Otherwise transform in parallel.
 
@@ -385,13 +385,13 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
                 all_steps_are_not_fittable = False
 
         if all_steps_are_not_fittable:
-            data_container = self._transform_data_container(data_container, context)
+            data_container = self.transform_data_container(data_container, context)
             data_container = self._did_transform(data_container, context)
             return self, data_container
 
-        return super()._fit_transform_data_container(data_container, context)
+        return super().fit_transform_data_container(data_container, context)
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Transform data container
 
