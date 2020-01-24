@@ -245,6 +245,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         self.use_threading = use_threading
 
         MiniBatchSequentialPipeline.__init__(self, steps=self._initialize_steps_as_tuple(steps), cache_folder=cache_folder)
+        self._refresh_steps()
 
     def _initialize_steps_as_tuple(self, steps):
         """
@@ -297,7 +298,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
                 n_workers = self.n_workers_per_step
             else:
                 n_workers, actual_step = step
-                name = step.name
+                name = actual_step.name
             max_size = self.max_size
             additional_arguments = []
         elif len(step) == 3:
@@ -325,7 +326,9 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :return: step
         :rtype: BaseStep
         """
-        self.connect_queued_pipeline()
+        if not self.is_initialized:
+            self.connect_queued_pipeline()
+        self.is_initialized = True
         return self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
@@ -344,8 +347,9 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
                 all_steps_are_not_fittable = False
 
         if all_steps_are_not_fittable:
-            data_container, context = self._will_transform_data_container(data_container, context)
-            return self, self._transform_data_container(data_container, context)
+            data_container = self._transform_data_container(data_container, context)
+            data_container = self._did_transform(data_container, context)
+            return self, data_container
 
         return super()._fit_transform_data_container(data_container, context)
 
@@ -364,7 +368,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         n_batches = self.get_n_batches(data_container)
         self[-1].set_n_batches(n_batches)
 
-        for i, (name, step) in enumerate(self[:-1]):
+        for name, step in self[:-1]:
             step.start(context)
 
         for data_container_batch in data_container_batches:
@@ -375,7 +379,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
     def _did_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
-        Stop all of the workers after transform.
+        Stop all of the workers after transform. Also, join the data using self.data_joiner.
 
         :param data_container: data container
         :type data_container: DataContainer
@@ -384,18 +388,10 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :return: data container
         :rtype: DataContainer
         """
-        return self.data_joiner.handle_transform(data_container, context)
-
-    def teardown(self) -> 'BaseStep':
-        """
-        Stop all workers on teardown.
-
-        :return:
-        """
-        for name, step in self:
+        for name, step in self[:-1]:
             step.stop()
 
-        return self
+        return self.data_joiner.handle_transform(data_container, context)
 
     @abstractmethod
     def get_n_batches(self, data_container) -> int:
@@ -446,9 +442,8 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
         return data_container.get_n_batches(self.batch_size)
 
     def connect_queued_pipeline(self):
-        for i, (name, step) in enumerate(self):
-            if i != 0:
-                self[i - 1].subscribe(step)
+        for i, (name, step) in enumerate(self[1:]):
+            self[i].subscribe(step)
 
     def send_batch_to_queued_pipeline(self, data_container: DataContainer):
         data_container = data_container.set_summary_id(data_container.hash_summary())
@@ -470,14 +465,14 @@ class ParallelQueuedPipeline(BaseQueuedPipeline):
     """
 
     def get_n_batches(self, data_container):
-        return data_container.get_n_batches(self.batch_size) * len(self)
+        return data_container.get_n_batches(self.batch_size) * (len(self) - 1)
 
     def connect_queued_pipeline(self):
-        for i, (name, step) in enumerate(self[:-1]):
+        for name, step in self[:-1]:
             step.subscribe(self[-1])
 
     def send_batch_to_queued_pipeline(self, data_container):
-        for i, (name, step) in enumerate(self[:-1]):
+        for name, step in self[:-1]:
             data_container = data_container.set_summary_id(data_container.hash_summary())
             self[-1].summary_ids.append(data_container.summary_id)
             step.put(QueuedPipelineTask(step_name=step.name, data_container=data_container.copy()))
