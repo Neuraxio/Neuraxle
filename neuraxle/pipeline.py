@@ -334,7 +334,7 @@ class CustomPipelineMixin:
         data_container.set_current_ids(current_ids)
 
         context = ExecutionContext(self.cache_folder, ExecutionMode.FIT_TRANSFORM)
-        new_self, data_container = self.handle_fit(data_container, context)
+        new_self = self.handle_fit(data_container, context)
 
         return new_self
 
@@ -374,7 +374,7 @@ class CustomHandleMethodsMixin:
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         data_container, context = self._will_process(data_container, context)
-        data_container, context = self._will_fit_data_container(data_container, context)
+        data_container, context = self._will_fit(data_container, context)
 
         new_self = self.fit_data_container(data_container, context)
 

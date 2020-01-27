@@ -51,12 +51,12 @@ class ObservableQueueMixin:
         self.queue = queue
         self.observers = []
 
-    def subscribe(self, queue_worker: 'ObservableQueueMixin') -> 'ObservableQueueMixin':
+    def subscribe(self, observer_queue_worker: 'ObservableQueueMixin') -> 'ObservableQueueMixin':
         """
         Subscribe a queue worker.
         The subscribed queue workers get notified when :func:`~neuraxle.distributed.streaming.ObservableQueueMixin.notify` is called.
         """
-        self.observers.append(queue_worker.queue)
+        self.observers.append(observer_queue_worker.queue)
         return self
 
     def get(self) -> 'QueuedPipelineTask':
@@ -202,11 +202,11 @@ class QueueWorker(MetaStepMixin, ObservableQueueMixin, BaseStep):
 #    return wrapped_worker_function
 
 
-def worker_function(step: QueueWorker, context: ExecutionContext, additional_worker_arguments):
+def worker_function(queue_worker: QueueWorker, context: ExecutionContext, additional_worker_arguments):
     """
     Worker function that transforms the items inside the queue of items to process.
 
-    :param step: step to transform
+    :param queue_worker: step to transform
     :param additional_worker_arguments: any additional arguments that need to be passed to the workers
     :param context: execution context
     :type context: ExecutionContext
@@ -217,14 +217,14 @@ def worker_function(step: QueueWorker, context: ExecutionContext, additional_wor
     )
 
     for argument_name, argument_value in additional_worker_arguments:
-        step.get_step().__dict__.update({argument_name: argument_value})
+        queue_worker.get_step().__dict__.update({argument_name: argument_value})
 
     while True:
-        task: QueuedPipelineTask = step.get()
+        task: QueuedPipelineTask = queue_worker.get()
         summary_id = task.data_container.summary_id
-        data_container = step.handle_transform(task.data_container, context)
+        data_container = queue_worker.handle_transform(task.data_container, context)
         data_container = data_container.set_summary_id(summary_id)
-        step.notify(QueuedPipelineTask(step_name=step.name, data_container=data_container))
+        queue_worker.notify(QueuedPipelineTask(step_name=queue_worker.name, data_container=data_container))
 
 
 QueuedPipelineStepsTuple = Union[
@@ -538,7 +538,7 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
         self[0].put(data_container)
 
 
-class ParallelQueuedPipeline(BaseQueuedPipeline):
+class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
     """
     Using :class:`QueueWorker`, run all steps in parallel using QueueWorkers.
 
@@ -626,6 +626,7 @@ class QueueJoiner(Joiner, ObservableQueueMixin):
             self.result[step_name].append_data_container(task.data_container)
 
         data_containers = self._join_all_step_results()
+        self.result = {}
         return original_data_container.set_data_inputs(data_containers)
 
     def _join_all_step_results(self):
