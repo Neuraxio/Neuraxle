@@ -33,7 +33,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from enum import Enum
-from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable
+from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Optional
 
 from joblib import dump, load
 from sklearn.base import BaseEstimator
@@ -965,6 +965,11 @@ class BaseStep(ABC):
 
         return self
 
+    def get_step_by_name(self, name):
+        if self.name == name:
+            return self
+        return None
+
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
@@ -1118,6 +1123,7 @@ class BaseStep(ABC):
         :return: (data container, execution context)
         :rtype: (DataContainer, ExecutionContext)
         """
+        self.setup()
         return data_container, context
 
     def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -1611,6 +1617,12 @@ class MetaStepMixin:
     ):
         self.wrapped: BaseStep = wrapped
 
+        if not hasattr(self, 'savers'):
+            warnings.warn('Please initialize Mixins in the reverse order. MetaStepMixin should be initialized after BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers.'.format(self.wrapped.name))
+            self.savers = [MetaStepJoblibStepSaver()]
+        else:
+            self.savers.append(MetaStepJoblibStepSaver())
+
     def setup(self) -> BaseStep:
         """
         Initialize step before it runs. Also initialize the wrapped step.
@@ -1808,8 +1820,8 @@ class MetaStepMixin:
         return self, data_inputs
 
     def fit(self, data_inputs, expected_outputs):
-        self.wrapped, data_inputs = self.wrapped.fit(data_inputs, expected_outputs)
-        return self, data_inputs
+        self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
+        return self
 
     def transform(self, data_inputs):
         data_inputs = self.wrapped.transform(data_inputs)
@@ -1849,6 +1861,10 @@ class MetaStepMixin:
         self.wrapped = self.wrapped.apply_method(method, *kargs, **kwargs)
         return self
 
+    def get_step_by_name(self, name):
+        if self.wrapped.name == name:
+            return self.wrapped
+        return self.wrapped.get_step_by_name(name)
 
     def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
         """
@@ -1889,6 +1905,72 @@ class MetaStepMixin:
         return output
 
 
+class MetaStepJoblibStepSaver(JoblibStepSaver):
+    """
+    Custom saver for meta step mixin.
+    """
+    def __init__(self):
+        JoblibStepSaver.__init__(self)
+
+    def save_step(self, step: 'MetaStepMixin', context: ExecutionContext) -> MetaStepMixin:
+        """
+        Save MetaStepMixin.
+
+        #. Save wrapped step.
+        #. Strip wrapped step form the meta step mixin.
+        #. Save meta step with wrapped step savers.
+
+        :param step: meta step to save
+        :type step: MetaStepMixin
+        :param context: execution context
+        :type context: ExecutionContext
+        :return:
+        """
+        # First, save the wrapped step savers
+        wrapped_step_savers = []
+        if step.wrapped.should_save():
+            wrapped_step_savers.extend(step.wrapped.get_savers())
+        else:
+            wrapped_step_savers.append(None)
+
+        # Second, save the wrapped step
+        step.wrapped.save(context)
+
+        step.wrapped_step_name_and_savers = (step.wrapped.name, wrapped_step_savers)
+
+        # Third, strip the wrapped step from the meta step
+        del step.wrapped
+
+        return step
+
+    def load_step(self, step: 'MetaStepMixin', context: ExecutionContext) -> 'MetaStepMixin':
+        """
+        Load MetaStepMixin.
+
+        #. Loop through all of the sub steps savers, and only load the sub steps that have been saved.
+        #. Refresh steps
+
+        :param step: step to load
+        :type step: BaseStep
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: loaded truncable steps
+        :rtype: TruncableSteps
+        """
+        step_name, savers = step.wrapped_step_name_and_savers
+
+        if savers is None:
+            # keep wrapped step as it is if it hasn't been saved
+            pass
+        else:
+            # load each sub step with their savers
+            sub_step_to_load = Identity(name=step_name, savers=savers)
+            sub_step = sub_step_to_load.load(context)
+            step.wrapped = sub_step
+
+        return step
+
+
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
 
 
@@ -1917,19 +1999,13 @@ class ForceAlwaysHandleMixin:
         raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
 
     def transform(self, data_inputs) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Transform method is not supported for {0}, because it inherits from ForceAlwaysHandleMixin. Please use handle_transform instead.'.format(
-                self.name))
+        raise Exception('Transform method is not supported for {0}, because it inherits from ForceAlwaysHandleMixin. Please use handle_transform instead.'.format(self.name))
 
     def fit(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Fit method is not supported for {0}, because it inherits from ForceAlwaysHandleMixin. Please use handle_fit instead.'.format(
-                self.name))
+        raise Exception('Fit method is not supported for {0}, because it inherits from ForceAlwaysHandleMixin. Please use handle_fit instead.'.format(self.name))
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Fit transform method is not supported for {0}, because it inherits from ForceAlwaysHandleMixin. Please use handle_fit_transform instead.'.format(
-                self.name))
+        raise Exception('Fit transform method is not supported for {0}, because it inherits from ForceAlwaysHandleMixin. Please use handle_fit_transform instead.'.format(self.name))
 
 
 class NonFittableMixin:
@@ -2197,6 +2273,17 @@ class TruncableSteps(BaseStep, ABC):
             step.apply_method(method, *kargs, **kwargs)
 
         return self
+
+    def get_step_by_name(self, name):
+        for step in self.values():
+            if step.name == name:
+                return step
+
+            found_step = step.get_step_by_name(name)
+            if found_step is not None:
+                return found_step
+
+        return None
 
     def _wrap_non_base_steps(self, steps_as_tuple: List) -> NamedTupleList:
         """

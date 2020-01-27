@@ -69,7 +69,7 @@ def create_test_case(di, eo, steps, expected_tape):
 def create_test_cases():
     data_inputs = np.ones((1, 1))
     expected_outputs = np.ones((1, 1))
-    dc = DataContainer(current_ids=range(len(data_inputs)), data_inputs=data_inputs, expected_outputs=expected_outputs)
+    dc = DataContainer(data_inputs=data_inputs, current_ids=range(len(data_inputs)), expected_outputs=expected_outputs)
 
     tape = TapeCallbackFunction()
     tape_fit = TapeCallbackFunction()

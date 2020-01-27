@@ -59,8 +59,8 @@ class BaseValidation(MetaStepMixin, BaseStep, ABC):
         :param scoring_function: scoring function with two arguments (y_true, y_pred)
         :type scoring_function: Callable
         """
-        MetaStepMixin.__init__(self)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self)
         self.scoring_function = scoring_function
 
 
@@ -108,8 +108,9 @@ class ValidationSplitWrapper(BaseValidation):
         :param test_size: ratio for test size between 0 and 1
         :param scoring_function: scoring function with two arguments (y_true, y_pred)
         """
-        MetaStepMixin.__init__(self, wrapped)
         BaseStep.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
+
         self.run_validation_split_in_test_mode = run_validation_split_in_test_mode
         self.test_size = test_size
         self.scoring_function = scoring_function
@@ -126,7 +127,7 @@ class ValidationSplitWrapper(BaseValidation):
         :return: fitted self
         """
         new_self, results_data_container = self._fit_transform_data_container(data_container, context)
-        return new_self, data_container
+        return new_self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
@@ -140,22 +141,19 @@ class ValidationSplitWrapper(BaseValidation):
         """
         train_data_container, validation_data_container = self.split_data_container(data_container)
 
-        self.wrapped = self.wrapped.handle_fit(train_data_container, context.push(self.wrapped))
-
-        results_data_container = self.wrapped.handle_transform(train_data_container, context.push(self.wrapped))
+        self.wrapped, results_data_container = self.wrapped.handle_fit_transform(train_data_container, context.push(self.wrapped))
 
         self._update_scores_train(results_data_container.data_inputs, results_data_container.expected_outputs)
 
-        if self.run_validation_split_in_test_mode:
-            self.set_train(False)
-
+        self.set_train(False)
         results_data_container = self.wrapped.handle_transform(validation_data_container, context.push(self.wrapped))
-
         self.set_train(True)
 
         self._update_scores_validation(results_data_container.data_inputs, results_data_container.expected_outputs)
 
+        self.apply('toggle_metrics')
         data_container = self.wrapped.handle_transform(data_container, context.push(self.wrapped))
+        self.apply('toggle_metrics')
 
         return self, data_container
 
@@ -221,6 +219,12 @@ class ValidationSplitWrapper(BaseValidation):
     def get_score(self):
         return self.scores_validation_mean
 
+    def get_score_validation(self):
+        return self.scores_validation_mean
+
+    def get_score_train(self):
+        return self.scores_validation_mean
+
     def split_data_container(self, data_container) -> Tuple[DataContainer, DataContainer]:
         """
         Split data container into a training set, and a validation set.
@@ -234,20 +238,14 @@ class ValidationSplitWrapper(BaseValidation):
             self.split(data_container.data_inputs, data_container.expected_outputs)
 
         train_ids = self.train_split(data_container.current_ids)
-        train_data_container = DataContainer(
-            summary_id=data_container.summary_id,
-            current_ids=train_ids,
-            data_inputs=train_data_inputs,
-            expected_outputs=train_expected_outputs
-        )
+        train_data_container = DataContainer(data_inputs=train_data_inputs, current_ids=train_ids,
+                                             summary_id=data_container.summary_id,
+                                             expected_outputs=train_expected_outputs)
 
         validation_ids = self.validation_split(data_container.current_ids)
-        validation_data_container = DataContainer(
-            summary_id=data_container.summary_id,
-            current_ids=validation_ids,
-            data_inputs=validation_data_inputs,
-            expected_outputs=validation_expected_outputs
-        )
+        validation_data_container = DataContainer(data_inputs=validation_data_inputs, current_ids=validation_ids,
+                                                  summary_id=data_container.summary_id,
+                                                  expected_outputs=validation_expected_outputs)
 
         return train_data_container, validation_data_container
 

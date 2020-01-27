@@ -35,7 +35,7 @@ from sklearn.metrics import r2_score
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 
-from neuraxle.api.flask import FlaskRestApiWrapper, JSONDataBodyDecoder, JSONDataResponseEncoder
+from neuraxle.rest.flask import FlaskRestApiWrapper, JSONDataBodyDecoder, JSONDataResponseEncoder
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.sklearn import RidgeModelStacking
 from neuraxle.union import AddFeatures
