@@ -96,11 +96,11 @@ class EpochRepeater(MetaStepMixin, BaseStep):
         :class:`BaseStep`
     """
 
-    def __init__(self, wrapped, epochs, fit_only=False, repeat_in_test_mode=False):
+    def __init__(self, wrapped, epochs, train_only=True, repeat_in_test_mode=False):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         self.repeat_in_test_mode = repeat_in_test_mode
-        self.fit_only = fit_only
+        self.train_only = train_only
         self.epochs = epochs
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
@@ -114,7 +114,7 @@ class EpochRepeater(MetaStepMixin, BaseStep):
         :return: (fitted self, data container)
         :rtype: (BaseStep, DataContainer)
         """
-        if not self.fit_only:
+        if self._should_repeat():
             for _ in range(self.epochs - 1):
                 self.wrapped = self.wrapped.handle_fit(data_container.copy(), context)
 
@@ -129,9 +129,8 @@ class EpochRepeater(MetaStepMixin, BaseStep):
         :param expected_outputs: expected_outputs to fit on
         :return: fitted self
         """
-        if not self.fit_only:
-            epochs = self._get_epochs()
-            for _ in range(epochs):
+        if self._should_repeat():
+            for _ in range(self.epochs):
                 self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
 
         self.wrapped, outputs = self.wrapped.fit_transform(data_inputs, expected_outputs)
@@ -149,10 +148,10 @@ class EpochRepeater(MetaStepMixin, BaseStep):
         :return: (fitted self, data container)
         :rtype: (BaseStep, DataContainer)
         """
-        epochs = self._get_epochs()
 
-        for _ in range(epochs):
-            self.wrapped = self.wrapped.handle_fit(data_container.copy(), context)
+        if self._should_repeat():
+            for _ in range(self.epochs):
+                self.wrapped = self.wrapped.handle_fit(data_container.copy(), context)
         return self
 
     def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
@@ -163,17 +162,12 @@ class EpochRepeater(MetaStepMixin, BaseStep):
         :param expected_outputs: expected_outputs to fit on
         :return: fitted self
         """
-        epochs = self._get_epochs()
-
-        for _ in range(epochs):
+        for _ in range(self.epochs):
             self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
         return self
 
-    def _get_epochs(self):
-        epochs = self.epochs
-        if self._should_repeat_fit():
-            epochs = 1
-        return epochs
+    def _should_repeat(self):
+        return self.train_only and self.is_train or not self.train_only
 
     def _should_repeat_fit(self):
         return self.is_train or not self.is_train and self.repeat_in_test_mode

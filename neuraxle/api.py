@@ -164,7 +164,7 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
         :rtype: BaseStep
         """
         if self.n_epochs is not None:
-            wrapped = EpochRepeater(wrapped, epochs=self.n_epochs, fit_only=False)
+            wrapped = EpochRepeater(wrapped, epochs=self.n_epochs, train_only=False)
         return wrapped
 
     def _did_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
