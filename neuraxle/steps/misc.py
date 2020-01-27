@@ -130,12 +130,19 @@ class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
 
 
 class FitTransformCallbackStep(BaseStep):
-    def __init__(self, transform_callback_function, fit_callback_function, more_arguments: List = tuple(),
+    def __init__(self, transform_callback_function=None, fit_callback_function=None, more_arguments: List = tuple(),
                  transform_function=None,
                  hyperparams=None):
         BaseStep.__init__(self, hyperparams)
         self.transform_function = transform_function
         self.more_arguments = more_arguments
+
+        if transform_callback_function is None:
+            transform_callback_function = TapeCallbackFunction()
+
+        if fit_callback_function is None:
+            fit_callback_function = TapeCallbackFunction()
+
         self.fit_callback_function = fit_callback_function
         self.transform_callback_function = transform_callback_function
 
@@ -159,6 +166,22 @@ class FitTransformCallbackStep(BaseStep):
 
     def inverse_transform(self, processed_outputs):
         return processed_outputs
+
+    def clear_callbacks(self):
+        cleared_callbacks = {
+           self.name: {
+               'transform': self.transform_callback_function.data,
+               'fit': self.fit_callback_function.data
+           }
+        }
+
+        self.transform_callback_function.data = []
+        self.transform_callback_function.name_tape = []
+
+        self.fit_callback_function.data = []
+        self.fit_callback_function.name_tape = []
+
+        return cleared_callbacks
 
 
 class CallbackWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):

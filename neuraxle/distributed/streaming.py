@@ -26,7 +26,7 @@ from multiprocessing.context import Process
 from threading import Thread
 from typing import Tuple, List, Union, Iterable
 
-from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin, NonFittableMixin
+from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin, NonFittableMixin, BaseSaver
 from neuraxle.data_container import DataContainer, ListDataContainer
 from neuraxle.pipeline import Pipeline, CustomPipelineMixin, MiniBatchSequentialPipeline, Joiner
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
@@ -45,8 +45,9 @@ class ObservableQueueMixin:
         :class:`ParallelQueuedPipeline`,
         :class:`SequentialQueuedPipeline`
     """
+
     def __init__(self, queue):
-        BaseStep.__init__(self)
+        self.savers = [ObservableQueueStepSaver()]
         self.queue = queue
         self.observers = []
 
@@ -88,9 +89,35 @@ class QueuedPipelineTask(object):
         :class:`ParallelQueuedPipeline`,
         :class:`SequentialQueuedPipeline`
     """
-    def __init__(self,  data_container, step_name=None):
+
+    def __init__(self, data_container, step_name=None):
         self.step_name = step_name
         self.data_container = data_container
+
+
+class ObservableQueueStepSaver(BaseSaver):
+    """
+    Saver for observable queue steps.
+
+    .. seealso::
+        :class:`QueueWorker`,
+        :class:`neuraxle.base.BaseSaver`,
+        :class:`BaseQueuedPipeline`,
+        :class:`ParallelQueuedPipeline`,
+        :class:`SequentialQueuedPipeline`
+    """
+
+    def save_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
+        step.queue = None
+        step.observers = []
+        return step
+
+    def can_load(self, step: 'BaseStep', context: 'ExecutionContext'):
+        return True
+
+    def load_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
+        step.queue = Queue()
+        return step
 
 
 class QueueWorker(MetaStepMixin, ObservableQueueMixin, BaseStep):
@@ -282,7 +309,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         self.n_workers_per_step = n_workers_per_step
         self.use_threading = use_threading
 
-        MiniBatchSequentialPipeline.__init__(self, steps=self._initialize_steps_as_tuple(steps), cache_folder=cache_folder)
+        MiniBatchSequentialPipeline.__init__(self, steps=self._initialize_steps_as_tuple(steps),
+                                             cache_folder=cache_folder)
         self._refresh_steps()
 
     def _initialize_steps_as_tuple(self, steps):
@@ -380,6 +408,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :return:
         """
         all_steps_are_not_fittable = True
+
         for _, step in self[:-1]:
             if not isinstance(step.get_step(), NonFittableMixin):
                 all_steps_are_not_fittable = False
@@ -388,6 +417,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             data_container = self.transform_data_container(data_container, context)
             data_container = self._did_transform(data_container, context)
             return self, data_container
+
+        self.is_invalidated = True
 
         return super().fit_transform_data_container(data_container, context)
 

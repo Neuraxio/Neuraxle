@@ -1,7 +1,10 @@
+import os
+
 import numpy as np
 
-from neuraxle.base import NonFittableMixin, BaseStep
+from neuraxle.base import NonFittableMixin, BaseStep, ExecutionContext
 from neuraxle.distributed.streaming import SequentialQueuedPipeline, ParallelQueuedPipeline
+from neuraxle.steps.misc import FitTransformCallbackStep, TapeCallbackFunction
 
 EXPECTED_OUTPUTS = np.array(range(100)) * 2 * 2 * 2 * 2
 EXPECTED_OUTPUTS_PARALLEL = np.array((np.array(range(100)) * 2).tolist() * 4)
@@ -193,3 +196,41 @@ def test_parallel_queued_pipeline_step_name_n_worker_with_default_n_workers_and_
     p, outputs = p.fit_transform(list(range(100)), list(range(100)))
 
     assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
+
+
+def test_queued_pipeline_saving(tmpdir):
+    # Given
+    p = ParallelQueuedPipeline([
+        ('1', FitTransformCallbackStep()),
+        ('2', FitTransformCallbackStep()),
+        ('3', FitTransformCallbackStep()),
+        ('4', FitTransformCallbackStep()),
+    ], n_workers_per_step=1, max_size=10, batch_size=10)
+
+    # When
+    p, outputs = p.fit_transform(list(range(100)), list(range(100)))
+    p.save(ExecutionContext(tmpdir))
+    p.apply('clear_callbacks')
+
+    # Then
+
+    assert len(p[0].wrapped.transform_callback_function.data) == 0
+    assert len(p[0].wrapped.fit_callback_function.data) == 0
+    assert len(p[1].wrapped.transform_callback_function.data) == 0
+    assert len(p[1].wrapped.fit_callback_function.data) == 0
+    assert len(p[2].wrapped.transform_callback_function.data) == 0
+    assert len(p[2].wrapped.fit_callback_function.data) == 0
+    assert len(p[3].wrapped.transform_callback_function.data) == 0
+    assert len(p[3].wrapped.fit_callback_function.data) == 0
+
+    p = p.load(ExecutionContext(tmpdir))
+
+    assert len(p[0].wrapped.transform_callback_function.data) == 10
+    assert len(p[0].wrapped.fit_callback_function.data) == 10
+    assert len(p[1].wrapped.transform_callback_function.data) == 10
+    assert len(p[1].wrapped.fit_callback_function.data) == 10
+    assert len(p[2].wrapped.transform_callback_function.data) == 10
+    assert len(p[2].wrapped.fit_callback_function.data) == 10
+    assert len(p[3].wrapped.transform_callback_function.data) == 10
+    assert len(p[3].wrapped.fit_callback_function.data) == 10
+
