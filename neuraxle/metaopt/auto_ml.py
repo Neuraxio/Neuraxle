@@ -301,7 +301,8 @@ class AutoMLAlgorithm(MetaStepMixin, BaseStep):
             self,
             hyperparameter_optimizer: BaseHyperparameterOptimizer,
             validation_technique: BaseCrossValidationWrapper = None,
-            higher_score_is_better=True
+            higher_score_is_better=True,
+            cache_folder=None
     ):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, None)
@@ -311,6 +312,7 @@ class AutoMLAlgorithm(MetaStepMixin, BaseStep):
         self.validation_technique = validation_technique
         self.higher_score_is_better = higher_score_is_better
         self.hyperparameter_optimizer = hyperparameter_optimizer
+        self.cache_folder = cache_folder
 
     def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
         """
@@ -334,7 +336,11 @@ class AutoMLAlgorithm(MetaStepMixin, BaseStep):
         """
         step: BaseStep = copy.deepcopy(self.wrapped)
         step: BaseCrossValidationWrapper = copy.copy(self.validation_technique).set_step(step)
-        step = step.fit(data_inputs, expected_outputs)
+        data_container = DataContainer(current_ids=[str(c_id) for c_id in range(len(data_inputs))], data_inputs=data_inputs, expected_outputs=expected_outputs)
+        context = ExecutionContext(self.cache_folder)
+
+        step, data_container = step._fit_transform_data_container(data_container, context)
+
         score = step.get_score()
 
         return self, score
@@ -522,7 +528,7 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
 
     def fit_transform(self, data_inputs, expected_outputs):
         new_self = self.fit(data_inputs, expected_outputs)
-        return new_self, new_self.transform(data_inputs)
+        return new_self, new_self.handle_transform(DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs), context=ExecutionContext())
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
@@ -615,6 +621,11 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
         auto_ml_algorithm = auto_ml_algorithm.update_hyperparams(best_hyperparams)
 
         return copy.deepcopy(auto_ml_algorithm.get_step())
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        if self.best_model is None:
+            raise Exception('Cannot transform AutoMLSequentialWrapper before fit')
+        return self.best_model.handle_transform(data_container, context)
 
     def transform(self, data_inputs):
         if self.best_model is None:

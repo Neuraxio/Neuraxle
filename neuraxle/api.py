@@ -74,7 +74,7 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
     def __init__(
             self,
             pipeline: Union[BaseStep, NamedTupleList],
-            validation_size: float = 0.0,
+            validation_size=None,
             batch_size: int = None,
             batch_metrics: Dict[str, Callable] = None,
             shuffle_in_each_epoch_at_train: bool = True,
@@ -126,7 +126,8 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
         :rtype: MetricsWrapper
         """
         if self.batch_size is not None:
-            wrapped = MetricsWrapper(wrapped=wrapped, metrics=self.batch_metrics, name=BATCH_METRICS_STEP_NAME, print_metrics=self.print_batch_metrics)
+            wrapped = MetricsWrapper(wrapped=wrapped, metrics=self.batch_metrics, name=BATCH_METRICS_STEP_NAME,
+                                     print_metrics=self.print_batch_metrics)
             wrapped = MiniBatchSequentialPipeline(
                 [wrapped],
                 batch_size=self.batch_size
@@ -143,8 +144,9 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
         :return: wrapped pipeline step
         :rtype: MetricsWrapper
         """
-        if self.validation_size != 0.0:
-            wrapped = MetricsWrapper(wrapped=wrapped, metrics=self.epochs_metrics, name=EPOCH_METRICS_STEP_NAME, print_metrics=self.print_epoch_metrics)
+        if self.validation_size is not None:
+            wrapped = MetricsWrapper(wrapped=wrapped, metrics=self.epochs_metrics, name=EPOCH_METRICS_STEP_NAME,
+                                     print_metrics=self.print_epoch_metrics)
             wrapped = ValidationSplitWrapper(
                 wrapped=wrapped,
                 test_size=self.validation_size,
@@ -192,4 +194,3 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
         :rtype: float
         """
         return self.get_step_by_name(VALIDATION_SPLIT_STEP_NAME).get_score_train()
-

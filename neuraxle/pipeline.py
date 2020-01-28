@@ -667,7 +667,7 @@ class CustomPipelineMixin:
         data_container.set_current_ids(current_ids)
 
         context = ExecutionContext(self.cache_folder, ExecutionMode.FIT_TRANSFORM)
-        new_self, data_container = self.handle_fit(data_container, context)
+        new_self = self.handle_fit(data_container, context)
 
         return new_self
 

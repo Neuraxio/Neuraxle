@@ -5,6 +5,8 @@ from sklearn import linear_model
 from sklearn.metrics import mean_squared_error
 
 from neuraxle.api import DeepLearningPipeline
+from neuraxle.metaopt.auto_ml import RandomSearch
+from neuraxle.metaopt.random import ValidationSplitWrapper
 from neuraxle.pipeline import Pipeline
 
 TIMESTEPS = 10
@@ -66,6 +68,66 @@ def test_deep_learning_pipeline():
 
     assert len(batch_mse_train) == expected_len_batch_mse_train
     assert len(batch_mse_validation) == expected_len_batch_mse_validation
+
+    last_batch_mse_validation = batch_mse_validation[-1]
+    last_batch_mse_train = batch_mse_train[-1]
+
+    last_epoch_mse_train = epoch_mse_train[-1]
+    last_epoch_mse_validation = epoch_mse_validation[-1]
+
+    assert last_batch_mse_train < last_batch_mse_validation
+    assert last_epoch_mse_train < last_epoch_mse_validation
+
+
+def test_deep_learning_pipeline_with_random_search():
+    # Given
+    i = 0
+    data_inputs = []
+    for batch_index in range(BATCH_SIZE):
+        batch = []
+        for _ in range(TIMESTEPS):
+            batch.append(i)
+            i += 1
+        data_inputs.append(batch)
+    data_inputs = np.array(data_inputs)
+
+    random_noise = np.random.random(DATA_INPUTS_PAST_SHAPE)
+    expected_outputs = 3 * data_inputs + 4 * random_noise
+    expected_outputs = expected_outputs.astype(np.float32)
+    data_inputs = data_inputs.astype(np.float32)
+
+    p = RandomSearch(DeepLearningPipeline(
+        Pipeline([
+            linear_model.LinearRegression()
+        ]),
+        batch_size=BATCH_SIZE,
+        batch_metrics={'mse': to_numpy_metric_wrapper(mean_squared_error)},
+        shuffle_in_each_epoch_at_train=True,
+        n_epochs=N_EPOCHS,
+        epochs_metrics={'mse': to_numpy_metric_wrapper(mean_squared_error)},
+        scoring_function=to_numpy_metric_wrapper(mean_squared_error),
+    ), validation_technique=ValidationSplitWrapper(test_size=0.15, scoring_function=to_numpy_metric_wrapper(mean_squared_error)), n_iter=10)
+
+    # When
+    p, outputs = p.fit_transform(data_inputs, expected_outputs)
+
+    metrics = p.apply('get_metrics')
+
+    # Then
+    batch_mse_train = metrics['batch_metrics']['train']['mse']
+    epoch_mse_train = metrics['epoch_metrics']['train']['mse']
+
+    batch_mse_validation = metrics['batch_metrics']['validation']['mse']
+    epoch_mse_validation = metrics['epoch_metrics']['validation']['mse']
+
+    assert len(epoch_mse_train) == N_EPOCHS * 10
+    assert len(epoch_mse_validation) == N_EPOCHS * 10
+
+    expected_len_batch_mse_train = math.ceil((len(data_inputs) / BATCH_SIZE) * (1 - VALIDATION_SIZE)) * N_EPOCHS
+    expected_len_batch_mse_validation = math.ceil((len(data_inputs) / BATCH_SIZE) * VALIDATION_SIZE) * N_EPOCHS
+
+    assert len(batch_mse_train) == expected_len_batch_mse_train * 10
+    assert len(batch_mse_validation) == expected_len_batch_mse_validation * 10
 
     last_batch_mse_validation = batch_mse_validation[-1]
     last_batch_mse_train = batch_mse_train[-1]
