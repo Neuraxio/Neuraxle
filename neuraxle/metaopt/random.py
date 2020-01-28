@@ -36,6 +36,8 @@ from neuraxle.data_container import DataContainer
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnCustomAxis
 
+VALIDATION_SUB_DATA_CONTAINER_NAME = 'validation'
+
 
 class BaseValidation(MetaStepMixin, BaseStep, ABC):
     """
@@ -140,6 +142,9 @@ class ValidationSplitWrapper(BaseValidation):
         :return: outputs
         """
         train_data_container, validation_data_container = self.split_data_container(data_container)
+
+        # add sub data container for the validation metrics calculated in MetricsWrapper
+        train_data_container.add_sub_data_container(name=VALIDATION_SUB_DATA_CONTAINER_NAME, sub_data_container=validation_data_container)
 
         self.wrapped, results_data_container = self.wrapped.handle_fit_transform(train_data_container, context.push(self.wrapped))
 

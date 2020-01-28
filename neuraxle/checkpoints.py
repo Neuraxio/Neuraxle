@@ -675,7 +675,7 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         :return: data container checkpoint
         :rtype: neuraxle.data_container.DataContainer
         """
-        data_container_checkpoint = ListDataContainer.empty()
+        data_container_checkpoint = ListDataContainer.empty(original_data_container=data_container)
 
         current_ids = self.summary_checkpointer.read_summary(
             checkpoint_path=context.get_path(),

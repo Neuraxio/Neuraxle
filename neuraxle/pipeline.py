@@ -595,7 +595,7 @@ class Joiner(Barrier):
             kernel_size=self.batch_size
         )
 
-        output_data_container = ListDataContainer.empty()
+        output_data_container = ListDataContainer.empty(original_data_container=data_container)
         for data_container_batch in data_container_batches:
             output_data_container.concat(
                 step._transform_data_container(data_container_batch, context)
@@ -622,7 +622,7 @@ class Joiner(Barrier):
             kernel_size=self.batch_size
         )
 
-        output_data_container = ListDataContainer.empty()
+        output_data_container = ListDataContainer.empty(original_data_container=data_container)
         for data_container_batch in data_container_batches:
             step, data_container_batch = step._fit_transform_data_container(data_container_batch, context)
             output_data_container.concat(
