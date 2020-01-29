@@ -25,6 +25,8 @@ Pipeline Steps For Looping
 import copy
 from typing import List, Any
 
+import numpy as np
+
 from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin
 from neuraxle.data_container import ListDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
@@ -33,6 +35,18 @@ from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpac
 class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
     """
     Truncable step that fits/transforms each step for each of the data inputs, and expected outputs.
+
+    .. seealso::
+        :class:`neuraxle.base.BaseStep`,
+        :class:`neuraxle.base.BaseSaver`,
+        :class:`neuraxle.base.BaseHasher`,
+        :class:`neuraxle.base.ResumableStepMixin`,
+        :class:`neuraxle.base.NonFittableMixin`,
+        :class:`neuraxle.base.NonTransformableMixin`,
+        :class:`neuraxle.pipeline.Pipeline`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`neuraxle.data_container.DataContainer`
     """
 
     def __init__(
@@ -241,3 +255,120 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
 
     def inverse_transform(self, data_output):
         return [self.steps[i].inverse_transform(di) for i, di in enumerate(data_output)]
+
+
+class FlattenForEach(ResumableStepMixin, MetaStepMixin, BaseStep):
+    """
+    Step that reduces a dimension instead of manually looping on it.
+
+    .. seealso::
+        :class:`neuraxle.base.BaseStep`,
+        :class:`neuraxle.base.BaseSaver`,
+        :class:`neuraxle.base.BaseHasher`,
+        :class:`neuraxle.base.ResumableStepMixin`,
+        :class:`neuraxle.base.MetaStepMixin`,
+        :class:`neuraxle.base.NonFittableMixin`,
+        :class:`neuraxle.base.NonTransformableMixin`,
+        :class:`neuraxle.pipeline.Pipeline`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`neuraxle.data_container.DataContainer`
+    """
+
+    def __init__(
+            self,
+            wrapped: BaseStep,
+            reaugment: bool = True
+    ):
+        BaseStep.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
+        ResumableStepMixin.__init__(self)
+
+        self.reaugment = reaugment
+
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        Flatten data container before any processing is done on the wrapped step.
+
+        :param data_container: data container to flatten
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: (data container, execution context)
+        :rtype: ('BaseStep', DataContainer)
+        """
+        data_container, context = BaseStep._will_process(self, data_container, context)
+
+        if data_container.expected_outputs is None or not np.all(np.array(data_container.expected_outputs)):
+            expected_outputs = np.empty_like(np.array(data_container.data_inputs))
+            expected_outputs.fill(np.nan)
+            data_container.set_expected_outputs(expected_outputs)
+
+        self.flattened_dimension_lengths = [len(di) for di in data_container.data_inputs]
+
+        data_container.set_data_inputs(self._flatten_list(data_container.data_inputs))
+        data_container.set_expected_outputs(self._flatten_list(data_container.expected_outputs))
+
+        return data_container, context
+
+    def _flatten_list(self, list_to_flatten):
+        """
+        Flatten the first dimension of a list.
+
+        :param list_to_flatten: list to flatten
+        :type list_to_flatten: Iterable
+        :return: flattened list
+        :rtype: np.ndarray
+        """
+        if not isinstance(list_to_flatten, np.ndarray):
+            list_to_flatten = np.array(list_to_flatten)
+
+        return np.array(sum(list_to_flatten.tolist(), []))
+
+    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Reaugment the flattened data container.
+
+        :param data_container: data container to reaugment
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: data container
+        :rtype: DataContainer
+        """
+        data_container = BaseStep._did_process(self, data_container, context)
+
+        if self.reaugment:
+            data_container.set_data_inputs(self._reaugment_list(data_container.data_inputs))
+            data_container.set_expected_outputs(self._reaugment_list(data_container.expected_outputs))
+
+        return data_container
+
+    def _reaugment_list(self, list_to_reaugment):
+        """
+        Reaugment list with the flattened dimension lengths.
+
+        :param list_to_reaugment: list to reaugment
+        :type list_to_reaugment: Iterable
+        :return: reaugmented numpy array
+        :rtype: np.ndarray
+        """
+        if not self.reaugment:
+            return list_to_reaugment
+
+        reaugmented_list = []
+        i = 0
+        for list_length in self.flattened_dimension_lengths:
+            sub_list = np.array(list_to_reaugment[i:i + list_length]).tolist()
+            reaugmented_list.append(sub_list)
+            i += list_length
+
+        reaugmented_list = np.array(reaugmented_list)
+        return reaugmented_list
+
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext):
+        context = context.push(self)
+
+        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context):
+            return True
+        return False

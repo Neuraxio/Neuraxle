@@ -179,6 +179,7 @@ class MultiplyByN(NonFittableMixin, BaseStep):
         :class:`NonFittableMixin`,
         :class:`BaseStep`
     """
+
     def __init__(self, multiply_by=1):
         NonFittableMixin.__init__(self)
         BaseStep.__init__(
@@ -220,6 +221,7 @@ class AddN(NonFittableMixin, BaseStep):
         :class:`NonFittableMixin`,
         :class:`BaseStep`
     """
+
     def __init__(self, add=1):
         NonFittableMixin.__init__(self)
         BaseStep.__init__(
@@ -240,6 +242,41 @@ class AddN(NonFittableMixin, BaseStep):
             data_inputs = np.array(data_inputs)
 
         return data_inputs - self.hyperparams['add']
+
+
+class Sum(NonFittableMixin, BaseStep):
+    """
+    Step sum numpy array using np.sum.
+
+    Example usage:
+
+    .. code-block:: python
+
+        pipeline = Pipeline([
+            Sum(axis=-1)
+        ])
+
+        outputs = pipeline.transform(np.array([1, 2, 3])
+        # outputs => 6)
+
+    .. seealso::
+        :class:`NonFittableMixin`,
+        :class:`BaseStep`
+    """
+
+    def __init__(self, axis=None):
+        NonFittableMixin.__init__(self)
+        BaseStep.__init__(self)
+        if axis is None:
+            axis = -1
+        self.axis = axis
+
+    def transform(self, data_inputs):
+        if not isinstance(data_inputs, np.ndarray):
+            data_inputs = np.array(data_inputs)
+
+        data_inputs = np.expand_dims(np.sum(data_inputs, axis=self.axis), axis=-1)
+        return data_inputs
 
 
 class OneHotEncoder(NonFittableMixin, BaseStep):
