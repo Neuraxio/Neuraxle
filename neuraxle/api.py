@@ -144,9 +144,14 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
         :return: wrapped pipeline step
         :rtype: MetricsWrapper
         """
+        wrapped = MetricsWrapper(
+            wrapped=wrapped,
+            metrics=self.epochs_metrics,
+            name=EPOCH_METRICS_STEP_NAME,
+            print_metrics=self.print_epoch_metrics
+        )
+
         if self.validation_size is not None:
-            wrapped = MetricsWrapper(wrapped=wrapped, metrics=self.epochs_metrics, name=EPOCH_METRICS_STEP_NAME,
-                                     print_metrics=self.print_epoch_metrics)
             wrapped = ValidationSplitWrapper(
                 wrapped=wrapped,
                 test_size=self.validation_size,

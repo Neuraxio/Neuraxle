@@ -9,11 +9,13 @@ from neuraxle.metaopt.auto_ml import RandomSearch
 from neuraxle.metaopt.random import ValidationSplitWrapper
 from neuraxle.pipeline import Pipeline
 
+N_ITER = 10
+
 TIMESTEPS = 10
 
 VALIDATION_SIZE = 0.1
 BATCH_SIZE = 32
-N_EPOCHS = 10
+N_EPOCHS = 15
 
 DATA_INPUTS_PAST_SHAPE = (BATCH_SIZE, TIMESTEPS)
 
@@ -63,11 +65,10 @@ def test_deep_learning_pipeline():
     assert len(epoch_mse_train) == N_EPOCHS
     assert len(epoch_mse_validation) == N_EPOCHS
 
-    expected_len_batch_mse_train = math.ceil((len(data_inputs) / BATCH_SIZE) * (1 - VALIDATION_SIZE)) * N_EPOCHS
-    expected_len_batch_mse_validation = math.ceil((len(data_inputs) / BATCH_SIZE) * VALIDATION_SIZE) * N_EPOCHS
+    expected_len_batch_mse = math.ceil((len(data_inputs) / BATCH_SIZE) * (1 - VALIDATION_SIZE)) * N_EPOCHS
 
-    assert len(batch_mse_train) == expected_len_batch_mse_train
-    assert len(batch_mse_validation) == expected_len_batch_mse_validation
+    assert len(batch_mse_train) == expected_len_batch_mse
+    assert len(batch_mse_validation) == expected_len_batch_mse
 
     last_batch_mse_validation = batch_mse_validation[-1]
     last_batch_mse_train = batch_mse_train[-1]
@@ -106,12 +107,13 @@ def test_deep_learning_pipeline_with_random_search():
         n_epochs=N_EPOCHS,
         epochs_metrics={'mse': to_numpy_metric_wrapper(mean_squared_error)},
         scoring_function=to_numpy_metric_wrapper(mean_squared_error),
-    ), validation_technique=ValidationSplitWrapper(test_size=0.15, scoring_function=to_numpy_metric_wrapper(mean_squared_error)), n_iter=10)
+    ), validation_technique=ValidationSplitWrapper(test_size=0.15, scoring_function=to_numpy_metric_wrapper(mean_squared_error)), n_iter=N_ITER)
 
     # When
     p, outputs = p.fit_transform(data_inputs, expected_outputs)
+    best_model = p.get_best_model()
 
-    metrics = p.apply('get_metrics')
+    metrics = best_model.apply('get_metrics')
 
     # Then
     batch_mse_train = metrics['batch_metrics']['train']['mse']
@@ -120,14 +122,13 @@ def test_deep_learning_pipeline_with_random_search():
     batch_mse_validation = metrics['batch_metrics']['validation']['mse']
     epoch_mse_validation = metrics['epoch_metrics']['validation']['mse']
 
-    assert len(epoch_mse_train) == N_EPOCHS * 10
-    assert len(epoch_mse_validation) == N_EPOCHS * 10
+    assert len(epoch_mse_train) == N_EPOCHS * N_ITER
+    assert len(epoch_mse_validation) == N_EPOCHS * N_ITER
 
-    expected_len_batch_mse_train = math.ceil((len(data_inputs) / BATCH_SIZE) * (1 - VALIDATION_SIZE)) * N_EPOCHS
-    expected_len_batch_mse_validation = math.ceil((len(data_inputs) / BATCH_SIZE) * VALIDATION_SIZE) * N_EPOCHS
+    expected_len_batch_mse = math.ceil((len(data_inputs) / BATCH_SIZE) * (1 - VALIDATION_SIZE)) * N_EPOCHS
 
-    assert len(batch_mse_train) == expected_len_batch_mse_train * 10
-    assert len(batch_mse_validation) == expected_len_batch_mse_validation * 10
+    assert len(batch_mse_train) == expected_len_batch_mse * N_ITER
+    assert len(batch_mse_validation) == expected_len_batch_mse * N_ITER
 
     last_batch_mse_validation = batch_mse_validation[-1]
     last_batch_mse_train = batch_mse_train[-1]
