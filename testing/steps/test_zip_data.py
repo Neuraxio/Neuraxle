@@ -15,6 +15,28 @@ SHAPE_2D = (BATCH_SIZE, TIMESTEPS)
 SHAPE_1D = BATCH_SIZE
 
 
+def test_zip_data_should_merge_3d_with_3d():
+    # Given
+    data_inputs_3d, expected_outputs_3d = _create_data_source(SHAPE_3D)
+    data_inputs_3d_second, expected_outputs_3d_second = _create_data_source(SHAPE_3D)
+    data_container_3d_second = DataContainer(data_inputs=data_inputs_3d_second, expected_outputs=expected_outputs_3d_second)
+    data_container = DataContainer(data_inputs=data_inputs_3d, expected_outputs=expected_outputs_3d) \
+        .add_sub_data_container('2d', data_container_3d_second)
+
+    # When
+    p = Pipeline([
+        ZipData(data_sources=['2d'])
+    ])
+
+    data_container = p.handle_transform(data_container, ExecutionContext())
+
+    # Then
+    assert data_container.data_inputs.shape == (SHAPE_3D[0], SHAPE_3D[1], SHAPE_3D[2] * 2)
+    assert data_container.expected_outputs.shape == (SHAPE_3D[0], SHAPE_3D[1], SHAPE_3D[2] * 2)
+    assert np.array_equal(data_container.data_inputs[..., -SHAPE_3D[2]:], data_container_3d_second.data_inputs)
+    assert np.array_equal(data_container.expected_outputs[..., -SHAPE_3D[2]:], data_container_3d_second.expected_outputs)
+
+
 def test_zip_data_should_merge_2d_with_3d():
     # Given
     data_inputs_3d, expected_outputs_3d = _create_data_source(SHAPE_3D)
@@ -53,8 +75,10 @@ def test_zip_data_should_merge_1d_with_3d():
     data_container = p.handle_transform(data_container, ExecutionContext())
 
     # Then
-    broadcasted_data_inputs_1d = np.broadcast_to(np.expand_dims(data_container_1d.data_inputs, axis=-1), shape=(SHAPE_3D[0], SHAPE_3D[1]))
-    broadcasted_expected_outputs_1d = np.broadcast_to(np.expand_dims(data_container_1d.expected_outputs, axis=-1), shape=(SHAPE_3D[0], SHAPE_3D[1]))
+    broadcasted_data_inputs_1d = np.broadcast_to(np.expand_dims(data_container_1d.data_inputs, axis=-1),
+                                                 shape=(SHAPE_3D[0], SHAPE_3D[1]))
+    broadcasted_expected_outputs_1d = np.broadcast_to(np.expand_dims(data_container_1d.expected_outputs, axis=-1),
+                                                      shape=(SHAPE_3D[0], SHAPE_3D[1]))
 
     assert np.array_equal(data_container.data_inputs[..., -1], broadcasted_data_inputs_1d)
     assert np.array_equal(data_container.expected_outputs[..., -1], broadcasted_expected_outputs_1d)
@@ -89,4 +113,3 @@ def _create_data_source(shape):
     data_inputs = np.random.random(shape).astype(np.float32)
     expected_outputs = np.random.random(shape).astype(np.float32)
     return data_inputs, expected_outputs
-
