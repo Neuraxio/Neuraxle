@@ -53,10 +53,14 @@ def test_zip_data_should_merge_1d_with_3d():
     data_container = p.handle_transform(data_container, ExecutionContext())
 
     # Then
+    broadcasted_data_inputs_1d = np.broadcast_to(np.expand_dims(data_container_1d.data_inputs, axis=-1), shape=(SHAPE_3D[0], SHAPE_3D[1]))
+    broadcasted_expected_outputs_1d = np.broadcast_to(np.expand_dims(data_container_1d.expected_outputs, axis=-1), shape=(SHAPE_3D[0], SHAPE_3D[1]))
+
+    assert np.array_equal(data_container.data_inputs[..., -1], broadcasted_data_inputs_1d)
+    assert np.array_equal(data_container.expected_outputs[..., -1], broadcasted_expected_outputs_1d)
+
     assert data_container.data_inputs.shape == (SHAPE_3D[0], SHAPE_3D[1], SHAPE_3D[2] + 1)
     assert data_container.expected_outputs.shape == (SHAPE_3D[0], SHAPE_3D[1], SHAPE_3D[2] + 1)
-    assert np.array_equal(data_container.data_inputs[..., -1], data_container_1d.data_inputs)
-    assert np.array_equal(data_container.expected_outputs[..., -1], data_container_1d.expected_outputs)
 
 
 def test_zip_data_should_merge_1d_with_2d():
@@ -77,8 +81,8 @@ def test_zip_data_should_merge_1d_with_2d():
     # Then
     assert data_container.data_inputs.shape == (SHAPE_2D[0], SHAPE_2D[1] + 1)
     assert data_container.expected_outputs.shape == (SHAPE_2D[0], SHAPE_2D[1] + 1)
-    assert np.array_equal(data_container.data_inputs[..., -1], data_container_1d.data_inputs * SHAPE_2D[1])
-    assert np.array_equal(data_container.expected_outputs[..., -1], data_container_1d.expected_outputs * SHAPE_2D[1])
+    assert np.array_equal(data_container.data_inputs[..., -1], data_container_1d.data_inputs)
+    assert np.array_equal(data_container.expected_outputs[..., -1], data_container_1d.expected_outputs)
 
 
 def _create_data_source(shape):

@@ -235,10 +235,24 @@ class ZipData(NonFittableMixin, NonTransformableMixin, BaseStep):
                 sub_data_containers_to_zip.append(sub_data_container)
 
         for data_container_to_zip in sub_data_containers_to_zip:
-            data_inputs = np.dstack((data_container.data_inputs, data_container_to_zip.data_inputs))
-            data_container.set_data_inputs(data_inputs)
-
-            expected_outputs = np.dstack((data_container.expected_outputs, data_container_to_zip.expected_outputs))
-            data_container.set_expected_outputs(expected_outputs)
+            data_container = self._zip_data_container(data_container, data_container_to_zip)
 
         return data_container
+
+    def _zip_data_container(self, data_container, data_container_to_zip):
+        data_inputs = self._zip_np_arrays(data_container.data_inputs, data_container_to_zip.data_inputs)
+        data_container.set_data_inputs(data_inputs)
+
+        expected_outputs = self._zip_np_arrays(data_container.expected_outputs, data_container_to_zip.expected_outputs)
+        data_container.set_expected_outputs(expected_outputs)
+
+        return data_container
+
+    def _zip_np_arrays(self, np_array, np_array_to_zip):
+        while len(np_array_to_zip.shape) < len(np_array.shape):
+            np_array_to_zip = np.expand_dims(np_array_to_zip, axis=-1)
+
+        target_shape = tuple(list(np_array.shape[:-1]) + [np_array_to_zip.shape[-1]])
+        np_array_to_zip = np.broadcast_to(np_array_to_zip, target_shape)
+
+        return np.concatenate((np_array, np_array_to_zip), axis=-1)
