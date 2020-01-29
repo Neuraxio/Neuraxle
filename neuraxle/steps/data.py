@@ -22,7 +22,9 @@ You can find here steps that take action on data.
 import random
 from typing import Iterable
 
-from neuraxle.base import BaseStep, MetaStepMixin, NonFittableMixin, ExecutionContext
+import numpy as np
+
+from neuraxle.base import BaseStep, MetaStepMixin, NonFittableMixin, ExecutionContext, NonTransformableMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import TrainOnlyWrapper
@@ -103,7 +105,8 @@ class EpochRepeater(MetaStepMixin, BaseStep):
         self.fit_only = fit_only
         self.epochs = epochs
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
         """
         Fit transform wrapped step self.epochs times using wrapped step handle fit transform method.
 
@@ -185,3 +188,57 @@ class TrainShuffled(Pipeline):
             TrainOnlyWrapper(DataShuffler(seed=seed)),
             wrapped
         ])
+
+
+class ZipData(NonFittableMixin, NonTransformableMixin, BaseStep):
+    """
+    Zip two data sources together. Pass the name of the sub data containers to merge in the current data container.
+
+    Code example:
+
+    .. code-block:: python
+
+        data_container_header_values = DataContainer(data_inputs=data_inputs_headers, expected_outputs=expected_outputs_headers)
+        data_container_3d = DataContainer(data_inputs=data_inputs_3d, expected_outputs=expected_outputs_3d) \
+            .add_sub_data_container('header_values', data_container_2d)
+
+        p = Pipeline([
+            ZipData(["header_values"])
+        ])
+
+        data_container_3d = p.handle_transform(data_container_3d, ExecutionContext())
+
+
+    .. seealso::
+        :class:`neuraxle.base.NonFittableMixin`,
+        :class:`neuraxle.base.NonTransformableMixin`,
+        :class:`neuraxle.base.BaseStep`
+        :class:`neuraxle.data_container.DataContainer`
+    """
+    def __init__(self, data_sources):
+        BaseStep.__init__(self)
+        NonTransformableMixin.__init__(self)
+        NonFittableMixin.__init__(self)
+
+        self.data_sources = data_sources
+
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        return self, self._zip_sub_data_containers(data_container)
+
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        return self._zip_sub_data_containers(data_container)
+
+    def _zip_sub_data_containers(self, data_container):
+        sub_data_containers_to_zip = []
+        for name, sub_data_container in data_container.sub_data_containers:
+            if name in self.data_sources:
+                sub_data_containers_to_zip.append(sub_data_container)
+
+        for data_container_to_zip in sub_data_containers_to_zip:
+            data_inputs = np.dstack((data_container.data_inputs, data_container_to_zip.data_inputs))
+            data_container.set_data_inputs(data_inputs)
+
+            expected_outputs = np.dstack((data_container.expected_outputs, data_container_to_zip.expected_outputs))
+            data_container.set_expected_outputs(expected_outputs)
+
+        return data_container
