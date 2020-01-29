@@ -200,7 +200,7 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
 
         .. seealso::
             :func:`~BaseStep.update_hyperparams`,
-            :class:`HyperparameterSamples`
+            :class:`neuraxle.hyperparams.space.HyperparameterSamples`
         """
         MetaStepMixin.update_hyperparams(self, hyperparams)
         self.steps = [s.set_hyperparams(self.wrapped.get_hyperparams()) for s in self.steps]

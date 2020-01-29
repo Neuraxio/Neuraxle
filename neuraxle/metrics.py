@@ -41,9 +41,9 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
 
 
     .. seealso::
-        :class:`DeepLearningPipeline`,
-        :class:`MetaStepMixin`,
-        :class:`BaseStep`
+        :class:`neuraxle.api.DeepLearningPipeline`,
+        :class:`neuraxle.base.MetaStepMixin`,
+        :class:`neuraxle.base.BaseStep`
     """
     def __init__(
             self,

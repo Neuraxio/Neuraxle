@@ -42,7 +42,7 @@ class ForceMustHandleMixin:
     If forbids only implementing fit or transform or fit_transform without the handles. So it forces the handles.
 
     .. seealso::
-        :class:`BaseStep`
+        :class:`neuraxle.base.BaseStep`
     """
 
     @abstractmethod
@@ -98,11 +98,11 @@ class TrainOrTestOnlyWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
         ])
 
     .. seealso::
-        :class:`TrainOnlyWrapper`,
-        :class:`TestOnlyWrapper`,
-        :class:`ForceMustHandleMixin`,
-        :class:`MetaStepMixin`,
-        :class:`BaseStep`
+        :class:`neuraxle.steps.flow.TrainOnlyWrapper`,
+        :class:`neuraxle.steps.flow.TestOnlyWrapper`,
+        :class:`neuraxle.steps.flow.ForceMustHandleMixin`,
+        :class:`neuraxle.base.MetaStepMixin`,
+        :class:`neuraxle.base.BaseStep`
     """
 
     def __init__(self, wrapped: BaseStep, is_train_only=True):
@@ -322,7 +322,7 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
         })
 
     .. seealso::
-        :class:`Pipeline`
+        :class:`neuraxle.pipeline.Pipeline`
         :class:`Optional`
     """
 
@@ -375,7 +375,7 @@ class ChooseOneStepOf(FeatureUnion):
         })
 
     .. seealso::
-        :class:`Pipeline`
+        :class:`neuraxle.pipeline.Pipeline`
         :class:`Optional`
     """
 
@@ -443,11 +443,11 @@ class ExpandDim(
         - The expected_outputs is a list of one element that contains the original expected outputs list.
 
     .. seealso::
-        :class:`ForceHandleMixin`,
-        :class:`MetaStepMixin`,
-        :class:`BaseStep`
-        :class:`BaseHasher`
-        :class:`ExpandedDataContainer`
+        :class:`neuraxle.base.ForceAlwaysHandleMixin`,
+        :class:`neuraxle.base.MetaStepMixin`,
+        :class:`neuraxle.base.BaseStep`
+        :class:`neuraxle.base.BaseHasher`
+        :class:`neuraxle.data_container.ExpandedDataContainer`
     """
 
     def __init__(self, wrapped: BaseStep):

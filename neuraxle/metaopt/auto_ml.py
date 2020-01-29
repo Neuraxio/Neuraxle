@@ -42,10 +42,10 @@ class HyperparamsRepository(ABC):
     .. seealso::
         :class:`AutoMLSequentialWrapper`
         :class:`AutoMLAlgorithm`,
-        :class:`BaseValidation`,
-        :class:`RandomSearchBaseAutoMLStrategy`,
-        :class:`HyperparameterSpace`,
-        :class:`HyperparameterSamples`
+        :class:`neuraxle.metaopt.random.BaseValidation`,
+        :class:`RandomSearchHyperparameterOptimizer`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
     @abstractmethod
@@ -109,7 +109,7 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
 
     .. seealso::
         :class:`HyperparamsRepository`,
-        :class:`HyperparameterSamples`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
         :class:`AutoMLSequentialWrapper`
     """
 
@@ -151,7 +151,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
     .. seealso::
         :class:`HyperparamsRepository`,
-        :class:`HyperparameterSamples`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
         :class:`AutoMLSequentialWrapper`
     """
 
@@ -288,13 +288,13 @@ class AutoMLAlgorithm(MetaStepMixin, BaseStep):
 
     .. seealso::
         :class:`BaseCrossValidationWrapper`,
-        :class:`HyperparameterSamples`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
         :class:`BaseHyperparameterOptimizer`,
         :class:`BaseCrossValidationWrapper`,
         :class:`TrialsContainer`,
-        :class:`HyperparameterSpace`,
-        :class:`MetaStepMixin`,
-        :class:`BaseStep`
+        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`neuraxle.base.MetaStepMixin`,
+        :class:`neuraxle.base.BaseStep`
     """
 
     def __init__(
@@ -369,8 +369,8 @@ class AutoMLContainer:
         :class:`AutoMLSequentialWrapper`,
         :class:`RandomSearch`,
         :class:`HyperparamsRepository`,
-        :class:`MetaStepMixin`,
-        :class:`BaseStep`
+        :class:`neuraxle.base.MetaStepMixin`,
+        :class:`neuraxle.base.BaseStep`
     """
 
     def __init__(
@@ -416,8 +416,8 @@ class Trials:
         :class:`AutoMLSequentialWrapper`,
         :class:`RandomSearch`,
         :class:`HyperparamsRepository`,
-        :class:`MetaStepMixin`,
-        :class:`BaseStep`
+        :class:`neuraxle.base.MetaStepMixin`,
+        :class:`neuraxle.base.BaseStep`
     """
 
     def __init__(
@@ -487,9 +487,9 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
         :class:`RandomSearch`,
         :class:`BaseHyperparameterOptimizer`,
         :class:`RandomSearchHyperparameterOptimizer`,
-        :class:`MetaStepMixin`,
-        :class:`NonTransformableMixin`,
-        :class:`BaseStep`
+        :class:`neuraxle.base.MetaStepMixin`,
+        :class:`neuraxle.base.NonTransformableMixin`,
+        :class:`neuraxle.base.BaseStep`
     """
 
     def __init__(
@@ -687,8 +687,8 @@ class RandomSearchHyperparameterOptimizer(BaseHyperparameterOptimizer):
         :class:`BaseHyperparameterOptimizer`,
         :class:`AutoMLSequentialWrapper`,
         :class:`TrialsContainer`,
-        :class:`HyperparameterSamples`,
-        :class:`HyperparameterSpace`
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSpace`
     """
 
     def __init__(self):

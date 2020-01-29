@@ -64,12 +64,12 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
     It uses :class:`EpochRepeater`, :class:`ValidationSplitWrapper`, and :class:`MiniBatchSequentialPipeline`
 
     .. seealso::
-        :class:`EpochRepeater`,
-        :class:`ValidationSplitWrapper`,
-        :class:`MiniBatchSequentialPipeline`,
-        :class:`Pipeline`,
-        :class:`CustomPipelineMixin`,
-        :class:`MetricsWrapper`
+        :class:`neuraxle.steps.data.EpochRepeater`,
+        :class:`neuraxle.metaopt.random.ValidationSplitWrapper`,
+        :class:`neuraxle.pipeline.MiniBatchSequentialPipeline`,
+        :class:`neuraxle.pipeline.Pipeline`,
+        :class:`neuraxle.pipeline.CustomPipelineMixin`,
+        :class:`neuraxle.metrics.MetricsWrapper`
     """
 
     def __init__(

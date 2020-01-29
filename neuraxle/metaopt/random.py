@@ -43,11 +43,10 @@ class BaseValidation(MetaStepMixin, BaseStep, ABC):
     It has a scoring function to calculate the score for the validation split.
 
     .. seealso::
-        :class`ValidationSplitWrapper`,
-        :class`ValidationSplitWrapper`,
-        :class`KFoldCrossValidationWrapper`,
-        :class`AnchoredWalkForwardTimeSeriesCrossValidationWrapper`,
-        :class`WalkForwardTimeSeriesCrossValidationWrapper`
+        :class`neuraxle.metaopt.random.ValidationSplitWrapper`,
+        :class`Kneuraxle.metaopt.random.FoldCrossValidationWrapper`,
+        :class`neuraxle.metaopt.random.AnchoredWalkForwardTimeSeriesCrossValidationWrapper`,
+        :class`neuraxle.metaopt.random.WalkForwardTimeSeriesCrossValidationWrapper`
 
     """
 
@@ -91,8 +90,8 @@ class ValidationSplitWrapper(BaseValidation):
     .. seealso::
         :class`BaseValidation`,
         :class`BaseCrossValidationWrapper`,
-        :class`RandomSearch`,
-        :class`DataShuffler`
+        :class`neuraxle.metaopt.auto_ml.RandomSearch`,
+        :class`neuraxle.steps.data.DataShuffler`
 
     """
 

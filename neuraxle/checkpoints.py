@@ -193,11 +193,11 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         )
 
     .. seealso::
-        * :class:`BaseStep`
-        * :func:`ResumablePipeline._load_checkpoint`
-        * :class:`ResumableStepMixin`
-        * :class:`NonFittableMixin`
-        * :class:`NonTransformableMixin`
+        :class:`neuraxle.base.BaseStep`,
+        :func:`neuraxle.pipeline.ResumablePipeline._load_checkpoint`,
+        :class:`neuraxle.base.ResumableStepMixin`,
+        :class:`neuraxle.base.NonFittableMixin`,
+        :class:`neuraxle.base.NonTransformableMixin`
     """
 
     def __init__(
