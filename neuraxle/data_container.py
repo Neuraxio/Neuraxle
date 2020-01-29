@@ -157,12 +157,22 @@ class DataContainer:
                     expected_outputs = expected_outputs[:i]
                     break
 
-            yield DataContainer(data_inputs=data_inputs, current_ids=current_ids, summary_id=self.summary_id,
-                                expected_outputs=expected_outputs)
+            yield DataContainer(
+                data_inputs=data_inputs,
+                current_ids=current_ids,
+                summary_id=self.summary_id,
+                expected_outputs=expected_outputs,
+                sub_data_containers=self.sub_data_containers
+            )
 
     def copy(self):
-        return DataContainer(data_inputs=self.data_inputs, current_ids=self.current_ids, summary_id=self.summary_id,
-                             expected_outputs=self.expected_outputs)
+        return DataContainer(
+            data_inputs=self.data_inputs,
+            current_ids=self.current_ids,
+            summary_id=self.summary_id,
+            expected_outputs=self.expected_outputs,
+            sub_data_containers=[(name, data_container.copy()) for name, data_container in self.sub_data_containers]
+        )
 
     def add_sub_data_container(self, name: str, sub_data_container: 'DataContainer'):
         """

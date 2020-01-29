@@ -109,7 +109,7 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
             self.set_train(False)
 
             validation_data_container = self._transform_data_container(data_container['validation'], context)
-            self._did_fit_transform_or_transform(validation_data_container, context)
+            self._calculate_metrics_results(validation_data_container.copy())
 
             self.set_train(True)
 

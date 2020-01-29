@@ -9,7 +9,7 @@ from neuraxle.metaopt.auto_ml import RandomSearch
 from neuraxle.metaopt.random import ValidationSplitWrapper
 from neuraxle.pipeline import Pipeline
 
-N_ITER = 10
+N_ITER = 1
 
 TIMESTEPS = 10
 
@@ -22,20 +22,7 @@ DATA_INPUTS_PAST_SHAPE = (BATCH_SIZE, TIMESTEPS)
 
 def test_deep_learning_pipeline():
     # Given
-    i = 0
-    data_inputs = []
-    for batch_index in range(BATCH_SIZE):
-        batch = []
-        for _ in range(TIMESTEPS):
-            batch.append(i)
-            i += 1
-        data_inputs.append(batch)
-    data_inputs = np.array(data_inputs)
-
-    random_noise = np.random.random(DATA_INPUTS_PAST_SHAPE)
-    expected_outputs = 3 * data_inputs + 4 * random_noise
-    expected_outputs = expected_outputs.astype(np.float32)
-    data_inputs = data_inputs.astype(np.float32)
+    data_inputs, expected_outputs = create_2d_data()
 
     p = DeepLearningPipeline(
         Pipeline([
@@ -82,20 +69,7 @@ def test_deep_learning_pipeline():
 
 def test_deep_learning_pipeline_with_random_search():
     # Given
-    i = 0
-    data_inputs = []
-    for batch_index in range(BATCH_SIZE):
-        batch = []
-        for _ in range(TIMESTEPS):
-            batch.append(i)
-            i += 1
-        data_inputs.append(batch)
-    data_inputs = np.array(data_inputs)
-
-    random_noise = np.random.random(DATA_INPUTS_PAST_SHAPE)
-    expected_outputs = 3 * data_inputs + 4 * random_noise
-    expected_outputs = expected_outputs.astype(np.float32)
-    data_inputs = data_inputs.astype(np.float32)
+    data_inputs, expected_outputs = create_2d_data()
 
     p = RandomSearch(DeepLearningPipeline(
         Pipeline([
@@ -122,13 +96,13 @@ def test_deep_learning_pipeline_with_random_search():
     batch_mse_validation = metrics['batch_metrics']['validation']['mse']
     epoch_mse_validation = metrics['epoch_metrics']['validation']['mse']
 
-    assert len(epoch_mse_train) == N_EPOCHS * N_ITER
-    assert len(epoch_mse_validation) == N_EPOCHS * N_ITER
+    assert len(epoch_mse_train) == N_EPOCHS
+    assert len(epoch_mse_validation) == N_EPOCHS
 
     expected_len_batch_mse = math.ceil((len(data_inputs) / BATCH_SIZE) * (1 - VALIDATION_SIZE)) * N_EPOCHS
 
-    assert len(batch_mse_train) == expected_len_batch_mse * N_ITER
-    assert len(batch_mse_validation) == expected_len_batch_mse * N_ITER
+    assert len(batch_mse_train) == expected_len_batch_mse
+    assert len(batch_mse_validation) == expected_len_batch_mse
 
     last_batch_mse_validation = batch_mse_validation[-1]
     last_batch_mse_train = batch_mse_train[-1]
@@ -138,6 +112,27 @@ def test_deep_learning_pipeline_with_random_search():
 
     assert last_batch_mse_train < last_batch_mse_validation
     assert last_epoch_mse_train < last_epoch_mse_validation
+
+
+def create_2d_data():
+    i = 0
+    data_inputs = []
+    for batch_index in range(BATCH_SIZE):
+        batch = []
+        for _ in range(TIMESTEPS):
+            batch.append(i)
+            i += 1
+        data_inputs.append(batch)
+
+    data_inputs = np.array(data_inputs)
+    random_noise = np.random.random(DATA_INPUTS_PAST_SHAPE)
+
+    expected_outputs = 3 * data_inputs + 4 * random_noise
+    expected_outputs = expected_outputs.astype(np.float32)
+
+    data_inputs = data_inputs.astype(np.float32)
+
+    return data_inputs, expected_outputs
 
 
 def to_numpy_metric_wrapper(metric_fun):
