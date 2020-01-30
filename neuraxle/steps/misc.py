@@ -27,12 +27,11 @@ You can find here misc. pipeline steps, for example, callbacks useful for debugg
 import time
 from abc import ABC
 
-from neuraxle.steps.flow import ForceMustHandleMixin
-
 VALUE_CACHING = 'value_caching'
 from typing import List, Any
 
-from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, ExecutionContext, MetaStepMixin
+from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, ExecutionContext, MetaStepMixin, \
+    HandlerMixin
 from neuraxle.data_container import DataContainer
 
 
@@ -161,7 +160,7 @@ class FitTransformCallbackStep(BaseStep):
         return processed_outputs
 
 
-class CallbackWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
+class CallbackWrapper(HandlerMixin, MetaStepMixin, BaseStep):
     def __init__(
             self,
             wrapped,
@@ -179,7 +178,7 @@ class CallbackWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
         self.fit_callback_function = fit_callback_function
         self.transform_callback_function = transform_callback_function
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         :param data_container: data container
         :type data_container: DataContainer
@@ -192,8 +191,7 @@ class CallbackWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
         self.wrapped = self.wrapped.handle_fit(data_container, context)
         return self
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         :param data_container: data container
         :type data_container: DataContainer
@@ -207,7 +205,7 @@ class CallbackWrapper(ForceMustHandleMixin, MetaStepMixin, BaseStep):
         self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
         return self, data_container
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         :param data_container: data container
         :type data_container: DataContainer
@@ -312,28 +310,28 @@ class TapeCallbackFunction:
         self.name_tape = []
 
 
-class HandleCallbackStep(ForceMustHandleMixin, BaseStep):
+class HandleCallbackStep(HandlerMixin, BaseStep):
     def __init__(
             self,
             handle_fit_callback,
             handle_transform_callback,
             handle_fit_transform_callback
     ):
-        ForceMustHandleMixin.__init__(self)
+        HandlerMixin.__init__(self)
         BaseStep.__init__(self)
         self.handle_fit_callback = handle_fit_callback
         self.handle_fit_transform_callback = handle_fit_transform_callback
         self.handle_transform_callback = handle_transform_callback
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         self.handle_fit_callback((data_container, context))
         return self, data_container
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         self.handle_transform_callback((data_container, context))
         return data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         self.handle_fit_transform_callback((data_container, context))
         return self, data_container
 

@@ -27,11 +27,11 @@ This module contains steps to perform various feature unions and model stacking,
 from joblib import Parallel, delayed
 
 from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin, NamedTupleList, Identity, ExecutionContext, \
-    DataContainer
+    DataContainer, HandlerMixin
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
-class FeatureUnion(TruncableSteps):
+class FeatureUnion(HandlerMixin, TruncableSteps):
     """Parallelize the union of many pipeline steps."""
 
     def __init__(
@@ -127,54 +127,6 @@ class FeatureUnion(TruncableSteps):
         self.joiner, data_container = self.joiner.handle_fit_transform(data_container, context)
         return data_container
 
-    def fit(self, data_inputs, expected_outputs=None) -> 'FeatureUnion':
-        """
-        Fit the parallel steps on the data. It will make use of some parallel processing.
-
-        :param data_inputs: The input data to fit onto
-        :param expected_outputs: The output that should be obtained when fitting.
-        :return: self
-        """
-        # Actually fit:
-        if self.n_jobs != 1:
-            fitted = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
-                delayed(bro.fit)(data_inputs, expected_outputs)
-                for _, bro in self.steps_as_tuple
-            )
-        else:
-            fitted = [
-                bro.fit(data_inputs, expected_outputs)
-                for _, bro in self.steps_as_tuple
-            ]
-
-        # Save fitted steps
-        for i, f in enumerate(fitted):
-            self.steps_as_tuple[i] = (self.steps_as_tuple[i][0], f)
-        self._refresh_steps()
-
-        return self
-
-    def transform(self, data_inputs):
-        """
-        Transform the data with the unions. It will make use of some parallel processing.
-
-        :param data_inputs: The input data to fit onto
-        :return: the transformed data_inputs.
-        """
-        if self.n_jobs != 1:
-            results = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
-                delayed(bro.transform)(data_inputs)
-                for _, bro in self.steps_as_tuple
-            )
-        else:
-            results = [
-                bro.transform(data_inputs)
-                for _, bro in self.steps_as_tuple
-            ]
-
-        results = self.joiner.transform(results)
-        return results
-
 
 class AddFeatures(FeatureUnion):
     """Parallelize the union of many pipeline steps AND concatenate the new features to the received inputs using Identity."""
@@ -210,49 +162,39 @@ class ModelStacking(FeatureUnion):
         FeatureUnion.__init__(self, steps_as_tuple, **kwargs)
         self.judge: BaseStep = judge  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
-        new_self, _ = FeatureUnion.handle_fit_transform(self, data_container, context)
+    def _fit_transform_data_container(self, data_container, context) -> (BaseStep, DataContainer):
+        new_self, _ = super()._fit_transform_data_container(data_container, context)
 
-        new_self = new_self.fit(data_container.data_inputs, data_container.expected_outputs)
+        new_self = new_self._fit_data_container(data_container, context)
+        data_container = new_self._transform_data_container(data_container, context)
 
-        return new_self, new_self.handle_transform(data_container, context)
+        return new_self, data_container
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
-        new_self = FeatureUnion.handle_fit(self, data_container, context)
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+        """
+        Fit the parallel steps on the data. It will make use of some parallel processing.
+        Also, fit the judge on the result of the parallel steps.
 
+        :param data_container: data container to fit on
+        :param context: execution context
+        :return: self
+        """
+        new_self = super()._fit_data_container(data_container, context)
         new_self = new_self.fit(data_container.data_inputs, data_container.expected_outputs)
 
         return new_self
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        data_container = FeatureUnion.handle_transform(self, data_container, context)
+    def _transform_data_container(self, data_container, context) -> DataContainer:
+        """
+        Transform the data with the unions. It will make use of some parallel processing.
+        Then, use the judge to refine the transformations.
+
+        :param data_container: data container to transform
+        :param context: execution context
+        """
+        data_container = super()._transform_data_container(data_container, context)
         results = self.judge.transform(data_container.data_inputs)
         data_container.set_data_inputs(results)
 
         return data_container
 
-    def fit(self, data_inputs, expected_outputs=None) -> 'ModelStacking':
-        """
-        Fit the parallel steps on the data. It will make use of some parallel processing.
-        Also, fit the judge on the result of the parallel steps.
-
-        :param data_inputs: The input data to fit onto
-        :param expected_outputs: The output that should be obtained when fitting.
-        :return: self
-        """
-        FeatureUnion.fit(self, data_inputs, expected_outputs)
-        results = FeatureUnion.transform(self, data_inputs)
-
-        self.judge = self.judge.fit(results, expected_outputs)
-        return self
-
-    def transform(self, data_inputs):
-        """
-        Transform the data with the unions. It will make use of some parallel processing.
-        Then, use the judge to refine the transformations.
-
-        :param data_inputs: The input data to fit onto
-        :return: the transformed data_inputs.
-        """
-        results = FeatureUnion.transform(self, data_inputs)
-        return self.judge.transform(results)

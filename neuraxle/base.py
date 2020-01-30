@@ -1881,46 +1881,6 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
 
 
-class ForceAlwaysHandleMixin:
-    """
-    A pipeline step that requires the implementation only of handler methods :
-
-        - handle_transform
-        - handle_fit_transform
-        - handle_fit
-
-    .. seealso::
-        :class:`BaseStep`
-    """
-
-    @abstractmethod
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
-        raise NotImplementedError('Must implement handle_fit in {0}'.format(self.name))
-
-    @abstractmethod
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
-        raise NotImplementedError('Must implement handle_transform in {0}'.format(self.name))
-
-    @abstractmethod
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
-        raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
-
-    def transform(self, data_inputs) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(
-                self.name))
-
-    def fit(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(
-                self.name))
-
-    def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(
-                self.name))
-
-
 class NonFittableMixin:
     """
     A pipeline step that requires no fitting: fitting just returns self when called to do no action.
@@ -2866,3 +2826,45 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
         NonTransformableMixin.__init__(self)
         NonFittableMixin.__init__(self)
         BaseStep.__init__(self, name=name, savers=savers)
+
+
+class HandlerMixin:
+    """
+    A pipeline step that only requires the implementation of handler methods :
+        - handle_transform
+        - handle_fit_transform
+        - handle_fit
+
+    If forbids only implementing fit or transform or fit_transform without the handles. So it forces the handles.
+
+    .. seealso::
+        :class:`BaseStep`
+    """
+
+    @abstractmethod
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        raise NotImplementedError('Must implement _fit_data_container in {0}'.format(self.name))
+
+    @abstractmethod
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        raise NotImplementedError('Must implement _transform_data_container in {0}'.format(self.name))
+
+    @abstractmethod
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
+        raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
+
+    def transform(self, data_inputs) -> 'HandlerMixin':
+        raise Exception(
+            'Transform method is not supported for {0}, because it inherits from HandlerMixin. Please use handle_transform instead.'.format(
+                self.name))
+
+    def fit(self, data_inputs, expected_outputs=None) -> 'HandlerMixin':
+        raise Exception(
+            'Fit method is not supported for {0}, because it inherits from HandlerMixin. Please use handle_fit instead.'.format(
+                self.name))
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> 'HandlerMixin':
+        raise Exception(
+            'Fit transform method is not supported for {0}, because it inherits from HandlerMixin. Please use handle_fit_transform instead.'.format(
+                self.name))

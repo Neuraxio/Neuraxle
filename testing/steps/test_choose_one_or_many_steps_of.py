@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from neuraxle.base import Identity
 from neuraxle.hyperparams.distributions import Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.pipeline import Pipeline
@@ -421,3 +422,13 @@ def test_choose_one_step_of_fit_should_choose_step(test_case: NeuraxleTestCase):
     p = p.transform(DATA_INPUTS)
 
     assert_callback_data_is_as_expected(test_case)
+
+
+def test_choose_one_step_of_invalid_chosen_step():
+    with pytest.raises(ValueError):
+        Pipeline([
+            ChooseOneStepOf([
+                ('a', Identity()),
+                ('b', Identity())
+            ]).set_hyperparams({'choice': 'c'}),
+        ])

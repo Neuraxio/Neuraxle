@@ -29,10 +29,8 @@ Handler methods are useful when :
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-import numpy as np
 
 from neuraxle.base import BaseStep, ForceAlwaysHandleMixin, DataContainer, ExecutionContext
-from neuraxle.pipeline import Pipeline
 
 
 class ForceAlwaysAlwaysHandleMixinStep(ForceAlwaysHandleMixin, BaseStep):
@@ -79,19 +77,3 @@ class ForceAlwaysAlwaysHandleMixinStep(ForceAlwaysHandleMixin, BaseStep):
         data_container = self.hash_data_container(data_container)
         return self, data_container
 
-
-def main():
-    p = Pipeline([
-        ForceAlwaysAlwaysHandleMixinStep(),
-    ])
-
-    p = p.fit(np.array([0, 1]), np.array([0, 1]))
-    p = p.transform(np.array([0, 1]))
-    
-    # Note that calling `ForceAlwaysAlwaysHandleMixinStep().fit(...)`
-    # on some data would have crashed. We would need to instead do
-    # `ForceAlwaysAlwaysHandleMixinStep().handle_fit(...)` with a handle.
-
-
-if __name__ == "__main__":
-    main()

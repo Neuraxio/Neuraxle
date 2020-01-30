@@ -26,6 +26,7 @@ Classes for containing the data that flows throught the pipeline steps.
 import hashlib
 from typing import Any, Iterable, List
 
+import numpy as np
 from conv import convolved_1d
 
 
@@ -143,6 +144,29 @@ class DataContainer:
         return DataContainer(data_inputs=self.data_inputs, current_ids=self.current_ids, summary_id=self.summary_id,
                              expected_outputs=self.expected_outputs)
 
+    def tolist(self):
+        current_ids = self.current_ids
+        data_inputs = self.data_inputs
+        expected_outputs = self.expected_outputs
+
+        if isinstance(self.current_ids, np.ndarray):
+            current_ids = self.current_ids.tolist()
+
+        if isinstance(self.data_inputs, np.ndarray):
+            data_inputs = self.data_inputs.tolist()
+
+        if isinstance(self.expected_outputs, np.ndarray):
+            expected_outputs = self.expected_outputs.tolist()
+
+        self.set_current_ids(current_ids)
+        self.set_data_inputs(data_inputs)
+        self.set_expected_outputs(expected_outputs)
+
+    def to_numpy(self):
+        self.set_current_ids(np.array(self.current_ids))
+        self.set_data_inputs(np.array(self.data_inputs))
+        self.set_expected_outputs(np.array(self.expected_outputs))
+
     def __iter__(self):
         """
         Iter method returns a zip of all of the current_ids, data_inputs, and expected_outputs in the data container.
@@ -219,6 +243,9 @@ class ListDataContainer(DataContainer):
     .. seealso::
         :class:`DataContainer`
     """
+    def __init__(self, data_inputs: Any, current_ids=None, summary_id=None, expected_outputs: Any = None):
+        DataContainer.__init__(self, data_inputs, current_ids, summary_id, expected_outputs)
+        self.tolist()
 
     @staticmethod
     def empty() -> 'ListDataContainer':
@@ -246,6 +273,8 @@ class ListDataContainer(DataContainer):
         :type data_container: DataContainer
         :return:
         """
+        data_container.tolist()
+
         self.current_ids.extend(data_container.current_ids)
         self.data_inputs.extend(data_container.data_inputs)
         self.expected_outputs.extend(data_container.expected_outputs)

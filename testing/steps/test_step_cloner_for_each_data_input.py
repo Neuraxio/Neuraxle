@@ -1,5 +1,6 @@
 from neuraxle.hyperparams.distributions import Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
+from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from testing.test_pipeline import SomeStep
 
@@ -23,7 +24,9 @@ class SomeStepInverseTransform(SomeStep):
 
 def test_should_fit_transform():
     some_step = SomeStepInverseTransform()
-    step_cloner = StepClonerForEachDataInput(some_step)
+    step_cloner = Pipeline([
+        StepClonerForEachDataInput(some_step)
+    ])
 
     step_cloner, processed_outputs = step_cloner.fit_transform([0])
 
@@ -32,7 +35,9 @@ def test_should_fit_transform():
 
 
 def test_should_inverse_transform():
-    step_cloner = StepClonerForEachDataInput(SomeStepInverseTransform())
+    step_cloner = Pipeline([
+        StepClonerForEachDataInput(SomeStepInverseTransform())
+    ])
 
     step_cloner, processed_outputs = step_cloner.fit_transform([0])
     step_cloner = step_cloner.reverse()

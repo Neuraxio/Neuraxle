@@ -413,7 +413,7 @@ class MiniBatchSequentialPipeline(Pipeline):
 
         return new_self, data_container.data_inputs
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Transform all sub pipelines splitted by the Barrier steps.
 
@@ -435,7 +435,7 @@ class MiniBatchSequentialPipeline(Pipeline):
 
         return data_container
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'MiniBatchSequentialPipeline':
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'Pipeline':
         """
         Fit all sub pipelines splitted by the Barrier steps.
 
@@ -467,7 +467,7 @@ class MiniBatchSequentialPipeline(Pipeline):
 
         return self
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> Tuple['MiniBatchSequentialPipeline', DataContainer]:
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
         """
         Transform all sub pipelines splitted by the Barrier steps.
 

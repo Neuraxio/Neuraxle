@@ -3,7 +3,7 @@ import pytest
 
 from neuraxle.base import ExecutionMode
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.flow import TrainOrTestOnlyWrapper
+from neuraxle.steps.flow import TrainOrTestOnlyWrapper, TestOnlyWrapper
 from neuraxle.steps.misc import TapeCallbackFunction, FitTransformCallbackStep
 from testing.steps.neuraxle_test_case import NeuraxleTestCase
 
@@ -136,6 +136,16 @@ tape_fit = TapeCallbackFunction()
         data_inputs=DATA_INPUTS,
         expected_outputs=EXPECTED_OUTPUTS,
         expected_callbacks_data=[[], []],
+        execution_mode=ExecutionMode.FIT
+    ),
+    NeuraxleTestCase(
+        pipeline=Pipeline([TestOnlyWrapper(
+            FitTransformCallbackStep(tape_transform, tape_fit, transform_function=lambda di: di * 2))]),
+        more_arguments={'set_train': False},
+        callbacks=[tape_transform, tape_fit],
+        data_inputs=DATA_INPUTS,
+        expected_outputs=EXPECTED_OUTPUTS,
+        expected_callbacks_data=[[], [(DATA_INPUTS, EXPECTED_OUTPUTS)]],
         execution_mode=ExecutionMode.FIT
     )
 ])

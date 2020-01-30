@@ -56,8 +56,7 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
 
         return data_container
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    BaseStep, DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
         """
         Handle fit by passing expected outputs to the wrapped step fit method.
 
@@ -75,8 +74,7 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
 
         return self, data_container
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    BaseStep, DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
         """
         Handle fit transform by passing expected outputs to the wrapped step fit method.
         Update the expected outputs with the outputs.
@@ -118,18 +116,6 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
         data_container.set_current_ids(current_ids)
 
         return data_container
-
-    def fit(self, data_inputs, expected_outputs=None):
-        raise NotImplementedError('must be used inside a pipeline')
-
-    def fit_transform(self, data_inputs, expected_outputs=None):
-        raise NotImplementedError('must be used inside a pipeline')
-
-    def transform(self, data_inputs):
-        raise NotImplementedError('must be used inside a pipeline')
-
-    def inverse_transform(self, processed_outputs):
-        raise NotImplementedError('must be used inside a pipeline')
 
 
 class InputAndOutputTransformerMixin:
@@ -182,14 +168,3 @@ class InputAndOutputTransformerMixin:
 
         return new_self, data_container
 
-    def fit(self, data_inputs, expected_outputs=None):
-        raise NotImplementedError('must be used inside a pipeline')
-
-    def fit_transform(self, data_inputs, expected_outputs=None):
-        raise NotImplementedError('must be used inside a pipeline')
-
-    def transform(self, data_inputs):
-        raise NotImplementedError('must be used inside a pipeline')
-
-    def inverse_transform(self, processed_outputs):
-        raise NotImplementedError('must be used inside a pipeline')

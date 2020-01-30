@@ -25,12 +25,12 @@ Pipeline Steps For Looping
 import copy
 from typing import List, Any
 
-from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin
+from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, HandlerMixin
 from neuraxle.data_container import ListDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
 
-class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
+class ForEachDataInput(HandlerMixin, ResumableStepMixin, MetaStepMixin, BaseStep):
     """
     Truncable step that fits/transforms each step for each of the data inputs, and expected outputs.
     """
@@ -41,15 +41,7 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
     ):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
-
-    def fit(self, data_inputs, expected_outputs=None):
-        if expected_outputs is None:
-            expected_outputs = [None] * len(data_inputs)
-
-        for di, eo in zip(data_inputs, expected_outputs):
-            self.wrapped = self.wrapped.fit(di, eo)
-
-        return self
+        HandlerMixin.__init__(self)
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
         """
@@ -68,20 +60,6 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
             )
 
         return self
-
-    def transform(self, data_inputs):
-        """
-        Transform each step for each data inputs.
-
-        :param data_inputs: data inputs to transform
-        :type data_inputs: Iterable
-        :return: outputs
-        """
-        outputs = []
-        for di in data_inputs:
-            outputs.append(self.wrapped.transform(di))
-
-        return outputs
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
@@ -109,27 +87,6 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
         output_data_container.summary_id = data_container.summary_id
 
         return output_data_container
-
-    def fit_transform(self, data_inputs, expected_outputs=None):
-        """
-        Fit transform each step for each data inputs, and expected outputs
-
-        :param data_inputs: data inputs to fit transform
-        :type data_inputs: Iterable
-        :param expected_outputs: expected outputs to fit transform on
-        :type expected_outputs: Iterable
-
-        :return: self, transformed_data_container
-        """
-        if expected_outputs is None:
-            expected_outputs = [None] * len(data_inputs)
-
-        outputs = []
-        for di, eo in zip(data_inputs, expected_outputs):
-            self.wrapped, output = self.wrapped.fit_transform(di, eo)
-            outputs.append(output)
-
-        return self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
@@ -174,10 +131,11 @@ class ForEachDataInput(ResumableStepMixin, MetaStepMixin, BaseStep):
         return False
 
 
-class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
+class StepClonerForEachDataInput(HandlerMixin, MetaStepMixin, BaseStep):
     def __init__(self, wrapped: BaseStep, copy_op=copy.deepcopy):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
+        HandlerMixin.__init__(self)
 
         self.set_step(wrapped)
         self.steps: List[BaseStep] = []
@@ -211,33 +169,59 @@ class StepClonerForEachDataInput(MetaStepMixin, BaseStep):
         self.steps = [s.set_hyperparams_space(self.wrapped.get_hyperparams_space()) for s in self.steps]
         return self
 
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        BaseStep._will_process(self, data_container, context)
+
+        self._copy_one_step_per_data_input(data_container)
+
+        return data_container, context
+
+    def _copy_one_step_per_data_input(self, data_container):
         # One copy of step per data input:
-        self.steps = [self.copy_op(self.wrapped) for _ in range(len(data_inputs))]
+        self.steps = [self.copy_op(self.wrapped) for _ in range(len(data_container))]
 
-        if expected_outputs is None:
-            expected_outputs = [None] * len(data_inputs)
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        fit_transform_result = [
+            self.steps[i].handle_fit_transform(data_container_batch, context)
+            for i, data_container_batch in enumerate(data_container.convolved_1d(1, 1))
+        ]
 
-        fit_transform_result = [self.steps[i].fit_transform(di, eo) for i, (di, eo) in
-                                enumerate(zip(data_inputs, expected_outputs))]
-        self.steps = [step for step, di in fit_transform_result]
-        data_inputs = [di for step, di in fit_transform_result]
+        self.steps = [step for step, _ in fit_transform_result]
+        output_data_container = ListDataContainer.empty()
+        [output_data_container.concat(data_container_batch) for _, data_container_batch in fit_transform_result]
 
-        return self, data_inputs
+        return self, output_data_container.to_numpy()
 
-    def fit(self, data_inputs: List, expected_outputs: List = None) -> 'StepClonerForEachDataInput':
-        # One copy of step per data input:
-        self.steps = [self.copy_op(self.wrapped) for _ in range(len(data_inputs))]
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        fit_transform_result = [
+            self.steps[i].handle_fit(data_container_batch, context)
+            for i, data_container_batch in enumerate(data_container.convolved_1d(1, 1))
+        ]
 
-        # Fit them all.
-        if expected_outputs is None:
-            expected_outputs = [None] * len(data_inputs)
-        self.steps = [self.steps[i].fit(di, eo) for i, (di, eo) in enumerate(zip(data_inputs, expected_outputs))]
+        self.steps = [step for step in fit_transform_result]
 
         return self
 
-    def transform(self, data_inputs: List) -> List:
-        return [self.steps[i].transform(di) for i, di in enumerate(data_inputs)]
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        fit_transform_result = [
+            self.steps[i].handle_transform(data_container_batch, context)
+            for i, data_container_batch in enumerate(data_container.convolved_1d(1, 1))
+        ]
 
-    def inverse_transform(self, data_output):
-        return [self.steps[i].inverse_transform(di) for i, di in enumerate(data_output)]
+        output_data_container = ListDataContainer.empty()
+        [output_data_container.concat(data_container_batch) for _, data_container_batch in fit_transform_result]
+
+        return output_data_container.to_numpy()
+
+    def handle_inverse_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        self._copy_one_step_per_data_input(data_container)
+
+        inverse_transform_result = [
+            self.steps[i].handle_inverse_transform(data_container_batch, context)
+            for i, data_container_batch in enumerate(data_container.convolved_1d(1, 1))
+        ]
+
+        output_data_container = ListDataContainer.empty()
+        [output_data_container.concat(data_container_batch) for _, data_container_batch in inverse_transform_result]
+
+        return output_data_container.to_numpy()
