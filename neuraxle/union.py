@@ -49,14 +49,10 @@ class FeatureUnion(HandlerMixin, TruncableSteps):
         :param n_jobs: The number of jobs for the parallelized ``joblib.Parallel`` loop in fit and in transform.
         :param backend: The type of parallelization to do with ``joblib.Parallel``. Possible values: "loky", "multiprocessing", "threading", "dask" if you use dask, and more.
         """
+        steps_as_tuple.append(('joiner', joiner))
         TruncableSteps.__init__(self, steps_as_tuple)
-        self.joiner = joiner
         self.n_jobs = n_jobs
         self.backend = backend
-
-    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
-        BaseStep.apply(self, method_name, *kargs, **kwargs)
-        self.joiner.apply(method_name, *kargs, **kwargs)
 
     def _fit_data_container(self, data_container, context):
         """
@@ -70,16 +66,16 @@ class FeatureUnion(HandlerMixin, TruncableSteps):
         if self.n_jobs != 1:
             fitted_steps = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
                 delayed(step.handle_fit)(data_container.copy(), context)
-                for _, step in self.steps_as_tuple
+                for _, step in self.steps_as_tuple[:-1]
             )
         else:
             fitted_steps = [
                 step.handle_fit(data_container.copy(), context)
-                for _, step in self.steps_as_tuple
+                for _, step in self.steps_as_tuple[:-1]
             ]
 
         # Save fitted steps
-        for i, fitted_step in enumerate(fitted_steps):
+        for i, fitted_step in enumerate(fitted_steps[:-1]):
             self.steps_as_tuple[i] = (self.steps_as_tuple[i][0], fitted_step)
         self._refresh_steps()
 
@@ -96,19 +92,23 @@ class FeatureUnion(HandlerMixin, TruncableSteps):
         if self.n_jobs != 1:
             data_containers = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
                 delayed(step.handle_transform)(data_container.copy(), context)
-                for _, step in self.steps_as_tuple
+                for _, step in self.steps_as_tuple[:-1]
             )
         else:
             data_containers = [
                 step.handle_transform(data_container.copy(), context)
-                for _, step in self.steps_as_tuple
+                for _, step in self.steps_as_tuple[:-1]
             ]
 
-        return DataContainer(data_inputs=data_containers, current_ids=data_container.current_ids,
-                             summary_id=data_container.summary_id, expected_outputs=data_container.expected_outputs)
+        return DataContainer(
+            data_inputs=data_containers,
+            current_ids=data_container.current_ids,
+            summary_id=data_container.summary_id,
+            expected_outputs=data_container.expected_outputs
+        )
 
     def _did_transform(self, data_container, context):
-        data_container = self.joiner.handle_transform(data_container, context)
+        data_container = self[-1].handle_transform(data_container, context)
         return data_container
 
     def _fit_transform_data_container(self, data_container, context):
@@ -124,7 +124,7 @@ class FeatureUnion(HandlerMixin, TruncableSteps):
         return new_self, data_container
 
     def _did_fit_transform(self, data_container, context):
-        self.joiner, data_container = self.joiner.handle_fit_transform(data_container, context)
+        data_container = self[-1].handle_transform(data_container, context)
         return data_container
 
 
@@ -162,15 +162,15 @@ class ModelStacking(FeatureUnion):
         FeatureUnion.__init__(self, steps_as_tuple, **kwargs)
         self.judge: BaseStep = judge  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
 
-    def _fit_transform_data_container(self, data_container, context) -> (BaseStep, DataContainer):
-        new_self, _ = super()._fit_transform_data_container(data_container, context)
+    def _did_fit_transform(self, data_container, context) -> ('BaseStep', DataContainer):
+        data_container = super()._did_fit_transform(data_container, context)
 
-        new_self = new_self._fit_data_container(data_container, context)
-        data_container = new_self._transform_data_container(data_container, context)
+        fitted_judge, data_container = self.judge.handle_fit_transform(data_container, context)
+        self.judge = fitted_judge
 
-        return new_self, data_container
+        return data_container
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+    def _did_fit(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Fit the parallel steps on the data. It will make use of some parallel processing.
         Also, fit the judge on the result of the parallel steps.
@@ -179,12 +179,16 @@ class ModelStacking(FeatureUnion):
         :param context: execution context
         :return: self
         """
-        new_self = super()._fit_data_container(data_container, context)
-        new_self = new_self.fit(data_container.data_inputs, data_container.expected_outputs)
+        data_container = super()._did_fit(data_container, context)
+        data_container = super()._transform_data_container(data_container, context)
+        data_container = super()._did_transform(data_container, context)
 
-        return new_self
+        fitted_judge = self.judge.handle_fit(data_container, context)
+        self.judge = fitted_judge
 
-    def _transform_data_container(self, data_container, context) -> DataContainer:
+        return data_container
+
+    def _did_transform(self, data_container, context) -> DataContainer:
         """
         Transform the data with the unions. It will make use of some parallel processing.
         Then, use the judge to refine the transformations.
@@ -192,9 +196,10 @@ class ModelStacking(FeatureUnion):
         :param data_container: data container to transform
         :param context: execution context
         """
-        data_container = super()._transform_data_container(data_container, context)
-        results = self.judge.transform(data_container.data_inputs)
-        data_container.set_data_inputs(results)
+        data_container = super()._did_transform(data_container, context)
+
+        results = self.judge.handle_transform(data_container, context)
+        data_container.set_data_inputs(results.data_inputs)
 
         return data_container
 
