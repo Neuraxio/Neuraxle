@@ -55,14 +55,16 @@ def test_list_data_container_concat():
     # When
     data_container.concat(DataContainer(
         current_ids=[str(i) for i in range(100, 200)],
-        data_inputs=np.array(list(range(200, 300))),
+        data_inputs=np.array(list(range(100, 200))),
+        expected_outputs=np.array(list(range(200, 300)))
     ))
 
     # Then
     assert np.array_equal(np.array(data_container.current_ids), np.array(list(range(0, 200))).astype(np.str))
 
     expected_data_inputs = np.array(list(range(0, 200))).astype(np.int)
-    assert np.array_equal(np.array(data_container.data_inputs).astype(np.int), expected_data_inputs)
+    actual_data_inputs = np.array(data_container.data_inputs).astype(np.int)
+    assert np.array_equal(actual_data_inputs, expected_data_inputs)
 
     expected_expected_outputs = np.array(list(range(100, 300))).astype(np.int)
     assert np.array_equal(np.array(data_container.expected_outputs).astype(np.int), expected_expected_outputs)

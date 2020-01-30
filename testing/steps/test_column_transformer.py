@@ -4,6 +4,7 @@ from typing import Any
 import numpy as np
 import pytest
 from neuraxle.base import BaseStep
+from neuraxle.pipeline import Pipeline
 from neuraxle.steps.column_transformer import ColumnTransformer
 
 
@@ -249,7 +250,9 @@ test_case_list_of_columns = ColumnChooserTestCase(
 ])
 def test_column_transformer_transform_should_support_indexes(test_case: ColumnChooserTestCase):
     data_inputs = test_case.data_inputs
-    column_transformer = ColumnTransformer(test_case.column_transformer_tuple_list)
+    column_transformer = Pipeline([
+        ColumnTransformer(test_case.column_transformer_tuple_list)
+    ])
 
     outputs = column_transformer.transform(data_inputs)
 
@@ -268,7 +271,9 @@ def test_column_transformer_transform_should_support_indexes(test_case: ColumnCh
 def test_column_transformer_fit_transform_should_support_indexes(test_case: ColumnChooserTestCase):
     data_inputs = test_case.data_inputs
     expected_outputs = test_case.expected_outputs
-    column_transformer = ColumnTransformer(test_case.column_transformer_tuple_list)
+    column_transformer = Pipeline([
+        ColumnTransformer(test_case.column_transformer_tuple_list)
+    ])
 
     column_transformer, outputs = column_transformer.fit_transform(data_inputs, expected_outputs)
 
@@ -289,7 +294,9 @@ def test_column_transformer_fit_transform_should_support_indexes(test_case: Colu
 ])
 def test_column_transformer_fit_should_support_indexes(test_case: ColumnChooserTestCase):
     data_inputs = test_case.data_inputs
-    column_transformer = ColumnTransformer(test_case.column_transformer_tuple_list)
+    column_transformer = Pipeline([
+        ColumnTransformer(test_case.column_transformer_tuple_list)
+    ])
 
     column_transformer = column_transformer.fit(data_inputs, test_case.expected_outputs)
 
@@ -323,7 +330,9 @@ def test_column_transformer_fit_should_support_multiple_tuples():
         n_dimension=3
     )
     data_inputs = test_case.data_inputs
-    column_transformer = ColumnTransformer(test_case.column_transformer_tuple_list)
+    column_transformer = Pipeline([
+        ColumnTransformer(test_case.column_transformer_tuple_list)
+    ])
 
     # When
     column_transformer = column_transformer.fit(data_inputs, test_case.expected_outputs)
@@ -363,7 +372,7 @@ def test_column_transformer_fit_transform_should_support_multiple_tuples():
         n_dimension=3
     )
     data_inputs = test_case.data_inputs
-    column_transformer = ColumnTransformer(test_case.column_transformer_tuple_list)
+    column_transformer = Pipeline([ColumnTransformer(test_case.column_transformer_tuple_list)])
 
     # When
     column_transformer, outputs = column_transformer.fit_transform(data_inputs, test_case.expected_outputs)
@@ -404,7 +413,7 @@ def test_column_transformer_transform_should_support_multiple_tuples():
         n_dimension=3
     )
     data_inputs = test_case.data_inputs
-    column_transformer = ColumnTransformer(test_case.column_transformer_tuple_list)
+    column_transformer = Pipeline([ColumnTransformer(test_case.column_transformer_tuple_list)])
 
     # When
     outputs = column_transformer.transform(data_inputs)

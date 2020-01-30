@@ -413,7 +413,7 @@ class MiniBatchSequentialPipeline(Pipeline):
 
         return new_self, data_container.data_inputs
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Transform all sub pipelines splitted by the Barrier steps.
 
@@ -421,6 +421,8 @@ class MiniBatchSequentialPipeline(Pipeline):
         :param context: execution context
         :return: data container
         """
+        data_container, context = self._will_process(data_container, context)
+
         sub_pipelines = self._create_sub_pipelines()
 
         for sub_pipeline in sub_pipelines:
@@ -435,7 +437,7 @@ class MiniBatchSequentialPipeline(Pipeline):
 
         return data_container
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'Pipeline':
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         Fit all sub pipelines splitted by the Barrier steps.
 
@@ -443,6 +445,8 @@ class MiniBatchSequentialPipeline(Pipeline):
         :param context: execution context
         :return: data container
         """
+        data_container, context = self._will_process(data_container, context)
+
         sub_pipelines = self._create_sub_pipelines()
         index_start = 0
 
@@ -467,7 +471,7 @@ class MiniBatchSequentialPipeline(Pipeline):
 
         return self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Transform all sub pipelines splitted by the Barrier steps.
 
@@ -475,6 +479,8 @@ class MiniBatchSequentialPipeline(Pipeline):
         :param context: execution context
         :return: data container
         """
+        data_container, context = self._will_process(data_container, context)
+
         sub_pipelines = self._create_sub_pipelines()
         index_start = 0
 
@@ -603,8 +609,7 @@ class Joiner(Barrier):
 
         return output_data_container
 
-    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple[
-        'Any', DataContainer]:
+    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple['Any', DataContainer]:
         """
         Concatenate the pipeline fit transform output of each batch of self.batch_size together.
 
