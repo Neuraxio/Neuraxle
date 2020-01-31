@@ -327,6 +327,9 @@ class SelectNotEmptyJoiner(TransformHandlerMixin, BaseStep):
         :return: transformed data container
         """
         data_inputs = [dc.data_inputs for dc in data_container.data_inputs if len(dc.data_inputs) > 0]
+        if len(data_inputs) == 1:
+            data_inputs = data_inputs[0]
+
         data_container = DataContainer(data_inputs=data_inputs, current_ids=data_container.current_ids,
                                        expected_outputs=data_container.expected_outputs)
         data_container.set_data_inputs(data_inputs)
