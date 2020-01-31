@@ -267,21 +267,31 @@ class BaseCrossValidationWrapper(BaseValidation, ABC):
         BaseValidation.__init__(self, scoring_function)
         self.joiner = joiner
 
-    def fit(self, data_inputs, expected_outputs=None) -> 'BaseCrossValidationWrapper':
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
         assert self.wrapped is not None
 
-        train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = self.split(
-            data_inputs, expected_outputs)
+        train_data_container, validation_data_container = self.split_data_container(data_container)
 
         step = StepClonerForEachDataInput(self.wrapped)
-        step = step.fit(train_data_inputs, train_expected_outputs)
+        step = step.handle_fit(train_data_container, context)
 
-        results = step.transform(validation_data_inputs)
-        self.scores = [self.scoring_function(a, b) for a, b in zip(results, validation_expected_outputs)]
+        results = step.handle_transform(validation_data_container, context)
+        self.scores = [self.scoring_function(a, b) for a, b in zip(results.data_inputs, results.expected_outputs)]
         self.scores_mean = np.mean(self.scores)
         self.scores_std = np.std(self.scores)
 
         return self
+
+    def split_data_container(self, data_container: DataContainer) -> Tuple[DataContainer, DataContainer]:
+        train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = self.split(
+            data_container.data_inputs,
+            data_container.expected_outputs
+        )
+
+        train_data_container = DataContainer(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
+        validation_data_container = DataContainer(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
+
+        return train_data_container, validation_data_container
 
     def get_score(self):
         return self.scores_mean

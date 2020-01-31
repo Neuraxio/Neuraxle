@@ -29,7 +29,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import List, Callable
 
-from neuraxle.base import MetaStepMixin, BaseStep, NonTransformableMixin, ExecutionContext
+from neuraxle.base import MetaStepMixin, BaseStep, NonTransformableMixin, ExecutionContext, HandlerMixin, RootStepMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.random import BaseCrossValidationWrapper, KFoldCrossValidationWrapper
@@ -278,7 +278,7 @@ class BaseHyperparameterOptimizer(ABC):
         raise NotImplementedError()
 
 
-class AutoMLAlgorithm(MetaStepMixin, BaseStep):
+class AutoMLAlgorithm(RootStepMixin, MetaStepMixin, BaseStep):
     """
     Pipeline step that executes Automatic Machine Learning strategy.
     It uses an hyperparameter optimizer of type :class:`BaseHyperparameterOptimizer` to find the next best hyperparams.
@@ -301,10 +301,12 @@ class AutoMLAlgorithm(MetaStepMixin, BaseStep):
             self,
             hyperparameter_optimizer: BaseHyperparameterOptimizer,
             validation_technique: BaseCrossValidationWrapper = None,
-            higher_score_is_better=True
+            higher_score_is_better=True,
+            cache_folder=None
     ):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, None)
+        RootStepMixin.__init__(self, cache_folder)
 
         if validation_technique is None:
             validation_technique = KFoldCrossValidationWrapper()
@@ -323,21 +325,22 @@ class AutoMLAlgorithm(MetaStepMixin, BaseStep):
         """
         return self.hyperparameter_optimizer.find_next_best_hyperparams(auto_ml_container)
 
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('AutoMLAlgorithm', float):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit cross validation with wrapped step, and return the score.
 
-        :param data_inputs: data inputs
-        :param expected_outputs: expected outputs to fit on
+        :param data_container: data container to fit transform
+        :param context: execution context
         :return: self, step score
         :rtype: (AutoMLAlgorithm, float)
         """
         step: BaseStep = copy.deepcopy(self.wrapped)
         step: BaseCrossValidationWrapper = copy.copy(self.validation_technique).set_step(step)
-        step = step.fit(data_inputs, expected_outputs)
+        step = step.handle_fit(data_container, context)
         score = step.get_score()
 
-        return self, score
+        data_container.set_data_inputs(score)
+        return self, data_container
 
     def get_best_hyperparams(self, trials: 'Trials') -> HyperparameterSamples:
         """
@@ -457,7 +460,7 @@ class Trials:
         return len(self.trials)
 
 
-class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
+class AutoMLSequentialWrapper(MetaStepMixin, BaseStep):
     """
     A step to execute any Automatic Machine Learning Algorithms.
 
@@ -500,13 +503,13 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
             n_iters: int = 100,
             refit=True
     ):
-        BaseStep.__init__(self)
 
         self.refit = refit
         auto_ml_algorithm = auto_ml_algorithm.set_step(wrapped)
 
+        BaseStep.__init__(self)
         MetaStepMixin.__init__(self, auto_ml_algorithm)
-        NonTransformableMixin.__init__(self)
+        HandlerMixin.__init__(self)
 
         if hyperparams_repository is None:
             hyperparams_repository = InMemoryHyperparamsRepository()
@@ -519,10 +522,6 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
     def _fit_transform_data_container(self, data_container, context):
         new_self = self._fit_data_container(data_container, context)
         return new_self, new_self._transform_data_container(data_container, context)
-
-    def fit_transform(self, data_inputs, expected_outputs):
-        new_self = self.fit(data_inputs, expected_outputs)
-        return new_self, new_self.transform(data_inputs)
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
@@ -567,12 +566,9 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
         """
         for i in range(self.n_iters):
             auto_ml_trial_container: AutoMLContainer = self._load_auto_ml_data(i)
-
             hyperparams: HyperparameterSamples = self.wrapped.find_next_best_hyperparams(auto_ml_trial_container)
             self.wrapped = self.wrapped.update_hyperparams(hyperparams)
-
             self.hyperparams_repository.create_new_trial(hyperparams)
-
             try:
                 self.wrapped, score = self.wrapped.fit_transform(data_inputs, expected_outputs)
                 self.hyperparams_repository.save_score_for_success_trial(hyperparams, score)
@@ -583,6 +579,17 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
             self.best_model = self._load_best_model().fit(data_inputs, expected_outputs)
 
         return self
+
+    def _transform_data_container(self, data_container, context):
+        if self.best_model is None:
+            raise Exception('Cannot transform AutoMLSequentialWrapper before fit')
+        return self.best_model.handle_transform(data_container, context)
+
+    def transform(self, data_inputs):
+        if self.best_model is None:
+            raise Exception('Cannot transform AutoMLSequentialWrapper before fit')
+
+        return self.best_model.transform(data_inputs)
 
     def _load_auto_ml_data(self, trial_number: int) -> AutoMLContainer:
         """
@@ -615,16 +622,6 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
         auto_ml_algorithm = auto_ml_algorithm.update_hyperparams(best_hyperparams)
 
         return copy.deepcopy(auto_ml_algorithm.get_step())
-
-    def transform(self, data_inputs):
-        if self.best_model is None:
-            raise Exception('Cannot transform AutoMLSequentialWrapper before fit')
-        return self.best_model.transform(data_inputs)
-
-    def _transform_data_container(self, data_container, context):
-        if self.best_model is None:
-            raise Exception('Cannot transform AutoMLSequentialWrapper before fit')
-        return self.best_model.handle_transform(data_container, context)
 
     def get_best_model(self) -> BaseStep:
         return self.best_model
@@ -661,7 +658,8 @@ class RandomSearch(AutoMLSequentialWrapper):
             validation_technique=None,
             hyperparams_repository: HyperparamsRepository = None,
             higher_score_is_better=True,
-            n_iter: int = 10
+            n_iter: int = 10,
+            cache_folder=None
     ):
         AutoMLSequentialWrapper.__init__(
             self,
@@ -669,7 +667,8 @@ class RandomSearch(AutoMLSequentialWrapper):
             auto_ml_algorithm=AutoMLAlgorithm(
                 hyperparameter_optimizer=RandomSearchHyperparameterOptimizer(),
                 validation_technique=validation_technique,
-                higher_score_is_better=higher_score_is_better
+                higher_score_is_better=higher_score_is_better,
+                cache_folder=cache_folder
             ),
             hyperparams_repository=hyperparams_repository,
             n_iters=n_iter
