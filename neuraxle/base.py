@@ -1007,8 +1007,7 @@ class BaseStep(ABC):
         """
         return data_container
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit transform data container.
 
@@ -1022,8 +1021,7 @@ class BaseStep(ABC):
 
         return new_self, data_container
 
-    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Apply side effects before transform.
 
@@ -1529,7 +1527,9 @@ class MetaStepMixin:
         self.wrapped: BaseStep = wrapped
 
         if not hasattr(self, 'savers'):
-            warnings.warn('Please initialize Mixins in the reverse order. MetaStepMixin should be initialized after BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers.'.format(self.wrapped.name))
+            warnings.warn(
+                'Please initialize Mixins in the reverse order. MetaStepMixin should be initialized after BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers.'.format(
+                    self.wrapped.name))
             self.savers = [MetaStepJoblibStepSaver()]
         else:
             self.savers.append(MetaStepJoblibStepSaver())
@@ -1828,6 +1828,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
     """
     Custom saver for meta step mixin.
     """
+
     def __init__(self):
         JoblibStepSaver.__init__(self)
 
@@ -2843,9 +2844,9 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
 class HandlerMixin:
     """
     A pipeline step that only requires the implementation of handler methods :
-        - handle_transform
-        - handle_fit_transform
-        - handle_fit
+        - _transform_data_container
+        - _fit_transform_data_container
+        - _fit_data_container
 
     If forbids only implementing fit or transform or fit_transform without the handles. So it forces the handles.
 
@@ -2880,3 +2881,42 @@ class HandlerMixin:
         raise Exception(
             'Fit transform method is not supported for {0}, because it inherits from HandlerMixin. Please use handle_fit_transform instead.'.format(
                 self.name))
+
+
+class RootStepMixin(HandlerMixin):
+    """
+    A step that can be the root of a pipeline.
+    Automatically call handle methods in the transform, fit, and fit_transform methods.
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`neuraxle.pipeline.Pipeline`,
+        :class:`neuraxle.pipeline.MiniBatchSequentialPipeline`,
+        :class:`neuraxle.metaopt.AutoMLSequentialWrapper`
+    """
+    def __init__(self, cache_folder):
+        self.cache_folder = cache_folder
+
+    def transform(self, data_inputs):
+        data_container = DataContainer(data_inputs=data_inputs)
+        execution_context = ExecutionContext(self.cache_folder, execution_mode=ExecutionMode.TRANSFORM)
+
+        data_container = self.handle_transform(data_container, execution_context)
+
+        return data_container.data_inputs
+
+    def fit(self, data_inputs, expected_outputs=None) -> Tuple['HandlerMixin', Iterable]:
+        data_container = DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs)
+        context = ExecutionContext(self.cache_folder, execution_mode=ExecutionMode.TRANSFORM)
+
+        new_self = self.handle_fit(data_container, context)
+
+        return new_self
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['HandlerMixin', Iterable]:
+        data_container = DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs)
+        context = ExecutionContext(root=self.cache_folder, execution_mode=ExecutionMode.TRANSFORM)
+
+        new_self, data_container = self.handle_fit_transform(data_container, context)
+
+        return new_self, data_container.data_inputs
