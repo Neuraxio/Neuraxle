@@ -116,30 +116,10 @@ class FeatureUnion(HandlerMixin, TruncableSteps):
         :param context: execution context
         :return: the transformed data_inputs.
         """
-        if self.n_jobs != 1:
-            steps_data_containers = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
-                delayed(step.handle_fit_transform)(data_container.copy(), context)
-                for _, step in self.steps_as_tuple[:-1]
-            )
-        else:
-            steps_data_containers = [
-                step.handle_fit_transform(data_container.copy(), context)
-                for _, step in self.steps_as_tuple[:-1]
-            ]
+        new_self = self._fit_data_container(data_container, context)
+        data_container = self._transform_data_container(data_container, context)
 
-        fitted_steps = [step for step, dc in steps_data_containers]
-        data_containers = [dc for _, dc in steps_data_containers]
-
-        self._save_fitted_steps(fitted_steps)
-
-        data_container = DataContainer(
-            data_inputs=data_containers,
-            current_ids=data_container.current_ids,
-            summary_id=data_container.summary_id,
-            expected_outputs=data_container.expected_outputs
-        )
-
-        return self, data_container
+        return new_self, data_container
 
     def _save_fitted_steps(self, fitted_steps):
         # Save fitted steps
