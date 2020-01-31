@@ -172,54 +172,74 @@ class StepClonerForEachDataInput(HandlerMixin, MetaStepMixin, BaseStep):
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         data_container, context = BaseStep._will_process(self, data_container, context)
 
-        self._copy_one_step_per_data_input(data_container)
+        if len(self.steps) != len(data_container.data_inputs):
+            self._copy_one_step_per_data_input(data_container)
 
         return data_container, context
 
     def _copy_one_step_per_data_input(self, data_container):
         # One copy of step per data input:
         self.steps = [self.copy_op(self.wrapped) for _ in range(len(data_container))]
+        self.is_invalidated = True
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
-        fit_transform_result = [
-            self.steps[i].handle_fit_transform(data_container_batch, context)
-            for i, data_container_batch in enumerate(data_container.convolved_1d(1, 1))
-        ]
+        fitted_steps_data_containers = []
+        for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
+            fitted_step_data_container = self.steps[i].handle_fit_transform(
+                DataContainer(current_ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
+                context
+            )
 
-        self.steps = [step for step, _ in fit_transform_result]
+            fitted_steps_data_containers.append(fitted_step_data_container)
+
+        self.steps = fitted_steps_data_containers
+        self.steps = [step for step, _ in fitted_steps_data_containers]
+
         output_data_container = ListDataContainer.empty()
-        [output_data_container.concat(data_container_batch) for _, data_container_batch in fit_transform_result]
+        [output_data_container.append_data_contianer(data_container_batch) for _, data_container_batch in fitted_steps_data_containers]
 
         return self, output_data_container.to_numpy()
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
-        fit_transform_result = [
-            self.steps[i].handle_fit(data_container_batch, context)
-            for i, data_container_batch in enumerate(data_container.convolved_1d(1, 1))
-        ]
+        fitted_steps = []
+        for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
+            fitted_step = self.steps[i].handle_fit(
+                DataContainer(current_ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
+                context
+            )
 
-        self.steps = [step for step in fit_transform_result]
+            fitted_steps.append(fitted_step)
+
+        self.steps = fitted_steps
 
         return self
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
-        transform_result = [
-            self.steps[i].handle_transform(data_container_batch, context)
-            for i, data_container_batch in enumerate(data_container.convolved_1d(1, 1))
-        ]
+        transform_results = []
+        for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
+            transform_result = self.steps[i].handle_transform(
+                DataContainer(current_ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
+                context
+            )
+
+            transform_results.append(transform_result)
 
         output_data_container = ListDataContainer.empty()
-        [output_data_container.concat(data_container_batch) for data_container_batch in transform_result]
+        [output_data_container.append_data_contianer(data_container_batch) for data_container_batch in transform_results]
 
         return output_data_container.to_numpy()
 
     def _inverse_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        inverse_transform_result = [
-            self.steps[i].handle_inverse_transform(data_container_batch, context)
-            for i, data_container_batch in enumerate(data_container.convolved_1d(1, 1))
-        ]
+        inverse_transform_results = []
+        for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
+            inverse_transform_result = self.steps[i].handle_inverse_transform(
+                DataContainer(current_ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
+                context
+            )
+
+            inverse_transform_results.append(inverse_transform_result)
 
         output_data_container = ListDataContainer.empty()
-        [output_data_container.concat(data_container_batch) for data_container_batch in inverse_transform_result]
+        [output_data_container.append_data_contianer(data_container_batch) for data_container_batch in inverse_transform_results]
 
         return output_data_container.to_numpy()

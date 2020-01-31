@@ -2921,7 +2921,9 @@ class RootStepMixin(HandlerMixin):
         :class:`neuraxle.pipeline.MiniBatchSequentialPipeline`,
         :class:`neuraxle.metaopt.AutoMLSequentialWrapper`
     """
-    def __init__(self, cache_folder):
+    def __init__(self, cache_folder=None):
+        if cache_folder is None:
+            cache_folder = DEFAULT_CACHE_FOLDER
         self.cache_folder = cache_folder
 
     def transform(self, data_inputs):

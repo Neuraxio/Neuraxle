@@ -569,11 +569,11 @@ class AutoMLSequentialWrapper(MetaStepMixin, BaseStep):
             hyperparams: HyperparameterSamples = self.wrapped.find_next_best_hyperparams(auto_ml_trial_container)
             self.wrapped = self.wrapped.update_hyperparams(hyperparams)
             self.hyperparams_repository.create_new_trial(hyperparams)
-            try:
-                self.wrapped, score = self.wrapped.fit_transform(data_inputs, expected_outputs)
-                self.hyperparams_repository.save_score_for_success_trial(hyperparams, score)
-            except Exception as error:
-                self.hyperparams_repository.save_failure_for_trial(hyperparams, error)
+            #try:
+            self.wrapped, score = self.wrapped.fit_transform(data_inputs, expected_outputs)
+            self.hyperparams_repository.save_score_for_success_trial(hyperparams, score)
+            #except Exception as error:
+            #self.hyperparams_repository.save_failure_for_trial(hyperparams, error)
 
         if self.refit:
             self.best_model = self._load_best_model().fit(data_inputs, expected_outputs)

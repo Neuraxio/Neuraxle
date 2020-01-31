@@ -53,7 +53,10 @@ class DataContainer:
         self.data_inputs = data_inputs
 
         if current_ids is None:
-            current_ids = [str(c) for c in range(len(data_inputs))]
+            if hasattr(data_inputs, '__len__'):
+                current_ids = [str(c) for c in range(len(data_inputs))]
+            else:
+                current_ids = str(0)
         self.current_ids = current_ids
 
         if expected_outputs is None and isinstance(data_inputs, Iterable):
@@ -270,6 +273,22 @@ class ListDataContainer(DataContainer):
         self.data_inputs.append(data_input)
         self.expected_outputs.append(expected_output)
 
+        return self
+
+    def append_data_contianer(self, other: DataContainer):
+        """
+        Append a data container to the DataContainer.
+
+        :param other: data container
+        :type other: DataContainer
+        :return:
+        """
+        self.current_ids.append(other.current_ids)
+        self.data_inputs.append(other.data_inputs)
+        self.expected_outputs.append(other.expected_outputs)
+
+        return self
+
     def concat(self, data_container: DataContainer):
         """
         Concat the given data container to the current data container.
@@ -283,3 +302,5 @@ class ListDataContainer(DataContainer):
         self.current_ids.extend(data_container.current_ids)
         self.data_inputs.extend(data_container.data_inputs)
         self.expected_outputs.extend(data_container.expected_outputs)
+
+        return self

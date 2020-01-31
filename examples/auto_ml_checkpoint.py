@@ -65,7 +65,8 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     best_model = RandomSearch(
         pipeline,
         n_iter=n_iter,
-        higher_score_is_better=True
+        higher_score_is_better=True,
+        cache_folder=tmpdir
     ).fit(DATA_INPUTS, EXPECTED_OUTPUTS)
     outputs = best_model.transform(DATA_INPUTS)
     time_b = time.time()
@@ -94,7 +95,8 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     best_model = RandomSearch(
         pipeline,
         n_iter=n_iter,
-        higher_score_is_better=True
+        higher_score_is_better=True,
+        cache_folder=tmpdir
     ).fit(DATA_INPUTS, EXPECTED_OUTPUTS)
     outputs = best_model.transform(DATA_INPUTS)
     time_b = time.time()
