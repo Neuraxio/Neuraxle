@@ -26,7 +26,7 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
 from typing import Union
 
 from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin, \
-    HandlerMixin
+    HandlerMixin, NonFittableMixin, TransformHandlerMixin
 from neuraxle.data_container import ExpandedDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.union import FeatureUnion
@@ -297,12 +297,41 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
         Wrap all steps with :class:`Optional` wrapper.
         """
         step_names = list(self.keys())
-        for step_name in step_names:
+        for step_name in step_names[:-1]:
             self[step_name] = Optional(self[step_name])
         self._refresh_steps()
 
 
 CHOICE_HYPERPARAM = 'choice'
+
+
+class SelectNotEmptyJoiner(TransformHandlerMixin, BaseStep):
+    """
+    Return the non empty data container.
+
+    .. seealso::
+        :class:`TransformHandlerMixin`,
+        :class:`BaseStep`
+    """
+
+    def __init__(self):
+        BaseStep.__init__(self)
+        TransformHandlerMixin.__init__(self)
+
+    def _transform_data_container(self, data_container, context):
+        """
+        Handle transform.
+
+        :param data_container: the data container to join
+        :param context: execution context
+        :return: transformed data container
+        """
+        data_inputs = [dc.data_inputs for dc in data_container.data_inputs if len(dc.data_inputs) > 0]
+        data_container = DataContainer(data_inputs=data_inputs, current_ids=data_container.current_ids,
+                                       expected_outputs=data_container.expected_outputs)
+        data_container.set_data_inputs(data_inputs)
+
+        return data_container
 
 
 class ChooseOneStepOf(FeatureUnion):
@@ -336,7 +365,7 @@ class ChooseOneStepOf(FeatureUnion):
     """
 
     def __init__(self, steps, hyperparams=None):
-        FeatureUnion.__init__(self, steps)
+        FeatureUnion.__init__(self, steps, joiner=SelectNotEmptyJoiner())
 
         self._make_all_steps_optional()
 
@@ -377,7 +406,7 @@ class ChooseOneStepOf(FeatureUnion):
         Wrap all steps with :class:`Optional` wrapper.
         """
         step_names = list(self.keys())
-        for step_name in step_names:
+        for step_name in step_names[:-1]:
             self[step_name] = Optional(self[step_name])
 
         self._refresh_steps()
