@@ -1900,6 +1900,9 @@ class NonFittableMixin:
     Note: fit methods are not implemented
     """
 
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        return self
+
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         return self, self._transform_data_container(data_container, context)
 
@@ -2839,6 +2842,30 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
         NonTransformableMixin.__init__(self)
         NonFittableMixin.__init__(self)
         BaseStep.__init__(self, name=name, savers=savers)
+
+
+
+class TransformHandlerMixin(NonFittableMixin):
+    """
+    A pipeline step that only requires the implementation of handler methods :
+        - _transform_data_container
+        - _fit_transform_data_container
+        - _fit_data_container
+
+    If forbids only implementing fit or transform or fit_transform without the handles. So it forces the handles.
+
+    .. seealso::
+        :class:`BaseStep`
+    """
+
+    @abstractmethod
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        raise NotImplementedError('Must implement _transform_data_container in {0}'.format(self.name))
+
+    def transform(self, data_inputs) -> 'HandlerMixin':
+        raise Exception(
+            'Transform method is not supported for {0}, because it inherits from HandlerMixin. Please use handle_transform instead.'.format(
+                self.name))
 
 
 class HandlerMixin:
