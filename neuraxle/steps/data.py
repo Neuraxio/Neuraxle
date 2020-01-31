@@ -139,6 +139,9 @@ class EpochRepeater(HandlerMixin, MetaStepMixin, BaseStep):
             self.wrapped = self.wrapped.handle_fit(data_container.copy(), context)
         return self
 
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        return self.wrapped.handle_transform(data_container, context)
+
     def _get_epochs(self):
         epochs = self.epochs
         if self._should_repeat_fit():

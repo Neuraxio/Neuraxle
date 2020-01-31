@@ -5,7 +5,7 @@ from neuraxle.data_container import DataContainer, ListDataContainer
 
 def test_data_container_iter_method_should_iterate_with_none_current_ids():
     data_container = DataContainer(data_inputs=np.array(list(range(100))),
-                                   expected_outputs=np.array(list(range(100, 200))))
+                                   expected_outputs=np.array(list(range(100, 200)))).set_current_ids(None)
 
     for i, (current_id, data_input, expected_outputs) in enumerate(data_container):
         assert current_id is None

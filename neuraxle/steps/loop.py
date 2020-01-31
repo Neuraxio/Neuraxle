@@ -170,7 +170,7 @@ class StepClonerForEachDataInput(HandlerMixin, MetaStepMixin, BaseStep):
         return self
 
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
-        BaseStep._will_process(self, data_container, context)
+        data_container, context = BaseStep._will_process(self, data_container, context)
 
         self._copy_one_step_per_data_input(data_container)
 
@@ -203,25 +203,23 @@ class StepClonerForEachDataInput(HandlerMixin, MetaStepMixin, BaseStep):
         return self
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
-        fit_transform_result = [
+        transform_result = [
             self.steps[i].handle_transform(data_container_batch, context)
             for i, data_container_batch in enumerate(data_container.convolved_1d(1, 1))
         ]
 
         output_data_container = ListDataContainer.empty()
-        [output_data_container.concat(data_container_batch) for _, data_container_batch in fit_transform_result]
+        [output_data_container.concat(data_container_batch) for data_container_batch in transform_result]
 
         return output_data_container.to_numpy()
 
-    def handle_inverse_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        self._copy_one_step_per_data_input(data_container)
-
+    def _inverse_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         inverse_transform_result = [
             self.steps[i].handle_inverse_transform(data_container_batch, context)
             for i, data_container_batch in enumerate(data_container.convolved_1d(1, 1))
         ]
 
         output_data_container = ListDataContainer.empty()
-        [output_data_container.concat(data_container_batch) for _, data_container_batch in inverse_transform_result]
+        [output_data_container.concat(data_container_batch) for data_container_batch in inverse_transform_result]
 
         return output_data_container.to_numpy()

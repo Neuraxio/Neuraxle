@@ -294,6 +294,7 @@ class ExecutionMode(Enum):
     TRANSFORM = 'transform'
     FIT = 'fit'
     FIT_TRANSFORM = 'fit_transform'
+    INVERSE_TRANSFORM = 'inverse_transform'
 
 
 class ExecutionContext:
@@ -843,13 +844,15 @@ class BaseStep(ABC):
             :class:`DataContainer`,
             :class:`neuraxle.pipeline.Pipeline`
         """
-        self.is_invalidated = True
+        data_container, context = self._will_process(data_container, context)
+        data_container = self._inverse_transform_data_container(data_container, context)
+        data_container = self._did_process(data_container, context)
 
+        return data_container
+
+    def _inverse_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         processed_outputs = self.inverse_transform(data_container.data_inputs)
         data_container.set_data_inputs(processed_outputs)
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
 
         return data_container
 
@@ -1723,6 +1726,10 @@ class MetaStepMixin:
         data_container = self.wrapped.handle_transform(data_container, context)
         return data_container
 
+    def _inverse_transform_data_container(self, data_container, context):
+        data_container = self.wrapped.handle_inverse_transform(data_container, context)
+        return data_container
+
     def fit_transform(self, data_inputs, expected_outputs):
         self.wrapped, data_inputs = self.wrapped.fit_transform(data_inputs, expected_outputs)
         return self, data_inputs
@@ -1733,6 +1740,10 @@ class MetaStepMixin:
 
     def transform(self, data_inputs):
         data_inputs = self.wrapped.transform(data_inputs)
+        return data_inputs
+
+    def inverse_transform(self, data_inputs):
+        data_inputs = self.wrapped.inverse_transform(data_inputs)
         return data_inputs
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext):

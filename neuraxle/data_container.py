@@ -49,10 +49,13 @@ class DataContainer:
     """
 
     def __init__(self, data_inputs: Any, current_ids=None, summary_id=None, expected_outputs: Any = None):
-        self.current_ids = current_ids
         self.summary_id = summary_id
-
         self.data_inputs = data_inputs
+
+        if current_ids is None:
+            current_ids = [str(c) for c in range(len(data_inputs))]
+        self.current_ids = current_ids
+
         if expected_outputs is None and isinstance(data_inputs, Iterable):
             self.expected_outputs = [None] * len(data_inputs)
         else:
@@ -87,6 +90,7 @@ class DataContainer:
         :return:
         """
         self.current_ids = current_ids
+        return self
 
     def set_summary_id(self, summary_id: str):
         """
@@ -166,6 +170,7 @@ class DataContainer:
         self.set_current_ids(np.array(self.current_ids))
         self.set_data_inputs(np.array(self.data_inputs))
         self.set_expected_outputs(np.array(self.expected_outputs))
+        return self
 
     def __iter__(self):
         """
