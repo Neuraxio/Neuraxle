@@ -326,7 +326,7 @@ def choose_one_step_single_step_chosen_fit_transform():
             []
         ],
         hyperparams={
-            'ChooseOneOrManyStepsOf__choice': 'a'
+            'Pipeline__ChooseOneOrManyStepsOf__choice': 'a'
         },
         expected_processed_outputs=np.array([0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
     )
