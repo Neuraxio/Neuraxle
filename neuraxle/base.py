@@ -2072,7 +2072,7 @@ def join_apply_results(results, new_results) -> Union[Dict, Iterable]:
         results.update(new_results)
     elif isinstance(results, list):
         results.append(new_results)
-    elif isinstance(results, list):
+    elif isinstance(results, np.ndarray):
         results = np.append(results, new_results)
     return results
 
