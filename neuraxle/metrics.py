@@ -19,7 +19,7 @@ The neuraxle classes to track metrics results.
     limitations under the License.
 
 """
-from typing import Dict, List
+from typing import Dict
 
 from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext
 from neuraxle.data_container import DataContainer
@@ -124,8 +124,8 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
             return
 
         result = {}
-        for metric_name, metric_fun_function in self.metrics.items():
-            result_metric = metric_fun_function(data_container.data_inputs, data_container.expected_outputs)
+        for metric_name, metric_function in self.metrics.items():
+            result_metric = metric_function(data_container.data_inputs, data_container.expected_outputs)
             result[metric_name] = result_metric
 
             if self.is_train:

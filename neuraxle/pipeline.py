@@ -327,11 +327,11 @@ class MiniBatchSequentialPipeline(Pipeline):
 
     def __init__(self, steps: NamedTupleList, batch_size=None):
         Pipeline.__init__(self, steps)
-        self.__validate_barriers_batch_size(batch_size)
+        self._validate_barriers_batch_size(batch_size)
         self._patch_missing_barrier(batch_size)
-        self.__patch_barriers_batch_size(batch_size)
+        self._patch_barriers_batch_size(batch_size)
 
-    def __validate_barriers_batch_size(self, batch_size):
+    def _validate_barriers_batch_size(self, batch_size):
         if batch_size is not None:
             return
 
@@ -342,7 +342,7 @@ class MiniBatchSequentialPipeline(Pipeline):
                         'Invalid Joiner batch size {}[{}]. Please provide a default batch size to MiniBatchSequentialPipeline, or add a batch size to {}[{}].'.format(
                             self.name, step.name, self.name, step.name))
 
-    def __patch_barriers_batch_size(self, batch_size):
+    def _patch_barriers_batch_size(self, batch_size):
         if batch_size is None:
             return
 
