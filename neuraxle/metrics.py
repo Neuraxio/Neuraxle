@@ -143,12 +143,9 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
 
         :return: dict with the step name as key, and all of the training, and validation metrics as values
         """
-        i = 0
         return {
-            self.name: {
-                'train': self.metrics_results_train,
-                'validation': self.metrics_results_validation
-            }
+            'train': self.metrics_results_train,
+            'validation': self.metrics_results_validation
         }
 
     def toggle_metrics(self):

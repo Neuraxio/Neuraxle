@@ -854,32 +854,46 @@ class BaseStep(ABC):
 
         return data_container
 
-    def apply_method(self, method: Callable, *kargs, **kwargs) -> Union[Dict, Iterable]:
+    def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply a method to a step and its children.
 
         :param method: method to call with self
+        :param step_name: current pipeline step name
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
-        :rtype: Union[Dict, Iterable]
+        :rtype: Dict
         """
-        results = method(self, *kargs, **kwargs)
-        return results
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
 
-    def apply(self, method_name: str, *kargs, **kwargs) -> Union[Dict, Iterable]:
+        return {
+            step_name: method(self, *kargs, **kwargs)
+        }
+
+    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply a method to a step and its children.
 
         :param method_name: method name that need to be called on all steps
+        :param step_name: current pipeline step name
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
-        :rtype: Union[Dict, Iterable]
+        :rtype: Dict
         """
-        results = None
+        results = {}
+
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
+
         if hasattr(self, method_name) and callable(getattr(self, method_name)):
-            results = getattr(self, method_name)(*kargs, **kwargs)
+            results[step_name] = getattr(self, method_name)(*kargs, **kwargs)
 
         return results
 
@@ -1741,33 +1755,51 @@ class MetaStepMixin:
             return True
         return False
 
-    def apply(self, method_name: str, *kargs, **kwargs) -> Union[Dict, Iterable]:
+    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply the method name to the meta step and its wrapped step.
 
         :param method_name: method name that need to be called on all steps
+        :param step_name: step name to apply the method to
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
         :rtype: Union[Dict, Iterable]
         """
-        results = BaseStep.apply(self, method_name, *kargs, **kwargs)
-        wrapped_results = self.wrapped.apply(method_name, *kargs, **kwargs)
-        return join_apply_results(results, wrapped_results)
+        results = BaseStep.apply(self, method_name=method_name, step_name=step_name, *kargs, **kwargs)
 
-    def apply_method(self, method: Callable, *kargs, **kwargs) -> Union[Dict, Iterable]:
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
+
+        wrapped_results = self.wrapped.apply(method_name=method_name, step_name=step_name, *kargs, **kwargs)
+        results.update(wrapped_results)
+
+        return results
+
+    def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Union[Dict, Iterable]:
         """
         Apply method to the meta step and its wrapped step.
 
         :param method: method to call with self
+        :param step_name: step name to apply the method to
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
         :rtype: Union[Dict, Iterable]
         """
-        results = BaseStep.apply_method(self, method, *kargs, **kwargs)
-        wrapped_results = self.wrapped.apply_method(method, *kargs, **kwargs)
-        return join_apply_results(results, wrapped_results)
+        results = BaseStep.apply_method(self, method=method, step_name=step_name, *kargs, **kwargs)
+
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
+
+        wrapped_results = self.wrapped.apply_method(method=method, step_name=step_name, *kargs, **kwargs)
+        results.update(wrapped_results)
+
+        return results
 
     def get_step_by_name(self, name):
         if self.wrapped.name == name:
@@ -2056,27 +2088,6 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         return step
 
 
-def join_apply_results(results, new_results) -> Union[Dict, Iterable]:
-    """
-    Join results returned from apply method.
-
-    :param results: dict, list or None for the current accumulated results
-    :param new_results: dict, list or None for the new results to be joined with the current accumulated results
-    :return:
-    """
-    if results is None:
-        results = new_results
-    elif new_results is None:
-        pass
-    elif isinstance(results, dict):
-        results.update(new_results)
-    elif isinstance(results, list):
-        results.append(new_results)
-    elif isinstance(results, np.ndarray):
-        results = np.append(results, new_results)
-    return results
-
-
 class TruncableSteps(BaseStep, ABC):
     """
     Step that contains multiple steps. :class:`Pipeline` inherits form this class.
@@ -2179,37 +2190,51 @@ class TruncableSteps(BaseStep, ABC):
 
         return self
 
-    def apply(self, method_name: str, *kargs, **kwargs) -> Union[Dict, Iterable]:
+    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply the method name to the pipeline step and all of its children.
 
         :param method_name: method name that need to be called on all steps
+        :param step_name: current pipeline step name
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
         :rtype: Union[Dict, Iterable]
         """
-        results = BaseStep.apply(self, method_name, *kargs, **kwargs)
+        results = BaseStep.apply(self, method_name, step_name=step_name, *kargs, **kwargs)
+
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
+
         for step in self.values():
-            sub_step_results = step.apply(method_name, *kargs, **kwargs)
-            results = join_apply_results(results, sub_step_results)
+            sub_step_results = step.apply(method_name=method_name, step_name=step_name, *kargs, **kwargs)
+            results.update(sub_step_results)
 
         return results
 
-    def apply_method(self, method: Callable, *kargs, **kwargs) -> Union[Dict, Iterable]:
+    def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply a method to the pipeline step and all of its children.
 
         :param method: method to call with self
+        :param step_name: current pipeline step name
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
         :rtype: Union[Dict, Iterable]
         """
-        results = BaseStep.apply_method(self, method, *kargs, **kwargs)
+        results = BaseStep.apply_method(self, method=method, step_name=step_name, *kargs, **kwargs)
+
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
+
         for step in self.values():
-            sub_step_results = step.apply_method(method, *kargs, **kwargs)
-            results = join_apply_results(results, sub_step_results)
+            sub_step_results = step.apply_method(method=method, step_name=step_name, *kargs, **kwargs)
+            results.update(sub_step_results)
 
         return results
 

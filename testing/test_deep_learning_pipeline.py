@@ -54,11 +54,11 @@ def test_deep_learning_pipeline():
     metrics = p.apply('get_metrics')
 
     # Then
-    batch_mse_train = metrics['batch_metrics']['train']['mse']
-    epoch_mse_train = metrics['epoch_metrics']['train']['mse']
+    batch_mse_train = metrics['DeepLearningPipeline__EpochRepeater__validation_split_wrapper__epoch_metrics']['train']['mse']
+    epoch_mse_train = metrics['DeepLearningPipeline__EpochRepeater__validation_split_wrapper__epoch_metrics__TrainShuffled__MiniBatchSequentialPipeline__batch_metrics']['train']['mse']
 
-    batch_mse_validation = metrics['batch_metrics']['validation']['mse']
-    epoch_mse_validation = metrics['epoch_metrics']['validation']['mse']
+    batch_mse_validation = metrics['DeepLearningPipeline__EpochRepeater__validation_split_wrapper__epoch_metrics__TrainShuffled__MiniBatchSequentialPipeline__batch_metrics']['validation']['mse']
+    epoch_mse_validation = metrics['DeepLearningPipeline__EpochRepeater__validation_split_wrapper__epoch_metrics']['validation']['mse']
 
     assert len(epoch_mse_train) == N_EPOCHS
     assert len(epoch_mse_validation) == N_EPOCHS
@@ -110,15 +110,16 @@ def test_deep_learning_pipeline_with_random_search():
 
     # When
     p, outputs = p.fit_transform(data_inputs, expected_outputs)
+    best_model = p.get_best_model()
 
-    metrics = p.apply('get_metrics')
+    metrics = best_model.apply('get_metrics')
 
     # Then
-    batch_mse_train = metrics['batch_metrics']['train']['mse']
-    epoch_mse_train = metrics['epoch_metrics']['train']['mse']
+    batch_mse_train = metrics['DeepLearningPipeline__EpochRepeater__epoch_metrics__TrainShuffled__MiniBatchSequentialPipeline__batch_metrics']['train']['mse']
+    epoch_mse_train = metrics['DeepLearningPipeline__EpochRepeater__epoch_metrics']['train']['mse']
 
-    batch_mse_validation = metrics['batch_metrics']['validation']['mse']
-    epoch_mse_validation = metrics['epoch_metrics']['validation']['mse']
+    batch_mse_validation = metrics['DeepLearningPipeline__EpochRepeater__epoch_metrics__TrainShuffled__MiniBatchSequentialPipeline__batch_metrics']['validation']['mse']
+    epoch_mse_validation = metrics['DeepLearningPipeline__EpochRepeater__epoch_metrics']['validation']['mse']
 
     assert len(epoch_mse_train) == N_EPOCHS * 10
     assert len(epoch_mse_validation) == N_EPOCHS * 10
