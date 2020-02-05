@@ -272,6 +272,9 @@ class ExpandedDataContainer(DataContainer):
         :return: reduced data container
         :rtype: DataContainer
         """
+        if len(self.data_inputs) != 1:
+            raise ValueError('Invalid Expanded Data Container. Please create ExpandedDataContainer with ExpandedDataContainer.create_from(data_container) method.')
+
         return DataContainer(
             data_inputs=self.data_inputs[0],
             current_ids=self.old_current_ids,
