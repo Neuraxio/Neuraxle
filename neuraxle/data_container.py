@@ -24,7 +24,7 @@ Classes for containing the data that flows throught the pipeline steps.
 
 """
 import hashlib
-from typing import Any, Iterable, List, Tuple
+from typing import Any, Iterable, List, Tuple, Union
 
 from conv import convolved_1d
 
@@ -199,10 +199,13 @@ class DataContainer:
         else:
             raise NotImplementedError('DataContainer.__contains__ not implemented for this type: {}'.format(type(item)))
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: Union[str, int]):
         """
-        Get sub data container if item is str, otherwise get a zip of current ids, data inputs, and expected outputs.
+        If item is a string, then get then sub container with the same name as item in the list of sub data containers.
+        If item is an int, then return a zip of (current id, data input, expected output) for the given item index.
 
+        :param item: sub data container str, or item index as int
+        :type item: Union[str, int]
         :return: data container, or zip of current ids, data inputs, expected outputs.
         :rtype: Union[DataContainer, Iterable]
         """
