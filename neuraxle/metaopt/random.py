@@ -153,7 +153,7 @@ class ValidationSplitWrapper(BaseValidation):
 
         self._update_scores_train(results_data_container.data_inputs, results_data_container.expected_outputs)
 
-        self.apply('toggle_metrics')
+        self.apply('disable_metrics')
 
         self.set_train(False)
         results_data_container = self.wrapped.handle_transform(validation_data_container, context.push(self.wrapped))
@@ -163,7 +163,7 @@ class ValidationSplitWrapper(BaseValidation):
 
         data_container = self.wrapped.handle_transform(data_container, context.push(self.wrapped))
 
-        self.apply('toggle_metrics')
+        self.apply('enable_metrics')
 
         return self, data_container
 

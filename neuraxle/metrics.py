@@ -160,3 +160,19 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
         :return:
         """
         self.enabled = not self.enabled
+
+    def disable_metrics(self):
+        """
+        Disable metrics wrapper metrics if needed..
+
+        :return:
+        """
+        self.enabled = False
+
+    def enable_metrics(self):
+        """
+        Enable metrics wrapper metrics if needed..
+
+        :return:
+        """
+        self.enabled = True
