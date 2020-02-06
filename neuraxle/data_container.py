@@ -26,6 +26,7 @@ Classes for containing the data that flows throught the pipeline steps.
 import hashlib
 from typing import Any, Iterable, List, Tuple, Union
 
+import numpy as np
 from conv import convolved_1d
 
 NamedDataContainerTuple = Tuple[str, 'DataContainer']
@@ -340,23 +341,16 @@ class ZipDataContainer(DataContainer):
         :rtype: ExpandedDataContainer
         """
         new_data_inputs = []
-        new_expected_outputs = []
         i = 0
 
         for (_, di, eo) in data_container:
-            new_data_input = []
-            new_expected_output = []
-
-            new_data_input.append(di)
-            new_expected_output.append(eo)
+            new_data_input = [di]
 
             for other_data_container in other_data_containers:
                 _, di, eo = other_data_container[i]
                 new_data_input.append(di)
-                new_expected_output.append(eo)
 
             new_data_inputs.append(tuple(new_data_input))
-            new_expected_outputs.append(tuple(new_expected_output))
 
             i += 1
 
@@ -364,12 +358,22 @@ class ZipDataContainer(DataContainer):
             data_inputs=new_data_inputs,
             current_ids=data_container.current_ids,
             summary_id=data_container.summary_id,
-            expected_outputs=new_expected_outputs,
+            expected_outputs=data_container.expected_outputs,
             sub_data_containers=data_container.sub_data_containers
         )
 
-    def inner_concatenate(self):
-        pass
+    def concatenate_inner_features(self):
+        """
+        Concatenate inner features from zipped data inputs.
+        Broadcast data inputs if the dimension is smaller.
+        """
+        new_data_inputs = [di[0] for di in self.data_inputs]
+
+        for i, data_input in enumerate(self.data_inputs):
+            for di in data_input[1:]:
+                new_data_inputs[i] = _inner_concatenate_np_array(new_data_inputs[i], di)
+
+        self.set_data_inputs(new_data_inputs)
 
 
 class ListDataContainer(DataContainer):
@@ -415,3 +419,23 @@ class ListDataContainer(DataContainer):
         self.current_ids.extend(data_container.current_ids)
         self.data_inputs.extend(data_container.data_inputs)
         self.expected_outputs.extend(data_container.expected_outputs)
+
+
+def _inner_concatenate_np_array(np_array, np_array_to_zip):
+    """
+    Concatenate numpy arrays on the last axis using expand dim, and broadcasting.
+
+    :param np_array: data container
+    :type np_array: np.ndarray
+    :param np_array_to_zip: numpy array to zip with the other
+    :type np_array_to_zip: np.ndarray
+    :return: concatenated np array
+    :rtype: np.ndarray
+    """
+    while len(np_array_to_zip.shape) < len(np_array.shape):
+        np_array_to_zip = np.expand_dims(np_array_to_zip, axis=-1)
+
+    target_shape = tuple(list(np_array.shape[:-1]) + [np_array_to_zip.shape[-1]])
+    np_array_to_zip = np.broadcast_to(np_array_to_zip, target_shape)
+
+    return np.concatenate((np_array, np_array_to_zip), axis=-1)

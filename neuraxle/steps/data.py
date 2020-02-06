@@ -22,10 +22,8 @@ You can find here steps that take action on data.
 import random
 from typing import Iterable
 
-import numpy as np
-
 from neuraxle.base import BaseStep, MetaStepMixin, NonFittableMixin, ExecutionContext, NonTransformableMixin
-from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer, _inner_concatenate_np_array
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import TrainOnlyWrapper
 from neuraxle.steps.output_handlers import InputAndOutputTransformerMixin
@@ -188,26 +186,6 @@ class TrainShuffled(Pipeline):
             TrainOnlyWrapper(DataShuffler(seed=seed)),
             wrapped
         ])
-
-
-def _inner_concatenate_np_array(np_array, np_array_to_zip):
-    """
-    Concatenate numpy arrays on the last axis using expand dim, and broadcasting.
-
-    :param np_array: data container
-    :type np_array: np.ndarray
-    :param np_array_to_zip: numpy array to zip with the other
-    :type np_array_to_zip: np.ndarray
-    :return: concatenated np array
-    :rtype: np.ndarray
-    """
-    while len(np_array_to_zip.shape) < len(np_array.shape):
-        np_array_to_zip = np.expand_dims(np_array_to_zip, axis=-1)
-
-    target_shape = tuple(list(np_array.shape[:-1]) + [np_array_to_zip.shape[-1]])
-    np_array_to_zip = np.broadcast_to(np_array_to_zip, target_shape)
-
-    return np.concatenate((np_array, np_array_to_zip), axis=-1)
 
 
 class InnerConcatenateDataContainer(NonFittableMixin, NonTransformableMixin, BaseStep):
