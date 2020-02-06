@@ -127,8 +127,8 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
             return
 
         result = {}
-        for metric_name, metric_fun_function in self.metrics.items():
-            result_metric = metric_fun_function(data_container.data_inputs, data_container.expected_outputs)
+        for metric_name, metric_function in self.metrics.items():
+            result_metric = metric_function(data_container.data_inputs, data_container.expected_outputs)
             result[metric_name] = result_metric
 
             if self.is_train:
@@ -147,10 +147,8 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
         :return: dict with the step name as key, and all of the training, and validation metrics as values
         """
         return {
-            self.name: {
-                'train': self.metrics_results_train,
-                'validation': self.metrics_results_validation
-            }
+            'train': self.metrics_results_train,
+            'validation': self.metrics_results_validation
         }
 
     def toggle_metrics(self):

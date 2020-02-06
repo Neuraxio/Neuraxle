@@ -74,7 +74,7 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
     def __init__(
             self,
             pipeline: Union[BaseStep, NamedTupleList],
-            validation_size=None,
+            validation_size: int =None,
             batch_size: int = None,
             batch_metrics: Dict[str, Callable] = None,
             shuffle_in_each_epoch_at_train: bool = True,
@@ -82,12 +82,24 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
             n_epochs: int = 1,
             epochs_metrics: Dict[str, Callable] = None,
             scoring_function: Callable = None,
-            metrics_plotting_step: BaseStep = None,
             cache_folder: str = None,
             print_epoch_metrics=False,
             print_batch_metrics=False
     ):
-
+        """
+        :param pipeline: pipeline to wrap with an epoch repeater, a validation split wrapper, and a mini batch sequential pipeline
+        :param validation_size: ratio for validation size between 0 and 1
+        :param batch_size: batch size for the mini batch sequential pipeline
+        :param batch_metrics: metrics to calculate for each processed mini batch
+        :param shuffle_in_each_epoch_at_train:
+        :param seed: random seed for the data shuffling that can be done at each epoch when the param shuffle_in_each_epoch_at_train is True
+        :param n_epochs: number of epochs
+        :param epochs_metrics: metrics to calculate for each epoch
+        :param scoring_function: scoring function with two arguments (y_true, y_pred)
+        :param cache_folder: cache folder to be used inside the pipeline
+        :param print_epoch_metrics: whether or not to print epoch metrics
+        :param print_batch_metrics: whether or not to print batch metrics
+        """
         if epochs_metrics is None:
             epochs_metrics = {}
         if batch_metrics is None:
@@ -100,7 +112,6 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
         self.batch_size = batch_size
         self.batch_metrics = batch_metrics
         self.validation_size = validation_size
-        self.metrics_plotting_step = metrics_plotting_step
         self.print_batch_metrics = print_batch_metrics
         self.print_epoch_metrics = print_epoch_metrics
 

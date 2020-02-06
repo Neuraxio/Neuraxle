@@ -27,8 +27,7 @@ from typing import Iterable, Dict, Union
 
 from joblib import Parallel, delayed
 
-from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin, NamedTupleList, Identity, ExecutionContext, \
-    DataContainer, join_apply_results
+from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin, NamedTupleList, Identity, ExecutionContext, DataContainer
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
@@ -38,7 +37,7 @@ class FeatureUnion(TruncableSteps):
     def __init__(
             self,
             steps_as_tuple: NamedTupleList,
-            joiner: NonFittableMixin = NumpyConcatenateInnerFeatures(),
+            joiner: BaseStep = NumpyConcatenateInnerFeatures(),
             n_jobs: int = None,
             backend: str = "threading"
     ):
@@ -51,21 +50,28 @@ class FeatureUnion(TruncableSteps):
         :param backend: The type of parallelization to do with ``joblib.Parallel``. Possible values: "loky", "multiprocessing", "threading", "dask" if you use dask, and more.
         """
         TruncableSteps.__init__(self, steps_as_tuple)
-        self.joiner = joiner
+        self.joiner: BaseStep = joiner
         self.n_jobs = n_jobs
         self.backend = backend
 
-    def apply(self, method_name: str, *kargs, **kwargs) -> Union[Dict, Iterable]:
+    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
         """
         TODO: fix issue #235
-        :param method_name:
-        :param kargs:
-        :param kwargs:
+        :param method_name: name of the method to apply to all steps
+        :param step_name: current pipeline step name
+        :param kargs: additional arguments to be passed to the method to apply
+        :param kwargs: additional positional arguments to be passed to the method to apply
         :return:
         """
-        results = BaseStep.apply(self, method_name, *kargs, **kwargs)
-        other_results = self.joiner.apply(method_name, *kargs, **kwargs)
-        results = join_apply_results(results, other_results)
+        results = BaseStep.apply(self, method_name=method_name, step_name=step_name, *kargs, **kwargs)
+
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
+
+        other_results = self.joiner.apply(method_name, step_name=step_name, *kargs, **kwargs)
+        results.update(other_results)
 
         return results
 
