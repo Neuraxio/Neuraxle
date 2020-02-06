@@ -283,7 +283,8 @@ class ExpandedDataContainer(DataContainer):
         :rtype: DataContainer
         """
         if len(self.data_inputs) != 1:
-            raise ValueError('Invalid Expanded Data Container. Please create ExpandedDataContainer with ExpandedDataContainer.create_from(data_container) method.')
+            raise ValueError(
+                'Invalid Expanded Data Container. Please create ExpandedDataContainer with ExpandedDataContainer.create_from(data_container) method.')
 
         return DataContainer(
             data_inputs=self.data_inputs[0],
@@ -309,6 +310,40 @@ class ExpandedDataContainer(DataContainer):
             summary_id=data_container.summary_id,
             expected_outputs=[data_container.expected_outputs],
             old_current_ids=data_container.current_ids,
+            sub_data_containers=data_container.sub_data_containers
+        )
+
+
+class ZipDataContainer(DataContainer):
+    """
+    Sub class of DataContainer to zip two data sources together.
+
+    .. seealso::
+        :class:`DataContainer`,
+    """
+
+    @staticmethod
+    def create_from(data_container: DataContainer, other_data_container: DataContainer) -> 'ZipDataContainer':
+        """
+        Create ZipDataContainer that merges two data sources together.
+
+        :param data_container: data container to transform
+        :param other_data_container: other data container to transform
+        :type data_container: DataContainer
+        :return: expanded data container
+        :rtype: ExpandedDataContainer
+        """
+        new_di = []
+        new_eo = []
+        for (ci, di, eo), (other_ci, other_di, other_eo) in zip(data_container, other_data_container):
+            new_di.append((di, other_di))
+            new_eo.append((eo, other_eo))
+
+        return ZipDataContainer(
+            data_inputs=new_di,
+            current_ids=data_container.current_ids,
+            summary_id=data_container.summary_id,
+            expected_outputs=new_eo,
             sub_data_containers=data_container.sub_data_containers
         )
 
@@ -356,4 +391,3 @@ class ListDataContainer(DataContainer):
         self.current_ids.extend(data_container.current_ids)
         self.data_inputs.extend(data_container.data_inputs)
         self.expected_outputs.extend(data_container.expected_outputs)
-
