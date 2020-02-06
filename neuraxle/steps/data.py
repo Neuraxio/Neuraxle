@@ -190,26 +190,26 @@ class TrainShuffled(Pipeline):
         ])
 
 
-class ZipData(NonFittableMixin, NonTransformableMixin, BaseStep):
+class InnerConcatenateDataContainer(NonFittableMixin, NonTransformableMixin, BaseStep):
     """
-    Zip two data sources together. Pass the name of the sub data containers to merge in the current data container.
+    Concatenate inner features of sub data containers along `axis=-1`..
 
     Code example:
 
     .. code-block:: python
 
-        # 3d shape: (batch_size, time_steps, n_features)
-        # 2d shape: (batch_size, batch_features)
-        # 1d shape: (batch_size)
-        data_container = DataContainer(
-            data_inputs=data_inputs_3d,
-            expected_outputs=expected_outputs_3d
-        ).add_sub_data_container('1d_data_source', data_container_1d) \
-            .add_sub_data_container('2d_data_source', data_container_2d)
+        data_container = DataContainer(data_inputs=data_inputs_3d, expected_outputs=expected_outputs_3d)
+        data_container.add_sub_data_container(name='1d_data_source', data_container=data_container_1d)
+        data_container.add_sub_data_container(name='2d_data_source', data_container=data_container_2d)
+
+        # data container with sub data containers :
+        # DataContainer(data_inputs=data_inputs_3d, expected_outputs=expected_outputs, sub_data_containers=[('1d_data_source', data_container_1d), ('2d_data_source', data_container_2d)])
 
         p = Pipeline([
-            ZipData(data_sources=['1d_data_source', '2d_data_source'])
+            InnerConcatenateDataContainer()
+            # is equivalent to ZipData(sub_data_container_names=['1d_data_source', '2d_data_source'])
         ])
+
         data_container = p.handle_transform(data_container, ExecutionContext())
 
         # new_shape: (batch_size, time_steps, n_features + batch_features + 1)
@@ -222,12 +222,12 @@ class ZipData(NonFittableMixin, NonTransformableMixin, BaseStep):
         :class:`neuraxle.data_container.DataContainer`
     """
 
-    def __init__(self, data_sources):
+    def __init__(self, sub_data_container_names=None):
         BaseStep.__init__(self)
         NonTransformableMixin.__init__(self)
         NonFittableMixin.__init__(self)
 
-        self.data_sources = data_sources
+        self.data_sources = sub_data_container_names
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
@@ -240,7 +240,7 @@ class ZipData(NonFittableMixin, NonTransformableMixin, BaseStep):
         :return: base step, data container
         :rtype: Tuple[BaseStep, DataContainer]
         """
-        return self, self._zip_sub_data_containers(data_container)
+        return self, self._concatenate_sub_data_containers(data_container)
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -253,9 +253,9 @@ class ZipData(NonFittableMixin, NonTransformableMixin, BaseStep):
         :return: base step, data container
         :rtype: DataContainer
         """
-        return self._zip_sub_data_containers(data_container)
+        return self._concatenate_sub_data_containers(data_container)
 
-    def _zip_sub_data_containers(self, data_container: DataContainer):
+    def _concatenate_sub_data_containers(self, data_container: DataContainer):
         """
         Merge sub data containers into the current data container.
 
@@ -270,11 +270,11 @@ class ZipData(NonFittableMixin, NonTransformableMixin, BaseStep):
                 sub_data_containers_to_zip.append(sub_data_container)
 
         for data_container_to_zip in sub_data_containers_to_zip:
-            data_container = self._zip_data_container(data_container, data_container_to_zip)
+            data_container = self._concatenate_sub_data_container(data_container, data_container_to_zip)
 
         return data_container
 
-    def _zip_data_container(self, data_container, data_container_to_zip) -> DataContainer:
+    def _concatenate_sub_data_container(self, data_container, data_container_to_zip) -> DataContainer:
         """
         Zip a data container into another data container with a higher dimension.
 
@@ -284,10 +284,12 @@ class ZipData(NonFittableMixin, NonTransformableMixin, BaseStep):
         :type data_container_to_zip: DataContainer
         :return: concatenated data containers
         """
-        data_inputs = self._concatenate_np_array_on_last_axis(data_container.data_inputs, data_container_to_zip.data_inputs)
+        data_inputs = self._concatenate_np_array_on_last_axis(data_container.data_inputs,
+                                                              data_container_to_zip.data_inputs)
         data_container.set_data_inputs(data_inputs)
 
-        expected_outputs = self._concatenate_np_array_on_last_axis(data_container.expected_outputs, data_container_to_zip.expected_outputs)
+        expected_outputs = self._concatenate_np_array_on_last_axis(data_container.expected_outputs,
+                                                                   data_container_to_zip.expected_outputs)
         data_container.set_expected_outputs(expected_outputs)
 
         return data_container
@@ -310,3 +312,112 @@ class ZipData(NonFittableMixin, NonTransformableMixin, BaseStep):
         np_array_to_zip = np.broadcast_to(np_array_to_zip, target_shape)
 
         return np.concatenate((np_array, np_array_to_zip), axis=-1)
+
+
+class ZipBatchDataContainer(NonFittableMixin, NonTransformableMixin, BaseStep):
+    """
+    Concatenate outer batch of sub data containers along `axis=0`..
+
+    Code example:
+
+    .. code-block:: python
+
+        data_container = DataContainer(data_inputs=data_inputs_3d, expected_outputs=expected_outputs_3d)
+        data_container.add_sub_data_container(name='1d_data_source', data_container=data_container_1d)
+        data_container.add_sub_data_container(name='2d_data_source', data_container=data_container_2d)
+
+        # data container with sub data containers :
+        # DataContainer(data_inputs=data_inputs_3d, expected_outputs=expected_outputs, sub_data_containers=[('1d_data_source', data_container_1d), ('2d_data_source', data_container_2d)])
+
+        p = Pipeline([
+            ZipBatchDataContainer()
+            # is equivalent to ZipBatchDataContainer(sub_data_container_names=['2d_data_source'])
+        ])
+
+        data_container = p.handle_transform(data_container, ExecutionContext())
+
+        # new_shape: (batch_size, ((time_steps, n_features_3d), n_features_2d))
+
+
+    .. seealso::
+        :class:`neuraxle.base.NonFittableMixin`,
+        :class:`neuraxle.base.NonTransformableMixin`,
+        :class:`neuraxle.base.BaseStep`
+        :class:`neuraxle.data_container.DataContainer`
+    """
+
+    def __init__(self, sub_data_container_names=None):
+        BaseStep.__init__(self)
+        NonTransformableMixin.__init__(self)
+        NonFittableMixin.__init__(self)
+
+        self.data_sources = sub_data_container_names
+
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        Merge sub data containers into the current data container.
+
+        :param data_container: data container to zip
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: base step, data container
+        :rtype: Tuple[BaseStep, DataContainer]
+        """
+        return self, self._batch_zip_sub_data_containers(data_container)
+
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Merge sub data containers into the current data container.
+
+        :param data_container: data container to zip
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: base step, data container
+        :rtype: DataContainer
+        """
+        return self._batch_zip_sub_data_containers(data_container)
+
+    def _batch_zip_sub_data_containers(self, data_container: DataContainer):
+        """
+        Zip sub data containers on the batch dimension.
+
+        :param data_container: data container to zip
+        :type data_container: DataContainer
+        :return: base step, data container
+        :rtype: DataContainer
+        """
+        sub_data_containers_to_zip = []
+        for name, sub_data_container in data_container.sub_data_containers:
+            if name in self.data_sources:
+                sub_data_containers_to_zip.append(sub_data_container)
+
+        for data_container_to_zip in sub_data_containers_to_zip:
+            data_container = self._batch_zip_sub_data_container(data_container, data_container_to_zip)
+
+        return data_container
+
+    def _batch_zip_sub_data_container(self, data_container, data_container_to_zip) -> DataContainer:
+        """
+        Zip sub data container on the batch dimension.
+
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param data_container_to_zip: data container to concatenate
+        :type data_container_to_zip: DataContainer
+        :return: concatenated data containers
+        """
+        new_data_inputs = []
+        for di, other_di in zip(data_container.data_inputs, data_container_to_zip.data_inputs):
+            new_data_inputs.append((di, other_di))
+
+        new_expected_outputs = []
+        for eo, other_eo in zip(data_container.expected_outputs, data_container_to_zip.expected_outputs):
+            new_expected_outputs.append((eo, other_eo))
+
+        data_container.set_data_inputs(new_data_inputs)
+        data_container.set_expected_outputs(new_expected_outputs)
+
+        return data_container
+

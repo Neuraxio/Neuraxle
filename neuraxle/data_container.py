@@ -174,13 +174,15 @@ class DataContainer:
             sub_data_containers=[(name, data_container.copy()) for name, data_container in self.sub_data_containers]
         )
 
-    def add_sub_data_container(self, name: str, sub_data_container: 'DataContainer'):
+    def add_sub_data_container(self, name: str, data_container: 'DataContainer'):
         """
         Get sub data container if item is str, otherwise get a zip of current ids, data inputs, and expected outputs.
 
+        :type name: sub data container name
+        :type data_container: sub data container
         :return: self
         """
-        self.sub_data_containers.append((name, sub_data_container))
+        self.sub_data_containers.append((name, data_container))
         return self
 
     def __contains__(self, item):
