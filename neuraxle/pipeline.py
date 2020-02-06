@@ -127,16 +127,29 @@ class Pipeline(BasePipeline):
 
         return new_self
 
-    def inverse_transform(self, processed_outputs) -> Any:
+    def inverse_transform(self, processed_outputs, expected_outputs=None) -> Any:
         """
         After transforming all data inputs, and obtaining a prediction, we can inverse transform the processed outputs
 
         :param processed_outputs: the forward transformed data input
+        :param expected_outputs:  expected outputs
         :return: backward transformed processed outputs
         """
+        data_container = DataContainer(data_inputs=processed_outputs, expected_outputs=expected_outputs)
+        context = ExecutionContext(root=self.cache_folder, execution_mode=ExecutionMode.INVERSE_TRANSFORM)
+
         for step_name, step in list(reversed(self.items())):
-            processed_outputs = step.inverse_transform(processed_outputs)
-        return processed_outputs
+            data_container = step.handle_inverse_transform(data_container, context)
+
+        return data_container.data_inputs
+
+    def _inverse_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        After transforming all data inputs, and obtaining a prediction, we can inverse transform the processed outputs
+        """
+        for step_name, step in list(reversed(self.items())):
+            data_container = step.handle_inverse_transform(data_container, context)
+        return data_container
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'Pipeline':
         """
@@ -420,6 +433,8 @@ class MiniBatchSequentialPipeline(Pipeline):
         :param context: execution context
         :return: data container
         """
+        data_container, context = self._will_process(data_container, context)
+
         sub_pipelines = self._create_sub_pipelines()
 
         for sub_pipeline in sub_pipelines:
@@ -434,7 +449,7 @@ class MiniBatchSequentialPipeline(Pipeline):
 
         return data_container
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'MiniBatchSequentialPipeline':
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         Fit all sub pipelines splitted by the Barrier steps.
 
@@ -442,6 +457,8 @@ class MiniBatchSequentialPipeline(Pipeline):
         :param context: execution context
         :return: data container
         """
+        data_container, context = self._will_process(data_container, context)
+
         sub_pipelines = self._create_sub_pipelines()
         index_start = 0
 
@@ -466,7 +483,7 @@ class MiniBatchSequentialPipeline(Pipeline):
 
         return self
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> Tuple['MiniBatchSequentialPipeline', DataContainer]:
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Transform all sub pipelines splitted by the Barrier steps.
 
@@ -474,6 +491,8 @@ class MiniBatchSequentialPipeline(Pipeline):
         :param context: execution context
         :return: data container
         """
+        data_container, context = self._will_process(data_container, context)
+
         sub_pipelines = self._create_sub_pipelines()
         index_start = 0
 

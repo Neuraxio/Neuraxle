@@ -88,7 +88,9 @@ def main():
             ),
         )
     ])
+
     print("Meta-fitting on train:")
+
     p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
         n_iter=10,
         higher_score_is_better=True,

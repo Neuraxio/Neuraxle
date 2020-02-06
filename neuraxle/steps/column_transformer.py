@@ -93,13 +93,6 @@ class ColumnsSelectorND(MetaStepMixin, BaseStep):
         MetaStepMixin.__init__(self, col_selector)
         self.n_dimension = n_dimension
 
-    def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
-        self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
-        return self
-
-    def transform(self, data_inputs):
-        return self.wrapped.transform(data_inputs)
-
 
 class ColumnTransformer(FeatureUnion):
     """
