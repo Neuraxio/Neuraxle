@@ -62,13 +62,13 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     ]).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
-    best_model = RandomSearch(
+    random_search = RandomSearch(
         pipeline,
         n_iter=n_iter,
         higher_score_is_better=True,
         cache_folder=tmpdir
     ).fit(DATA_INPUTS, EXPECTED_OUTPUTS)
-    outputs = best_model.transform(DATA_INPUTS)
+    outputs = random_search.get_best_model().transform(DATA_INPUTS)
     time_b = time.time()
 
     actual_score = mean_squared_error(EXPECTED_OUTPUTS, outputs)
@@ -92,13 +92,13 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     ], cache_folder=tmpdir).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
-    best_model = RandomSearch(
+    random_search = RandomSearch(
         pipeline,
         n_iter=n_iter,
         higher_score_is_better=True,
         cache_folder=tmpdir
     ).fit(DATA_INPUTS, EXPECTED_OUTPUTS)
-    outputs = best_model.transform(DATA_INPUTS)
+    outputs = random_search.get_best_model().transform(DATA_INPUTS)
     time_b = time.time()
     pipeline.flush_all_cache()
 

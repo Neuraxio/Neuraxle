@@ -96,6 +96,8 @@ def main():
         higher_score_is_better=True,
         validation_technique=KFoldCrossValidationWrapper(scoring_function=r2_score, k_fold=10)
     ))
+
+    p = random_search.get_best_model()
     # Here is an alternative way to do it, more "pipeliney":
     # p = RandomSearch(
     #     p,

@@ -595,7 +595,7 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         return copy.deepcopy(auto_ml_algorithm)
 
     def get_best_model(self) -> BaseStep:
-        return self.best_model
+        return self.best_model.get_step()
 
 
 class RandomSearch(AutoMLSequentialWrapper):
