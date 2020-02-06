@@ -27,11 +27,11 @@ This module contains steps to perform various feature unions and model stacking,
 from joblib import Parallel, delayed
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, Identity, ExecutionContext, DataContainer, \
-    HandleOnlyMixin, NonFittableMixin
+    NonFittableMixin, ForceHandleOnlyMixin
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
-class FeatureUnion(HandleOnlyMixin, TruncableSteps):
+class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
     """Parallelize the union of many pipeline steps."""
 
     def __init__(
@@ -39,7 +39,8 @@ class FeatureUnion(HandleOnlyMixin, TruncableSteps):
             steps_as_tuple: NamedTupleList,
             joiner: NonFittableMixin = NumpyConcatenateInnerFeatures(),
             n_jobs: int = None,
-            backend: str = "threading"
+            backend: str = "threading",
+            cache_folder: str = None
     ):
         """
         Create a feature union.
@@ -52,6 +53,7 @@ class FeatureUnion(HandleOnlyMixin, TruncableSteps):
         TruncableSteps.__init__(self, steps_as_tuple)
         self.n_jobs = n_jobs
         self.backend = backend
+        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder)
 
     def _fit_data_container(self, data_container, context):
         """

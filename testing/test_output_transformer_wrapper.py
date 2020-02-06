@@ -10,9 +10,7 @@ from neuraxle.steps.output_handlers import OutputTransformerWrapper
 
 def test_output_transformer_wrapper_should_fit_with_data_inputs_and_expected_outputs_as_data_inputs():
     tape = TapeCallbackFunction()
-    p = Pipeline([
-        OutputTransformerWrapper(FitCallbackStep(tape))
-    ])
+    p = OutputTransformerWrapper(FitCallbackStep(tape))
     data_inputs, expected_outputs = _create_data_source((10, 10))
 
     p.fit(data_inputs, expected_outputs)
@@ -24,9 +22,7 @@ def test_output_transformer_wrapper_should_fit_with_data_inputs_and_expected_out
 
 def test_output_transformer_wrapper_should_fit_transform_with_data_inputs_and_expected_outputs():
     tape = TapeCallbackFunction()
-    p = Pipeline([
-        OutputTransformerWrapper(Pipeline([MultiplyByN(2), FitCallbackStep(tape)]))
-    ])
+    p = OutputTransformerWrapper(Pipeline([MultiplyByN(2), FitCallbackStep(tape)]))
     data_inputs, expected_outputs = _create_data_source((10, 10))
 
     p, data_container = p.handle_fit_transform(DataContainer(
@@ -42,9 +38,7 @@ def test_output_transformer_wrapper_should_fit_transform_with_data_inputs_and_ex
 
 
 def test_output_transformer_wrapper_should_transform_with_data_inputs_and_expected_outputs():
-    p = Pipeline([
-        OutputTransformerWrapper(MultiplyByN(2))
-    ])
+    p = OutputTransformerWrapper(MultiplyByN(2))
     data_inputs, expected_outputs = _create_data_source((10, 10))
 
     data_container = p.handle_transform(DataContainer(

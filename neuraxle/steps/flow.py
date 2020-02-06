@@ -25,7 +25,8 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
 """
 from typing import Union
 
-from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin, HandleOnlyMixin, TransformHandlerOnlyMixin
+from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin, \
+    HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin
 from neuraxle.data_container import ExpandedDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.union import FeatureUnion
@@ -154,7 +155,7 @@ class TestOnlyWrapper(TrainOrTestOnlyWrapper):
         TrainOrTestOnlyWrapper.__init__(self, wrapped=wrapped, is_train_only=False)
 
 
-class Optional(HandleOnlyMixin, MetaStepMixin, BaseStep):
+class Optional(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     """
     A wrapper to nullify a step : nullify its hyperparams, and also nullify all of his behavior.
 
@@ -168,7 +169,7 @@ class Optional(HandleOnlyMixin, MetaStepMixin, BaseStep):
 
     """
 
-    def __init__(self, wrapped: BaseStep, enabled: bool = True, nullified_return_value=None):
+    def __init__(self, wrapped: BaseStep, enabled: bool = True, nullified_return_value=None, cache_folder=None):
         BaseStep.__init__(
             self,
             hyperparams=HyperparameterSamples({
@@ -176,7 +177,7 @@ class Optional(HandleOnlyMixin, MetaStepMixin, BaseStep):
             })
         )
         MetaStepMixin.__init__(self, wrapped)
-        HandleOnlyMixin.__init__(self)
+        ForceHandleOnlyMixin.__init__(self, cache_folder)
 
         if nullified_return_value is None:
             nullified_return_value = []
