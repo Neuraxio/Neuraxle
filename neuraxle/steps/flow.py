@@ -25,7 +25,7 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
 """
 from typing import Union
 
-from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin, HandlerMixin, TransformHandlerMixin
+from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin, HandleOnlyMixin, TransformHandlerOnlyMixin
 from neuraxle.data_container import ExpandedDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.union import FeatureUnion
@@ -33,7 +33,7 @@ from neuraxle.union import FeatureUnion
 OPTIONAL_ENABLED_HYPERPARAM = 'enabled'
 
 
-class TrainOrTestOnlyWrapper(HandlerMixin, MetaStepMixin, BaseStep):
+class TrainOrTestOnlyWrapper(HandleOnlyMixin, MetaStepMixin, BaseStep):
     """
     A wrapper to run wrapped step only in test mode, or only in train mode.
 
@@ -154,7 +154,7 @@ class TestOnlyWrapper(TrainOrTestOnlyWrapper):
         TrainOrTestOnlyWrapper.__init__(self, wrapped=wrapped, is_train_only=False)
 
 
-class Optional(HandlerMixin, MetaStepMixin, BaseStep):
+class Optional(HandleOnlyMixin, MetaStepMixin, BaseStep):
     """
     A wrapper to nullify a step : nullify its hyperparams, and also nullify all of his behavior.
 
@@ -176,7 +176,7 @@ class Optional(HandlerMixin, MetaStepMixin, BaseStep):
             })
         )
         MetaStepMixin.__init__(self, wrapped)
-        HandlerMixin.__init__(self)
+        HandleOnlyMixin.__init__(self)
 
         if nullified_return_value is None:
             nullified_return_value = []
@@ -304,9 +304,9 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
 CHOICE_HYPERPARAM = 'choice'
 
 
-class SelectNotEmptyJoiner(TransformHandlerMixin, BaseStep):
+class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseStep):
     """
-    Return the non empty data container.
+    A step that selects non empty data inputs.
 
     .. seealso::
         :class:`TransformHandlerMixin`,
@@ -315,7 +315,7 @@ class SelectNotEmptyJoiner(TransformHandlerMixin, BaseStep):
 
     def __init__(self):
         BaseStep.__init__(self)
-        TransformHandlerMixin.__init__(self)
+        TransformHandlerOnlyMixin.__init__(self)
 
     def _transform_data_container(self, data_container, context):
         """
@@ -367,7 +367,7 @@ class ChooseOneStepOf(FeatureUnion):
     """
 
     def __init__(self, steps, hyperparams=None):
-        FeatureUnion.__init__(self, steps, joiner=SelectNotEmptyJoiner())
+        FeatureUnion.__init__(self, steps, joiner=SelectNonEmptyDataInputs())
 
         self._make_all_steps_optional()
 
@@ -461,7 +461,7 @@ class ExpandDim(
         return False
 
 
-class ReversiblePreprocessingWrapper(HandlerMixin, TruncableSteps):
+class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
     """
     TruncableSteps with a preprocessing step(1), and a postprocessing step(2)
     that inverse transforms with the preprocessing step at the end (1, 2, reversed(1)).
@@ -482,7 +482,7 @@ class ReversiblePreprocessingWrapper(HandlerMixin, TruncableSteps):
     """
 
     def __init__(self, preprocessing_step, postprocessing_step):
-        HandlerMixin.__init__(self)
+        HandleOnlyMixin.__init__(self)
         TruncableSteps.__init__(self, [
             ("preprocessing_step", preprocessing_step),
             ("postprocessing_step", postprocessing_step)

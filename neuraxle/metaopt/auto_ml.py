@@ -24,7 +24,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import List, Callable, Dict, Union, Iterable
 
-from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, HandlerMixin, RootStepMixin
+from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, HandleOnlyMixin, ForceHandleOnlyMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.random import BaseCrossValidationWrapper, KFoldCrossValidationWrapper
@@ -254,7 +254,7 @@ class BaseHyperparameterOptimizer(ABC):
         raise NotImplementedError()
 
 
-class AutoMLAlgorithm(RootStepMixin, MetaStepMixin, BaseStep):
+class AutoMLAlgorithm(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     """
     Pipeline step that executes Automatic Machine Learning strategy.
     It uses an hyperparameter optimizer of type :class:`BaseHyperparameterOptimizer` to find the next best hyperparams.
@@ -280,7 +280,7 @@ class AutoMLAlgorithm(RootStepMixin, MetaStepMixin, BaseStep):
     ):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, None)
-        RootStepMixin.__init__(self, cache_folder)
+        ForceHandleOnlyMixin.__init__(self, cache_folder)
 
         if validation_technique is None:
             validation_technique = KFoldCrossValidationWrapper()
@@ -457,7 +457,7 @@ class Trials:
         return len(self.trials)
 
 
-class AutoMLSequentialWrapper(RootStepMixin, MetaStepMixin, BaseStep):
+class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     """
     A step to execute any Automatic Machine Learning Algorithms.
     Example usage :
@@ -500,7 +500,7 @@ class AutoMLSequentialWrapper(RootStepMixin, MetaStepMixin, BaseStep):
 
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, auto_ml_algorithm)
-        RootStepMixin.__init__(self, cache_folder)
+        ForceHandleOnlyMixin.__init__(self, cache_folder)
 
         if hyperparams_repository is None:
             hyperparams_repository = InMemoryHyperparamsRepository()

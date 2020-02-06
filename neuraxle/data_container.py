@@ -66,6 +66,7 @@ class DataContainer:
                 current_ids = [str(c) for c in range(len(data_inputs))]
             else:
                 current_ids = str(0)
+
         self.current_ids = current_ids
 
         if expected_outputs is None and isinstance(data_inputs, Iterable):
@@ -258,6 +259,24 @@ class DataContainer:
         self.set_data_inputs(data_inputs)
         self.set_expected_outputs(expected_outputs)
 
+        return self
+
+    def tolistshallow(self):
+        new_current_ids = []
+        new_data_inputs = []
+        new_expected_outputs = []
+
+        for cid, di, eo in self:
+            new_current_ids.append(cid)
+            new_data_inputs.append(di)
+            new_expected_outputs.append(eo)
+
+        self.set_current_ids(new_current_ids)
+        self.set_data_inputs(new_data_inputs)
+        self.set_expected_outputs(new_expected_outputs)
+
+        return self
+
     def to_numpy(self):
         self.set_current_ids(np.array(self.current_ids))
         self.set_data_inputs(np.array(self.data_inputs))
@@ -418,7 +437,7 @@ class ListDataContainer(DataContainer):
 
     def __init__(self, data_inputs: Any, current_ids=None, summary_id=None, expected_outputs: Any = None, sub_data_containers=None):
         DataContainer.__init__(self, data_inputs, current_ids, summary_id, expected_outputs, sub_data_containers)
-        self.tolist()
+        self.tolistshallow()
 
     @staticmethod
     def empty(original_data_container: DataContainer = None) -> 'ListDataContainer':
@@ -467,7 +486,7 @@ class ListDataContainer(DataContainer):
         :type data_container: DataContainer
         :return:
         """
-        data_container.tolist()
+        data_container.tolistshallow()
 
         self.current_ids.extend(data_container.current_ids)
         self.data_inputs.extend(data_container.data_inputs)

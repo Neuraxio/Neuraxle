@@ -127,15 +127,14 @@ class Pipeline(BasePipeline):
 
         return new_self
 
-    def inverse_transform(self, processed_outputs, expected_outputs=None) -> Any:
+    def inverse_transform(self, processed_outputs) -> Any:
         """
         After transforming all data inputs, and obtaining a prediction, we can inverse transform the processed outputs
 
         :param processed_outputs: the forward transformed data input
-        :param expected_outputs:  expected outputs
         :return: backward transformed processed outputs
         """
-        data_container = DataContainer(data_inputs=processed_outputs, expected_outputs=expected_outputs)
+        data_container = DataContainer(data_inputs=processed_outputs)
         context = ExecutionContext(root=self.cache_folder, execution_mode=ExecutionMode.INVERSE_TRANSFORM)
 
         for step_name, step in list(reversed(self.items())):

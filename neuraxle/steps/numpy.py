@@ -26,7 +26,8 @@ Those steps works with NumPy (np) arrays.
 
 import numpy as np
 
-from neuraxle.base import NonFittableMixin, BaseStep, DataContainer
+from neuraxle.base import NonFittableMixin, BaseStep, DataContainer, ExecutionContext, ForceHandleOnlyMixin, \
+    ForceHandleMixin
 from neuraxle.hyperparams.space import HyperparameterSamples
 
 
@@ -179,6 +180,7 @@ class MultiplyByN(NonFittableMixin, BaseStep):
         :class:`NonFittableMixin`,
         :class:`BaseStep`
     """
+
     def __init__(self, multiply_by=1):
         NonFittableMixin.__init__(self)
         BaseStep.__init__(
@@ -220,6 +222,7 @@ class AddN(NonFittableMixin, BaseStep):
         :class:`NonFittableMixin`,
         :class:`BaseStep`
     """
+
     def __init__(self, add=1):
         NonFittableMixin.__init__(self)
         BaseStep.__init__(
@@ -303,3 +306,11 @@ class OneHotEncoder(NonFittableMixin, BaseStep):
         outputs_ = np.delete(outputs_, self.nb_columns, axis=-1)
 
         return outputs_.squeeze()
+
+
+class ToNumpy(ForceHandleMixin, BaseStep):
+    """
+    Convert data inputs, and expected outputs to a numpy array.
+    """
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+        return data_container.to_numpy(), context

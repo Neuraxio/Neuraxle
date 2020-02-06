@@ -27,11 +27,11 @@ This module contains steps to perform various feature unions and model stacking,
 from joblib import Parallel, delayed
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, Identity, ExecutionContext, DataContainer, \
-    HandlerMixin, NonFittableMixin
+    HandleOnlyMixin, NonFittableMixin
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
-class FeatureUnion(HandlerMixin, TruncableSteps):
+class FeatureUnion(HandleOnlyMixin, TruncableSteps):
     """Parallelize the union of many pipeline steps."""
 
     def __init__(

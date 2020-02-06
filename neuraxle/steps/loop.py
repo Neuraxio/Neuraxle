@@ -25,12 +25,12 @@ Pipeline Steps For Looping
 import copy
 from typing import List, Any
 
-from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, HandlerMixin
+from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, HandleOnlyMixin
 from neuraxle.data_container import ListDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
 
-class ForEachDataInput(HandlerMixin, ResumableStepMixin, MetaStepMixin, BaseStep):
+class ForEachDataInput(HandleOnlyMixin, ResumableStepMixin, MetaStepMixin, BaseStep):
     """
     Truncable step that fits/transforms each step for each of the data inputs, and expected outputs.
     """
@@ -41,7 +41,7 @@ class ForEachDataInput(HandlerMixin, ResumableStepMixin, MetaStepMixin, BaseStep
     ):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
-        HandlerMixin.__init__(self)
+        HandleOnlyMixin.__init__(self)
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
         """
@@ -131,11 +131,11 @@ class ForEachDataInput(HandlerMixin, ResumableStepMixin, MetaStepMixin, BaseStep
         return False
 
 
-class StepClonerForEachDataInput(HandlerMixin, MetaStepMixin, BaseStep):
+class StepClonerForEachDataInput(HandleOnlyMixin, MetaStepMixin, BaseStep):
     def __init__(self, wrapped: BaseStep, copy_op=copy.deepcopy):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
-        HandlerMixin.__init__(self)
+        HandleOnlyMixin.__init__(self)
 
         self.set_step(wrapped)
         self.steps: List[BaseStep] = []

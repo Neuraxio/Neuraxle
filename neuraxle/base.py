@@ -2898,14 +2898,9 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
 
 
 
-class TransformHandlerMixin(NonFittableMixin):
+class TransformHandlerOnlyMixin(NonFittableMixin):
     """
-    A pipeline step that only requires the implementation of handler methods :
-        - _transform_data_container
-        - _fit_transform_data_container
-        - _fit_data_container
-
-    If forbids only implementing fit or transform or fit_transform without the handles. So it forces the handles.
+    A pipeline step that only requires the implementation of _transform_data_container.
 
     .. seealso::
         :class:`BaseStep`
@@ -2915,13 +2910,13 @@ class TransformHandlerMixin(NonFittableMixin):
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         raise NotImplementedError('Must implement _transform_data_container in {0}'.format(self.name))
 
-    def transform(self, data_inputs) -> 'HandlerMixin':
+    def transform(self, data_inputs) -> 'HandleOnlyMixin':
         raise Exception(
             'Transform method is not supported for {0}, because it inherits from HandlerMixin. Please use handle_transform instead.'.format(
                 self.name))
 
 
-class HandlerMixin:
+class HandleOnlyMixin:
     """
     A pipeline step that only requires the implementation of handler methods :
         - _transform_data_container
@@ -2947,26 +2942,25 @@ class HandlerMixin:
             'BaseStep', DataContainer):
         raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
 
-    def transform(self, data_inputs) -> 'HandlerMixin':
+    def transform(self, data_inputs) -> 'HandleOnlyMixin':
         raise Exception(
-            'Transform method is not supported for {0}, because it inherits from HandlerMixin. Please use handle_transform instead.'.format(
+            'Transform method is not supported for {0}, because it inherits from HandleOnlyMixin. Please use handle_transform instead.'.format(
                 self.name))
 
-    def fit(self, data_inputs, expected_outputs=None) -> 'HandlerMixin':
+    def fit(self, data_inputs, expected_outputs=None) -> 'HandleOnlyMixin':
         raise Exception(
-            'Fit method is not supported for {0}, because it inherits from HandlerMixin. Please use handle_fit instead.'.format(
+            'Fit method is not supported for {0}, because it inherits from HandleOnlyMixin. Please use handle_fit instead.'.format(
                 self.name))
 
-    def fit_transform(self, data_inputs, expected_outputs=None) -> 'HandlerMixin':
+    def fit_transform(self, data_inputs, expected_outputs=None) -> 'HandleOnlyMixin':
         raise Exception(
-            'Fit transform method is not supported for {0}, because it inherits from HandlerMixin. Please use handle_fit_transform instead.'.format(
+            'Fit transform method is not supported for {0}, because it inherits from HandleOnlyMixin. Please use handle_fit_transform instead.'.format(
                 self.name))
 
 
-class RootStepMixin(HandlerMixin):
+class ForceHandleMixin:
     """
-    A step that can be the root of a pipeline.
-    Automatically call handle methods in the transform, fit, and fit_transform methods.
+    A step that automatically calls handle methods in the transform, fit, and fit_transform methods.
 
     .. seealso::
         :class:`BaseStep`,
@@ -2987,7 +2981,7 @@ class RootStepMixin(HandlerMixin):
 
         return data_container.data_inputs
 
-    def fit(self, data_inputs, expected_outputs=None) -> Tuple['HandlerMixin', Iterable]:
+    def fit(self, data_inputs, expected_outputs=None) -> Tuple['HandleOnlyMixin', Iterable]:
         data_container = DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs)
         context = ExecutionContext(self.cache_folder, execution_mode=ExecutionMode.TRANSFORM)
 
@@ -2995,10 +2989,30 @@ class RootStepMixin(HandlerMixin):
 
         return new_self
 
-    def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['HandlerMixin', Iterable]:
+    def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['HandleOnlyMixin', Iterable]:
         data_container = DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs)
         context = ExecutionContext(root=self.cache_folder, execution_mode=ExecutionMode.TRANSFORM)
 
         new_self, data_container = self.handle_fit_transform(data_container, context)
 
         return new_self, data_container.data_inputs
+
+
+class ForceHandleOnlyMixin(ForceHandleMixin, HandleOnlyMixin):
+    """
+    A step that automatically calls handle methods in the transform, fit, and fit_transform methods.
+    It also requires the implementation of handler methods :
+        - _transform_data_container
+        - _fit_transform_data_container
+        - _fit_data_container
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`neuraxle.pipeline.Pipeline`,
+        :class:`neuraxle.pipeline.MiniBatchSequentialPipeline`,
+        :class:`neuraxle.metaopt.AutoMLSequentialWrapper`
+    """
+    def __init__(self, cache_folder=None):
+        HandleOnlyMixin.__init__(self)
+        ForceHandleMixin.__init__(self, cache_folder)
+

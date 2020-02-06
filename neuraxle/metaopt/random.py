@@ -31,7 +31,7 @@ from typing import List, Callable, Tuple
 import numpy as np
 from sklearn.metrics import r2_score
 
-from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, HandlerMixin
+from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, HandleOnlyMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnCustomAxis
@@ -66,7 +66,7 @@ class BaseValidation(MetaStepMixin, BaseStep, ABC):
         self.scoring_function = scoring_function
 
 
-class ValidationSplitWrapper(HandlerMixin, BaseValidation):
+class ValidationSplitWrapper(HandleOnlyMixin, BaseValidation):
     """
     Wrapper for validation split that calculates the score for the validation split.
 
@@ -113,7 +113,7 @@ class ValidationSplitWrapper(HandlerMixin, BaseValidation):
         """
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
-        HandlerMixin.__init__(self)
+        HandleOnlyMixin.__init__(self)
 
         self.run_validation_split_in_test_mode = run_validation_split_in_test_mode
         self.test_size = test_size
