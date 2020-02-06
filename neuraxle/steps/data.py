@@ -265,6 +265,9 @@ class InnerConcatenateDataContainer(NonFittableMixin, NonTransformableMixin, Bas
         :rtype: DataContainer
         """
         sub_data_containers_to_zip = []
+        if self.data_sources is None:
+            self.data_sources = data_container.get_sub_data_container_names()
+
         for name, sub_data_container in data_container.sub_data_containers:
             if name in self.data_sources:
                 sub_data_containers_to_zip.append(sub_data_container)
@@ -389,6 +392,9 @@ class ZipBatchDataContainer(NonFittableMixin, NonTransformableMixin, BaseStep):
         :rtype: DataContainer
         """
         sub_data_containers_to_zip = []
+        if self.data_sources is None:
+            self.data_sources = data_container.get_sub_data_container_names()
+
         for name, sub_data_container in data_container.sub_data_containers:
             if name in self.data_sources:
                 sub_data_containers_to_zip.append(sub_data_container)

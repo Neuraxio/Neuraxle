@@ -185,6 +185,14 @@ class DataContainer:
         self.sub_data_containers.append((name, data_container))
         return self
 
+    def get_sub_data_container_names(self):
+        """
+        Get sub data container names.
+
+        :return: list of names
+        """
+        return [name for name, _ in self.sub_data_containers]
+
     def __contains__(self, item):
         """
         return true if sub container name is in the sub data containers.
