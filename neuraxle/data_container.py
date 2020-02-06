@@ -212,12 +212,12 @@ class DataContainer:
     def __getitem__(self, item: Union[str, int]):
         """
         If item is a string, then get then sub container with the same name as item in the list of sub data containers.
-        If item is an int, then return a zip of (current id, data input, expected output) for the given item index.
+        If item is an int, then return a tuple of (current id, data input, expected output) for the given item index.
 
         :param item: sub data container str, or item index as int
         :type item: Union[str, int]
-        :return: data container, or zip of current ids, data inputs, expected outputs.
-        :rtype: Union[DataContainer, Iterable]
+        :return: data container, or tuple of current ids, data inputs, expected outputs.
+        :rtype: Union[DataContainer, Tuple]
         """
         if isinstance(item, str):
             for name, data_container in self.sub_data_containers:
@@ -225,7 +225,12 @@ class DataContainer:
                     return data_container
             raise KeyError("sub_data_container {} not found in data container".format(item))
         else:
-            return zip(self.current_ids[item], self.data_inputs[item], self.expected_outputs[item])
+            if self.current_ids is None:
+                current_ids = [None] * len(self)
+            else:
+                current_ids = self.current_ids[item]
+
+            return current_ids, self.data_inputs[item], self.expected_outputs[item]
 
     def __iter__(self):
         """
@@ -323,29 +328,48 @@ class ZipDataContainer(DataContainer):
     """
 
     @staticmethod
-    def create_from(data_container: DataContainer, other_data_container: DataContainer) -> 'ZipDataContainer':
+    def create_from(data_container: DataContainer, *other_data_containers: DataContainer) -> 'ZipDataContainer':
         """
         Create ZipDataContainer that merges two data sources together.
 
         :param data_container: data container to transform
-        :param other_data_container: other data container to transform
         :type data_container: DataContainer
+        :param other_data_containers: other data containers to zip with data container
+        :type other_data_containers: List[DataContainer]
         :return: expanded data container
         :rtype: ExpandedDataContainer
         """
-        new_di = []
-        new_eo = []
-        for (ci, di, eo), (other_ci, other_di, other_eo) in zip(data_container, other_data_container):
-            new_di.append((di, other_di))
-            new_eo.append((eo, other_eo))
+        new_data_inputs = []
+        new_expected_outputs = []
+        i = 0
+
+        for (_, di, eo) in data_container:
+            new_data_input = []
+            new_expected_output = []
+
+            new_data_input.append(di)
+            new_expected_output.append(eo)
+
+            for other_data_container in other_data_containers:
+                _, di, eo = other_data_container[i]
+                new_data_input.append(di)
+                new_expected_output.append(eo)
+
+            new_data_inputs.append(tuple(new_data_input))
+            new_expected_outputs.append(tuple(new_expected_output))
+
+            i += 1
 
         return ZipDataContainer(
-            data_inputs=new_di,
+            data_inputs=new_data_inputs,
             current_ids=data_container.current_ids,
             summary_id=data_container.summary_id,
-            expected_outputs=new_eo,
+            expected_outputs=new_expected_outputs,
             sub_data_containers=data_container.sub_data_containers
         )
+
+    def inner_concatenate(self):
+        pass
 
 
 class ListDataContainer(DataContainer):

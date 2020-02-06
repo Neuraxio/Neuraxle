@@ -190,6 +190,26 @@ class TrainShuffled(Pipeline):
         ])
 
 
+def _inner_concatenate_np_array(np_array, np_array_to_zip):
+    """
+    Concatenate numpy arrays on the last axis using expand dim, and broadcasting.
+
+    :param np_array: data container
+    :type np_array: np.ndarray
+    :param np_array_to_zip: numpy array to zip with the other
+    :type np_array_to_zip: np.ndarray
+    :return: concatenated np array
+    :rtype: np.ndarray
+    """
+    while len(np_array_to_zip.shape) < len(np_array.shape):
+        np_array_to_zip = np.expand_dims(np_array_to_zip, axis=-1)
+
+    target_shape = tuple(list(np_array.shape[:-1]) + [np_array_to_zip.shape[-1]])
+    np_array_to_zip = np.broadcast_to(np_array_to_zip, target_shape)
+
+    return np.concatenate((np_array, np_array_to_zip), axis=-1)
+
+
 class InnerConcatenateDataContainer(NonFittableMixin, NonTransformableMixin, BaseStep):
     """
     Concatenate inner features of sub data containers along `axis=-1`..
@@ -287,34 +307,15 @@ class InnerConcatenateDataContainer(NonFittableMixin, NonTransformableMixin, Bas
         :type data_container_to_zip: DataContainer
         :return: concatenated data containers
         """
-        data_inputs = self._concatenate_np_array_on_last_axis(data_container.data_inputs,
-                                                              data_container_to_zip.data_inputs)
+        data_inputs = _inner_concatenate_np_array(data_container.data_inputs,
+                                                  data_container_to_zip.data_inputs)
         data_container.set_data_inputs(data_inputs)
 
-        expected_outputs = self._concatenate_np_array_on_last_axis(data_container.expected_outputs,
-                                                                   data_container_to_zip.expected_outputs)
+        expected_outputs = _inner_concatenate_np_array(data_container.expected_outputs,
+                                                       data_container_to_zip.expected_outputs)
         data_container.set_expected_outputs(expected_outputs)
 
         return data_container
-
-    def _concatenate_np_array_on_last_axis(self, np_array, np_array_to_zip):
-        """
-        Concatenate numpy arrays on the last axis using expand dim, and broadcasting.
-
-        :param np_array: data container
-        :type np_array: np.ndarray
-        :param np_array_to_zip: numpy array to zip with the other
-        :type np_array_to_zip: np.ndarray
-        :return: concatenated np array
-        :rtype: np.ndarray
-        """
-        while len(np_array_to_zip.shape) < len(np_array.shape):
-            np_array_to_zip = np.expand_dims(np_array_to_zip, axis=-1)
-
-        target_shape = tuple(list(np_array.shape[:-1]) + [np_array_to_zip.shape[-1]])
-        np_array_to_zip = np.broadcast_to(np_array_to_zip, target_shape)
-
-        return np.concatenate((np_array, np_array_to_zip), axis=-1)
 
 
 class ZipBatchDataContainer(NonFittableMixin, NonTransformableMixin, BaseStep):
