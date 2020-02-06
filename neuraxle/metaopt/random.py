@@ -31,7 +31,7 @@ from typing import List, Callable, Tuple
 import numpy as np
 from sklearn.metrics import r2_score
 
-from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, HandleOnlyMixin
+from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, HandleOnlyMixin, ForceHandleOnlyMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnCustomAxis
@@ -66,7 +66,7 @@ class BaseValidation(MetaStepMixin, BaseStep, ABC):
         self.scoring_function = scoring_function
 
 
-class ValidationSplitWrapper(HandleOnlyMixin, BaseValidation):
+class ValidationSplitWrapper(ForceHandleOnlyMixin, BaseValidation):
     """
     Wrapper for validation split that calculates the score for the validation split.
 
@@ -104,7 +104,8 @@ class ValidationSplitWrapper(HandleOnlyMixin, BaseValidation):
             test_size: float = 0.2,
             scoring_function=r2_score,
             run_validation_split_in_test_mode=True,
-            metrics_enabled=True
+            metrics_enabled=True,
+            cache_folder=None
     ):
         """
         :param wrapped: wrapped step
@@ -113,7 +114,7 @@ class ValidationSplitWrapper(HandleOnlyMixin, BaseValidation):
         """
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
-        HandleOnlyMixin.__init__(self)
+        ForceHandleOnlyMixin.__init__(self, cache_folder)
 
         self.run_validation_split_in_test_mode = run_validation_split_in_test_mode
         self.test_size = test_size
@@ -287,10 +288,12 @@ class ValidationSplitWrapper(HandleOnlyMixin, BaseValidation):
         return math.floor(len(data_inputs) * (1 - self.test_size))
 
 
-class BaseCrossValidationWrapper(BaseValidation, ABC):
+class BaseCrossValidationWrapper(ForceHandleOnlyMixin, BaseValidation, ABC):
     # TODO: change default argument of scoring_function...
-    def __init__(self, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch()):
+    def __init__(self, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch(), cache_folder=None):
         BaseValidation.__init__(self, scoring_function)
+        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder)
+
         self.joiner = joiner
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
@@ -330,19 +333,11 @@ class BaseCrossValidationWrapper(BaseValidation, ABC):
     def split(self, data_inputs, expected_outputs):
         raise NotImplementedError("TODO")
 
-    def transform(self, data_inputs):
-        # TODO: use the splits and average the results?? instead of picking best model...
-        raise NotImplementedError("TODO: code this method in Neuraxle.")
-        data_inputs = self.split(data_inputs)
-        predicted_outputs_splitted = self.wrapped.transform(data_inputs)
-        return self.joiner.transform(predicted_outputs_splitted)
-
 
 class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
-
-    def __init__(self, scoring_function=r2_score, k_fold=3, joiner=NumpyConcatenateOuterBatch()):
+    def __init__(self, scoring_function=r2_score, k_fold=3, joiner=NumpyConcatenateOuterBatch(), cache_folder=None):
         self.k_fold = k_fold
-        BaseCrossValidationWrapper.__init__(self, scoring_function=scoring_function, joiner=joiner)
+        BaseCrossValidationWrapper.__init__(self, scoring_function=scoring_function, joiner=joiner, cache_folder=cache_folder)
 
     def split(self, data_inputs, expected_outputs):
         validation_data_inputs, validation_expected_outputs = self.validation_split(data_inputs, expected_outputs)

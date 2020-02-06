@@ -31,7 +31,7 @@ def test_automl_sequential_wrapper(tmpdir):
     # When
     auto_ml: AutoMLSequentialWrapper = auto_ml.fit(data_inputs, expected_outputs)
     best_model: Pipeline = auto_ml.get_best_model()
-    predicted_outputs = best_model.transform(data_inputs)
+    predicted_outputs = best_model.get_step().transform(data_inputs)
 
     # Then
     actual_mse = ((predicted_outputs - expected_outputs) ** 2).mean()
