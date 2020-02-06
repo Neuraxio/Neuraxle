@@ -22,7 +22,7 @@ import os
 import traceback
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import List, Callable
+from typing import List, Callable, Dict, Union, Iterable
 
 from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, HandlerMixin, RootStepMixin
 from neuraxle.data_container import DataContainer
@@ -289,6 +289,26 @@ class AutoMLAlgorithm(RootStepMixin, MetaStepMixin, BaseStep):
         self.hyperparameter_optimizer = hyperparameter_optimizer
         self.return_fitted_model = False
 
+    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
+        self.validation_technique.apply(method_name, step_name, *kargs, **kwargs)
+
+        results = BaseStep.apply(self, method_name=method_name, step_name=step_name, *kargs, **kwargs)
+
+        meta_step_results = MetaStepMixin.apply(self, method_name=method_name, step_name=step_name, *kargs, **kwargs)
+        results.update(meta_step_results)
+
+        return results
+
+    def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Union[Dict, Iterable]:
+        self.validation_technique.apply_method(method, step_name, *kargs, **kwargs)
+
+        results = BaseStep.apply(self, method=method, step_name=step_name, *kargs, **kwargs)
+
+        meta_step_results = MetaStepMixin.apply(self, method=method, step_name=step_name, *kargs, **kwargs)
+        results.update(meta_step_results)
+
+        return results
+
     def set_return_fitted_model(self, return_fitted_model):
         self.return_fitted_model = return_fitted_model
 
@@ -492,7 +512,12 @@ class AutoMLSequentialWrapper(RootStepMixin, MetaStepMixin, BaseStep):
 
     def _fit_transform_data_container(self, data_container, context):
         new_self = self._fit_data_container(data_container, context)
-        return new_self, new_self._transform_data_container(data_container, context)
+
+        new_self.best_model.apply('disable_metrics')
+        data_container = new_self._transform_data_container(data_container, context)
+        new_self.best_model.apply('enable_metrics')
+
+        return new_self, data_container
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """

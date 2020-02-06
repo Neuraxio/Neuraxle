@@ -103,7 +103,8 @@ class ValidationSplitWrapper(HandlerMixin, BaseValidation):
             wrapped: BaseStep = None,
             test_size: float = 0.2,
             scoring_function=r2_score,
-            run_validation_split_in_test_mode=True
+            run_validation_split_in_test_mode=True,
+            metrics_enabled=True
     ):
         """
         :param wrapped: wrapped step
@@ -117,6 +118,8 @@ class ValidationSplitWrapper(HandlerMixin, BaseValidation):
         self.run_validation_split_in_test_mode = run_validation_split_in_test_mode
         self.test_size = test_size
         self.scoring_function = scoring_function
+
+        self.metrics_enabled = metrics_enabled
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('ValidationSplitWrapper', DataContainer):
         """
@@ -150,11 +153,13 @@ class ValidationSplitWrapper(HandlerMixin, BaseValidation):
             data_container=validation_data_container
         )
 
-        self.wrapped, results_data_container = self.wrapped.handle_fit_transform(train_data_container, context.push(self.wrapped))
+        self.wrapped, results_data_container = self.wrapped.handle_fit_transform(train_data_container,
+                                                                                 context.push(self.wrapped))
 
         self._update_scores_train(results_data_container.data_inputs, results_data_container.expected_outputs)
 
-        self.apply('disable_metrics')
+        if self.metrics_enabled:
+            self.wrapped.apply('disable_metrics')
 
         self.set_train(False)
         results_data_container = self.wrapped.handle_transform(validation_data_container, context.push(self.wrapped))
@@ -164,7 +169,8 @@ class ValidationSplitWrapper(HandlerMixin, BaseValidation):
 
         data_container = self.wrapped.handle_transform(data_container, context.push(self.wrapped))
 
-        self.apply('enable_metrics')
+        if self.metrics_enabled:
+            self.wrapped.apply('enable_metrics')
 
         return self, data_container
 
@@ -267,6 +273,16 @@ class ValidationSplitWrapper(HandlerMixin, BaseValidation):
         """
         return data_inputs[self._get_index_split(data_inputs):]
 
+    def disable_metrics(self):
+        self.metrics_enabled = False
+        if self.wrapped is not None:
+            self.wrapped.apply('disable_metrics')
+
+    def enable_metrics(self):
+        self.metrics_enabled = True
+        if self.wrapped is not None:
+            self.wrapped.apply('enable_metrics')
+
     def _get_index_split(self, data_inputs):
         return math.floor(len(data_inputs) * (1 - self.test_size))
 
@@ -299,7 +315,8 @@ class BaseCrossValidationWrapper(BaseValidation, ABC):
         )
 
         train_data_container = DataContainer(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
-        validation_data_container = DataContainer(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
+        validation_data_container = DataContainer(data_inputs=train_data_inputs,
+                                                  expected_outputs=train_expected_outputs)
 
         return train_data_container, validation_data_container
 
@@ -330,7 +347,8 @@ class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
     def split(self, data_inputs, expected_outputs):
         validation_data_inputs, validation_expected_outputs = self.validation_split(data_inputs, expected_outputs)
 
-        train_data_inputs, train_expected_outputs = self.train_split(validation_data_inputs, validation_expected_outputs)
+        train_data_inputs, train_expected_outputs = self.train_split(validation_data_inputs,
+                                                                     validation_expected_outputs)
 
         return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
 
@@ -563,4 +581,3 @@ class WalkForwardTimeSeriesCrossValidationWrapper(AnchoredWalkForwardTimeSeriesC
             slice = data_inputs[:, a:b]
             splitted_data_inputs.append(slice)
         return splitted_data_inputs
-

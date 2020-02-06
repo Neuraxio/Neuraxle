@@ -1786,8 +1786,9 @@ class MetaStepMixin:
         else:
             step_name = self.name
 
-        wrapped_results = self.wrapped.apply(method_name=method_name, step_name=step_name, *kargs, **kwargs)
-        results.update(wrapped_results)
+        if self.wrapped is not None:
+            wrapped_results = self.wrapped.apply(method_name=method_name, step_name=step_name, *kargs, **kwargs)
+            results.update(wrapped_results)
 
         return results
 
@@ -1809,8 +1810,9 @@ class MetaStepMixin:
         else:
             step_name = self.name
 
-        wrapped_results = self.wrapped.apply_method(method=method, step_name=step_name, *kargs, **kwargs)
-        results.update(wrapped_results)
+        if self.wrapped is not None:
+            wrapped_results = self.wrapped.apply_method(method=method, step_name=step_name, *kargs, **kwargs)
+            results.update(wrapped_results)
 
         return results
 
