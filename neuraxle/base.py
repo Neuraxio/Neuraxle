@@ -3016,3 +3016,14 @@ class ForceHandleOnlyMixin(ForceHandleMixin, HandleOnlyMixin):
         HandleOnlyMixin.__init__(self)
         ForceHandleMixin.__init__(self, cache_folder)
 
+
+class MeasurableStepMixin:
+    """
+    A step that can be measured with the scoring functions.
+
+    .. seealso::
+        :class:`BaseStep`
+    """
+    @abstractmethod
+    def get_score(self):
+        raise NotImplementedError()

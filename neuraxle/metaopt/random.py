@@ -31,7 +31,8 @@ from typing import List, Callable, Tuple
 import numpy as np
 from sklearn.metrics import r2_score
 
-from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, HandleOnlyMixin, ForceHandleOnlyMixin
+from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, HandleOnlyMixin, ForceHandleOnlyMixin, \
+    MeasurableStepMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnCustomAxis
@@ -66,7 +67,7 @@ class BaseValidation(MetaStepMixin, BaseStep, ABC):
         self.scoring_function = scoring_function
 
 
-class ValidationSplitWrapper(ForceHandleOnlyMixin, BaseValidation):
+class ValidationSplitWrapper(MeasurableStepMixin, ForceHandleOnlyMixin, BaseValidation):
     """
     Wrapper for validation split that calculates the score for the validation split.
 
@@ -115,6 +116,7 @@ class ValidationSplitWrapper(ForceHandleOnlyMixin, BaseValidation):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder)
+        MeasurableStepMixin.__init__(self)
 
         self.run_validation_split_in_test_mode = run_validation_split_in_test_mode
         self.test_size = test_size
@@ -288,11 +290,12 @@ class ValidationSplitWrapper(ForceHandleOnlyMixin, BaseValidation):
         return math.floor(len(data_inputs) * (1 - self.test_size))
 
 
-class BaseCrossValidationWrapper(ForceHandleOnlyMixin, BaseValidation, ABC):
+class BaseCrossValidationWrapper(MeasurableStepMixin, ForceHandleOnlyMixin, BaseValidation, ABC):
     # TODO: change default argument of scoring_function...
     def __init__(self, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch(), cache_folder=None):
         BaseValidation.__init__(self, scoring_function)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder)
+        MeasurableStepMixin.__init__(self)
 
         self.joiner = joiner
 

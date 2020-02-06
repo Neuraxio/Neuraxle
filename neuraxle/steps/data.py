@@ -145,12 +145,12 @@ class EpochRepeater(HandleOnlyMixin, MetaStepMixin, BaseStep):
 
     def _get_epochs(self):
         epochs = self.epochs
-        if self._should_repeat_fit():
+        if not self._should_repeat_fit():
             epochs = 1
         return epochs
 
     def _should_repeat_fit(self):
-        return self.is_train or not self.is_train and self.repeat_in_test_mode
+        return self.is_train or (not self.is_train and self.repeat_in_test_mode)
 
 
 class TrainShuffled(Pipeline):

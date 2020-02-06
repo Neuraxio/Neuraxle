@@ -34,6 +34,7 @@ from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import RandomSearch
+from neuraxle.metaopt.random import ValidationSplitWrapper
 from neuraxle.pipeline import ResumablePipeline, DEFAULT_CACHE_FOLDER, Pipeline
 from neuraxle.steps.flow import ExpandDim
 from neuraxle.steps.loop import ForEachDataInput
@@ -63,7 +64,7 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
 
     time_a = time.time()
     random_search = RandomSearch(
-        pipeline,
+        ValidationSplitWrapper(pipeline, test_size=0.1),
         n_iter=n_iter,
         higher_score_is_better=True,
         cache_folder=tmpdir
@@ -93,7 +94,7 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
 
     time_a = time.time()
     random_search = RandomSearch(
-        pipeline,
+        ValidationSplitWrapper(pipeline, test_size=0.1),
         n_iter=n_iter,
         higher_score_is_better=True,
         cache_folder=tmpdir

@@ -21,10 +21,10 @@ Neuraxle's high-level API classes. Useful to make complex Deep Learning pipeline
 """
 from typing import Dict, Callable, Union
 
-from neuraxle.base import BaseStep, NamedTupleList
+from neuraxle.base import BaseStep, NamedTupleList, MeasurableStepMixin, ForceHandleMixin, MetaStepMixin
 from neuraxle.metaopt.random import ValidationSplitWrapper
 from neuraxle.metrics import MetricsWrapper
-from neuraxle.pipeline import MiniBatchSequentialPipeline, Pipeline, CustomPipelineMixin
+from neuraxle.pipeline import MiniBatchSequentialPipeline
 from neuraxle.steps.data import EpochRepeater, TrainShuffled
 
 VALIDATION_SPLIT_STEP_NAME = 'validation_split_wrapper'
@@ -32,7 +32,7 @@ EPOCH_METRICS_STEP_NAME = 'epoch_metrics'
 BATCH_METRICS_STEP_NAME = 'batch_metrics'
 
 
-class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
+class DeepLearningPipeline(MeasurableStepMixin, ForceHandleMixin, MetaStepMixin, BaseStep):
     """
     Adds an epoch loop, a validation split, and mini batching to a pipeline.
     It also tracks batch metrics, and epoch metrics.
@@ -74,8 +74,8 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
     def __init__(
             self,
             pipeline: Union[BaseStep, NamedTupleList],
-            validation_size: int =None,
-            batch_size: int = None,
+            validation_size: int = None,
+            batch_size: float = None,
             batch_metrics: Dict[str, Callable] = None,
             shuffle_in_each_epoch_at_train: bool = True,
             seed: int = None,
@@ -125,7 +125,9 @@ class DeepLearningPipeline(CustomPipelineMixin, Pipeline):
         wrapped = self._create_epoch_repeater(wrapped)
 
         BaseStep.__init__(self)
-        Pipeline.__init__(self, [wrapped], cache_folder=cache_folder)
+        MetaStepMixin.__init__(self, wrapped)
+        MeasurableStepMixin.__init__(self)
+        ForceHandleMixin.__init__(self, cache_folder)
 
     def _create_mini_batch_pipeline(self, wrapped: BaseStep) -> BaseStep:
         """

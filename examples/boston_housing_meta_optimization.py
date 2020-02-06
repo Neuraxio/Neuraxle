@@ -91,11 +91,12 @@ def main():
 
     print("Meta-fitting on train:")
 
-    p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
+    random_search = RandomSearch(
+        KFoldCrossValidationWrapper(scoring_function=r2_score, k_fold=10).set_step(p),
         n_iter=10,
-        higher_score_is_better=True,
-        validation_technique=KFoldCrossValidationWrapper(scoring_function=r2_score, k_fold=10)
-    ))
+        higher_score_is_better=True
+    )
+    random_search = random_search.fit(X_train, y_train)
 
     p = random_search.get_best_model()
     # Here is an alternative way to do it, more "pipeliney":
