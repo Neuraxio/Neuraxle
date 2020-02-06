@@ -287,6 +287,10 @@ class AutoMLAlgorithm(RootStepMixin, MetaStepMixin, BaseStep):
         self.validation_technique = validation_technique
         self.higher_score_is_better = higher_score_is_better
         self.hyperparameter_optimizer = hyperparameter_optimizer
+        self.return_fitted_model = False
+
+    def set_return_fitted_model(self, return_fitted_model):
+        self.return_fitted_model = return_fitted_model
 
     def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
         """
@@ -312,6 +316,10 @@ class AutoMLAlgorithm(RootStepMixin, MetaStepMixin, BaseStep):
         score = step.get_score()
 
         data_container.set_data_inputs(score)
+
+        if self.return_fitted_model:
+            return step, data_container
+
         return self, data_container
 
     def get_best_hyperparams(self, trials: 'Trials') -> HyperparameterSamples:
@@ -429,7 +437,7 @@ class Trials:
         return len(self.trials)
 
 
-class AutoMLSequentialWrapper(MetaStepMixin, BaseStep):
+class AutoMLSequentialWrapper(RootStepMixin, MetaStepMixin, BaseStep):
     """
     A step to execute any Automatic Machine Learning Algorithms.
     Example usage :
@@ -463,7 +471,8 @@ class AutoMLSequentialWrapper(MetaStepMixin, BaseStep):
             auto_ml_algorithm: AutoMLAlgorithm,
             hyperparams_repository: HyperparamsRepository = None,
             n_iters: int = 100,
-            refit=True
+            refit=True,
+            cache_folder=None
     ):
 
         self.refit = refit
@@ -471,7 +480,7 @@ class AutoMLSequentialWrapper(MetaStepMixin, BaseStep):
 
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, auto_ml_algorithm)
-        HandlerMixin.__init__(self)
+        RootStepMixin.__init__(self, cache_folder)
 
         if hyperparams_repository is None:
             hyperparams_repository = InMemoryHyperparamsRepository()
@@ -512,31 +521,10 @@ class AutoMLSequentialWrapper(MetaStepMixin, BaseStep):
                 self.hyperparams_repository.save_failure_for_trial(hyperparams, error)
 
         if self.refit:
-            self.best_model = self._load_best_model().handle_fit(data_container.copy(), context)
-
-        return self
-
-    def fit(self, data_inputs, expected_outputs=None) -> BaseStep:
-        """
-        Find the best hyperparams using the wrapped AutoML strategy.
-        :param data_inputs: data inputs
-        :param expected_outputs: expected ouptuts to fit on
-        :return: fitted self
-        :rtype: BaseStep
-        """
-        for i in range(self.n_iters):
-            auto_ml_trial_container: AutoMLContainer = self._load_auto_ml_data(i)
-            hyperparams: HyperparameterSamples = self.wrapped.find_next_best_hyperparams(auto_ml_trial_container)
-            self.wrapped = self.wrapped.update_hyperparams(hyperparams)
-            self.hyperparams_repository.create_new_trial(hyperparams)
-            #try:
-            self.wrapped, score = self.wrapped.fit_transform(data_inputs, expected_outputs)
-            self.hyperparams_repository.save_score_for_success_trial(hyperparams, score)
-            #except Exception as error:
-            #self.hyperparams_repository.save_failure_for_trial(hyperparams, error)
-
-        if self.refit:
-            self.best_model = self._load_best_model().fit(data_inputs, expected_outputs)
+            best_model = self._load_best_model()
+            best_model.set_return_fitted_model(True)
+            best_model, _ = best_model.handle_fit_transform(data_container.copy(), context)
+            self.best_model = best_model
 
         return self
 
@@ -579,7 +567,7 @@ class AutoMLSequentialWrapper(MetaStepMixin, BaseStep):
         best_hyperparams = auto_ml_algorithm.get_best_hyperparams(trials)
         auto_ml_algorithm = auto_ml_algorithm.update_hyperparams(best_hyperparams)
 
-        return copy.deepcopy(auto_ml_algorithm.get_step())
+        return copy.deepcopy(auto_ml_algorithm)
 
     def get_best_model(self) -> BaseStep:
         return self.best_model
