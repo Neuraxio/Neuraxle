@@ -321,8 +321,7 @@ class BaseCrossValidationWrapper(MeasurableStepMixin, ForceHandleOnlyMixin, Base
         )
 
         train_data_container = DataContainer(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
-        validation_data_container = DataContainer(data_inputs=train_data_inputs,
-                                                  expected_outputs=train_expected_outputs)
+        validation_data_container = DataContainer(data_inputs=validation_data_inputs, expected_outputs=validation_expected_outputs)
 
         return train_data_container, validation_data_container
 
