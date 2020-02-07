@@ -561,10 +561,13 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         best_hyperparams = auto_ml_algorithm.get_best_hyperparams(trials)
         auto_ml_algorithm = auto_ml_algorithm.update_hyperparams(best_hyperparams)
 
-        return copy.deepcopy(auto_ml_algorithm.get_step())
+        validation_technique = auto_ml_algorithm.get_step()
+        best_model = validation_technique.get_step()
+
+        return copy.deepcopy(best_model)
 
     def get_best_model(self) -> BaseStep:
-        return self.best_model.get_step()
+        return self.best_model
 
 
 class RandomSearch(AutoMLSequentialWrapper):

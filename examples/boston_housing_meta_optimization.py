@@ -99,7 +99,6 @@ def main():
     random_search = random_search.fit(X_train, y_train)
 
     p = random_search.get_best_model()
-    p = p.fit(X_train, X_test)
     # Here is an alternative way to do it, more "pipeliney":
     # p = RandomSearch(
     #     p,
