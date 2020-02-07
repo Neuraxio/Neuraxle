@@ -22,18 +22,19 @@ import os
 import traceback
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import List, Callable, Dict, Union, Iterable
+from typing import List, Callable
 
-from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, HandleOnlyMixin, ForceHandleOnlyMixin, \
-    MeasurableStepMixin
+from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, ForceHandleOnlyMixin, \
+    EvaluableStepMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
-from neuraxle.metaopt.random import BaseCrossValidationWrapper, KFoldCrossValidationWrapper
+from neuraxle.metaopt.random import BaseCrossValidationWrapper
 
 
 class HyperparamsRepository(ABC):
     """
     Hyperparams repository that saves hyperparams, and scores for every AutoML trial.
+
     .. seealso::
         :class:`AutoMLSequentialWrapper`
         :class:`AutoMLAlgorithm`,
@@ -47,6 +48,7 @@ class HyperparamsRepository(ABC):
     def create_new_trial(self, hyperparams: HyperparameterSamples):
         """
         Create new hyperperams trial.
+
         :param hyperparams: hyperparams
         :type hyperparams: HyperparameterSamples
         :return:
@@ -57,6 +59,7 @@ class HyperparamsRepository(ABC):
     def load_all_trials(self, status: 'TRIAL_STATUS') -> 'Trials':
         """
         Load all hyperparameter trials with their corresponding score.
+
         :return: (hyperparams, scores)
         """
         pass
@@ -65,6 +68,7 @@ class HyperparamsRepository(ABC):
     def save_score_for_success_trial(self, hyperparams: HyperparameterSamples, score: float):
         """
         Save hyperparams, and score for a successful trial.
+
         :return: (hyperparams, scores)
         """
         pass
@@ -73,6 +77,7 @@ class HyperparamsRepository(ABC):
     def save_failure_for_trial(self, hyperparams: HyperparameterSamples, exception: Exception):
         """
         Save hyperparams, and score for a failed trial.
+
         :return: (hyperparams, scores)
         """
         pass
@@ -86,13 +91,17 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
     """
     In memory hyperparams repository that can print information about trials.
     Useful for debugging.
+
     Example usage :
+
     .. code-block:: python
+
         InMemoryHyperparamsRepository(
             print_new_trial=True,
             print_success_trial=True,
             print_exception=True
         )
+
     .. seealso::
         :class:`HyperparamsRepository`,
         :class:`HyperparameterSamples`,
@@ -134,6 +143,7 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
 class HyperparamsJSONRepository(HyperparamsRepository):
     """
     Hyperparams repository that saves json files for every AutoML trial.
+
     .. seealso::
         :class:`HyperparamsRepository`,
         :class:`HyperparameterSamples`,
@@ -146,6 +156,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
     def create_new_trial(self, hyperparams: HyperparameterSamples):
         """
         Create new hyperperams trial json file.
+
         :param hyperparams: hyperparams
         :type hyperparams: HyperparameterSamples
         :return:
@@ -156,6 +167,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         """
         Load all hyperparameter trials with their corresponding score.
         Reads all the saved trial json files.
+
         :return: (hyperparams, scores)
         """
         trials = []
@@ -172,6 +184,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
     def save_score_for_success_trial(self, hyperparams: HyperparameterSamples, score: float):
         """
         Save hyperparams, and score for a successful trial.
+
         :return: (hyperparams, scores)
         """
         self._save_successful_trial_json(hyperparams, score)
@@ -179,6 +192,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
     def save_failure_for_trial(self, hyperparams: HyperparameterSamples, exception: Exception):
         """
         Save hyperparams, and score for a failed trial.
+
         :return: (hyperparams, scores)
         """
         self._save_failed_trial_json(hyperparams, exception)
@@ -186,6 +200,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
     def _create_trial_json(self, hyperparams):
         """
         Save new trial json file.
+
         :return: (hyperparams, scores)
         """
         hp_dict = hyperparams.to_flat_as_dict_primitive()
@@ -201,6 +216,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
     def _save_successful_trial_json(self, hyperparams, score):
         """
         Save trial json file.
+
         :return: (hyperparams, scores)
         """
         hp_dict = hyperparams.to_flat_as_dict_primitive()
@@ -227,6 +243,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
     def _save_failed_trial_json(self, hyperparams, exception):
         """
         Save trial json file.
+
         :return: (hyperparams, scores)
         """
         hp_dict = hyperparams.to_flat_as_dict_primitive()
@@ -247,6 +264,7 @@ class BaseHyperparameterOptimizer(ABC):
     def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials.
+
         :param auto_ml_container: trials data container
         :type auto_ml_container: Trials
         :return: next best hyperparams
@@ -261,6 +279,7 @@ class AutoMLAlgorithm(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     It uses an hyperparameter optimizer of type :class:`BaseHyperparameterOptimizer` to find the next best hyperparams.
     It uses a validation technique of type :class:`BaseCrossValidationWrapper` to calculate the score.
     Please refer to :class:`AutoMLSequentialWrapper` for a usage example.
+
     .. seealso::
         :class:`BaseCrossValidationWrapper`,
         :class:`HyperparameterSamples`,
@@ -276,17 +295,18 @@ class AutoMLAlgorithm(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             self,
             hyperparameter_optimizer: BaseHyperparameterOptimizer,
             higher_score_is_better=True,
-            cache_folder=None
+            cache_folder_when_no_handle=None
     ):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, None)
-        ForceHandleOnlyMixin.__init__(self, cache_folder)
+        ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
         self.higher_score_is_better = higher_score_is_better
         self.hyperparameter_optimizer = hyperparameter_optimizer
 
     def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials.
+
         :param auto_ml_container: trials data container
         :type auto_ml_container: Trials
         :return: next best hyperparams
@@ -297,6 +317,7 @@ class AutoMLAlgorithm(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit cross validation with wrapped step, and return the score.
+
         :param data_container: data container to fit transform
         :param context: execution context
         :return: self, step score
@@ -313,6 +334,7 @@ class AutoMLAlgorithm(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     def get_best_hyperparams(self, trials: 'Trials') -> HyperparameterSamples:
         """
         Get the best hyperparams from all previous trials.
+
         :return: best hyperparams
         :rtype: HyperparameterSamples
         """
@@ -334,6 +356,7 @@ class TRIAL_STATUS(Enum):
 class AutoMLContainer:
     """
     Data object for auto ml.
+
     .. seealso::
         :class:`AutoMLSequentialWrapper`,
         :class:`RandomSearch`,
@@ -380,6 +403,7 @@ class Trial:
 class Trials:
     """
     Data object containing auto ml trials.
+
     .. seealso::
         :class:`AutoMLSequentialWrapper`,
         :class:`RandomSearch`,
@@ -428,8 +452,11 @@ class Trials:
 class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     """
     A step to execute any Automatic Machine Learning Algorithms.
+
     Example usage :
+
     .. code-block:: python
+
         auto_ml: AutoMLSequentialWrapper = AutoMLSequentialWrapper(
             step=ForecastingPipeline(),
             auto_ml_algorithm=AutoMLAlgorithm(
@@ -442,6 +469,8 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         )
         auto_ml: AutoMLSequentialWrapper = auto_ml.fit(data_inputs, expected_outputs)
         best_model: ForecastingPipeline = auto_ml.get_best_model()
+
+
     .. seealso::
         :class:`AutoMLAlgorithm`,
         :class:`HyperparamsRepository`,
@@ -460,17 +489,17 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             hyperparams_repository: HyperparamsRepository = None,
             n_iters: int = 100,
             refit=True,
-            cache_folder=None
+            cache_folder_when_no_handle=None
     ):
-        if not isinstance(wrapped, MeasurableStepMixin):
-            raise ValueError('AutoML algorithm need measurable steps that implement the function get_score. Please use a validation technique, or implement MeasurableStepMixin.')
+        if not isinstance(wrapped, EvaluableStepMixin):
+            raise ValueError('AutoML algorithm needs evaluable steps that implement the function get_score. Please use a validation technique, or implement EvaluableStepMixin.')
 
         self.refit = refit
         auto_ml_algorithm = auto_ml_algorithm.set_step(wrapped)
 
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, auto_ml_algorithm)
-        ForceHandleOnlyMixin.__init__(self, cache_folder)
+        ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
 
         if hyperparams_repository is None:
             hyperparams_repository = InMemoryHyperparamsRepository()
@@ -492,6 +521,7 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
         Find the best hyperparams using the wrapped AutoML strategy.
+
         :param data_container: data container to fit on
         :type data_container: DataContainer
         :param context: execution context
@@ -536,6 +566,7 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     def _load_auto_ml_data(self, trial_number: int) -> AutoMLContainer:
         """
         Load data for all trials.
+
         :param trial_number: trial number
         :type trial_number: int
         :return: auto ml data container
@@ -573,13 +604,18 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 class RandomSearch(AutoMLSequentialWrapper):
     """
     Random Search Automatic Machine Learning Algorithm that randomly samples the space of random variables.
+
     Example usage :
+
     .. code-block:: python
+
         random_search = RandomSearch(
             ForecastingPipeline(),
             hyperparams_repository=HyperparamsJSONRepository(),
             n_iters=100
         )
+
+
     .. seealso::
         :class:`AutoMLSequentialWrapper`,
         :class:`AutoMLAlgorithm`,
@@ -597,7 +633,7 @@ class RandomSearch(AutoMLSequentialWrapper):
             hyperparams_repository: HyperparamsRepository = None,
             higher_score_is_better=True,
             n_iter: int = 10,
-            cache_folder=None
+            cache_folder_when_no_handle=None
     ):
         AutoMLSequentialWrapper.__init__(
             self,
@@ -605,7 +641,7 @@ class RandomSearch(AutoMLSequentialWrapper):
             auto_ml_algorithm=AutoMLAlgorithm(
                 hyperparameter_optimizer=RandomSearchHyperparameterOptimizer(),
                 higher_score_is_better=higher_score_is_better,
-                cache_folder=cache_folder
+                cache_folder_when_no_handle=cache_folder_when_no_handle
             ),
             hyperparams_repository=hyperparams_repository,
             n_iters=n_iter
@@ -616,6 +652,7 @@ class RandomSearchHyperparameterOptimizer(BaseHyperparameterOptimizer):
     """
     AutoML Hyperparameter Optimizer that randomly samples the space of random variables.
     Please refer to :class:`AutoMLSequentialWrapper` for a usage example.
+
     .. seealso::
         :class:`AutoMLAlgorithm`,
         :class:`BaseHyperparameterOptimizer`,
@@ -631,6 +668,7 @@ class RandomSearchHyperparameterOptimizer(BaseHyperparameterOptimizer):
     def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
         """
         Randomly sample the next hyperparams to try.
+
         :param auto_ml_container: trials data container
         :type auto_ml_container: Trials
         :return: next best hyperparams

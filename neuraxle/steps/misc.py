@@ -161,6 +161,23 @@ class FitTransformCallbackStep(BaseStep):
 
 
 class CallbackWrapper(HandleOnlyMixin, MetaStepMixin, BaseStep):
+    """
+    A step that calls a callback function for each of his methods : transform, fit, fit_transform, and even inverse_transform.
+    To be used with :class:`TapeCallbackFunction`.
+
+    .. code-block:: python
+
+        tape_fit = TapeCallbackFunction()
+        tape_transform = TapeCallbackFunction()
+        tape_inverse_transform = TapeCallbackFunction()
+
+        callback_wrapper = CallbackWrapper(MultiplyByN(2), tape_transform_preprocessing, tape_fit_preprocessing, tape_inverse_transform_preprocessing)
+
+    .. seealso::
+        :class:`neuraxle.base.HandleOnlyMixin`,
+        :class:`neuraxle.base.MetaStepMixin`,
+        :class:`neuraxle.base.BaseStep`
+    """
     def __init__(
             self,
             wrapped,

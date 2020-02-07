@@ -1544,7 +1544,7 @@ class MetaStepMixin:
 
         if not hasattr(self, 'savers'):
             warnings.warn(
-                'Please initialize Mixins in the reverse order. MetaStepMixin should be initialized after BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers.'.format(
+                'Please initialize Mixins in the good order. MetaStepMixin should be initialized after BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers.'.format(
                     self.wrapped.name))
             self.savers = [MetaStepJoblibStepSaver()]
         else:
@@ -2903,7 +2903,8 @@ class TransformHandlerOnlyMixin(NonFittableMixin):
     A pipeline step that only requires the implementation of _transform_data_container.
 
     .. seealso::
-        :class:`BaseStep`
+        :class:`BaseStep`,
+        :class:`NonFittableMixin`
     """
 
     @abstractmethod
@@ -2926,7 +2927,12 @@ class HandleOnlyMixin:
     If forbids only implementing fit or transform or fit_transform without the handles. So it forces the handles.
 
     .. seealso::
-        :class:`BaseStep`
+        :class:`BaseStep`,
+        :class:`TransformHandlerOnlyMixin`,
+        :class:`NonTransformableMixin`,
+        :class:`NonFittableMixin`,
+        :class:`ForceHandleMixin`,
+        :class:`ForceHandleOnlyMixin`
     """
 
     @abstractmethod
@@ -2964,9 +2970,11 @@ class ForceHandleMixin:
 
     .. seealso::
         :class:`BaseStep`,
-        :class:`neuraxle.pipeline.Pipeline`,
-        :class:`neuraxle.pipeline.MiniBatchSequentialPipeline`,
-        :class:`neuraxle.metaopt.AutoMLSequentialWrapper`
+        :class:`HandleOnlyMixin`,
+        :class:`TransformHandlerOnlyMixin`,
+        :class:`NonTransformableMixin`,
+        :class:`NonFittableMixin`,
+        :class:`ForceHandleOnlyMixin`
     """
     def __init__(self, cache_folder=None):
         if cache_folder is None:
@@ -2974,28 +2982,30 @@ class ForceHandleMixin:
         self.cache_folder = cache_folder
 
     def transform(self, data_inputs):
-        data_container = DataContainer(data_inputs=data_inputs)
         execution_context = ExecutionContext(self.cache_folder, execution_mode=ExecutionMode.TRANSFORM)
+        context, data_container = self._encapsulate_data(data_inputs, expected_outputs=None, execution_mode=ExecutionMode.TRANSFORM)
 
         data_container = self.handle_transform(data_container, execution_context)
 
         return data_container.data_inputs
 
     def fit(self, data_inputs, expected_outputs=None) -> Tuple['HandleOnlyMixin', Iterable]:
-        data_container = DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs)
-        context = ExecutionContext(self.cache_folder, execution_mode=ExecutionMode.TRANSFORM)
-
+        context, data_container = self._encapsulate_data(data_inputs, expected_outputs, ExecutionMode.FIT)
         new_self = self.handle_fit(data_container, context)
 
         return new_self
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['HandleOnlyMixin', Iterable]:
-        data_container = DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs)
-        context = ExecutionContext(root=self.cache_folder, execution_mode=ExecutionMode.TRANSFORM)
-
+        context, data_container = self._encapsulate_data(data_inputs, expected_outputs, ExecutionMode.FIT_TRANSFORM)
         new_self, data_container = self.handle_fit_transform(data_container, context)
 
         return new_self, data_container.data_inputs
+
+    def _encapsulate_data(self, data_inputs, expected_outputs=None, execution_mode=None):
+        data_container = DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs)
+        context = ExecutionContext(root=self.cache_folder, execution_mode=execution_mode)
+
+        return context, data_container
 
 
 class ForceHandleOnlyMixin(ForceHandleMixin, HandleOnlyMixin):
@@ -3008,18 +3018,20 @@ class ForceHandleOnlyMixin(ForceHandleMixin, HandleOnlyMixin):
 
     .. seealso::
         :class:`BaseStep`,
-        :class:`neuraxle.pipeline.Pipeline`,
-        :class:`neuraxle.pipeline.MiniBatchSequentialPipeline`,
-        :class:`neuraxle.metaopt.AutoMLSequentialWrapper`
+        :class:`HandleOnlyMixin`,
+        :class:`TransformHandlerOnlyMixin`,
+        :class:`NonTransformableMixin`,
+        :class:`NonFittableMixin`,
+        :class:`ForceHandleMixin`
     """
     def __init__(self, cache_folder=None):
         HandleOnlyMixin.__init__(self)
         ForceHandleMixin.__init__(self, cache_folder)
 
 
-class MeasurableStepMixin:
+class EvaluableStepMixin:
     """
-    A step that can be measured with the scoring functions.
+    A step that can be evaluated with the scoring functions.
 
     .. seealso::
         :class:`BaseStep`

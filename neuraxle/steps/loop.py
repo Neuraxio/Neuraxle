@@ -51,11 +51,11 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStepMixin, 
     def __init__(
             self,
             wrapped: BaseStep,
-            cache_folder=None
+            cache_folder_when_no_handle=None
     ):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
-        ForceHandleOnlyMixin.__init__(self, cache_folder)
+        ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
         """
@@ -146,10 +146,10 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStepMixin, 
 
 
 class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
-    def __init__(self, wrapped: BaseStep, copy_op=copy.deepcopy, cache_folder=None):
+    def __init__(self, wrapped: BaseStep, copy_op=copy.deepcopy, cache_folder_when_no_handle=None):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
-        ForceHandleOnlyMixin.__init__(self, cache_folder)
+        ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
 
         self.set_step(wrapped)
         self.steps: List[BaseStep] = []
@@ -210,7 +210,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         self.steps = [step for step, _ in fitted_steps_data_containers]
 
         output_data_container = ListDataContainer.empty()
-        [output_data_container.append_data_contianer(data_container_batch) for _, data_container_batch in fitted_steps_data_containers]
+        [output_data_container.append_data_container(data_container_batch) for _, data_container_batch in fitted_steps_data_containers]
 
         return self, output_data_container.to_numpy()
 
@@ -239,7 +239,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             transform_results.append(transform_result)
 
         output_data_container = ListDataContainer.empty()
-        [output_data_container.append_data_contianer(data_container_batch) for data_container_batch in transform_results]
+        [output_data_container.append_data_container(data_container_batch) for data_container_batch in transform_results]
 
         return output_data_container.to_numpy()
 
@@ -254,7 +254,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             inverse_transform_results.append(inverse_transform_result)
 
         output_data_container = ListDataContainer.empty()
-        [output_data_container.append_data_contianer(data_container_batch) for data_container_batch in inverse_transform_results]
+        [output_data_container.append_data_container(data_container_batch) for data_container_batch in inverse_transform_results]
 
         return output_data_container.to_numpy()
 
@@ -296,9 +296,7 @@ class FlattenForEach(ResumableStepMixin, MetaStepMixin, BaseStep):
         Flatten data container before any processing is done on the wrapped step.
 
         :param data_container: data container to flatten
-        :type data_container: DataContainer
         :param context: execution context
-        :type context: ExecutionContext
         :return: (data container, execution context)
         :rtype: ('BaseStep', DataContainer)
         """
@@ -321,9 +319,7 @@ class FlattenForEach(ResumableStepMixin, MetaStepMixin, BaseStep):
         Flatten the first dimension of a list.
 
         :param list_to_flatten: list to flatten
-        :type list_to_flatten: Iterable
         :return: flattened list
-        :rtype: np.ndarray
         """
         if not isinstance(list_to_flatten, np.ndarray):
             list_to_flatten = np.array(list_to_flatten)
@@ -335,11 +331,8 @@ class FlattenForEach(ResumableStepMixin, MetaStepMixin, BaseStep):
         Reaugment the flattened data container.
 
         :param data_container: data container to reaugment
-        :type data_container: DataContainer
         :param context: execution context
-        :type context: ExecutionContext
         :return: data container
-        :rtype: DataContainer
         """
         data_container = BaseStep._did_process(self, data_container, context)
 
@@ -354,9 +347,7 @@ class FlattenForEach(ResumableStepMixin, MetaStepMixin, BaseStep):
         Reaugment list with the flattened dimension lengths.
 
         :param list_to_reaugment: list to reaugment
-        :type list_to_reaugment: Iterable
         :return: reaugmented numpy array
-        :rtype: np.ndarray
         """
         if not self.reaugment:
             return list_to_reaugment

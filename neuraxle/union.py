@@ -40,7 +40,7 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
             joiner: NonFittableMixin = NumpyConcatenateInnerFeatures(),
             n_jobs: int = None,
             backend: str = "threading",
-            cache_folder: str = None
+            cache_folder_when_no_handle: str = None
     ):
         """
         Create a feature union.
@@ -53,7 +53,7 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
         TruncableSteps.__init__(self, steps_as_tuple)
         self.n_jobs = n_jobs
         self.backend = backend
-        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder)
+        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
 
     def _fit_data_container(self, data_container, context):
         """

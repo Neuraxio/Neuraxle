@@ -29,11 +29,12 @@ Handler methods are useful when :
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
+import numpy as np
 
-from neuraxle.base import BaseStep, ForceAlwaysHandleMixin, DataContainer, ExecutionContext
+from neuraxle.base import BaseStep, DataContainer, ExecutionContext, ForceHandleMixin
 
 
-class ForceAlwaysAlwaysHandleMixinStep(ForceAlwaysHandleMixin, BaseStep):
+class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
     """
     Please make your steps inherit from ForceHandleMixin when they only implement handle_methods, but also
     when you want to make impossible the use of regular fit, transform, and fit_transform methods
@@ -41,7 +42,7 @@ class ForceAlwaysAlwaysHandleMixinStep(ForceAlwaysHandleMixin, BaseStep):
     """
 
     def __init__(self):
-        ForceAlwaysHandleMixin.__init__(self)
+        ForceHandleMixin.__init__(self)
         BaseStep.__init__(self)
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
@@ -53,7 +54,7 @@ class ForceAlwaysAlwaysHandleMixinStep(ForceAlwaysHandleMixin, BaseStep):
         Change the execution flow of the pipeline
         """
         data_container = self.hash_data_container(data_container)
-        return self, data_container
+        return self
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
         """
@@ -77,3 +78,15 @@ class ForceAlwaysAlwaysHandleMixinStep(ForceAlwaysHandleMixin, BaseStep):
         data_container = self.hash_data_container(data_container)
         return self, data_container
 
+
+def main():
+    p = ForceHandleMixinStep()
+    data_inputs = np.array([0, 1])
+    expected_outputs = np.array([0, 1])
+
+    p = p.fit(data_inputs, expected_outputs)
+    outputs = p.transform(data_inputs)
+
+
+if __name__ == '__main__':
+    main()

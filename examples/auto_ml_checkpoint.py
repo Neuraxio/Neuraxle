@@ -67,7 +67,7 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
         ValidationSplitWrapper(pipeline, test_size=0.1),
         n_iter=n_iter,
         higher_score_is_better=True,
-        cache_folder=tmpdir
+        cache_folder_when_no_handle=tmpdir
     ).fit(DATA_INPUTS, EXPECTED_OUTPUTS)
     outputs = random_search.get_best_model().transform(DATA_INPUTS)
     time_b = time.time()
@@ -97,7 +97,7 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
         ValidationSplitWrapper(pipeline, test_size=0.1),
         n_iter=n_iter,
         higher_score_is_better=True,
-        cache_folder=tmpdir
+        cache_folder_when_no_handle=tmpdir
     ).fit(DATA_INPUTS, EXPECTED_OUTPUTS)
     outputs = random_search.get_best_model().transform(DATA_INPUTS)
     time_b = time.time()

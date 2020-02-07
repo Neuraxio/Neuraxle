@@ -32,7 +32,7 @@ import numpy as np
 from sklearn.metrics import r2_score
 
 from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, HandleOnlyMixin, ForceHandleOnlyMixin, \
-    MeasurableStepMixin
+    EvaluableStepMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnCustomAxis
@@ -67,7 +67,7 @@ class BaseValidation(MetaStepMixin, BaseStep, ABC):
         self.scoring_function = scoring_function
 
 
-class ValidationSplitWrapper(MeasurableStepMixin, ForceHandleOnlyMixin, BaseValidation):
+class ValidationSplitWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValidation):
     """
     Wrapper for validation split that calculates the score for the validation split.
 
@@ -105,8 +105,8 @@ class ValidationSplitWrapper(MeasurableStepMixin, ForceHandleOnlyMixin, BaseVali
             test_size: float = 0.2,
             scoring_function=r2_score,
             run_validation_split_in_test_mode=True,
-            metrics_enabled=True,
-            cache_folder=None
+            metrics_already_enabled=True,
+            cache_folder_when_no_handle=None
     ):
         """
         :param wrapped: wrapped step
@@ -115,14 +115,14 @@ class ValidationSplitWrapper(MeasurableStepMixin, ForceHandleOnlyMixin, BaseVali
         """
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
-        ForceHandleOnlyMixin.__init__(self, cache_folder)
-        MeasurableStepMixin.__init__(self)
+        ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
+        EvaluableStepMixin.__init__(self)
 
         self.run_validation_split_in_test_mode = run_validation_split_in_test_mode
         self.test_size = test_size
         self.scoring_function = scoring_function
 
-        self.metrics_enabled = metrics_enabled
+        self.metrics_enabled = metrics_already_enabled
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('ValidationSplitWrapper', DataContainer):
         """
@@ -290,12 +290,12 @@ class ValidationSplitWrapper(MeasurableStepMixin, ForceHandleOnlyMixin, BaseVali
         return math.floor(len(data_inputs) * (1 - self.test_size))
 
 
-class BaseCrossValidationWrapper(MeasurableStepMixin, ForceHandleOnlyMixin, BaseValidation, ABC):
+class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValidation, ABC):
     # TODO: change default argument of scoring_function...
-    def __init__(self, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch(), cache_folder=None):
+    def __init__(self, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch(), cache_folder_when_no_handle=None):
         BaseValidation.__init__(self, scoring_function)
-        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder)
-        MeasurableStepMixin.__init__(self)
+        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
+        EvaluableStepMixin.__init__(self)
 
         self.joiner = joiner
 
@@ -337,9 +337,9 @@ class BaseCrossValidationWrapper(MeasurableStepMixin, ForceHandleOnlyMixin, Base
 
 
 class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
-    def __init__(self, scoring_function=r2_score, k_fold=3, joiner=NumpyConcatenateOuterBatch(), cache_folder=None):
+    def __init__(self, scoring_function=r2_score, k_fold=3, joiner=NumpyConcatenateOuterBatch(), cache_folder_when_no_handle=None):
         self.k_fold = k_fold
-        BaseCrossValidationWrapper.__init__(self, scoring_function=scoring_function, joiner=joiner, cache_folder=cache_folder)
+        BaseCrossValidationWrapper.__init__(self, scoring_function=scoring_function, joiner=joiner, cache_folder_when_no_handle=cache_folder_when_no_handle)
 
     def split(self, data_inputs, expected_outputs):
         validation_data_inputs, validation_expected_outputs = self.validation_split(data_inputs, expected_outputs)

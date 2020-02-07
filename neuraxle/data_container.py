@@ -464,7 +464,7 @@ class ListDataContainer(DataContainer):
 
         return self
 
-    def append_data_contianer(self, other: DataContainer):
+    def append_data_container(self, other: DataContainer):
         """
         Append a data container to the DataContainer.
 

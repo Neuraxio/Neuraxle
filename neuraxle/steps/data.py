@@ -97,10 +97,10 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         :class:`BaseStep`
     """
 
-    def __init__(self, wrapped, epochs, fit_only=False, repeat_in_test_mode=False, cache_folder=None):
+    def __init__(self, wrapped, epochs, fit_only=False, repeat_in_test_mode=False, cache_folder_when_no_handle=None):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
-        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder)
+        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
 
         self.repeat_in_test_mode = repeat_in_test_mode
         self.fit_only = fit_only

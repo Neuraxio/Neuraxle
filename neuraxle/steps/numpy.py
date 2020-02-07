@@ -265,11 +265,9 @@ class Sum(NonFittableMixin, BaseStep):
         :class:`BaseStep`
     """
 
-    def __init__(self, axis=None):
+    def __init__(self, axis):
         NonFittableMixin.__init__(self)
         BaseStep.__init__(self)
-        if axis is None:
-            axis = -1
         self.axis = axis
 
     def transform(self, data_inputs):

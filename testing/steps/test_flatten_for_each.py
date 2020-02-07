@@ -9,9 +9,7 @@ from neuraxle.steps.output_handlers import OutputTransformerWrapper
 
 
 def test_flatten_for_each_should_transform_data_inputs():
-    p = Pipeline([
-        FlattenForEach(MultiplyByN(2))
-    ])
+    p = FlattenForEach(MultiplyByN(2))
     data_shape = (10, 10)
     data_inputs, expected_outputs = _create_data_source(data_shape)
 
@@ -22,12 +20,10 @@ def test_flatten_for_each_should_transform_data_inputs():
 
 
 def test_flatten_for_each_should_transform_data_inputs_and_expected_outputs():
-    p = Pipeline([
-        FlattenForEach(Pipeline([
+    p = FlattenForEach(Pipeline([
             MultiplyByN(2),
             OutputTransformerWrapper(MultiplyByN(2))
         ]))
-    ])
     data_shape = (10, 10)
     data_inputs, expected_outputs = _create_data_source(data_shape)
 

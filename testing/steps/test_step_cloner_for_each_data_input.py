@@ -18,53 +18,47 @@ HYPE_SAMPLE = HyperparameterSamples({
 
 def test_step_cloner_should_transform():
     tape = TapeCallbackFunction()
-    p = Pipeline([
-        StepClonerForEachDataInput(
+    p = StepClonerForEachDataInput(
             Pipeline([
                 FitCallbackStep(tape),
                 MultiplyByN(2)
             ])
         )
-    ])
     data_inputs = _create_data((2, 2))
 
     processed_outputs = p.transform(data_inputs)
 
-    assert isinstance(p[0].steps[0], Pipeline)
-    assert isinstance(p[0].steps[1], Pipeline)
+    assert isinstance(p.steps[0], Pipeline)
+    assert isinstance(p.steps[1], Pipeline)
     assert np.array_equal(processed_outputs, data_inputs * 2)
 
 
 def test_step_cloner_should_fit_transform():
     tape = TapeCallbackFunction()
-    p = Pipeline([
-        StepClonerForEachDataInput(
+    p = StepClonerForEachDataInput(
             Pipeline([
                 FitCallbackStep(tape),
                 MultiplyByN(2)
             ])
         )
-    ])
     data_inputs = _create_data((2, 2))
     expected_outputs = _create_data((2, 2))
 
     p, processed_outputs = p.fit_transform(data_inputs, expected_outputs)
 
-    assert isinstance(p[0].steps[0], Pipeline)
-    assert isinstance(p[0].steps[1], Pipeline)
+    assert isinstance(p.steps[0], Pipeline)
+    assert isinstance(p.steps[1], Pipeline)
     assert np.array_equal(processed_outputs, data_inputs * 2)
 
 
 def test_step_cloner_should_inverse_transform():
     tape = TapeCallbackFunction()
-    p = Pipeline([
-        StepClonerForEachDataInput(
+    p = StepClonerForEachDataInput(
             Pipeline([
                 FitCallbackStep(tape),
                 MultiplyByN(2)
             ])
         )
-    ])
     data_inputs = _create_data((2, 2))
     expected_outputs = _create_data((2, 2))
 
@@ -73,9 +67,9 @@ def test_step_cloner_should_inverse_transform():
 
     assert np.array_equal(processed_outputs, data_inputs * 2)
 
-    processed_outputs = p.inverse_transform(processed_outputs)
+    inverse_processed_outputs = p.inverse_transform(processed_outputs)
 
-    assert processed_outputs.tolist() == np.array(processed_outputs).tolist()
+    assert np.array_equal(np.array(inverse_processed_outputs), np.array(data_inputs))
 
 
 def _create_data(shape):

@@ -34,7 +34,7 @@ from neuraxle.union import FeatureUnion
 OPTIONAL_ENABLED_HYPERPARAM = 'enabled'
 
 
-class TrainOrTestOnlyWrapper(HandleOnlyMixin, MetaStepMixin, BaseStep):
+class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     """
     A wrapper to run wrapped step only in test mode, or only in train mode.
 
@@ -42,29 +42,26 @@ class TrainOrTestOnlyWrapper(HandleOnlyMixin, MetaStepMixin, BaseStep):
 
     .. code-block:: python
 
-        p = Pipeline([
-            TrainOrTestOnlyWrapper(Identity(), is_train_only=True)
-        ])
+        p = TrainOrTestOnlyWrapper(Identity(), is_train_only=True)
 
     Execute only in train mode:
 
     .. code-block:: python
 
-        p = Pipeline([
-            TrainOnlyWrapper(Identity(), test_only=False)
-        ])
+        p = TrainOnlyWrapper(Identity(), test_only=False)
 
     .. seealso::
         :class:`TrainOnlyWrapper`,
         :class:`TestOnlyWrapper`,
-        :class:`HandlerMixin`,
+        :class:`ForceHandleOnlyMixin`,
         :class:`MetaStepMixin`,
         :class:`BaseStep`
     """
 
-    def __init__(self, wrapped: BaseStep, is_train_only=True):
+    def __init__(self, wrapped: BaseStep, is_train_only=True, cache_folder_when_no_handle=None):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
+        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
 
         self.is_train_only = is_train_only
 
@@ -169,7 +166,7 @@ class Optional(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
     """
 
-    def __init__(self, wrapped: BaseStep, enabled: bool = True, nullified_return_value=None, cache_folder=None):
+    def __init__(self, wrapped: BaseStep, enabled: bool = True, nullified_return_value=None, cache_folder_when_no_handle=None):
         BaseStep.__init__(
             self,
             hyperparams=HyperparameterSamples({
@@ -177,7 +174,7 @@ class Optional(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             })
         )
         MetaStepMixin.__init__(self, wrapped)
-        ForceHandleOnlyMixin.__init__(self, cache_folder)
+        ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
 
         if nullified_return_value is None:
             nullified_return_value = []

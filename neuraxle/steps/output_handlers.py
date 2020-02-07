@@ -33,10 +33,10 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     so that it can transform the expected outputs.
     """
 
-    def __init__(self, wrapped, cache_folder=None):
+    def __init__(self, wrapped, cache_folder_when_no_handle=None):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
-        ForceHandleOnlyMixin.__init__(self, cache_folder)
+        ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
