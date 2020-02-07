@@ -304,7 +304,7 @@ class FlattenForEach(ResumableStepMixin, MetaStepMixin, BaseStep):
         """
         data_container, context = BaseStep._will_process(self, data_container, context)
 
-        if data_container.expected_outputs is None or not np.all(np.array(data_container.expected_outputs)):
+        if data_container.expected_outputs is None:
             expected_outputs = np.empty_like(np.array(data_container.data_inputs))
             expected_outputs.fill(np.nan)
             data_container.set_expected_outputs(expected_outputs)
