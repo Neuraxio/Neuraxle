@@ -546,7 +546,7 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
                 self.hyperparams_repository.save_failure_for_trial(hyperparams, error)
 
         if self.refit:
-            best_model = self._load_best_model()
+            best_model = self._load_virgin_best_model()
             best_model = best_model.handle_fit(data_container.copy(), context)
             self.best_model = best_model
 
@@ -581,7 +581,7 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             n_iters=self.n_iters
         )
 
-    def _load_best_model(self) -> BaseStep:
+    def _load_virgin_best_model(self) -> BaseStep:
         """
         Get the best model from all of the previous trials.
         :return: best model step
