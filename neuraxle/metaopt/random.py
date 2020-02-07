@@ -345,8 +345,7 @@ class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
     def split(self, data_inputs, expected_outputs):
         validation_data_inputs, validation_expected_outputs = self.validation_split(data_inputs, expected_outputs)
 
-        train_data_inputs, train_expected_outputs = self.train_split(validation_data_inputs,
-                                                                     validation_expected_outputs)
+        train_data_inputs, train_expected_outputs = self.train_split(validation_data_inputs, validation_expected_outputs)
 
         return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
 

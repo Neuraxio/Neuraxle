@@ -283,10 +283,6 @@ class AutoMLAlgorithm(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         ForceHandleOnlyMixin.__init__(self, cache_folder)
         self.higher_score_is_better = higher_score_is_better
         self.hyperparameter_optimizer = hyperparameter_optimizer
-        self.return_fitted_model = False
-
-    def set_return_fitted_model(self, return_fitted_model):
-        self.return_fitted_model = return_fitted_model
 
     def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
         """
@@ -311,9 +307,6 @@ class AutoMLAlgorithm(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         score = step.get_score()
 
         data_container.set_data_inputs(score)
-
-        if self.return_fitted_model:
-            return step, data_container
 
         return self, data_container
 
@@ -524,8 +517,7 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
         if self.refit:
             best_model = self._load_best_model()
-            best_model.set_return_fitted_model(True)
-            best_model, _ = best_model.handle_fit_transform(data_container.copy(), context)
+            best_model = best_model.handle_fit(data_container.copy(), context)
             self.best_model = best_model
 
         return self
@@ -569,7 +561,7 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         best_hyperparams = auto_ml_algorithm.get_best_hyperparams(trials)
         auto_ml_algorithm = auto_ml_algorithm.update_hyperparams(best_hyperparams)
 
-        return copy.deepcopy(auto_ml_algorithm)
+        return copy.deepcopy(auto_ml_algorithm.get_step())
 
     def get_best_model(self) -> BaseStep:
         return self.best_model.get_step()
