@@ -21,7 +21,8 @@ You can find here steps that take action on data.
 """
 import random
 
-from neuraxle.base import BaseStep, MetaStepMixin, NonFittableMixin, ExecutionContext, HandleOnlyMixin
+from neuraxle.base import BaseStep, MetaStepMixin, NonFittableMixin, ExecutionContext, HandleOnlyMixin, \
+    ForceHandleOnlyMixin
 from neuraxle.base import NonTransformableMixin
 from neuraxle.data_container import DataContainer, _inner_concatenate_np_array
 from neuraxle.pipeline import Pipeline
@@ -77,7 +78,7 @@ class DataShuffler(NonFittableMixin, InputAndOutputTransformerMixin, BaseStep):
         return list(data_inputs_shuffled), list(expected_outputs_shuffled)
 
 
-class EpochRepeater(HandleOnlyMixin, MetaStepMixin, BaseStep):
+class EpochRepeater(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     """
     Repeat wrapped step fit, or transform for the number of epochs passed in the constructor.
 
@@ -96,10 +97,11 @@ class EpochRepeater(HandleOnlyMixin, MetaStepMixin, BaseStep):
         :class:`BaseStep`
     """
 
-    def __init__(self, wrapped, epochs, fit_only=False, repeat_in_test_mode=False):
+    def __init__(self, wrapped, epochs, fit_only=False, repeat_in_test_mode=False, cache_folder=None):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
-        HandleOnlyMixin.__init__(self)
+        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder)
+
         self.repeat_in_test_mode = repeat_in_test_mode
         self.fit_only = fit_only
         self.epochs = epochs

@@ -212,3 +212,4 @@ class DeepLearningPipeline(MeasurableStepMixin, ForceHandleMixin, MetaStepMixin,
         :rtype: float
         """
         return self.get_step_by_name(VALIDATION_SPLIT_STEP_NAME).get_score_train()
+
