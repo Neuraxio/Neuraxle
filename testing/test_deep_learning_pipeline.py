@@ -8,6 +8,7 @@ from neuraxle.api import DeepLearningPipeline
 from neuraxle.metaopt.auto_ml import RandomSearch
 from neuraxle.metaopt.random import ValidationSplitWrapper
 from neuraxle.pipeline import Pipeline
+from neuraxle.steps.sklearn import SKLearnWrapper
 
 N_ITER = 1
 
@@ -25,9 +26,7 @@ def test_deep_learning_pipeline():
     data_inputs, expected_outputs = create_2d_data()
 
     p = DeepLearningPipeline(
-        Pipeline([
-            linear_model.LinearRegression()
-        ]),
+        SKLearnWrapper(linear_model.LinearRegression()),
         validation_size=VALIDATION_SIZE,
         batch_size=BATCH_SIZE,
         batch_metrics={'mse': to_numpy_metric_wrapper(mean_squared_error)},
@@ -72,9 +71,7 @@ def test_deep_learning_pipeline_with_random_search():
     data_inputs, expected_outputs = create_2d_data()
 
     p = RandomSearch(DeepLearningPipeline(
-        Pipeline([
-            linear_model.LinearRegression()
-        ]),
+        SKLearnWrapper(linear_model.LinearRegression()),
         batch_size=BATCH_SIZE,
         batch_metrics={'mse': to_numpy_metric_wrapper(mean_squared_error)},
         shuffle_in_each_epoch_at_train=True,
