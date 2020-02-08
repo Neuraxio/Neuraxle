@@ -382,9 +382,8 @@ class ZipDataContainer(DataContainer):
         :rtype: ExpandedDataContainer
         """
         new_data_inputs = []
-        i = 0
 
-        for (_, di, eo) in data_container:
+        for i, (_, di, eo) in enumerate(data_container):
             new_data_input = [di]
 
             for other_data_container in other_data_containers:
@@ -392,8 +391,6 @@ class ZipDataContainer(DataContainer):
                 new_data_input.append(di)
 
             new_data_inputs.append(tuple(new_data_input))
-
-            i += 1
 
         return ZipDataContainer(
             data_inputs=new_data_inputs,
