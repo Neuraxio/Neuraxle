@@ -81,37 +81,20 @@ def test_deep_learning_pipeline_with_random_search():
         n_epochs=N_EPOCHS,
         epochs_metrics={'mse': to_numpy_metric_wrapper(mean_squared_error)},
         scoring_function=to_numpy_metric_wrapper(mean_squared_error),
-    ), validation_technique=ValidationSplitWrapper(test_size=0.15, scoring_function=to_numpy_metric_wrapper(mean_squared_error)), n_iter=N_ITER)
+        validation_size=0.15
+    ), n_iter=N_ITER)
 
     # When
     p, outputs = p.fit_transform(data_inputs, expected_outputs)
     best_model = p.get_best_model()
-
-    metrics = best_model.apply('get_metrics')
+    best_model.set_train(False)
+    best_model.apply('disable_metrics')
 
     # Then
-    batch_mse_train = metrics['DeepLearningPipeline__EpochRepeater__epoch_metrics__TrainShuffled__MiniBatchSequentialPipeline__batch_metrics']['train']['mse']
-    epoch_mse_train = metrics['DeepLearningPipeline__EpochRepeater__epoch_metrics']['train']['mse']
+    outputs = best_model.transform(data_inputs)
 
-    batch_mse_validation = metrics['DeepLearningPipeline__EpochRepeater__epoch_metrics__TrainShuffled__MiniBatchSequentialPipeline__batch_metrics']['validation']['mse']
-    epoch_mse_validation = metrics['DeepLearningPipeline__EpochRepeater__epoch_metrics']['validation']['mse']
-
-    assert len(epoch_mse_train) == N_EPOCHS
-    assert len(epoch_mse_validation) == N_EPOCHS
-
-    expected_len_batch_mse = math.ceil((len(data_inputs) / BATCH_SIZE) * (1 - VALIDATION_SIZE)) * N_EPOCHS
-
-    assert len(batch_mse_train) == expected_len_batch_mse
-    assert len(batch_mse_validation) == expected_len_batch_mse
-
-    last_batch_mse_validation = batch_mse_validation[-1]
-    last_batch_mse_train = batch_mse_train[-1]
-
-    last_epoch_mse_train = epoch_mse_train[-1]
-    last_epoch_mse_validation = epoch_mse_validation[-1]
-
-    assert last_batch_mse_train < last_batch_mse_validation
-    assert last_epoch_mse_train < last_epoch_mse_validation
+    mse = ((outputs - expected_outputs) ** 2).mean()
+    assert mse < 1.5
 
 
 def create_2d_data():

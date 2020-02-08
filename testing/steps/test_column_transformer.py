@@ -238,6 +238,7 @@ test_case_list_of_columns = ColumnChooserTestCase(
     n_dimension=3
 )
 
+
 @pytest.mark.parametrize("test_case", [
     copy.deepcopy(test_case_index_int),
     copy.deepcopy(test_case_index_start_end),
@@ -268,12 +269,12 @@ def test_column_transformer_transform_should_support_indexes(test_case: ColumnCh
 def test_column_transformer_fit_transform_should_support_indexes(test_case: ColumnChooserTestCase):
     data_inputs = test_case.data_inputs
     expected_outputs = test_case.expected_outputs
-    column_transformer = ColumnTransformer(test_case.column_transformer_tuple_list)
+    p = ColumnTransformer(test_case.column_transformer_tuple_list)
 
-    column_transformer, outputs = column_transformer.fit_transform(data_inputs, expected_outputs)
+    p, outputs = p.fit_transform(data_inputs, expected_outputs)
 
     assert np.array_equal(outputs, test_case.expected_processed_outputs)
-    actual_fitted_data = column_transformer[test_case.expected_step_key]['MultiplyBy2'].fitted_data
+    actual_fitted_data = p[test_case.expected_step_key]['MultiplyBy2'].fitted_data
     expected_fitted_data = test_case.expected_fitted_data
     assert_data_fitted_properly(actual_fitted_data, expected_fitted_data)
 
@@ -289,11 +290,11 @@ def test_column_transformer_fit_transform_should_support_indexes(test_case: Colu
 ])
 def test_column_transformer_fit_should_support_indexes(test_case: ColumnChooserTestCase):
     data_inputs = test_case.data_inputs
-    column_transformer = ColumnTransformer(test_case.column_transformer_tuple_list)
+    p = ColumnTransformer(test_case.column_transformer_tuple_list)
 
-    column_transformer = column_transformer.fit(data_inputs, test_case.expected_outputs)
+    p = p.fit(data_inputs, test_case.expected_outputs)
 
-    actual_fitted_data = column_transformer[test_case.expected_step_key]['MultiplyBy2'].fitted_data
+    actual_fitted_data = p[test_case.expected_step_key]['MultiplyBy2'].fitted_data
     expected_fitted_data = test_case.expected_fitted_data
     assert_data_fitted_properly(actual_fitted_data, expected_fitted_data)
 
@@ -323,17 +324,17 @@ def test_column_transformer_fit_should_support_multiple_tuples():
         n_dimension=3
     )
     data_inputs = test_case.data_inputs
-    column_transformer = ColumnTransformer(test_case.column_transformer_tuple_list)
+    p = ColumnTransformer(test_case.column_transformer_tuple_list)
 
     # When
-    column_transformer = column_transformer.fit(data_inputs, test_case.expected_outputs)
+    p = p.fit(data_inputs, test_case.expected_outputs)
 
     # Then
-    actual_fitted_data = column_transformer['2_MultiplyBy2']['MultiplyBy2'].fitted_data
-    expected_fitted_data = [([[2], [12], [22]], [[0, 1, 2, 3],[10, 11, 12, 13], [20, 21, 22, 23]])]
+    actual_fitted_data = p['2_MultiplyBy2']['MultiplyBy2'].fitted_data
+    expected_fitted_data = [([[2], [12], [22]], [[0, 1, 2, 3], [10, 11, 12, 13], [20, 21, 22, 23]])]
     assert_data_fitted_properly(actual_fitted_data, expected_fitted_data)
 
-    actual_fitted_data = column_transformer['slice(0, 2, None)_MultiplyBy2']['MultiplyBy2'].fitted_data
+    actual_fitted_data = p['slice(0, 2, None)_MultiplyBy2']['MultiplyBy2'].fitted_data
     expected_fitted_data = [([[1, 1], [10, 11], [20, 21]], [[0, 1, 2, 3], [10, 11, 12, 13], [20, 21, 22, 23]])]
     assert_data_fitted_properly(actual_fitted_data, expected_fitted_data)
 
@@ -363,18 +364,18 @@ def test_column_transformer_fit_transform_should_support_multiple_tuples():
         n_dimension=3
     )
     data_inputs = test_case.data_inputs
-    column_transformer = ColumnTransformer(test_case.column_transformer_tuple_list)
+    p = ColumnTransformer(test_case.column_transformer_tuple_list)
 
     # When
-    column_transformer, outputs = column_transformer.fit_transform(data_inputs, test_case.expected_outputs)
+    p, outputs = p.fit_transform(data_inputs, test_case.expected_outputs)
 
     # Then
     assert np.array_equal(test_case.expected_processed_outputs, outputs)
-    actual_fitted_data = column_transformer['2_MultiplyBy2']['MultiplyBy2'].fitted_data
-    expected_fitted_data = [([[2], [12], [22]], [[0, 1, 2, 3],[10, 11, 12, 13], [20, 21, 22, 23]])]
+    actual_fitted_data = p['2_MultiplyBy2']['MultiplyBy2'].fitted_data
+    expected_fitted_data = [([[2], [12], [22]], [[0, 1, 2, 3], [10, 11, 12, 13], [20, 21, 22, 23]])]
     assert_data_fitted_properly(actual_fitted_data, expected_fitted_data)
 
-    actual_fitted_data = column_transformer['slice(0, 2, None)_MultiplyBy2']['MultiplyBy2'].fitted_data
+    actual_fitted_data = p['slice(0, 2, None)_MultiplyBy2']['MultiplyBy2'].fitted_data
     expected_fitted_data = [([[1, 1], [10, 11], [20, 21]], [[0, 1, 2, 3], [10, 11, 12, 13], [20, 21, 22, 23]])]
     assert_data_fitted_properly(actual_fitted_data, expected_fitted_data)
 
@@ -404,10 +405,10 @@ def test_column_transformer_transform_should_support_multiple_tuples():
         n_dimension=3
     )
     data_inputs = test_case.data_inputs
-    column_transformer = ColumnTransformer(test_case.column_transformer_tuple_list)
+    p = ColumnTransformer(test_case.column_transformer_tuple_list)
 
     # When
-    outputs = column_transformer.transform(data_inputs)
+    outputs = p.transform(data_inputs)
 
     # Then
     assert np.array_equal(test_case.expected_processed_outputs, outputs)

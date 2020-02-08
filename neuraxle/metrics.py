@@ -105,11 +105,13 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
 
         self._calculate_metrics_results(data_container)
 
-        if 'validation' in data_container:
+        if 'validation' in data_container and self.enabled:
             self.set_train(False)
 
-            validation_data_container = self._transform_data_container(data_container['validation'], context)
-            self._calculate_metrics_results(validation_data_container.copy())
+            self.apply('disable_metrics')
+            validation_data_container = self._transform_data_container(data_container['validation'].copy(), context)
+            self.apply('enable_metrics')
+            self._calculate_metrics_results(validation_data_container)
 
             self.set_train(True)
 

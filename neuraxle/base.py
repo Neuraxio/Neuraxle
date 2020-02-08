@@ -295,6 +295,7 @@ class ExecutionMode(Enum):
     TRANSFORM = 'transform'
     FIT = 'fit'
     FIT_TRANSFORM = 'fit_transform'
+    INVERSE_TRANSFORM = 'inverse_transform'
 
 
 class ExecutionContext:
@@ -844,13 +845,15 @@ class BaseStep(ABC):
             :class:`DataContainer`,
             :class:`neuraxle.pipeline.Pipeline`
         """
-        self.is_invalidated = True
+        data_container, context = self._will_process(data_container, context)
+        data_container = self._inverse_transform_data_container(data_container, context)
+        data_container = self._did_process(data_container, context)
 
+        return data_container
+
+    def _inverse_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         processed_outputs = self.inverse_transform(data_container.data_inputs)
         data_container.set_data_inputs(processed_outputs)
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
 
         return data_container
 
@@ -919,6 +922,8 @@ class BaseStep(ABC):
         data_container, context = self._will_fit(data_container, context)
 
         new_self = self._fit_data_container(data_container, context)
+
+        self._did_fit(data_container, context)
 
         return new_self
 
@@ -1538,7 +1543,9 @@ class MetaStepMixin:
         self.wrapped: BaseStep = wrapped
 
         if not hasattr(self, 'savers'):
-            warnings.warn('Please initialize Mixins in the reverse order. MetaStepMixin should be initialized after BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers.'.format(self.wrapped.name))
+            warnings.warn(
+                'Please initialize Mixins in the good order. MetaStepMixin should be initialized after BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers.'.format(
+                    self.wrapped.name))
             self.savers = [MetaStepJoblibStepSaver()]
         else:
             self.savers.append(MetaStepJoblibStepSaver())
@@ -1735,6 +1742,10 @@ class MetaStepMixin:
         data_container = self.wrapped.handle_transform(data_container, context)
         return data_container
 
+    def _inverse_transform_data_container(self, data_container, context):
+        data_container = self.wrapped.handle_inverse_transform(data_container, context)
+        return data_container
+
     def fit_transform(self, data_inputs, expected_outputs):
         self.wrapped, data_inputs = self.wrapped.fit_transform(data_inputs, expected_outputs)
         return self, data_inputs
@@ -1745,6 +1756,10 @@ class MetaStepMixin:
 
     def transform(self, data_inputs):
         data_inputs = self.wrapped.transform(data_inputs)
+        return data_inputs
+
+    def inverse_transform(self, data_inputs):
+        data_inputs = self.wrapped.inverse_transform(data_inputs)
         return data_inputs
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext):
@@ -1771,8 +1786,9 @@ class MetaStepMixin:
         else:
             step_name = self.name
 
-        wrapped_results = self.wrapped.apply(method_name=method_name, step_name=step_name, *kargs, **kwargs)
-        results.update(wrapped_results)
+        if self.wrapped is not None:
+            wrapped_results = self.wrapped.apply(method_name=method_name, step_name=step_name, *kargs, **kwargs)
+            results.update(wrapped_results)
 
         return results
 
@@ -1794,8 +1810,9 @@ class MetaStepMixin:
         else:
             step_name = self.name
 
-        wrapped_results = self.wrapped.apply_method(method=method, step_name=step_name, *kargs, **kwargs)
-        results.update(wrapped_results)
+        if self.wrapped is not None:
+            wrapped_results = self.wrapped.apply_method(method=method, step_name=step_name, *kargs, **kwargs)
+            results.update(wrapped_results)
 
         return results
 
@@ -1847,6 +1864,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
     """
     Custom saver for meta step mixin.
     """
+
     def __init__(self):
         JoblibStepSaver.__init__(self)
 
@@ -1912,51 +1930,14 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
 
 
-class ForceAlwaysHandleMixin:
-    """
-    A pipeline step that requires the implementation only of handler methods :
-
-        - handle_transform
-        - handle_fit_transform
-        - handle_fit
-
-    .. seealso::
-        :class:`BaseStep`
-    """
-
-    @abstractmethod
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
-        raise NotImplementedError('Must implement handle_fit in {0}'.format(self.name))
-
-    @abstractmethod
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
-        raise NotImplementedError('Must implement handle_transform in {0}'.format(self.name))
-
-    @abstractmethod
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
-        raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
-
-    def transform(self, data_inputs) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(
-                self.name))
-
-    def fit(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(
-                self.name))
-
-    def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(
-                self.name))
-
-
 class NonFittableMixin:
     """
     A pipeline step that requires no fitting: fitting just returns self when called to do no action.
     Note: fit methods are not implemented
     """
+
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        return self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         return self, self._transform_data_container(data_container, context)
@@ -2914,3 +2895,147 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
         NonTransformableMixin.__init__(self)
         NonFittableMixin.__init__(self)
         BaseStep.__init__(self, name=name, savers=savers)
+
+
+
+class TransformHandlerOnlyMixin(NonFittableMixin):
+    """
+    A pipeline step that only requires the implementation of _transform_data_container.
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`NonFittableMixin`
+    """
+
+    @abstractmethod
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        raise NotImplementedError('Must implement _transform_data_container in {0}'.format(self.name))
+
+    def transform(self, data_inputs) -> 'HandleOnlyMixin':
+        raise Exception(
+            'Transform method is not supported for {0}, because it inherits from HandlerMixin. Please use handle_transform instead.'.format(
+                self.name))
+
+
+class HandleOnlyMixin:
+    """
+    A pipeline step that only requires the implementation of handler methods :
+        - _transform_data_container
+        - _fit_transform_data_container
+        - _fit_data_container
+
+    If forbids only implementing fit or transform or fit_transform without the handles. So it forces the handles.
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`TransformHandlerOnlyMixin`,
+        :class:`NonTransformableMixin`,
+        :class:`NonFittableMixin`,
+        :class:`ForceHandleMixin`,
+        :class:`ForceHandleOnlyMixin`
+    """
+
+    @abstractmethod
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        raise NotImplementedError('Must implement _fit_data_container in {0}'.format(self.name))
+
+    @abstractmethod
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        raise NotImplementedError('Must implement _transform_data_container in {0}'.format(self.name))
+
+    @abstractmethod
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
+        raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
+
+    def transform(self, data_inputs) -> 'HandleOnlyMixin':
+        raise Exception(
+            'Transform method is not supported for {0}, because it inherits from HandleOnlyMixin. Please use handle_transform instead.'.format(
+                self.name))
+
+    def fit(self, data_inputs, expected_outputs=None) -> 'HandleOnlyMixin':
+        raise Exception(
+            'Fit method is not supported for {0}, because it inherits from HandleOnlyMixin. Please use handle_fit instead.'.format(
+                self.name))
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> 'HandleOnlyMixin':
+        raise Exception(
+            'Fit transform method is not supported for {0}, because it inherits from HandleOnlyMixin. Please use handle_fit_transform instead.'.format(
+                self.name))
+
+
+class ForceHandleMixin:
+    """
+    A step that automatically calls handle methods in the transform, fit, and fit_transform methods.
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`HandleOnlyMixin`,
+        :class:`TransformHandlerOnlyMixin`,
+        :class:`NonTransformableMixin`,
+        :class:`NonFittableMixin`,
+        :class:`ForceHandleOnlyMixin`
+    """
+    def __init__(self, cache_folder=None):
+        if cache_folder is None:
+            cache_folder = DEFAULT_CACHE_FOLDER
+        self.cache_folder = cache_folder
+
+    def transform(self, data_inputs):
+        execution_context = ExecutionContext(self.cache_folder, execution_mode=ExecutionMode.TRANSFORM)
+        context, data_container = self._encapsulate_data(data_inputs, expected_outputs=None, execution_mode=ExecutionMode.TRANSFORM)
+
+        data_container = self.handle_transform(data_container, execution_context)
+
+        return data_container.data_inputs
+
+    def fit(self, data_inputs, expected_outputs=None) -> Tuple['HandleOnlyMixin', Iterable]:
+        context, data_container = self._encapsulate_data(data_inputs, expected_outputs, ExecutionMode.FIT)
+        new_self = self.handle_fit(data_container, context)
+
+        return new_self
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['HandleOnlyMixin', Iterable]:
+        context, data_container = self._encapsulate_data(data_inputs, expected_outputs, ExecutionMode.FIT_TRANSFORM)
+        new_self, data_container = self.handle_fit_transform(data_container, context)
+
+        return new_self, data_container.data_inputs
+
+    def _encapsulate_data(self, data_inputs, expected_outputs=None, execution_mode=None):
+        data_container = DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs)
+        context = ExecutionContext(root=self.cache_folder, execution_mode=execution_mode)
+
+        return context, data_container
+
+
+class ForceHandleOnlyMixin(ForceHandleMixin, HandleOnlyMixin):
+    """
+    A step that automatically calls handle methods in the transform, fit, and fit_transform methods.
+    It also requires the implementation of handler methods :
+        - _transform_data_container
+        - _fit_transform_data_container
+        - _fit_data_container
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`HandleOnlyMixin`,
+        :class:`TransformHandlerOnlyMixin`,
+        :class:`NonTransformableMixin`,
+        :class:`NonFittableMixin`,
+        :class:`ForceHandleMixin`
+    """
+    def __init__(self, cache_folder=None):
+        HandleOnlyMixin.__init__(self)
+        ForceHandleMixin.__init__(self, cache_folder)
+
+
+class EvaluableStepMixin:
+    """
+    A step that can be evaluated with the scoring functions.
+
+    .. seealso::
+        :class:`BaseStep`
+    """
+    @abstractmethod
+    def get_score(self):
+        raise NotImplementedError()

@@ -58,10 +58,17 @@ class DataContainer:
             expected_outputs: Any = None,
             sub_data_containers: List['NamedDataContainerTuple'] = None
     ):
-        self.current_ids = current_ids
         self.summary_id = summary_id
-
         self.data_inputs = data_inputs
+
+        if current_ids is None:
+            if hasattr(data_inputs, '__len__'):
+                current_ids = [str(c) for c in range(len(data_inputs))]
+            else:
+                current_ids = str(0)
+
+        self.current_ids = current_ids
+
         if expected_outputs is None and isinstance(data_inputs, Iterable):
             self.expected_outputs = [None] * len(data_inputs)
         else:
@@ -101,6 +108,7 @@ class DataContainer:
         :return:
         """
         self.current_ids = current_ids
+        return self
 
     def set_summary_id(self, summary_id: str):
         """
@@ -232,6 +240,48 @@ class DataContainer:
                 current_ids = self.current_ids[item]
 
             return current_ids, self.data_inputs[item], self.expected_outputs[item]
+
+    def tolist(self):
+        current_ids = self.current_ids
+        data_inputs = self.data_inputs
+        expected_outputs = self.expected_outputs
+
+        if isinstance(self.current_ids, np.ndarray):
+            current_ids = self.current_ids.tolist()
+
+        if isinstance(self.data_inputs, np.ndarray):
+            data_inputs = self.data_inputs.tolist()
+
+        if isinstance(self.expected_outputs, np.ndarray):
+            expected_outputs = self.expected_outputs.tolist()
+
+        self.set_current_ids(current_ids)
+        self.set_data_inputs(data_inputs)
+        self.set_expected_outputs(expected_outputs)
+
+        return self
+
+    def tolistshallow(self):
+        new_current_ids = []
+        new_data_inputs = []
+        new_expected_outputs = []
+
+        for cid, di, eo in self:
+            new_current_ids.append(cid)
+            new_data_inputs.append(di)
+            new_expected_outputs.append(eo)
+
+        self.set_current_ids(new_current_ids)
+        self.set_data_inputs(new_data_inputs)
+        self.set_expected_outputs(new_expected_outputs)
+
+        return self
+
+    def to_numpy(self):
+        self.set_current_ids(np.array(self.current_ids))
+        self.set_data_inputs(np.array(self.data_inputs))
+        self.set_expected_outputs(np.array(self.expected_outputs))
+        return self
 
     def __iter__(self):
         """
@@ -385,6 +435,10 @@ class ListDataContainer(DataContainer):
         :class:`DataContainer`
     """
 
+    def __init__(self, data_inputs: Any, current_ids=None, summary_id=None, expected_outputs: Any = None, sub_data_containers=None):
+        DataContainer.__init__(self, data_inputs, current_ids, summary_id, expected_outputs, sub_data_containers)
+        self.tolistshallow()
+
     @staticmethod
     def empty(original_data_container: DataContainer = None) -> 'ListDataContainer':
         if original_data_container is None:
@@ -408,6 +462,22 @@ class ListDataContainer(DataContainer):
         self.data_inputs.append(data_input)
         self.expected_outputs.append(expected_output)
 
+        return self
+
+    def append_data_container(self, other: DataContainer):
+        """
+        Append a data container to the DataContainer.
+
+        :param other: data container
+        :type other: DataContainer
+        :return:
+        """
+        self.current_ids.append(other.current_ids)
+        self.data_inputs.append(other.data_inputs)
+        self.expected_outputs.append(other.expected_outputs)
+
+        return self
+
     def concat(self, data_container: DataContainer):
         """
         Concat the given data container to the current data container.
@@ -416,9 +486,13 @@ class ListDataContainer(DataContainer):
         :type data_container: DataContainer
         :return:
         """
+        data_container.tolistshallow()
+
         self.current_ids.extend(data_container.current_ids)
         self.data_inputs.extend(data_container.data_inputs)
         self.expected_outputs.extend(data_container.expected_outputs)
+
+        return self
 
 
 def _inner_concatenate_np_array(np_array, np_array_to_zip):
