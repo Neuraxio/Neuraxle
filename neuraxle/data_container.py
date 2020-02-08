@@ -262,18 +262,9 @@ class DataContainer:
         return self
 
     def tolistshallow(self):
-        new_current_ids = []
-        new_data_inputs = []
-        new_expected_outputs = []
-
-        for cid, di, eo in self:
-            new_current_ids.append(cid)
-            new_data_inputs.append(di)
-            new_expected_outputs.append(eo)
-
-        self.set_current_ids(new_current_ids)
-        self.set_data_inputs(new_data_inputs)
-        self.set_expected_outputs(new_expected_outputs)
+        self.set_current_ids(list(self.current_ids))
+        self.set_data_inputs(list(self.data_inputs))
+        self.set_expected_outputs(list(self.expected_outputs))
 
         return self
 
