@@ -322,10 +322,6 @@ class TapeCallbackFunction:
         """
         return self.name_tape
 
-    def reset(self):
-        self.data = []
-        self.name_tape = []
-
 
 class HandleCallbackStep(HandleOnlyMixin, BaseStep):
     def __init__(

@@ -1113,9 +1113,7 @@ class BaseStep(ABC):
         data_container.set_current_ids(current_ids)
 
         if data_container.summary_id is None:
-            data_container.set_summary_id(
-                data_container.hash_summary()
-            )
+            data_container.set_summary_id(data_container.hash_summary())
 
         summary_id = self.summary_hash(data_container)
         data_container.set_summary_id(summary_id)

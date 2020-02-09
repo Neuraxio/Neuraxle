@@ -23,6 +23,7 @@ Pipeline Steps For Looping
 
 """
 import copy
+import hashlib
 from typing import List
 
 from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, ForceHandleOnlyMixin
@@ -309,10 +310,13 @@ class FlattenForEach(ResumableStepMixin, MetaStepMixin, BaseStep):
 
         self.flattened_dimension_lengths = [len(di) for di in data_container.data_inputs]
 
-        data_container.set_data_inputs(self._flatten_list(data_container.data_inputs))
-        data_container.set_expected_outputs(self._flatten_list(data_container.expected_outputs))
+        flattened_data_container = DataContainer(
+            summary_id=data_container.summary_id,
+            data_inputs=self._flatten_list(data_container.data_inputs),
+            expected_outputs=self._flatten_list(data_container.expected_outputs)
+        )
 
-        return data_container, context
+        return flattened_data_container, context
 
     def _flatten_list(self, list_to_flatten):
         """
