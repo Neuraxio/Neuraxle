@@ -17,6 +17,20 @@ def test_zip_data_container_should_merge_two_data_sources_together():
         assert np.array_equal(di[1], data_inputs_2d[i])
 
 
+def test_zip_data_container_should_merge_1d_with_2d():
+    data_inputs_3d, expected_outputs_3d = _create_data_source((10, 10, 2))
+    data_inputs_1d, expected_outputs_1d = _create_data_source((10,))
+    data_container_1d = DataContainer(data_inputs=data_inputs_1d, expected_outputs=expected_outputs_1d)
+    data_container = DataContainer(data_inputs=data_inputs_3d, expected_outputs=expected_outputs_3d)
+
+    zip_data_container = ZipDataContainer.create_from(data_container, data_container_1d)
+
+    assert zip_data_container.current_ids == data_container.current_ids
+    for i, di in enumerate(zip_data_container.data_inputs):
+        assert np.array_equal(di[0], data_inputs_3d[i])
+        assert np.array_equal(di[1], data_inputs_1d[i])
+
+
 def test_zip_data_container_should_merge_multiple_data_sources_together():
     data_inputs_3d, expected_outputs_3d = _create_data_source((10, 10, 2))
     data_inputs_2d, expected_outputs_2d = _create_data_source((10, 10))
