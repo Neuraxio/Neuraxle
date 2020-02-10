@@ -543,6 +543,8 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
                 self.hyperparams_repository.save_score_for_success_trial(hyperparams, score)
             except Exception as error:
+                track = traceback.format_exc()
+                print(track)
                 self.hyperparams_repository.save_failure_for_trial(hyperparams, error)
 
         if self.refit:
