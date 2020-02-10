@@ -100,7 +100,8 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
             data_inputs=data_containers,
             current_ids=data_container.current_ids,
             summary_id=data_container.summary_id,
-            expected_outputs=data_container.expected_outputs
+            expected_outputs=data_container.expected_outputs,
+            sub_data_containers=data_container.sub_data_containers
         )
 
     def _did_transform(self, data_container, context):

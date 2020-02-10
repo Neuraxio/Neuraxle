@@ -313,7 +313,8 @@ class FlattenForEach(ResumableStepMixin, MetaStepMixin, BaseStep):
         flattened_data_container = DataContainer(
             summary_id=data_container.summary_id,
             data_inputs=self._flatten_list(data_container.data_inputs),
-            expected_outputs=self._flatten_list(data_container.expected_outputs)
+            expected_outputs=self._flatten_list(data_container.expected_outputs),
+            sub_data_containers=data_container.sub_data_containers
         )
 
         return flattened_data_container, context
