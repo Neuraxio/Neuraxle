@@ -1320,7 +1320,6 @@ class BaseStep(ABC):
             :class:`BaseSaver`
         """
         context = context.push(self)
-        self.is_invalidated = False
 
         if full_dump:
             # initialize and invalidate steps to make sure that all steps will be saved
