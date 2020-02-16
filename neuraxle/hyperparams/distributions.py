@@ -27,14 +27,15 @@ the distribution.
 """
 
 import copy
+import math
 import random
 import sys
 from abc import abstractmethod, ABCMeta
 from typing import List
-from scipy.stats import norm
-from scipy.integrate import quad
-import math
+
 import numpy as np
+from scipy.integrate import quad
+from scipy.stats import norm
 from scipy.stats import truncnorm
 
 
@@ -104,11 +105,8 @@ class HyperparameterDistribution(metaclass=ABCMeta):
         :return: self.
         """
         self.kept_space_ratio_trace = (
-                self.get_current_narrowing_value() *
-                kept_space_ratio *
-                original_hp.get_current_narrowing_value()
-        )
-        self.original_hp: HyperparameterDistribution = original_hp.unnarrow()
+                self.get_current_narrowing_value() * kept_space_ratio * original_hp.get_current_narrowing_value())
+        self.original_hp: 'HyperparameterDistribution' = original_hp.unnarrow()
         return self
 
     def get_current_narrowing_value(self):
@@ -266,7 +264,8 @@ class Choice(HyperparameterDistribution):
         elif null_default_value in choice_list:
             HyperparameterDistribution.__init__(self, null_default_value)
         else:
-            raise ValueError('invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
+            raise ValueError(
+                'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
 
         self.choice_list = choice_list
 
@@ -363,7 +362,8 @@ class PriorityChoice(HyperparameterDistribution):
         elif null_default_value in choice_list:
             HyperparameterDistribution.__init__(self, null_default_value)
         else:
-            raise ValueError('invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
+            raise ValueError(
+                'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
 
         HyperparameterDistribution.__init__(self, null_default_value)
         self.choice_list = choice_list
@@ -451,7 +451,8 @@ class PriorityChoice(HyperparameterDistribution):
 
 
 class WrappedHyperparameterDistributions(HyperparameterDistribution):
-    def __init__(self, hd: HyperparameterDistribution = None, hds: List[HyperparameterDistribution] = None, null_default_value=None):
+    def __init__(self, hd: HyperparameterDistribution = None, hds: List[HyperparameterDistribution] = None,
+                 null_default_value=None):
         """
         Create a wrapper that will surround another HyperparameterDistribution.
         The wrapper might use one (hd) and/or many (hds) HyperparameterDistribution depending on the argument(s) used.
@@ -519,7 +520,7 @@ class Quantized(WrappedHyperparameterDistributions):
 class RandInt(HyperparameterDistribution):
     """Get a random integer within a range"""
 
-    def __init__(self, min_included: int, max_included: int, null_default_value: int=None):
+    def __init__(self, min_included: int, max_included: int, null_default_value: int = None):
         """
         Create a quantized random uniform distribution.
         A random integer between the two values inclusively will be returned.
@@ -585,7 +586,8 @@ class RandInt(HyperparameterDistribution):
         new_max_included = round(self.max_included * kept_space_ratio + best_guess * lost_space_ratio)
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
             return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return RandInt(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
+        return RandInt(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio,
+                                                                                                      self)
 
 
 class Uniform(HyperparameterDistribution):
@@ -668,7 +670,8 @@ class Uniform(HyperparameterDistribution):
         new_max_included = self.max_included * kept_space_ratio + best_guess * lost_space_ratio
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
             return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return Uniform(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
+        return Uniform(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio,
+                                                                                                      self)
 
 
 class LogUniform(HyperparameterDistribution):
@@ -750,14 +753,15 @@ class LogUniform(HyperparameterDistribution):
         new_max_included = self.log2_max_included * kept_space_ratio + log2_best_guess * lost_space_ratio
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
             return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return LogUniform(2 ** new_min_included, 2 ** new_max_included, 2 ** self.null_default_value).was_narrowed_from(kept_space_ratio, self)
+        return LogUniform(2 ** new_min_included, 2 ** new_max_included, 2 ** self.null_default_value).was_narrowed_from(
+            kept_space_ratio, self)
 
 
 class Normal(HyperparameterDistribution):
     """Get a normal distribution."""
 
     def __init__(self, mean: float, std: float,
-                 hard_clip_min: float = None, hard_clip_max: float = None, null_default_value: float=None):
+                 hard_clip_min: float = None, hard_clip_max: float = None, null_default_value: float = None):
         """
         Create a normal distribution from mean and standard deviation.
 
