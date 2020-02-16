@@ -24,9 +24,12 @@ Classes for containing the data that flows throught the pipeline steps.
 
 """
 import hashlib
-from typing import Any, Iterable, List
+from typing import Any, Iterable, List, Tuple, Union
 
+import numpy as np
 from conv import convolved_1d
+
+NamedDataContainerTuple = Tuple[str, 'DataContainer']
 
 
 class DataContainer:
@@ -47,15 +50,34 @@ class DataContainer:
         :class: `BaseStep`
     """
 
-    def __init__(self, data_inputs: Any, current_ids=None, summary_id=None, expected_outputs: Any = None):
-        self.current_ids = current_ids
+    def __init__(
+            self,
+            data_inputs: Any,
+            current_ids=None,
+            summary_id=None,
+            expected_outputs: Any = None,
+            sub_data_containers: List['NamedDataContainerTuple'] = None
+    ):
         self.summary_id = summary_id
-
         self.data_inputs = data_inputs
+
+        if current_ids is None:
+            if hasattr(data_inputs, '__len__'):
+                current_ids = [str(c) for c in range(len(data_inputs))]
+            else:
+                current_ids = str(0)
+
+        self.current_ids = current_ids
+
         if expected_outputs is None and isinstance(data_inputs, Iterable):
             self.expected_outputs = [None] * len(data_inputs)
         else:
             self.expected_outputs = expected_outputs
+
+        if sub_data_containers is None:
+            sub_data_containers = []
+
+        self.sub_data_containers: List[NamedDataContainerTuple] = sub_data_containers
 
     def set_data_inputs(self, data_inputs: Iterable):
         """
@@ -86,6 +108,7 @@ class DataContainer:
         :return:
         """
         self.current_ids = current_ids
+        return self
 
     def set_summary_id(self, summary_id: str):
         """
@@ -95,6 +118,13 @@ class DataContainer:
         :return:
         """
         self.summary_id = summary_id
+
+    def set_sub_data_containers(self, sub_data_containers: List['DataContainer']):
+        """
+        Set sub data containers
+        :return:
+        """
+        self.sub_data_containers = sub_data_containers
 
     def hash_summary(self):
         """
@@ -136,12 +166,113 @@ class DataContainer:
                     expected_outputs = expected_outputs[:i]
                     break
 
-            yield DataContainer(data_inputs=data_inputs, current_ids=current_ids, summary_id=self.summary_id,
-                                expected_outputs=expected_outputs)
+            yield DataContainer(
+                data_inputs=data_inputs,
+                current_ids=current_ids,
+                summary_id=self.summary_id,
+                expected_outputs=expected_outputs,
+                sub_data_containers=self.sub_data_containers
+            )
 
     def copy(self):
-        return DataContainer(data_inputs=self.data_inputs, current_ids=self.current_ids, summary_id=self.summary_id,
-                             expected_outputs=self.expected_outputs)
+        return DataContainer(
+            data_inputs=self.data_inputs,
+            current_ids=self.current_ids,
+            summary_id=self.summary_id,
+            expected_outputs=self.expected_outputs,
+            sub_data_containers=[(name, data_container.copy()) for name, data_container in self.sub_data_containers]
+        )
+
+    def add_sub_data_container(self, name: str, data_container: 'DataContainer'):
+        """
+        Get sub data container if item is str, otherwise get a zip of current ids, data inputs, and expected outputs.
+
+        :type name: sub data container name
+        :type data_container: sub data container
+        :return: self
+        """
+        self.sub_data_containers.append((name, data_container))
+        return self
+
+    def get_sub_data_container_names(self):
+        """
+        Get sub data container names.
+
+        :return: list of names
+        """
+        return [name for name, _ in self.sub_data_containers]
+
+    def __contains__(self, item):
+        """
+        return true if sub container name is in the sub data containers.
+
+        :return: contains
+        :rtype: bool
+        """
+        if isinstance(item, str):
+            contains = False
+            for name, data_container in self.sub_data_containers:
+                if name == item:
+                    contains = True
+            return contains
+        else:
+            raise NotImplementedError('DataContainer.__contains__ not implemented for this type: {}'.format(type(item)))
+
+    def __getitem__(self, item: Union[str, int]):
+        """
+        If item is a string, then get then sub container with the same name as item in the list of sub data containers.
+        If item is an int, then return a tuple of (current id, data input, expected output) for the given item index.
+
+        :param item: sub data container str, or item index as int
+        :type item: Union[str, int]
+        :return: data container, or tuple of current ids, data inputs, expected outputs.
+        :rtype: Union[DataContainer, Tuple]
+        """
+        if isinstance(item, str):
+            for name, data_container in self.sub_data_containers:
+                if name == item:
+                    return data_container
+            raise KeyError("sub_data_container {} not found in data container".format(item))
+        else:
+            if self.current_ids is None:
+                current_ids = [None] * len(self)
+            else:
+                current_ids = self.current_ids[item]
+
+            return current_ids, self.data_inputs[item], self.expected_outputs[item]
+
+    def tolist(self):
+        current_ids = self.current_ids
+        data_inputs = self.data_inputs
+        expected_outputs = self.expected_outputs
+
+        if isinstance(self.current_ids, np.ndarray):
+            current_ids = self.current_ids.tolist()
+
+        if isinstance(self.data_inputs, np.ndarray):
+            data_inputs = self.data_inputs.tolist()
+
+        if isinstance(self.expected_outputs, np.ndarray):
+            expected_outputs = self.expected_outputs.tolist()
+
+        self.set_current_ids(current_ids)
+        self.set_data_inputs(data_inputs)
+        self.set_expected_outputs(expected_outputs)
+
+        return self
+
+    def tolistshallow(self):
+        self.set_current_ids(list(self.current_ids))
+        self.set_data_inputs(list(self.data_inputs))
+        self.set_expected_outputs(list(self.expected_outputs))
+
+        return self
+
+    def to_numpy(self):
+        self.set_current_ids(np.array(self.current_ids))
+        self.set_data_inputs(np.array(self.data_inputs))
+        self.set_expected_outputs(np.array(self.expected_outputs))
+        return self
 
     def __iter__(self):
         """
@@ -179,10 +310,15 @@ class ExpandedDataContainer(DataContainer):
         :class:`ExpandedDataContainer`,
     """
 
-    def __init__(self,  data_inputs, current_ids, expected_outputs, summary_id, old_current_ids):
-
-        DataContainer.__init__(self, data_inputs=data_inputs, current_ids=current_ids, summary_id=summary_id,
-                               expected_outputs=expected_outputs)
+    def __init__(self, data_inputs, current_ids, expected_outputs, summary_id, old_current_ids, sub_data_containers):
+        DataContainer.__init__(
+            self,
+            data_inputs=data_inputs,
+            current_ids=current_ids,
+            summary_id=summary_id,
+            expected_outputs=expected_outputs,
+            sub_data_containers=sub_data_containers
+        )
 
         self.old_current_ids = old_current_ids
 
@@ -193,8 +329,17 @@ class ExpandedDataContainer(DataContainer):
         :return: reduced data container
         :rtype: DataContainer
         """
-        return DataContainer(data_inputs=self.data_inputs[0], current_ids=self.old_current_ids,
-                             summary_id=self.summary_id, expected_outputs=self.expected_outputs[0])
+        if len(self.data_inputs) != 1:
+            raise ValueError(
+                'Invalid Expanded Data Container. Please create ExpandedDataContainer with ExpandedDataContainer.create_from(data_container) method.')
+
+        return DataContainer(
+            data_inputs=self.data_inputs[0],
+            current_ids=self.old_current_ids,
+            summary_id=self.summary_id,
+            expected_outputs=self.expected_outputs[0],
+            sub_data_containers=self.sub_data_containers
+        )
 
     @staticmethod
     def create_from(data_container: DataContainer) -> 'ExpandedDataContainer':
@@ -206,9 +351,67 @@ class ExpandedDataContainer(DataContainer):
         :return: expanded data container
         :rtype: ExpandedDataContainer
         """
-        return ExpandedDataContainer(data_inputs=[data_container.data_inputs], current_ids=[data_container.summary_id],
-                                     summary_id=data_container.summary_id,
-                                     expected_outputs=[data_container.expected_outputs], old_current_ids=data_container.current_ids)
+        return ExpandedDataContainer(
+            data_inputs=[data_container.data_inputs],
+            current_ids=[data_container.summary_id],
+            summary_id=data_container.summary_id,
+            expected_outputs=[data_container.expected_outputs],
+            old_current_ids=data_container.current_ids,
+            sub_data_containers=data_container.sub_data_containers
+        )
+
+
+class ZipDataContainer(DataContainer):
+    """
+    Sub class of DataContainer to zip two data sources together.
+
+    .. seealso::
+        :class:`DataContainer`,
+    """
+
+    @staticmethod
+    def create_from(data_container: DataContainer, *other_data_containers: DataContainer) -> 'ZipDataContainer':
+        """
+        Create ZipDataContainer that merges two data sources together.
+
+        :param data_container: data container to transform
+        :type data_container: DataContainer
+        :param other_data_containers: other data containers to zip with data container
+        :type other_data_containers: List[DataContainer]
+        :return: expanded data container
+        :rtype: ExpandedDataContainer
+        """
+        new_data_inputs = []
+
+        for i, (_, di, eo) in enumerate(data_container):
+            new_data_input = [di]
+
+            for other_data_container in other_data_containers:
+                _, di, eo = other_data_container[i]
+                new_data_input.append(di)
+
+            new_data_inputs.append(tuple(new_data_input))
+
+        return ZipDataContainer(
+            data_inputs=new_data_inputs,
+            current_ids=data_container.current_ids,
+            summary_id=data_container.summary_id,
+            expected_outputs=data_container.expected_outputs,
+            sub_data_containers=data_container.sub_data_containers
+        )
+
+    def concatenate_inner_features(self):
+        """
+        Concatenate inner features from zipped data inputs.
+        Broadcast data inputs if the dimension is smaller.
+        """
+        new_data_inputs = [di[0] for di in self.data_inputs]
+
+        for i, data_input in enumerate(self.data_inputs):
+            for di in data_input[1:]:
+                new_data_inputs[i] = _inner_concatenate_np_array(new_data_inputs[i], di)
+
+        self.set_data_inputs(new_data_inputs)
 
 
 class ListDataContainer(DataContainer):
@@ -220,9 +423,18 @@ class ListDataContainer(DataContainer):
         :class:`DataContainer`
     """
 
+    def __init__(self, data_inputs: Any, current_ids=None, summary_id=None, expected_outputs: Any = None, sub_data_containers=None):
+        DataContainer.__init__(self, data_inputs, current_ids, summary_id, expected_outputs, sub_data_containers)
+        self.tolistshallow()
+
     @staticmethod
-    def empty() -> 'ListDataContainer':
-        return ListDataContainer([], [], [])
+    def empty(original_data_container: DataContainer = None) -> 'ListDataContainer':
+        if original_data_container is None:
+            sub_data_containers = []
+        else:
+            sub_data_containers = original_data_container.sub_data_containers
+
+        return ListDataContainer([], [], [], sub_data_containers=sub_data_containers)
 
     def append(self, current_id: str, data_input: Any, expected_output: Any):
         """
@@ -238,6 +450,22 @@ class ListDataContainer(DataContainer):
         self.data_inputs.append(data_input)
         self.expected_outputs.append(expected_output)
 
+        return self
+
+    def append_data_container(self, other: DataContainer):
+        """
+        Append a data container to the DataContainer.
+
+        :param other: data container
+        :type other: DataContainer
+        :return:
+        """
+        self.current_ids.append(other.current_ids)
+        self.data_inputs.append(other.data_inputs)
+        self.expected_outputs.append(other.expected_outputs)
+
+        return self
+
     def concat(self, data_container: DataContainer):
         """
         Concat the given data container to the current data container.
@@ -246,6 +474,30 @@ class ListDataContainer(DataContainer):
         :type data_container: DataContainer
         :return:
         """
+        data_container.tolistshallow()
+
         self.current_ids.extend(data_container.current_ids)
         self.data_inputs.extend(data_container.data_inputs)
         self.expected_outputs.extend(data_container.expected_outputs)
+
+        return self
+
+
+def _inner_concatenate_np_array(np_array, np_array_to_zip):
+    """
+    Concatenate numpy arrays on the last axis using expand dim, and broadcasting.
+
+    :param np_array: data container
+    :type np_array: np.ndarray
+    :param np_array_to_zip: numpy array to zip with the other
+    :type np_array_to_zip: np.ndarray
+    :return: concatenated np array
+    :rtype: np.ndarray
+    """
+    while len(np_array_to_zip.shape) < len(np_array.shape):
+        np_array_to_zip = np.expand_dims(np_array_to_zip, axis=-1)
+
+    target_shape = tuple(list(np_array.shape[:-1]) + [np_array_to_zip.shape[-1]])
+    np_array_to_zip = np.broadcast_to(np_array_to_zip, target_shape)
+
+    return np.concatenate((np_array, np_array_to_zip), axis=-1)

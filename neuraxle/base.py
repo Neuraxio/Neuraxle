@@ -33,8 +33,9 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from enum import Enum
-from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Optional
+from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Optional, Dict
 
+import numpy as np
 from joblib import dump, load
 from sklearn.base import BaseEstimator
 
@@ -294,6 +295,7 @@ class ExecutionMode(Enum):
     TRANSFORM = 'transform'
     FIT = 'fit'
     FIT_TRANSFORM = 'fit_transform'
+    INVERSE_TRANSFORM = 'inverse_transform'
 
 
 class ExecutionContext:
@@ -843,43 +845,60 @@ class BaseStep(ABC):
             :class:`DataContainer`,
             :class:`neuraxle.pipeline.Pipeline`
         """
-        self.is_invalidated = True
-
-        processed_outputs = self.inverse_transform(data_container.data_inputs)
-        data_container.set_data_inputs(processed_outputs)
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+        data_container, context = self._will_process(data_container, context)
+        data_container = self._inverse_transform_data_container(data_container, context)
+        data_container = self._did_process(data_container, context)
 
         return data_container
 
-    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
+    def _inverse_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        processed_outputs = self.inverse_transform(data_container.data_inputs)
+        data_container.set_data_inputs(processed_outputs)
+
+        return data_container
+
+    def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply a method to a step and its children.
 
         :param method: method to call with self
+        :param step_name: current pipeline step name
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Dict
         """
-        method(self, *kargs, **kwargs)
-        return self
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
 
-    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
+        return {
+            step_name: method(self, *kargs, **kwargs)
+        }
+
+    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply a method to a step and its children.
 
         :param method_name: method name that need to be called on all steps
+        :param step_name: current pipeline step name
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Dict
         """
-        if hasattr(self, method_name) and callable(getattr(self, method_name)):
-            getattr(self, method_name)(*kargs, **kwargs)
+        results = {}
 
-        return self
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
+
+        if hasattr(self, method_name) and callable(getattr(self, method_name)):
+            results[step_name] = getattr(self, method_name)(*kargs, **kwargs)
+
+        return results
 
     def get_step_by_name(self, name):
         if self.name == name:
@@ -904,10 +923,11 @@ class BaseStep(ABC):
 
         new_self = self._fit_data_container(data_container, context)
 
+        self._did_fit(data_container, context)
+
         return new_self
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.fit_transform`.
         The default behavior is to rehash current ids with the step hyperparameters.
@@ -1003,8 +1023,7 @@ class BaseStep(ABC):
         """
         return data_container
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit transform data container.
 
@@ -1018,8 +1037,7 @@ class BaseStep(ABC):
 
         return new_self, data_container
 
-    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
         """
         Apply side effects before transform.
 
@@ -1030,7 +1048,7 @@ class BaseStep(ABC):
         """
         return data_container, context.push(self)
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
         """
         Apply side effects before any step method.
 
@@ -1095,9 +1113,7 @@ class BaseStep(ABC):
         data_container.set_current_ids(current_ids)
 
         if data_container.summary_id is None:
-            data_container.set_summary_id(
-                data_container.hash_summary()
-            )
+            data_container.set_summary_id(data_container.hash_summary())
 
         summary_id = self.summary_hash(data_container)
         data_container.set_summary_id(summary_id)
@@ -1525,7 +1541,9 @@ class MetaStepMixin:
         self.wrapped: BaseStep = wrapped
 
         if not hasattr(self, 'savers'):
-            warnings.warn('Please initialize Mixins in the reverse order. MetaStepMixin should be initialized after BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers.'.format(self.wrapped.name))
+            warnings.warn(
+                'Please initialize Mixins in the good order. MetaStepMixin should be initialized after BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers.'.format(
+                    self.wrapped.name))
             self.savers = [MetaStepJoblibStepSaver()]
         else:
             self.savers.append(MetaStepJoblibStepSaver())
@@ -1722,6 +1740,10 @@ class MetaStepMixin:
         data_container = self.wrapped.handle_transform(data_container, context)
         return data_container
 
+    def _inverse_transform_data_container(self, data_container, context):
+        data_container = self.wrapped.handle_inverse_transform(data_container, context)
+        return data_container
+
     def fit_transform(self, data_inputs, expected_outputs):
         self.wrapped, data_inputs = self.wrapped.fit_transform(data_inputs, expected_outputs)
         return self, data_inputs
@@ -1734,39 +1756,63 @@ class MetaStepMixin:
         data_inputs = self.wrapped.transform(data_inputs)
         return data_inputs
 
+    def inverse_transform(self, data_inputs):
+        data_inputs = self.wrapped.inverse_transform(data_inputs)
+        return data_inputs
+
     def should_resume(self, data_container: DataContainer, context: ExecutionContext):
         context = context.push(self)
         if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context):
             return True
         return False
 
-    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
+    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply the method name to the meta step and its wrapped step.
 
         :param method_name: method name that need to be called on all steps
+        :param step_name: step name to apply the method to
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Union[Dict, Iterable]
         """
-        BaseStep.apply(self, method_name, *kargs, **kwargs)
-        self.wrapped.apply(method_name, *kargs, **kwargs)
-        return self
+        results = BaseStep.apply(self, method_name=method_name, step_name=step_name, *kargs, **kwargs)
 
-    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
+
+        if self.wrapped is not None:
+            wrapped_results = self.wrapped.apply(method_name=method_name, step_name=step_name, *kargs, **kwargs)
+            results.update(wrapped_results)
+
+        return results
+
+    def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Union[Dict, Iterable]:
         """
         Apply method to the meta step and its wrapped step.
 
         :param method: method to call with self
+        :param step_name: step name to apply the method to
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Union[Dict, Iterable]
         """
-        BaseStep.apply_method(self, method, *kargs, **kwargs)
-        self.wrapped = self.wrapped.apply_method(method, *kargs, **kwargs)
-        return self
+        results = BaseStep.apply_method(self, method=method, step_name=step_name, *kargs, **kwargs)
+
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
+
+        if self.wrapped is not None:
+            wrapped_results = self.wrapped.apply_method(method=method, step_name=step_name, *kargs, **kwargs)
+            results.update(wrapped_results)
+
+        return results
 
     def get_step_by_name(self, name):
         if self.wrapped.name == name:
@@ -1816,6 +1862,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
     """
     Custom saver for meta step mixin.
     """
+
     def __init__(self):
         JoblibStepSaver.__init__(self)
 
@@ -1881,51 +1928,14 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
 
 
-class ForceAlwaysHandleMixin:
-    """
-    A pipeline step that requires the implementation only of handler methods :
-
-        - handle_transform
-        - handle_fit_transform
-        - handle_fit
-
-    .. seealso::
-        :class:`BaseStep`
-    """
-
-    @abstractmethod
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
-        raise NotImplementedError('Must implement handle_fit in {0}'.format(self.name))
-
-    @abstractmethod
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
-        raise NotImplementedError('Must implement handle_transform in {0}'.format(self.name))
-
-    @abstractmethod
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
-        raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
-
-    def transform(self, data_inputs) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(
-                self.name))
-
-    def fit(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(
-                self.name))
-
-    def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(
-                self.name))
-
-
 class NonFittableMixin:
     """
     A pipeline step that requires no fitting: fitting just returns self when called to do no action.
     Note: fit methods are not implemented
     """
+
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        return self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         return self, self._transform_data_container(data_container, context)
@@ -2157,36 +2167,53 @@ class TruncableSteps(BaseStep, ABC):
 
         return self
 
-    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
+    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply the method name to the pipeline step and all of its children.
 
         :param method_name: method name that need to be called on all steps
+        :param step_name: current pipeline step name
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Union[Dict, Iterable]
         """
-        BaseStep.apply(self, method_name, *kargs, **kwargs)
-        for step in self.values():
-            step.apply(method_name, *kargs, **kwargs)
-        return self
+        results = BaseStep.apply(self, method_name, step_name=step_name, *kargs, **kwargs)
 
-    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
+
+        for step in self.values():
+            sub_step_results = step.apply(method_name=method_name, step_name=step_name, *kargs, **kwargs)
+            results.update(sub_step_results)
+
+        return results
+
+    def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply a method to the pipeline step and all of its children.
 
         :param method: method to call with self
+        :param step_name: current pipeline step name
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Union[Dict, Iterable]
         """
-        BaseStep.apply_method(self, method, *kargs, **kwargs)
-        for step in self.values():
-            step.apply_method(method, *kargs, **kwargs)
+        results = BaseStep.apply_method(self, method=method, step_name=step_name, *kargs, **kwargs)
 
-        return self
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
+
+        for step in self.values():
+            sub_step_results = step.apply_method(method=method, step_name=step_name, *kargs, **kwargs)
+            results.update(sub_step_results)
+
+        return results
 
     def get_step_by_name(self, name):
         for step in self.values():
@@ -2866,3 +2893,147 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
         NonTransformableMixin.__init__(self)
         NonFittableMixin.__init__(self)
         BaseStep.__init__(self, name=name, savers=savers)
+
+
+
+class TransformHandlerOnlyMixin(NonFittableMixin):
+    """
+    A pipeline step that only requires the implementation of _transform_data_container.
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`NonFittableMixin`
+    """
+
+    @abstractmethod
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        raise NotImplementedError('Must implement _transform_data_container in {0}'.format(self.name))
+
+    def transform(self, data_inputs) -> 'HandleOnlyMixin':
+        raise Exception(
+            'Transform method is not supported for {0}, because it inherits from HandlerMixin. Please use handle_transform instead.'.format(
+                self.name))
+
+
+class HandleOnlyMixin:
+    """
+    A pipeline step that only requires the implementation of handler methods :
+        - _transform_data_container
+        - _fit_transform_data_container
+        - _fit_data_container
+
+    If forbids only implementing fit or transform or fit_transform without the handles. So it forces the handles.
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`TransformHandlerOnlyMixin`,
+        :class:`NonTransformableMixin`,
+        :class:`NonFittableMixin`,
+        :class:`ForceHandleMixin`,
+        :class:`ForceHandleOnlyMixin`
+    """
+
+    @abstractmethod
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        raise NotImplementedError('Must implement _fit_data_container in {0}'.format(self.name))
+
+    @abstractmethod
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        raise NotImplementedError('Must implement _transform_data_container in {0}'.format(self.name))
+
+    @abstractmethod
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
+        raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
+
+    def transform(self, data_inputs) -> 'HandleOnlyMixin':
+        raise Exception(
+            'Transform method is not supported for {0}, because it inherits from HandleOnlyMixin. Please use handle_transform instead.'.format(
+                self.name))
+
+    def fit(self, data_inputs, expected_outputs=None) -> 'HandleOnlyMixin':
+        raise Exception(
+            'Fit method is not supported for {0}, because it inherits from HandleOnlyMixin. Please use handle_fit instead.'.format(
+                self.name))
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> 'HandleOnlyMixin':
+        raise Exception(
+            'Fit transform method is not supported for {0}, because it inherits from HandleOnlyMixin. Please use handle_fit_transform instead.'.format(
+                self.name))
+
+
+class ForceHandleMixin:
+    """
+    A step that automatically calls handle methods in the transform, fit, and fit_transform methods.
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`HandleOnlyMixin`,
+        :class:`TransformHandlerOnlyMixin`,
+        :class:`NonTransformableMixin`,
+        :class:`NonFittableMixin`,
+        :class:`ForceHandleOnlyMixin`
+    """
+    def __init__(self, cache_folder=None):
+        if cache_folder is None:
+            cache_folder = DEFAULT_CACHE_FOLDER
+        self.cache_folder = cache_folder
+
+    def transform(self, data_inputs):
+        execution_context = ExecutionContext(self.cache_folder, execution_mode=ExecutionMode.TRANSFORM)
+        context, data_container = self._encapsulate_data(data_inputs, expected_outputs=None, execution_mode=ExecutionMode.TRANSFORM)
+
+        data_container = self.handle_transform(data_container, execution_context)
+
+        return data_container.data_inputs
+
+    def fit(self, data_inputs, expected_outputs=None) -> Tuple['HandleOnlyMixin', Iterable]:
+        context, data_container = self._encapsulate_data(data_inputs, expected_outputs, ExecutionMode.FIT)
+        new_self = self.handle_fit(data_container, context)
+
+        return new_self
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['HandleOnlyMixin', Iterable]:
+        context, data_container = self._encapsulate_data(data_inputs, expected_outputs, ExecutionMode.FIT_TRANSFORM)
+        new_self, data_container = self.handle_fit_transform(data_container, context)
+
+        return new_self, data_container.data_inputs
+
+    def _encapsulate_data(self, data_inputs, expected_outputs=None, execution_mode=None):
+        data_container = DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs)
+        context = ExecutionContext(root=self.cache_folder, execution_mode=execution_mode)
+
+        return context, data_container
+
+
+class ForceHandleOnlyMixin(ForceHandleMixin, HandleOnlyMixin):
+    """
+    A step that automatically calls handle methods in the transform, fit, and fit_transform methods.
+    It also requires the implementation of handler methods :
+        - _transform_data_container
+        - _fit_transform_data_container
+        - _fit_data_container
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`HandleOnlyMixin`,
+        :class:`TransformHandlerOnlyMixin`,
+        :class:`NonTransformableMixin`,
+        :class:`NonFittableMixin`,
+        :class:`ForceHandleMixin`
+    """
+    def __init__(self, cache_folder=None):
+        HandleOnlyMixin.__init__(self)
+        ForceHandleMixin.__init__(self, cache_folder)
+
+
+class EvaluableStepMixin:
+    """
+    A step that can be evaluated with the scoring functions.
+
+    .. seealso::
+        :class:`BaseStep`
+    """
+    @abstractmethod
+    def get_score(self):
+        raise NotImplementedError()

@@ -34,6 +34,7 @@ from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import RandomSearch
+from neuraxle.metaopt.random import ValidationSplitWrapper
 from neuraxle.pipeline import ResumablePipeline, DEFAULT_CACHE_FOLDER, Pipeline
 from neuraxle.steps.flow import ExpandDim
 from neuraxle.steps.loop import ForEachDataInput
@@ -62,12 +63,13 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     ]).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
-    best_model = RandomSearch(
-        pipeline,
+    random_search = RandomSearch(
+        ValidationSplitWrapper(pipeline, test_size=0.1),
         n_iter=n_iter,
-        higher_score_is_better=True
+        higher_score_is_better=True,
+        cache_folder_when_no_handle=tmpdir
     ).fit(DATA_INPUTS, EXPECTED_OUTPUTS)
-    outputs = best_model.transform(DATA_INPUTS)
+    outputs = random_search.get_best_model().transform(DATA_INPUTS)
     time_b = time.time()
 
     actual_score = mean_squared_error(EXPECTED_OUTPUTS, outputs)
@@ -91,12 +93,13 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     ], cache_folder=tmpdir).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
-    best_model = RandomSearch(
-        pipeline,
+    random_search = RandomSearch(
+        ValidationSplitWrapper(pipeline, test_size=0.1),
         n_iter=n_iter,
-        higher_score_is_better=True
+        higher_score_is_better=True,
+        cache_folder_when_no_handle=tmpdir
     ).fit(DATA_INPUTS, EXPECTED_OUTPUTS)
-    outputs = best_model.transform(DATA_INPUTS)
+    outputs = random_search.get_best_model().transform(DATA_INPUTS)
     time_b = time.time()
     pipeline.flush_all_cache()
 
