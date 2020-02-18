@@ -168,7 +168,7 @@ data flow management. `Time Series data is 3D <https://qr.ae/TZjoMb>`__.
     ]), epochs=200, fit_only=True)
 
 Deep Learning Pipeline Training and Evaluation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Here we train and evaluate with a train-validation split. Note that
 automatic hyperparameter tuning would require only a few more lines
@@ -288,7 +288,7 @@ more performance and avoid truly writing to disks.
 Neuraxle is compatible with most other ML and DL libraries. We're
 currently already writing savers for PyTorch and TensorFlow in the
 `Neuraxle-PyTorch <https://github.com/Neuraxio/Neuraxle-PyTorch>`__ 
-and `Neuraxle-TensorFlow<https://github.com/Neuraxio/Neuraxle-TensorFlow>`__ 
+and `Neuraxle-TensorFlow <https://github.com/Neuraxio/Neuraxle-TensorFlow>`__ 
 extensions of this project.
 
 Time Series Processing

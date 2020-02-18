@@ -212,7 +212,7 @@ def test_pickle_checkpoint_step_should_load_data_container(tmpdir: LocalPath):
     )
     transformer = create_pipeline_output_transformer()
     actual_data_container = transformer.handle_transform(
-        DataContainer(current_ids=[0, 1], data_inputs=initial_data_inputs, expected_outputs=initial_expected_outputs),
+        DataContainer(data_inputs=initial_data_inputs, current_ids=[0, 1], expected_outputs=initial_expected_outputs),
         ExecutionContext(tmpdir)
     )
 
