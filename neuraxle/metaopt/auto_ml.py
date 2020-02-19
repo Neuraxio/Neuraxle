@@ -19,6 +19,7 @@ import glob
 import hashlib
 import json
 import os
+import time
 import traceback
 from abc import ABC, abstractmethod
 from enum import Enum
@@ -59,8 +60,9 @@ class HyperparamsRepository(ABC):
     def load_all_trials(self, status: 'TRIAL_STATUS') -> 'Trials':
         """
         Load all hyperparameter trials with their corresponding score.
+        Sorted by creation date.
 
-        :return: (hyperparams, scores)
+        :return: Trials (hyperparams, scores)
         """
         pass
 
@@ -108,10 +110,11 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         :class:`AutoMLSequentialWrapper`
     """
 
-    def __init__(self, print_new_trial=True, print_success_trial=True, print_exception=True, print_func: Callable = None):
+    def __init__(self, print_new_trial=True, print_success_trial=True, print_exception=True,
+                 print_func: Callable = None):
         HyperparamsRepository.__init__(self)
         if print_func is None:
-           print_func = print
+            print_func = print
         self.print_func = print_func
 
         self.trials = Trials()
@@ -131,7 +134,8 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
 
         if self.print_success_trial:
             self.print_func('score: {}'.format(score))
-            self.print_func('hyperparams:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+            self.print_func(
+                'hyperparams:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
     def save_failure_for_trial(self, hyperparams: HyperparameterSamples, exception: Exception):
         if self.print_exception:
@@ -166,20 +170,27 @@ class HyperparamsJSONRepository(HyperparamsRepository):
     def load_all_trials(self, status: 'TRIAL_STATUS' = None) -> 'Trials':
         """
         Load all hyperparameter trials with their corresponding score.
-        Reads all the saved trial json files.
+        Reads all the saved trial json files, sorted by creation date.
 
         :return: (hyperparams, scores)
         """
-        trials = []
+        trials = Trials()
 
-        for base_path in glob.glob(os.path.join(self.cache_folder, '*.json')):
+        files = glob.glob(os.path.join(self.cache_folder, '*.json'))
+
+        # sort by created date:
+        def getmtimens(filename):
+            return os.stat(filename).st_mtime_ns
+        files.sort(key=getmtimens)
+
+        for base_path in files:
             with open(base_path) as f:
                 trial_json = json.load(f)
 
             if status is None or trial_json['status'] == status.value:
                 trials.append(Trial.from_json(trial_json))
 
-        return Trials(trials)
+        return trials
 
     def save_score_for_success_trial(self, hyperparams: HyperparameterSamples, score: float):
         """
@@ -231,6 +242,8 @@ class HyperparamsJSONRepository(HyperparamsRepository):
                 'score': score,
                 'status': TRIAL_STATUS.SUCCESS.value
             }, outfile)
+        # Sleeping to have a valid time difference between files when reloading them to sort them by creation time:
+        time.sleep(0.1)
 
     def _remove_new_trial_json(self, current_hyperparameters_hash):
         new_trial_json = self._get_new_trial_json_path(current_hyperparameters_hash)
@@ -314,7 +327,8 @@ class AutoMLAlgorithm(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         """
         return self.hyperparameter_optimizer.find_next_best_hyperparams(auto_ml_container)
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
         """
         Fit cross validation with wrapped step, and return the score.
 
@@ -380,13 +394,13 @@ class AutoMLContainer:
 
 class Trial:
     def __init__(self, hyperparams: HyperparameterSamples, score: float, status: TRIAL_STATUS):
-        self.hyperparams = hyperparams
+        self.hyperparams = HyperparameterSamples(hyperparams)
         self.score = score
         self.status = status
 
     def to_json(self) -> dict:
         return {
-            'hyperparams': self.hyperparams,
+            'hyperparams': self.hyperparams.to_flat_as_dict_primitive(),
             'score': self.score,
             'status': self.status
         }
@@ -398,6 +412,13 @@ class Trial:
             score=trial_json['score'],
             status=trial_json['status']
         )
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __repr__(self):
+        s = "Trial.from_json({})".format(str(self.to_json()))
+        return s
 
 
 class Trials:
@@ -413,8 +434,8 @@ class Trials:
     """
 
     def __init__(
-        self,
-        trials: List[Trial] = None
+            self,
+            trials: List[Trial] = None
     ):
         if trials is None:
             trials = []
@@ -447,6 +468,13 @@ class Trials:
 
     def __len__(self):
         return len(self.trials)
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __repr__(self):
+        s = "Trials({})".format(str([str(t) for t in self.trials]))
+        return s
 
 
 class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
@@ -492,22 +520,23 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             cache_folder_when_no_handle=None
     ):
         if not isinstance(wrapped, EvaluableStepMixin):
-            raise ValueError('AutoML algorithm needs evaluable steps that implement the function get_score. Please use a validation technique, or implement EvaluableStepMixin.')
-
-        self.refit = refit
-        auto_ml_algorithm = auto_ml_algorithm.set_step(wrapped)
+            raise ValueError(
+                'AutoML algorithm needs evaluable steps that implement the function get_score. Please use a validation technique, or implement EvaluableStepMixin.')
 
         BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, auto_ml_algorithm)
+        MetaStepMixin.__init__(self, auto_ml_algorithm.set_step(wrapped))
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
 
         if hyperparams_repository is None:
             hyperparams_repository = InMemoryHyperparamsRepository()
         self.hyperparams_repository = hyperparams_repository
         self.n_iters = n_iters
+        self.refit = refit
 
     def set_step(self, step: BaseStep) -> BaseStep:
-        self.wrapped.set_step(step)
+        auto_ml_algorithm: AutoMLAlgorithm = self.get_step()
+        auto_ml_algorithm.set_step(step)  # 2nd level wrapped set shortcut.
+        return self
 
     def _fit_transform_data_container(self, data_container, context):
         new_self = self._fit_data_container(data_container, context)
@@ -538,7 +567,8 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             self.hyperparams_repository.create_new_trial(hyperparams)
 
             try:
-                self.wrapped, data_container_with_score = self.wrapped.handle_fit_transform(data_container.copy(), context)
+                self.wrapped, data_container_with_score = self.wrapped.handle_fit_transform(data_container.copy(),
+                                                                                            context)
                 score = data_container_with_score.data_inputs
 
                 self.hyperparams_repository.save_score_for_success_trial(hyperparams, score)

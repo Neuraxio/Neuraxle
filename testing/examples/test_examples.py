@@ -1,6 +1,3 @@
-from examples.non_fittable_mixin import main
-
-
 def test_auto_ml_checkpoint(tmpdir):
     from examples.auto_ml_checkpoint import main
     main(tmpdir)
@@ -37,4 +34,10 @@ def test_nested_pipelines():
 
 
 def test_non_fittable_mixin():
+    from examples.non_fittable_mixin import main
+    main()
+
+
+def test_label_encoder_across_multiple_columns():
+    from examples.label_encoder_across_multiple_columns import main
     main()
