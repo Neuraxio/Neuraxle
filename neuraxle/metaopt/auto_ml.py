@@ -19,6 +19,7 @@ import glob
 import hashlib
 import json
 import os
+import time
 import traceback
 from abc import ABC, abstractmethod
 from enum import Enum
@@ -241,6 +242,8 @@ class HyperparamsJSONRepository(HyperparamsRepository):
                 'score': score,
                 'status': TRIAL_STATUS.SUCCESS.value
             }, outfile)
+        # Sleeping to have a valid time difference between files when reloading them to sort them by creation time:
+        time.sleep(0.1)
 
     def _remove_new_trial_json(self, current_hyperparameters_hash):
         new_trial_json = self._get_new_trial_json_path(current_hyperparameters_hash)

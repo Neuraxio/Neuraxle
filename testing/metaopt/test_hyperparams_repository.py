@@ -1,6 +1,5 @@
 import json
 import os
-import time
 
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.metaopt.auto_ml import HyperparamsJSONRepository
