@@ -24,6 +24,8 @@ def test_hyperparams_repository_should_create_new_trial(tmpdir):
 
 
 def test_hyperparams_repository_should_load_all_trials(tmpdir):
+    tmpdir = os.path.join(tmpdir, "__json__")
+    os.mkdir(tmpdir)
     hyperparams_json_repository = HyperparamsJSONRepository(tmpdir)
     n_trials = 3
     for i in range(n_trials):
