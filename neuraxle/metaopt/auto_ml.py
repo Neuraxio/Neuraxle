@@ -59,8 +59,9 @@ class HyperparamsRepository(ABC):
     def load_all_trials(self, status: 'TRIAL_STATUS') -> 'Trials':
         """
         Load all hyperparameter trials with their corresponding score.
+        Sorted by creation date.
 
-        :return: (hyperparams, scores)
+        :return: Trials (hyperparams, scores)
         """
         pass
 
@@ -168,20 +169,23 @@ class HyperparamsJSONRepository(HyperparamsRepository):
     def load_all_trials(self, status: 'TRIAL_STATUS' = None) -> 'Trials':
         """
         Load all hyperparameter trials with their corresponding score.
-        Reads all the saved trial json files.
+        Reads all the saved trial json files, sorted by creation date.
 
         :return: (hyperparams, scores)
         """
-        trials = []
+        trials = Trials()
 
-        for base_path in glob.glob(os.path.join(self.cache_folder, '*.json')):
+        files = glob.glob(os.path.join(self.cache_folder, '*.json'))
+        files.sort(key=os.path.getmtime)  # sort by created date.
+
+        for base_path in files:
             with open(base_path) as f:
                 trial_json = json.load(f)
 
             if status is None or trial_json['status'] == status.value:
                 trials.append(Trial.from_json(trial_json))
 
-        return Trials(trials)
+        return trials
 
     def save_score_for_success_trial(self, hyperparams: HyperparameterSamples, score: float):
         """
@@ -383,13 +387,13 @@ class AutoMLContainer:
 
 class Trial:
     def __init__(self, hyperparams: HyperparameterSamples, score: float, status: TRIAL_STATUS):
-        self.hyperparams = hyperparams
+        self.hyperparams = HyperparameterSamples(hyperparams)
         self.score = score
         self.status = status
 
     def to_json(self) -> dict:
         return {
-            'hyperparams': self.hyperparams,
+            'hyperparams': self.hyperparams.to_flat_as_dict_primitive(),
             'score': self.score,
             'status': self.status
         }
@@ -401,6 +405,13 @@ class Trial:
             score=trial_json['score'],
             status=trial_json['status']
         )
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __repr__(self):
+        s = "Trial.from_json({})".format(str(self.to_json()))
+        return s
 
 
 class Trials:
@@ -450,6 +461,13 @@ class Trials:
 
     def __len__(self):
         return len(self.trials)
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __repr__(self):
+        s = "Trials({})".format(str([str(t) for t in self.trials]))
+        return s
 
 
 class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
