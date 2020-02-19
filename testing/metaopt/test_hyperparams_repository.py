@@ -35,7 +35,7 @@ def test_hyperparams_repository_should_load_all_trials(tmpdir):
     assert len(trials) == n_trials
     for i in range(n_trials):
         assert trials[i].hyperparams == HyperparameterSamples(
-            {'learning_rate': 0.01 + i * 0.01}).to_flat_as_dict_primitive()
+            {'learning_rate': 0.01 + i * 0.01}).to_flat_as_dict_primitive(), (i, trials)
 
 
 def test_hyperparams_repository_should_save_failed_trial(tmpdir):
