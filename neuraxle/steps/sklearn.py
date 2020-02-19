@@ -23,6 +23,7 @@ Those steps works with scikit-learn (sklearn) transformers and estimators.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
+import inspect
 from typing import Any
 
 from sklearn.base import BaseEstimator
@@ -53,21 +54,20 @@ class SKLearnWrapper(BaseStep):
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
 
         if hasattr(self.wrapped_sklearn_predictor, 'fit_transform'):
-            out = self.wrapped_sklearn_predictor.fit_transform(data_inputs, expected_outputs)
+            if expected_outputs is None or len(inspect.getfullargspec(self.wrapped_sklearn_predictor.fit).args) < 3:
+                out = self.wrapped_sklearn_predictor.fit_transform(data_inputs)
+            else:
+                out = self.wrapped_sklearn_predictor.fit_transform(data_inputs, expected_outputs)
             return self, out
 
-        if expected_outputs is None:
-            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs)
-        else:
-            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs, expected_outputs)
+        self.fit(data_inputs, expected_outputs)
 
         if hasattr(self.wrapped_sklearn_predictor, 'predict'):
             return self, self.wrapped_sklearn_predictor.predict(data_inputs)
-
         return self, self.wrapped_sklearn_predictor.transform(data_inputs)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'SKLearnWrapper':
-        if expected_outputs is None:
+        if expected_outputs is None or len(inspect.getfullargspec(self.wrapped_sklearn_predictor.fit).args) < 3:
             self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs)
         else:
             self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs, expected_outputs)

@@ -108,10 +108,11 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         :class:`AutoMLSequentialWrapper`
     """
 
-    def __init__(self, print_new_trial=True, print_success_trial=True, print_exception=True, print_func: Callable = None):
+    def __init__(self, print_new_trial=True, print_success_trial=True, print_exception=True,
+                 print_func: Callable = None):
         HyperparamsRepository.__init__(self)
         if print_func is None:
-           print_func = print
+            print_func = print
         self.print_func = print_func
 
         self.trials = Trials()
@@ -131,7 +132,8 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
 
         if self.print_success_trial:
             self.print_func('score: {}'.format(score))
-            self.print_func('hyperparams:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+            self.print_func(
+                'hyperparams:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
     def save_failure_for_trial(self, hyperparams: HyperparameterSamples, exception: Exception):
         if self.print_exception:
@@ -314,7 +316,8 @@ class AutoMLAlgorithm(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         """
         return self.hyperparameter_optimizer.find_next_best_hyperparams(auto_ml_container)
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
         """
         Fit cross validation with wrapped step, and return the score.
 
@@ -413,8 +416,8 @@ class Trials:
     """
 
     def __init__(
-        self,
-        trials: List[Trial] = None
+            self,
+            trials: List[Trial] = None
     ):
         if trials is None:
             trials = []
@@ -492,22 +495,23 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             cache_folder_when_no_handle=None
     ):
         if not isinstance(wrapped, EvaluableStepMixin):
-            raise ValueError('AutoML algorithm needs evaluable steps that implement the function get_score. Please use a validation technique, or implement EvaluableStepMixin.')
-
-        self.refit = refit
-        auto_ml_algorithm = auto_ml_algorithm.set_step(wrapped)
+            raise ValueError(
+                'AutoML algorithm needs evaluable steps that implement the function get_score. Please use a validation technique, or implement EvaluableStepMixin.')
 
         BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, auto_ml_algorithm)
+        MetaStepMixin.__init__(self, auto_ml_algorithm.set_step(wrapped))
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
 
         if hyperparams_repository is None:
             hyperparams_repository = InMemoryHyperparamsRepository()
         self.hyperparams_repository = hyperparams_repository
         self.n_iters = n_iters
+        self.refit = refit
 
     def set_step(self, step: BaseStep) -> BaseStep:
-        self.wrapped.set_step(step)
+        auto_ml_algorithm: AutoMLAlgorithm = self.get_step()
+        auto_ml_algorithm.set_step(step)  # 2nd level wrapped set shortcut.
+        return self
 
     def _fit_transform_data_container(self, data_container, context):
         new_self = self._fit_data_container(data_container, context)
@@ -538,7 +542,8 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             self.hyperparams_repository.create_new_trial(hyperparams)
 
             try:
-                self.wrapped, data_container_with_score = self.wrapped.handle_fit_transform(data_container.copy(), context)
+                self.wrapped, data_container_with_score = self.wrapped.handle_fit_transform(data_container.copy(),
+                                                                                            context)
                 score = data_container_with_score.data_inputs
 
                 self.hyperparams_repository.save_score_for_success_trial(hyperparams, score)
