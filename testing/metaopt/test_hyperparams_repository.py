@@ -32,7 +32,6 @@ def test_hyperparams_repository_should_load_all_trials(tmpdir):
     for i in range(n_trials):
         hyperparams = HyperparameterSamples({'learning_rate': 0.01 + i * 0.01})
         hyperparams_json_repository.save_score_for_success_trial(hyperparams, i)
-        time.sleep(1.1)
 
     trials = hyperparams_json_repository.load_all_trials()
 
