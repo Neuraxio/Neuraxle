@@ -176,7 +176,11 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         trials = Trials()
 
         files = glob.glob(os.path.join(self.cache_folder, '*.json'))
-        files.sort(key=os.path.getmtime)  # sort by created date.
+
+        # sort by created date:
+        def getmtimens(filename):
+            return os.stat(filename).st_mtime_ns
+        files.sort(key=getmtimens)
 
         for base_path in files:
             with open(base_path) as f:
