@@ -329,7 +329,11 @@ class FlattenForEach(ResumableStepMixin, MetaStepMixin, BaseStep):
         if not isinstance(list_to_flatten, np.ndarray):
             list_to_flatten = np.array(list_to_flatten)
 
-        return np.array(sum(list_to_flatten.tolist(), []))
+        list_to_flatten = list(list_to_flatten)
+        list_to_flatten = [list(x) for x in list_to_flatten]
+        flattened_list = sum(list_to_flatten, [])
+
+        return flattened_list
 
     def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
