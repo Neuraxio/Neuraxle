@@ -76,8 +76,8 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         """
         if self._should_execute_wrapped_step():
             self.wrapped = self.wrapped.handle_fit(data_container, context)
-            return self, data_container
-        return self, data_container
+            return self
+        return self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
