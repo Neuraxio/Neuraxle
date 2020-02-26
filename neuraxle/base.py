@@ -966,6 +966,22 @@ class BaseStep(ABC):
 
         return data_container
 
+    def handle_predict(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Handle_transform in test mode.
+
+        :param data_container: the data container to transform
+        :param context: execution context
+        :return: transformed data container
+        """
+        was_train: bool = self.is_train
+        self.set_train(False)
+
+        data_container = self.handle_transform(data_container, context)
+
+        self.set_train(was_train)
+        return data_container
+
     def _will_fit(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
         """
         Before fit is called, apply side effects on the step, the data container, or the execution context.
@@ -1193,14 +1209,20 @@ class BaseStep(ABC):
 
     def predict(self, data_input):
         """
-        Predict data input expected output using transform method.
-        This is simply a shorthand method that does the same thing as func:`~.transform`.
+        Predict the expected output in test mode using func:`~.transform`.
 
         :param data_input: data input to predict
         :return: prediction
         :rtype: Any
         """
-        return self.transform(data_input)
+
+        was_train: bool = self.is_train
+        self.set_train(False)
+
+        outputs = self.transform(data_input)
+
+        self.set_train(was_train)
+        return outputs
 
     def should_save(self) -> bool:
         """
