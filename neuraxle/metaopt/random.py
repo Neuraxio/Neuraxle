@@ -296,27 +296,42 @@ class ValidationSplitWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValid
 
 class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValidation, ABC):
     # TODO: change default argument of scoring_function...
-    def __init__(self, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch(), cache_folder_when_no_handle=None):
+    def __init__(self, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch(), cache_folder_when_no_handle=None, split_data_container_during_fit=True, predict_after_fit=True):
         BaseValidation.__init__(self, scoring_function)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
         EvaluableStepMixin.__init__(self)
 
+        self.split_data_container_during_fit = split_data_container_during_fit
+        self.predict_after_fit = predict_after_fit
         self.joiner = joiner
+
+    def train(self, train_data_container: DataContainer, context: ExecutionContext):
+        step = StepClonerForEachDataInput(self.wrapped)
+        step = step.handle_fit(train_data_container, context)
+
+        return step
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
         assert self.wrapped is not None
 
-        train_data_container, validation_data_container = self.split_data_container(data_container)
+        if self.split_data_container_during_fit:
+            train_data_container, validation_data_container = self.split_data_container(data_container)
+        else:
+            train_data_container = data_container
 
         step = StepClonerForEachDataInput(self.wrapped)
         step = step.handle_fit(train_data_container, context)
 
-        results = step.handle_transform(validation_data_container, context)
+        if self.predict_after_fit:
+            results = step.handle_predict(validation_data_container, context)
+            self.calculate_score(results)
+
+        return self
+
+    def calculate_score(self, results):
         self.scores = [self.scoring_function(a, b) for a, b in zip(results.data_inputs, results.expected_outputs)]
         self.scores_mean = np.mean(self.scores)
         self.scores_std = np.std(self.scores)
-
-        return self
 
     def split_data_container(self, data_container: DataContainer) -> Tuple[DataContainer, DataContainer]:
         train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = self.split(

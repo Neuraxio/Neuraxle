@@ -610,8 +610,7 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         return AutoMLContainer(
             trial_number=trial_number,
             trials=trials,
-            hyperparameter_space=self.wrapped.get_hyperparams_space(),
-            n_iters=self.n_iters
+            hyperparameter_space=self.wrapped.get_hyperparams_space()
         )
 
     def _load_virgin_best_model(self) -> BaseStep:

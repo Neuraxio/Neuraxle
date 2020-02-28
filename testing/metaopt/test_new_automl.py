@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn import linear_model
 from sklearn.metrics import mean_squared_error
 
 from neuraxle.metaopt.auto_ml import RandomSearchHyperparameterOptimizer
@@ -19,14 +20,18 @@ def test_automl_should_start_trial_with_validation_split_wrapper():
         callbacks=[]
     )
 
-    auto_ml = auto_ml.fit(data_inputs=np.array([0, 1]), expected_outputs=np.array([0, 1]))
+    data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expected_outputs = data_inputs * 2
+    auto_ml = auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     assert auto_ml
 
 
 def test_automl_should_start_trial_with_merge_kfold():
     auto_ml = AutoML(
-        pipeline=Pipeline([]),
+        pipeline=Pipeline([
+            linear_model.LinearRegression()
+        ]),
         validation_technique=KFoldCrossValidationWrapper(k_fold=2, scoring_function=mean_squared_error),
         hyperparams_repository=InMemoryHyperparamsRepository(RandomSearchHyperparameterOptimizer()),
         scoring_function=mean_squared_error,
@@ -36,6 +41,8 @@ def test_automl_should_start_trial_with_merge_kfold():
         callbacks=[]
     )
 
-    auto_ml = auto_ml.fit(data_inputs=np.array([0, 1]), expected_outputs=np.array([0, 1]))
+    data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expected_outputs = data_inputs * 2
+    auto_ml = auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     assert auto_ml

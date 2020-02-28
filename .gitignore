@@ -112,4 +112,8 @@ ___*
 **cache/**
 cache/**
 testing/examples/cache/**
+<<<<<<< HEAD
 testing/cache/**
+=======
+testing/cache/*
+>>>>>>> 8592543513689635e907944e5dd5eb04928d30a3

@@ -74,11 +74,12 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         :class:`AutoMLSequentialWrapper`
     """
 
-    def __init__(self, hyperparameter_optimizer, print_func: Callable = None):
+    def __init__(self, hyperparameter_optimizer, print_func: Callable = None, cache_folder: str = None):
         HyperparamsRepository.__init__(self)
         if print_func is None:
             print_func = print
         self.print_func = print_func
+        self.cache_folder = cache_folder
 
         self.trials = Trials()
         self.hyperparameter_optimizer = hyperparameter_optimizer
@@ -97,7 +98,9 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         return Trial(hyperparams)
 
     def save_model(self, step: BaseStep):
-        pass
+        trial_hash = self._get_trial_hash(step.get_hyperparams().to_flat_as_dict_primitive())
+        step.set_name(trial_hash).save(full_dump=True)
+        return step
 
 
 class Trial:
@@ -142,22 +145,19 @@ class Trainer:
         for i in range(epochs):
             self.p = self.p.handle_fit(train_data_container, context)
 
-            y_pred_train_dact = self.p.handle_predict(train_data_container, context)
-            y_pred_val_dact = self.p.handle_predict(validation_data_container, context)
+            y_pred_train = self.p.handle_predict(train_data_container, context)
+            y_pred_val = self.p.handle_predict(validation_data_container, context)
 
-            training_data_container = self.p.handle_predict(train_data_container, context)
-            validation_data_container = self.p.handle_predict(validation_data_container, context)
+            self.metrics_results_train = calculate_metrics_results(y_pred_train, self.metrics)
+            self.metrics_results_validation = calculate_metrics_results(y_pred_val, self.metrics)
 
-            self.metrics_results_train = calculate_metrics_results(training_data_container, self.metrics)
-            self.metrics_results_validation = calculate_metrics_results(validation_data_container, self.metrics)
-
-            training_score = self.score(y_pred_train_dact)
-            validation_score = self.score(y_pred_val_dact)
+            train_score = self.score(y_pred_train)
+            validation_score = self.score(y_pred_val)
 
             for callback in self.callbacks:
-                if callback.call(training_data_container, validation_data_container, training_score, validation_score):
+                if callback.call(y_pred_train, y_pred_val, train_score, validation_score):
                     self.trial_repository.update_trial(
-                        training_score=training_score,
+                        training_score=train_score,
                         validation_score=validation_score,
                         model_to_checkpoint_if_better_score=self.p
                     )
@@ -205,8 +205,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         self.metrics = metrics
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
-        training_data_container, validation_data_container = self.validation_technique.split_data_container(
-            data_container)
+        training_data_container, validation_data_container = self.validation_technique.split_data_container(data_container)
         best_score = None
 
         for trial_number in range(self.n_trial):
@@ -234,31 +233,39 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                     validation_score = self.scoring_function(training_data_container.validation_data_container)
 
                     repo_trial.set_score(train_score, validation_score)
-
             except Exception as error:
                 track = traceback.format_exc()
                 self.print_func(track)
                 repo_trial.set_failed(error)
 
-            new_best_score = False
-            if repo_trial.validation_score < best_score and not self.higher_score_is_better:
-                best_score = repo_trial.validation_score
-                new_best_score = True
-            if repo_trial.validation_score > best_score and self.higher_score_is_better:
-                best_score = repo_trial.validation_score
-                self.print_func('new best score: {}'.format(best_score))
-                self.print_func('new best hyperparams: {}'.format(repo_trial.hyperparams))
-                new_best_score = True
+            is_new_best_score = self._get_best_score(best_score, repo_trial)
 
             self.hyperparams_repository.save_trial(repo_trial)
-
-            if self.only_save_new_best_model:
-                if new_best_score:
-                    self.hyperparams_repository.save_model(p)
-            else:
-                self.hyperparams_repository.save_model(p)
+            self._save_model_if_needed(is_new_best_score, p)
 
         return self
+
+    def _get_best_score(self, best_score, repo_trial):
+        new_best_score = False
+        if repo_trial.status == TRIAL_STATUS.FAILED:
+            return new_best_score
+
+        if repo_trial.validation_score < best_score and not self.higher_score_is_better:
+            best_score = repo_trial.validation_score
+            new_best_score = True
+        if repo_trial.validation_score > best_score and self.higher_score_is_better:
+            best_score = repo_trial.validation_score
+            self.print_func('new best score: {}'.format(best_score))
+            self.print_func('new best hyperparams: {}'.format(repo_trial.hyperparams))
+            new_best_score = True
+        return new_best_score
+
+    def _save_model_if_needed(self, is_new_best_score, p):
+        if self.only_save_new_best_model:
+            if is_new_best_score:
+                self.hyperparams_repository.save_model(p)
+        else:
+            self.hyperparams_repository.save_model(p)
 
     def _load_auto_ml_data(self, trial_number: int) -> AutoMLContainer:
         """
