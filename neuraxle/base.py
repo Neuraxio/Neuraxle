@@ -1209,13 +1209,12 @@ class BaseStep(ABC):
 
     def predict(self, data_input):
         """
-        Predict the expected output in test mode using func:`~.transform`.
+        Predict the expected output in test mode using func:`~.transform`, but by setting self to test mode first and then reverting the mode.
 
         :param data_input: data input to predict
         :return: prediction
         :rtype: Any
         """
-
         was_train: bool = self.is_train
         self.set_train(False)
 
