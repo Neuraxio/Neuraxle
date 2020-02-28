@@ -84,6 +84,9 @@ class HyperparamsRepository(ABC):
         """
         pass
 
+    def new_experiment(self, hyperparams: HyperparameterSamples):
+        pass
+
     def _get_trial_hash(self, hp_dict):
         current_hyperparameters_hash = hashlib.md5(str.encode(str(hp_dict))).hexdigest()
         return current_hyperparameters_hash
@@ -383,12 +386,10 @@ class AutoMLContainer:
             self,
             trials: 'Trials',
             hyperparameter_space: HyperparameterSpace,
-            n_iters: int,
             trial_number: int
     ):
         self.trials = trials
         self.hyperparameter_space = hyperparameter_space
-        self.n_iters = n_iters
         self.trial_number = trial_number
 
 

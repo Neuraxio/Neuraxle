@@ -66,6 +66,10 @@ class BaseValidation(MetaStepMixin, BaseStep, ABC):
         MetaStepMixin.__init__(self)
         self.scoring_function = scoring_function
 
+    @abstractmethod
+    def split_data_container(self, data_container) -> Tuple[DataContainer, DataContainer]:
+        pass
+
 
 class ValidationSplitWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValidation):
     """
