@@ -326,7 +326,7 @@ class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseV
             results = step.handle_predict(validation_data_container, context)
             self.calculate_score(results)
 
-        return self
+        return step
 
     def calculate_score(self, results):
         self.scores = [self.scoring_function(a, b) for a, b in zip(results.data_inputs, results.expected_outputs)]
@@ -356,9 +356,24 @@ class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseV
 
 
 class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
-    def __init__(self, scoring_function=r2_score, k_fold=3, joiner=NumpyConcatenateOuterBatch(), cache_folder_when_no_handle=None):
+    def __init__(
+            self,
+            scoring_function=r2_score,
+            k_fold=3,
+            joiner=NumpyConcatenateOuterBatch(),
+            cache_folder_when_no_handle=None,
+            split_data_container_during_fit=True,
+            predict_after_fit=True
+    ):
         self.k_fold = k_fold
-        BaseCrossValidationWrapper.__init__(self, scoring_function=scoring_function, joiner=joiner, cache_folder_when_no_handle=cache_folder_when_no_handle)
+        BaseCrossValidationWrapper.__init__(
+            self,
+            scoring_function=scoring_function,
+            joiner=joiner,
+            cache_folder_when_no_handle=cache_folder_when_no_handle,
+            split_data_container_during_fit=split_data_container_during_fit,
+            predict_after_fit=predict_after_fit
+        )
 
     def split(self, data_inputs, expected_outputs):
         validation_data_inputs, validation_expected_outputs = self.validation_split(data_inputs, expected_outputs)
