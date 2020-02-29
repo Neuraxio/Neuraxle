@@ -183,6 +183,38 @@ class Trial:
 
 
 class Trainer:
+    """
+
+    Example usage :
+
+    .. code-block:: python
+
+        trainer = Trainer(
+            metrics=self.metrics,
+            callbacks=self.callbacks,
+            score=self.scoring_function,
+            epochs=self.epochs
+        )
+
+        training_data_container, validation_data_container = trainer.train(
+            p=p,
+            train_data_container=training_data_container,
+            validation_data_container=validation_data_container,
+            trial_repository=repo_trial,
+            context=context
+        )
+
+        pipeline = trainer.refit(repo_trial.pipeline, data_container, context)
+
+
+    .. seealso::
+        :class:`AutoML`,
+        :class:`Trial`,
+        :class:`HyperparamsRepository`,
+        :class:`HyperparameterOptimizer`,
+        :class:`RandomSearchHyperparameterOptimizer`,
+        :class:`DataContainer`
+    """
     def __init__(self, score, epochs, metrics, callbacks=None, refit_callbacks=None, print_metrics=True, print_func=None):
         self.score = score
 
@@ -204,7 +236,19 @@ class Trainer:
         self.print_func = print_func
         self.print_metrics = print_metrics
 
-    def train(self, p, train_data_container, validation_data_container, trial_repository, context: ExecutionContext):
+    def train(self, p, train_data_container: DataContainer, validation_data_container: DataContainer, trial: Trial, context: ExecutionContext) -> Trial:
+        """
+        Train pipeline using the training data container.
+        Track training, and validation metrics for each epoch.
+
+        :param p: pipeline to train on
+        :param train_data_container: train data container
+        :param validation_data_container: validation data container
+        :param trial: trial to execute
+        :param context: execution context
+
+        :return: executed trial
+        """
         early_stopping = False
 
         for i in range(self.epochs):
@@ -219,7 +263,7 @@ class Trainer:
             train_score = self.score(y_pred_train.data_inputs, y_pred_train.expected_outputs)
             validation_score = self.score(y_pred_val.data_inputs, y_pred_val.expected_outputs)
 
-            trial_repository.update_trial(
+            trial.update_trial(
                 train_score=train_score,
                 validation_score=validation_score,
                 metrics_results_train=self.metrics_results_train,
@@ -228,15 +272,24 @@ class Trainer:
             )
 
             for callback in self.callbacks:
-                if callback.call(trial_repository):
+                if callback.call(trial):
                     early_stopping = True
 
             if early_stopping:
                 break
 
-        return train_data_container, validation_data_container
+        return trial
 
-    def refit(self, trial: Trial, data_container: DataContainer, context: ExecutionContext):
+    def refit(self, trial: Trial, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+        """
+        Refit the pipeline on the whole dataset (without any validation technique).
+
+        :param trial: trial to refit on
+        :param data_container: data container
+        :param context: execution context
+
+        :return: fitted pipeline
+        """
         p = trial.get_step_wrapped_by_validation_technique()
 
         early_stopping = False
@@ -262,6 +315,7 @@ class Trainer:
 
         :param metrics: metrics function dict
         :type metrics: dict
+
         :return:
         """
         self.metrics_results_train = {}
@@ -271,7 +325,15 @@ class Trainer:
             self.metrics_results_train[m] = []
             self.metrics_results_validation[m] = []
 
-    def _update_metrics_results(self, data_container, train_metrics):
+    def _update_metrics_results(self, data_container: DataContainer, train_metrics: bool):
+        """
+        Update metrics results.
+
+        :param data_container: data container
+        :param train_metrics: bool for training mode
+
+        :return:
+        """
         result = {}
         for metric_name, metric_function in self.metrics.items():
             result_metric = metric_function(data_container.data_inputs, data_container.expected_outputs)
@@ -287,6 +349,43 @@ class Trainer:
 
 
 class AutoML(ForceHandleOnlyMixin, BaseStep):
+    """
+    A step to execute any Automatic Machine Learning Algorithms.
+
+    Example usage :
+
+    .. code-block:: python
+
+        auto_ml = AutoML(
+            pipeline=Pipeline([
+                MultiplyByN(2),
+                NumpyReshape(shape=(-1, 1)),
+                linear_model.LinearRegression()
+            ]),
+            validation_technique=KFoldCrossValidationWrapper(
+                k_fold=2,
+                scoring_function=average_kfold_scores(mean_squared_error),
+                split_data_container_during_fit=False,
+                predict_after_fit=False
+            ),
+            hyperparams_optimizer=RandomSearchHyperparameterOptimizer(),
+            hyperparams_repository=InMemoryHyperparamsRepository(),
+            scoring_function=average_kfold_scores(mean_squared_error),
+            n_trial=1,
+            metrics={'mse': average_kfold_scores(mean_squared_error)},
+            epochs=2
+        )
+
+        auto_ml = auto_ml.fit(data_inputs, expected_outputs)
+
+    .. seealso::
+        :class:`BaseValidation`,
+        :class:`BaseHyperparameterOptimizer`,
+        :class:`HyperparamsRepository`,
+        :class:`RandomSearchHyperparameterOptimizer`,
+        :class:`ForceHandleOnlyMixin`,
+        :class:`BaseStep`
+    """
     def __init__(
             self,
             pipeline,
@@ -328,8 +427,19 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         self.refit_trial = refit_trial
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
-        training_data_container, validation_data_container = self.validation_technique.split_data_container(data_container)
+        """
+        Run Auto ML Loop.
+        Find the best hyperparams using the hyperparameter optmizer.
+        Evaluate the pipeline on each trial using a validation technique.
+
+        :param data_container: data container to fit
+        :param context: execution context
+
+        :return: self
+        """
         best_score = None
+        training_data_container, validation_data_container = self.validation_technique.split_data_container(data_container)
+
         trainer = Trainer(
             metrics=self.metrics,
             callbacks=self.callbacks,
@@ -345,11 +455,11 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                 try:
                     p.update_hyperparams(repo_trial.hyperparams)
 
-                    training_data_container, validation_data_container = trainer.train(
+                    repo_trial = trainer.train(
                         p=p,
                         train_data_container=training_data_container,
                         validation_data_container=validation_data_container,
-                        trial_repository=repo_trial,
+                        trial=repo_trial,
                         context=context
                     )
                 except Exception as error:
@@ -357,7 +467,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                     self.print_func(track)
                     repo_trial.set_failed(error)
 
-            is_new_best_score = self._get_best_score(best_score, repo_trial)
+            is_new_best_score = self._trial_has_a_new_best_score(best_score, repo_trial)
             if is_new_best_score:
                 best_score = repo_trial.validation_score
 
@@ -371,7 +481,14 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
         return self
 
-    def _get_best_score(self, best_score, repo_trial):
+    def _trial_has_a_new_best_score(self, best_score, repo_trial):
+        """
+        Return True if trial has a new best score.
+
+        :param best_score:
+        :param repo_trial:
+        :return:
+        """
         if best_score is None:
             return True
 
@@ -391,9 +508,11 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
     def _save_pipeline_if_needed(self, pipeline, is_new_best_score):
         """
+        Save pipeline if a new best score has been found, or if self.only_save_new_best_model is False.
 
-        :param pipeline:
-        :param is_new_best_score:
+        :param pipeline: pipeline to save
+        :param is_new_best_score: bool that is True if a new best score has been found
+
         :return:
         """
         if self.only_save_new_best_model:
