@@ -13,7 +13,8 @@ def test_automl_should_start_trial_with_validation_split_wrapper():
     auto_ml = AutoML(
         pipeline=Pipeline([]),
         validation_technique=ValidationSplitWrapper(test_size=0.2, scoring_function=mean_squared_error),
-        hyperparams_repository=InMemoryHyperparamsRepository(RandomSearchHyperparameterOptimizer()),
+        hyperparams_optimizer=RandomSearchHyperparameterOptimizer(),
+        hyperparams_repository=InMemoryHyperparamsRepository(),
         scoring_function=mean_squared_error,
         n_trial=1,
         metrics={'mse': mean_squared_error},
@@ -34,7 +35,8 @@ def test_automl_should_start_trial_with_merge_kfold():
             linear_model.LinearRegression()
         ]),
         validation_technique=KFoldCrossValidationWrapper(k_fold=2, scoring_function=mean_squared_error),
-        hyperparams_repository=InMemoryHyperparamsRepository(RandomSearchHyperparameterOptimizer()),
+        hyperparams_optimizer=RandomSearchHyperparameterOptimizer(),
+        hyperparams_repository=InMemoryHyperparamsRepository(),
         scoring_function=mean_squared_error,
         n_trial=1,
         metrics={'mse': mean_squared_error},
@@ -73,7 +75,8 @@ def test_automl_should_save_best_model(tmpdir):
             split_data_container_during_fit=False,
             predict_after_fit=False
         ),
-        hyperparams_repository=InMemoryHyperparamsRepository(RandomSearchHyperparameterOptimizer()),
+        hyperparams_optimizer=RandomSearchHyperparameterOptimizer(),
+        hyperparams_repository=InMemoryHyperparamsRepository(),
         scoring_function=average_kfold_scores(mean_squared_error),
         n_trial=1,
         metrics={'mse': average_kfold_scores(mean_squared_error)},
