@@ -128,7 +128,8 @@ class ValidationSplitWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValid
 
         self.metrics_enabled = metrics_already_enabled
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('ValidationSplitWrapper', DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'ValidationSplitWrapper', DataContainer):
         """
         Fit using the training split.
         Calculate the scores using the validation split.
@@ -142,7 +143,8 @@ class ValidationSplitWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValid
         new_self, results_data_container = self._fit_transform_data_container(data_container, context)
         return new_self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseStep', DataContainer):
         """
         Fit Transform given data inputs without splitting.
 
@@ -296,7 +298,8 @@ class ValidationSplitWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValid
 
 class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValidation, ABC):
     # TODO: change default argument of scoring_function...
-    def __init__(self, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch(), cache_folder_when_no_handle=None, split_data_container_during_fit=True, predict_after_fit=True):
+    def __init__(self, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch(), cache_folder_when_no_handle=None,
+                 split_data_container_during_fit=True, predict_after_fit=True):
         BaseValidation.__init__(self, scoring_function)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
         EvaluableStepMixin.__init__(self)
@@ -340,7 +343,8 @@ class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseV
         )
 
         train_data_container = DataContainer(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
-        validation_data_container = DataContainer(data_inputs=validation_data_inputs, expected_outputs=validation_expected_outputs)
+        validation_data_container = DataContainer(data_inputs=validation_data_inputs,
+                                                  expected_outputs=validation_expected_outputs)
 
         return train_data_container, validation_data_container
 
@@ -353,6 +357,17 @@ class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseV
     @abstractmethod
     def split(self, data_inputs, expected_outputs):
         raise NotImplementedError("TODO")
+
+
+def average_kfold_scores(metric_function):
+    def calculate(y_true_kfolds, y_pred_kfolds):
+        kfold_scores = []
+        for y_true, y_pred in zip(y_true_kfolds, y_pred_kfolds):
+            kfold_scores.append(metric_function(y_true, y_pred))
+
+        return np.mean(kfold_scores)
+
+    return calculate
 
 
 class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
@@ -378,7 +393,8 @@ class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
     def split(self, data_inputs, expected_outputs):
         validation_data_inputs, validation_expected_outputs = self.validation_split(data_inputs, expected_outputs)
 
-        train_data_inputs, train_expected_outputs = self.train_split(validation_data_inputs, validation_expected_outputs)
+        train_data_inputs, train_expected_outputs = self.train_split(validation_data_inputs,
+                                                                     validation_expected_outputs)
 
         return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
 
