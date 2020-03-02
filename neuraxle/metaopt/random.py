@@ -23,7 +23,7 @@ Meta steps for hyperparameter tuning, such as random search.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-
+import copy
 import math
 from abc import ABC, abstractmethod
 from typing import List, Callable, Tuple
@@ -54,7 +54,7 @@ class BaseValidation(MetaStepMixin, BaseStep, ABC):
 
     """
 
-    def __init__(self, scoring_function: Callable = r2_score):
+    def __init__(self, wrapped=None, scoring_function: Callable = r2_score):
         """
         Base class For validation wrappers.
         It has a scoring function to calculate the score for the validation split.
@@ -63,7 +63,7 @@ class BaseValidation(MetaStepMixin, BaseStep, ABC):
         :type scoring_function: Callable
         """
         BaseStep.__init__(self)
-        MetaStepMixin.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
         self.scoring_function = scoring_function
 
     @abstractmethod
@@ -71,7 +71,70 @@ class BaseValidation(MetaStepMixin, BaseStep, ABC):
         pass
 
 
-class ValidationSplitWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValidation):
+class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValidation, ABC):
+    # TODO: change default argument of scoring_function...
+    def __init__(self, wrapped=None, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch(), cache_folder_when_no_handle=None,
+                 split_data_container_during_fit=True, predict_after_fit=True):
+        BaseValidation.__init__(self, wrapped=wrapped, scoring_function=scoring_function)
+        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
+        EvaluableStepMixin.__init__(self)
+
+        self.split_data_container_during_fit = split_data_container_during_fit
+        self.predict_after_fit = predict_after_fit
+        self.joiner = joiner
+
+    def train(self, train_data_container: DataContainer, context: ExecutionContext):
+        step = StepClonerForEachDataInput(self.wrapped)
+        step = step.handle_fit(train_data_container, context)
+
+        return step
+
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+        assert self.wrapped is not None
+
+        if self.split_data_container_during_fit:
+            train_data_container, validation_data_container = self.split_data_container(data_container)
+        else:
+            train_data_container = data_container
+
+        step = StepClonerForEachDataInput(self.wrapped)
+        step = step.handle_fit(train_data_container, context)
+
+        if self.predict_after_fit:
+            results = step.handle_predict(validation_data_container, context)
+            self.calculate_score(results)
+
+        return copy.copy(self).set_step(step)
+
+    def calculate_score(self, results):
+        self.scores = [self.scoring_function(a, b) for a, b in zip(results.data_inputs, results.expected_outputs)]
+        self.scores_mean = np.mean(self.scores)
+        self.scores_std = np.std(self.scores)
+
+    def split_data_container(self, data_container: DataContainer) -> Tuple[DataContainer, DataContainer]:
+        train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = self.split(
+            data_container.data_inputs,
+            data_container.expected_outputs
+        )
+
+        train_data_container = DataContainer(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
+        validation_data_container = DataContainer(data_inputs=validation_data_inputs,
+                                                  expected_outputs=validation_expected_outputs)
+
+        return train_data_container, validation_data_container
+
+    def get_score(self):
+        return self.scores_mean
+
+    def get_scores_std(self):
+        return self.scores_std
+
+    @abstractmethod
+    def split(self, data_inputs, expected_outputs):
+        raise NotImplementedError("TODO")
+
+
+class ValidationSplitWrapper(BaseCrossValidationWrapper):
     """
     Wrapper for validation split that calculates the score for the validation split.
 
@@ -117,10 +180,7 @@ class ValidationSplitWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValid
         :param test_size: ratio for test size between 0 and 1
         :param scoring_function: scoring function with two arguments (y_true, y_pred)
         """
-        BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, wrapped)
-        ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
-        EvaluableStepMixin.__init__(self)
+        BaseCrossValidationWrapper.__init__(self, wrapped=wrapped, cache_folder_when_no_handle=cache_folder_when_no_handle)
 
         self.run_validation_split_in_test_mode = run_validation_split_in_test_mode
         self.test_size = test_size
@@ -128,8 +188,7 @@ class ValidationSplitWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValid
 
         self.metrics_enabled = metrics_already_enabled
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'ValidationSplitWrapper', DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('ValidationSplitWrapper', DataContainer):
         """
         Fit using the training split.
         Calculate the scores using the validation split.
@@ -143,8 +202,7 @@ class ValidationSplitWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValid
         new_self, results_data_container = self._fit_transform_data_container(data_container, context)
         return new_self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit Transform given data inputs without splitting.
 
@@ -294,69 +352,6 @@ class ValidationSplitWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValid
 
     def _get_index_split(self, data_inputs):
         return math.floor(len(data_inputs) * (1 - self.test_size))
-
-
-class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValidation, ABC):
-    # TODO: change default argument of scoring_function...
-    def __init__(self, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch(), cache_folder_when_no_handle=None,
-                 split_data_container_during_fit=True, predict_after_fit=True):
-        BaseValidation.__init__(self, scoring_function)
-        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
-        EvaluableStepMixin.__init__(self)
-
-        self.split_data_container_during_fit = split_data_container_during_fit
-        self.predict_after_fit = predict_after_fit
-        self.joiner = joiner
-
-    def train(self, train_data_container: DataContainer, context: ExecutionContext):
-        step = StepClonerForEachDataInput(self.wrapped)
-        step = step.handle_fit(train_data_container, context)
-
-        return step
-
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
-        assert self.wrapped is not None
-
-        if self.split_data_container_during_fit:
-            train_data_container, validation_data_container = self.split_data_container(data_container)
-        else:
-            train_data_container = data_container
-
-        step = StepClonerForEachDataInput(self.wrapped)
-        step = step.handle_fit(train_data_container, context)
-
-        if self.predict_after_fit:
-            results = step.handle_predict(validation_data_container, context)
-            self.calculate_score(results)
-
-        return step
-
-    def calculate_score(self, results):
-        self.scores = [self.scoring_function(a, b) for a, b in zip(results.data_inputs, results.expected_outputs)]
-        self.scores_mean = np.mean(self.scores)
-        self.scores_std = np.std(self.scores)
-
-    def split_data_container(self, data_container: DataContainer) -> Tuple[DataContainer, DataContainer]:
-        train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = self.split(
-            data_container.data_inputs,
-            data_container.expected_outputs
-        )
-
-        train_data_container = DataContainer(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
-        validation_data_container = DataContainer(data_inputs=validation_data_inputs,
-                                                  expected_outputs=validation_expected_outputs)
-
-        return train_data_container, validation_data_container
-
-    def get_score(self):
-        return self.scores_mean
-
-    def get_scores_std(self):
-        return self.scores_std
-
-    @abstractmethod
-    def split(self, data_inputs, expected_outputs):
-        raise NotImplementedError("TODO")
 
 
 def average_kfold_scores(metric_function):

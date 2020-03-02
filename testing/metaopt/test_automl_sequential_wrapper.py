@@ -3,7 +3,7 @@ from sklearn.metrics import mean_squared_error
 
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import HyperparamsJSONRepository, AutoMLSequentialWrapper, RandomSearch
+from neuraxle.metaopt.deprecated import RandomSearch, HyperparamsJSONRepository, AutoMLSequentialWrapper
 from neuraxle.metaopt.random import ValidationSplitWrapper, KFoldCrossValidationWrapper
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import MultiplyByN

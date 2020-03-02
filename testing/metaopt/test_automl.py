@@ -5,8 +5,8 @@ from sklearn.metrics import mean_squared_error
 from neuraxle.base import ExecutionContext
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import RandomSearchHyperparameterOptimizer
-from neuraxle.metaopt.new_automl import AutoML, InMemoryHyperparamsRepository, EarlyStoppingCallback
+from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, RandomSearchHyperparameterOptimizer, \
+    EarlyStoppingCallback, HyperparamsJSONRepository
 from neuraxle.metaopt.random import ValidationSplitWrapper, KFoldCrossValidationWrapper, average_kfold_scores
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCallbackStep
@@ -28,11 +28,10 @@ def test_automl_with_validation_split_wrapper(tmpdir):
         hyperparams_optimizer=RandomSearchHyperparameterOptimizer(),
         hyperparams_repository=hp_repository,
         scoring_function=mean_squared_error,
-        refit_scoring_function=mean_squared_error,
-        n_trial=1,
         metrics={'mse': mean_squared_error},
+        callbacks=[],
+        n_trial=1,
         epochs=2,
-        callbacks=[]
     )
 
     # When
@@ -48,9 +47,9 @@ def test_automl_with_validation_split_wrapper(tmpdir):
     assert mse < 500
 
 
-def test_automl_with_validation_split_wrapper(tmpdir):
+def test_automl_with_validation_split_wrapper_and_json_repository(tmpdir):
     # Given
-    hp_repository = HyperparamsRepository(cache_folder=str(tmpdir))
+    hp_repository = HyperparamsJSONRepository(cache_folder=str(tmpdir))
     auto_ml = AutoML(
         pipeline=Pipeline([
             MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
@@ -63,11 +62,10 @@ def test_automl_with_validation_split_wrapper(tmpdir):
         hyperparams_optimizer=RandomSearchHyperparameterOptimizer(),
         hyperparams_repository=hp_repository,
         scoring_function=mean_squared_error,
-        refit_scoring_function=mean_squared_error,
-        n_trial=1,
         metrics={'mse': mean_squared_error},
+        callbacks=[],
+        n_trial=1,
         epochs=2,
-        callbacks=[]
     )
 
     # When

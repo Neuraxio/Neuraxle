@@ -5,9 +5,7 @@ from sklearn import linear_model
 from sklearn.metrics import mean_squared_error
 
 from neuraxle.api import DeepLearningPipeline
-from neuraxle.metaopt.auto_ml import RandomSearch
-from neuraxle.metaopt.random import ValidationSplitWrapper
-from neuraxle.pipeline import Pipeline
+from neuraxle.metaopt.deprecated import RandomSearch
 from neuraxle.steps.sklearn import SKLearnWrapper
 
 N_ITER = 1
