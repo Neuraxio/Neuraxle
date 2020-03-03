@@ -218,8 +218,9 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         current_hyperparameters_hash = self._get_trial_hash(hp_dict)
         self._remove_new_trial_json(current_hyperparameters_hash)
 
-        trial_file_path = self._get_successful_trial_json_file_path(trial)
-        if trial.status == TRIAL_STATUS.FAILED:
+        if trial.status == TRIAL_STATUS.SUCCESS:
+            trial_file_path = self._get_successful_trial_json_file_path(trial)
+        else:
             trial_file_path = self._get_failed_trial_json_file_path(trial)
 
         with open(trial_file_path, 'w+') as outfile:
