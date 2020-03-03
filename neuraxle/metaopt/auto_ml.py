@@ -276,6 +276,9 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         hp_dict = trial.hyperparams.to_flat_as_dict_primitive()
         current_hyperparameters_hash = self._get_trial_hash(hp_dict)
 
+        if not os.path.exists(self.cache_folder):
+            os.makedirs(self.cache_folder)
+
         with open(os.path.join(self._get_new_trial_json_path(current_hyperparameters_hash)), 'w+') as outfile:
             json.dump(trial.to_json(), outfile)
 
