@@ -363,7 +363,7 @@ class Trial:
 
     def set_failed_trial(self, error: Exception):
         self.status = TRIAL_STATUS.FAILED
-        self.error = error
+        self.error = str(error)
         self.error_traceback = traceback.format_exc()
 
     def to_json(self) -> dict:
