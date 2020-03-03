@@ -358,6 +358,9 @@ class Trial:
         self.metrics_results_validation = metrics_results_validation
         self.pipeline = pipeline
 
+    def set_success_trial(self):
+        self.status = TRIAL_STATUS.SUCCESS
+
     def set_failed_trial(self, error: Exception):
         self.status = TRIAL_STATUS.FAILED
         self.error = error
@@ -399,7 +402,6 @@ class Trial:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.end_time = datetime.datetime.now()
-        self.status = TRIAL_STATUS.SUCCESS
         return self
 
     def __str__(self):
@@ -855,6 +857,8 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                         trial=repo_trial,
                         context=context
                     )
+
+                    repo_trial.set_success_trial()
                 except Exception as error:
                     track = traceback.format_exc()
                     self.print_func(track)
