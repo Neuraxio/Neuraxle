@@ -81,18 +81,23 @@ class HyperparamsRepository(ABC):
     def get_best_model(self, higher_score_is_better):
         hyperparams = self.get_best_hyperparams(higher_score_is_better=higher_score_is_better)
         trial_hash = self._get_trial_hash(HyperparameterSamples(hyperparams).to_flat_as_dict_primitive())
+        print('load trial hp: {}'.format(hyperparams))
+        print('load trial hash: {}'.format(trial_hash))
         p = ExecutionContext(str(self.cache_folder)).load(trial_hash)
         return p
 
-    def save_model(self, step: BaseStep) -> BaseStep:
+    def save_model(self, step: BaseStep, trial_hyperparams) -> BaseStep:
         """
         Save step inside the trial hash folder.
 
         :param step: step to save
+        :param trial_hyperparams: trail hyperparams
         :return: saved step
         """
-        hyperparams = step.get_hyperparams().to_flat_as_dict_primitive()
+        hyperparams = trial_hyperparams.to_flat_as_dict_primitive()
         trial_hash = self._get_trial_hash(hyperparams)
+        print('trial hp: {}'.format(hyperparams))
+        print('trial_hash: {}'.format(trial_hash))
         step.set_name(trial_hash).save(ExecutionContext(self.cache_folder), full_dump=True)
 
         return step
@@ -351,7 +356,7 @@ class Trial:
         self.metrics_results_validation = metrics_results_validation
         self.pipeline = pipeline
 
-    def set_failed_trial(self, error):
+    def set_failed_trial(self, error: Exception):
         self.status = TRIAL_STATUS.FAILED
         self.error = error
         self.error_traceback = traceback.format_exc()
@@ -464,11 +469,9 @@ class EarlyStoppingCallback(BaseCallback):
 
     def call(self, trial: Trial):
         if len(trial.validation_scores) > self.n_epochs_without_improvement:
-            if trial.validation_scores[-self.n_epochs_without_improvement] >= trial.validation_scores[
-                -1] and self.higher_score_is_better:
+            if trial.validation_scores[-self.n_epochs_without_improvement] >= trial.validation_scores[-1] and self.higher_score_is_better:
                 return True
-            if trial.validation_scores[-self.n_epochs_without_improvement] <= trial.validation_scores[
-                -1] and not self.higher_score_is_better:
+            if trial.validation_scores[-self.n_epochs_without_improvement] <= trial.validation_scores[-1] and not self.higher_score_is_better:
                 return True
         return False
 
@@ -697,11 +700,13 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             print_func: Callable = None,
             only_save_new_best_model=True,
             refit_trial=True,
+            print_metrics=True,
             cache_folder_when_no_handle=None
     ):
         BaseStep.__init__(self)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
 
+        self.print_metrics = print_metrics
         if print_func is None:
             print_func = print
 
@@ -762,7 +767,9 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             callbacks=self.callbacks,
             score=self.scoring_function,
             refit_score=self.refit_scoring_function,
-            epochs=self.epochs
+            epochs=self.epochs,
+            print_metrics=self.print_metrics,
+            print_func=self.print_func
         )
 
         for trial_number in range(self.n_trial):
@@ -783,7 +790,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                 except Exception as error:
                     track = traceback.format_exc()
                     self.print_func(track)
-                    repo_trial.set_failed(error)
+                    repo_trial.set_failed_trial(error)
 
             is_new_best_score = self._trial_has_a_new_best_score(best_score, repo_trial)
             if is_new_best_score:
@@ -791,15 +798,17 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
             self.hyperparams_repository.save_trial(repo_trial)
 
-            p: BaseStep = self._load_virgin_best_model()
-            if self.refit_trial:
-                p = trainer.refit(
-                    p=p,
-                    data_container=data_container,
-                    context=context
-                )
+        best_hyperparams = self.hyperparams_repository.get_best_hyperparams(self.higher_score_is_better)
+        p: BaseStep = self._load_virgin_model(hyperparams=best_hyperparams)
+        if self.refit_trial:
+            self.hyperparams_repository.save_model(p, best_hyperparams)
+            p = trainer.refit(
+                p=p,
+                data_container=data_container,
+                context=context
+            )
 
-            self._save_pipeline_if_needed(p, is_new_best_score)
+            self.hyperparams_repository.save_model(p, best_hyperparams)
 
         return self
 
@@ -818,6 +827,19 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
         best_model = p.get_step()
         return copy.deepcopy(best_model)
+
+    def _load_virgin_model(self, hyperparams: HyperparameterSamples) -> BaseStep:
+        """
+        Load virigin model with the given hyperparams.
+
+        :return: best model step
+        :rtype: BaseStep
+        """
+        p: Union[BaseCrossValidationWrapper, BaseStep] = self.validation_technique.set_step(copy.copy(self.pipeline))
+        p = p.update_hyperparams(hyperparams)
+        model = p.get_step()
+
+        return copy.deepcopy(model)
 
     def _trial_has_a_new_best_score(self, best_score, repo_trial):
         """
@@ -844,7 +866,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
         return new_best_score
 
-    def _save_pipeline_if_needed(self, pipeline, is_new_best_score):
+    def _save_pipeline_if_needed(self, pipeline, trial_hyperparams, is_new_best_score):
         """
         Save pipeline if a new best score has been found, or if self.only_save_new_best_model is False.
 
@@ -855,9 +877,9 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         """
         if self.only_save_new_best_model:
             if is_new_best_score:
-                self.hyperparams_repository.save_model(pipeline)
+                self.hyperparams_repository.save_model(pipeline, trial_hyperparams)
         else:
-            self.hyperparams_repository.save_model(pipeline)
+            self.hyperparams_repository.save_model(pipeline, trial_hyperparams)
 
     def _load_auto_ml_data(self, trial_number: int) -> 'AutoMLContainer':
         """
@@ -870,10 +892,12 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         """
         trials = self.hyperparams_repository.load_all_trials(TRIAL_STATUS.SUCCESS)
 
+        step = copy.copy(self.validation_technique).set_step(self.pipeline)
+        hyperparams_space = step.get_hyperparams_space()
         return AutoMLContainer(
             trial_number=trial_number,
             trials=trials,
-            hyperparameter_space=self.pipeline.get_hyperparams_space(),
+            hyperparameter_space=hyperparams_space,
         )
 
 

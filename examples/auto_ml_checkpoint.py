@@ -34,7 +34,6 @@ from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import AutoML
-from neuraxle.metaopt.deprecated import RandomSearch
 from neuraxle.metaopt.random import ValidationSplitWrapper
 from neuraxle.pipeline import ResumablePipeline, DEFAULT_CACHE_FOLDER, Pipeline
 from neuraxle.steps.flow import ExpandDim
@@ -65,11 +64,12 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
 
     time_a = time.time()
     auto_ml = AutoML(
-       pipeline,
-       validation_technique=ValidationSplitWrapper(pipeline, test_size=0.1),
-       n_trial=n_iter,
-       higher_score_is_better=True,
-       cache_folder_when_no_handle=str(tmpdir)
+        pipeline,
+        validation_technique=ValidationSplitWrapper(pipeline, test_size=0.1),
+        n_trial=n_iter,
+        higher_score_is_better=False,
+        cache_folder_when_no_handle=str(tmpdir),
+        print_metrics=False
     )
     auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
     outputs = auto_ml.get_best_model().predict(DATA_INPUTS)
@@ -100,8 +100,9 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
         pipeline,
         validation_technique=ValidationSplitWrapper(pipeline, test_size=0.1),
         n_trial=n_iter,
-        higher_score_is_better=True,
-        cache_folder_when_no_handle=str(tmpdir)
+        higher_score_is_better=False,
+        cache_folder_when_no_handle=str(tmpdir),
+        print_metrics=False
     )
     auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
     outputs = auto_ml.get_best_model().predict(DATA_INPUTS)
