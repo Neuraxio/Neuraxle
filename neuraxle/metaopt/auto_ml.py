@@ -814,6 +814,17 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         self.metrics = metrics
         self.refit_trial = refit_trial
 
+        self.trainer = Trainer(
+            metrics=self.metrics,
+            callbacks=self.callbacks,
+            refit_callbacks=self.refit_callbacks,
+            score=self.scoring_function,
+            refit_score=self.refit_scoring_function,
+            epochs=self.epochs,
+            print_metrics=self.print_metrics,
+            print_func=self.print_func
+        )
+
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         Run Auto ML Loop.
@@ -829,17 +840,6 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         training_data_container, validation_data_container = self.validation_technique.split_data_container(
             data_container)
 
-        trainer = Trainer(
-            metrics=self.metrics,
-            callbacks=self.callbacks,
-            refit_callbacks=self.refit_callbacks,
-            score=self.scoring_function,
-            refit_score=self.refit_scoring_function,
-            epochs=self.epochs,
-            print_metrics=self.print_metrics,
-            print_func=self.print_func
-        )
-
         for trial_number in range(self.n_trial):
             auto_ml_data = self._load_auto_ml_data(trial_number)
             p = self.validation_technique.set_step(copy.deepcopy(self.pipeline))
@@ -848,7 +848,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                 try:
                     p.update_hyperparams(repo_trial.hyperparams)
 
-                    repo_trial = trainer.fit(
+                    repo_trial = self.trainer.fit(
                         p=p,
                         train_data_container=training_data_container,
                         validation_data_container=validation_data_container,
@@ -869,7 +869,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         best_hyperparams = self.hyperparams_repository.get_best_hyperparams(self.higher_score_is_better)
         p: BaseStep = self._load_virgin_model(hyperparams=best_hyperparams)
         if self.refit_trial:
-            p = trainer.refit(
+            p = self.trainer.refit(
                 p=p,
                 data_container=data_container,
                 context=context
