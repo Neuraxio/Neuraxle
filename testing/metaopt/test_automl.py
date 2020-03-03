@@ -6,7 +6,7 @@ from neuraxle.base import ExecutionContext
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, RandomSearchHyperparameterOptimizer, \
-    EarlyStoppingCallback, HyperparamsJSONRepository
+    EarlyStoppingCallback, HyperparamsJSONRepository, EarlyStoppingRefitCallback
 from neuraxle.metaopt.random import ValidationSplitWrapper, KFoldCrossValidationWrapper, average_kfold_scores
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCallbackStep
@@ -40,7 +40,7 @@ def test_automl_with_validation_split_wrapper(tmpdir):
     auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
-    p = _get_saved_model(hp_repository)
+    p = auto_ml.get_best_model()
     outputs = p.transform(data_inputs)
     mse = mean_squared_error(expected_outputs, outputs)
 
@@ -74,7 +74,7 @@ def test_automl_with_validation_split_wrapper_and_json_repository(tmpdir):
     auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
-    p = _get_saved_model(hp_repository)
+    p = auto_ml.get_best_model()
     outputs = p.transform(data_inputs)
     mse = mean_squared_error(expected_outputs, outputs)
 
@@ -103,16 +103,18 @@ def test_automl_early_stopping_callback(tmpdir):
         metrics={'mse': mean_squared_error},
         epochs=n_epochs,
         callbacks=[EarlyStoppingCallback(n_epochs_without_improvement=3, higher_score_is_better=False)],
-        refit_trial=False
+        refit_callbacks=[EarlyStoppingRefitCallback(n_epochs_without_improvement=3, higher_score_is_better=False)],
+        refit_trial=True,
+        higher_score_is_better=False
     )
 
     # When
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     expected_outputs = data_inputs * 2
-    auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
+    auto_ml = auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
-    p = _get_saved_model(hp_repository)
+    p = auto_ml.get_best_model()
     callback_step = p.get_step_by_name('callback')
 
     assert len(callback_step.fit_callback_function.data) < n_epochs
@@ -152,21 +154,9 @@ def test_automl_with_kfold(tmpdir):
     auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
-    p = _get_saved_model(hp_repository)
+    p = auto_ml.get_best_model()
     outputs = p.transform(data_inputs)
     mse = mean_squared_error(expected_outputs, outputs)
 
     assert mse < 500
 
-
-def _get_saved_model(hp_repository):
-    hp_dict = {
-        'MultiplyByN__multiply_by': 2,
-        'LinearRegression__copy_X': True,
-        'LinearRegression__fit_intercept': True,
-        'LinearRegression__n_jobs': None,
-        'LinearRegression__normalize': False
-    }
-    trial_hash = hp_repository._get_trial_hash(hp_dict)
-    p = ExecutionContext(str(hp_repository.cache_folder)).load(trial_hash)
-    return p

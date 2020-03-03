@@ -76,17 +76,16 @@ class HyperparamsRepository(ABC):
 
     def get_best_hyperparams(self, higher_score_is_better) -> HyperparameterSamples:
         trials = self.load_all_trials(status=TRIAL_STATUS.SUCCESS)
-        return trials.get_best_hyperparams(higher_score_is_better)
+        best_hyperparams = HyperparameterSamples(trials.get_best_hyperparams(higher_score_is_better))
+        return best_hyperparams
 
     def get_best_model(self, higher_score_is_better):
         hyperparams = self.get_best_hyperparams(higher_score_is_better=higher_score_is_better)
         trial_hash = self._get_trial_hash(HyperparameterSamples(hyperparams).to_flat_as_dict_primitive())
-        print('load trial hp: {}'.format(hyperparams))
-        print('load trial hash: {}'.format(trial_hash))
         p = ExecutionContext(str(self.cache_folder)).load(trial_hash)
         return p
 
-    def save_model(self, step: BaseStep, trial_hyperparams) -> BaseStep:
+    def save_model(self, step: BaseStep, trial_hyperparams: HyperparameterSamples) -> BaseStep:
         """
         Save step inside the trial hash folder.
 
@@ -96,8 +95,6 @@ class HyperparamsRepository(ABC):
         """
         hyperparams = trial_hyperparams.to_flat_as_dict_primitive()
         trial_hash = self._get_trial_hash(hyperparams)
-        print('trial hp: {}'.format(hyperparams))
-        print('trial_hash: {}'.format(trial_hash))
         step.set_name(trial_hash).save(ExecutionContext(self.cache_folder), full_dump=True)
 
         return step
@@ -207,7 +204,8 @@ class HyperparamsJSONRepository(HyperparamsRepository):
     """
 
     def __init__(self, hyperparameter_optimizer: 'BaseHyperparameterOptimizer' = None, cache_folder=None):
-        HyperparamsRepository.__init__(self, hyperparameter_optimizer=hyperparameter_optimizer, cache_folder=cache_folder)
+        HyperparamsRepository.__init__(self, hyperparameter_optimizer=hyperparameter_optimizer,
+                                       cache_folder=cache_folder)
 
     def save_trial(self, trial: 'Trial'):
         """
@@ -428,6 +426,12 @@ class BaseCallback(ABC):
         pass
 
 
+class BaseRefitCallback(ABC):
+    @abstractmethod
+    def call(self, scores):
+        pass
+
+
 class EarlyStoppingCallback(BaseCallback):
     """
     Perform early stopping when there is multiple epochs in a row that didn't improve the performance of the model.
@@ -469,9 +473,59 @@ class EarlyStoppingCallback(BaseCallback):
 
     def call(self, trial: Trial):
         if len(trial.validation_scores) > self.n_epochs_without_improvement:
-            if trial.validation_scores[-self.n_epochs_without_improvement] >= trial.validation_scores[-1] and self.higher_score_is_better:
+            if trial.validation_scores[-self.n_epochs_without_improvement] >= trial.validation_scores[
+                -1] and self.higher_score_is_better:
                 return True
-            if trial.validation_scores[-self.n_epochs_without_improvement] <= trial.validation_scores[-1] and not self.higher_score_is_better:
+            if trial.validation_scores[-self.n_epochs_without_improvement] <= trial.validation_scores[
+                -1] and not self.higher_score_is_better:
+                return True
+        return False
+
+
+class EarlyStoppingRefitCallback(BaseRefitCallback):
+    """
+    Perform early stopping when there is multiple epochs in a row that didn't improve the performance of the model.
+
+    Example usage :
+
+    .. code-block:: python
+
+        trainer = Trainer(
+            metrics=self.metrics,
+            callbacks=self.callbacks,
+            refit_callbacks=self.callbacks,
+            score=self.scoring_function,
+            epochs=self.epochs
+        )
+
+        trial = trainer.fit(
+            p=p,
+            trial_repository=repo_trial,
+            train_data_container=training_data_container,
+            validation_data_container=validation_data_container,
+            context=context
+        )
+
+        pipeline = trainer.refit(repo_trial.pipeline, data_container, context)
+
+    .. seealso::
+        :class:`AutoML`,
+        :class:`Trial`,
+        :class:`HyperparamsRepository`,
+        :class:`HyperparameterOptimizer`,
+        :class:`RandomSearchHyperparameterOptimizer`,
+        :class:`DataContainer`
+    """
+
+    def __init__(self, n_epochs_without_improvement, higher_score_is_better):
+        self.higher_score_is_better = higher_score_is_better
+        self.n_epochs_without_improvement = n_epochs_without_improvement
+
+    def call(self, scores):
+        if len(scores) > self.n_epochs_without_improvement:
+            if scores[-self.n_epochs_without_improvement] >= scores[-1] and self.higher_score_is_better:
+                return True
+            if scores[-self.n_epochs_without_improvement] <= scores[-1] and not self.higher_score_is_better:
                 return True
         return False
 
@@ -591,14 +645,17 @@ class Trainer:
         """
         early_stopping = False
 
+        train_scores = []
+
         for i in range(self.epochs):
             p = p.handle_fit(data_container, context)
             pred = p.handle_predict(data_container, context)
 
             train_score = self.refit_score(pred.data_inputs, pred.expected_outputs)
+            train_scores.append(train_score)
 
             for callback in self.refit_callbacks:
-                if callback.call(p, train_score):
+                if callback.call(train_scores):
                     early_stopping = True
 
             if early_stopping:
@@ -695,6 +752,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             metrics: Dict = None,
             epochs: int = 10,
             callbacks: List[BaseCallback] = None,
+            refit_callbacks: List[BaseCallback] = None,
             refit_scoring_function: Callable = None,
             higher_score_is_better=False,
             print_func: Callable = None,
@@ -741,6 +799,11 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         if callbacks is None:
             callbacks = []
         self.callbacks = callbacks
+
+        if refit_callbacks is None:
+            refit_callbacks = []
+        self.refit_callbacks = refit_callbacks
+
         self.epochs = epochs
         if metrics is None:
             metrics = {}
@@ -765,6 +828,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         trainer = Trainer(
             metrics=self.metrics,
             callbacks=self.callbacks,
+            refit_callbacks=self.refit_callbacks,
             score=self.scoring_function,
             refit_score=self.refit_scoring_function,
             epochs=self.epochs,
@@ -774,7 +838,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
         for trial_number in range(self.n_trial):
             auto_ml_data = self._load_auto_ml_data(trial_number)
-            p = self.validation_technique.set_step(copy.copy(self.pipeline))
+            p = self.validation_technique.set_step(copy.deepcopy(self.pipeline))
 
             with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
                 try:
@@ -801,7 +865,6 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         best_hyperparams = self.hyperparams_repository.get_best_hyperparams(self.higher_score_is_better)
         p: BaseStep = self._load_virgin_model(hyperparams=best_hyperparams)
         if self.refit_trial:
-            self.hyperparams_repository.save_model(p, best_hyperparams)
             p = trainer.refit(
                 p=p,
                 data_container=data_container,

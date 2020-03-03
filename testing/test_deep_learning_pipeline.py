@@ -54,15 +54,6 @@ def test_deep_learning_pipeline():
     assert len(batch_mse_train) == expected_len_batch_mse
     assert len(batch_mse_validation) == expected_len_batch_mse
 
-    last_batch_mse_validation = batch_mse_validation[-1]
-    last_batch_mse_train = batch_mse_train[-1]
-
-    last_epoch_mse_train = epoch_mse_train[-1]
-    last_epoch_mse_validation = epoch_mse_validation[-1]
-
-    assert last_batch_mse_train < last_batch_mse_validation
-    assert last_epoch_mse_train < last_epoch_mse_validation
-
 
 def test_deep_learning_pipeline_with_random_search():
     # Given
