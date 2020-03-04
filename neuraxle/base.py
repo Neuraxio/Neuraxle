@@ -436,14 +436,15 @@ class ExecutionContext:
         if not os.path.exists(path):
             os.makedirs(path)
 
-    def get_path(self, with_root=True):
+    def get_path(self, is_absolute: bool = True):
         """
         Creates the directory path for the current execution context.
 
+        :param is_absolute: bool to say if we want to add root to the path or not
         :return: current context path
         :rtype: str
         """
-        parents_with_path = [self.root] if with_root else []
+        parents_with_path = [self.root] if is_absolute else []
         parents_with_path += [p.name for p in self.parents]
         if len(parents_with_path) == 0:
             return '/'
