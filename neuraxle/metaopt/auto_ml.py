@@ -611,6 +611,7 @@ class Trainer:
         early_stopping = False
 
         for i in range(self.epochs):
+            self.print_func('epoch {}/{}'.format(i, self.epochs))
             p = p.handle_fit(train_data_container, context)
 
             y_pred_train = p.handle_predict(train_data_container, context)
@@ -846,6 +847,8 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             data_container)
 
         for trial_number in range(self.n_trial):
+            self.print_func('trial {}/{}'.format(trial_number, self.n_trial))
+
             auto_ml_data = self._load_auto_ml_data(trial_number)
             p = self.validation_technique.set_step(copy.deepcopy(self.pipeline))
 
