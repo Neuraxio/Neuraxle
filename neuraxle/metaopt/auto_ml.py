@@ -428,7 +428,7 @@ class BaseHyperparameterOptimizer(ABC):
 
 class BaseCallback(ABC):
     @abstractmethod
-    def call(self, trial: Trial):
+    def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer, pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, early_stopping: bool):
         pass
 
 
@@ -477,10 +477,9 @@ class EarlyStoppingCallback(BaseCallback):
         self.higher_score_is_better = higher_score_is_better
         self.n_epochs_without_improvement = n_epochs_without_improvement
 
-    def call(self, trial: Trial):
+    def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer, pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, early_stopping: bool):
         if len(trial.validation_scores) > self.n_epochs_without_improvement:
-            if trial.validation_scores[-self.n_epochs_without_improvement] >= trial.validation_scores[
-                -1] and self.higher_score_is_better:
+            if trial.validation_scores[-self.n_epochs_without_improvement] >= trial.validation_scores[-1] and self.higher_score_is_better:
                 return True
             if trial.validation_scores[-self.n_epochs_without_improvement] <= trial.validation_scores[
                 -1] and not self.higher_score_is_better:
@@ -632,7 +631,16 @@ class Trainer:
             )
 
             for callback in self.callbacks:
-                if callback.call(trial):
+                if callback.call(
+                    trial=trial,
+                    epoch_number=i,
+                    total_epochs=self.epochs,
+                    input_train=train_data_container,
+                    pred_train=y_pred_train,
+                    input_val=validation_data_container,
+                    pred_val=y_pred_val,
+                    early_stopping=early_stopping
+                ):
                     early_stopping = True
 
             if early_stopping:
