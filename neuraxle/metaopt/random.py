@@ -104,7 +104,7 @@ class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseV
             results = step.handle_predict(validation_data_container, context)
             self.calculate_score(results)
 
-        return copy.copy(self).set_step(step)
+        return step
 
     def calculate_score(self, results):
         self.scores = [self.scoring_function(a, b) for a, b in zip(results.data_inputs, results.expected_outputs)]

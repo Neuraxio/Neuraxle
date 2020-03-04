@@ -705,7 +705,10 @@ class Trainer:
                 self.metrics_results_validation[metric_name].append(result_metric)
 
         if self.print_metrics:
-            self.print_func(result)
+            if train_metrics:
+                self.print_func('train metrics : {}'.format(result))
+            else:
+                self.print_func('validation metrics : {}'.format(result))
 
 
 class AutoML(ForceHandleOnlyMixin, BaseStep):
