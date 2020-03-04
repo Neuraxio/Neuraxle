@@ -316,40 +316,40 @@ class Trial:
 
     def __init__(
             self,
-            hyperparams,
-            status=None,
-            train_score=None,
-            validation_score=None,
-            error=None,
-            error_traceback=None,
-            metrics_results_train=None,
-            metrics_results_validation=None,
-            pipeline=None,
-            train_scores=None,
-            validation_scores=None
+            hyperparams: HyperparameterSamples,
+            status: 'TRIAL_STATUS' = None,
+            train_score: int = None,
+            validation_score: int = None,
+            error: Exception = None,
+            error_traceback: str = None,
+            metrics_results_train: Dict = None,
+            metrics_results_validation: Dict = None,
+            pipeline: BaseStep = None,
+            train_scores: List[float] = None,
+            validation_scores: List[float] = None
     ):
         if status is None:
             status = TRIAL_STATUS.PLANNED
-        self.status = status
-        self.train_score = train_score
-        self.validation_score = validation_score
-        self.error = error
-        self.error_traceback = error_traceback
-        self.metrics_results_train = metrics_results_train
-        self.metrics_results_validation = metrics_results_validation
-        self.pipeline = pipeline
+        self.status: TRIAL_STATUS = status
+        self.train_score: float = train_score
+        self.validation_score: float = validation_score
+        self.error: Exception = error
+        self.error_traceback: str = error_traceback
+        self.metrics_results_train: Dict = metrics_results_train
+        self.metrics_results_validation: Dict = metrics_results_validation
+        self.pipeline: BaseStep = pipeline
 
         if train_scores is None:
             train_scores = []
-        self.train_scores = train_scores
+        self.train_scores: List[float] = train_scores
 
         if validation_scores is None:
             validation_scores = []
-        self.validation_scores = validation_scores
+        self.validation_scores: List[float] = validation_scores
 
-        self.hyperparams = hyperparams
+        self.hyperparams: HyperparameterSamples = hyperparams
 
-    def update_trial(self, train_score, validation_score, metrics_results_train, metrics_results_validation, pipeline):
+    def update_trial(self, train_score: float, validation_score: float, metrics_results_train: Dict, metrics_results_validation: Dict, pipeline: BaseStep):
         self.train_score = train_score
         self.validation_score = validation_score
         self.train_scores.append(train_score)
@@ -428,7 +428,8 @@ class BaseHyperparameterOptimizer(ABC):
 
 class BaseCallback(ABC):
     @abstractmethod
-    def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer, pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, early_stopping: bool):
+    def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, early_stopping: bool):
         pass
 
 
@@ -477,9 +478,11 @@ class EarlyStoppingCallback(BaseCallback):
         self.higher_score_is_better = higher_score_is_better
         self.n_epochs_without_improvement = n_epochs_without_improvement
 
-    def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer, pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, early_stopping: bool):
+    def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, early_stopping: bool):
         if len(trial.validation_scores) > self.n_epochs_without_improvement:
-            if trial.validation_scores[-self.n_epochs_without_improvement] >= trial.validation_scores[-1] and self.higher_score_is_better:
+            if trial.validation_scores[-self.n_epochs_without_improvement] >= trial.validation_scores[
+                -1] and self.higher_score_is_better:
                 return True
             if trial.validation_scores[-self.n_epochs_without_improvement] <= trial.validation_scores[
                 -1] and not self.higher_score_is_better:
@@ -632,14 +635,14 @@ class Trainer:
 
             for callback in self.callbacks:
                 if callback.call(
-                    trial=trial,
-                    epoch_number=i,
-                    total_epochs=self.epochs,
-                    input_train=train_data_container,
-                    pred_train=y_pred_train,
-                    input_val=validation_data_container,
-                    pred_val=y_pred_val,
-                    early_stopping=early_stopping
+                        trial=trial,
+                        epoch_number=i,
+                        total_epochs=self.epochs,
+                        input_train=train_data_container,
+                        pred_train=y_pred_train,
+                        input_val=validation_data_container,
+                        pred_val=y_pred_val,
+                        early_stopping=early_stopping
                 ):
                     early_stopping = True
 
