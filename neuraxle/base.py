@@ -447,7 +447,7 @@ class ExecutionContext:
         parents_with_path = [self.root] if is_absolute else []
         parents_with_path += [p.name for p in self.parents]
         if len(parents_with_path) == 0:
-            return '/'
+            return '.' + os.sep
         return os.path.join(*parents_with_path)
 
     def get_names(self):
