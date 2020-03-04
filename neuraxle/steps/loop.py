@@ -156,6 +156,11 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         self.steps: List[BaseStep] = []
         self.copy_op = copy_op
 
+    def set_train(self, is_train: bool = True):
+        MetaStepMixin.set_train(self, is_train)
+        [s.set_train(is_train) for s in self.steps]
+        return self
+
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
         MetaStepMixin.set_hyperparams(self, hyperparams)
         self.steps = [s.set_hyperparams(self.wrapped.get_hyperparams()) for s in self.steps]

@@ -19,11 +19,11 @@ HYPE_SAMPLE = HyperparameterSamples({
 def test_step_cloner_should_transform():
     tape = TapeCallbackFunction()
     p = StepClonerForEachDataInput(
-            Pipeline([
-                FitCallbackStep(tape),
-                MultiplyByN(2)
-            ])
-        )
+        Pipeline([
+            FitCallbackStep(tape),
+            MultiplyByN(2)
+        ])
+    )
     data_inputs = _create_data((2, 2))
 
     processed_outputs = p.transform(data_inputs)
@@ -37,11 +37,11 @@ def test_step_cloner_should_fit_transform():
     # Given
     tape = TapeCallbackFunction()
     p = StepClonerForEachDataInput(
-            Pipeline([
-                FitCallbackStep(tape),
-                MultiplyByN(2)
-            ])
-        )
+        Pipeline([
+            FitCallbackStep(tape),
+            MultiplyByN(2)
+        ])
+    )
     data_inputs = _create_data((2, 2))
     expected_outputs = _create_data((2, 2))
 
@@ -63,11 +63,11 @@ def test_step_cloner_should_fit_transform():
 def test_step_cloner_should_inverse_transform():
     tape = TapeCallbackFunction()
     p = StepClonerForEachDataInput(
-            Pipeline([
-                FitCallbackStep(tape),
-                MultiplyByN(2)
-            ])
-        )
+        Pipeline([
+            FitCallbackStep(tape),
+            MultiplyByN(2)
+        ])
+    )
     data_inputs = _create_data((2, 2))
     expected_outputs = _create_data((2, 2))
 
@@ -77,6 +77,25 @@ def test_step_cloner_should_inverse_transform():
     assert np.array_equal(processed_outputs, data_inputs * 2)
     inverse_processed_outputs = p.inverse_transform(processed_outputs)
     assert np.array_equal(np.array(inverse_processed_outputs), np.array(data_inputs))
+
+
+def test_step_cloner_should_set_train():
+    tape = TapeCallbackFunction()
+    p = StepClonerForEachDataInput(
+        Pipeline([
+            FitCallbackStep(tape),
+            MultiplyByN(2)
+        ])
+    )
+    data_inputs = _create_data((2, 2))
+    expected_outputs = _create_data((2, 2))
+    p, processed_outputs = p.fit_transform(data_inputs, expected_outputs)
+
+    p.set_train(False)
+
+    assert not p.is_train
+    assert not p.steps[0].is_train
+    assert not p.steps[1].is_train
 
 
 def _create_data(shape):
