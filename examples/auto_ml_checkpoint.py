@@ -66,10 +66,12 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     auto_ml = AutoML(
         pipeline,
         validation_technique=ValidationSplitWrapper(pipeline, test_size=0.1),
-        n_trial=n_iter,
+        n_trials=n_iter,
+        metrics={},
         higher_score_is_better=False,
+        print_metrics=False,
         cache_folder_when_no_handle=str(tmpdir),
-        print_metrics=False
+        refit_trial=False
     )
     auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
     outputs = auto_ml.get_best_model().predict(DATA_INPUTS)
@@ -99,10 +101,11 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     auto_ml = AutoML(
         pipeline,
         validation_technique=ValidationSplitWrapper(pipeline, test_size=0.1),
-        n_trial=n_iter,
+        n_trials=n_iter,
         higher_score_is_better=False,
+        print_metrics=False,
         cache_folder_when_no_handle=str(tmpdir),
-        print_metrics=False
+        refit_trial=False
     )
     auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
     outputs = auto_ml.get_best_model().predict(DATA_INPUTS)

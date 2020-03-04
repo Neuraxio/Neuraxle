@@ -2,7 +2,6 @@ import numpy as np
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error
 
-from neuraxle.base import ExecutionContext
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, RandomSearchHyperparameterOptimizer, \
@@ -28,10 +27,11 @@ def test_automl_with_validation_split_wrapper(tmpdir):
         hyperparams_optimizer=RandomSearchHyperparameterOptimizer(),
         hyperparams_repository=hp_repository,
         scoring_function=mean_squared_error,
+        n_trials=1,
         metrics={'mse': mean_squared_error},
-        callbacks=[],
-        n_trial=1,
         epochs=2,
+        callbacks=[],
+        refit_trial=True
     )
 
     # When
@@ -62,10 +62,11 @@ def test_automl_with_validation_split_wrapper_and_json_repository(tmpdir):
         hyperparams_optimizer=RandomSearchHyperparameterOptimizer(),
         hyperparams_repository=hp_repository,
         scoring_function=mean_squared_error,
+        n_trials=1,
         metrics={'mse': mean_squared_error},
-        callbacks=[],
-        n_trial=1,
         epochs=2,
+        callbacks=[],
+        refit_trial=True
     )
 
     # When
@@ -98,14 +99,14 @@ def test_automl_early_stopping_callback(tmpdir):
         hyperparams_optimizer=RandomSearchHyperparameterOptimizer(),
         hyperparams_repository=hp_repository,
         scoring_function=mean_squared_error,
-        refit_scoring_function=mean_squared_error,
-        n_trial=1,
+        n_trials=1,
         metrics={'mse': mean_squared_error},
         epochs=n_epochs,
         callbacks=[EarlyStoppingCallback(n_epochs_without_improvement=3, higher_score_is_better=False)],
         refit_callbacks=[EarlyStoppingRefitCallback(n_epochs_without_improvement=3, higher_score_is_better=False)],
+        refit_scoring_function=mean_squared_error,
+        higher_score_is_better=False,
         refit_trial=True,
-        higher_score_is_better=False
     )
 
     # When
@@ -140,11 +141,12 @@ def test_automl_with_kfold(tmpdir):
         hyperparams_optimizer=RandomSearchHyperparameterOptimizer(),
         hyperparams_repository=hp_repository,
         scoring_function=average_kfold_scores(mean_squared_error),
-        refit_scoring_function=mean_squared_error,
-        n_trial=1,
+        n_trials=1,
         metrics={'mse': average_kfold_scores(mean_squared_error)},
         epochs=10,
-        callbacks=[]
+        callbacks=[],
+        refit_scoring_function=mean_squared_error,
+        refit_trial=True
     )
 
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
@@ -159,4 +161,3 @@ def test_automl_with_kfold(tmpdir):
     mse = mean_squared_error(expected_outputs, outputs)
 
     assert mse < 500
-

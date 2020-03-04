@@ -766,19 +766,19 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             self,
             pipeline,
             validation_technique: BaseCrossValidationWrapper,
+            refit_trial,
             hyperparams_optimizer: BaseHyperparameterOptimizer = None,
             hyperparams_repository: HyperparamsRepository = None,
             scoring_function: Callable = None,
-            n_trial: int = 10,
+            n_trials: int = 10,
             metrics: Dict = None,
             epochs: int = 10,
             callbacks: List[BaseCallback] = None,
-            refit_callbacks: List[BaseCallback] = None,
+            refit_callbacks: List[BaseRefitCallback] = None,
             refit_scoring_function: Callable = None,
             higher_score_is_better=False,
             print_func: Callable = None,
             only_save_new_best_model=True,
-            refit_trial=True,
             print_metrics=True,
             cache_folder_when_no_handle=None
     ):
@@ -805,7 +805,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         self.higher_score_is_better = higher_score_is_better
         self.print_func = print_func
 
-        self.n_trial = n_trial
+        self.n_trial = n_trials
         self.hyperparams_repository = hyperparams_repository
         self.hyperparameter_optimizer = hyperparams_optimizer
 
