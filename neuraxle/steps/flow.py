@@ -34,7 +34,7 @@ from neuraxle.union import FeatureUnion
 OPTIONAL_ENABLED_HYPERPARAM = 'enabled'
 
 
-class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
+class TrainOrTestOnlyWrapper(ResumableStepMixin, ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     """
     A wrapper to run wrapped step only in test mode, or only in train mode.
 
@@ -62,6 +62,7 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
+        ResumableStepMixin.__init__(self)
 
         self.is_train_only = is_train_only
 
@@ -105,6 +106,9 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         if self._should_execute_wrapped_step():
             return self.wrapped.handle_transform(data_container, context)
         return data_container
+
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
+        return self._should_execute_wrapped_step() and self.wrapped.should_resume(data_container, context)
 
     def _should_execute_wrapped_step(self):
         return (self.wrapped.is_train and self.is_train_only) or (not self.wrapped.is_train and not self.is_train_only)
