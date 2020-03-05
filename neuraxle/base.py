@@ -1362,9 +1362,6 @@ class BaseStep(ABC):
             self.apply_method(_initialize_if_needed)
             self.apply_method(_invalidate)
 
-        return self._save_step(context)
-
-    def _save_step(self, context):
         context.mkdir()
         stripped_step = copy(self)
 
