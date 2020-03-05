@@ -200,7 +200,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     def _copy_one_step_per_data_input(self, data_container):
         # One copy of step per data input:
         self.steps = [self.copy_op(self.wrapped) for _ in range(len(data_container))]
-        self.is_invalidated = True
+        self.invalidate()
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
             'BaseStep', DataContainer):
