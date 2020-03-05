@@ -1349,10 +1349,18 @@ class BaseStep(ABC):
         context = context.push(self)
         self.is_invalidated = False
 
+        def _initialize_if_needed(step):
+            if not step.is_initialized:
+                step.setup()
+            return step
+
+        def _invalidate(step):
+            step.invalidate()
+
         if full_dump:
             # initialize and invalidate steps to make sure that all steps will be saved
-            self.apply_method(lambda step: step.setup() if not step.is_initialized else None)
-            self.apply_method(lambda step: step.invalidate())
+            self.apply_method(_initialize_if_needed)
+            self.apply_method(_invalidate)
 
         return self._save_step(context)
 
