@@ -71,7 +71,7 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
         higher_score_is_better=False,
         print_metrics=False,
         cache_folder_when_no_handle=str(tmpdir),
-        refit_trial=False
+        refit_trial=True
     )
     auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
     outputs = auto_ml.get_best_model().predict(DATA_INPUTS)

@@ -3,9 +3,9 @@ def test_auto_ml_checkpoint(tmpdir):
     main(tmpdir)
 
 
-def test_boston_housing_meta_optimization():
+def test_boston_housing_meta_optimization(tmpdir):
     from examples.boston_housing_meta_optimization import main
-    main()
+    main(tmpdir)
 
 
 def test_boston_housing_regression_with_model_stacking():

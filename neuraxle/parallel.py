@@ -70,7 +70,7 @@ class SaverParallelTransform(NonFittableMixin, MetaStepMixin, BaseStep):
 
         batch_size = self._get_batch_size(data_container)
         data_container_batches = data_container.convolved_1d(stride=batch_size, kernel_size=batch_size)
-        step_path = context.get_path(with_root=False)
+        step_path = context.get_path(is_absolute=False)
 
         outputs_data_containers = Parallel(
             n_jobs=self.n_jobs,

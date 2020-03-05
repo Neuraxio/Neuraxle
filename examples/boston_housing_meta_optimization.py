@@ -39,15 +39,15 @@ from sklearn.utils import shuffle
 
 from neuraxle.hyperparams.distributions import RandInt, LogUniform, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.deprecated import RandomSearch
-from neuraxle.metaopt.random import KFoldCrossValidationWrapper
+from neuraxle.metaopt.auto_ml import AutoML
+from neuraxle.metaopt.random import KFoldCrossValidationWrapper, average_kfold_scores
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.union import AddFeatures, ModelStacking
 
 
-def main():
+def main(tmpdir):
     boston = load_boston()
     X, y = shuffle(boston.data, boston.target, random_state=13)
     X = X.astype(np.float32)
@@ -90,12 +90,19 @@ def main():
     ])
 
     print("Meta-fitting on train:")
-    random_search = RandomSearch(
-        KFoldCrossValidationWrapper(scoring_function=r2_score, k_fold=10).set_step(p),
-        n_iter=10,
-        higher_score_is_better=True
+    auto_ml = AutoML(
+        p,
+        validation_technique=KFoldCrossValidationWrapper(k_fold=10),
+        n_trials=10,
+        metrics={},
+        scoring_function=average_kfold_scores(r2_score),
+        higher_score_is_better=True,
+        print_metrics=False,
+        refit_trial=True,
+        cache_folder_when_no_handle=str(tmpdir)
     )
-    random_search = random_search.fit(X_train, y_train)
+
+    random_search = auto_ml.fit(X_train, y_train)
     p = random_search.get_best_model()
     print("")
 
