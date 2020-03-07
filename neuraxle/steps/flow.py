@@ -108,7 +108,7 @@ class TrainOrTestOnlyWrapper(ResumableStepMixin, ForceHandleOnlyMixin, MetaStepM
         return data_container
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
-        context.push(self)
+        context = context.push(self)
         return self._should_execute_wrapped_step() and self.wrapped.should_resume(data_container, context)
 
     def _should_execute_wrapped_step(self):
