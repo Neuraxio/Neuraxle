@@ -657,6 +657,8 @@ class BaseStep(ABC):
         .. seealso::
             :class:`neuraxle.checkpoints.Checkpoint`
         """
+        if isinstance(data_container, str):
+            i = 0
         current_ids = data_container.current_ids
         for h in self.hashers:
             current_ids = h.hash(current_ids, self.hyperparams, data_container.data_inputs)
@@ -1862,6 +1864,38 @@ class MetaStepMixin:
 
     def get_best_model(self) -> BaseStep:
         return self.best_model
+
+    def handle_fit_transform(self, data_container, context):
+        previous_summary_id = data_container.summary_id
+
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_fit_transform(data_container, context)
+
+        new_self, data_container = self._fit_transform_data_container(data_container, context)
+
+        data_container = self._did_fit_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        data_container.set_summary_id(previous_summary_id)
+        data_container.set_summary_id(self.summary_hash(data_container))
+
+        return new_self, data_container
+
+    def handle_transform(self, data_container, context):
+        previous_summary_id = data_container.summary_id
+
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_transform_data_container(data_container, context)
+
+        data_container = self._transform_data_container(data_container, context)
+
+        data_container = self._did_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        data_container.set_summary_id(previous_summary_id)
+        data_container.set_summary_id(self.summary_hash(data_container))
+
+        return data_container
 
     def _fit_transform_data_container(self, data_container, context):
         self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
