@@ -1935,6 +1935,15 @@ class MetaStepMixin:
             return True
         return False
 
+    def resume(self, data_container: DataContainer, context: ExecutionContext):
+        context = context.push(self)
+        if not isinstance(self.wrapped, ResumableStepMixin):
+            raise Exception('cannot resume steps that don\' inherit from ResumableStepMixin')
+
+        data_container = self.wrapped.resume(data_container, context)
+        data_container = self._did_process(data_container, context)
+        return data_container
+
     def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply the method name to the meta step and its wrapped step.

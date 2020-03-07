@@ -255,6 +255,17 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
 
         return data_container
 
+    def resume(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Same as read_checkpoint.
+
+        :param data_container: data container to load checkpoint from
+        :param context: execution mode to load checkpoint from
+        :return: loaded data container checkpoint
+        :rtype: neuraxle.data_container.DataContainer
+        """
+        return self.read_checkpoint(data_container, context)
+
     def read_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Read data checkpoint for the current execution mode using self.data_checkpointers.
