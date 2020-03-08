@@ -635,6 +635,9 @@ class BaseStep(ABC):
         .. seealso::
             :class:`neuraxle.checkpoints.Checkpoint`
         """
+        if data_container.summary_id is None:
+            data_container.set_summary_id(data_container.hash_summary())
+
         summary_id = data_container.summary_id
         for h in self.hashers:
             summary_id = h.single_hash(
@@ -657,8 +660,6 @@ class BaseStep(ABC):
         .. seealso::
             :class:`neuraxle.checkpoints.Checkpoint`
         """
-        if isinstance(data_container, str):
-            i = 0
         current_ids = data_container.current_ids
         for h in self.hashers:
             current_ids = h.hash(current_ids, self.hyperparams, data_container.data_inputs)
@@ -1218,9 +1219,6 @@ class BaseStep(ABC):
         """
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
-
-        if data_container.summary_id is None:
-            data_container.set_summary_id(data_container.hash_summary())
 
         summary_id = self.summary_hash(data_container)
         data_container.set_summary_id(summary_id)
