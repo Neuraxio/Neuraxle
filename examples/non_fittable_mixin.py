@@ -43,19 +43,15 @@ from neuraxle.pipeline import Pipeline
 class NonFittableStep(NonFittableMixin, BaseStep):
     """
     Fit method is automatically implemented as changing nothing.
-    Please make your steps inherit from NonFittableMixin, when they don't need any transformations.
+    Please make your steps inherit from NonFittableMixin, when they don't need any fitting.
     Also, make sure that BaseStep is the last step you inherit from.
+    Note that we could also define the inverse_transform method in the present object.
     """
 
     def transform(self, data_inputs):
         # insert your transform code here
         print("NonFittableStep: I transformed.")
         return self, data_inputs
-
-    def inverse_transform(self, processed_outputs):
-        # insert your inverse transform code here
-        print("NonFittableStep: I inverse transformed.")
-        return processed_outputs
 
 
 class NonTransformableStep(NonTransformableMixin, BaseStep):
