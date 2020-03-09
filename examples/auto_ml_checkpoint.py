@@ -63,16 +63,9 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     ]).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
-    auto_ml = AutoML(
-        pipeline,
-        validation_technique=ValidationSplitWrapper(pipeline, test_size=0.1),
-        n_trials=n_iter,
-        metrics={},
-        higher_score_is_better=False,
-        print_metrics=False,
-        cache_folder_when_no_handle=str(tmpdir),
-        refit_trial=True
-    )
+    auto_ml = AutoML(pipeline, validation_technique=ValidationSplitWrapper(pipeline, test_size=0.1), scoring_function=,
+                     refit_trial=True, n_trials=n_iter, metrics={}, higher_score_is_better=False, print_metrics=False,
+                     cache_folder_when_no_handle=str(tmpdir))
     auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
     outputs = auto_ml.get_best_model().predict(DATA_INPUTS)
     time_b = time.time()
@@ -98,15 +91,9 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     ], cache_folder=tmpdir).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
-    auto_ml = AutoML(
-        pipeline,
-        validation_technique=ValidationSplitWrapper(pipeline, test_size=0.1),
-        n_trials=n_iter,
-        higher_score_is_better=False,
-        print_metrics=False,
-        cache_folder_when_no_handle=str(tmpdir),
-        refit_trial=False
-    )
+    auto_ml = AutoML(pipeline, validation_technique=ValidationSplitWrapper(pipeline, test_size=0.1), scoring_function=,
+                     refit_trial=False, n_trials=n_iter, higher_score_is_better=False, print_metrics=False,
+                     cache_folder_when_no_handle=str(tmpdir))
     auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
     outputs = auto_ml.get_best_model().predict(DATA_INPUTS)
     time_b = time.time()

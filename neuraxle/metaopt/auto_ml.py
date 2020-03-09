@@ -10,8 +10,6 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Callable, Dict, List, Union
 
-from sklearn.metrics import mean_squared_error
-
 from neuraxle.base import BaseStep, ExecutionContext, ForceHandleOnlyMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
@@ -766,10 +764,10 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             self,
             pipeline,
             validation_technique: BaseCrossValidationWrapper,
+            scoring_function: Callable,
             refit_trial,
             hyperparams_optimizer: BaseHyperparameterOptimizer = None,
             hyperparams_repository: HyperparamsRepository = None,
-            scoring_function: Callable = None,
             n_trials: int = 10,
             metrics: Dict = None,
             epochs: int = 10,
@@ -809,8 +807,6 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         self.hyperparams_repository = hyperparams_repository
         self.hyperparameter_optimizer = hyperparams_optimizer
 
-        if scoring_function is None:
-            scoring_function = mean_squared_error
         self.scoring_function = scoring_function
         if refit_scoring_function is None:
             refit_scoring_function = scoring_function
