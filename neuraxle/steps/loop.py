@@ -187,7 +187,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
         MetaStepMixin.set_hyperparams_space(self, hyperparams_space)
-        self.steps = [s.set_hyperparams_space(self.wrapped.get_hyperparams_space()) for s in self.steps]
+        self.steps = [(name, step.set_hyperparams_space(self.wrapped.get_hyperparams_space())) for name, step in self]
         return self
 
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
@@ -200,19 +200,21 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
     def _copy_one_step_per_data_input(self, data_container):
         # One copy of step per data input:
-        self.steps = [self.copy_op(self.wrapped).set_name('{}[{}]'.format(self.wrapped.name, i)) for i in range(len(data_container))]
+        steps = [self.copy_op(self.wrapped).set_name('{}[{}]'.format(self.wrapped.name, i)) for i in range(len(data_container))]
+        self.steps = [(step.name, step) for step in steps]
         self.invalidate()
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
             'BaseStep', DataContainer):
         fitted_steps_data_containers = []
         for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
-            fitted_step_data_container = self.steps[i].handle_fit_transform(
+            fitted_step_data_container = self[i].handle_fit_transform(
                 DataContainer(current_ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
                 context
             )
             fitted_steps_data_containers.append(fitted_step_data_container)
-        self.steps = [step for step, _ in fitted_steps_data_containers]
+
+        self.steps = [(step.name, step) for step, _ in fitted_steps_data_containers]
 
         output_data_container = ListDataContainer.empty()
         for _, data_container_batch in fitted_steps_data_containers:
@@ -224,19 +226,21 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             'BaseStep', DataContainer):
         fitted_steps = []
         for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
-            fitted_step = self.steps[i].handle_fit(
+            fitted_step = self[i].handle_fit(
                 DataContainer(current_ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
                 context
             )
             fitted_steps.append(fitted_step)
-        self.steps = fitted_steps
+
+        self.steps = [(step.name, step) for step in fitted_steps]
+
         return self
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
             'BaseStep', DataContainer):
         transform_results = []
         for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
-            transform_result = self.steps[i].handle_transform(
+            transform_result = self[i].handle_transform(
                 DataContainer(current_ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
                 context
             )
@@ -251,7 +255,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
                                           context: ExecutionContext) -> DataContainer:
         inverse_transform_results = []
         for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
-            inverse_transform_result = self.steps[i].handle_inverse_transform(
+            inverse_transform_result = self[i].handle_inverse_transform(
                 DataContainer(current_ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
                 context
             )
@@ -263,7 +267,15 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         return output_data_container
 
     def inverse_transform(self, data_output):
-        return [self.steps[i].inverse_transform(di) for i, di in enumerate(data_output)]
+        return [self[i].inverse_transform(di) for i, di in enumerate(data_output)]
+
+    def __getitem__(self, item):
+        """
+        Get cloned step at the given index.
+
+        :return: iter(self.steps_as_tuple)
+        """
+        return self.steps[item][1]
 
     def __iter__(self):
         """

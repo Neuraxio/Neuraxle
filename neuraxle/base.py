@@ -266,6 +266,7 @@ class JoblibStepSaver(BaseSaver):
         context.mkdir()
 
         path = self._create_step_path(context, step)
+        print(path)
         dump(step, path)
 
         return step
@@ -2207,7 +2208,9 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
 
         # Third, strip the sub steps from truncable steps before saving
         del step.steps
-        del step.steps_as_tuple
+
+        if hasattr(self, 'steps_at_tuple'):
+            del step.steps_as_tuple
 
         return step
 

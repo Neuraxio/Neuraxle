@@ -116,13 +116,22 @@ def test_step_cloner_should_save_sub_steps(tmpdir):
 
     p.save(ExecutionContext(tmpdir), full_dump=True)
 
-    not_saved_paths = []
-    saved_paths = []
+    saved_paths = [
+        os.path.join(tmpdir, 'StepClonerForEachDataInput/Pipeline[0]/FitCallbackStep/FitCallbackStep.joblib'),
+        os.path.join(tmpdir, 'StepClonerForEachDataInput/Pipeline[0]/MultiplyByN/MultiplyByN.joblib'),
+        os.path.join(tmpdir, 'StepClonerForEachDataInput/Pipeline[0]/MultiplyByN/MultiplyByN.joblib'),
+        os.path.join(tmpdir, 'StepClonerForEachDataInput/Pipeline[0]/Pipeline[0].joblib'),
+        os.path.join(tmpdir, 'StepClonerForEachDataInput/Pipeline[1]/FitCallbackStep/FitCallbackStep.joblib'),
+        os.path.join(tmpdir, 'StepClonerForEachDataInput/Pipeline[1]/MultiplyByN/MultiplyByN.joblib'),
+        os.path.join(tmpdir, 'StepClonerForEachDataInput/Pipeline[1]/Pipeline[1].joblib'),
+        os.path.join(tmpdir, 'StepClonerForEachDataInput/Pipeline/FitCallbackStep/FitCallbackStep.joblib'),
+        os.path.join(tmpdir, 'StepClonerForEachDataInput/Pipeline/MultiplyByN/MultiplyByN.joblib'),
+        os.path.join(tmpdir, 'StepClonerForEachDataInput/Pipeline/Pipeline.joblib'),
+        os.path.join(tmpdir, 'StepClonerForEachDataInput/StepClonerForEachDataInput.joblib')
+    ]
 
     for p in saved_paths:
         assert os.path.exists(p)
-    for p in not_saved_paths:
-        assert not os.path.exists(p)
 
 
 def _create_data(shape):
