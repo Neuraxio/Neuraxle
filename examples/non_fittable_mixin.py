@@ -51,7 +51,7 @@ class NonFittableStep(NonFittableMixin, BaseStep):
     def transform(self, data_inputs):
         # insert your transform code here
         print("NonFittableStep: I transformed.")
-        return self, data_inputs
+        return data_inputs
 
 
 class NonTransformableStep(NonTransformableMixin, BaseStep):
@@ -74,9 +74,18 @@ def main():
         Identity()  # Note: Identity does nothing: it inherits from both NonFittableMixin and NonTransformableMixin.
     ])
 
-    p = p.fit(np.array([0, 1]), np.array([0, 1]))
+    some_data = np.array([0, 1])
+    p = p.fit(some_data)
+    # Out:
+    #     NonFittableStep: I transformed.
+    #     NonTransformableStep: I fitted.
 
-    out = p.transform(np.array([0, 1]))
+    out = p.transform(some_data)
+    # Out:
+    #     NonFittableStep: I transformed.
+
+    assert np.array_equal(out, some_data)
+    # Data is unchanged as we've done nothing in the only transform.
 
 
 if __name__ == "__main__":
