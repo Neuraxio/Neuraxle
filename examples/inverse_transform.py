@@ -38,7 +38,7 @@ def main():
 
     data_inputs = np.array([1, 2])
     generated_outputs = p.transform(data_inputs)
-    regenerated_inputs = reversed(p).transform(generated_outputs)
+    regenerated_inputs = p.inverse_transform(generated_outputs)
 
     assert np.array_equal(regenerated_inputs, data_inputs)
     assert np.array_equal(generated_outputs, 2 * data_inputs)
