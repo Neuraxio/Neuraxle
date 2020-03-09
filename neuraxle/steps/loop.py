@@ -28,7 +28,7 @@ from typing import List
 import numpy as np
 
 from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, \
-    ForceHandleOnlyMixin, ForceHandleMixin
+    ForceHandleOnlyMixin, ForceHandleMixin, BaseSaver, TruncableJoblibStepSaver, TruncableSteps, NamedTupleList
 from neuraxle.data_container import ListDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
@@ -151,19 +151,20 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
+        self.savers.append(TruncableJoblibStepSaver())
 
         self.set_step(wrapped)
-        self.steps: List[BaseStep] = []
+        self.steps: List[NamedTupleList] = []
         self.copy_op = copy_op
 
     def set_train(self, is_train: bool = True):
         MetaStepMixin.set_train(self, is_train)
-        [s.set_train(is_train) for s in self.steps]
+        [step.set_train(is_train) for _, step in self]
         return self
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
         MetaStepMixin.set_hyperparams(self, hyperparams)
-        self.steps = [s.set_hyperparams(self.wrapped.get_hyperparams()) for s in self.steps]
+        self.steps = [(name, step.set_hyperparams(self.wrapped.get_hyperparams())) for name, step in self]
         return self
 
     def update_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
@@ -181,7 +182,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             :class:`HyperparameterSamples`
         """
         MetaStepMixin.update_hyperparams(self, hyperparams)
-        self.steps = [s.set_hyperparams(self.wrapped.get_hyperparams()) for s in self.steps]
+        self.steps = [(name, step.set_hyperparams(self.wrapped.get_hyperparams())) for name, step in self.steps]
         return self
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
@@ -199,7 +200,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
     def _copy_one_step_per_data_input(self, data_container):
         # One copy of step per data input:
-        self.steps = [self.copy_op(self.wrapped) for _ in range(len(data_container))]
+        self.steps = [self.copy_op(self.wrapped).set_name('{}[{}]'.format(self.wrapped.name, i)) for i in range(len(data_container))]
         self.invalidate()
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
@@ -263,6 +264,14 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
     def inverse_transform(self, data_output):
         return [self.steps[i].inverse_transform(di) for i, di in enumerate(data_output)]
+
+    def __iter__(self):
+        """
+        Iterate through the steps.
+
+        :return: iter(self.steps_as_tuple)
+        """
+        return iter(self.steps)
 
 
 class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStepMixin, BaseStep):

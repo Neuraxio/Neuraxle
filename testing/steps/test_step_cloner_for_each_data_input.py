@@ -1,5 +1,8 @@
+import os
+
 import numpy as np
 
+from neuraxle.base import ExecutionContext
 from neuraxle.hyperparams.distributions import Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 from neuraxle.pipeline import Pipeline
@@ -96,6 +99,30 @@ def test_step_cloner_should_set_train():
     assert not p.is_train
     assert not p.steps[0].is_train
     assert not p.steps[1].is_train
+
+
+def test_step_cloner_should_save_sub_steps(tmpdir):
+    tape = TapeCallbackFunction()
+    p = StepClonerForEachDataInput(
+        Pipeline([
+            FitCallbackStep(tape),
+            MultiplyByN(2)
+        ]),
+        cache_folder_when_no_handle=tmpdir
+    )
+    data_inputs = _create_data((2, 2))
+    expected_outputs = _create_data((2, 2))
+    p, processed_outputs = p.fit_transform(data_inputs, expected_outputs)
+
+    p.save(ExecutionContext(tmpdir), full_dump=True)
+
+    not_saved_paths = []
+    saved_paths = []
+
+    for p in saved_paths:
+        assert os.path.exists(p)
+    for p in not_saved_paths:
+        assert not os.path.exists(p)
 
 
 def _create_data(shape):
