@@ -22,15 +22,21 @@ import os
 import time
 import traceback
 from abc import ABC, abstractmethod
-from typing import Callable, List
+from typing import Callable, List, Tuple
+import numpy as np
+
+from sklearn.metrics import r2_score
 
 from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, ForceHandleOnlyMixin, \
     EvaluableStepMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
 
-from neuraxle.metaopt.auto_ml import RandomSearchHyperparameterOptimizer, TRIAL_STATUS, AutoMLContainer
-from neuraxle.metaopt.random import BaseCrossValidationWrapper
+from neuraxle.metaopt.auto_ml import RandomSearchHyperparameterSelectionStrategy, AutoMLContainer
+from neuraxle.metaopt.trial import TRIAL_STATUS
+from neuraxle.metaopt.random import BaseCrossValidationWrapper, BaseValidation
+from neuraxle.steps.loop import StepClonerForEachDataInput
+from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
 
 class HyperparamsRepository(ABC):
@@ -588,7 +594,7 @@ class RandomSearch(AutoMLSequentialWrapper):
             self,
             wrapped=wrapped,
             auto_ml_algorithm=AutoMLAlgorithm(
-                hyperparameter_optimizer=RandomSearchHyperparameterOptimizer(),
+                hyperparameter_optimizer=RandomSearchHyperparameterSelectionStrategy(),
                 higher_score_is_better=higher_score_is_better,
                 cache_folder_when_no_handle=cache_folder_when_no_handle
             ),
@@ -679,3 +685,135 @@ class Trials:
     def __repr__(self):
         s = "Trials({})".format(str([str(t) for t in self.trials]))
         return s
+
+class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValidation, ABC):
+    # TODO: change default argument of scoring_function...
+    def __init__(self, wrapped=None, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch(), cache_folder_when_no_handle=None,
+                 split_data_container_during_fit=True, predict_after_fit=True):
+        BaseValidation.__init__(self, wrapped=wrapped, scoring_function=scoring_function)
+        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
+        EvaluableStepMixin.__init__(self)
+
+        self.split_data_container_during_fit = split_data_container_during_fit
+        self.predict_after_fit = predict_after_fit
+        self.joiner = joiner
+
+    def train(self, train_data_container: DataContainer, context: ExecutionContext):
+        step = StepClonerForEachDataInput(self.wrapped)
+        step = step.handle_fit(train_data_container, context)
+
+        return step
+
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+        assert self.wrapped is not None
+
+        if self.split_data_container_during_fit:
+            train_data_container, validation_data_container = self.split_data_container(data_container)
+        else:
+            train_data_container = data_container
+
+        step = StepClonerForEachDataInput(self.wrapped)
+        step = step.handle_fit(train_data_container, context)
+
+        if self.predict_after_fit:
+            results = step.handle_predict(validation_data_container, context)
+            self.calculate_score(results)
+
+        return self
+
+    def calculate_score(self, results):
+        self.scores = [self.scoring_function(a, b) for a, b in zip(results.data_inputs, results.expected_outputs)]
+        self.scores_mean = np.mean(self.scores)
+        self.scores_std = np.std(self.scores)
+
+    def split_data_container(self, data_container: DataContainer) -> Tuple[DataContainer, DataContainer]:
+        train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = self.split(
+            data_container.data_inputs,
+            data_container.expected_outputs
+        )
+
+        train_data_container = DataContainer(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
+        validation_data_container = DataContainer(data_inputs=validation_data_inputs,
+                                                  expected_outputs=validation_expected_outputs)
+
+        return train_data_container, validation_data_container
+
+    def get_score(self):
+        return self.scores_mean
+
+    def get_scores_std(self):
+        return self.scores_std
+
+    @abstractmethod
+    def split(self, data_inputs, expected_outputs):
+        raise NotImplementedError("TODO")
+
+class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
+    def __init__(
+            self,
+            scoring_function=r2_score,
+            k_fold=3,
+            joiner=NumpyConcatenateOuterBatch(),
+            cache_folder_when_no_handle=None,
+            split_data_container_during_fit=True,
+            predict_after_fit=True
+    ):
+        self.k_fold = k_fold
+        BaseCrossValidationWrapper.__init__(
+            self,
+            scoring_function=scoring_function,
+            joiner=joiner,
+            cache_folder_when_no_handle=cache_folder_when_no_handle,
+            split_data_container_during_fit=split_data_container_during_fit,
+            predict_after_fit=predict_after_fit
+        )
+
+    def split(self, data_inputs, expected_outputs):
+        validation_data_inputs, validation_expected_outputs = self.validation_split(data_inputs, expected_outputs)
+        train_data_inputs, train_expected_outputs = self.train_split(data_inputs, expected_outputs)
+
+        return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
+
+    def train_split(self, data_inputs, expected_outputs) -> (List, List):
+        train_data_inputs = []
+        train_expected_outputs = []
+        data_inputs = np.array(data_inputs)
+        expected_outputs = np.array(expected_outputs)
+
+        for i in range(len(data_inputs)):
+            before_di = data_inputs[:i]
+            after_di = data_inputs[i + 1:]
+            inputs = (before_di, after_di)
+
+            before_eo = expected_outputs[:i]
+            after_eo = expected_outputs[i + 1:]
+            outputs = (before_eo, after_eo)
+
+            inputs = self.joiner.transform(inputs)
+            outputs = self.joiner.transform(outputs)
+
+            train_data_inputs.append(inputs)
+            train_expected_outputs.append(outputs)
+
+        return train_data_inputs, train_expected_outputs
+
+    def validation_split(self, data_inputs, expected_outputs=None) -> (List, List):
+        splitted_data_inputs = self._split(data_inputs)
+        if expected_outputs is not None:
+            splitted_expected_outputs = self._split(expected_outputs)
+            return splitted_data_inputs, splitted_expected_outputs
+
+        return splitted_data_inputs, [None] * len(splitted_data_inputs)
+
+    def _split(self, data_inputs):
+        splitted_data_inputs = []
+        step = len(data_inputs) / float(self.k_fold)
+        for i in range(self.k_fold):
+            a = int(step * i)
+            b = int(step * (i + 1))
+            if b > len(data_inputs):
+                b = len(data_inputs)
+
+            slice = data_inputs[a:b]
+            splitted_data_inputs.append(slice)
+        return splitted_data_inputs

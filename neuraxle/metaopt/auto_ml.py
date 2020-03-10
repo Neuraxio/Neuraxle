@@ -1,19 +1,21 @@
 import copy
-import datetime
 import glob
 import hashlib
 import json
 import os
 import time
 import traceback
+import numpy as np
 from abc import ABC, abstractmethod
-from enum import Enum
-from typing import Callable, Dict, List, Union
+from typing import Callable, List, Union, Tuple
 
 from neuraxle.base import BaseStep, ExecutionContext, ForceHandleOnlyMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
+from neuraxle.metaopt.callbacks import BaseCallback, CallbackList, MetricCallback
 from neuraxle.metaopt.random import BaseCrossValidationWrapper
+from neuraxle.metaopt.trial import Trial, TRIAL_STATUS, Trials
+from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
 
 class HyperparamsRepository(ABC):
@@ -39,11 +41,15 @@ class HyperparamsRepository(ABC):
         :class:`HyperparameterSamples`
     """
 
-    def __init__(self, hyperparameter_optimizer=None, cache_folder=None):
+    def __init__(self, hyperparameter_optimizer=None, cache_folder=None, best_retrained_model_folder=None):
+        if best_retrained_model_folder is None:
+            best_retrained_model_folder = os.path.join(cache_folder, 'best')
+        self.best_retrained_model_folder = best_retrained_model_folder
+
         self.hyperparameter_optimizer = hyperparameter_optimizer
         self.cache_folder = cache_folder
 
-    def set_optimizer(self, hyperparameter_optimizer: 'BaseHyperparameterOptimizer'):
+    def set_optimizer(self, hyperparameter_optimizer: 'BaseHyperparameterSelectionStrategy'):
         """
         Set optimizer.
 
@@ -72,30 +78,25 @@ class HyperparamsRepository(ABC):
         """
         pass
 
-    def get_best_hyperparams(self, higher_score_is_better) -> HyperparameterSamples:
+    def get_best_hyperparams(self) -> HyperparameterSamples:
         trials = self.load_all_trials(status=TRIAL_STATUS.SUCCESS)
-        best_hyperparams = HyperparameterSamples(trials.get_best_hyperparams(higher_score_is_better))
+        best_hyperparams = HyperparameterSamples(trials.get_best_hyperparams())
         return best_hyperparams
 
-    def get_best_model(self, higher_score_is_better):
-        hyperparams = self.get_best_hyperparams(higher_score_is_better=higher_score_is_better)
-        trial_hash = self._get_trial_hash(HyperparameterSamples(hyperparams).to_flat_as_dict_primitive())
-        p = ExecutionContext(str(self.cache_folder)).load(trial_hash)
+    def get_best_model(self):
+        hyperparams: HyperparameterSamples = self.get_best_hyperparams()
+        trial_hash: str = self._get_trial_hash(HyperparameterSamples(hyperparams).to_flat_as_dict_primitive())
+        p: BaseStep = ExecutionContext(str(self.cache_folder)).load(trial_hash)
+
         return p
 
-    def save_model(self, step: BaseStep, trial_hyperparams: HyperparameterSamples) -> BaseStep:
-        """
-        Save step inside the trial hash folder.
-
-        :param step: step to save
-        :param trial_hyperparams: trail hyperparams
-        :return: saved step
-        """
-        hyperparams = trial_hyperparams.to_flat_as_dict_primitive()
+    def save_best_model(self, step: BaseStep):
+        hyperparams = step.get_hyperparams().to_flat_as_dict_primitive()
         trial_hash = self._get_trial_hash(hyperparams)
-        step.set_name(trial_hash).save(ExecutionContext(self.cache_folder), full_dump=True)
+        step.set_name(trial_hash).save(ExecutionContext(self.best_retrained_model_folder), full_dump=True)
 
         return step
+
 
     @abstractmethod
     def new_trial(self, auto_ml_container: 'AutoMLContainer'):
@@ -201,9 +202,10 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :class:`Trainer`
     """
 
-    def __init__(self, hyperparameter_optimizer: 'BaseHyperparameterOptimizer' = None, cache_folder=None):
+    def __init__(self, hyperparameter_optimizer: 'BaseHyperparameterSelectionStrategy' = None, cache_folder=None, best_retrained_model_folder=None):
         HyperparamsRepository.__init__(self, hyperparameter_optimizer=hyperparameter_optimizer,
-                                       cache_folder=cache_folder)
+                                       cache_folder=cache_folder, best_retrained_model_folder=best_retrained_model_folder)
+        self.best_retrained_model_folder = best_retrained_model_folder
 
     def save_trial(self, trial: 'Trial'):
         """
@@ -235,7 +237,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :return:
         """
         hyperparams = self.hyperparameter_optimizer.find_next_best_hyperparams(auto_ml_container)
-        trial = Trial(hyperparams)
+        trial = Trial(hyperparams, cache_folder=self.cache_folder)
         self._create_trial_json(trial=trial)
 
         return trial
@@ -299,118 +301,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         return os.path.join(self.cache_folder, "NEW_" + current_hyperparameters_hash) + '.json'
 
 
-class Trial:
-    """
-    Trial data container.
-
-    .. seealso::
-        :class:`AutoML`,
-        :class:`HyperparamsRepository`,
-        :class:`HyperparameterOptimizer`,
-        :class:`RandomSearchHyperparameterOptimizer`,
-        :class:`DataContainer`,
-        :class:`EarlyStoppingCallback`,
-    """
-
-    def __init__(
-            self,
-            hyperparams: HyperparameterSamples,
-            status: 'TRIAL_STATUS' = None,
-            train_score: int = None,
-            validation_score: int = None,
-            error: Exception = None,
-            error_traceback: str = None,
-            metrics_results_train: Dict = None,
-            metrics_results_validation: Dict = None,
-            pipeline: BaseStep = None,
-            train_scores: List[float] = None,
-            validation_scores: List[float] = None
-    ):
-        if status is None:
-            status = TRIAL_STATUS.PLANNED
-        self.status: TRIAL_STATUS = status
-        self.train_score: float = train_score
-        self.validation_score: float = validation_score
-        self.error: Exception = error
-        self.error_traceback: str = error_traceback
-        self.metrics_results_train: Dict = metrics_results_train
-        self.metrics_results_validation: Dict = metrics_results_validation
-        self.pipeline: BaseStep = pipeline
-
-        if train_scores is None:
-            train_scores = []
-        self.train_scores: List[float] = train_scores
-
-        if validation_scores is None:
-            validation_scores = []
-        self.validation_scores: List[float] = validation_scores
-
-        self.hyperparams: HyperparameterSamples = hyperparams
-
-    def update_trial(self, train_score: float, validation_score: float, metrics_results_train: Dict, metrics_results_validation: Dict, pipeline: BaseStep):
-        self.train_score = train_score
-        self.validation_score = validation_score
-        self.train_scores.append(train_score)
-        self.validation_scores.append(validation_score)
-        self.metrics_results_train = metrics_results_train
-        self.metrics_results_validation = metrics_results_validation
-        self.pipeline = pipeline
-
-    def set_success_trial(self):
-        self.status = TRIAL_STATUS.SUCCESS
-
-    def set_failed_trial(self, error: Exception):
-        self.status = TRIAL_STATUS.FAILED
-        self.error = str(error)
-        self.error_traceback = traceback.format_exc()
-
-    def to_json(self) -> dict:
-        return {
-            'hyperparams': self.hyperparams.to_flat_as_dict_primitive(),
-            'status': self.status.value,
-            'train_score': self.train_score,
-            'validation_score': self.validation_score,
-            'error': self.error,
-            'error_traceback': self.error_traceback,
-            'metrics_results_train': self.metrics_results_train,
-            'metrics_results_validation': self.metrics_results_validation,
-            'train_scores': self.train_scores,
-            'validation_scores': self.validation_scores
-        }
-
-    @staticmethod
-    def from_json(trial_json) -> 'Trial':
-        return Trial(
-            hyperparams=trial_json['hyperparams'],
-            status=trial_json['status'],
-            train_score=trial_json['train_score'],
-            validation_score=trial_json['validation_score'],
-            error=trial_json['error'],
-            error_traceback=trial_json['error_traceback'],
-            metrics_results_train=trial_json['metrics_results_train'],
-            metrics_results_validation=trial_json['metrics_results_validation'],
-            train_scores=trial_json['train_scores'],
-            validation_scores=trial_json['validation_scores']
-        )
-
-    def __enter__(self):
-        self.start_time = datetime.datetime.now()
-        self.status = TRIAL_STATUS.PLANNED
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.end_time = datetime.datetime.now()
-        return self
-
-    def __str__(self):
-        return self.__repr__()
-
-    def __repr__(self):
-        s = "Trial.from_json({})".format(str(self.to_json()))
-        return s
-
-
-class BaseHyperparameterOptimizer(ABC):
+class BaseHyperparameterSelectionStrategy(ABC):
     @abstractmethod
     def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
         """
@@ -422,118 +313,6 @@ class BaseHyperparameterOptimizer(ABC):
         :rtype: HyperparameterSamples
         """
         raise NotImplementedError()
-
-
-class BaseCallback(ABC):
-    @abstractmethod
-    def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, early_stopping: bool):
-        pass
-
-
-class BaseRefitCallback(ABC):
-    @abstractmethod
-    def call(self, scores):
-        pass
-
-
-class EarlyStoppingCallback(BaseCallback):
-    """
-    Perform early stopping when there is multiple epochs in a row that didn't improve the performance of the model.
-
-    Example usage :
-
-    .. code-block:: python
-
-        trainer = Trainer(
-            metrics=self.metrics,
-            callbacks=self.callbacks,
-            score=self.scoring_function,
-            epochs=self.epochs
-        )
-
-        trial = trainer.execute_trial(
-            p=p,
-            trial_repository=repo_trial,
-            train_data_container=training_data_container,
-            validation_data_container=validation_data_container,
-            context=context
-        )
-
-        pipeline = trainer.refit(repo_trial.pipeline, data_container, context)
-
-
-    .. seealso::
-        :class:`AutoML`,
-        :class:`Trial`,
-        :class:`HyperparamsRepository`,
-        :class:`HyperparameterOptimizer`,
-        :class:`RandomSearchHyperparameterOptimizer`,
-        :class:`DataContainer`
-    """
-
-    def __init__(self, n_epochs_without_improvement, higher_score_is_better):
-        self.higher_score_is_better = higher_score_is_better
-        self.n_epochs_without_improvement = n_epochs_without_improvement
-
-    def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, early_stopping: bool):
-        if len(trial.validation_scores) > self.n_epochs_without_improvement:
-            if trial.validation_scores[-self.n_epochs_without_improvement] >= trial.validation_scores[
-                -1] and self.higher_score_is_better:
-                return True
-            if trial.validation_scores[-self.n_epochs_without_improvement] <= trial.validation_scores[
-                -1] and not self.higher_score_is_better:
-                return True
-        return False
-
-
-class EarlyStoppingRefitCallback(BaseRefitCallback):
-    """
-    Perform early stopping when there is multiple epochs in a row that didn't improve the performance of the model.
-
-    Example usage :
-
-    .. code-block:: python
-
-        trainer = Trainer(
-            metrics=self.metrics,
-            callbacks=self.callbacks,
-            refit_callbacks=self.callbacks,
-            score=self.scoring_function,
-            epochs=self.epochs
-        )
-
-        trial = trainer.fit(
-            p=p,
-            trial_repository=repo_trial,
-            train_data_container=training_data_container,
-            validation_data_container=validation_data_container,
-            context=context
-        )
-
-        pipeline = trainer.refit(repo_trial.pipeline, data_container, context)
-
-    .. seealso::
-        :class:`AutoML`,
-        :class:`Trial`,
-        :class:`HyperparamsRepository`,
-        :class:`HyperparameterOptimizer`,
-        :class:`RandomSearchHyperparameterOptimizer`,
-        :class:`DataContainer`
-    """
-
-    def __init__(self, n_epochs_without_improvement, higher_score_is_better):
-        self.higher_score_is_better = higher_score_is_better
-        self.n_epochs_without_improvement = n_epochs_without_improvement
-
-    def call(self, scores):
-        if len(scores) > self.n_epochs_without_improvement:
-            if scores[-self.n_epochs_without_improvement] >= scores[-1] and self.higher_score_is_better:
-                return True
-            if scores[-self.n_epochs_without_improvement] <= scores[-1] and not self.higher_score_is_better:
-                return True
-        return False
 
 
 class Trainer:
@@ -569,24 +348,21 @@ class Trainer:
         :class:`DataContainer`
     """
 
-    def __init__(self, score, refit_score, epochs, metrics=None, callbacks=None, refit_callbacks=None,
-                 print_metrics=True, print_func=None):
-        self.score = score
-        self.refit_score = refit_score
-
+    def __init__(
+            self,
+            epochs,
+            metrics=None,
+            callbacks=None,
+            print_metrics=True,
+            print_func=None
+    ):
         self.epochs = epochs
         if metrics is None:
             metrics = {}
         self.metrics = metrics
         self._initialize_metrics(metrics)
 
-        if callbacks is None:
-            callbacks = []
-        self.callbacks = callbacks
-
-        if refit_callbacks is None:
-            refit_callbacks = []
-        self.refit_callbacks = refit_callbacks
+        self.callbacks = CallbackList(callbacks)
 
         if print_func is None:
             print_func = print
@@ -617,34 +393,18 @@ class Trainer:
             y_pred_train = p.handle_predict(train_data_container, context)
             y_pred_val = p.handle_predict(validation_data_container, context)
 
-            self._update_metrics_results(y_pred_train, train_metrics=True)
-            self._update_metrics_results(y_pred_val, train_metrics=False)
+            trial.set_fitted_pipeline(pipeline=p)
 
-            train_score = self.score(y_pred_train.data_inputs, y_pred_train.expected_outputs)
-            validation_score = self.score(y_pred_val.data_inputs, y_pred_val.expected_outputs)
-
-            trial.update_trial(
-                train_score=train_score,
-                validation_score=validation_score,
-                metrics_results_train=self.metrics_results_train,
-                metrics_results_validation=self.metrics_results_validation,
-                pipeline=p
-            )
-
-            for callback in self.callbacks:
-                if callback.call(
-                        trial=trial,
-                        epoch_number=i,
-                        total_epochs=self.epochs,
-                        input_train=train_data_container,
-                        pred_train=y_pred_train,
-                        input_val=validation_data_container,
-                        pred_val=y_pred_val,
-                        early_stopping=early_stopping
-                ):
-                    early_stopping = True
-
-            if early_stopping:
+            if self.callbacks.call(
+                    trial=trial,
+                    epoch_number=i,
+                    total_epochs=self.epochs,
+                    input_train=train_data_container,
+                    pred_train=y_pred_train,
+                    input_val=validation_data_container,
+                    pred_val=y_pred_val,
+                    is_finished_and_fitted=early_stopping
+            ):
                 break
 
         return trial
@@ -695,30 +455,6 @@ class Trainer:
             self.metrics_results_train[m] = []
             self.metrics_results_validation[m] = []
 
-    def _update_metrics_results(self, data_container: DataContainer, train_metrics: bool):
-        """
-        Update metrics results.
-
-        :param data_container: data container
-        :param train_metrics: bool for training mode
-
-        :return:
-        """
-        result = {}
-        for metric_name, metric_function in self.metrics.items():
-            result_metric = metric_function(data_container.data_inputs, data_container.expected_outputs)
-            result[metric_name] = result_metric
-
-            if train_metrics:
-                self.metrics_results_train[metric_name].append(result_metric)
-            else:
-                self.metrics_results_validation[metric_name].append(result_metric)
-
-        if self.print_metrics:
-            if train_metrics:
-                self.print_func('train metrics : {}'.format(result))
-            else:
-                self.print_func('validation metrics : {}'.format(result))
 
 
 class AutoML(ForceHandleOnlyMixin, BaseStep):
@@ -763,53 +499,46 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
     def __init__(
             self,
             pipeline,
-            validation_technique: BaseCrossValidationWrapper,
-            scoring_function: Callable,
+            validation_split_function: Callable,
             refit_trial,
-            hyperparams_optimizer: BaseHyperparameterOptimizer = None,
+            scoring_callback: MetricCallback,
+            hyperparams_optimizer: BaseHyperparameterSelectionStrategy = None,
             hyperparams_repository: HyperparamsRepository = None,
             n_trials: int = 10,
-            metrics: Dict = None,
             epochs: int = 10,
             callbacks: List[BaseCallback] = None,
-            refit_callbacks: List[BaseRefitCallback] = None,
             refit_scoring_function: Callable = None,
-            higher_score_is_better=False,
             print_func: Callable = None,
-            only_save_new_best_model=True,
             print_metrics=True,
             cache_folder_when_no_handle=None
     ):
         BaseStep.__init__(self)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
 
+        self.scoring_callback = scoring_callback
+        self.validation_split_function = create_split_data_container_function(validation_split_function)
+
         self.print_metrics = print_metrics
         if print_func is None:
             print_func = print
 
         if hyperparams_optimizer is None:
-            hyperparams_optimizer = RandomSearchHyperparameterOptimizer()
+            hyperparams_optimizer = RandomSearchHyperparameterSelectionStrategy()
         self.hyperparameter_optimizer = hyperparams_optimizer
 
         if hyperparams_repository is None:
             hyperparams_repository = HyperparamsJSONRepository(hyperparams_optimizer, cache_folder_when_no_handle)
         else:
             hyperparams_repository.set_optimizer(hyperparams_optimizer)
+
         self.hyperparams_repository = hyperparams_repository
 
-        self.only_save_new_best_model = only_save_new_best_model
         self.pipeline = pipeline
-        self.validation_technique = validation_technique
-        self.higher_score_is_better = higher_score_is_better
         self.print_func = print_func
 
         self.n_trial = n_trials
         self.hyperparams_repository = hyperparams_repository
         self.hyperparameter_optimizer = hyperparams_optimizer
-
-        self.scoring_function = scoring_function
-        if refit_scoring_function is None:
-            refit_scoring_function = scoring_function
 
         self.refit_scoring_function = refit_scoring_function
 
@@ -817,24 +546,12 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             callbacks = []
         self.callbacks = callbacks
 
-        if refit_callbacks is None:
-            refit_callbacks = []
-        self.refit_callbacks = refit_callbacks
-
         self.epochs = epochs
-        if metrics is None:
-            metrics = {}
-        self.metrics = metrics
         self.refit_trial = refit_trial
 
         self.trainer = Trainer(
-            metrics=self.metrics,
             callbacks=self.callbacks,
-            refit_callbacks=self.refit_callbacks,
-            score=self.scoring_function,
-            refit_score=self.refit_scoring_function,
             epochs=self.epochs,
-            print_metrics=self.print_metrics,
             print_func=self.print_func
         )
 
@@ -849,15 +566,13 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
         :return: self
         """
-        best_score = None
-        training_data_container, validation_data_container = self.validation_technique.split_data_container(
-            data_container)
+        training_data_container, validation_data_container = self.validation_split_function(data_container)
 
         for trial_number in range(self.n_trial):
             self.print_func('trial {}/{}'.format(trial_number, self.n_trial))
 
             auto_ml_data = self._load_auto_ml_data(trial_number)
-            p = self.validation_technique.set_step(copy.deepcopy(self.pipeline))
+            p = copy.deepcopy(self.pipeline)
 
             with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
                 try:
@@ -871,19 +586,15 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                         context=context
                     )
 
-                    repo_trial.set_success_trial()
+                    repo_trial.set_success()
                 except Exception as error:
                     track = traceback.format_exc()
                     self.print_func(track)
-                    repo_trial.set_failed_trial(error)
-
-            is_new_best_score = self._trial_has_a_new_best_score(best_score, repo_trial)
-            if is_new_best_score:
-                best_score = repo_trial.validation_score
+                    repo_trial.set_failed(error)
 
             self.hyperparams_repository.save_trial(repo_trial)
 
-        best_hyperparams = self.hyperparams_repository.get_best_hyperparams(self.higher_score_is_better)
+        best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
         p: BaseStep = self._load_virgin_model(hyperparams=best_hyperparams)
         if self.refit_trial:
             p = self.trainer.refit(
@@ -892,12 +603,12 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                 context=context
             )
 
-            self.hyperparams_repository.save_model(p, best_hyperparams)
+            self.hyperparams_repository.save_best_model(p)
 
         return self
 
     def get_best_model(self):
-        return self.hyperparams_repository.get_best_model(self.higher_score_is_better)
+        return self.hyperparams_repository.get_best_model()
 
     def _load_virgin_best_model(self) -> BaseStep:
         """
@@ -905,8 +616,8 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         :return: best model step
         :rtype: BaseStep
         """
-        best_hyperparams = self.hyperparams_repository.get_best_hyperparams(self.higher_score_is_better)
-        p: Union[BaseCrossValidationWrapper, BaseStep] = self.validation_technique.set_step(copy.copy(self.pipeline))
+        best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
+        p: Union[BaseCrossValidationWrapper, BaseStep] = copy.copy(self.pipeline)
         p = p.update_hyperparams(best_hyperparams)
 
         best_model = p.get_step()
@@ -919,51 +630,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         :return: best model step
         :rtype: BaseStep
         """
-        p: Union[BaseCrossValidationWrapper, BaseStep] = self.validation_technique.set_step(copy.copy(self.pipeline))
-        p = p.update_hyperparams(hyperparams)
-        model = p.get_step()
-
-        return copy.deepcopy(model)
-
-    def _trial_has_a_new_best_score(self, best_score, repo_trial):
-        """
-        Return True if trial has a new best score.
-
-        :param best_score:
-        :param repo_trial:
-        :return:
-        """
-        if best_score is None:
-            return True
-
-        new_best_score = False
-        if repo_trial.status == TRIAL_STATUS.FAILED:
-            return new_best_score
-
-        if repo_trial.validation_score < best_score and not self.higher_score_is_better:
-            new_best_score = True
-
-        if repo_trial.validation_score > best_score and self.higher_score_is_better:
-            self.print_func('new best score: {}'.format(best_score))
-            self.print_func('new best hyperparams: {}'.format(repo_trial.hyperparams))
-            new_best_score = True
-
-        return new_best_score
-
-    def _save_pipeline_if_needed(self, pipeline, trial_hyperparams, is_new_best_score):
-        """
-        Save pipeline if a new best score has been found, or if self.only_save_new_best_model is False.
-
-        :param pipeline: pipeline to save
-        :param is_new_best_score: bool that is True if a new best score has been found
-
-        :return:
-        """
-        if self.only_save_new_best_model:
-            if is_new_best_score:
-                self.hyperparams_repository.save_model(pipeline, trial_hyperparams)
-        else:
-            self.hyperparams_repository.save_model(pipeline, trial_hyperparams)
+        return copy.deepcopy(self.pipeline).update_hyperparams(hyperparams)
 
     def _load_auto_ml_data(self, trial_number: int) -> 'AutoMLContainer':
         """
@@ -975,79 +642,13 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         :rtype: Trials
         """
         trials = self.hyperparams_repository.load_all_trials(TRIAL_STATUS.SUCCESS)
+        hyperparams_space = self.pipeline.get_hyperparams_space()
 
-        step = copy.copy(self.validation_technique).set_step(self.pipeline)
-        hyperparams_space = step.get_hyperparams_space()
         return AutoMLContainer(
             trial_number=trial_number,
             trials=trials,
             hyperparameter_space=hyperparams_space,
         )
-
-
-class Trials:
-    """
-    Data object containing auto ml trials.
-
-    .. seealso::
-        :class:`AutoMLSequentialWrapper`,
-        :class:`RandomSearch`,
-        :class:`HyperparamsRepository`,
-        :class:`MetaStepMixin`,
-        :class:`BaseStep`
-    """
-
-    def __init__(
-            self,
-            trials: List[Trial] = None
-    ):
-        if trials is None:
-            trials = []
-        self.trials: List[Trial] = trials
-
-    def get_best_hyperparams(self, higher_score_is_better: bool) -> HyperparameterSamples:
-        best_score = None
-        best_hyperparams = None
-
-        for trial in self.trials:
-            if best_score is None or higher_score_is_better == (trial.validation_score > best_score):
-                best_score = trial.validation_score
-                best_hyperparams = trial.hyperparams
-
-        return best_hyperparams
-
-    def append(self, trial: Trial):
-        self.trials.append(trial)
-
-    def filter(self, status: 'TRIAL_STATUS') -> 'Trials':
-        trials = Trials()
-        for trial in self.trials:
-            if trial.status == status:
-                trials.append(trial)
-
-        return trials
-
-    def __getitem__(self, item):
-        return self.trials[item]
-
-    def __len__(self):
-        return len(self.trials)
-
-    def __str__(self):
-        return self.__repr__()
-
-    def __repr__(self):
-        s = "Trials({})".format(str([str(t) for t in self.trials]))
-        return s
-
-
-class TRIAL_STATUS(Enum):
-    """
-    Trial status.
-    """
-    FAILED = 'failed'
-    SUCCESS = 'success'
-    PLANNED = 'planned'
 
 
 class AutoMLContainer:
@@ -1073,7 +674,7 @@ class AutoMLContainer:
         self.trial_number = trial_number
 
 
-class RandomSearchHyperparameterOptimizer(BaseHyperparameterOptimizer):
+class RandomSearchHyperparameterSelectionStrategy(BaseHyperparameterSelectionStrategy):
     """
     AutoML Hyperparameter Optimizer that randomly samples the space of random variables.
     Please refer to :class:`AutoMLSequentialWrapper` for a usage example.
@@ -1087,7 +688,7 @@ class RandomSearchHyperparameterOptimizer(BaseHyperparameterOptimizer):
     """
 
     def __init__(self):
-        BaseHyperparameterOptimizer.__init__(self)
+        BaseHyperparameterSelectionStrategy.__init__(self)
 
     def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
         """
@@ -1098,3 +699,76 @@ class RandomSearchHyperparameterOptimizer(BaseHyperparameterOptimizer):
         :rtype: HyperparameterSamples
         """
         return auto_ml_container.hyperparameter_space.rvs()
+
+
+ValidationSplitter = Callable
+
+def create_split_data_container_function(validation_splitter_function: Callable):
+    def split_data_container(data_container: DataContainer) -> Tuple[DataContainer, DataContainer]:
+        train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = \
+            validation_splitter_function(data_container.data_inputs, data_container.expected_outputs)
+
+        train_data_container = DataContainer(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
+        validation_data_container = DataContainer(data_inputs=validation_data_inputs, expected_outputs=validation_expected_outputs)
+
+        return train_data_container, validation_data_container
+
+    return split_data_container
+
+
+def kfold_cross_validation_split(k_fold):
+    def split(data_inputs, expected_outputs):
+        validation_data_inputs, validation_expected_outputs = \
+            kfold_cross_validation_validation_split(data_inputs, expected_outputs)
+        train_data_inputs, train_expected_outputs = \
+            kfold_cross_validation_train_split(data_inputs, expected_outputs)
+
+        return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
+
+    def kfold_cross_validation_train_split(data_inputs, expected_outputs) -> (List, List):
+        train_data_inputs = []
+        train_expected_outputs = []
+        data_inputs = np.array(data_inputs)
+        expected_outputs = np.array(expected_outputs)
+        joiner = NumpyConcatenateOuterBatch()
+
+        for i in range(len(data_inputs)):
+            before_di = data_inputs[:i]
+            after_di = data_inputs[i + 1:]
+            inputs = (before_di, after_di)
+
+            before_eo = expected_outputs[:i]
+            after_eo = expected_outputs[i + 1:]
+            outputs = (before_eo, after_eo)
+
+            inputs = joiner.transform(inputs)
+            outputs = joiner.transform(outputs)
+
+            train_data_inputs.append(inputs)
+            train_expected_outputs.append(outputs)
+
+        return train_data_inputs, train_expected_outputs
+
+    def kfold_cross_validation_validation_split(data_inputs, expected_outputs=None) -> (List, List):
+        splitted_data_inputs = _kfold_cross_validation_split(data_inputs)
+        if expected_outputs is not None:
+            splitted_expected_outputs = _kfold_cross_validation_split(expected_outputs)
+            return splitted_data_inputs, splitted_expected_outputs
+
+        return splitted_data_inputs, [None] * len(splitted_data_inputs)
+
+    def _kfold_cross_validation_split(data_inputs):
+        splitted_data_inputs = []
+        step = len(data_inputs) / float(k_fold)
+        for i in range(k_fold):
+            a = int(step * i)
+            b = int(step * (i + 1))
+            if b > len(data_inputs):
+                b = len(data_inputs)
+
+            slice = data_inputs[a:b]
+            splitted_data_inputs.append(slice)
+
+        return splitted_data_inputs
+
+    return split

@@ -92,17 +92,8 @@ class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseV
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
         assert self.wrapped is not None
 
-        if self.split_data_container_during_fit:
-            train_data_container, validation_data_container = self.split_data_container(data_container)
-        else:
-            train_data_container = data_container
-
         step = StepClonerForEachDataInput(self.wrapped)
-        step = step.handle_fit(train_data_container, context)
-
-        if self.predict_after_fit:
-            results = step.handle_predict(validation_data_container, context)
-            self.calculate_score(results)
+        step = step.handle_fit(data_container, context)
 
         return step
 
@@ -118,8 +109,10 @@ class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseV
         )
 
         train_data_container = DataContainer(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
-        validation_data_container = DataContainer(data_inputs=validation_data_inputs,
-                                                  expected_outputs=validation_expected_outputs)
+        validation_data_container = DataContainer(
+            data_inputs=validation_data_inputs,
+            expected_outputs=validation_expected_outputs
+        )
 
         return train_data_container, validation_data_container
 
@@ -371,34 +364,36 @@ class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
             scoring_function=r2_score,
             k_fold=3,
             joiner=NumpyConcatenateOuterBatch(),
-            cache_folder_when_no_handle=None,
-            split_data_container_during_fit=True,
-            predict_after_fit=True
+            cache_folder_when_no_handle=None
     ):
         self.k_fold = k_fold
         BaseCrossValidationWrapper.__init__(
             self,
             scoring_function=scoring_function,
             joiner=joiner,
-            cache_folder_when_no_handle=cache_folder_when_no_handle,
-            split_data_container_during_fit=split_data_container_during_fit,
-            predict_after_fit=predict_after_fit
+            cache_folder_when_no_handle=cache_folder_when_no_handle
         )
 
     def split(self, data_inputs, expected_outputs):
         validation_data_inputs, validation_expected_outputs = self.validation_split(data_inputs, expected_outputs)
-
-        train_data_inputs, train_expected_outputs = self.train_split(validation_data_inputs,
-                                                                     validation_expected_outputs)
+        train_data_inputs, train_expected_outputs = self.train_split(data_inputs, expected_outputs)
 
         return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
 
-    def train_split(self, validation_data_inputs, validation_expected_outputs) -> (List, List):
+    def train_split(self, data_inputs, expected_outputs) -> (List, List):
         train_data_inputs = []
         train_expected_outputs = []
-        for i in range(len(validation_data_inputs)):
-            inputs = validation_data_inputs[:i] + validation_data_inputs[i + 1:]
-            outputs = validation_expected_outputs[:i] + validation_expected_outputs[i + 1:]
+        data_inputs = np.array(data_inputs)
+        expected_outputs = np.array(expected_outputs)
+
+        for i in range(len(data_inputs)):
+            before_di = data_inputs[:i]
+            after_di = data_inputs[i + 1:]
+            inputs = (before_di, after_di)
+
+            before_eo = expected_outputs[:i]
+            after_eo = expected_outputs[i + 1:]
+            outputs = (before_eo, after_eo)
 
             inputs = self.joiner.transform(inputs)
             outputs = self.joiner.transform(outputs)
@@ -413,6 +408,7 @@ class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
         if expected_outputs is not None:
             splitted_expected_outputs = self._split(expected_outputs)
             return splitted_data_inputs, splitted_expected_outputs
+
         return splitted_data_inputs, [None] * len(splitted_data_inputs)
 
     def _split(self, data_inputs):

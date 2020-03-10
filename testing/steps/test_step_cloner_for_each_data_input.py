@@ -31,8 +31,8 @@ def test_step_cloner_should_transform():
 
     processed_outputs = p.transform(data_inputs)
 
-    assert isinstance(p.steps[0], Pipeline)
-    assert isinstance(p.steps[1], Pipeline)
+    assert isinstance(p.steps[0][1], Pipeline)
+    assert isinstance(p.steps[1][1], Pipeline)
     assert np.array_equal(processed_outputs, data_inputs * 2)
 
 
@@ -52,13 +52,13 @@ def test_step_cloner_should_fit_transform():
     p, processed_outputs = p.fit_transform(data_inputs, expected_outputs)
 
     # Then
-    assert isinstance(p.steps[0], Pipeline)
-    assert np.array_equal(p.steps[0][0].callback_function.data[0][0], data_inputs[0])
-    assert np.array_equal(p.steps[0][0].callback_function.data[0][1], expected_outputs[0])
+    assert isinstance(p.steps[0][1], Pipeline)
+    assert np.array_equal(p.steps[0][1][0].callback_function.data[0][0], data_inputs[0])
+    assert np.array_equal(p.steps[0][1][0].callback_function.data[0][1], expected_outputs[0])
 
-    assert isinstance(p.steps[1], Pipeline)
-    assert np.array_equal(p.steps[1][0].callback_function.data[0][0], data_inputs[1])
-    assert np.array_equal(p.steps[1][0].callback_function.data[0][1], expected_outputs[1])
+    assert isinstance(p.steps[1][1], Pipeline)
+    assert np.array_equal(p.steps[1][1][0].callback_function.data[0][0], data_inputs[1])
+    assert np.array_equal(p.steps[1][1][0].callback_function.data[0][1], expected_outputs[1])
 
     assert np.array_equal(processed_outputs, data_inputs * 2)
 
@@ -97,8 +97,8 @@ def test_step_cloner_should_set_train():
     p.set_train(False)
 
     assert not p.is_train
-    assert not p.steps[0].is_train
-    assert not p.steps[1].is_train
+    assert not p.steps[0][1].is_train
+    assert not p.steps[1][1].is_train
 
 
 def test_step_cloner_should_save_sub_steps(tmpdir):

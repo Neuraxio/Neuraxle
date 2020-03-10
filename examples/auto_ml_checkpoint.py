@@ -33,8 +33,9 @@ from sklearn.metrics import mean_squared_error
 from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML
-from neuraxle.metaopt.random import ValidationSplitWrapper
+from neuraxle.metaopt.auto_ml import AutoML, kfold_cross_validation_split, RandomSearchHyperparameterSelectionStrategy
+from neuraxle.metaopt.callbacks import MetricCallback
+from neuraxle.metaopt.random import ValidationSplitWrapper, average_kfold_scores
 from neuraxle.pipeline import ResumablePipeline, DEFAULT_CACHE_FOLDER, Pipeline
 from neuraxle.steps.flow import ExpandDim
 from neuraxle.steps.loop import ForEachDataInput
@@ -63,9 +64,19 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     ]).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
-    auto_ml = AutoML(pipeline, validation_technique=ValidationSplitWrapper(pipeline, test_size=0.1), scoring_function=,
-                     refit_trial=True, n_trials=n_iter, metrics={}, higher_score_is_better=False, print_metrics=False,
-                     cache_folder_when_no_handle=str(tmpdir))
+    auto_ml = AutoML(
+        pipeline,
+        refit_trial=True,
+        n_trials=n_iter,
+        print_metrics=False,
+        cache_folder_when_no_handle=str(tmpdir),
+        validation_split_function = kfold_cross_validation_split(k_fold=2),
+        hyperparams_optimizer = RandomSearchHyperparameterSelectionStrategy(),
+        scoring_callback = MetricCallback('mse', average_kfold_scores(mean_squared_error), higher_score_is_better=False),
+        callbacks = [
+            MetricCallback('mse', metric_function=average_kfold_scores(mean_squared_error), higher_score_is_better=False)
+        ]
+    )
     auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
     outputs = auto_ml.get_best_model().predict(DATA_INPUTS)
     time_b = time.time()
@@ -91,9 +102,19 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     ], cache_folder=tmpdir).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
-    auto_ml = AutoML(pipeline, validation_technique=ValidationSplitWrapper(pipeline, test_size=0.1), scoring_function=,
-                     refit_trial=False, n_trials=n_iter, higher_score_is_better=False, print_metrics=False,
-                     cache_folder_when_no_handle=str(tmpdir))
+    auto_ml = AutoML(
+        pipeline,
+        refit_trial=False,
+        n_trials=n_iter,
+        print_metrics=False,
+        cache_folder_when_no_handle=str(tmpdir),
+        validation_split_function = kfold_cross_validation_split(k_fold=2),
+        hyperparams_optimizer = RandomSearchHyperparameterSelectionStrategy(),
+        scoring_callback = MetricCallback('mse', average_kfold_scores(mean_squared_error), higher_score_is_better=False),
+        callbacks = [
+            MetricCallback('mse', metric_function=average_kfold_scores(mean_squared_error), higher_score_is_better=False)
+        ]
+    )
     auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
     outputs = auto_ml.get_best_model().predict(DATA_INPUTS)
     time_b = time.time()
