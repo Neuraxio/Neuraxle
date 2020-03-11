@@ -3167,7 +3167,7 @@ class ForceHandleMixin:
 
         return data_container.data_inputs
 
-    def fit(self, data_inputs, expected_outputs=None) -> Tuple['HandleOnlyMixin']:
+    def fit(self, data_inputs, expected_outputs=None) -> 'HandleOnlyMixin':
         context, data_container = self._encapsulate_data(data_inputs, expected_outputs, ExecutionMode.FIT)
         new_self = self.handle_fit(data_container, context)
 
