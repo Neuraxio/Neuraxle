@@ -66,7 +66,7 @@ class TrainOrTestOnlyWrapper(ResumableStepMixin, ForceHandleOnlyMixin, MetaStepM
 
         self.is_train_only = is_train_only
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         :param data_container: data container
         :type data_container: DataContainer
@@ -77,8 +77,8 @@ class TrainOrTestOnlyWrapper(ResumableStepMixin, ForceHandleOnlyMixin, MetaStepM
         """
         if self._should_execute_wrapped_step():
             self.wrapped = self.wrapped.handle_fit(data_container, context)
-            return self, data_container
-        return self, data_container
+            return self
+        return self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
