@@ -3047,6 +3047,10 @@ class ResumableStepMixin:
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def resume(self, data_container: DataContainer, context: ExecutionContext):
+        raise NotImplementedError()
+
     def __str__(self):
         return self.__repr__()
 

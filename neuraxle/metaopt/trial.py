@@ -1,3 +1,29 @@
+"""
+Neuraxle's Trial Classes
+====================================
+Trial objects used by AutoML algorithm classes.
+
+..
+    Copyright 2019, Neuraxio Inc.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+..
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+
+"""
+
 import datetime
 import hashlib
 import traceback
@@ -15,10 +41,9 @@ class Trial:
     .. seealso::
         :class:`AutoML`,
         :class:`HyperparamsRepository`,
-        :class:`HyperparameterOptimizer`,
-        :class:`RandomSearchHyperparameterOptimizer`,
-        :class:`DataContainer`,
-        :class:`EarlyStoppingCallback`,
+        :class:`BaseHyperparameterSelectionStrategy`,
+        :class:`RandomSearchHyperparameterSelectionStrategy`,
+        :class:`DataContainer`
     """
 
     def __init__(
@@ -43,10 +68,24 @@ class Trial:
         self.pipeline: BaseStep = pipeline
         self.hyperparams: HyperparameterSamples = hyperparams
 
-    def set_fitted_pipeline(self, pipeline):
+    def set_fitted_pipeline(self, pipeline: BaseStep):
+        """
+        Set fitted pipeline.
+
+        :param pipeline: fitted pipeline
+        :return:
+        """
         self.pipeline = pipeline
 
-    def add_metric_results_train(self, name, score, higher_score_is_better):
+    def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool):
+        """
+        Add a train metric result in the metric results dictionary.
+
+        :param name: name of the metric
+        :param score: score
+        :param higher_score_is_better: if higher score is better or not for this metric
+        :return:
+        """
         if name not in self.metrics_results:
             self.metrics_results[name] = {
                 'train_values': [],
@@ -56,7 +95,15 @@ class Trial:
 
         self.metrics_results[name]['train_values'].append(score)
 
-    def add_metric_results_validation(self, name, score, higher_score_is_better):
+    def add_metric_results_validation(self, name: str, score: float, higher_score_is_better: bool):
+        """
+        Add a validation metric result in the metric results dictionary.
+
+        :param name: name of the metric
+        :param score: score
+        :param higher_score_is_better: if higher score is better or not for this metric
+        :return:
+        """
         if name not in self.metrics_results:
             self.metrics_results[name] = {
                 'train_values': [],
@@ -67,22 +114,45 @@ class Trial:
         self.metrics_results[name]['validation_values'].append(score)
 
     def save_model(self):
+        """
+        Save fitted model in the trial hash folder.
+        """
         hyperparams = self.hyperparams.to_flat_as_dict_primitive()
         trial_hash = self._get_trial_hash(hyperparams)
         self.pipeline.set_name(trial_hash).save(ExecutionContext(self.cache_folder), full_dump=True)
 
     def set_success(self):
+        """
+        Set trial status to success.
+        """
         self.status = TRIAL_STATUS.SUCCESS
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples):
+        """
+        Set trial hyperparams.
+
+        :param hyperparams: trial hyperparams
+        :return:
+        """
         self.hyperparams = hyperparams
 
     def set_failed(self, error: Exception):
+        """
+        Set failed trial with exception.
+
+        :param error: catched exception
+        :return:
+        """
         self.status = TRIAL_STATUS.FAILED
         self.error = str(error)
         self.error_traceback = traceback.format_exc()
 
     def is_new_best_score(self):
+        """
+        Return True if the latest validation score is the new best score.
+
+        :return:
+        """
         higher_score_is_better = self.metrics_results['main']['higher_score_is_better']
         validation_values = self.metrics_results['main']['validation_values']
         best_score = validation_values[0]
@@ -99,12 +169,27 @@ class Trial:
         return False
 
     def get_validation_scores(self):
+        """
+        Return the validation scores for the main scoring metric.
+
+        :return:
+        """
         return self.metrics_results['main']['validation_values']
 
     def get_higher_score_is_better(self):
+        """
+        Return True if higher scores are better for the main metric.
+
+        :return:
+        """
         return self.metrics_results['main']['higher_score_is_better']
 
     def to_json(self) -> dict:
+        """
+        Return the trial in a json format.
+
+        :return:
+        """
         return {
             'hyperparams': self.hyperparams.to_flat_as_dict_primitive(),
             'status': self.status.value,
@@ -115,6 +200,12 @@ class Trial:
 
     @staticmethod
     def from_json(trial_json) -> 'Trial':
+        """
+        Create a trial object from json.
+
+        :param trial_json: trial json
+        :return:
+        """
         return Trial(
             hyperparams=trial_json['hyperparams'],
             status=trial_json['status'],
@@ -123,22 +214,33 @@ class Trial:
             error_traceback=trial_json['error_traceback']
         )
 
-    def _get_trial_hash(self, hp_dict):
+    def _get_trial_hash(self, hp_dict: Dict):
         """
         Hash hyperparams with md5 to create a trial hash.
 
-        :param hp_dict:
+        :param hp_dict: hyperparams dict
         :return:
         """
         current_hyperparameters_hash = hashlib.md5(str.encode(str(hp_dict))).hexdigest()
         return current_hyperparameters_hash
 
     def __enter__(self):
+        """
+        Start trial, and set the trial status to PLANNED.
+        """
         self.start_time = datetime.datetime.now()
         self.status = TRIAL_STATUS.PLANNED
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Stop trial, and save end time.
+
+        :param exc_type:
+        :param exc_val:
+        :param exc_tb:
+        :return:
+        """
         self.end_time = datetime.datetime.now()
         del self.pipeline
         return self
@@ -181,6 +283,11 @@ class Trials:
         self.trials: List[Trial] = trials
 
     def get_best_hyperparams(self) -> HyperparameterSamples:
+        """
+        Get best hyperparams from all trials.
+
+        :return:
+        """
         best_score = None
         best_hyperparams = None
 
@@ -195,9 +302,21 @@ class Trials:
         return best_hyperparams
 
     def append(self, trial: Trial):
+        """
+        Add a new trial.
+
+        :param trial: new trial
+        :return:
+        """
         self.trials.append(trial)
 
     def filter(self, status: 'TRIAL_STATUS') -> 'Trials':
+        """
+        Get all the trials with the given trial status.
+
+        :param status: trial status
+        :return:
+        """
         trials = Trials()
         for trial in self.trials:
             if trial.status == status:
@@ -206,6 +325,12 @@ class Trials:
         return trials
 
     def __getitem__(self, item):
+        """
+        Get trial at the given index.
+
+        :param item: trial index
+        :return:
+        """
         return self.trials[item]
 
     def __len__(self):
