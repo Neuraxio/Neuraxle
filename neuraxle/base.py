@@ -177,6 +177,8 @@ class BaseSaver(ABC):
         :type step: BaseStep
         :param context: execution context
         :type context: ExecutionContext
+        :param save_savers:
+        :type save_savers: bool
         :return:
         """
         raise NotImplementedError()
@@ -282,7 +284,7 @@ class JoblibStepSaver(BaseSaver):
 
         # we need to keep the current steps in memory because they have been deleted before saving...
         # the steps that have not been saved yet need to be in memory while loading a truncable steps...
-        if isinstance(step, TruncableSteps):
+        if isinstance(loaded_step, TruncableSteps) and hasattr(step, 'steps'):
             loaded_step.steps = step.steps
 
         return loaded_step
@@ -336,20 +338,39 @@ class ExecutionContext:
     def get_execution_mode(self) -> ExecutionMode:
         return self.execution_mode
 
-    def save_all_unsaved(self):
+    def save(self, full_dump=False):
         """
         Save all unsaved steps in the parents of the execution context using :func:`~neuraxle.base.BaseStep.save`.
         This method is called from a step checkpointer inside a :class:`Checkpoint`.
 
+        :param full_dump: save full pipeline dump to be able to load everything without source code (false by default).
+        :type full_dump: bool
         :return:
+
+        .. seealso::
+            :class:`BaseStep`,
+            :func:`~neuraxle.base.BaseStep.save`
         """
         while not self.empty():
             should_save_last_step = self.should_save_last_step()
             last_step = self.peek()
+            if full_dump:
+                should_save_last_step = True
 
             self.pop()
             if should_save_last_step:
-                last_step.save(self)
+                last_step.save(self, full_dump)
+
+    def save_last(self):
+        """
+        Save only the last step in the execution context.
+
+        .. seealso::
+            :func:`~neuraxle.base.ExecutionContext.save`
+        """
+        last_step = self.peek()
+        self.pop()
+        last_step.save(self, True)
 
     def should_save_last_step(self) -> bool:
         """
@@ -415,14 +436,18 @@ class ExecutionContext:
         if not os.path.exists(path):
             os.makedirs(path)
 
-    def get_path(self):
+    def get_path(self, is_absolute: bool = True):
         """
         Creates the directory path for the current execution context.
 
+        :param is_absolute: bool to say if we want to add root to the path or not
         :return: current context path
         :rtype: str
         """
-        parents_with_path = [self.root] + [p.name for p in self.parents]
+        parents_with_path = [self.root] if is_absolute else []
+        parents_with_path += [p.name for p in self.parents]
+        if len(parents_with_path) == 0:
+            return '.' + os.sep
         return os.path.join(*parents_with_path)
 
     def get_names(self):
@@ -442,6 +467,57 @@ class ExecutionContext:
         :rtype: bool
         """
         return len(self) == 0
+
+    def load(self, path: str) -> 'BaseStep':
+        """
+        Load full dump at the given path.
+
+        :param path: pipeline step path
+        :type path: str
+        :return: loaded step
+        :rtype: BaseStep
+
+        .. seealso::
+            :class:`FullDumpLoader`,
+            :class:`Identity`
+        """
+        context_for_loading = self
+        context_for_loading = context_for_loading.push(Identity(name=path))
+
+        if os.sep in path:
+            context_for_loading = context_for_loading.to_identity()
+            path = path.split(os.sep)[-1]
+
+        return FullDumpLoader(
+            name=path,
+            stripped_saver=self.stripped_saver
+        ).load(context_for_loading, True)
+
+    def to_identity(self) -> 'ExecutionContext':
+        """
+        Create a fake execution context containing only identity steps.
+        Create the parents by using the path of the current execution context.
+
+        :return: fake identity execution context
+        :rtype: ExecutionContext
+
+        .. seealso::
+            :class:`FullDumpLoader`,
+            :class:`Identity`
+        """
+        step_names = self.get_path(False).split(os.sep)
+
+        parents = [
+            Identity(name=name)
+            for name in step_names
+        ]
+
+        return ExecutionContext(
+            root=self.root,
+            execution_mode=self.execution_mode,
+            stripped_saver=self.stripped_saver,
+            parents=parents
+        )
 
     def __len__(self):
         return len(self.parents)
@@ -543,7 +619,7 @@ class BaseStep(ABC):
 
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
         self.is_initialized = False
-        self.is_invalidated = True
+        self.invalidate()
         self.is_train: bool = True
 
     def summary_hash(self, data_container: DataContainer) -> str:
@@ -559,6 +635,9 @@ class BaseStep(ABC):
         .. seealso::
             :class:`neuraxle.checkpoints.Checkpoint`
         """
+        if data_container.summary_id is None:
+            data_container.set_summary_id(data_container.hash_summary())
+
         summary_id = data_container.summary_id
         for h in self.hashers:
             summary_id = h.single_hash(
@@ -598,6 +677,15 @@ class BaseStep(ABC):
         :rtype: BaseStep
         """
         self.is_initialized = True
+        return self
+
+    def invalidate(self) -> 'BaseStep':
+        """
+        Invalidate step.
+
+        :return: self
+        :rtype: BaseStep
+        """
         self.is_invalidated = True
         return self
 
@@ -639,7 +727,7 @@ class BaseStep(ABC):
             A step name is the same value as the one in the keys of :any:`~neuraxle.pipeline.Pipeline.steps_as_tuple`
         """
         self.name = name
-        self.is_invalidated = True
+        self.invalidate()
         return self
 
     def get_name(self) -> str:
@@ -697,7 +785,7 @@ class BaseStep(ABC):
         .. seealso::
             :class:`neuraxle.hyperparams.space.HyperparameterSamples`
         """
-        self.is_invalidated = True
+        self.invalidate()
         self.hyperparams = HyperparameterSamples(hyperparams).to_flat()
         return self
 
@@ -808,7 +896,7 @@ class BaseStep(ABC):
             :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
             :class:`neuraxle.hyperparams.distributions.HyperparameterDistribution`
         """
-        self.is_invalidated = True
+        self.invalidate()
         self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
         return self
 
@@ -966,6 +1054,22 @@ class BaseStep(ABC):
 
         return data_container
 
+    def handle_predict(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Handle_transform in test mode.
+
+        :param data_container: the data container to transform
+        :param context: execution context
+        :return: transformed data container
+        """
+        was_train: bool = self.is_train
+        self.set_train(False)
+
+        data_container = self.handle_transform(data_container, context)
+
+        self.set_train(was_train)
+        return data_container
+
     def _will_fit(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
         """
         Before fit is called, apply side effects on the step, the data container, or the execution context.
@@ -975,7 +1079,7 @@ class BaseStep(ABC):
         :return: (data container, execution context)
         :rtype: (DataContainer, ExecutionContext)
         """
-        self.is_invalidated = True
+        self.invalidate()
         return data_container, context.push(self)
 
     def _did_fit(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -1010,7 +1114,7 @@ class BaseStep(ABC):
         :return: (data container, execution context)
         :rtype: (DataContainer, ExecutionContext)
         """
-        self.is_invalidated = True
+        self.invalidate()
         return data_container, context.push(self)
 
     def _did_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -1116,9 +1220,6 @@ class BaseStep(ABC):
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
-        if data_container.summary_id is None:
-            data_container.set_summary_id(data_container.hash_summary())
-
         summary_id = self.summary_hash(data_container)
         data_container.set_summary_id(summary_id)
 
@@ -1133,7 +1234,7 @@ class BaseStep(ABC):
         :return: (fitted self, tranformed data inputs)
         :rtype: Tuple[BaseStep, Any]
         """
-        self.is_invalidated = True
+        self.invalidate()
 
         new_self = self.fit(data_inputs, expected_outputs)
         out = new_self.transform(data_inputs)
@@ -1193,14 +1294,19 @@ class BaseStep(ABC):
 
     def predict(self, data_input):
         """
-        Predict data input expected output using transform method.
-        This is simply a shorthand method that does the same thing as func:`~.transform`.
+        Predict the expected output in test mode using func:`~.transform`, but by setting self to test mode first and then reverting the mode.
 
         :param data_input: data input to predict
         :return: prediction
         :rtype: Any
         """
-        return self.transform(data_input)
+        was_train: bool = self.is_train
+        self.set_train(False)
+
+        outputs = self.transform(data_input)
+
+        self.set_train(was_train)
+        return outputs
 
     def should_save(self) -> bool:
         """
@@ -1220,7 +1326,7 @@ class BaseStep(ABC):
         """
         return self.is_invalidated and self.is_initialized
 
-    def save(self, context: ExecutionContext) -> 'BaseStep':
+    def save(self, context: ExecutionContext, full_dump=False) -> 'BaseStep':
         """
         Save step using the execution context to create the directory to save the step into.
         The saving happens by looping through all of the step savers in the reversed order.
@@ -1231,6 +1337,8 @@ class BaseStep(ABC):
 
         :param context: context to save from
         :type context: ExecutionContext
+        :param full_dump: save full pipeline dump to be able to load everything without source code (false by default).
+        :type full_dump: bool
         :return: self
         :rtype: BaseStep
 
@@ -1239,32 +1347,43 @@ class BaseStep(ABC):
             :class:`BaseSaver`
         """
         context = context.push(self)
+        self.is_invalidated = False
 
-        if self.is_invalidated and self.is_initialized:
-            self.is_invalidated = False
+        def _initialize_if_needed(step):
+            if not step.is_initialized:
+                step.setup()
+            return step
 
-            context.mkdir()
-            stripped_step = copy(self)
+        def _invalidate(step):
+            step.invalidate()
 
-            # A final "visitor" saver will save anything that
-            # wasn't saved customly after stripping the rest.
-            savers_with_provided_default_stripped_saver = [context.stripped_saver] + self.savers
+        if full_dump:
+            # initialize and invalidate steps to make sure that all steps will be saved
+            self.apply_method(_initialize_if_needed)
+            self.apply_method(_invalidate)
 
-            for saver in reversed(savers_with_provided_default_stripped_saver):
-                # Each saver strips the step a bit more if needs be.
-                stripped_step = saver.save_step(stripped_step, context)
+        context.mkdir()
+        stripped_step = copy(self)
 
-            return stripped_step
+        # A final "visitor" saver will save anything that
+        # wasn't saved customly after stripping the rest.
+        savers_with_provided_default_stripped_saver = [context.stripped_saver] + self.savers
 
-        return self
+        for saver in reversed(savers_with_provided_default_stripped_saver):
+            # Each saver strips the step a bit more if needs be.
+            stripped_step = saver.save_step(stripped_step, context)
 
-    def load(self, context: ExecutionContext) -> 'BaseStep':
+        return stripped_step
+
+    def load(self, context: ExecutionContext, full_dump=False) -> 'BaseStep':
         """
         Load step using the execution context to create the directory of the saved step.
         Warning:
 
         :param context: execution context to load step from
-        :return:
+        :param full_dump: save full dump bool
+        :type full_dump: bool
+        :return: loaded step
 
         .. warning::
             Please do not override this method because on loading it is an identity
@@ -1276,11 +1395,13 @@ class BaseStep(ABC):
         """
         context = context.push(self)
 
-        # A final "visitor" saver might reload anything that wasn't saved customly after stripping the rest.
-        savers_with_provided_default_stripped_saver = [context.stripped_saver] + self.savers
+        savers = [context.stripped_saver] + self.savers
+        return self._load_step(context, savers)
 
+    def _load_step(self, context, savers):
+        # A final "visitor" saver might reload anything that wasn't saved customly after stripping the rest.
         loaded_self = self
-        for saver in savers_with_provided_default_stripped_saver:
+        for saver in savers:
             # Each saver unstrips the step a bit more if needed
             if saver.can_load(loaded_self, context):
                 loaded_self = saver.load_step(loaded_self, context)
@@ -1290,7 +1411,6 @@ class BaseStep(ABC):
                                                                                  self.__class__.__name__,
                                                                                  saver.__class__.__name__))
                 break
-
         return loaded_self
 
     def meta_fit(self, X_train, y_train, metastep: 'MetaStepMixin'):
@@ -1328,7 +1448,7 @@ class BaseStep(ABC):
         :param warn: (verbose) wheter or not to warn about the inexistence of the method.
         :return: self, a copy of self, or even perhaps a new or different BaseStep object.
         """
-        self.is_invalidated = True
+        self.invalidate()
         pending_new_base_step, pending_new_method, pending_method_to_assign_to = self.pending_mutate
 
         # Use everything that is pending if they are not none (ternaries).
@@ -1349,7 +1469,7 @@ class BaseStep(ABC):
 
             # 3. assign new method to old method
             setattr(new_base_step, method_to_assign_to, new_method)
-            self.is_invalidated = True
+            self.invalidate()
 
         except AttributeError as e:
             if warn:
@@ -1397,7 +1517,7 @@ class BaseStep(ABC):
         :return: self
         :rtype: BaseStep
         """
-        self.is_invalidated = True
+        self.invalidate()
 
         if new_method is None or method_to_assign_to is None:
             new_method = method_to_assign_to = "transform"  # No changes will be applied (transform will stay transform).
@@ -1572,7 +1692,7 @@ class MetaStepMixin:
         :return: self
         :rtype: BaseStep
         """
-        self.is_invalidated = True
+        self.invalidate()
         self.wrapped: BaseStep = _sklearn_to_neuraxle_step(step)
         return self
 
@@ -1636,7 +1756,7 @@ class MetaStepMixin:
         .. seealso::
             :class:`HyperparameterSamples`
         """
-        self.is_invalidated = True
+        self.invalidate()
 
         hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
 
@@ -1665,7 +1785,7 @@ class MetaStepMixin:
             :func:`~BaseStep.update_hyperparams`,
             :class:`HyperparameterSamples`
         """
-        self.is_invalidated = True
+        self.invalidate()
 
         hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
 
@@ -1704,7 +1824,7 @@ class MetaStepMixin:
 
         :return: self
         """
-        self.is_invalidated = True
+        self.invalidate()
 
         hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
 
@@ -1743,6 +1863,38 @@ class MetaStepMixin:
     def get_best_model(self) -> BaseStep:
         return self.best_model
 
+    def handle_fit_transform(self, data_container, context):
+        previous_summary_id = data_container.summary_id
+
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_fit_transform(data_container, context)
+
+        new_self, data_container = self._fit_transform_data_container(data_container, context)
+
+        data_container = self._did_fit_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        data_container.set_summary_id(previous_summary_id)
+        data_container.set_summary_id(self.summary_hash(data_container))
+
+        return new_self, data_container
+
+    def handle_transform(self, data_container, context):
+        previous_summary_id = data_container.summary_id
+
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_transform_data_container(data_container, context)
+
+        data_container = self._transform_data_container(data_container, context)
+
+        data_container = self._did_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        data_container.set_summary_id(previous_summary_id)
+        data_container.set_summary_id(self.summary_hash(data_container))
+
+        return data_container
+
     def _fit_transform_data_container(self, data_container, context):
         self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
         return self, data_container
@@ -1780,6 +1932,15 @@ class MetaStepMixin:
         if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context):
             return True
         return False
+
+    def resume(self, data_container: DataContainer, context: ExecutionContext):
+        context = context.push(self)
+        if not isinstance(self.wrapped, ResumableStepMixin):
+            raise Exception('cannot resume steps that don\' inherit from ResumableStepMixin')
+
+        data_container = self.wrapped.resume(data_container, context)
+        data_container = self._did_process(data_container, context)
+        return data_container
 
     def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
         """
@@ -2038,16 +2199,18 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         for i, (_, sub_step) in enumerate(step):
             if sub_step.should_save():
                 sub_steps_savers.append((step[i].name, step[i].get_savers()))
+                sub_step.save(context)
             else:
                 sub_steps_savers.append((step[i].name, None))
-
-            sub_step.save(context)
 
         step.sub_steps_savers = sub_steps_savers
 
         # Third, strip the sub steps from truncable steps before saving
-        del step.steps
-        del step.steps_as_tuple
+        if hasattr(self, 'steps'):
+            del step.steps
+
+        if hasattr(self, 'steps_at_tuple'):
+            del step.steps_as_tuple
 
         return step
 
@@ -2075,7 +2238,9 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
                 sub_step = sub_step_to_load.load(context)
                 step.steps_as_tuple.append((step_name, sub_step))
 
-        step._refresh_steps()
+        operation = getattr(step, '_refresh_steps', None)
+        if callable(operation):
+            step._refresh_steps()
 
         return step
 
@@ -2290,7 +2455,7 @@ class TruncableSteps(BaseStep, ABC):
             step = (_name, step)
             names_yet.add(step[0])
             patched.append(step)
-        self.is_invalidated = True
+        self.invalidate()
         return patched
 
     def _rename_step(self, step_name, class_name, names_yet: set):
@@ -2312,7 +2477,7 @@ class TruncableSteps(BaseStep, ABC):
         while step_name in names_yet:
             step_name = class_name + str(i)
             i += 1
-        self.is_invalidated = True
+        self.invalidate()
         return step_name
 
     def _refresh_steps(self):
@@ -2320,7 +2485,7 @@ class TruncableSteps(BaseStep, ABC):
         Private method to refresh inner state after having edited ``self.steps_as_tuple``
         (recreate ``self.steps`` from ``self.steps_as_tuple``).
         """
-        self.is_invalidated = True
+        self.invalidate()
         self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
         for name, step in self.items():
             step.name = name
@@ -2385,7 +2550,7 @@ class TruncableSteps(BaseStep, ABC):
         .. seealso::
             :class:`HyperparameterSamples`
         """
-        self.is_invalidated = True
+        self.invalidate()
 
         hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
 
@@ -2413,7 +2578,7 @@ class TruncableSteps(BaseStep, ABC):
             :func:`~BaseStep.update_hyperparams`,
             :class:`HyperparameterSamples`
         """
-        self.is_invalidated = True
+        self.invalidate()
 
         hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
 
@@ -2484,7 +2649,7 @@ class TruncableSteps(BaseStep, ABC):
         .. seealso::
             :class:`HyperparameterSpace`
         """
-        self.is_invalidated = True
+        self.invalidate()
 
         hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
 
@@ -2882,6 +3047,10 @@ class ResumableStepMixin:
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def resume(self, data_container: DataContainer, context: ExecutionContext):
+        raise NotImplementedError()
+
     def __str__(self):
         return self.__repr__()
 
@@ -2902,6 +3071,8 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
     """
 
     def __init__(self, savers=None, name=None):
+        if savers is None:
+            savers = [JoblibStepSaver()]
         NonTransformableMixin.__init__(self)
         NonFittableMixin.__init__(self)
         BaseStep.__init__(self, name=name, savers=savers)
@@ -3003,7 +3174,7 @@ class ForceHandleMixin:
 
         return data_container.data_inputs
 
-    def fit(self, data_inputs, expected_outputs=None) -> Tuple['HandleOnlyMixin', Iterable]:
+    def fit(self, data_inputs, expected_outputs=None) -> 'HandleOnlyMixin':
         context, data_container = self._encapsulate_data(data_inputs, expected_outputs, ExecutionMode.FIT)
         new_self = self.handle_fit(data_container, context)
 
@@ -3055,3 +3226,36 @@ class EvaluableStepMixin:
     @abstractmethod
     def get_score(self):
         raise NotImplementedError()
+
+class FullDumpLoader(Identity):
+    """
+    Identity step that can load the full dump of a pipeline step.
+    Used by :func:`~neuraxle.base.BaseStep.load`.
+
+    .. seealso::
+        :class:`ExecutionContext`
+        :class:`BaseStep`,
+        :class:`Identity`
+    """
+    def __init__(self, name, stripped_saver=None):
+        if stripped_saver is None:
+            stripped_saver = JoblibStepSaver()
+        Identity.__init__(self, name=name, savers=[stripped_saver])
+
+    def load(self, context: ExecutionContext, full_dump=True) -> BaseStep:
+        """
+        Load the full dump of a pipeline step.
+
+        :param context: execution context
+        :param full_dump: load full dump or not (always true, inherited from :class:`BaseStep`
+        :type full_dump: load full dump or not
+        :return: loaded step
+        :rtype: BaseStep
+        """
+        if not context.stripped_saver.can_load(self, context):
+            raise Exception('Cannot Load Full Dump For Step {}'.format(os.path.join(context.get_path(), self.name)))
+
+        loaded_self = context.stripped_saver.load_step(self, context)
+
+        context.pop()
+        return loaded_self.load(context, full_dump)

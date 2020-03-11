@@ -1,11 +1,14 @@
-def test_auto_ml_checkpoint(tmpdir):
+from py._path.local import LocalPath
+
+
+def test_auto_ml_checkpoint(tmpdir: LocalPath):
     from examples.auto_ml_checkpoint import main
     main(tmpdir)
 
 
-def test_boston_housing_meta_optimization():
+def test_boston_housing_meta_optimization(tmpdir: LocalPath):
     from examples.boston_housing_meta_optimization import main
-    main()
+    main(tmpdir)
 
 
 def test_boston_housing_regression_with_model_stacking():
