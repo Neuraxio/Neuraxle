@@ -31,8 +31,8 @@ def test_step_cloner_should_transform():
 
     processed_outputs = p.transform(data_inputs)
 
-    assert isinstance(p.steps[0][1], Pipeline)
-    assert isinstance(p.steps[1][1], Pipeline)
+    assert isinstance(p.steps_as_tuple[0][1], Pipeline)
+    assert isinstance(p.steps_as_tuple[1][1], Pipeline)
     assert np.array_equal(processed_outputs, data_inputs * 2)
 
 
@@ -132,6 +132,28 @@ def test_step_cloner_should_save_sub_steps(tmpdir):
 
     for p in saved_paths:
         assert os.path.exists(p)
+
+
+def test_step_cloner_should_load_sub_steps(tmpdir):
+    tape = TapeCallbackFunction()
+    p = StepClonerForEachDataInput(
+        Pipeline([
+            FitCallbackStep(tape),
+            MultiplyByN(2)
+        ]),
+        cache_folder_when_no_handle=tmpdir
+    )
+    data_inputs = _create_data((2, 2))
+    expected_outputs = _create_data((2, 2))
+    p, processed_outputs = p.fit_transform(data_inputs, expected_outputs)
+
+    p.save(ExecutionContext(tmpdir), full_dump=True)
+
+    loaded_step_cloner = ExecutionContext(tmpdir).load('StepClonerForEachDataInput')
+    assert isinstance(loaded_step_cloner.wrapped, Pipeline)
+    assert len(loaded_step_cloner.steps_as_tuple) == len(data_inputs)
+    assert isinstance(loaded_step_cloner.steps_as_tuple[0][1], Pipeline)
+    assert isinstance(loaded_step_cloner.steps_as_tuple[1][1], Pipeline)
 
 
 def _create_data(shape):

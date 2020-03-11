@@ -2206,7 +2206,8 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         step.sub_steps_savers = sub_steps_savers
 
         # Third, strip the sub steps from truncable steps before saving
-        del step.steps
+        if hasattr(self, 'steps'):
+            del step.steps
 
         if hasattr(self, 'steps_at_tuple'):
             del step.steps_as_tuple
@@ -2237,7 +2238,9 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
                 sub_step = sub_step_to_load.load(context)
                 step.steps_as_tuple.append((step_name, sub_step))
 
-        step._refresh_steps()
+        operation = getattr(step, '_refresh_steps', None)
+        if callable(operation):
+            step._refresh_steps()
 
         return step
 

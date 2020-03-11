@@ -28,7 +28,7 @@ from typing import List
 import numpy as np
 
 from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, \
-    ForceHandleOnlyMixin, ForceHandleMixin, BaseSaver, TruncableJoblibStepSaver, TruncableSteps, NamedTupleList
+    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList
 from neuraxle.data_container import ListDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
@@ -154,7 +154,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         self.savers.append(TruncableJoblibStepSaver())
 
         self.set_step(wrapped)
-        self.steps: List[NamedTupleList] = []
+        self.steps_as_tuple: List[NamedTupleList] = []
         self.copy_op = copy_op
 
     def set_train(self, is_train: bool = True):
@@ -164,7 +164,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
         MetaStepMixin.set_hyperparams(self, hyperparams)
-        self.steps = [(name, step.set_hyperparams(self.wrapped.get_hyperparams())) for name, step in self]
+        self.steps_as_tuple = [(name, step.set_hyperparams(self.wrapped.get_hyperparams())) for name, step in self]
         return self
 
     def update_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
@@ -182,18 +182,18 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             :class:`HyperparameterSamples`
         """
         MetaStepMixin.update_hyperparams(self, hyperparams)
-        self.steps = [(name, step.set_hyperparams(self.wrapped.get_hyperparams())) for name, step in self.steps]
+        self.steps_as_tuple = [(name, step.set_hyperparams(self.wrapped.get_hyperparams())) for name, step in self.steps_as_tuple]
         return self
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
         MetaStepMixin.set_hyperparams_space(self, hyperparams_space)
-        self.steps = [(name, step.set_hyperparams_space(self.wrapped.get_hyperparams_space())) for name, step in self]
+        self.steps_as_tuple = [(name, step.set_hyperparams_space(self.wrapped.get_hyperparams_space())) for name, step in self]
         return self
 
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         data_container, context = BaseStep._will_process(self, data_container, context)
 
-        if len(self.steps) != len(data_container.data_inputs):
+        if len(self.steps_as_tuple) != len(data_container.data_inputs):
             self._copy_one_step_per_data_input(data_container)
 
         return data_container, context
@@ -201,7 +201,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     def _copy_one_step_per_data_input(self, data_container):
         # One copy of step per data input:
         steps = [self.copy_op(self.wrapped).set_name('{}[{}]'.format(self.wrapped.name, i)) for i in range(len(data_container))]
-        self.steps = [(step.name, step) for step in steps]
+        self.steps_as_tuple = [(step.name, step) for step in steps]
         self.invalidate()
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
@@ -214,7 +214,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             )
             fitted_steps_data_containers.append(fitted_step_data_container)
 
-        self.steps = [(step.name, step) for step, _ in fitted_steps_data_containers]
+        self.steps_as_tuple = [(step.name, step) for step, _ in fitted_steps_data_containers]
 
         output_data_container = ListDataContainer.empty()
         for _, data_container_batch in fitted_steps_data_containers:
@@ -232,7 +232,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             )
             fitted_steps.append(fitted_step)
 
-        self.steps = [(step.name, step) for step in fitted_steps]
+        self.steps_as_tuple = [(step.name, step) for step in fitted_steps]
 
         return self
 
@@ -275,7 +275,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
         :return: iter(self.steps_as_tuple)
         """
-        return self.steps[item][1]
+        return self.steps_as_tuple[item][1]
 
     def __iter__(self):
         """
@@ -283,7 +283,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
         :return: iter(self.steps_as_tuple)
         """
-        return iter(self.steps)
+        return iter(self.steps_as_tuple)
 
 
 class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStepMixin, BaseStep):
