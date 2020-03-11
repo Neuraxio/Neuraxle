@@ -101,6 +101,9 @@ class Trial:
     def get_validation_scores(self):
         return self.metrics_results['main']['validation_values']
 
+    def get_higher_score_is_better(self):
+        return self.metrics_results['main']['higher_score_is_better']
+
     def to_json(self) -> dict:
         return {
             'hyperparams': self.hyperparams.to_flat_as_dict_primitive(),

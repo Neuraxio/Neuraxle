@@ -54,9 +54,8 @@ class EarlyStoppingCallback(BaseCallback):
         :class:`DataContainer`
     """
 
-    def __init__(self, n_epochs_without_improvement, higher_score_is_better):
-        self.higher_score_is_better = higher_score_is_better
-        self.n_epochs_without_improvement = n_epochs_without_improvement
+    def __init__(self, max_epochs_without_improvement):
+        self.n_epochs_without_improvement = max_epochs_without_improvement
 
     def call(
             self,
@@ -71,9 +70,10 @@ class EarlyStoppingCallback(BaseCallback):
     ):
         validation_scores = trial.get_validation_scores()
         if len(validation_scores) > self.n_epochs_without_improvement:
-            if validation_scores[-self.n_epochs_without_improvement] >= validation_scores[-1] and self.higher_score_is_better:
+            higher_score_is_better = trial.get_higher_score_is_better()
+            if validation_scores[-self.n_epochs_without_improvement] >= validation_scores[-1] and higher_score_is_better:
                 return True
-            if validation_scores[-self.n_epochs_without_improvement] <= validation_scores[-1] and not self.higher_score_is_better:
+            if validation_scores[-self.n_epochs_without_improvement] <= validation_scores[-1] and not higher_score_is_better:
                 return True
         return False
 
@@ -114,9 +114,8 @@ class IfBestScore(MetaCallback):
         return False
 
 class IfLastStep(MetaCallback):
-    def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, is_finished_and_fitted: bool):
-        if epoch_number == total_epochs - 1:
+    def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer, pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, is_finished_and_fitted: bool):
+        if epoch_number == total_epochs - 1 or is_finished_and_fitted:
             self.wrapped_callback.call(
                 trial,
                 epoch_number,
