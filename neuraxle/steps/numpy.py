@@ -366,10 +366,10 @@ class NumpyReshape(NonFittableMixin, BaseStep):
         :class:`BaseStep`
     """
 
-    def __init__(self, shape):
+    def __init__(self, new_shape):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
-        self.shape = shape
+        self.new_shape = new_shape
 
     def transform(self, data_inputs):
-        return np.reshape(data_inputs, newshape=self.shape)
+        return np.reshape(data_inputs, newshape=self.new_shape)

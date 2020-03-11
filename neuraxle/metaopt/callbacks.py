@@ -177,13 +177,13 @@ class MetricCallback(BaseCallback):
         train_score = self.metric_function(pred_train.data_inputs, pred_train.expected_outputs)
         validation_score = self.metric_function(pred_val.data_inputs, pred_val.expected_outputs)
 
-        trial.set_metric_results_train(
+        trial.add_metric_results_train(
             name=self.name,
             score=train_score,
             higher_score_is_better=self.higher_score_is_better
         )
 
-        trial.set_metric_results_validation(
+        trial.add_metric_results_validation(
             name=self.name,
             score=validation_score,
             higher_score_is_better=self.higher_score_is_better
@@ -200,50 +200,3 @@ class ScoringCallback(MetricCallback):
             higher_score_is_better=higher_score_is_better
         )
 
-
-class EarlyStoppingRefitCallback(BaseRefitCallback):
-    """
-    Perform early stopping when there is multiple epochs in a row that didn't improve the performance of the model.
-
-    Example usage :
-
-    .. code-block:: python
-
-        trainer = Trainer(
-            metrics=self.metrics,
-            callbacks=self.callbacks,
-            refit_callbacks=self.callbacks,
-            score=self.scoring_function,
-            epochs=self.epochs
-        )
-
-        trial = trainer.fit(
-            p=p,
-            trial_repository=repo_trial,
-            train_data_container=training_data_container,
-            validation_data_container=validation_data_container,
-            context=context
-        )
-
-        pipeline = trainer.refit(repo_trial.pipeline, data_container, context)
-
-    .. seealso::
-        :class:`AutoML`,
-        :class:`Trial`,
-        :class:`HyperparamsRepository`,
-        :class:`HyperparameterOptimizer`,
-        :class:`RandomSearchHyperparameterOptimizer`,
-        :class:`DataContainer`
-    """
-
-    def __init__(self, n_epochs_without_improvement, higher_score_is_better):
-        self.higher_score_is_better = higher_score_is_better
-        self.n_epochs_without_improvement = n_epochs_without_improvement
-
-    def call(self, scores):
-        if len(scores) > self.n_epochs_without_improvement:
-            if scores[-self.n_epochs_without_improvement] >= scores[-1] and self.higher_score_is_better:
-                return True
-            if scores[-self.n_epochs_without_improvement] <= scores[-1] and not self.higher_score_is_better:
-                return True
-        return False

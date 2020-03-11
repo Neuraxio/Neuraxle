@@ -28,6 +28,7 @@ performed to find the best possible combination of hyperparameters by sampling r
 """
 
 import numpy as np
+from py._path.local import LocalPath
 from sklearn.cluster import KMeans
 from sklearn.datasets import load_boston
 from sklearn.decomposition import PCA, FastICA
@@ -39,17 +40,15 @@ from sklearn.utils import shuffle
 
 from neuraxle.hyperparams.distributions import RandInt, LogUniform, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, InMemoryHyperparamsRepository, kfold_cross_validation_split, \
-    validation_splitter
+from neuraxle.metaopt.auto_ml import AutoML, InMemoryHyperparamsRepository, validation_splitter
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
-from neuraxle.metaopt.random import average_kfold_scores
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.union import AddFeatures, ModelStacking
 
 
-def main(tmpdir):
+def main(tmpdir: LocalPath):
     boston = load_boston()
     X, y = shuffle(boston.data, boston.target, random_state=13)
     X = X.astype(np.float32)

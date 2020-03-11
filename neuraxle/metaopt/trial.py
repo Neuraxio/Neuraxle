@@ -46,7 +46,7 @@ class Trial:
     def set_fitted_pipeline(self, pipeline):
         self.pipeline = pipeline
 
-    def set_metric_results_train(self, name, score, higher_score_is_better):
+    def add_metric_results_train(self, name, score, higher_score_is_better):
         if name not in self.metrics_results:
             self.metrics_results[name] = {
                 'train_values': [],
@@ -56,7 +56,7 @@ class Trial:
 
         self.metrics_results[name]['train_values'].append(score)
 
-    def set_metric_results_validation(self, name, score, higher_score_is_better):
+    def add_metric_results_validation(self, name, score, higher_score_is_better):
         if name not in self.metrics_results:
             self.metrics_results[name] = {
                 'train_values': [],

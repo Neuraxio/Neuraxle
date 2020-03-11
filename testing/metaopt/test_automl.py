@@ -24,7 +24,7 @@ def test_automl_early_stopping_callback(tmpdir):
             MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
                 'multiply_by': FixedHyperparameter(2)
             })),
-            NumpyReshape(shape=(-1, 1)),
+            NumpyReshape(new_shape=(-1, 1)),
             linear_model.LinearRegression()
         ]),
         hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
@@ -56,7 +56,7 @@ def test_automl_with_kfold(tmpdir):
             MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
                 'multiply_by': FixedHyperparameter(2)
             })),
-            NumpyReshape(shape=(-1, 1)),
+            NumpyReshape(new_shape=(-1, 1)),
             linear_model.LinearRegression()
         ]),
         validation_split_function=validation_splitter(0.20),
