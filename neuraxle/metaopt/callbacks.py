@@ -9,7 +9,7 @@ from neuraxle.metaopt.trial import Trial
 class BaseCallback(ABC):
     @abstractmethod
     def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, early_stopping: bool):
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, is_finished_and_fitted: bool):
         pass
 
 
@@ -67,14 +67,13 @@ class EarlyStoppingCallback(BaseCallback):
             pred_train: DataContainer,
             input_val: DataContainer,
             pred_val: DataContainer,
-            early_stopping: bool
+            is_finished_and_fitted: bool
     ):
-        if len(trial.validation_scores) > self.n_epochs_without_improvement:
-            if trial.validation_scores[-self.n_epochs_without_improvement] >= trial.validation_scores[
-                -1] and self.higher_score_is_better:
+        validation_scores = trial.get_validation_scores()
+        if len(validation_scores) > self.n_epochs_without_improvement:
+            if validation_scores[-self.n_epochs_without_improvement] >= validation_scores[-1] and self.higher_score_is_better:
                 return True
-            if trial.validation_scores[-self.n_epochs_without_improvement] <= trial.validation_scores[
-                -1] and not self.higher_score_is_better:
+            if validation_scores[-self.n_epochs_without_improvement] <= validation_scores[-1] and not self.higher_score_is_better:
                 return True
         return False
 
@@ -93,13 +92,13 @@ class MetaCallback(BaseCallback):
             pred_train: DataContainer,
             input_val: DataContainer,
             pred_val: DataContainer,
-            early_stopping: bool
+            is_finished_and_fitted: bool
     ):
         pass
 
 class IfBestScore(MetaCallback):
     def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, early_stopping: bool):
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, is_finished_and_fitted: bool):
         if trial.is_new_best_score():
             if self.wrapped_callback.call(
                     trial,
@@ -109,14 +108,14 @@ class IfBestScore(MetaCallback):
                     pred_train,
                     input_val,
                     pred_val,
-                    early_stopping
+                    is_finished_and_fitted
             ):
                 return True
         return False
 
 class IfLastStep(MetaCallback):
     def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, early_stopping: bool):
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, is_finished_and_fitted: bool):
         if epoch_number == total_epochs - 1:
             self.wrapped_callback.call(
                 trial,
@@ -126,7 +125,7 @@ class IfLastStep(MetaCallback):
                 pred_train,
                 input_val,
                 pred_val,
-                early_stopping
+                is_finished_and_fitted
             )
             return True
         return False
@@ -134,7 +133,7 @@ class IfLastStep(MetaCallback):
 
 class StepSaverCallback(MetaCallback):
     def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, early_stopping: bool):
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, is_finished_and_fitted: bool):
         trial.save_model()
         return False
 
@@ -142,6 +141,8 @@ class StepSaverCallback(MetaCallback):
 class CallbackList(BaseCallback):
     def __init__(self, callbacks, print_func: Callable = None):
         self.callbacks = callbacks
+        if print_func is None:
+            print_func = print
         self.print_func = print_func
 
     def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
@@ -173,7 +174,7 @@ class MetricCallback(BaseCallback):
         self.higher_score_is_better = higher_score_is_better
 
     def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, early_stopping: bool):
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, is_finished_and_fitted: bool):
         train_score = self.metric_function(pred_train.data_inputs, pred_train.expected_outputs)
         validation_score = self.metric_function(pred_val.data_inputs, pred_val.expected_outputs)
 
@@ -190,6 +191,15 @@ class MetricCallback(BaseCallback):
         )
 
         return False
+
+
+class ScoringCallback(MetricCallback):
+    def __init__(self, metric_function: Callable, higher_score_is_better: bool):
+        super().__init__(
+            name='main',
+            metric_function=metric_function,
+            higher_score_is_better=higher_score_is_better
+        )
 
 
 class EarlyStoppingRefitCallback(BaseRefitCallback):

@@ -33,14 +33,16 @@ from sklearn.datasets import load_boston
 from sklearn.decomposition import PCA, FastICA
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.linear_model import Ridge
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_squared_error
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 
 from neuraxle.hyperparams.distributions import RandInt, LogUniform, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML
-from neuraxle.metaopt.random import KFoldCrossValidationWrapper, average_kfold_scores
+from neuraxle.metaopt.auto_ml import AutoML, InMemoryHyperparamsRepository, kfold_cross_validation_split, \
+    validation_splitter
+from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
+from neuraxle.metaopt.random import average_kfold_scores
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
@@ -92,14 +94,15 @@ def main(tmpdir):
     print("Meta-fitting on train:")
     auto_ml = AutoML(
         p,
-        validation_technique=KFoldCrossValidationWrapper(k_fold=10),
-        scoring_function=average_kfold_scores(r2_score),
+        validation_split_function=validation_splitter(0.20),
         refit_trial=True,
         n_trials=10,
-        metrics={},
-        higher_score_is_better=True,
+        epochs=10,
         print_metrics=False,
-        cache_folder_when_no_handle=str(tmpdir)
+        cache_folder_when_no_handle=str(tmpdir),
+        scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
+        callbacks=[MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)],
+        hyperparams_repository=InMemoryHyperparamsRepository(cache_folder=str(tmpdir))
     )
 
     random_search = auto_ml.fit(X_train, y_train)
@@ -124,4 +127,4 @@ def main(tmpdir):
 
 
 if __name__ == "__main__":
-    main()
+    main('cache')

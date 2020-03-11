@@ -33,9 +33,9 @@ from sklearn.metrics import mean_squared_error
 from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, kfold_cross_validation_split, RandomSearchHyperparameterSelectionStrategy
-from neuraxle.metaopt.callbacks import MetricCallback
-from neuraxle.metaopt.random import ValidationSplitWrapper, average_kfold_scores
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearchHyperparameterSelectionStrategy, \
+    validation_splitter
+from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.pipeline import ResumablePipeline, DEFAULT_CACHE_FOLDER, Pipeline
 from neuraxle.steps.flow import ExpandDim
 from neuraxle.steps.loop import ForEachDataInput
@@ -70,11 +70,11 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
         n_trials=n_iter,
         print_metrics=False,
         cache_folder_when_no_handle=str(tmpdir),
-        validation_split_function = kfold_cross_validation_split(k_fold=2),
-        hyperparams_optimizer = RandomSearchHyperparameterSelectionStrategy(),
-        scoring_callback = MetricCallback('mse', average_kfold_scores(mean_squared_error), higher_score_is_better=False),
-        callbacks = [
-            MetricCallback('mse', metric_function=average_kfold_scores(mean_squared_error), higher_score_is_better=False)
+        validation_split_function=validation_splitter(0.2),
+        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
+        callbacks=[
+            MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)
         ]
     )
     auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
@@ -108,11 +108,11 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
         n_trials=n_iter,
         print_metrics=False,
         cache_folder_when_no_handle=str(tmpdir),
-        validation_split_function = kfold_cross_validation_split(k_fold=2),
-        hyperparams_optimizer = RandomSearchHyperparameterSelectionStrategy(),
-        scoring_callback = MetricCallback('mse', average_kfold_scores(mean_squared_error), higher_score_is_better=False),
-        callbacks = [
-            MetricCallback('mse', metric_function=average_kfold_scores(mean_squared_error), higher_score_is_better=False)
+        validation_split_function=validation_splitter(0.2),
+        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
+        callbacks=[
+            MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)
         ]
     )
     auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)

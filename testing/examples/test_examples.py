@@ -1,6 +1,3 @@
-import pytest
-
-
 def test_auto_ml_checkpoint(tmpdir):
     from examples.auto_ml_checkpoint import main
     main(tmpdir)

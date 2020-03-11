@@ -266,7 +266,6 @@ class JoblibStepSaver(BaseSaver):
         context.mkdir()
 
         path = self._create_step_path(context, step)
-        print(path)
         dump(step, path)
 
         return step

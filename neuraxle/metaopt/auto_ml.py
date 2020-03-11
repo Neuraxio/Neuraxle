@@ -2,20 +2,21 @@ import copy
 import glob
 import hashlib
 import json
+import math
 import os
 import time
 import traceback
-import numpy as np
 from abc import ABC, abstractmethod
 from typing import Callable, List, Union, Tuple, Iterable
+
+import numpy as np
 
 from neuraxle.base import BaseStep, ExecutionContext, ForceHandleOnlyMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
-from neuraxle.metaopt.callbacks import BaseCallback, CallbackList, MetricCallback
+from neuraxle.metaopt.callbacks import BaseCallback, CallbackList, ScoringCallback
 from neuraxle.metaopt.random import BaseCrossValidationWrapper
 from neuraxle.metaopt.trial import Trial, TRIAL_STATUS, Trials
-from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
 
 class HyperparamsRepository(ABC):
@@ -86,7 +87,7 @@ class HyperparamsRepository(ABC):
     def get_best_model(self):
         hyperparams: HyperparameterSamples = self.get_best_hyperparams()
         trial_hash: str = self._get_trial_hash(HyperparameterSamples(hyperparams).to_flat_as_dict_primitive())
-        p: BaseStep = ExecutionContext(str(self.cache_folder)).load(trial_hash)
+        p: BaseStep = ExecutionContext(str(self.best_retrained_model_folder)).load(trial_hash)
 
         return p
 
@@ -142,11 +143,12 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         :class:`Trainer`
     """
 
-    def __init__(self, hyperparameter_optimizer=None, print_func: Callable = None, cache_folder: str = None):
+    def __init__(self, hyperparameter_optimizer=None, print_func: Callable = None, cache_folder: str = None, best_retrained_model_folder=None):
         HyperparamsRepository.__init__(
             self,
             hyperparameter_optimizer=hyperparameter_optimizer,
-            cache_folder=cache_folder
+            cache_folder=cache_folder,
+            best_retrained_model_folder=best_retrained_model_folder
         )
         if print_func is None:
             print_func = print
@@ -206,7 +208,6 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         HyperparamsRepository.__init__(self, hyperparameter_optimizer=hyperparameter_optimizer,
                                        cache_folder=cache_folder,
                                        best_retrained_model_folder=best_retrained_model_folder)
-        self.best_retrained_model_folder = best_retrained_model_folder
 
     def save_trial(self, trial: 'Trial'):
         """
@@ -286,8 +287,10 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
     def _get_successful_trial_json_file_path(self, trial: 'Trial'):
         trial_hash = self._get_trial_hash(trial.hyperparams.to_flat_as_dict_primitive())
-        return os.path.join(self.cache_folder,
-                            str(float(trial.validation_score)).replace('.', ',') + "_" + trial_hash) + '.json'
+        return os.path.join(
+            self.cache_folder,
+            str(float(trial.get_validation_scores()[-1])).replace('.', ',') + "_" + trial_hash
+        ) + '.json'
 
     def _get_failed_trial_json_file_path(self, trial: 'Trial'):
         trial_hash = self._get_trial_hash(trial.hyperparams.to_flat_as_dict_primitive())
@@ -420,23 +423,8 @@ class Trainer:
 
         :return: fitted pipeline
         """
-        early_stopping = False
-
-        train_scores = []
-
         for i in range(self.epochs):
             p = p.handle_fit(data_container, context)
-            pred = p.handle_predict(data_container, context)
-
-            train_score = self.refit_score(pred.data_inputs, pred.expected_outputs)
-            train_scores.append(train_score)
-
-            for callback in self.refit_callbacks:
-                if callback.call(train_scores):
-                    early_stopping = True
-
-            if early_stopping:
-                break
 
         return p
 
@@ -501,7 +489,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             pipeline,
             validation_split_function: Callable,
             refit_trial,
-            scoring_callback: MetricCallback,
+            scoring_callback: ScoringCallback,
             hyperparams_optimizer: BaseHyperparameterSelectionStrategy = None,
             hyperparams_repository: HyperparamsRepository = None,
             n_trials: int = 10,
@@ -544,6 +532,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
         if callbacks is None:
             callbacks = []
+        callbacks.append(scoring_callback)
         self.callbacks = callbacks
 
         self.epochs = epochs
@@ -577,6 +566,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
                 try:
                     p.update_hyperparams(repo_trial.hyperparams)
+                    repo_trial.set_hyperparams(p.get_hyperparams())
 
                     repo_trial = self.trainer.fit(
                         p=p,
@@ -748,3 +738,107 @@ def kfold_cross_validation_split(k_fold):
         return splitted_train_data_inputs, splitted_validation_inputs
 
     return split
+
+
+def validation_splitter(test_size: float):
+    def create_validation_splitter(splitter_function: Callable):
+        def splitter(data_inputs, expected_outputs=None) -> Tuple[Iterable, Iterable, Iterable, Iterable]:
+            train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = splitter_function(data_inputs, expected_outputs)
+            return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
+
+        return splitter
+
+    def split(data_inputs, expected_outputs=None) -> Tuple[List, List, List, List]:
+        """
+        Split data inputs, and expected outputs into a training set, and a validation set.
+
+        :param data_inputs: data inputs to split
+        :param expected_outputs: expected outputs to split
+        :return: train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
+        """
+        validation_data_inputs = validation_split(data_inputs)
+        validation_expected_outputs = None
+        if expected_outputs is not None:
+            validation_expected_outputs = validation_split(expected_outputs)
+
+        train_data_inputs = train_split(data_inputs)
+        train_expected_outputs = None
+        if expected_outputs is not None:
+            train_expected_outputs = train_split(expected_outputs)
+
+        return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
+
+    def train_split(data_inputs) -> List:
+        """
+        Split training set.
+
+        :param data_inputs: data inputs to split
+        :return: train_data_inputs
+        """
+        return data_inputs[0:_get_index_split(data_inputs)]
+
+    def validation_split(data_inputs) -> List:
+        """
+        Split validation set.
+
+        :param data_inputs: data inputs to split
+        :return: validation_data_inputs
+        """
+        return data_inputs[_get_index_split(data_inputs):]
+
+    def _get_index_split(data_inputs):
+        return math.floor(len(data_inputs) * (1 - test_size))
+
+    return create_validation_splitter(split)
+
+
+def validation_splitter_fold(test_size: float):
+    def create_validation_splitter(splitter_function: Callable):
+        def splitter(data_inputs, expected_outputs=None) -> Tuple[Iterable, Iterable, Iterable, Iterable]:
+            train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = splitter_function(data_inputs, expected_outputs)
+            return [train_data_inputs], [train_expected_outputs], [validation_data_inputs], [validation_expected_outputs]
+
+        return splitter
+
+    def split(data_inputs, expected_outputs=None) -> Tuple[List, List, List, List]:
+        """
+        Split data inputs, and expected outputs into a training set, and a validation set.
+
+        :param data_inputs: data inputs to split
+        :param expected_outputs: expected outputs to split
+        :return: train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
+        """
+        validation_data_inputs = validation_split(data_inputs)
+        validation_expected_outputs = None
+        if expected_outputs is not None:
+            validation_expected_outputs = validation_split(expected_outputs)
+
+        train_data_inputs = train_split(data_inputs)
+        train_expected_outputs = None
+        if expected_outputs is not None:
+            train_expected_outputs = train_split(expected_outputs)
+
+        return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
+
+    def train_split(data_inputs) -> List:
+        """
+        Split training set.
+
+        :param data_inputs: data inputs to split
+        :return: train_data_inputs
+        """
+        return data_inputs[0:_get_index_split(data_inputs)]
+
+    def validation_split(data_inputs) -> List:
+        """
+        Split validation set.
+
+        :param data_inputs: data inputs to split
+        :return: validation_data_inputs
+        """
+        return data_inputs[_get_index_split(data_inputs):]
+
+    def _get_index_split(data_inputs):
+        return math.floor(len(data_inputs) * (1 - test_size))
+
+    return create_validation_splitter(split)

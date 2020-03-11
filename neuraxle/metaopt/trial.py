@@ -50,6 +50,7 @@ class Trial:
         if name not in self.metrics_results:
             self.metrics_results[name] = {
                 'train_values': [],
+                'validation_values': [],
                 'higher_score_is_better': higher_score_is_better
             }
 
@@ -58,6 +59,7 @@ class Trial:
     def set_metric_results_validation(self, name, score, higher_score_is_better):
         if name not in self.metrics_results:
             self.metrics_results[name] = {
+                'train_values': [],
                 'validation_values': [],
                 'higher_score_is_better': higher_score_is_better
             }
@@ -69,9 +71,11 @@ class Trial:
         trial_hash = self._get_trial_hash(hyperparams)
         self.pipeline.set_name(trial_hash).save(ExecutionContext(self.cache_folder), full_dump=True)
 
-
     def set_success(self):
         self.status = TRIAL_STATUS.SUCCESS
+
+    def set_hyperparams(self, hyperparams: HyperparameterSamples):
+        self.hyperparams = hyperparams
 
     def set_failed(self, error: Exception):
         self.status = TRIAL_STATUS.FAILED
@@ -102,6 +106,7 @@ class Trial:
             'hyperparams': self.hyperparams.to_flat_as_dict_primitive(),
             'status': self.status.value,
             'error': self.error,
+            'metric_results': self.metrics_results,
             'error_traceback': self.error_traceback,
         }
 
@@ -111,8 +116,8 @@ class Trial:
             hyperparams=trial_json['hyperparams'],
             status=trial_json['status'],
             error=trial_json['error'],
-            error_traceback=trial_json['error_traceback'],
-            metrics_results=trial_json['metrics_results_train']
+            metrics_results=trial_json['metric_results'],
+            error_traceback=trial_json['error_traceback']
         )
 
     def _get_trial_hash(self, hp_dict):
