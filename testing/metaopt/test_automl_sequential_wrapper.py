@@ -67,10 +67,6 @@ def test_automl_sequential_wrapper_with_validation_split_wrapper(tmpdir):
             scoring_function=mean_squared_error,
             run_validation_split_in_test_mode=False
         ),
-        scoring_callback=MetricCallback('mse', average_kfold_scores(mean_squared_error), higher_score_is_better=False),
-        callbacks=[
-            MetricCallback('mse', metric_function=average_kfold_scores(mean_squared_error), higher_score_is_better=False),
-        ],
         hyperparams_repository=HyperparamsJSONRepository(tmpdir),
         higher_score_is_better=False,
         n_iter=100

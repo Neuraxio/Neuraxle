@@ -90,9 +90,17 @@ def main(tmpdir):
     ])
 
     print("Meta-fitting on train:")
-    auto_ml = AutoML(p, validation_technique=KFoldCrossValidationWrapper(k_fold=10),
-                     scoring_function=average_kfold_scores(r2_score), refit_trial=True, n_trials=10, metrics={},
-                     higher_score_is_better=True, print_metrics=False, cache_folder_when_no_handle=str(tmpdir))
+    auto_ml = AutoML(
+        p,
+        validation_technique=KFoldCrossValidationWrapper(k_fold=10),
+        scoring_function=average_kfold_scores(r2_score),
+        refit_trial=True,
+        n_trials=10,
+        metrics={},
+        higher_score_is_better=True,
+        print_metrics=False,
+        cache_folder_when_no_handle=str(tmpdir)
+    )
 
     random_search = auto_ml.fit(X_train, y_train)
     p = random_search.get_best_model()

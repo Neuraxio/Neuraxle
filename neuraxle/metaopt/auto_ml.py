@@ -7,7 +7,7 @@ import time
 import traceback
 import numpy as np
 from abc import ABC, abstractmethod
-from typing import Callable, List, Union, Tuple
+from typing import Callable, List, Union, Tuple, Iterable
 
 from neuraxle.base import BaseStep, ExecutionContext, ForceHandleOnlyMixin
 from neuraxle.data_container import DataContainer
@@ -96,7 +96,6 @@ class HyperparamsRepository(ABC):
         step.set_name(trial_hash).save(ExecutionContext(self.best_retrained_model_folder), full_dump=True)
 
         return step
-
 
     @abstractmethod
     def new_trial(self, auto_ml_container: 'AutoMLContainer'):
@@ -202,9 +201,11 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :class:`Trainer`
     """
 
-    def __init__(self, hyperparameter_optimizer: 'BaseHyperparameterSelectionStrategy' = None, cache_folder=None, best_retrained_model_folder=None):
+    def __init__(self, hyperparameter_optimizer: 'BaseHyperparameterSelectionStrategy' = None, cache_folder=None,
+                 best_retrained_model_folder=None):
         HyperparamsRepository.__init__(self, hyperparameter_optimizer=hyperparameter_optimizer,
-                                       cache_folder=cache_folder, best_retrained_model_folder=best_retrained_model_folder)
+                                       cache_folder=cache_folder,
+                                       best_retrained_model_folder=best_retrained_model_folder)
         self.best_retrained_model_folder = best_retrained_model_folder
 
     def save_trial(self, trial: 'Trial'):
@@ -456,7 +457,6 @@ class Trainer:
             self.metrics_results_validation[m] = []
 
 
-
 class AutoML(ForceHandleOnlyMixin, BaseStep):
     """
     A step to execute any Automatic Machine Learning Algorithms.
@@ -703,13 +703,15 @@ class RandomSearchHyperparameterSelectionStrategy(BaseHyperparameterSelectionStr
 
 ValidationSplitter = Callable
 
+
 def create_split_data_container_function(validation_splitter_function: Callable):
     def split_data_container(data_container: DataContainer) -> Tuple[DataContainer, DataContainer]:
         train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = \
             validation_splitter_function(data_container.data_inputs, data_container.expected_outputs)
 
         train_data_container = DataContainer(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
-        validation_data_container = DataContainer(data_inputs=validation_data_inputs, expected_outputs=validation_expected_outputs)
+        validation_data_container = DataContainer(data_inputs=validation_data_inputs,
+                                                  expected_outputs=validation_expected_outputs)
 
         return train_data_container, validation_data_container
 
@@ -717,48 +719,19 @@ def create_split_data_container_function(validation_splitter_function: Callable)
 
 
 def kfold_cross_validation_split(k_fold):
-    def split(data_inputs, expected_outputs):
-        validation_data_inputs, validation_expected_outputs = \
-            kfold_cross_validation_validation_split(data_inputs, expected_outputs)
-        train_data_inputs, train_expected_outputs = \
-            kfold_cross_validation_train_split(data_inputs, expected_outputs)
+    def split(data_inputs: Iterable, expected_outputs: Iterable):
+        data_inputs_train, data_inputs_val = _kfold_cross_validation_split(data_inputs)
 
-        return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
-
-    def kfold_cross_validation_train_split(data_inputs, expected_outputs) -> (List, List):
-        train_data_inputs = []
-        train_expected_outputs = []
-        data_inputs = np.array(data_inputs)
-        expected_outputs = np.array(expected_outputs)
-        joiner = NumpyConcatenateOuterBatch()
-
-        for i in range(len(data_inputs)):
-            before_di = data_inputs[:i]
-            after_di = data_inputs[i + 1:]
-            inputs = (before_di, after_di)
-
-            before_eo = expected_outputs[:i]
-            after_eo = expected_outputs[i + 1:]
-            outputs = (before_eo, after_eo)
-
-            inputs = joiner.transform(inputs)
-            outputs = joiner.transform(outputs)
-
-            train_data_inputs.append(inputs)
-            train_expected_outputs.append(outputs)
-
-        return train_data_inputs, train_expected_outputs
-
-    def kfold_cross_validation_validation_split(data_inputs, expected_outputs=None) -> (List, List):
-        splitted_data_inputs = _kfold_cross_validation_split(data_inputs)
         if expected_outputs is not None:
-            splitted_expected_outputs = _kfold_cross_validation_split(expected_outputs)
-            return splitted_data_inputs, splitted_expected_outputs
+            expected_outputs_train, expected_outputs_val = _kfold_cross_validation_split(expected_outputs)
+            return data_inputs_train, expected_outputs_train, data_inputs_val, expected_outputs_val
 
-        return splitted_data_inputs, [None] * len(splitted_data_inputs)
+        return data_inputs_train, [None] * len(data_inputs_train), data_inputs_val,  [None] * len(data_inputs_val)
 
     def _kfold_cross_validation_split(data_inputs):
-        splitted_data_inputs = []
+        splitted_train_data_inputs = []
+        splitted_validation_inputs = []
+
         step = len(data_inputs) / float(k_fold)
         for i in range(k_fold):
             a = int(step * i)
@@ -766,9 +739,12 @@ def kfold_cross_validation_split(k_fold):
             if b > len(data_inputs):
                 b = len(data_inputs)
 
-            slice = data_inputs[a:b]
-            splitted_data_inputs.append(slice)
+            validation = data_inputs[a:b]
+            train = np.concatenate((data_inputs[:a], data_inputs[b:]), axis=0)
 
-        return splitted_data_inputs
+            splitted_validation_inputs.append(validation)
+            splitted_train_data_inputs.append(train)
+
+        return splitted_train_data_inputs, splitted_validation_inputs
 
     return split
