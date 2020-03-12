@@ -311,10 +311,14 @@ class MetricCallback(BaseCallback):
         :class:`~neuraxle.base.HyperparameterSamples`,
         :class:`~neuraxle.data_container.DataContainer`
     """
-    def __init__(self, name: str, metric_function: Callable, higher_score_is_better: bool):
+    def __init__(self, name: str, metric_function: Callable, higher_score_is_better: bool, print_metrics=True, print_function=None):
         self.name = name
         self.metric_function = metric_function
         self.higher_score_is_better = higher_score_is_better
+        self.print_metrics = print_metrics
+        if print_function is None:
+            print_function = print
+        self.print_function = print_function
 
     def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, is_finished_and_fitted: bool):
@@ -332,6 +336,10 @@ class MetricCallback(BaseCallback):
             score=validation_score,
             higher_score_is_better=self.higher_score_is_better
         )
+
+        if self.print_metrics:
+            self.print_function('{} train: {}'.format(self.name, train_score))
+            self.print_function('{} validation: {}'.format(self.name, validation_score))
 
         return False
 

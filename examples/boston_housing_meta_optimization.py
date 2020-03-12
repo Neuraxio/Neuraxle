@@ -97,7 +97,6 @@ def main(tmpdir: LocalPath):
         refit_trial=True,
         n_trials=10,
         epochs=10,
-        print_metrics=False,
         cache_folder_when_no_handle=str(tmpdir),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)],
