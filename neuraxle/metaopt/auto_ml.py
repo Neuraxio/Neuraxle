@@ -657,6 +657,8 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             self.hyperparams_repository.save_trial(repo_trial)
 
         best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
+
+        self.print_func('best hyperparams:\n{}'.format(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
         p: BaseStep = self._load_virgin_model(hyperparams=best_hyperparams)
         if self.refit_trial:
             p = self.trainer.refit(
