@@ -464,7 +464,7 @@ class Trainer:
         early_stopping = False
 
         for i in range(self.epochs):
-            self.print_func('epoch {}/{}'.format(i, self.epochs))
+            self.print_func('\nepoch {}/{}'.format(i + 1, self.epochs))
             p = p.handle_fit(train_data_container, context)
 
             y_pred_train = p.handle_predict(train_data_container, context)
@@ -570,7 +570,6 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             callbacks: List[BaseCallback] = None,
             refit_scoring_function: Callable = None,
             print_func: Callable = None,
-            print_metrics=True,
             cache_folder_when_no_handle=None
     ):
         BaseStep.__init__(self)
@@ -579,7 +578,6 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         self.scoring_callback = scoring_callback
         self.validation_split_function = create_split_data_container_function(validation_split_function)
 
-        self.print_metrics = print_metrics
         if print_func is None:
             print_func = print
 
@@ -631,7 +629,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         training_data_container, validation_data_container = self.validation_split_function(data_container)
 
         for trial_number in range(self.n_trial):
-            self.print_func('trial {}/{}'.format(trial_number, self.n_trial))
+            self.print_func('\ntrial {}/{}'.format(trial_number + 1, self.n_trial))
 
             auto_ml_data = self._load_auto_ml_data(trial_number)
             p = copy.deepcopy(self.pipeline)
@@ -650,6 +648,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                     )
 
                     repo_trial.set_success()
+                    self.print_func('trial {}/{} score: {}'.format(trial_number + 1, self.n_trial, repo_trial.get_validation_scores()[-1]))
                 except Exception as error:
                     track = traceback.format_exc()
                     self.print_func(track)
@@ -658,6 +657,8 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             self.hyperparams_repository.save_trial(repo_trial)
 
         best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
+
+        self.print_func('best hyperparams:\n{}'.format(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
         p: BaseStep = self._load_virgin_model(hyperparams=best_hyperparams)
         if self.refit_trial:
             p = self.trainer.refit(
