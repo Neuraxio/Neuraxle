@@ -25,7 +25,6 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
 """
 from typing import Union
 
-from build.lib.neuraxle.steps.flow import CHOICE_HYPERPARAM
 from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin, \
     HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin, NonFittableMixin
 from neuraxle.data_container import ExpandedDataContainer
@@ -268,6 +267,7 @@ class Optional(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         hyperparams_space = self.wrapped.get_hyperparams_space()
         self.wrapped.set_hyperparams(hyperparams_space.nullify())
 
+CHOICE_HYPERPARAM = 'choice'
 
 class ChooseOneStepOf(FeatureUnion):
     """
