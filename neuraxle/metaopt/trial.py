@@ -295,7 +295,15 @@ class Trials:
 
         for trial in self.trials:
             trial_score = trial.metrics_results['main']['higher_score_is_better']
-            if best_score is None or higher_score_is_better == (trial_score > best_score):
+            if best_score is None:
+                best_score = trial_score
+                best_hyperparams = trial.hyperparams
+
+            if trial_score > best_score and higher_score_is_better:
+                best_score = trial_score
+                best_hyperparams = trial.hyperparams
+
+            if trial_score < best_score and not higher_score_is_better:
                 best_score = trial_score
                 best_hyperparams = trial.hyperparams
 
