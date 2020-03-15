@@ -36,7 +36,7 @@ import numpy as np
 OPTIONAL_ENABLED_HYPERPARAM = 'enabled'
 
 
-class TrainOrTestOnlyWrapper(ResumableStepMixin, ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
+class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     """
     A wrapper to run wrapped step only in test mode, or only in train mode.
 
@@ -64,7 +64,6 @@ class TrainOrTestOnlyWrapper(ResumableStepMixin, ForceHandleOnlyMixin, MetaStepM
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
-        ResumableStepMixin.__init__(self)
 
         self.is_train_only = is_train_only
 
