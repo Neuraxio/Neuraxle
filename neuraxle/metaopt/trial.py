@@ -187,6 +187,9 @@ class Trial:
     def get_metric_validation_results(self, metric_name):
         return self.metrics_results[metric_name]['validation_values']
 
+    def get_metric_train_values(self, metric_name):
+        return self.metrics_results[metric_name]['train_values']
+
     def to_json(self) -> dict:
         """
         Return the trial in a json format.
