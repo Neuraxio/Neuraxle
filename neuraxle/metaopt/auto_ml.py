@@ -566,7 +566,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             hyperparams_optimizer: BaseHyperparameterSelectionStrategy = None,
             hyperparams_repository: HyperparamsRepository = None,
             n_trials: int = 10,
-            epochs: int = 10,
+            epochs: int = 1,
             callbacks: List[BaseCallback] = None,
             refit_scoring_function: Callable = None,
             print_func: Callable = None,
