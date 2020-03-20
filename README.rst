@@ -431,41 +431,6 @@ License
 Neuraxle is licensed under the `Apache License, Version
 2.0 <https://github.com/Neuraxio/Neuraxle/blob/master/LICENSE>`__.
 
-Summary of the License
-^^^^^^^^^^^^^^^^^^^^^^
-
-At `Neuraxio <https://www.neuraxio.com/en/>`__, we have open-source at
-heart. We want *you* to be able to use Neuraxio's Neuraxle as much as
-possible without copyleft restrictions. For this reasons, Neuraxle don't
-depend on copyleft librairies and is neither licensed under a copyleft
-license. This way, Neuraxle is quite permissive.
-
-The License is very permissive and not very restrictive.
-
-Permissions:
- - Commercial use
- - Modification
- - Distribution
- - Patent use
- - Private use
-
-Limitations:
- - Trademark use
- - Liability
- - Warranty
-
-Conditions:
- - License and copyright notice
- - State changes
-
-For example, if Neuraxle is used within a larger project, it doesn't
-necessarily mean that the larger project is also licensed under the same
-license. Licensed works, modifications, and larger works may be
-distributed under different terms and without source code.
-
-Note: this Summary of the License is not legal advice. Refer to the `full
-license <https://github.com/Neuraxio/Neuraxle/blob/master/LICENSE>`__.
-
 Citation
 ~~~~~~~~~~~~
 
@@ -526,13 +491,3 @@ We thank these organisations for generously supporting the project:
 .. raw:: html
 
     <img src="https://www.neuraxio.com/images/La-Cite-LP.png" width="260">
-
-Support Us
-~~~~~~~~~~~~
-
--  `Get in touch with us <https://gitter.im/Neuraxle/community>`__.
--  `Be a sponsor <https://www.neuraxio.com/en/>`__.
--  Save this for later:
-
-.. image:: https://img.shields.io/github/watchers/Neuraxio/Neuraxle?style=social&   :alt: GitHub watchers
-    :target: https://github.com/Neuraxio/Neuraxle/watchers
