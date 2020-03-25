@@ -23,7 +23,6 @@ For more info, see the `thread here <https://stackoverflow.com/questions/2445864
     See the License for the specific language governing permissions and
     limitations under the License.
 
-
 """
 
 import numpy as np
