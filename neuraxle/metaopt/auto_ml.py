@@ -383,7 +383,6 @@ class BaseHyperparameterSelectionStrategy(ABC):
         Find the next best hyperparams using previous trials.
 
         :param auto_ml_container: trials data container
-        :type auto_ml_container: neuraxle.metaopt.new_automl.Trials
         :return: next best hyperparams
         :rtype: HyperparameterSamples
         """
