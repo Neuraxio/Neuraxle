@@ -1,6 +1,6 @@
 """
 Create label encoder across multiple columns
-====================================
+==================================================
 
 You can apply label encoder to all columns using the ColumnTransformer step.
 
