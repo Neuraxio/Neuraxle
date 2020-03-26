@@ -86,6 +86,33 @@ def test_automl_with_kfold(tmpdir):
     assert mse < 1000
 
 
+def test_validation_splitter_should_split_data_properly():
+    # Given
+    data_inputs = np.random.random((4, 2, 2048, 6)).astype(np.float32)
+    expected_outputs = np.random.random((4, 2, 2048, 1)).astype(np.float32)
+    splitter = create_split_data_container_function(validation_splitter(test_size=0.2))
+
+    # When
+    train_data_container, validation_data_container = splitter(DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs))
+
+    train_di = train_data_container.data_inputs[0]
+    train_eo = train_data_container.expected_outputs[0]
+
+    validation_di = validation_data_container.data_inputs[0]
+    validation_eo = validation_data_container.expected_outputs[0]
+
+    # Then
+    assert len(train_di) == 3
+    assert np.array_equal(np.array(train_di), data_inputs[0:3])
+    assert len(train_eo) == 3
+    assert np.array_equal(np.array(train_eo), expected_outputs[0:3])
+
+    assert len(validation_di) == 1
+    assert np.array_equal(validation_di[0], data_inputs[-1])
+    assert len(validation_eo) == 1
+    assert np.array_equal(validation_eo[0], expected_outputs[-1])
+
+
 def test_kfold_cross_validation_should_split_data_properly():
     # Given
     data_inputs = np.random.random((4, 2, 2048, 6)).astype(np.float32)

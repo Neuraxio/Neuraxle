@@ -33,10 +33,169 @@ from typing import Dict, List
 from neuraxle.base import BaseStep, ExecutionContext
 from neuraxle.hyperparams.space import HyperparameterSamples
 
+TRIAL_DATETIME_STR_FORMAT = '%m/%d/%Y, %H:%M:%S'
+
+MAIN_SCORING_METRIC_NAME = 'main'
+
 
 class Trial:
     """
-    Trial data container.
+    Trial data container for :class:`AutoML`.
+    A Trial contains the results for each validation split.
+    Each trial split contains both the training set results, and the validation set results.
+
+    .. seealso::
+        :class:`AutoML`,
+        :class:`TrialSplit`,
+        :class:`HyperparamsRepository`,
+        :class:`BaseHyperparameterSelectionStrategy`,
+        :class:`RandomSearchHyperparameterSelectionStrategy`,
+        :class:`DataContainer`
+    """
+
+    def __init__(
+            self,
+            hyperparams: HyperparameterSamples,
+            status: 'TRIAL_STATUS' = None,
+            pipeline: BaseStep = None,
+            validation_splits=None,
+            cache_folder=None,
+            error=None,
+            error_traceback=None,
+            start_time=None,
+            end_time=None
+    ):
+        if status is None:
+            status = TRIAL_STATUS.PLANNED
+        if validation_splits is None:
+            validation_splits = []
+
+        self.status: TRIAL_STATUS = status
+        self.hyperparams = hyperparams
+        self.pipeline: BaseStep = pipeline
+        self.validation_splits = validation_splits
+        self.cache_folder = cache_folder
+        self.error_traceback = error_traceback
+        self.error = error
+        self.start_time = start_time
+        self.end_time = end_time
+
+    def new_validation_split(self):
+        """
+        Create a new trial split.
+        A trial has one split when the validation splitter function is validation split.
+        A trial has one or many split when the validation splitter function is kfold_cross_validation_split.
+
+        :return:
+        """
+        trial_split: TrialSplit = TrialSplit()
+        self.validation_splits.append(trial_split)
+
+        return trial_split
+
+    def set_fitted_pipeline(self, pipeline: BaseStep):
+        """
+        Set fitted pipeline.
+
+        :param pipeline: fitted pipeline
+        :return:
+        """
+        self.pipeline = pipeline
+
+    def save_model(self):
+        """
+        Save fitted model in the trial hash folder.
+        """
+        hyperparams = self.hyperparams.to_flat_as_dict_primitive()
+        trial_hash = self._get_trial_hash(hyperparams)
+        self.pipeline.set_name(trial_hash).save(ExecutionContext(self.cache_folder), full_dump=True)
+
+    def set_hyperparams(self, hyperparams: HyperparameterSamples):
+        """
+        Set trial hyperparams.
+
+        :param hyperparams: trial hyperparams
+        :return:
+        """
+        self.hyperparams = hyperparams
+
+    def set_success(self):
+        """
+        Set trial status to success.
+        """
+        self.status = TRIAL_STATUS.SUCCESS
+
+    def set_failed(self, error: Exception):
+        """
+        Set failed trial with exception.
+
+        :param error: catched exception
+        :return:
+        """
+        self.status = TRIAL_STATUS.FAILED
+        self.error = str(error)
+        self.error_traceback = traceback.format_exc()
+
+    def _get_trial_hash(self, hp_dict: Dict):
+        """
+        Hash hyperparams with md5 to create a trial hash.
+
+        :param hp_dict: hyperparams dict
+        :return:
+        """
+        current_hyperparameters_hash = hashlib.md5(str.encode(str(hp_dict))).hexdigest()
+        return current_hyperparameters_hash
+
+    def to_json(self):
+        return {
+            'status': self.status.value,
+            'hyperparams': self.hyperparams.to_flat_as_dict_primitive(),
+            'validation_splits': [v.to_json() for v in self.validation_splits],
+            'error': self.error,
+            'error_traceback': self.error_traceback,
+            'start_time': self.start_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.start_time is not None else '',
+            'end_time': self.end_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.end_time is not None else ''
+        }
+
+    def from_json(self, trial_json) -> 'Trial':
+        return Trial(
+            status=trial_json['status'],
+            hyperparams=HyperparameterSamples(trial_json['hyperparams']),
+            validation_splits=[
+                TrialSplit.from_json(validation_split_json)
+                for validation_split_json in trial_json['validation_splits']
+            ],
+            error=trial_json['error'],
+            error_traceback=trial_json['error_traceback'],
+            start_time=datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT),
+            end_time=datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT)
+        )
+
+    def __enter__(self):
+        """
+        Start trial, and set the trial status to PLANNED.
+        """
+        self.start_time = datetime.datetime.now()
+        self.status = TRIAL_STATUS.STARTED
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Stop trial, and save end time.
+
+        :param exc_type:
+        :param exc_val:
+        :param exc_tb:
+        :return:
+        """
+        self.end_time = datetime.datetime.now()
+        del self.pipeline
+        return self
+
+
+class TrialSplit:
+    """
+    Trial split
 
     .. seealso::
         :class:`AutoML`,
@@ -48,34 +207,23 @@ class Trial:
 
     def __init__(
             self,
-            hyperparams: HyperparameterSamples,
             status: 'TRIAL_STATUS' = None,
             error: Exception = None,
             error_traceback: str = None,
             metrics_results: Dict = None,
-            pipeline: BaseStep = None,
-            cache_folder = None
+            start_time: datetime.datetime = None,
+            end_time: datetime.datetime = None
     ):
         if status is None:
             status = TRIAL_STATUS.PLANNED
-        self.cache_folder = cache_folder
         self.status: TRIAL_STATUS = status
         self.error: Exception = error
         self.error_traceback: str = error_traceback
         if metrics_results is None:
             metrics_results = {}
         self.metrics_results: Dict = metrics_results
-        self.pipeline: BaseStep = pipeline
-        self.hyperparams: HyperparameterSamples = hyperparams
-
-    def set_fitted_pipeline(self, pipeline: BaseStep):
-        """
-        Set fitted pipeline.
-
-        :param pipeline: fitted pipeline
-        :return:
-        """
-        self.pipeline = pipeline
+        self.end_time = end_time
+        self.start_time = start_time
 
     def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool):
         """
@@ -113,61 +261,6 @@ class Trial:
 
         self.metrics_results[name]['validation_values'].append(score)
 
-    def save_model(self):
-        """
-        Save fitted model in the trial hash folder.
-        """
-        hyperparams = self.hyperparams.to_flat_as_dict_primitive()
-        trial_hash = self._get_trial_hash(hyperparams)
-        self.pipeline.set_name(trial_hash).save(ExecutionContext(self.cache_folder), full_dump=True)
-
-    def set_success(self):
-        """
-        Set trial status to success.
-        """
-        self.status = TRIAL_STATUS.SUCCESS
-
-    def set_hyperparams(self, hyperparams: HyperparameterSamples):
-        """
-        Set trial hyperparams.
-
-        :param hyperparams: trial hyperparams
-        :return:
-        """
-        self.hyperparams = hyperparams
-
-    def set_failed(self, error: Exception):
-        """
-        Set failed trial with exception.
-
-        :param error: catched exception
-        :return:
-        """
-        self.status = TRIAL_STATUS.FAILED
-        self.error = str(error)
-        self.error_traceback = traceback.format_exc()
-
-    def is_new_best_score(self):
-        """
-        Return True if the latest validation score is the new best score.
-
-        :return:
-        """
-        higher_score_is_better = self.metrics_results['main']['higher_score_is_better']
-        validation_values = self.metrics_results['main']['validation_values']
-        best_score = validation_values[0]
-
-        for score in validation_values:
-            if score > best_score and higher_score_is_better:
-                best_score = score
-
-            if score < best_score and not higher_score_is_better:
-                best_score = score
-
-        if best_score == validation_values[-1]:
-            return True
-        return False
-
     def get_validation_scores(self):
         """
         Return the validation scores for the main scoring metric.
@@ -184,6 +277,27 @@ class Trial:
         """
         return self.metrics_results['main']['higher_score_is_better']
 
+    def is_new_best_score(self):
+        """
+        Return True if the latest validation score is the new best score.
+
+        :return:
+        """
+        higher_score_is_better = self.metrics_results[MAIN_SCORING_METRIC_NAME]['higher_score_is_better']
+        validation_values = self.metrics_results[MAIN_SCORING_METRIC_NAME]['validation_values']
+        best_score = validation_values[0]
+
+        for score in validation_values:
+            if score > best_score and higher_score_is_better:
+                best_score = score
+
+            if score < best_score and not higher_score_is_better:
+                best_score = score
+
+        if best_score == validation_values[-1]:
+            return True
+        return False
+
     def to_json(self) -> dict:
         """
         Return the trial in a json format.
@@ -191,45 +305,54 @@ class Trial:
         :return:
         """
         return {
-            'hyperparams': self.hyperparams.to_flat_as_dict_primitive(),
             'status': self.status.value,
             'error': self.error,
             'metric_results': self.metrics_results,
             'error_traceback': self.error_traceback,
+            'start_time': self.start_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.start_time is not None else '',
+            'end_time': self.end_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.end_time is not None else ''
         }
 
     @staticmethod
-    def from_json(trial_json) -> 'Trial':
+    def from_json(trial_json) -> 'TrialSplit':
         """
-        Create a trial object from json.
+        Create a trial split object from json.
 
         :param trial_json: trial json
         :return:
         """
-        return Trial(
-            hyperparams=trial_json['hyperparams'],
+        return TrialSplit(
             status=trial_json['status'],
             error=trial_json['error'],
+            error_traceback=trial_json['error_traceback'],
             metrics_results=trial_json['metric_results'],
-            error_traceback=trial_json['error_traceback']
+            start_time=datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT),
+            end_time=datetime.datetime.strptime(trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT)
         )
 
-    def _get_trial_hash(self, hp_dict: Dict):
+    def set_success(self):
         """
-        Hash hyperparams with md5 to create a trial hash.
+        Set trial status to success.
+        """
+        self.status = TRIAL_STATUS.SUCCESS
 
-        :param hp_dict: hyperparams dict
+    def set_failed(self, error: Exception):
+        """
+        Set failed trial with exception.
+
+        :param error: catched exception
         :return:
         """
-        current_hyperparameters_hash = hashlib.md5(str.encode(str(hp_dict))).hexdigest()
-        return current_hyperparameters_hash
+        self.status = TRIAL_STATUS.FAILED
+        self.error = str(error)
+        self.error_traceback = traceback.format_exc()
 
     def __enter__(self):
         """
         Start trial, and set the trial status to PLANNED.
         """
         self.start_time = datetime.datetime.now()
-        self.status = TRIAL_STATUS.PLANNED
+        self.status = TRIAL_STATUS.STARTED
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -242,7 +365,6 @@ class Trial:
         :return:
         """
         self.end_time = datetime.datetime.now()
-        del self.pipeline
         return self
 
     def __str__(self):
@@ -258,6 +380,7 @@ class TRIAL_STATUS(Enum):
     Trial status.
     """
     FAILED = 'failed'
+    STARTED = 'started'
     SUCCESS = 'success'
     PLANNED = 'planned'
 

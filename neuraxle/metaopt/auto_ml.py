@@ -635,24 +635,26 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             p = copy.deepcopy(self.pipeline)
 
             with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
-                try:
-                    p.update_hyperparams(repo_trial.hyperparams)
-                    repo_trial.set_hyperparams(p.get_hyperparams())
+                p.update_hyperparams(repo_trial.hyperparams)
+                repo_trial.set_hyperparams(p.get_hyperparams())
 
-                    repo_trial = self.trainer.fit(
-                        p=p,
-                        train_data_container=training_data_container,
-                        validation_data_container=validation_data_container,
-                        trial=repo_trial,
-                        context=context
-                    )
+                with repo_trial.new_validation_split() as repo_trial_split:
+                    try:
+                        repo_trial_split = self.trainer.fit(
+                            p=p,
+                            train_data_container=training_data_container,
+                            validation_data_container=validation_data_container,
+                            trial=repo_trial_split,
+                            context=context
+                        )
 
-                    repo_trial.set_success()
-                    self.print_func('trial {}/{} score: {}'.format(trial_number + 1, self.n_trial, repo_trial.get_validation_scores()[-1]))
-                except Exception as error:
-                    track = traceback.format_exc()
-                    self.print_func(track)
-                    repo_trial.set_failed(error)
+                        repo_trial_split.set_success()
+                        self.print_func('trial {}/{} score: {}'.format(trial_number + 1, self.n_trial, repo_trial_split.get_validation_scores()[-1]))
+
+                    except Exception as error:
+                        track = traceback.format_exc()
+                        self.print_func(track)
+                        repo_trial_split.set_failed(error)
 
             self.hyperparams_repository.save_trial(repo_trial)
 
@@ -660,6 +662,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
         self.print_func('best hyperparams:\n{}'.format(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
         p: BaseStep = self._load_virgin_model(hyperparams=best_hyperparams)
+
         if self.refit_trial:
             p = self.trainer.refit(
                 p=p,
@@ -861,58 +864,6 @@ def validation_splitter(test_size: float):
     def create_validation_splitter(splitter_function: Callable):
         def splitter(data_inputs, expected_outputs=None) -> Tuple[Iterable, Iterable, Iterable, Iterable]:
             train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = splitter_function(data_inputs, expected_outputs)
-            return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
-
-        return splitter
-
-    def split(data_inputs, expected_outputs=None) -> Tuple[List, List, List, List]:
-        """
-        Split data inputs, and expected outputs into a training set, and a validation set.
-
-        :param data_inputs: data inputs to split
-        :param expected_outputs: expected outputs to split
-        :return: train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
-        """
-        validation_data_inputs = validation_split(data_inputs)
-        validation_expected_outputs = None
-        if expected_outputs is not None:
-            validation_expected_outputs = validation_split(expected_outputs)
-
-        train_data_inputs = train_split(data_inputs)
-        train_expected_outputs = None
-        if expected_outputs is not None:
-            train_expected_outputs = train_split(expected_outputs)
-
-        return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
-
-    def train_split(data_inputs) -> List:
-        """
-        Split training set.
-
-        :param data_inputs: data inputs to split
-        :return: train_data_inputs
-        """
-        return data_inputs[0:_get_index_split(data_inputs)]
-
-    def validation_split(data_inputs) -> List:
-        """
-        Split validation set.
-
-        :param data_inputs: data inputs to split
-        :return: validation_data_inputs
-        """
-        return data_inputs[_get_index_split(data_inputs):]
-
-    def _get_index_split(data_inputs):
-        return math.floor(len(data_inputs) * (1 - test_size))
-
-    return create_validation_splitter(split)
-
-
-def validation_splitter_fold(test_size: float):
-    def create_validation_splitter(splitter_function: Callable):
-        def splitter(data_inputs, expected_outputs=None) -> Tuple[Iterable, Iterable, Iterable, Iterable]:
-            train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = splitter_function(data_inputs, expected_outputs)
             return [train_data_inputs], [train_expected_outputs], [validation_data_inputs], [validation_expected_outputs]
 
         return splitter
@@ -959,3 +910,4 @@ def validation_splitter_fold(test_size: float):
         return math.floor(len(data_inputs) * (1 - test_size))
 
     return create_validation_splitter(split)
+
