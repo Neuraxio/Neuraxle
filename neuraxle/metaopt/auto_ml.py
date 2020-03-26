@@ -649,7 +649,11 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                         )
 
                         repo_trial_split.set_success()
-                        self.print_func('trial {}/{} score: {}'.format(trial_number + 1, self.n_trial, repo_trial_split.get_validation_scores()[-1]))
+                        self.print_func('trial {}/{} score: {}'.format(
+                            trial_number + 1,
+                            self.n_trial,
+                            repo_trial_split.get_validation_score()
+                        ))
 
                     except Exception as error:
                         track = traceback.format_exc()

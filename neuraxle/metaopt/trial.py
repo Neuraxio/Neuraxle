@@ -18,9 +18,6 @@ Trial objects used by AutoML algorithm classes.
     See the License for the specific language governing permissions and
     limitations under the License.
 
-..
-    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
-    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
 
@@ -118,6 +115,30 @@ class Trial:
         :return:
         """
         self.hyperparams = hyperparams
+
+    def get_higher_score_is_better(self):
+        """
+        Return True if higher scores are better for the main metric.
+
+        :return:
+        """
+        return self.validation_splits[0].get_higher_score_is_better()
+
+    def get_validation_score(self):
+        """
+        Return the latest validation score for the main scoring metric.
+        Returns the average score for all validation splits.
+
+        :return:
+        """
+        scores = [
+            validation_split.get_validation_score()
+            for validation_split in self.validation_splits if validation_split.is_success()
+        ]
+
+        score = sum(scores) / len(scores)
+
+        return score
 
     def set_success(self):
         """
@@ -269,6 +290,14 @@ class TrialSplit:
         """
         return self.metrics_results['main']['validation_values']
 
+    def get_validation_score(self):
+        """
+        Return the latest validation score for the main scoring metric.
+
+        :return:
+        """
+        return self.metrics_results['main']['validation_values'][-1]
+
     def get_higher_score_is_better(self):
         """
         Return True if higher scores are better for the main metric.
@@ -335,6 +364,12 @@ class TrialSplit:
         Set trial status to success.
         """
         self.status = TRIAL_STATUS.SUCCESS
+
+    def is_success(self):
+        """
+        Set trial status to success.
+        """
+        return self.status == TRIAL_STATUS.SUCCESS
 
     def set_failed(self, error: Exception):
         """
@@ -414,10 +449,10 @@ class Trials:
         best_score = None
         best_hyperparams = None
 
-        higher_score_is_better = self.trials[-1].metrics_results['main']['higher_score_is_better']
+        higher_score_is_better = self.trials[-1].get_higher_score_is_better()
 
         for trial in self.trials:
-            trial_score = trial.metrics_results['main']['higher_score_is_better']
+            trial_score = trial.get_validation_score()
             if best_score is None or higher_score_is_better == (trial_score > best_score):
                 best_score = trial_score
                 best_hyperparams = trial.hyperparams

@@ -6,7 +6,12 @@ from neuraxle.metaopt.trial import Trial, MAIN_SCORING_METRIC_NAME, TRIAL_STATUS
 EXPECTED_ERROR_TRACEBACK = 'NoneType: None\n'
 
 EXPECTED_METRIC_RESULTS = {
-    'main': {'train_values': [0.5, 0.7, 0.4], 'validation_values': [0.5, 0.7, 0.4], 'higher_score_is_better': False}}
+    'main': {
+        'train_values': [0.5, 0.7, 0.4],
+        'validation_values': [0.5, 0.7, 0.4],
+        'higher_score_is_better': False
+    }
+}
 
 
 def test_trial_should_create_new_split():
@@ -74,9 +79,9 @@ def test_success_trial_split_to_json():
     hp = HyperparameterSamples({'a': 2})
     trial = Trial(hyperparams=hp)
 
-    trial_split = given_success_trial_validation_split(trial)
-
-    trial_json = trial_split.to_json()
+    with trial:
+        trial_split = given_success_trial_validation_split(trial)
+        trial_json = trial_split.to_json()
 
     then_success_trial_split_json_is_valid(trial_json)
 
@@ -98,7 +103,8 @@ def test_success_trial_to_json():
     hp = HyperparameterSamples({'a': 2})
     trial = Trial(hyperparams=hp)
 
-    given_success_trial_validation_split(trial)
+    with trial:
+        given_success_trial_validation_split(trial)
 
     trial_json = trial.to_json()
 
@@ -114,22 +120,61 @@ def test_success_trial_to_json():
     assert start_time < end_time
 
 
-def given_success_trial_validation_split(trial):
+def test_success_trial_get_validation_score():
+    hp = HyperparameterSamples({'a': 2})
+    trial = Trial(hyperparams=hp)
+
     with trial:
-        with trial.new_validation_split() as trial_split:
-            trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=0.5, higher_score_is_better=False)
-            trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=0.5,
-                                                      higher_score_is_better=False)
+        given_success_trial_validation_split(trial, best_score=0.3)
 
-            trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=0.7, higher_score_is_better=False)
-            trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=0.7,
-                                                      higher_score_is_better=False)
+    validation_score = trial.get_validation_score()
 
-            trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=0.4, higher_score_is_better=False)
-            trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=0.4,
-                                                      higher_score_is_better=False)
-            trial_split.set_success()
-            trial.set_success()
+    assert validation_score == 0.3
+
+
+def test_success_trial_multiple_splits_should_average_the_scores():
+    hp = HyperparameterSamples({'a': 2})
+    trial = Trial(hyperparams=hp)
+
+    with trial:
+        given_success_trial_validation_split(trial, best_score=0.3)
+        given_success_trial_validation_split(trial, best_score=0.1)
+
+    validation_score = trial.get_validation_score()
+
+    assert validation_score == 0.2
+
+
+def test_trial_with_failed_split_should_only_average_successful_splits():
+    hp = HyperparameterSamples({'a': 2})
+    trial = Trial(hyperparams=hp)
+
+    with trial:
+        given_success_trial_validation_split(trial, best_score=0.3)
+        given_success_trial_validation_split(trial, best_score=0.1)
+        given_failed_trial_split(trial)
+
+    validation_score = trial.get_validation_score()
+
+    assert validation_score == 0.2
+
+
+def given_success_trial_validation_split(trial, best_score=0.4):
+    with trial.new_validation_split() as trial_split:
+        trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=0.5, higher_score_is_better=False)
+        trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=0.5,
+                                                  higher_score_is_better=False)
+
+        trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=0.7, higher_score_is_better=False)
+        trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=0.7,
+                                                  higher_score_is_better=False)
+
+        trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=best_score,
+                                             higher_score_is_better=False)
+        trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=best_score,
+                                                  higher_score_is_better=False)
+        trial_split.set_success()
+        trial.set_success()
 
     return trial_split
 
@@ -137,7 +182,8 @@ def given_success_trial_validation_split(trial):
 def test_failure_trial_split_to_json():
     hp = HyperparameterSamples({'a': 2})
     trial = Trial(hyperparams=hp)
-    trial_split = given_failed_trial_split(trial)
+    with trial:
+        trial_split = given_failed_trial_split(trial)
 
     trial_json = trial_split.to_json()
 
@@ -159,7 +205,9 @@ def then_failed_validation_split_json_is_valid(trial_json, trial_split):
 def test_failure_trial_to_json():
     hp = HyperparameterSamples({'a': 2})
     trial = Trial(hyperparams=hp)
-    trial_split = given_failed_trial_split(trial)
+
+    with trial:
+        trial_split = given_failed_trial_split(trial)
 
     trial_json = trial.to_json()
 
@@ -176,30 +224,40 @@ def test_failure_trial_to_json():
 
 
 def given_failed_trial_split(trial):
-    with trial:
-        with trial.new_validation_split() as trial_split:
-            trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=0.5, higher_score_is_better=False)
-            trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=0.5,
-                                                      higher_score_is_better=False)
+    with trial.new_validation_split() as trial_split:
+        trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=0.5, higher_score_is_better=False)
+        trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=0.5,
+                                                  higher_score_is_better=False)
 
-            trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=0.7, higher_score_is_better=False)
-            trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=0.7,
-                                                      higher_score_is_better=False)
+        trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=0.7, higher_score_is_better=False)
+        trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=0.7,
+                                                  higher_score_is_better=False)
 
-            trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=0.4, higher_score_is_better=False)
-            trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=0.4,
-                                                      higher_score_is_better=False)
-            error = IndexError('index error')
-            trial_split.set_failed(error)
-            trial.set_failed(error)
+        trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=0.4, higher_score_is_better=False)
+        trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=0.4,
+                                                  higher_score_is_better=False)
+        error = IndexError('index error')
+        trial_split.set_failed(error)
+        trial.set_failed(error)
     return trial_split
 
 
-def test_trials_get_best_hyperparams():
-    hp = HyperparameterSamples({'a': 2})
-    trial = Trial(hyperparams=hp)
-    trial_split = given_success_trial_validation_split(trial)
-    trials = Trials(trials=[trial])
+def test_trials_get_best_hyperparams_should_return_hyperparams_of_best_trial():
+    # Given
+    hp_trial_1 = HyperparameterSamples({'a': 2})
+    trial_1 = Trial(hyperparams=hp_trial_1)
+    with trial_1:
+        given_success_trial_validation_split(trial_1, best_score=0.2)
 
+    hp_trial_2 = HyperparameterSamples({'b': 3})
+    trial_2 = Trial(hyperparams=hp_trial_2)
+    with trial_2:
+        given_success_trial_validation_split(trial_2, best_score=0.1)
+
+    trials = Trials(trials=[trial_1, trial_2])
+
+    # When
     best_hyperparams = trials.get_best_hyperparams()
 
+    # Then
+    assert best_hyperparams == hp_trial_2
