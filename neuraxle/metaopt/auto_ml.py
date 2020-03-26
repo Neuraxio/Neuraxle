@@ -42,7 +42,7 @@ from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.callbacks import BaseCallback, CallbackList, ScoringCallback
 from neuraxle.metaopt.random import BaseCrossValidationWrapper
-from neuraxle.metaopt.trial import Trial, TRIAL_STATUS, Trials
+from neuraxle.metaopt.trial import Trial, TrialSplit, TRIAL_STATUS, Trials
 
 
 class HyperparamsRepository(ABC):
@@ -250,11 +250,18 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :class:`~neuraxle.hyperparams.trial.HyperparameterSamples`
     """
 
-    def __init__(self, hyperparameter_selection_strategy: 'BaseHyperparameterSelectionStrategy' = None, cache_folder=None,
-                 best_retrained_model_folder=None):
-        HyperparamsRepository.__init__(self, hyperparameter_selection_strategy=hyperparameter_selection_strategy,
-                                       cache_folder=cache_folder,
-                                       best_retrained_model_folder=best_retrained_model_folder)
+    def __init__(
+            self,
+            hyperparameter_selection_strategy: 'BaseHyperparameterSelectionStrategy' = None,
+            cache_folder=None,
+            best_retrained_model_folder=None
+    ):
+        HyperparamsRepository.__init__(
+            self,
+            hyperparameter_selection_strategy=hyperparameter_selection_strategy,
+            cache_folder=cache_folder,
+            best_retrained_model_folder=best_retrained_model_folder
+        )
 
     def save_trial(self, trial: 'Trial'):
         """
@@ -447,13 +454,17 @@ class Trainer:
         self.print_func = print_func
         self.print_metrics = print_metrics
 
-    def fit(self, p, train_data_container: DataContainer, validation_data_container: DataContainer, trial: Trial,
-            context: ExecutionContext) -> Trial:
+    def fit(
+            self,
+            trial: TrialSplit,
+            train_data_container: DataContainer,
+            validation_data_container: DataContainer,
+            context: ExecutionContext
+    ) -> TrialSplit:
         """
         Train pipeline using the training data container.
         Track training, and validation metrics for each epoch.
 
-        :param p: pipeline to train on
         :param train_data_container: train data container
         :param validation_data_container: validation data container
         :param trial: trial to execute
@@ -465,12 +476,9 @@ class Trainer:
 
         for i in range(self.epochs):
             self.print_func('\nepoch {}/{}'.format(i + 1, self.epochs))
-            p = p.handle_fit(train_data_container, context)
-
-            y_pred_train = p.handle_predict(train_data_container, context)
-            y_pred_val = p.handle_predict(validation_data_container, context)
-
-            trial.set_fitted_pipeline(pipeline=p)
+            trial = trial.fit(train_data_container, context)
+            y_pred_train = trial.predict(train_data_container, context)
+            y_pred_val = trial.predict(validation_data_container, context)
 
             if self.callbacks.call(
                     trial=trial,
@@ -626,7 +634,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
         :return: self
         """
-        training_data_container, validation_data_container = self.validation_split_function(data_container)
+        validation_splits = self.validation_split_function(data_container)
 
         for trial_number in range(self.n_trial):
             self.print_func('\ntrial {}/{}'.format(trial_number + 1, self.n_trial))
@@ -638,27 +646,30 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                 p.update_hyperparams(repo_trial.hyperparams)
                 repo_trial.set_hyperparams(p.get_hyperparams())
 
-                with repo_trial.new_validation_split() as repo_trial_split:
-                    try:
-                        repo_trial_split = self.trainer.fit(
-                            p=p,
-                            train_data_container=training_data_container,
-                            validation_data_container=validation_data_container,
-                            trial=repo_trial_split,
-                            context=context
-                        )
+                for trial_split_number, (training_data_container, validation_data_container) in enumerate(validation_splits):
+                    with repo_trial.new_validation_split(p) as repo_trial_split:
+                        try:
+                            repo_trial_split = self.trainer.fit(
+                                trial=repo_trial_split,
+                                train_data_container=training_data_container,
+                                validation_data_container=validation_data_container,
+                                context=context
+                            )
 
-                        repo_trial_split.set_success()
-                        self.print_func('trial {}/{} score: {}'.format(
-                            trial_number + 1,
-                            self.n_trial,
-                            repo_trial_split.get_validation_score()
-                        ))
+                            repo_trial_split.set_success()
 
-                    except Exception as error:
-                        track = traceback.format_exc()
-                        self.print_func(track)
-                        repo_trial_split.set_failed(error)
+                            self.print_func('trial {}/{} split {}/{} score: {}'.format(
+                                trial_number + 1,
+                                self.n_trial,
+                                trial_split_number,
+                                len(training_data_container),
+                                repo_trial_split.get_validation_score()
+                            ))
+
+                        except Exception as error:
+                            track = traceback.format_exc()
+                            self.print_func(track)
+                            repo_trial_split.set_failed(error)
 
             self.hyperparams_repository.save_trial(repo_trial)
 
@@ -804,7 +815,21 @@ def create_split_data_container_function(validation_splitter_function: Callable)
         validation_data_container = DataContainer(data_inputs=validation_data_inputs,
                                                   expected_outputs=validation_expected_outputs)
 
-        return train_data_container, validation_data_container
+        for (train_current_id, train_di, train_eo), (validation_current_id, validation_di, validation_eo) in \
+                zip(train_data_container, validation_data_container):
+            train_data_container_split = DataContainer(
+                current_ids=train_current_id,
+                data_inputs=train_di,
+                expected_outputs=train_eo
+            )
+
+            validation_data_container_split = DataContainer(
+                current_ids=validation_current_id,
+                data_inputs=validation_di,
+                expected_outputs=validation_eo
+            )
+
+            yield train_data_container_split, validation_data_container_split
 
     return split_data_container
 

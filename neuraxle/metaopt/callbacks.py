@@ -29,7 +29,7 @@ from abc import ABC, abstractmethod
 from typing import Callable
 
 from neuraxle.data_container import DataContainer
-from neuraxle.metaopt.trial import Trial
+from neuraxle.metaopt.trial import TrialSplit
 
 
 class BaseCallback(ABC):
@@ -53,9 +53,11 @@ class BaseCallback(ABC):
         :class:`~neuraxle.base.HyperparameterSamples`,
         :class:`~neuraxle.data_container.DataContainer`
     """
+
     @abstractmethod
-    def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, is_finished_and_fitted: bool):
+    def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
+             is_finished_and_fitted: bool):
         pass
 
 
@@ -85,7 +87,7 @@ class EarlyStoppingCallback(BaseCallback):
 
     def call(
             self,
-            trial: Trial,
+            trial: TrialSplit,
             epoch_number: int,
             total_epochs: int,
             input_train: DataContainer,
@@ -97,9 +99,11 @@ class EarlyStoppingCallback(BaseCallback):
         validation_scores = trial.get_validation_scores()
         if len(validation_scores) > self.n_epochs_without_improvement:
             higher_score_is_better = trial.get_higher_score_is_better()
-            if validation_scores[-self.n_epochs_without_improvement] >= validation_scores[-1] and higher_score_is_better:
+            if validation_scores[-self.n_epochs_without_improvement] >= validation_scores[
+                -1] and higher_score_is_better:
                 return True
-            if validation_scores[-self.n_epochs_without_improvement] <= validation_scores[-1] and not higher_score_is_better:
+            if validation_scores[-self.n_epochs_without_improvement] <= validation_scores[
+                -1] and not higher_score_is_better:
                 return True
         return False
 
@@ -124,13 +128,14 @@ class MetaCallback(BaseCallback):
         :class:`~neuraxle.base.HyperparameterSamples`,
         :class:`~neuraxle.data_container.DataContainer`
     """
+
     def __init__(self, wrapped_callback: BaseCallback):
         self.wrapped_callback = wrapped_callback
 
     @abstractmethod
     def call(
             self,
-            trial: Trial,
+            trial: TrialSplit,
             epoch_number: int,
             total_epochs: int,
             input_train: DataContainer,
@@ -140,6 +145,7 @@ class MetaCallback(BaseCallback):
             is_finished_and_fitted: bool
     ):
         pass
+
 
 class IfBestScore(MetaCallback):
     """
@@ -161,8 +167,10 @@ class IfBestScore(MetaCallback):
         :class:`~neuraxle.base.HyperparameterSamples`,
         :class:`~neuraxle.data_container.DataContainer`
     """
-    def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, is_finished_and_fitted: bool):
+
+    def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
+             is_finished_and_fitted: bool):
         if trial.is_new_best_score():
             if self.wrapped_callback.call(
                     trial,
@@ -176,6 +184,7 @@ class IfBestScore(MetaCallback):
             ):
                 return True
         return False
+
 
 class IfLastStep(MetaCallback):
     """
@@ -196,7 +205,10 @@ class IfLastStep(MetaCallback):
         :class:`~neuraxle.base.HyperparameterSamples`,
         :class:`~neuraxle.data_container.DataContainer`
     """
-    def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer, pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, is_finished_and_fitted: bool):
+
+    def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
+             is_finished_and_fitted: bool):
         if epoch_number == total_epochs - 1 or is_finished_and_fitted:
             self.wrapped_callback.call(
                 trial,
@@ -233,8 +245,10 @@ class StepSaverCallback(BaseCallback):
         :class:`~neuraxle.base.HyperparameterSamples`,
         :class:`~neuraxle.data_container.DataContainer`
     """
-    def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, is_finished_and_fitted: bool):
+
+    def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
+             is_finished_and_fitted: bool):
         trial.save_model()
         return False
 
@@ -260,14 +274,16 @@ class CallbackList(BaseCallback):
         :class:`~neuraxle.base.HyperparameterSamples`,
         :class:`~neuraxle.data_container.DataContainer`
     """
+
     def __init__(self, callbacks, print_func: Callable = None):
         self.callbacks = callbacks
         if print_func is None:
             print_func = print
         self.print_func = print_func
 
-    def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, is_finished_and_fitted: bool):
+    def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
+             is_finished_and_fitted: bool):
         is_finished_and_fitted = False
         for callback in self.callbacks:
             try:
@@ -311,7 +327,9 @@ class MetricCallback(BaseCallback):
         :class:`~neuraxle.base.HyperparameterSamples`,
         :class:`~neuraxle.data_container.DataContainer`
     """
-    def __init__(self, name: str, metric_function: Callable, higher_score_is_better: bool, print_metrics=True, print_function=None):
+
+    def __init__(self, name: str, metric_function: Callable, higher_score_is_better: bool, print_metrics=True,
+                 print_function=None):
         self.name = name
         self.metric_function = metric_function
         self.higher_score_is_better = higher_score_is_better
@@ -320,8 +338,9 @@ class MetricCallback(BaseCallback):
             print_function = print
         self.print_function = print_function
 
-    def call(self, trial: Trial, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, is_finished_and_fitted: bool):
+    def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
+             is_finished_and_fitted: bool):
         train_score = self.metric_function(pred_train.data_inputs, pred_train.expected_outputs)
         validation_score = self.metric_function(pred_val.data_inputs, pred_val.expected_outputs)
 
@@ -367,10 +386,10 @@ class ScoringCallback(MetricCallback):
         :class:`~neuraxle.base.HyperparameterSamples`,
         :class:`~neuraxle.data_container.DataContainer`
     """
+
     def __init__(self, metric_function: Callable, higher_score_is_better: bool):
         super().__init__(
             name='main',
             metric_function=metric_function,
             higher_score_is_better=higher_score_is_better
         )
-

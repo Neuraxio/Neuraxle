@@ -28,6 +28,7 @@ from enum import Enum
 from typing import Dict, List
 
 from neuraxle.base import BaseStep, ExecutionContext
+from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
 
 TRIAL_DATETIME_STR_FORMAT = '%m/%d/%Y, %H:%M:%S'
@@ -77,22 +78,24 @@ class Trial:
         self.start_time = start_time
         self.end_time = end_time
 
-    def new_validation_split(self):
+    def new_validation_split(self, pipeline: BaseStep):
         """
         Create a new trial split.
         A trial has one split when the validation splitter function is validation split.
         A trial has one or many split when the validation splitter function is kfold_cross_validation_split.
 
+        :type pipeline: pipeline to execute
         :return:
         """
         trial_split: TrialSplit = TrialSplit()
         self.validation_splits.append(trial_split)
+        self.set_pipeline(pipeline)
 
         return trial_split
 
-    def set_fitted_pipeline(self, pipeline: BaseStep):
+    def set_pipeline(self, pipeline: BaseStep):
         """
-        Set fitted pipeline.
+        Set pipeline.
 
         :param pipeline: fitted pipeline
         :return:
@@ -233,7 +236,8 @@ class TrialSplit:
             error_traceback: str = None,
             metrics_results: Dict = None,
             start_time: datetime.datetime = None,
-            end_time: datetime.datetime = None
+            end_time: datetime.datetime = None,
+            pipeline: BaseStep = None
     ):
         if status is None:
             status = TRIAL_STATUS.PLANNED
@@ -245,6 +249,14 @@ class TrialSplit:
         self.metrics_results: Dict = metrics_results
         self.end_time = end_time
         self.start_time = start_time
+        self.pipeline = pipeline
+
+    def fit(self, train_data_container: DataContainer, context: ExecutionContext) -> 'TrialSplit':
+        self.pipeline = self.pipeline.fit(train_data_container, context)
+        return self
+
+    def predict(self, data_container: DataContainer, context: ExecutionContext) -> 'DataContainer':
+        return self.pipeline.handle_predict(data_container, context)
 
     def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool):
         """
@@ -381,6 +393,15 @@ class TrialSplit:
         self.status = TRIAL_STATUS.FAILED
         self.error = str(error)
         self.error_traceback = traceback.format_exc()
+
+    def set_fitted_pipeline(self, pipeline: BaseStep):
+        """
+        Set fitted pipeline.
+
+        :param pipeline: fitted pipeline
+        :return:
+        """
+        self.pipeline = pipeline
 
     def __enter__(self):
         """
