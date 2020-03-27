@@ -384,7 +384,6 @@ class BaseHyperparameterSelectionStrategy(ABC):
 
         :param auto_ml_container: trials data container
         :return: next best hyperparams
-        :rtype: HyperparameterSamples
         """
         raise NotImplementedError()
 
@@ -505,7 +504,6 @@ class Trainer:
         Initialize metrics results dict for train, and validation using the metrics function dict.
 
         :param metrics: metrics function dict
-        :type metrics: dict
 
         :return:
         """
@@ -683,7 +681,6 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         Get the best model from all of the previous trials.
 
         :return: best model step
-        :rtype: BaseStep
         """
         best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
         p: Union[BaseCrossValidationWrapper, BaseStep] = copy.copy(self.pipeline)
@@ -697,7 +694,6 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         Load virigin model with the given hyperparams.
 
         :return: best model step
-        :rtype: BaseStep
         """
         return copy.deepcopy(self.pipeline).update_hyperparams(hyperparams)
 
@@ -706,9 +702,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         Load data for all trials.
 
         :param trial_number: trial number
-        :type trial_number: int
         :return: auto ml data container
-        :rtype: Trials
         """
         trials = self.hyperparams_repository.load_all_trials(TRIAL_STATUS.SUCCESS)
         hyperparams_space = self.pipeline.get_hyperparams_space()
@@ -772,9 +766,7 @@ class RandomSearchHyperparameterSelectionStrategy(BaseHyperparameterSelectionStr
         Randomly sample the next hyperparams to try.
 
         :param auto_ml_container: trials data container
-        :type auto_ml_container: Trials
         :return: next best hyperparams
-        :rtype: HyperparameterSamples
         """
         return auto_ml_container.hyperparameter_space.rvs()
 
