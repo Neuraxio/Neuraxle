@@ -638,17 +638,17 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
         for trial_number in range(self.n_trial):
             self.print_func('\ntrial {}/{}'.format(trial_number + 1, self.n_trial))
-
             auto_ml_data = self._load_auto_ml_data(trial_number)
-            p = copy.deepcopy(self.pipeline)
 
             with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
-                p.update_hyperparams(repo_trial.hyperparams)
-                repo_trial.set_hyperparams(p.get_hyperparams())
 
                 for training_data_container, validation_data_container in validation_splits:
                     with repo_trial.new_validation_split(p) as repo_trial_split:
                         try:
+                            p = copy.deepcopy(self.pipeline)
+                            p.update_hyperparams(repo_trial.hyperparams)
+                            repo_trial.set_hyperparams(p.get_hyperparams())
+
                             repo_trial_split = self.trainer.fit(
                                 trial=repo_trial_split,
                                 train_data_container=training_data_container,
