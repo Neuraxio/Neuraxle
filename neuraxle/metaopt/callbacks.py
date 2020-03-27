@@ -1,6 +1,6 @@
 """
 Neuraxle's training callbacks classes.
-====================================
+=========================================
 Training callback classes.
 
 ..

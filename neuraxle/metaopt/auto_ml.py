@@ -123,8 +123,8 @@ class HyperparamsRepository(ABC):
         """
         Save the best model inside the best retrained model folder.
 
-        :param step:
-        :return:
+        :param step: step to save
+        :return: saved step
         """
         hyperparams = step.get_hyperparams().to_flat_as_dict_primitive()
         trial_hash = self._get_trial_hash(hyperparams)
@@ -390,7 +390,6 @@ class BaseHyperparameterSelectionStrategy(ABC):
         Find the next best hyperparams using previous trials.
 
         :param auto_ml_container: trials data container
-        :type auto_ml_container: neuraxle.metaopt.new_automl.Trials
         :return: next best hyperparams
         :rtype: HyperparameterSamples
         """
@@ -694,6 +693,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
     def get_best_model(self):
         """
         Get best model using the hyperparams repository.
+
         :return:
         """
         return self.hyperparams_repository.get_best_model()
@@ -701,6 +701,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
     def _load_virgin_best_model(self) -> BaseStep:
         """
         Get the best model from all of the previous trials.
+
         :return: best model step
         :rtype: BaseStep
         """
@@ -844,6 +845,7 @@ def kfold_cross_validation_split(k_fold: int):
 
         # create a kfold cross validation splitter with 2 kfold
         kfold_cross_validation_split(0.20)
+
 
     :param k_fold: number of folds.
     :return:
