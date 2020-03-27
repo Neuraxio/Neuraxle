@@ -320,7 +320,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
                 trial_json = json.load(f)
 
             if status is None or trial_json['status'] == status.value:
-                trials.append(Trial.from_json(trial_json))
+                trials.append(Trial.from_json(trial_json=trial_json))
 
         return trials
 
@@ -349,7 +349,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         trial_hash = self._get_trial_hash(trial.hyperparams.to_flat_as_dict_primitive())
         return os.path.join(
             self.cache_folder,
-            str(float(trial.get_validation_scores()[-1])).replace('.', ',') + "_" + trial_hash
+            str(float(trial.get_validation_score())).replace('.', ',') + "_" + trial_hash
         ) + '.json'
 
     def _get_failed_trial_json_file_path(self, trial: 'Trial'):
@@ -646,7 +646,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                 p.update_hyperparams(repo_trial.hyperparams)
                 repo_trial.set_hyperparams(p.get_hyperparams())
 
-                for trial_split_number, (training_data_container, validation_data_container) in enumerate(validation_splits):
+                for training_data_container, validation_data_container in validation_splits:
                     with repo_trial.new_validation_split(p) as repo_trial_split:
                         try:
                             repo_trial_split = self.trainer.fit(
@@ -661,7 +661,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                             self.print_func('trial {}/{} split {}/{} score: {}'.format(
                                 trial_number + 1,
                                 self.n_trial,
-                                trial_split_number,
+                                repo_trial_split.split_number + 1,
                                 len(training_data_container),
                                 repo_trial_split.get_validation_score()
                             ))
@@ -670,6 +670,8 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                             track = traceback.format_exc()
                             self.print_func(track)
                             repo_trial_split.set_failed(error)
+
+                    repo_trial.update_final_trial_status()
 
             self.hyperparams_repository.save_trial(repo_trial)
 

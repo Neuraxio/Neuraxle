@@ -93,13 +93,14 @@ def test_validation_splitter_should_split_data_properly():
     splitter = create_split_data_container_function(validation_splitter(test_size=0.2))
 
     # When
-    train_data_container, validation_data_container = splitter(DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs))
+    validation_splits = splitter(DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs))
+    train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 
-    train_di = train_data_container.data_inputs[0]
-    train_eo = train_data_container.expected_outputs[0]
+    train_di = train_di[0]
+    train_eo = train_eo[0]
 
-    validation_di = validation_data_container.data_inputs[0]
-    validation_eo = validation_data_container.expected_outputs[0]
+    validation_di = validation_di[0]
+    validation_eo = validation_eo[0]
 
     # Then
     assert len(train_di) == 3
@@ -120,15 +121,11 @@ def test_kfold_cross_validation_should_split_data_properly():
     splitter = create_split_data_container_function(kfold_cross_validation_split(k_fold=4))
 
     # When
-    train_data_container, validation_data_container = splitter(
+    validation_splits = splitter(
         DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs)
     )
 
-    train_di = train_data_container.data_inputs
-    train_eo = train_data_container.expected_outputs
-
-    validation_di = validation_data_container.data_inputs
-    validation_eo = validation_data_container.expected_outputs
+    train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 
     # Then
     assert len(train_di[0]) == 3
@@ -186,13 +183,9 @@ def test_kfold_cross_validation_should_split_data_properly_bug():
     splitter = create_split_data_container_function(kfold_cross_validation_split(k_fold=2))
 
     # When
-    train_data_container, validation_data_container = splitter(data_container)
+    validation_splits = splitter(data_container)
 
-    train_di = train_data_container.data_inputs
-    train_eo = train_data_container.expected_outputs
-
-    validation_di = validation_data_container.data_inputs
-    validation_eo = validation_data_container.expected_outputs
+    train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 
     # Then
     assert len(train_di[0]) == 6
@@ -220,3 +213,17 @@ def test_kfold_cross_validation_should_split_data_properly_bug():
     assert np.array_equal(np.array(validation_di[1]), data_inputs[5:])
     assert len(validation_eo[1]) == 6
     assert np.array_equal(validation_eo[1], expected_outputs[5:])
+
+
+def extract_validation_split_data(validation_splits):
+    train_di = []
+    train_eo = []
+    validation_di = []
+    validation_eo = []
+    for train_dc, validation_dc in validation_splits:
+        train_di.append(train_dc.data_inputs)
+        train_eo.append(train_dc.expected_outputs)
+
+        validation_di.append(validation_dc.data_inputs)
+        validation_eo.append(validation_dc.expected_outputs)
+    return train_di, train_eo, validation_di, validation_eo

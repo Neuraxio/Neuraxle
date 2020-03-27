@@ -87,11 +87,10 @@ class Trial:
         :type pipeline: pipeline to execute
         :return:
         """
-        trial_split: TrialSplit = TrialSplit()
+        trial_split: TrialSplit = TrialSplit(split_number=len(self.validation_splits))
         self.validation_splits.append(trial_split)
-        self.set_pipeline(pipeline)
 
-        return trial_split
+        return trial_split.set_pipeline(pipeline)
 
     def set_pipeline(self, pipeline: BaseStep):
         """
@@ -149,6 +148,20 @@ class Trial:
         """
         self.status = TRIAL_STATUS.SUCCESS
 
+    def update_final_trial_status(self):
+        """
+        Set trial status to success.
+        """
+        success = True
+        for validation_split in self.validation_splits:
+            if not validation_split.is_success():
+                success = False
+
+        if success:
+            self.status = TRIAL_STATUS.SUCCESS
+        else:
+            self.status = TRIAL_STATUS.FAILED
+
     def set_failed(self, error: Exception):
         """
         Set failed trial with exception.
@@ -181,9 +194,10 @@ class Trial:
             'end_time': self.end_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.end_time is not None else ''
         }
 
-    def from_json(self, trial_json) -> 'Trial':
+    @staticmethod
+    def from_json(trial_json) -> 'Trial':
         return Trial(
-            status=trial_json['status'],
+            status=TRIAL_STATUS(trial_json['status']),
             hyperparams=HyperparameterSamples(trial_json['hyperparams']),
             validation_splits=[
                 TrialSplit.from_json(validation_split_json)
@@ -231,6 +245,7 @@ class TrialSplit:
 
     def __init__(
             self,
+            split_number,
             status: 'TRIAL_STATUS' = None,
             error: Exception = None,
             error_traceback: str = None,
@@ -241,6 +256,7 @@ class TrialSplit:
     ):
         if status is None:
             status = TRIAL_STATUS.PLANNED
+        self.split_number = split_number
         self.status: TRIAL_STATUS = status
         self.error: Exception = error
         self.error_traceback: str = error_traceback
@@ -252,7 +268,7 @@ class TrialSplit:
         self.pipeline = pipeline
 
     def fit(self, train_data_container: DataContainer, context: ExecutionContext) -> 'TrialSplit':
-        self.pipeline = self.pipeline.fit(train_data_container, context)
+        self.pipeline = self.pipeline.handle_fit(train_data_container, context)
         return self
 
     def predict(self, data_container: DataContainer, context: ExecutionContext) -> 'DataContainer':
@@ -351,7 +367,8 @@ class TrialSplit:
             'metric_results': self.metrics_results,
             'error_traceback': self.error_traceback,
             'start_time': self.start_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.start_time is not None else '',
-            'end_time': self.end_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.end_time is not None else ''
+            'end_time': self.end_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.end_time is not None else '',
+            'split_number': self.split_number
         }
 
     @staticmethod
@@ -363,12 +380,13 @@ class TrialSplit:
         :return:
         """
         return TrialSplit(
-            status=trial_json['status'],
+            status=TRIAL_STATUS(trial_json['status']),
             error=trial_json['error'],
             error_traceback=trial_json['error_traceback'],
             metrics_results=trial_json['metric_results'],
             start_time=datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT),
-            end_time=datetime.datetime.strptime(trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT)
+            end_time=datetime.datetime.strptime(trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT),
+            split_number=trial_json['split_number']
         )
 
     def set_success(self):
@@ -394,14 +412,16 @@ class TrialSplit:
         self.error = str(error)
         self.error_traceback = traceback.format_exc()
 
-    def set_fitted_pipeline(self, pipeline: BaseStep):
+    def set_pipeline(self, pipeline: BaseStep) -> 'TrialSplit':
         """
         Set fitted pipeline.
 
         :param pipeline: fitted pipeline
-        :return:
+        :return: self
         """
         self.pipeline = pipeline
+
+        return self
 
     def __enter__(self):
         """

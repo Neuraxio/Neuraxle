@@ -1,5 +1,6 @@
 import datetime
 
+from neuraxle.base import Identity
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.metaopt.trial import Trial, MAIN_SCORING_METRIC_NAME, TRIAL_STATUS, TRIAL_DATETIME_STR_FORMAT, Trials
 
@@ -18,7 +19,7 @@ def test_trial_should_create_new_split():
     hp = HyperparameterSamples({'a': 2})
     trial = Trial(hyperparams=hp)
 
-    with trial.new_validation_split() as trial_split:
+    with trial.new_validation_split(Identity()) as trial_split:
         trial_split.set_success()
 
     assert isinstance(trial_split.start_time, datetime.datetime)
@@ -31,7 +32,7 @@ def test_trial_split_is_new_best_score_should_return_true_with_one_score():
     hp = HyperparameterSamples({'a': 2})
     trial = Trial(hyperparams=hp)
 
-    with trial.new_validation_split() as trial_split:
+    with trial.new_validation_split(Identity()) as trial_split:
         trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=0.5, higher_score_is_better=False)
         trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=0.5,
                                                   higher_score_is_better=False)
@@ -43,7 +44,7 @@ def test_trial_split_is_new_best_score_should_return_false_with_not_a_new_best_s
     hp = HyperparameterSamples({'a': 2})
     trial = Trial(hyperparams=hp)
 
-    with trial.new_validation_split() as trial_split:
+    with trial.new_validation_split(Identity()) as trial_split:
         trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=0.5, higher_score_is_better=False)
         trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=0.5,
                                                   higher_score_is_better=False)
@@ -59,7 +60,7 @@ def test_trial_split_is_new_best_score_should_return_true_with_a_new_best_score_
     hp = HyperparameterSamples({'a': 2})
     trial = Trial(hyperparams=hp)
 
-    with trial.new_validation_split() as trial_split:
+    with trial.new_validation_split(Identity()) as trial_split:
         trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=0.5, higher_score_is_better=False)
         trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=0.5,
                                                   higher_score_is_better=False)
@@ -160,7 +161,7 @@ def test_trial_with_failed_split_should_only_average_successful_splits():
 
 
 def given_success_trial_validation_split(trial, best_score=0.4):
-    with trial.new_validation_split() as trial_split:
+    with trial.new_validation_split(Identity()) as trial_split:
         trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=0.5, higher_score_is_better=False)
         trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=0.5,
                                                   higher_score_is_better=False)
@@ -224,7 +225,7 @@ def test_failure_trial_to_json():
 
 
 def given_failed_trial_split(trial):
-    with trial.new_validation_split() as trial_split:
+    with trial.new_validation_split(Identity()) as trial_split:
         trial_split.add_metric_results_train(name=MAIN_SCORING_METRIC_NAME, score=0.5, higher_score_is_better=False)
         trial_split.add_metric_results_validation(name=MAIN_SCORING_METRIC_NAME, score=0.5,
                                                   higher_score_is_better=False)
