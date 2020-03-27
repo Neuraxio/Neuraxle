@@ -643,12 +643,12 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
 
                 for training_data_container, validation_data_container in validation_splits:
+                    p = copy.deepcopy(self.pipeline)
+                    p.update_hyperparams(repo_trial.hyperparams)
+                    repo_trial.set_hyperparams(p.get_hyperparams())
+
                     with repo_trial.new_validation_split(p) as repo_trial_split:
                         try:
-                            p = copy.deepcopy(self.pipeline)
-                            p.update_hyperparams(repo_trial.hyperparams)
-                            repo_trial.set_hyperparams(p.get_hyperparams())
-
                             repo_trial_split = self.trainer.fit(
                                 trial=repo_trial_split,
                                 train_data_container=training_data_container,
