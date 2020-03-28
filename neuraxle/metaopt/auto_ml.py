@@ -453,9 +453,9 @@ class Trainer:
         self.print_func = print_func
         self.print_metrics = print_metrics
 
-    def fit(
+    def fit_trial_split(
             self,
-            trial: TrialSplit,
+            trial_split: TrialSplit,
             train_data_container: DataContainer,
             validation_data_container: DataContainer,
             context: ExecutionContext
@@ -466,7 +466,7 @@ class Trainer:
 
         :param train_data_container: train data container
         :param validation_data_container: validation data container
-        :param trial: trial to execute
+        :param trial_split: trial to execute
         :param context: execution context
 
         :return: executed trial
@@ -475,12 +475,12 @@ class Trainer:
 
         for i in range(self.epochs):
             self.print_func('\nepoch {}/{}'.format(i + 1, self.epochs))
-            trial = trial.fit(train_data_container, context)
-            y_pred_train = trial.predict(train_data_container, context)
-            y_pred_val = trial.predict(validation_data_container, context)
+            trial_split = trial_split.fit(train_data_container, context)
+            y_pred_train = trial_split.predict(train_data_container, context)
+            y_pred_val = trial_split.predict(validation_data_container, context)
 
             if self.callbacks.call(
-                    trial=trial,
+                    trial=trial_split,
                     epoch_number=i,
                     total_epochs=self.epochs,
                     input_train=train_data_container,
@@ -491,7 +491,7 @@ class Trainer:
             ):
                 break
 
-        return trial
+        return trial_split
 
     def refit(self, p: BaseStep, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
         """
@@ -667,8 +667,8 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                                 json.dumps(auto_ml_data.hyperparameter_space.to_flat_as_dict_primitive(), sort_keys=True, indent=4),
                             )
 
-                            repo_trial_split = self.trainer.fit(
-                                trial=repo_trial_split,
+                            repo_trial_split = self.trainer.fit_trial_split(
+                                trial_split=repo_trial_split,
                                 train_data_container=training_data_container,
                                 validation_data_container=validation_data_container,
                                 context=context
