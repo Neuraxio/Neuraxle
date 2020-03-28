@@ -280,7 +280,7 @@ class TrialSplit:
         self.pipeline = pipeline
         self.main_metric_name = main_metric_name
 
-    def fit(self, train_data_container: DataContainer, context: ExecutionContext) -> 'TrialSplit':
+    def fit_trial_split(self, train_data_container: DataContainer, context: ExecutionContext) -> 'TrialSplit':
         """
         Fit the trial split pipeline with the training data container.
 
@@ -291,7 +291,7 @@ class TrialSplit:
         self.pipeline = self.pipeline.handle_fit(train_data_container, context)
         return self
 
-    def predict(self, data_container: DataContainer, context: ExecutionContext) -> 'DataContainer':
+    def predict_with_pipeline(self, data_container: DataContainer, context: ExecutionContext) -> 'DataContainer':
         """
         Predict data with the fitted trial split pipeline.
 

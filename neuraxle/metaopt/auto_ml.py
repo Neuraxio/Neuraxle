@@ -475,9 +475,9 @@ class Trainer:
 
         for i in range(self.epochs):
             self.print_func('\nepoch {}/{}'.format(i + 1, self.epochs))
-            trial_split = trial_split.fit(train_data_container, context)
-            y_pred_train = trial_split.predict(train_data_container, context)
-            y_pred_val = trial_split.predict(validation_data_container, context)
+            trial_split = trial_split.fit_trial_split(train_data_container, context)
+            y_pred_train = trial_split.predict_with_pipeline(train_data_container, context)
+            y_pred_val = trial_split.predict_with_pipeline(validation_data_container, context)
 
             if self.callbacks.call(
                     trial=trial_split,
