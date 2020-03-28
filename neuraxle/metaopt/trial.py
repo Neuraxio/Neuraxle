@@ -78,29 +78,19 @@ class Trial:
         self.start_time = start_time
         self.end_time = end_time
 
-    def new_validation_split(self, pipeline: BaseStep):
+    def new_validation_split(self, pipeline: BaseStep) -> 'TrialSplit':
         """
         Create a new trial split.
         A trial has one split when the validation splitter function is validation split.
         A trial has one or many split when the validation splitter function is kfold_cross_validation_split.
 
         :type pipeline: pipeline to execute
-        :return:
+        :return: one trial split
         """
-        trial_split: TrialSplit = TrialSplit(split_number=len(self.validation_splits), main_metric_name=self.main_metric_name)
+        trial_split: TrialSplit = TrialSplit(split_number=len(self.validation_splits), main_metric_name=self.main_metric_name, pipeline=pipeline)
         self.validation_splits.append(trial_split)
 
-        return trial_split.set_pipeline(pipeline)
-
-    def set_pipeline(self, pipeline: BaseStep) -> 'Trial':
-        """
-        Set pipeline.
-
-        :param pipeline: fitted pipeline
-        :return: self
-        """
-        self.pipeline = pipeline
-        return self
+        return trial_split
 
     def save_model(self):
         """
@@ -291,10 +281,24 @@ class TrialSplit:
         self.main_metric_name = main_metric_name
 
     def fit(self, train_data_container: DataContainer, context: ExecutionContext) -> 'TrialSplit':
+        """
+        Fit the trial split pipeline with the training data container.
+
+        :param train_data_container: training data container
+        :param context: execution context
+        :return: trial split with its fitted pipeline.
+        """
         self.pipeline = self.pipeline.handle_fit(train_data_container, context)
         return self
 
     def predict(self, data_container: DataContainer, context: ExecutionContext) -> 'DataContainer':
+        """
+        Predict data with the fitted trial split pipeline.
+
+        :param data_container: data container to predict
+        :param context: execution context
+        :return: predicted data container
+        """
         return self.pipeline.handle_predict(data_container, context)
 
     def set_main_metric_name(self, name: str) -> 'TrialSplit':
@@ -456,17 +460,6 @@ class TrialSplit:
         self.status = TRIAL_STATUS.FAILED
         self.error = str(error)
         self.error_traceback = traceback.format_exc()
-        return self
-
-    def set_pipeline(self, pipeline: BaseStep) -> 'TrialSplit':
-        """
-        Set fitted pipeline.
-
-        :param pipeline: fitted pipeline
-        :return: self
-        """
-        self.pipeline = pipeline
-
         return self
 
     def __enter__(self):

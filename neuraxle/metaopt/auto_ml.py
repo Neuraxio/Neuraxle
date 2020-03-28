@@ -657,13 +657,14 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
                     with repo_trial.new_validation_split(p) as repo_trial_split:
                         try:
-                            trial_split_description = '{}/{} split {}/{}\nhyperparams: {}\nhyperparams_space: {}\n'.format(
+                            trial_split_description = '{}/{} split {}/{}\nhyperparams: {}\n'.format(
                                 trial_number + 1,
                                 self.n_trial,
                                 repo_trial_split.split_number + 1,
                                 len(training_data_container),
                                 json.dumps(repo_trial.hyperparams, sort_keys=True, indent=4),
-                                json.dumps(auto_ml_data.hyperparameter_space.to_flat_as_dict_primitive(), sort_keys=True, indent=4),
+                                # TODO: make hyperparams space serializable
+                                # json.dumps(auto_ml_data.hyperparameter_space.to_flat_as_dict_primitive(), sort_keys=True, indent=4),
                             )
 
                             repo_trial_split = self.trainer.fit_trial_split(

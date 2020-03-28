@@ -69,6 +69,7 @@ def test_automl_with_kfold(tmpdir):
         n_trials=1,
         epochs=10,
         refit_trial=True,
+        print_func=print,
         hyperparams_repository=hp_repository
     )
 
