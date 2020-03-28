@@ -26,7 +26,8 @@ Those steps works with NumPy (np) arrays.
 
 import numpy as np
 
-from neuraxle.base import NonFittableMixin, BaseStep, DataContainer
+from neuraxle.base import NonFittableMixin, BaseStep, DataContainer, ExecutionContext, ForceHandleOnlyMixin, \
+    ForceHandleMixin
 from neuraxle.hyperparams.space import HyperparameterSamples
 
 
@@ -179,6 +180,7 @@ class MultiplyByN(NonFittableMixin, BaseStep):
         :class:`NonFittableMixin`,
         :class:`BaseStep`
     """
+
     def __init__(self, multiply_by=1):
         NonFittableMixin.__init__(self)
         BaseStep.__init__(
@@ -220,6 +222,7 @@ class AddN(NonFittableMixin, BaseStep):
         :class:`NonFittableMixin`,
         :class:`BaseStep`
     """
+
     def __init__(self, add=1):
         NonFittableMixin.__init__(self)
         BaseStep.__init__(
@@ -240,6 +243,39 @@ class AddN(NonFittableMixin, BaseStep):
             data_inputs = np.array(data_inputs)
 
         return data_inputs - self.hyperparams['add']
+
+
+class Sum(NonFittableMixin, BaseStep):
+    """
+    Step sum numpy array using np.sum.
+
+    Example usage:
+
+    .. code-block:: python
+
+        pipeline = Pipeline([
+            Sum(axis=-1)
+        ])
+
+        outputs = pipeline.transform(np.array([1, 2, 3])
+        # outputs => 6)
+
+    .. seealso::
+        :class:`NonFittableMixin`,
+        :class:`BaseStep`
+    """
+
+    def __init__(self, axis):
+        NonFittableMixin.__init__(self)
+        BaseStep.__init__(self)
+        self.axis = axis
+
+    def transform(self, data_inputs):
+        if not isinstance(data_inputs, np.ndarray):
+            data_inputs = np.array(data_inputs)
+
+        data_inputs = np.expand_dims(np.sum(data_inputs, axis=self.axis), axis=-1)
+        return data_inputs
 
 
 class OneHotEncoder(NonFittableMixin, BaseStep):
@@ -303,3 +339,37 @@ class OneHotEncoder(NonFittableMixin, BaseStep):
         outputs_ = np.delete(outputs_, self.nb_columns, axis=-1)
 
         return outputs_.squeeze()
+
+
+class ToNumpy(ForceHandleMixin, BaseStep):
+    """
+    Convert data inputs, and expected outputs to a numpy array.
+    """
+
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+        return data_container.to_numpy(), context
+
+
+class NumpyReshape(NonFittableMixin, BaseStep):
+    """
+    Reshape numpy array in data inputs.
+
+    .. code-block:: python
+
+       import numpy as np
+       a = np.array([1,0,3])
+       outputs = NumpyReshape(shape=(-1,1)).transform(a)
+       assert np.array_equal(outputs, np.array([[1],[0],[3]]))
+
+    .. seealso::
+        :class:`NonFittableMixin`
+        :class:`BaseStep`
+    """
+
+    def __init__(self, new_shape):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+        self.new_shape = new_shape
+
+    def transform(self, data_inputs):
+        return np.reshape(data_inputs, newshape=self.new_shape)

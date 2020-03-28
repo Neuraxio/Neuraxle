@@ -1,6 +1,8 @@
 import os
 from pickle import dump
 
+from py._path.local import LocalPath
+
 from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.pipeline import ResumablePipeline
 from neuraxle.steps.misc import FitTransformCallbackStep, TapeCallbackFunction
@@ -8,7 +10,7 @@ from neuraxle.steps.misc import FitTransformCallbackStep, TapeCallbackFunction
 SUMMARY_ID = '6e4419c1957e7772f3957d63bb41efcd'
 
 
-def test_resumable_pipeline_with_checkpoint_fit_transform_should_save_data_inputs(tmpdir):
+def test_resumable_pipeline_with_checkpoint_fit_transform_should_save_data_inputs(tmpdir: LocalPath):
     test_case = create_checkpoint_test_case(tmpdir)
 
     pipeline, outputs = test_case.pipeline.fit_transform([0, 1], [1, 2])
