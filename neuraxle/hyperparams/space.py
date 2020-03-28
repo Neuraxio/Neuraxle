@@ -64,6 +64,8 @@ ready to be sent to an instance of the pipeline to try and score it, for example
 
 from collections import OrderedDict
 
+from scipy.stats import rv_continuous, rv_discrete, rv_histogram
+
 from neuraxle.hyperparams.distributions import HyperparameterDistribution
 
 PARAMS_SPLIT_SEQ = "__"
@@ -196,7 +198,6 @@ class HyperparameterSpace(HyperparameterSamples):
             new_items.append((k, v))
         return HyperparameterSamples(new_items)
 
-
     def narrow_space_from_best_guess(
             self, best_guesses: 'HyperparameterSpace', kept_space_ratio: float = 0.5
     ) -> 'HyperparameterSpace':
@@ -244,3 +245,5 @@ class HyperparameterSpace(HyperparameterSamples):
         :return: an HyperparameterSpace like self, as a nested dict.
         """
         return flat_to_nested_dict(self, dict_ctor=HyperparameterSpace)
+
+

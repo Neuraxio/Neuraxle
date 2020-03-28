@@ -31,7 +31,7 @@ import random
 import sys
 from abc import abstractmethod, ABCMeta
 from typing import List
-from scipy.stats import norm
+from scipy.stats import norm, rv_continuous, rv_discrete, rv_histogram
 from scipy.integrate import quad
 import math
 import numpy as np
@@ -266,7 +266,8 @@ class Choice(HyperparameterDistribution):
         elif null_default_value in choice_list:
             HyperparameterDistribution.__init__(self, null_default_value)
         else:
-            raise ValueError('invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
+            raise ValueError(
+                'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
 
         self.choice_list = choice_list
 
@@ -363,7 +364,8 @@ class PriorityChoice(HyperparameterDistribution):
         elif null_default_value in choice_list:
             HyperparameterDistribution.__init__(self, null_default_value)
         else:
-            raise ValueError('invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
+            raise ValueError(
+                'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
 
         HyperparameterDistribution.__init__(self, null_default_value)
         self.choice_list = choice_list
@@ -451,7 +453,8 @@ class PriorityChoice(HyperparameterDistribution):
 
 
 class WrappedHyperparameterDistributions(HyperparameterDistribution):
-    def __init__(self, hd: HyperparameterDistribution = None, hds: List[HyperparameterDistribution] = None, null_default_value=None):
+    def __init__(self, hd: HyperparameterDistribution = None, hds: List[HyperparameterDistribution] = None,
+                 null_default_value=None):
         """
         Create a wrapper that will surround another HyperparameterDistribution.
         The wrapper might use one (hd) and/or many (hds) HyperparameterDistribution depending on the argument(s) used.
@@ -519,7 +522,7 @@ class Quantized(WrappedHyperparameterDistributions):
 class RandInt(HyperparameterDistribution):
     """Get a random integer within a range"""
 
-    def __init__(self, min_included: int, max_included: int, null_default_value: int=None):
+    def __init__(self, min_included: int, max_included: int, null_default_value: int = None):
         """
         Create a quantized random uniform distribution.
         A random integer between the two values inclusively will be returned.
@@ -585,7 +588,8 @@ class RandInt(HyperparameterDistribution):
         new_max_included = round(self.max_included * kept_space_ratio + best_guess * lost_space_ratio)
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
             return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return RandInt(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
+        return RandInt(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio,
+                                                                                                      self)
 
 
 class Uniform(HyperparameterDistribution):
@@ -668,7 +672,8 @@ class Uniform(HyperparameterDistribution):
         new_max_included = self.max_included * kept_space_ratio + best_guess * lost_space_ratio
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
             return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return Uniform(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
+        return Uniform(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio,
+                                                                                                      self)
 
 
 class LogUniform(HyperparameterDistribution):
@@ -750,14 +755,15 @@ class LogUniform(HyperparameterDistribution):
         new_max_included = self.log2_max_included * kept_space_ratio + log2_best_guess * lost_space_ratio
         if new_max_included <= new_min_included or kept_space_ratio == 0.0:
             return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return LogUniform(2 ** new_min_included, 2 ** new_max_included, 2 ** self.null_default_value).was_narrowed_from(kept_space_ratio, self)
+        return LogUniform(2 ** new_min_included, 2 ** new_max_included, 2 ** self.null_default_value).was_narrowed_from(
+            kept_space_ratio, self)
 
 
 class Normal(HyperparameterDistribution):
     """Get a normal distribution."""
 
     def __init__(self, mean: float, std: float,
-                 hard_clip_min: float = None, hard_clip_max: float = None, null_default_value: float=None):
+                 hard_clip_min: float = None, hard_clip_max: float = None, null_default_value: float = None):
         """
         Create a normal distribution from mean and standard deviation.
 
@@ -1007,3 +1013,92 @@ class LogNormal(HyperparameterDistribution):
         return Normal(
             new_mean, new_std, self.hard_clip_min, self.hard_clip_max, self.null_default_value
         ).was_narrowed_from(kept_space_ratio, self)
+
+
+class Continuous(rv_continuous, HyperparameterDistribution):
+    """
+    Discrete distribution that inherits from `scipy.stats.rv_continuous <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
+
+    Example usage :
+
+    .. code-block:: python
+
+        hist_dist = Discrete(
+             min_included=0.0,
+             max_included=2.0,
+             null_default_value=0.0
+        )
+
+
+    .. seealso::
+        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
+        :class:`Histogram`,
+        :class:`Discrete`,
+        :class:`HyperparameterDistribution`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`neuraxle.base.BaseStep`
+    """
+    def __init__(self, min_included: int, max_included: int, null_default_value: int = None, **kwargs):
+        rv_continuous.__init__(self, a=min_included, b=max_included, **kwargs)
+        HyperparameterDistribution.__init__(self, null_default_value=null_default_value)
+
+
+class Discrete(rv_discrete, HyperparameterDistribution):
+    """
+    Discrete distribution that inherits from `scipy.stats.rv_discrete <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_discrete.html#scipy.stats.rv_discrete>`_
+
+    Example usage :
+
+    .. code-block:: python
+
+        hist_dist = Discrete(
+             min_included=0.0,
+             max_included=2.0,
+             null_default_value=0.0
+        )
+
+
+    .. seealso::
+        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
+        :class:`Histogram`,
+        :class:`Continuous`,
+        :class:`HyperparameterDistribution`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`neuraxle.base.BaseStep`
+    """
+    def __init__(self, min_included: float, max_included: float, null_default_value: int = None, **kwargs):
+        rv_discrete.__init__(self, a=min_included, b=max_included, **kwargs)
+        HyperparameterDistribution.__init__(self, null_default_value)
+
+    def pdf(self, x) -> float:
+        pass
+
+
+class Histogram(rv_histogram, HyperparameterDistribution):
+    """
+    Histogram distribution that inherits from `scipy.stats.rv_histogram <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_histogram.html#scipy.stats.rv_histogram>`_
+
+    Example usage :
+
+    .. code-block:: python
+
+        hist_dist = Histogram(
+             histogram=np.histogram(data, bins=100),
+             null_default_value=0.0
+        )
+
+
+    .. seealso::
+        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
+        :class:`Discrete`,
+        :class:`Continuous`,
+        :class:`HyperparameterDistribution`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`neuraxle.base.BaseStep`
+    """
+    def __init__(self, histogram, null_default_value: int = None, **kwargs):
+        rv_histogram.__init__(self, histogram=histogram, **kwargs)
+        HyperparameterDistribution.__init__(self, null_default_value)

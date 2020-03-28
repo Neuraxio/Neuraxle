@@ -56,6 +56,7 @@ def test_boolean_distribution():
     assert hd.cdf(-0.1) == 0.
     assert hd.cdf(1.1) == 1.
 
+
 @pytest.mark.parametrize("ctor", [Choice, PriorityChoice])
 def test_choice_and_priority_choice(ctor):
     hd = ctor([0, 1, False, "Test"])
@@ -74,7 +75,7 @@ def test_choice_and_priority_choice(ctor):
 
     assert (hd.pdf(0) - 1 / 4) < 1e-6
     assert (hd.pdf(1) - 1 / 4) < 1e-6
-    assert (hd.pdf(False) - 1/4) < 1e-6
+    assert (hd.pdf(False) - 1 / 4) < 1e-6
     assert (hd.pdf("Test") - 1 / 4) < 1e-6
 
     assert (hd.cdf(0) - 1 / 4) < 1e-6
@@ -99,13 +100,13 @@ def test_quantized_uniform():
     assert min(samples) >= -10.0
     assert max(samples) <= 10.0
 
-    assert abs(hd.pdf(-10) - 1/40) < 1e-6
+    assert abs(hd.pdf(-10) - 1 / 40) < 1e-6
     assert abs(hd.pdf(-9) - 1 / 20) < 1e-6
     assert abs(hd.pdf(0) - 1 / 20) < 1e-6
     assert abs(hd.pdf(9) - 1 / 20) < 1e-6
     assert abs(hd.pdf(10) - 1 / 40) < 1e-6
 
-    assert abs(hd.cdf(-10) - 1/40) < 1e-6
+    assert abs(hd.cdf(-10) - 1 / 40) < 1e-6
     assert abs(hd.cdf(-9) - 1.5 / 20) < 1e-6
     assert abs(hd.cdf(0) - 10.5 / 20) < 1e-6
     assert abs(hd.cdf(9) - 19.5 / 20) < 1e-6
@@ -139,6 +140,7 @@ def test_randint():
     assert abs(hd.cdf(10) - 1.) < 1e-6
     assert hd.cdf(10.1) == 1.
 
+
 def test_uniform():
     hd = Uniform(-10, 10)
 
@@ -149,11 +151,12 @@ def test_uniform():
     assert min(samples) >= -10.0
     assert max(samples) <= 10.0
     assert hd.pdf(-10.1) == 0.
-    assert abs(hd.pdf(0) - 1/(10 + 10)) < 1e-6
+    assert abs(hd.pdf(0) - 1 / (10 + 10)) < 1e-6
     assert hd.pdf(10.1) == 0.
     assert hd.cdf(-10.1) == 0.
     assert abs(hd.cdf(0) - (0 + 10) / (10 + 10)) < 1e-6
     assert hd.cdf(10.1) == 1.
+
 
 def test_loguniform():
     hd = LogUniform(0.001, 10)
@@ -206,7 +209,6 @@ def test_lognormal():
     assert abs(hd.cdf(5.) - 0.8771717397015799) < 1e-6
 
 
-
 @pytest.mark.parametrize("hd", [
     FixedHyperparameter(0),
     Boolean(),
@@ -217,7 +219,10 @@ def test_lognormal():
     Uniform(-10, 10),
     LogUniform(0.001, 10),
     Normal(0.0, 1.0),
-    LogNormal(0.0, 2.0)
+    LogNormal(0.0, 2.0),
+    Continuous(1, 10),
+    Discrete(0.0, 1.0),
+    Histogram(histogram=np.histogram(norm.rvs(size=100000, loc=0, scale=1.5, random_state=123), bins=100))
 ])
 def test_can_restore_each_distributions(hd):
     print(hd.__dict__)
@@ -275,4 +280,3 @@ def test_priority_choice_threshold_narrowing():
     assert isinstance(hd, PriorityChoice)
     assert len(hd) == 4
     assert hd.get_current_narrowing_value() == 1.0
-
