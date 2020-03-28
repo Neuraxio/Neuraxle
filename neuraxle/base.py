@@ -720,11 +720,10 @@ class BaseStep(ABC):
         Set the name of the pipeline step.
 
         :param name: a string.
-        :type name: str
         :return: self
 
         .. note::
-            A step name is the same value as the one in the keys of :any:`~neuraxle.pipeline.Pipeline.steps_as_tuple`
+            A step name is the same value as the one in the keys of :py:attr:`~neuraxle.pipeline.Pipeline.steps_as_tuple`
         """
         self.name = name
         self.invalidate()
@@ -1708,6 +1707,18 @@ class MetaStepMixin:
         self.is_initialized = True
         return self
 
+    def teardown(self) -> BaseStep:
+        """
+        Teardown step. Also teardown the wrapped step.
+
+        :return: self
+        :rtype: BaseStep
+        """
+        BaseStep.teardown(self)
+        self.wrapped.teardown()
+        self.is_initialized = False
+        return self
+
     def set_train(self, is_train: bool = True):
         """
         Set pipeline step mode to train or test. Also set wrapped step mode to train or test.
@@ -2344,6 +2355,8 @@ class TruncableSteps(BaseStep, ABC):
         """
         for step_name, step in self.steps_as_tuple:
             step.teardown()
+
+        self.is_initialized = False
 
         return self
 

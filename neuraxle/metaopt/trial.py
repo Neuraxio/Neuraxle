@@ -355,6 +355,28 @@ class TrialSplit:
             return True
         return False
 
+    def get_validation_scores(self):
+        """
+        Return the validation scores for the main scoring metric.
+
+        :return:
+        """
+        return self.metrics_results['main']['validation_values']
+
+    def get_higher_score_is_better(self):
+        """
+        Return True if higher scores are better for the main metric.
+
+        :return:
+        """
+        return self.metrics_results['main']['higher_score_is_better']
+
+    def get_metric_validation_results(self, metric_name):
+        return self.metrics_results[metric_name]['validation_values']
+
+    def get_metric_train_results(self, metric_name):
+        return self.metrics_results[metric_name]['train_values']
+
     def to_json(self) -> dict:
         """
         Return the trial in a json format.

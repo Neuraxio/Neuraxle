@@ -1,3 +1,30 @@
+"""
+Create label encoder across multiple columns
+==================================================
+
+You can apply label encoder to all columns using the ColumnTransformer step.
+
+This demonstrates how to use properly transform columns using neuraxle.
+
+For more info, see the `thread here <https://stackoverflow.com/questions/24458645/label-encoding-across-multiple-columns-in-scikit-learn>`__.
+
+..
+    Copyright 2019, Neuraxio Inc.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+"""
+
 import numpy as np
 import pandas
 from sklearn.preprocessing import LabelEncoder
