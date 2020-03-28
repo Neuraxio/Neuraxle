@@ -650,7 +650,6 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             )
 
             with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
-
                 for training_data_container, validation_data_container in validation_splits:
                     p = copy.deepcopy(self.pipeline)
                     p.update_hyperparams(repo_trial.hyperparams)
@@ -805,13 +804,13 @@ class RandomSearchHyperparameterSelectionStrategy(BaseHyperparameterSelectionStr
 ValidationSplitter = Callable
 
 
-def create_split_data_container_function(validation_splitter_function: Callable):
+def create_split_data_container_function(validation_splitter_function: Callable) -> Callable:
     """
     Wrap a validation split function with a split data container function.
     A validation split function takes two arguments:  data inputs, and expected outputs.
 
     :param validation_splitter_function:
-    :return:
+    :return: a function that returns a generator iterator that yields the pairs of training, and validation data containers for each validation split.
     """
     def split_data_container(data_container: DataContainer) -> Tuple[DataContainer, DataContainer]:
         train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = \
@@ -821,6 +820,7 @@ def create_split_data_container_function(validation_splitter_function: Callable)
         validation_data_container = DataContainer(data_inputs=validation_data_inputs,
                                                   expected_outputs=validation_expected_outputs)
 
+        # Yields all of the pairs of training, and validation data containers for each validation split.
         for (train_current_id, train_di, train_eo), (validation_current_id, validation_di, validation_eo) in \
                 zip(train_data_container, validation_data_container):
             train_data_container_split = DataContainer(
