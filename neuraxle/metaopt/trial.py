@@ -56,12 +56,12 @@ class Trial:
             hyperparams: HyperparameterSamples,
             status: 'TRIAL_STATUS' = None,
             pipeline: BaseStep = None,
-            validation_splits=None,
-            cache_folder=None,
-            error=None,
-            error_traceback=None,
-            start_time=None,
-            end_time=None
+            validation_splits: List['TrialSplit'] = None,
+            cache_folder: str = None,
+            error: str = None,
+            error_traceback: str = None,
+            start_time: datetime.datetime = None,
+            end_time: datetime.datetime = None
     ):
         if status is None:
             status = TRIAL_STATUS.PLANNED
@@ -195,7 +195,7 @@ class Trial:
         }
 
     @staticmethod
-    def from_json(trial_json) -> 'Trial':
+    def from_json(trial_json: Dict) -> 'Trial':
         return Trial(
             status=TRIAL_STATUS(trial_json['status']),
             hyperparams=HyperparameterSamples(trial_json['hyperparams']),
@@ -354,22 +354,6 @@ class TrialSplit:
         if best_score == validation_values[-1]:
             return True
         return False
-
-    def get_validation_scores(self):
-        """
-        Return the validation scores for the main scoring metric.
-
-        :return:
-        """
-        return self.metrics_results['main']['validation_values']
-
-    def get_higher_score_is_better(self):
-        """
-        Return True if higher scores are better for the main metric.
-
-        :return:
-        """
-        return self.metrics_results['main']['higher_score_is_better']
 
     def get_metric_validation_results(self, metric_name):
         return self.metrics_results[metric_name]['validation_values']
