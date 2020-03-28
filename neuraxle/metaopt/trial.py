@@ -253,7 +253,7 @@ class Trial:
 
 class TrialSplit:
     """
-    Trial split
+    One split of a trial.
 
     .. seealso::
         :class:`AutoML`,
