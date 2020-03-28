@@ -92,14 +92,15 @@ class Trial:
 
         return trial_split.set_pipeline(pipeline)
 
-    def set_pipeline(self, pipeline: BaseStep):
+    def set_pipeline(self, pipeline: BaseStep) -> 'Trial':
         """
         Set pipeline.
 
         :param pipeline: fitted pipeline
-        :return:
+        :return: self
         """
         self.pipeline = pipeline
+        return self
 
     def save_model(self):
         """
@@ -109,13 +110,16 @@ class Trial:
         trial_hash = self._get_trial_hash(hyperparams)
         self.pipeline.set_name(trial_hash).save(ExecutionContext(self.cache_folder), full_dump=True)
 
-    def set_main_metric_name(self, name: str):
+    def set_main_metric_name(self, name: str) -> 'Trial':
         """
         Set trial main metric name.
+
+        :return: self
         """
         self.main_metric_name = name
+        return self
 
-    def set_hyperparams(self, hyperparams: HyperparameterSamples):
+    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'Trial':
         """
         Set trial hyperparams.
 
@@ -124,20 +128,22 @@ class Trial:
         """
         self.hyperparams = hyperparams
 
-    def get_higher_score_is_better(self):
+        return self
+
+    def get_higher_score_is_better(self) -> bool:
         """
         Return True if higher scores are better for the main metric.
 
-        :return:
+        :return: if higher score is better
         """
         return self.validation_splits[0].get_higher_score_is_better()
 
-    def get_validation_score(self):
+    def get_validation_score(self) -> float:
         """
         Return the latest validation score for the main scoring metric.
         Returns the average score for all validation splits.
 
-        :return:
+        :return: validation score
         """
         scores = [
             validation_split.get_validation_score()
@@ -148,11 +154,15 @@ class Trial:
 
         return score
 
-    def set_success(self):
+    def set_success(self) -> 'Trial':
         """
         Set trial status to success.
+
+        :return: self
         """
         self.status = TRIAL_STATUS.SUCCESS
+
+        return self
 
     def update_final_trial_status(self):
         """
@@ -168,16 +178,18 @@ class Trial:
         else:
             self.status = TRIAL_STATUS.FAILED
 
-    def set_failed(self, error: Exception):
+    def set_failed(self, error: Exception) -> 'Trial':
         """
         Set failed trial with exception.
 
         :param error: catched exception
-        :return:
+        :return: self
         """
         self.status = TRIAL_STATUS.FAILED
         self.error = str(error)
         self.error_traceback = traceback.format_exc()
+
+        return self
 
     def _get_trial_hash(self, hp_dict: Dict):
         """
@@ -285,14 +297,16 @@ class TrialSplit:
     def predict(self, data_container: DataContainer, context: ExecutionContext) -> 'DataContainer':
         return self.pipeline.handle_predict(data_container, context)
 
-    def set_main_metric_name(self, name: str):
+    def set_main_metric_name(self, name: str) -> 'TrialSplit':
         """
         Set main metric name.
 
         :param name: main metric name.
-        :return:
+        :return: self
         """
         self.main_metric_name = name
+
+        return self
 
     def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool):
         """
@@ -417,11 +431,14 @@ class TrialSplit:
             main_metric_name=trial_json['main_metric_name']
         )
 
-    def set_success(self):
+    def set_success(self) -> 'TrialSplit':
         """
         Set trial status to success.
+
+        :return: self
         """
         self.status = TRIAL_STATUS.SUCCESS
+        return self
 
     def is_success(self):
         """
@@ -429,16 +446,17 @@ class TrialSplit:
         """
         return self.status == TRIAL_STATUS.SUCCESS
 
-    def set_failed(self, error: Exception):
+    def set_failed(self, error: Exception) -> 'TrialSplit':
         """
         Set failed trial with exception.
 
         :param error: catched exception
-        :return:
+        :return: self
         """
         self.status = TRIAL_STATUS.FAILED
         self.error = str(error)
         self.error_traceback = traceback.format_exc()
+        return self
 
     def set_pipeline(self, pipeline: BaseStep) -> 'TrialSplit':
         """
