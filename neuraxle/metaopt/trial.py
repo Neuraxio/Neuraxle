@@ -130,13 +130,13 @@ class Trial:
 
         return self
 
-    def get_higher_score_is_better(self) -> bool:
+    def is_higher_score_better(self) -> bool:
         """
         Return True if higher scores are better for the main metric.
 
         :return: if higher score is better
         """
-        return self.validation_splits[0].get_higher_score_is_better()
+        return self.validation_splits[0].is_higher_score_better()
 
     def get_validation_score(self) -> float:
         """
@@ -360,7 +360,7 @@ class TrialSplit:
         """
         return self.metrics_results[self.main_metric_name]['validation_values'][-1]
 
-    def get_higher_score_is_better(self) -> bool:
+    def is_higher_score_better(self) -> bool:
         """
         Return True if higher scores are better for the main metric.
 
@@ -536,7 +536,7 @@ class Trials:
         best_score = None
         best_hyperparams = None
 
-        higher_score_is_better = self.trials[-1].get_higher_score_is_better()
+        higher_score_is_better = self.trials[-1].is_higher_score_better()
 
         for trial in self.trials:
             trial_score = trial.get_validation_score()
