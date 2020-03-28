@@ -524,6 +524,14 @@ class Trainer:
             self.metrics_results_train[m] = []
             self.metrics_results_validation[m] = []
 
+    def get_main_metric_name(self) -> str:
+        """
+        Get main metric name.
+
+        :return:
+        """
+        return self.callbacks[0].name
+
 
 class AutoML(ForceHandleOnlyMixin, BaseStep):
     """
@@ -609,14 +617,13 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
         if callbacks is None:
             callbacks = []
-        self.callbacks = [scoring_callback] + callbacks
+        callbacks = [scoring_callback] + callbacks
 
-        self.epochs = epochs
         self.refit_trial = refit_trial
 
         self.trainer = Trainer(
-            callbacks=self.callbacks,
-            epochs=self.epochs,
+            callbacks=callbacks,
+            epochs=epochs,
             print_func=self.print_func
         )
 
@@ -639,7 +646,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                 trial_number=trial_number,
                 trials=self.hyperparams_repository.load_all_trials(TRIAL_STATUS.SUCCESS),
                 hyperparameter_space=self.pipeline.get_hyperparams_space(),
-                main_scoring_metric_name=self.callbacks[0].name
+                main_scoring_metric_name=self.trainer.get_main_metric_name()
             )
 
             with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:

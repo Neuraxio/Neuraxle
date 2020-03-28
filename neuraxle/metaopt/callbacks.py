@@ -281,6 +281,9 @@ class CallbackList(BaseCallback):
             print_func = print
         self.print_func = print_func
 
+    def __getitem__(self, item):
+        return self.callbacks[item]
+
     def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
              is_finished_and_fitted: bool):
