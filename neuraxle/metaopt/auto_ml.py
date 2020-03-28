@@ -658,6 +658,15 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
                     with repo_trial.new_validation_split(p) as repo_trial_split:
                         try:
+                            trial_split_description = '{}/{} split {}/{}\nhyperparams: {}\nhyperparams_space: {}\n'.format(
+                                trial_number + 1,
+                                self.n_trial,
+                                repo_trial_split.split_number + 1,
+                                len(training_data_container),
+                                json.dumps(repo_trial.hyperparams, sort_keys=True, indent=4),
+                                json.dumps(auto_ml_data.hyperparameter_space.to_flat_as_dict_primitive(), sort_keys=True, indent=4),
+                            )
+
                             repo_trial_split = self.trainer.fit(
                                 trial=repo_trial_split,
                                 train_data_container=training_data_container,
@@ -667,16 +676,16 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
                             repo_trial_split.set_success()
 
-                            self.print_func('trial {}/{} split {}/{} score: {}'.format(
-                                trial_number + 1,
-                                self.n_trial,
-                                repo_trial_split.split_number + 1,
-                                len(training_data_container),
+                            self.print_func('{} score: {}'.format(
+                                trial_split_description,
                                 repo_trial_split.get_validation_score()
                             ))
 
                         except Exception as error:
                             track = traceback.format_exc()
+                            self.print_func('failed {}'.format(
+                                trial_split_description
+                            ))
                             self.print_func(track)
                             repo_trial_split.set_failed(error)
 
