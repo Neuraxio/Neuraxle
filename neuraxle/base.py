@@ -1707,6 +1707,18 @@ class MetaStepMixin:
         self.is_initialized = True
         return self
 
+    def teardown(self) -> BaseStep:
+        """
+        Teardown step. Also teardown the wrapped step.
+
+        :return: self
+        :rtype: BaseStep
+        """
+        BaseStep.teardown(self)
+        self.wrapped.teardown()
+        self.is_initialized = False
+        return self
+
     def set_train(self, is_train: bool = True):
         """
         Set pipeline step mode to train or test. Also set wrapped step mode to train or test.
@@ -2343,6 +2355,8 @@ class TruncableSteps(BaseStep, ABC):
         """
         for step_name, step in self.steps_as_tuple:
             step.teardown()
+
+        self.is_initialized = False
 
         return self
 

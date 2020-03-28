@@ -565,7 +565,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             hyperparams_optimizer: BaseHyperparameterSelectionStrategy = None,
             hyperparams_repository: HyperparamsRepository = None,
             n_trials: int = 10,
-            epochs: int = 10,
+            epochs: int = 1,
             callbacks: List[BaseCallback] = None,
             refit_scoring_function: Callable = None,
             print_func: Callable = None,
@@ -574,7 +574,6 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         BaseStep.__init__(self)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
 
-        self.scoring_callback = scoring_callback
         self.validation_split_function = create_split_data_container_function(validation_split_function)
 
         if print_func is None:
@@ -602,8 +601,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
         if callbacks is None:
             callbacks = []
-        callbacks.append(scoring_callback)
-        self.callbacks = callbacks
+        self.callbacks = [scoring_callback] + callbacks
 
         self.epochs = epochs
         self.refit_trial = refit_trial

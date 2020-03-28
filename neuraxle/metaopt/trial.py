@@ -184,6 +184,12 @@ class Trial:
         """
         return self.metrics_results['main']['higher_score_is_better']
 
+    def get_metric_validation_results(self, metric_name):
+        return self.metrics_results[metric_name]['validation_values']
+
+    def get_metric_train_results(self, metric_name):
+        return self.metrics_results[metric_name]['train_values']
+
     def to_json(self) -> dict:
         """
         Return the trial in a json format.
@@ -295,7 +301,15 @@ class Trials:
 
         for trial in self.trials:
             trial_score = trial.metrics_results['main']['higher_score_is_better']
-            if best_score is None or higher_score_is_better == (trial_score > best_score):
+            if best_score is None:
+                best_score = trial_score
+                best_hyperparams = trial.hyperparams
+
+            if trial_score > best_score and higher_score_is_better:
+                best_score = trial_score
+                best_hyperparams = trial.hyperparams
+
+            if trial_score < best_score and not higher_score_is_better:
                 best_score = trial_score
                 best_hyperparams = trial.hyperparams
 
