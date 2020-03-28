@@ -33,8 +33,6 @@ from neuraxle.hyperparams.space import HyperparameterSamples
 
 TRIAL_DATETIME_STR_FORMAT = '%m/%d/%Y, %H:%M:%S'
 
-MAIN_SCORING_METRIC_NAME = 'main'
-
 
 class Trial:
     """
@@ -54,6 +52,7 @@ class Trial:
     def __init__(
             self,
             hyperparams: HyperparameterSamples,
+            main_metric_name: str,
             status: 'TRIAL_STATUS' = None,
             pipeline: BaseStep = None,
             validation_splits: List['TrialSplit'] = None,
@@ -61,13 +60,14 @@ class Trial:
             error: str = None,
             error_traceback: str = None,
             start_time: datetime.datetime = None,
-            end_time: datetime.datetime = None
+            end_time: datetime.datetime = None,
     ):
         if status is None:
             status = TRIAL_STATUS.PLANNED
         if validation_splits is None:
             validation_splits = []
 
+        self.main_metric_name = main_metric_name
         self.status: TRIAL_STATUS = status
         self.hyperparams = hyperparams
         self.pipeline: BaseStep = pipeline
@@ -87,7 +87,7 @@ class Trial:
         :type pipeline: pipeline to execute
         :return:
         """
-        trial_split: TrialSplit = TrialSplit(split_number=len(self.validation_splits))
+        trial_split: TrialSplit = TrialSplit(split_number=len(self.validation_splits), main_metric_name=self.main_metric_name)
         self.validation_splits.append(trial_split)
 
         return trial_split.set_pipeline(pipeline)
@@ -108,6 +108,12 @@ class Trial:
         hyperparams = self.hyperparams.to_flat_as_dict_primitive()
         trial_hash = self._get_trial_hash(hyperparams)
         self.pipeline.set_name(trial_hash).save(ExecutionContext(self.cache_folder), full_dump=True)
+
+    def set_main_metric_name(self, name: str):
+        """
+        Set trial main metric name.
+        """
+        self.main_metric_name = name
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples):
         """
@@ -191,12 +197,14 @@ class Trial:
             'error': self.error,
             'error_traceback': self.error_traceback,
             'start_time': self.start_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.start_time is not None else '',
-            'end_time': self.end_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.end_time is not None else ''
+            'end_time': self.end_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.end_time is not None else '',
+            'main_metric_name': self.main_metric_name
         }
 
     @staticmethod
     def from_json(trial_json: Dict) -> 'Trial':
         return Trial(
+            main_metric_name=trial_json['main_metric_name'],
             status=TRIAL_STATUS(trial_json['status']),
             hyperparams=HyperparameterSamples(trial_json['hyperparams']),
             validation_splits=[
@@ -246,16 +254,18 @@ class TrialSplit:
     def __init__(
             self,
             split_number,
+            main_metric_name: str,
             status: 'TRIAL_STATUS' = None,
             error: Exception = None,
             error_traceback: str = None,
             metrics_results: Dict = None,
             start_time: datetime.datetime = None,
             end_time: datetime.datetime = None,
-            pipeline: BaseStep = None
+            pipeline: BaseStep = None,
     ):
         if status is None:
             status = TRIAL_STATUS.PLANNED
+
         self.split_number = split_number
         self.status: TRIAL_STATUS = status
         self.error: Exception = error
@@ -266,6 +276,7 @@ class TrialSplit:
         self.end_time = end_time
         self.start_time = start_time
         self.pipeline = pipeline
+        self.main_metric_name = main_metric_name
 
     def fit(self, train_data_container: DataContainer, context: ExecutionContext) -> 'TrialSplit':
         self.pipeline = self.pipeline.handle_fit(train_data_container, context)
@@ -273,6 +284,15 @@ class TrialSplit:
 
     def predict(self, data_container: DataContainer, context: ExecutionContext) -> 'DataContainer':
         return self.pipeline.handle_predict(data_container, context)
+
+    def set_main_metric_name(self, name: str):
+        """
+        Set main metric name.
+
+        :param name: main metric name.
+        :return:
+        """
+        self.main_metric_name = name
 
     def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool):
         """
@@ -316,7 +336,7 @@ class TrialSplit:
 
         :return:
         """
-        return self.metrics_results['main']['validation_values']
+        return self.metrics_results[self.main_metric_name]['validation_values']
 
     def get_validation_score(self):
         """
@@ -324,7 +344,7 @@ class TrialSplit:
 
         :return:
         """
-        return self.metrics_results['main']['validation_values'][-1]
+        return self.metrics_results[self.main_metric_name]['validation_values'][-1]
 
     def get_higher_score_is_better(self):
         """
@@ -332,7 +352,7 @@ class TrialSplit:
 
         :return:
         """
-        return self.metrics_results['main']['higher_score_is_better']
+        return self.metrics_results[self.main_metric_name]['higher_score_is_better']
 
     def is_new_best_score(self):
         """
@@ -340,8 +360,8 @@ class TrialSplit:
 
         :return:
         """
-        higher_score_is_better = self.metrics_results[MAIN_SCORING_METRIC_NAME]['higher_score_is_better']
-        validation_values = self.metrics_results[MAIN_SCORING_METRIC_NAME]['validation_values']
+        higher_score_is_better = self.metrics_results[self.main_metric_name]['higher_score_is_better']
+        validation_values = self.metrics_results[self.main_metric_name]['validation_values']
         best_score = validation_values[0]
 
         for score in validation_values:
@@ -374,11 +394,12 @@ class TrialSplit:
             'error_traceback': self.error_traceback,
             'start_time': self.start_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.start_time is not None else '',
             'end_time': self.end_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.end_time is not None else '',
-            'split_number': self.split_number
+            'split_number': self.split_number,
+            'main_metric_name': self.main_metric_name
         }
 
     @staticmethod
-    def from_json(trial_json) -> 'TrialSplit':
+    def from_json(trial_json: Dict) -> 'TrialSplit':
         """
         Create a trial split object from json.
 
@@ -392,7 +413,8 @@ class TrialSplit:
             metrics_results=trial_json['metric_results'],
             start_time=datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT),
             end_time=datetime.datetime.strptime(trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT),
-            split_number=trial_json['split_number']
+            split_number=trial_json['split_number'],
+            main_metric_name=trial_json['main_metric_name']
         )
 
     def set_success(self):

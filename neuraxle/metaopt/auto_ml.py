@@ -221,7 +221,7 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         hyperparams = self.hyperparameter_selection_strategy.find_next_best_hyperparams(auto_ml_container)
         self.print_func('new trial:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
-        return Trial(hyperparams)
+        return Trial(hyperparams=hyperparams, main_metric_name=auto_ml_container.main_scoring_metric_name)
 
 
 class HyperparamsJSONRepository(HyperparamsRepository):
@@ -293,7 +293,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :return:
         """
         hyperparams = self.hyperparameter_selection_strategy.find_next_best_hyperparams(auto_ml_container)
-        trial = Trial(hyperparams, cache_folder=self.cache_folder)
+        trial = Trial(hyperparams, cache_folder=self.cache_folder, main_metric_name=auto_ml_container.main_scoring_metric_name)
         self._create_trial_json(trial=trial)
 
         return trial
@@ -730,11 +730,13 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         """
         trials = self.hyperparams_repository.load_all_trials(TRIAL_STATUS.SUCCESS)
         hyperparams_space = self.pipeline.get_hyperparams_space()
+        main_scoring_metric_name = self.callbacks[0].name
 
         return AutoMLContainer(
             trial_number=trial_number,
             trials=trials,
             hyperparameter_space=hyperparams_space,
+            main_scoring_metric_name=main_scoring_metric_name
         )
 
 
@@ -758,11 +760,13 @@ class AutoMLContainer:
             self,
             trials: 'Trials',
             hyperparameter_space: HyperparameterSpace,
-            trial_number: int
+            trial_number: int,
+            main_scoring_metric_name: str
     ):
         self.trials = trials
         self.hyperparameter_space = hyperparameter_space
         self.trial_number = trial_number
+        self.main_scoring_metric_name = main_scoring_metric_name
 
 
 class RandomSearchHyperparameterSelectionStrategy(BaseHyperparameterSelectionStrategy):
