@@ -720,11 +720,10 @@ class BaseStep(ABC):
         Set the name of the pipeline step.
 
         :param name: a string.
-        :type name: str
         :return: self
 
         .. note::
-            A step name is the same value as the one in the keys of :any:`~neuraxle.pipeline.Pipeline.steps_as_tuple`
+            A step name is the same value as the one in the keys of :py:attr:`~neuraxle.pipeline.Pipeline.steps_as_tuple`
         """
         self.name = name
         self.invalidate()
