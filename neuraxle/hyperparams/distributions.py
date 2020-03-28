@@ -127,10 +127,6 @@ class HyperparameterDistribution(metaclass=ABCMeta):
             return copy.deepcopy(self)
         return copy.deepcopy(self.original_hp.unnarrow())
 
-    @abstractmethod
-    def __str__(self):
-        pass
-
     def __eq__(self, other):
         return self.first_id == other.first_id
 
