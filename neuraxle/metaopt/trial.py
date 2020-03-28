@@ -360,7 +360,7 @@ class TrialSplit:
         """
         return self.metrics_results[self.main_metric_name]['validation_values'][-1]
 
-    def get_higher_score_is_better(self):
+    def get_higher_score_is_better(self) -> bool:
         """
         Return True if higher scores are better for the main metric.
 
