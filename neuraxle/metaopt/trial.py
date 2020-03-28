@@ -69,14 +69,14 @@ class Trial:
 
         self.main_metric_name = main_metric_name
         self.status: TRIAL_STATUS = status
-        self.hyperparams = hyperparams
+        self.hyperparams: HyperparameterSamples = hyperparams
         self.pipeline: BaseStep = pipeline
-        self.validation_splits = validation_splits
-        self.cache_folder = cache_folder
-        self.error_traceback = error_traceback
-        self.error = error
-        self.start_time = start_time
-        self.end_time = end_time
+        self.validation_splits: List['TrialSplit'] = validation_splits
+        self.cache_folder: str = cache_folder
+        self.error_traceback: str = error_traceback
+        self.error: str = error
+        self.start_time: datetime.datetime = start_time
+        self.end_time: datetime.datetime = end_time
 
     def new_validation_split(self, pipeline: BaseStep) -> 'TrialSplit':
         """
@@ -268,17 +268,17 @@ class TrialSplit:
         if status is None:
             status = TRIAL_STATUS.PLANNED
 
-        self.split_number = split_number
+        self.split_number: int = split_number
         self.status: TRIAL_STATUS = status
         self.error: Exception = error
         self.error_traceback: str = error_traceback
         if metrics_results is None:
             metrics_results = {}
         self.metrics_results: Dict = metrics_results
-        self.end_time = end_time
-        self.start_time = start_time
-        self.pipeline = pipeline
-        self.main_metric_name = main_metric_name
+        self.end_time: datetime.datetime = end_time
+        self.start_time: datetime.datetime = start_time
+        self.pipeline: BaseStep = pipeline
+        self.main_metric_name: str = main_metric_name
 
     def fit_trial_split(self, train_data_container: DataContainer, context: ExecutionContext) -> 'TrialSplit':
         """
