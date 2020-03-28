@@ -536,6 +536,9 @@ class Trials:
         best_score = None
         best_hyperparams = None
 
+        if len(self) == 0:
+            raise Exception('Could not get best hyperparams because there were no successful trial.')
+
         higher_score_is_better = self.trials[-1].is_higher_score_better()
 
         for trial in self.trials:
