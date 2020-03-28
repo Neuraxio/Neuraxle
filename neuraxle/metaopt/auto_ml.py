@@ -635,7 +635,12 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
         for trial_number in range(self.n_trial):
             self.print_func('\ntrial {}/{}'.format(trial_number + 1, self.n_trial))
-            auto_ml_data = self._load_auto_ml_data(trial_number)
+            auto_ml_data = AutoMLContainer(
+                trial_number=trial_number,
+                trials=self.hyperparams_repository.load_all_trials(TRIAL_STATUS.SUCCESS),
+                hyperparameter_space=self.pipeline.get_hyperparams_space(),
+                main_scoring_metric_name=self.callbacks[0].name
+            )
 
             with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
 
@@ -718,26 +723,6 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         :rtype: BaseStep
         """
         return copy.deepcopy(self.pipeline).update_hyperparams(hyperparams)
-
-    def _load_auto_ml_data(self, trial_number: int) -> 'AutoMLContainer':
-        """
-        Load data for all trials.
-
-        :param trial_number: trial number
-        :type trial_number: int
-        :return: auto ml data container
-        :rtype: Trials
-        """
-        trials = self.hyperparams_repository.load_all_trials(TRIAL_STATUS.SUCCESS)
-        hyperparams_space = self.pipeline.get_hyperparams_space()
-        main_scoring_metric_name = self.callbacks[0].name
-
-        return AutoMLContainer(
-            trial_number=trial_number,
-            trials=trials,
-            hyperparameter_space=hyperparams_space,
-            main_scoring_metric_name=main_scoring_metric_name
-        )
 
 
 class AutoMLContainer:
