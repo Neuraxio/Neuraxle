@@ -666,6 +666,9 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
                                 # TODO: make hyperparams space serializable
                                 # json.dumps(auto_ml_data.hyperparameter_space.to_flat_as_dict_primitive(), sort_keys=True, indent=4),
                             )
+                            self.print_func('fitting trial {}'.format(
+                                trial_split_description
+                            ))
 
                             repo_trial_split = self.trainer.fit_trial_split(
                                 trial_split=repo_trial_split,
