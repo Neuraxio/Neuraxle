@@ -641,60 +641,35 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         validation_splits = self.validation_split_function(data_container)
 
         for trial_number in range(self.n_trial):
-            self.print_func('\ntrial {}/{}'.format(trial_number + 1, self.n_trial))
-            auto_ml_data = AutoMLContainer(
-                trial_number=trial_number,
-                trials=self.hyperparams_repository.load_all_trials(TRIAL_STATUS.SUCCESS),
-                hyperparameter_space=self.pipeline.get_hyperparams_space(),
-                main_scoring_metric_name=self.trainer.get_main_metric_name()
-            )
+            try:
+                auto_ml_data = AutoMLContainer(
+                    trial_number=trial_number,
+                    trials=self.hyperparams_repository.load_all_trials(TRIAL_STATUS.SUCCESS),
+                    hyperparameter_space=self.pipeline.get_hyperparams_space(),
+                    main_scoring_metric_name=self.trainer.get_main_metric_name()
+                )
 
-            with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
-                for training_data_container, validation_data_container in validation_splits:
-                    p = copy.deepcopy(self.pipeline)
-                    p.update_hyperparams(repo_trial.hyperparams)
-                    repo_trial.set_hyperparams(p.get_hyperparams())
+                with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
+                    self.print_func('\ntrial {}/{}'.format(trial_number + 1, self.n_trial))
 
-                    with repo_trial.new_validation_split(p) as repo_trial_split:
-                        try:
-                            trial_split_description = '{}/{} split {}/{}\nhyperparams: {}\n'.format(
-                                trial_number + 1,
-                                self.n_trial,
-                                repo_trial_split.split_number + 1,
-                                len(training_data_container),
-                                json.dumps(repo_trial.hyperparams, sort_keys=True, indent=4),
-                                # TODO: make hyperparams space serializable
-                                # json.dumps(auto_ml_data.hyperparameter_space.to_flat_as_dict_primitive(), sort_keys=True, indent=4),
-                            )
-                            self.print_func('fitting trial {}'.format(
-                                trial_split_description
-                            ))
-
-                            repo_trial_split = self.trainer.fit_trial_split(
-                                trial_split=repo_trial_split,
-                                train_data_container=training_data_container,
-                                validation_data_container=validation_data_container,
-                                context=context
-                            )
-
-                            repo_trial_split.set_success()
-
-                            self.print_func('success trial {} score: {}'.format(
-                                trial_split_description,
-                                repo_trial_split.get_validation_score()
-                            ))
-
-                        except Exception as error:
-                            track = traceback.format_exc()
-                            self.print_func('failed trial {}'.format(
-                                trial_split_description
-                            ))
-                            self.print_func(track)
-                            repo_trial_split.set_failed(error)
-
-                    repo_trial.update_final_trial_status()
-
-            self.hyperparams_repository.save_trial(repo_trial)
+                    repo_trial_split = self._execute_trial(
+                        trial_number=trial_number,
+                        repo_trial=repo_trial,
+                        context=context,
+                        validation_splits=validation_splits
+                    )
+            except (SystemError, SystemExit, EOFError, KeyboardInterrupt) as error:
+                track = traceback.format_exc()
+                repo_trial.set_failed(error)
+                self.print_func(track)
+                raise error
+            except Exception:
+                track = traceback.format_exc()
+                self.print_func('failed trial {}'.format(self._get_trial_split_description(repo_trial, repo_trial_split, validation_splits, trial_number)))
+                self.print_func(track)
+            finally:
+                repo_trial.update_final_trial_status()
+                self.hyperparams_repository.save_trial(repo_trial)
 
         best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
 
@@ -711,6 +686,50 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             self.hyperparams_repository.save_best_model(p)
 
         return self
+
+    def _execute_trial(self, trial_number: int, repo_trial: Trial, context: ExecutionContext, validation_splits: List[Tuple[DataContainer, DataContainer]]):
+        for training_data_container, validation_data_container in validation_splits:
+            p = copy.deepcopy(self.pipeline)
+            p.update_hyperparams(repo_trial.hyperparams)
+            repo_trial.set_hyperparams(p.get_hyperparams())
+
+            with repo_trial.new_validation_split(p) as repo_trial_split:
+                trial_split_description = self._get_trial_split_description(
+                    repo_trial=repo_trial,
+                    repo_trial_split=repo_trial_split,
+                    validation_splits=validation_splits,
+                    trial_number=trial_number
+                )
+
+                self.print_func('fitting trial {}'.format(
+                    trial_split_description
+                ))
+
+                repo_trial_split = self.trainer.fit_trial_split(
+                    trial_split=repo_trial_split,
+                    train_data_container=training_data_container,
+                    validation_data_container=validation_data_container,
+                    context=context
+                )
+
+                repo_trial_split.set_success()
+
+                self.print_func('success trial {} score: {}'.format(
+                    trial_split_description,
+                    repo_trial_split.get_validation_score()
+                ))
+
+        return repo_trial_split
+
+    def _get_trial_split_description(self, repo_trial, repo_trial_split, validation_splits, trial_number):
+        trial_split_description = '{}/{} split {}/{}\nhyperparams: {}\n'.format(
+            trial_number + 1,
+            self.n_trial,
+            repo_trial_split.split_number + 1,
+            len(validation_splits),
+            json.dumps(repo_trial.hyperparams, sort_keys=True, indent=4)
+        )
+        return trial_split_description
 
     def get_best_model(self):
         """
@@ -814,9 +833,9 @@ def create_split_data_container_function(validation_splitter_function: Callable)
     A validation split function takes two arguments:  data inputs, and expected outputs.
 
     :param validation_splitter_function:
-    :return: a function that returns a generator iterator that yields the pairs of training, and validation data containers for each validation split.
+    :return: a function that returns the pairs of training, and validation data containers for each validation split.
     """
-    def split_data_container(data_container: DataContainer) -> Tuple[DataContainer, DataContainer]:
+    def split_data_container(data_container: DataContainer) -> List[Tuple[DataContainer, DataContainer]]:
         train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = \
             validation_splitter_function(data_container.data_inputs, data_container.expected_outputs)
 
@@ -824,7 +843,7 @@ def create_split_data_container_function(validation_splitter_function: Callable)
         validation_data_container = DataContainer(data_inputs=validation_data_inputs,
                                                   expected_outputs=validation_expected_outputs)
 
-        # Yields all of the pairs of training, and validation data containers for each validation split.
+        splits = []
         for (train_current_id, train_di, train_eo), (validation_current_id, validation_di, validation_eo) in \
                 zip(train_data_container, validation_data_container):
             train_data_container_split = DataContainer(
@@ -839,7 +858,9 @@ def create_split_data_container_function(validation_splitter_function: Callable)
                 expected_outputs=validation_eo
             )
 
-            yield train_data_container_split, validation_data_container_split
+            splits.append((train_data_container_split, validation_data_container_split))
+
+        return splits
 
     return split_data_container
 

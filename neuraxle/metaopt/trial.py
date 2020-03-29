@@ -238,6 +238,9 @@ class Trial:
         """
         self.end_time = datetime.datetime.now()
         del self.pipeline
+        self.set_failed(exc_val)
+        if exc_type is not None:
+            raise exc_val
         return self
 
 
@@ -480,6 +483,11 @@ class TrialSplit:
         :return:
         """
         self.end_time = datetime.datetime.now()
+        del self.pipeline
+        self.set_failed(exc_val)
+        if exc_type is not None:
+            raise exc_val
+
         return self
 
     def __str__(self):
