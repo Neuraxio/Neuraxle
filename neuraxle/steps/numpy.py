@@ -345,5 +345,31 @@ class ToNumpy(ForceHandleMixin, BaseStep):
     """
     Convert data inputs, and expected outputs to a numpy array.
     """
+
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
         return data_container.to_numpy(), context
+
+
+class NumpyReshape(NonFittableMixin, BaseStep):
+    """
+    Reshape numpy array in data inputs.
+
+    .. code-block:: python
+
+       import numpy as np
+       a = np.array([1,0,3])
+       outputs = NumpyReshape(shape=(-1,1)).transform(a)
+       assert np.array_equal(outputs, np.array([[1],[0],[3]]))
+
+    .. seealso::
+        :class:`NonFittableMixin`
+        :class:`BaseStep`
+    """
+
+    def __init__(self, new_shape):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+        self.new_shape = new_shape
+
+    def transform(self, data_inputs):
+        return np.reshape(data_inputs, newshape=self.new_shape)

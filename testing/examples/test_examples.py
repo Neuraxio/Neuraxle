@@ -1,14 +1,14 @@
-from examples.non_fittable_mixin import main
+from py._path.local import LocalPath
 
 
-def test_auto_ml_checkpoint(tmpdir):
+def test_auto_ml_checkpoint(tmpdir: LocalPath):
     from examples.auto_ml_checkpoint import main
     main(tmpdir)
 
 
-def test_boston_housing_meta_optimization():
+def test_boston_housing_meta_optimization(tmpdir: LocalPath):
     from examples.boston_housing_meta_optimization import main
-    main()
+    main(tmpdir)
 
 
 def test_boston_housing_regression_with_model_stacking():
@@ -37,4 +37,10 @@ def test_nested_pipelines():
 
 
 def test_non_fittable_mixin():
+    from examples.non_fittable_mixin import main
+    main()
+
+
+def test_label_encoder_across_multiple_columns():
+    from examples.label_encoder_across_multiple_columns import main
     main()
