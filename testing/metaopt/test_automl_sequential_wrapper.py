@@ -3,8 +3,10 @@ from sklearn.metrics import mean_squared_error
 
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import HyperparamsJSONRepository, AutoMLSequentialWrapper, RandomSearch
-from neuraxle.metaopt.random import ValidationSplitWrapper, KFoldCrossValidationWrapper
+from neuraxle.metaopt.callbacks import MetricCallback
+from neuraxle.metaopt.deprecated import RandomSearch, HyperparamsJSONRepository, AutoMLSequentialWrapper, \
+    KFoldCrossValidationWrapper
+from neuraxle.metaopt.random import ValidationSplitWrapper, average_kfold_scores
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import MultiplyByN
 
@@ -28,7 +30,7 @@ def test_automl_sequential_wrapper(tmpdir):
 
     auto_ml = RandomSearch(
         KFoldCrossValidationWrapper().set_step(pipeline),
-        hyperparams_repository=HyperparamsJSONRepository(tmpdir), n_iter=100
+        hyperparams_repository=HyperparamsJSONRepository(tmpdir), n_iter=10
     )
 
     # When
@@ -38,7 +40,7 @@ def test_automl_sequential_wrapper(tmpdir):
 
     # Then
     actual_mse = ((predicted_outputs - expected_outputs) ** 2).mean()
-    assert actual_mse < 5000
+    assert actual_mse < 20000
 
 
 def test_automl_sequential_wrapper_with_validation_split_wrapper(tmpdir):

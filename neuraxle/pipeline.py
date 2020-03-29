@@ -30,7 +30,7 @@ from copy import copy
 from typing import Any, Tuple, List
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, NonFittableMixin, \
-    ExecutionContext, ExecutionMode, NonTransformableMixin
+    ExecutionContext, ExecutionMode, NonTransformableMixin, MetaStepMixin
 from neuraxle.checkpoints import Checkpoint
 from neuraxle.data_container import DataContainer, ListDataContainer
 
@@ -267,8 +267,8 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         self._assign_loaded_pipeline_into_self(loaded_pipeline)
 
         step = self[new_starting_step_index]
-        if isinstance(step, Checkpoint):
-            starting_step_data_container = step.read_checkpoint(starting_step_data_container, context)
+        if isinstance(step, Checkpoint) or (isinstance(step, MetaStepMixin) and isinstance(step.wrapped, Checkpoint)):
+            starting_step_data_container = step.resume(starting_step_data_container, context)
 
         return self[new_starting_step_index:], starting_step_data_container
 
@@ -292,8 +292,7 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         index_latest_checkpoint = 0
 
         for index, (step_name, step) in enumerate(self.items()):
-            if isinstance(step, ResumableStepMixin) and step.should_resume(current_data_container.copy(),
-                                                                           starting_step_context):
+            if hasattr(step, 'should_resume') and step.should_resume(current_data_container.copy(), starting_step_context):
                 index_latest_checkpoint = index
                 starting_step_data_container = copy(current_data_container)
 
@@ -311,7 +310,7 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         """
         context = context.push(self)
         for index, (step_name, step) in enumerate(reversed(self.items())):
-            if isinstance(step, ResumableStepMixin) and step.should_resume(data_container, context):
+            if hasattr(step, 'should_resume') and step.should_resume(data_container, context):
                 return True
 
         return False

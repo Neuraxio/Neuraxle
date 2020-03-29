@@ -2,7 +2,7 @@ import json
 import os
 
 from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.metaopt.auto_ml import HyperparamsJSONRepository
+from neuraxle.metaopt.deprecated import HyperparamsJSONRepository
 
 HYPERPARAMS = {'learning_rate': 0.01}
 FIRST_SCORE_FOR_TRIAL = 1
@@ -24,18 +24,20 @@ def test_hyperparams_repository_should_create_new_trial(tmpdir):
 
 
 def test_hyperparams_repository_should_load_all_trials(tmpdir):
+    tmpdir = os.path.join(tmpdir, "__json__")
+    os.mkdir(tmpdir)
     hyperparams_json_repository = HyperparamsJSONRepository(tmpdir)
-    for i in range(2):
+    n_trials = 3
+    for i in range(n_trials):
         hyperparams = HyperparameterSamples({'learning_rate': 0.01 + i * 0.01})
         hyperparams_json_repository.save_score_for_success_trial(hyperparams, i)
 
     trials = hyperparams_json_repository.load_all_trials()
 
-    assert len(trials) == 2
-    assert trials[0].hyperparams == HyperparameterSamples(
-        {'learning_rate': 0.01 + 0 * 0.01}).to_flat_as_dict_primitive()
-    assert trials[1].hyperparams == HyperparameterSamples(
-        {'learning_rate': 0.01 + 1 * 0.01}).to_flat_as_dict_primitive()
+    assert len(trials) == n_trials
+    for i in range(n_trials):
+        assert trials[i].hyperparams == HyperparameterSamples(
+            {'learning_rate': 0.01 + i * 0.01}).to_flat_as_dict_primitive(), (i, str(trials))
 
 
 def test_hyperparams_repository_should_save_failed_trial(tmpdir):

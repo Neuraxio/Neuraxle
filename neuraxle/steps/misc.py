@@ -129,10 +129,15 @@ class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
 
 
 class FitTransformCallbackStep(BaseStep):
-    def __init__(self, transform_callback_function, fit_callback_function, more_arguments: List = tuple(),
+    def __init__(self, transform_callback_function=None, fit_callback_function=None, more_arguments: List = tuple(),
                  transform_function=None,
                  hyperparams=None):
         BaseStep.__init__(self, hyperparams)
+        if transform_callback_function is None:
+            transform_callback_function = TapeCallbackFunction()
+        if fit_callback_function is None:
+            fit_callback_function = TapeCallbackFunction()
+
         self.transform_function = transform_function
         self.more_arguments = more_arguments
         self.fit_callback_function = fit_callback_function
