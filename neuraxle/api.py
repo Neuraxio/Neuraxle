@@ -74,7 +74,7 @@ class DeepLearningPipeline(EvaluableStepMixin, ForceHandleMixin, MetaStepMixin, 
     def __init__(
             self,
             pipeline: Union[BaseStep, NamedTupleList],
-            validation_size: int = None,
+            validation_size: float = None,
             batch_size: int = None,
             batch_metrics: Dict[str, Callable] = None,
             shuffle_in_each_epoch_at_train: bool = True,

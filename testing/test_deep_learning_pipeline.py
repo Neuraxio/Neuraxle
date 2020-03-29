@@ -80,7 +80,7 @@ def test_deep_learning_pipeline_with_random_search():
     outputs = best_model.transform(data_inputs)
 
     mse = ((outputs - expected_outputs) ** 2).mean()
-    assert mse < 1.5
+    assert mse < 2
 
 
 def create_2d_data():
