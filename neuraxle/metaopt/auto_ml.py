@@ -851,13 +851,13 @@ class BaseValidationSplitter(ABC):
         for (train_current_id, train_di, train_eo), (validation_current_id, validation_di, validation_eo) in zip(
                 train_data_container, validation_data_container):
             train_data_container_split = DataContainer(
-                current_ids=train_current_id,
+                summary_id=train_current_id,
                 data_inputs=train_di,
                 expected_outputs=train_eo
             )
 
             validation_data_container_split = DataContainer(
-                current_ids=validation_current_id,
+                summary_id=validation_current_id,
                 data_inputs=validation_di,
                 expected_outputs=validation_eo
             )

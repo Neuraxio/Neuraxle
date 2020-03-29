@@ -42,7 +42,7 @@ from neuraxle.steps.misc import Sleep
 from neuraxle.steps.numpy import MultiplyByN
 
 
-def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
+def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
     DATA_INPUTS = np.array(range(100))
     EXPECTED_OUTPUTS = np.array(range(100, 200))
 

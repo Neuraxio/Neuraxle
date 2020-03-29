@@ -527,11 +527,20 @@ class ExpandDim(
         if not isinstance(self.wrapped, ResumableStepMixin):
             raise Exception('cannot resume steps that don\' inherit from ResumableStepMixin')
 
+        old_current_ids = data_container.current_ids
+
         data_container = self.wrapped.resume(data_container, context)
-        data_container = self._did_process(
-            data_container,
-            context
+
+        expanded_data_container = ExpandedDataContainer(
+            data_inputs=data_container.data_inputs,
+            expected_outputs=data_container.expected_outputs,
+            current_ids=data_container.current_ids,
+            summary_id=data_container.summary_id,
+            old_current_ids=old_current_ids
         )
+
+        data_container = self._did_process(expanded_data_container, context)
+
         return data_container
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
