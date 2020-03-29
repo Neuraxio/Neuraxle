@@ -33,7 +33,7 @@ import os
 import time
 import traceback
 from abc import ABC, abstractmethod
-from typing import Callable, List, Union, Tuple, Iterable
+from typing import Callable, List, Union, Tuple
 
 import numpy as np
 
