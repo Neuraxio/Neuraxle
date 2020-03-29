@@ -33,8 +33,7 @@ from sklearn.metrics import mean_squared_error
 from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, RandomSearchHyperparameterSelectionStrategy, \
-    validation_splitter
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearchHyperparameterSelectionStrategy, ValidationSplitter
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.pipeline import ResumablePipeline, DEFAULT_CACHE_FOLDER, Pipeline
 from neuraxle.steps.flow import ExpandDim
@@ -69,7 +68,7 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
         refit_trial=True,
         n_trials=n_iter,
         cache_folder_when_no_handle=str(tmpdir),
-        validation_split_function=validation_splitter(0.2),
+        validation_splitter=ValidationSplitter(0.2),
         hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
@@ -106,7 +105,7 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
         refit_trial=False,
         n_trials=n_iter,
         cache_folder_when_no_handle=str(tmpdir),
-        validation_split_function=validation_splitter(0.2),
+        validation_splitter=ValidationSplitter(0.2),
         hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
