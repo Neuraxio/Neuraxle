@@ -352,16 +352,20 @@ class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStepMixin, BaseSt
         Flatten the first dimension of a list.
 
         :param list_to_flatten: list to flatten
-        :return: flattened list
+        :return: flattened list, len flattened lists
         """
         if not isinstance(list_to_flatten, np.ndarray):
             list_to_flatten = np.array(list_to_flatten)
 
+        if len(list_to_flatten.shape) == 1:
+            return list_to_flatten, [1 for x in list_to_flatten]
+
         list_to_flatten = list(list_to_flatten)
         list_to_flatten = [list(x) for x in list_to_flatten]
+        len_list_to_flatten = [len(x) for x in list_to_flatten]
         flattened_list = sum(list_to_flatten, [])
 
-        return flattened_list
+        return flattened_list, len_list_to_flatten
 
     def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
