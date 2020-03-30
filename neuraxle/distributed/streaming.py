@@ -623,7 +623,7 @@ class QueueJoiner(Joiner, ObservableQueueMixin):
                     summary_id=task.data_container.summary_id
                 )
 
-            self.result[step_name].append_data_container(task.data_container)
+            self.result[step_name].append_data_container_in_data_inputs(task.data_container)
 
         data_containers = self._join_all_step_results()
         self.result = {}

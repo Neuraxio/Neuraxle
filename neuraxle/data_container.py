@@ -455,7 +455,18 @@ class ListDataContainer(DataContainer):
         self.data_inputs.append(data_input)
         self.expected_outputs.append(expected_output)
 
-    def append_data_container(self, other: DataContainer):
+    def append_data_container_in_data_inputs(self, other: DataContainer) -> 'ListDataContainer':
+        """
+        Append a data container to the data inputs of this data container.
+
+        :param other: data container
+        :type other: DataContainer
+        :return:
+        """
+        self.data_inputs.append(other)
+        return self
+
+    def append_data_container(self, other: DataContainer) -> 'ListDataContainer':
         """
         Append a data container to the DataContainer.
 
