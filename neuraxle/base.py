@@ -899,6 +899,40 @@ class BaseStep(ABC):
         self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
         return self
 
+    def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
+        """
+        Update the step hyperparameter spaces without removing the already-set hyperparameters.
+        This can be useful to add more hyperparameter spaces to the existing ones without flushing the ones that were already set.
+
+        Example :
+
+        .. code-block:: python
+
+            step.set_hyperparams_space(HyperparameterSpace({
+                'learning_rate': LogNormal(0.5, 0.5)
+                'weight_decay': LogNormal(0.001, 0.0005)
+            }))
+
+            step.update_hyperparams_space(HyperparameterSpace({
+                'learning_rate': LogNormal(0.5, 0.1)
+            }))
+
+            assert step.get_hyperparams_space()['learning_rate'] == LogNormal(0.5, 0.1)
+            assert step.get_hyperparams_space()['weight_decay'] == LogNormal(0.001, 0.0005)
+
+        :param hyperparams_space: hyperparameters space
+        :type hyperparams_space: HyperparameterSpace
+        :return: self
+        :rtype: BaseStep
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`neuraxle.hyperparams.space.HyperparameterSpace`
+        """
+        self.hyperparams_space.update(hyperparams_space)
+        self.hyperparams_space = HyperparameterSamples(self.hyperparams_space).to_flat()
+        return self
+
     def get_hyperparams_space(self) -> HyperparameterSpace:
         """
         Get step hyperparameters space.
@@ -1850,6 +1884,35 @@ class MetaStepMixin:
 
         return self
 
+    def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> BaseStep:
+        """
+        Update the step, and the wrapped step hyperparams without removing the already set hyperparameters.
+        Please refer to :func:`~BaseStep.update_hyperparams`.
+
+        :param hyperparams_space: hyperparameters
+        :type hyperparams_space: HyperparameterSamples
+        :return: self
+        :rtype: BaseStep
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`HyperparameterSamples`
+        """
+        self.is_invalidated = True
+
+        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
+
+        remainders = dict()
+        for name, hparams_space in hyperparams_space.items():
+            if name == self.wrapped.name:
+                self.wrapped.update_hyperparams_space(hparams_space)
+            else:
+                remainders[name] = hparams_space
+
+        self.hyperparams_space.update(remainders)
+
+        return self
+
     def get_hyperparams_space(self) -> HyperparameterSpace:
         """
         Get meta step and wrapped step hyperparams as a flat hyperparameter space
@@ -2639,6 +2702,34 @@ class TruncableSteps(BaseStep, ABC):
         )
 
         return all_hyperparams.to_flat()
+
+    def update_hyperparams_space(self, hyperparams_space: Union[HyperparameterSpace, OrderedDict, dict]) -> BaseStep:
+        """
+        Update the steps hyperparameters without removing the already-set hyperparameters.
+        Please refer to :func:`~BaseStep.update_hyperparams`.
+
+        :param hyperparams_space: hyperparams_space to update
+        :type hyperparams_space: HyperparameterSamples
+        :return: step
+        :rtype: BaseStep
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`HyperparameterSamples`
+        """
+        self.is_invalidated = True
+
+        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
+
+        remainders = dict()
+        for name, hparams_space in hyperparams_space.items():
+            if name in self.steps.keys():
+                self.steps[name].update_hyperparams_space(HyperparameterSamples(hparams_space))
+            else:
+                remainders[name] = hparams_space
+        self.hyperparams_space.update(remainders)
+
+        return self
 
     def set_hyperparams_space(self, hyperparams_space: Union[HyperparameterSpace, OrderedDict, dict]) -> BaseStep:
         """
