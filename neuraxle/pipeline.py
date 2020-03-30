@@ -30,7 +30,7 @@ from copy import copy
 from typing import Any, Tuple, List
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, NonFittableMixin, \
-    ExecutionContext, ExecutionMode, NonTransformableMixin
+    ExecutionContext, ExecutionMode, NonTransformableMixin, MetaStepMixin
 from neuraxle.checkpoints import Checkpoint
 from neuraxle.data_container import DataContainer, ListDataContainer
 
@@ -134,9 +134,21 @@ class Pipeline(BasePipeline):
         :param processed_outputs: the forward transformed data input
         :return: backward transformed processed outputs
         """
+        data_container = DataContainer(data_inputs=processed_outputs)
+        context = ExecutionContext(root=self.cache_folder, execution_mode=ExecutionMode.INVERSE_TRANSFORM)
+
         for step_name, step in list(reversed(self.items())):
-            processed_outputs = step.inverse_transform(processed_outputs)
-        return processed_outputs
+            data_container = step.handle_inverse_transform(data_container, context)
+
+        return data_container.data_inputs
+
+    def _inverse_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        After transforming all data inputs, and obtaining a prediction, we can inverse transform the processed outputs
+        """
+        for step_name, step in list(reversed(self.items())):
+            data_container = step.handle_inverse_transform(data_container, context)
+        return data_container
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'Pipeline':
         """
@@ -207,8 +219,7 @@ class Pipeline(BasePipeline):
 
         return data_container
 
-    def _load_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> \
-            Tuple[NamedTupleList, DataContainer]:
+    def _load_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[NamedTupleList, DataContainer]:
         """
         Try loading a pipeline cache with the passed data container.
         If pipeline cache loading succeeds, find steps left to do,
@@ -256,8 +267,8 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         self._assign_loaded_pipeline_into_self(loaded_pipeline)
 
         step = self[new_starting_step_index]
-        if isinstance(step, Checkpoint):
-            starting_step_data_container = step.read_checkpoint(starting_step_data_container, context)
+        if isinstance(step, Checkpoint) or (isinstance(step, MetaStepMixin) and isinstance(step.wrapped, Checkpoint)):
+            starting_step_data_container = step.resume(starting_step_data_container, context)
 
         return self[new_starting_step_index:], starting_step_data_container
 
@@ -281,8 +292,7 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         index_latest_checkpoint = 0
 
         for index, (step_name, step) in enumerate(self.items()):
-            if isinstance(step, ResumableStepMixin) and step.should_resume(current_data_container.copy(),
-                                                                           starting_step_context):
+            if hasattr(step, 'should_resume') and step.should_resume(current_data_container.copy(), starting_step_context):
                 index_latest_checkpoint = index
                 starting_step_data_container = copy(current_data_container)
 
@@ -300,7 +310,7 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         """
         context = context.push(self)
         for index, (step_name, step) in enumerate(reversed(self.items())):
-            if isinstance(step, ResumableStepMixin) and step.should_resume(data_container, context):
+            if hasattr(step, 'should_resume') and step.should_resume(data_container, context):
                 return True
 
         return False
@@ -468,7 +478,6 @@ class MiniBatchSequentialPipeline(CustomHandleMethodsMixin, CustomPipelineMixin,
     def transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Transform all sub pipelines splitted by the Barrier steps.
-
         :param data_container: data container to transform.
         :param context: execution context
         :return: data container
@@ -490,7 +499,6 @@ class MiniBatchSequentialPipeline(CustomHandleMethodsMixin, CustomPipelineMixin,
     def fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
         """
         Fit all sub pipelines splitted by the Barrier steps.
-
         :param data_container: data container to transform.
         :param context: execution context
         :return: data container
@@ -528,7 +536,6 @@ class MiniBatchSequentialPipeline(CustomHandleMethodsMixin, CustomPipelineMixin,
     def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[BaseStep, DataContainer]:
         """
         Transform all sub pipelines splitted by the Barrier steps.
-
         :param data_container: data container to transform.
         :param context: execution context
         :return: data container
@@ -566,7 +573,6 @@ class MiniBatchSequentialPipeline(CustomHandleMethodsMixin, CustomPipelineMixin,
     def _create_sub_pipelines(self) -> List['MiniBatchSequentialPipeline']:
         """
         Create sub pipelines by splitting the steps by the join type name.
-
         :return: list of sub pipelines
         """
         sub_pipelines: List[MiniBatchSequentialPipeline] = self.split(Barrier)
@@ -581,7 +587,6 @@ class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
     """
     A Barrier step to be used in a minibatch sequential pipeline. It forces all the
     data inputs to get to the barrier in a sub pipeline before going through to the next sub-pipeline.
-
     ```
     p = MiniBatchSequentialPipeline([
         SomeStep(),
@@ -598,7 +603,6 @@ class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
     def join_transform(self, step: TruncableSteps, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Execute the given pipeline :func:`~neuraxle.pipeline.Pipeline.transform` with the given data container, and execution context.
-
         :param step: truncable steps to execute
         :type step: TruncableSteps
         :param data_container: data container
@@ -614,7 +618,6 @@ class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
     def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple['Any', DataContainer]:
         """
         Execute the given pipeline :func:`~neuraxle.pipeline.Pipeline.fit_transform` with the given data container, and execution context.
-
         :param step: truncable steps to execute
         :type step: Pipeline
         :param data_container: data container
@@ -639,7 +642,6 @@ class Joiner(Barrier):
     def join_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Concatenate the pipeline transform output of each batch of self.batch_size together.
-
         :param step: pipeline to transform on
         :type step: Pipeline
         :param data_container: data container to transform
@@ -666,7 +668,6 @@ class Joiner(Barrier):
     def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple['Any', DataContainer]:
         """
         Concatenate the pipeline fit transform output of each batch of self.batch_size together.
-
         :param step: pipeline to fit transform on
         :type step: Pipeline
         :param data_container: data container to fit transform on
