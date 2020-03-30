@@ -183,7 +183,7 @@ class DeepLearningPipeline(EvaluableStepMixin, ForceHandleMixin, MetaStepMixin, 
         :rtype: BaseStep
         """
         if self.n_epochs is not None:
-            wrapped = EpochRepeater(wrapped, epochs=self.n_epochs, train_only=False)
+            wrapped = EpochRepeater(wrapped, epochs=self.n_epochs, repeat_in_test_mode=False)
         return wrapped
 
     def get_score(self):
