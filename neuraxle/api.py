@@ -63,18 +63,18 @@ class DeepLearningPipeline(EvaluableStepMixin, ForceHandleMixin, MetaStepMixin, 
     It uses :class:`EpochRepeater`, :class:`ValidationSplitWrapper`, and :class:`MiniBatchSequentialPipeline`
 
     .. seealso::
-        :class:`EpochRepeater`,
-        :class:`ValidationSplitWrapper`,
-        :class:`MiniBatchSequentialPipeline`,
-        :class:`Pipeline`,
-        :class:`CustomPipelineMixin`,
-        :class:`MetricsWrapper`
+        :class:`neuraxle.steps.data.EpochRepeater`,
+        :class:`neuraxle.metaopt.random.ValidationSplitWrapper`,
+        :class:`neuraxle.pipeline.MiniBatchSequentialPipeline`,
+        :class:`neuraxle.pipeline.Pipeline`,
+        :class:`neuraxle.pipeline.CustomPipelineMixin`,
+        :class:`neuraxle.metrics.MetricsWrapper`
     """
 
     def __init__(
             self,
             pipeline: Union[BaseStep, NamedTupleList],
-            validation_size: int = None,
+            validation_size: float = None,
             batch_size: int = None,
             batch_metrics: Dict[str, Callable] = None,
             shuffle_in_each_epoch_at_train: bool = True,
@@ -183,7 +183,7 @@ class DeepLearningPipeline(EvaluableStepMixin, ForceHandleMixin, MetaStepMixin, 
         :rtype: BaseStep
         """
         if self.n_epochs is not None:
-            wrapped = EpochRepeater(wrapped, epochs=self.n_epochs, fit_only=False)
+            wrapped = EpochRepeater(wrapped, epochs=self.n_epochs, repeat_in_test_mode=False)
         return wrapped
 
     def get_score(self):

@@ -46,8 +46,8 @@ class DataContainer:
     Most of the time, you won't need to care about the DataContainer because it is the pipeline that manages it.
 
     .. seealso::
-        :class:`BaseHasher`,
-        :class: `BaseStep`
+        :class:`neuraxle.base.BaseHasher`,
+        :class: `neuraxle.base.BaseStep`
     """
 
     def __init__(
@@ -307,7 +307,7 @@ class ExpandedDataContainer(DataContainer):
     Sub class of DataContainer to expand data container dimension.
 
     .. seealso::
-        :class:`ExpandedDataContainer`,
+        :class:`DataContainer`,
     """
 
     def __init__(self, data_inputs, current_ids, expected_outputs, summary_id, old_current_ids):
