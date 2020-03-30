@@ -20,6 +20,7 @@ You can find here steps that take action on data.
 
 """
 import random
+from typing import Iterable
 
 from neuraxle.base import BaseStep, MetaStepMixin, NonFittableMixin, ExecutionContext, HandleOnlyMixin, \
     ForceHandleOnlyMixin
@@ -97,17 +98,15 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         :class:`neuraxle.base.BaseStep`
     """
 
-    def __init__(self, wrapped, epochs, fit_only=False, repeat_in_test_mode=False, cache_folder_when_no_handle=None):
+    def __init__(self, wrapped, epochs, repeat_in_test_mode=False, cache_folder_when_no_handle=None):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
 
         self.repeat_in_test_mode = repeat_in_test_mode
-        self.fit_only = fit_only
         self.epochs = epochs
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit transform wrapped step self.epochs times using wrapped step handle fit transform method.
 
@@ -118,12 +117,28 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         :return: (fitted self, data container)
         :rtype: (BaseStep, DataContainer)
         """
-        if not self.fit_only:
+        if self._should_repeat():
             for _ in range(self.epochs - 1):
                 self.wrapped = self.wrapped.handle_fit(data_container.copy(), context)
 
         self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
         return self, data_container
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Iterable):
+        """
+        Fit transform wrapped step self.epochs times.
+
+        :param data_inputs: data inputs to fit on
+        :param expected_outputs: expected_outputs to fit on
+        :return: fitted self
+        """
+        if self._should_repeat():
+            for _ in range(self.epochs - 1):
+                self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
+
+        self.wrapped, outputs = self.wrapped.fit_transform(data_inputs, expected_outputs)
+
+        return self, outputs
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
@@ -136,11 +151,30 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         :return: (fitted self, data container)
         :rtype: (BaseStep, DataContainer)
         """
-        epochs = self._get_epochs()
 
-        for _ in range(epochs):
-            self.wrapped = self.wrapped.handle_fit(data_container.copy(), context)
+        if self._should_repeat():
+            for _ in range(self.epochs):
+                self.wrapped = self.wrapped.handle_fit(data_container.copy(), context)
         return self
+
+    def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
+        """
+        Fit wrapped step self.epochs times.
+
+        :param data_inputs: data inputs to fit on
+        :param expected_outputs: expected_outputs to fit on
+        :return: fitted self
+        """
+        if self._should_repeat():
+            for _ in range(self.epochs):
+                self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
+        else:
+            self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
+
+        return self
+
+    def _should_repeat(self):
+        return self.is_train or (not self.is_train and self.repeat_in_test_mode)
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         return self.wrapped.handle_transform(data_container, context)
