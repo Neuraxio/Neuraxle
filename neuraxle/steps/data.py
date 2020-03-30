@@ -98,17 +98,15 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         :class:`neuraxle.base.BaseStep`
     """
 
-    def __init__(self, wrapped, epochs, train_only=True, repeat_in_test_mode=False, cache_folder_when_no_handle=None):
+    def __init__(self, wrapped, epochs, repeat_in_test_mode=False, cache_folder_when_no_handle=None):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
 
         self.repeat_in_test_mode = repeat_in_test_mode
-        self.train_only = train_only
         self.epochs = epochs
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         Fit transform wrapped step self.epochs times using wrapped step handle fit transform method.
 
@@ -167,12 +165,16 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         :param expected_outputs: expected_outputs to fit on
         :return: fitted self
         """
-        for _ in range(self.epochs):
+        if self._should_repeat():
+            for _ in range(self.epochs):
+                self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
+        else:
             self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
+
         return self
 
     def _should_repeat(self):
-        return self.train_only and self.is_train or not self.train_only
+        return self.is_train or (not self.is_train and self.repeat_in_test_mode)
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         return self.wrapped.handle_transform(data_container, context)

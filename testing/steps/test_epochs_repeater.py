@@ -46,7 +46,7 @@ EPOCHS = 2
     ),
     NeuraxleTestCase(
         pipeline=Pipeline([
-            EpochRepeater(FitTransformCallbackStep(callback_transform, callback_fit), epochs=EPOCHS, train_only=True)
+            EpochRepeater(FitTransformCallbackStep(callback_transform, callback_fit), epochs=EPOCHS)
         ]).set_train(False),
         callbacks=[callback_fit, callback_transform],
         expected_callbacks_data=[
