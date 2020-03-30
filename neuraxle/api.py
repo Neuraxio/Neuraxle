@@ -186,7 +186,6 @@ class DeepLearningPipeline(EvaluableStepMixin, ForceHandleMixin, MetaStepMixin, 
             wrapped = EpochRepeater(wrapped, epochs=self.n_epochs, repeat_in_test_mode=False)
         return wrapped
 
-
     def get_score(self):
         """
         Get latest score. This function had to be defined for the hyperparameter optimization steps.
