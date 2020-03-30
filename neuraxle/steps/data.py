@@ -46,9 +46,9 @@ class DataShuffler(NonFittableMixin, InputAndOutputTransformerMixin, BaseStep):
 
     .. seealso::
         :class:`EpochRepeater`,
-        :class:`TrainOnlyWrapper`,
-        :class:`InputAndOutputTransformerMixin`,
-        :class:`BaseStep`
+        :class:`neuraxle.steps.flow.TrainOnlyWrapper`,
+        :class:`neuraxle.steps.output_handlers.InputAndOutputTransformerMixin`,
+        :class:`neuraxle.base.BaseStep`
     """
 
     def __init__(self, seed=None, increment_seed_after_each_fit=True):
@@ -91,10 +91,10 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
     .. seealso::
         :class:`DataShuffler`,
-        :class:`MetaStepMixin`,
-        :class:`TrainOnlyWrapper`,
-        :class:`TestOnlyWrapper`,
-        :class:`BaseStep`
+        :class:`neuraxle.base.MetaStepMixin`,
+        :class:`neuraxle.steps.flow.TrainOnlyWrapper`,
+        :class:`neuraxle.steps.flow.TestOnlyWrapper`,
+        :class:`neuraxle.base.BaseStep`
     """
 
     def __init__(self, wrapped, epochs, fit_only=False, repeat_in_test_mode=False, cache_folder_when_no_handle=None):

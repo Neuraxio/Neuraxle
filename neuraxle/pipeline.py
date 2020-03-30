@@ -331,8 +331,8 @@ class MiniBatchSequentialPipeline(Pipeline):
         :class:`Pipeline`,
         :class:`Barrier`,
         :class:`Joiner`,
-        :class:`DataContainer`,
-        :class:`ExecutionContext`
+        :class:`neuraxle.data_container.DataContainer`,
+        :class:`neuraxle.base.ExecutionContext`
     """
 
     def __init__(self, steps: NamedTupleList, batch_size=None):

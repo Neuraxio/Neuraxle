@@ -179,7 +179,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
         .. seealso::
             :func:`~BaseStep.update_hyperparams`,
-            :class:`HyperparameterSamples`
+            :class:`neuraxle.hyperparams.space.HyperparameterSamples`
         """
         MetaStepMixin.update_hyperparams(self, hyperparams)
         self.steps_as_tuple = [(name, step.set_hyperparams(self.wrapped.get_hyperparams())) for name, step in self.steps_as_tuple]
