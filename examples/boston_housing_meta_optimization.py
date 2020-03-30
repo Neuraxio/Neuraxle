@@ -28,26 +28,27 @@ performed to find the best possible combination of hyperparameters by sampling r
 """
 
 import numpy as np
+from py._path.local import LocalPath
 from sklearn.cluster import KMeans
 from sklearn.datasets import load_boston
 from sklearn.decomposition import PCA, FastICA
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.linear_model import Ridge
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_squared_error
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 
 from neuraxle.hyperparams.distributions import RandInt, LogUniform, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import RandomSearch
-from neuraxle.metaopt.random import KFoldCrossValidationWrapper
+from neuraxle.metaopt.auto_ml import AutoML, InMemoryHyperparamsRepository, validation_splitter
+from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.union import AddFeatures, ModelStacking
 
 
-def main():
+def main(tmpdir: LocalPath):
     boston = load_boston()
     X, y = shuffle(boston.data, boston.target, random_state=13)
     X = X.astype(np.float32)
@@ -88,20 +89,22 @@ def main():
             ),
         )
     ])
-    print("Meta-fitting on train:")
-    p = p.meta_fit(X_train, y_train, metastep=RandomSearch(
-        n_iter=10,
-        higher_score_is_better=True,
-        validation_technique=KFoldCrossValidationWrapper(scoring_function=r2_score, k_fold=10)
-    ))
-    # Here is an alternative way to do it, more "pipeliney":
-    # p = RandomSearch(
-    #     p,
-    #     n_iter=15,
-    #     higher_score_is_better=True,
-    #     validation_technique=KFoldCrossValidation(scoring_function=r2_score, k_fold=3)
-    # ).fit(X_train, y_train)
 
+    print("Meta-fitting on train:")
+    auto_ml = AutoML(
+        p,
+        validation_split_function=validation_splitter(0.20),
+        refit_trial=True,
+        n_trials=10,
+        epochs=10,
+        cache_folder_when_no_handle=str(tmpdir),
+        scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
+        callbacks=[MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)],
+        hyperparams_repository=InMemoryHyperparamsRepository(cache_folder=str(tmpdir))
+    )
+
+    random_search = auto_ml.fit(X_train, y_train)
+    p = random_search.get_best_model()
     print("")
 
     print("Transforming train and test:")
@@ -122,4 +125,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main('cache')

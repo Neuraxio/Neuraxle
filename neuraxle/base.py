@@ -33,7 +33,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from enum import Enum
-from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Optional
+from typing import Tuple, List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Dict
 
 from joblib import dump, load
 from sklearn.base import BaseEstimator
@@ -177,6 +177,8 @@ class BaseSaver(ABC):
         :type step: BaseStep
         :param context: execution context
         :type context: ExecutionContext
+        :param save_savers:
+        :type save_savers: bool
         :return:
         """
         raise NotImplementedError()
@@ -282,7 +284,7 @@ class JoblibStepSaver(BaseSaver):
 
         # we need to keep the current steps in memory because they have been deleted before saving...
         # the steps that have not been saved yet need to be in memory while loading a truncable steps...
-        if isinstance(step, TruncableSteps):
+        if isinstance(loaded_step, TruncableSteps) and hasattr(step, 'steps'):
             loaded_step.steps = step.steps
 
         return loaded_step
@@ -294,6 +296,7 @@ class ExecutionMode(Enum):
     TRANSFORM = 'transform'
     FIT = 'fit'
     FIT_TRANSFORM = 'fit_transform'
+    INVERSE_TRANSFORM = 'inverse_transform'
 
 
 class ExecutionContext:
@@ -335,20 +338,39 @@ class ExecutionContext:
     def get_execution_mode(self) -> ExecutionMode:
         return self.execution_mode
 
-    def save_all_unsaved(self):
+    def save(self, full_dump=False):
         """
         Save all unsaved steps in the parents of the execution context using :func:`~neuraxle.base.BaseStep.save`.
         This method is called from a step checkpointer inside a :class:`Checkpoint`.
 
+        :param full_dump: save full pipeline dump to be able to load everything without source code (false by default).
+        :type full_dump: bool
         :return:
+
+        .. seealso::
+            :class:`BaseStep`,
+            :func:`~neuraxle.base.BaseStep.save`
         """
         while not self.empty():
             should_save_last_step = self.should_save_last_step()
             last_step = self.peek()
+            if full_dump:
+                should_save_last_step = True
 
             self.pop()
             if should_save_last_step:
-                last_step.save(self)
+                last_step.save(self, full_dump)
+
+    def save_last(self):
+        """
+        Save only the last step in the execution context.
+
+        .. seealso::
+            :func:`~neuraxle.base.ExecutionContext.save`
+        """
+        last_step = self.peek()
+        self.pop()
+        last_step.save(self, True)
 
     def should_save_last_step(self) -> bool:
         """
@@ -414,14 +436,18 @@ class ExecutionContext:
         if not os.path.exists(path):
             os.makedirs(path)
 
-    def get_path(self):
+    def get_path(self, is_absolute: bool = True):
         """
         Creates the directory path for the current execution context.
 
+        :param is_absolute: bool to say if we want to add root to the path or not
         :return: current context path
         :rtype: str
         """
-        parents_with_path = [self.root] + [p.name for p in self.parents]
+        parents_with_path = [self.root] if is_absolute else []
+        parents_with_path += [p.name for p in self.parents]
+        if len(parents_with_path) == 0:
+            return '.' + os.sep
         return os.path.join(*parents_with_path)
 
     def get_names(self):
@@ -441,6 +467,57 @@ class ExecutionContext:
         :rtype: bool
         """
         return len(self) == 0
+
+    def load(self, path: str) -> 'BaseStep':
+        """
+        Load full dump at the given path.
+
+        :param path: pipeline step path
+        :type path: str
+        :return: loaded step
+        :rtype: BaseStep
+
+        .. seealso::
+            :class:`FullDumpLoader`,
+            :class:`Identity`
+        """
+        context_for_loading = self
+        context_for_loading = context_for_loading.push(Identity(name=path))
+
+        if os.sep in path:
+            context_for_loading = context_for_loading.to_identity()
+            path = path.split(os.sep)[-1]
+
+        return FullDumpLoader(
+            name=path,
+            stripped_saver=self.stripped_saver
+        ).load(context_for_loading, True)
+
+    def to_identity(self) -> 'ExecutionContext':
+        """
+        Create a fake execution context containing only identity steps.
+        Create the parents by using the path of the current execution context.
+
+        :return: fake identity execution context
+        :rtype: ExecutionContext
+
+        .. seealso::
+            :class:`FullDumpLoader`,
+            :class:`Identity`
+        """
+        step_names = self.get_path(False).split(os.sep)
+
+        parents = [
+            Identity(name=name)
+            for name in step_names
+        ]
+
+        return ExecutionContext(
+            root=self.root,
+            execution_mode=self.execution_mode,
+            stripped_saver=self.stripped_saver,
+            parents=parents
+        )
 
     def __len__(self):
         return len(self.parents)
@@ -542,7 +619,7 @@ class BaseStep(ABC):
 
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
         self.is_initialized = False
-        self.is_invalidated = True
+        self.invalidate()
         self.is_train: bool = True
 
     def summary_hash(self, data_container: DataContainer) -> str:
@@ -558,6 +635,9 @@ class BaseStep(ABC):
         .. seealso::
             :class:`neuraxle.checkpoints.Checkpoint`
         """
+        if data_container.summary_id is None:
+            data_container.set_summary_id(data_container.hash_summary())
+
         summary_id = data_container.summary_id
         for h in self.hashers:
             summary_id = h.single_hash(
@@ -597,6 +677,15 @@ class BaseStep(ABC):
         :rtype: BaseStep
         """
         self.is_initialized = True
+        return self
+
+    def invalidate(self) -> 'BaseStep':
+        """
+        Invalidate step.
+
+        :return: self
+        :rtype: BaseStep
+        """
         self.is_invalidated = True
         return self
 
@@ -631,14 +720,13 @@ class BaseStep(ABC):
         Set the name of the pipeline step.
 
         :param name: a string.
-        :type name: str
         :return: self
 
         .. note::
-            A step name is the same value as the one in the keys of :any:`~neuraxle.pipeline.Pipeline.steps_as_tuple`
+            A step name is the same value as the one in the keys of :py:attr:`~neuraxle.pipeline.Pipeline.steps_as_tuple`
         """
         self.name = name
-        self.is_invalidated = True
+        self.invalidate()
         return self
 
     def get_name(self) -> str:
@@ -696,7 +784,7 @@ class BaseStep(ABC):
         .. seealso::
             :class:`neuraxle.hyperparams.space.HyperparameterSamples`
         """
-        self.is_invalidated = True
+        self.invalidate()
         self.hyperparams = HyperparameterSamples(hyperparams).to_flat()
         return self
 
@@ -807,7 +895,7 @@ class BaseStep(ABC):
             :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
             :class:`neuraxle.hyperparams.distributions.HyperparameterDistribution`
         """
-        self.is_invalidated = True
+        self.invalidate()
         self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
         return self
 
@@ -843,43 +931,61 @@ class BaseStep(ABC):
             :class:`neuraxle.data_container.DataContainer`,
             :class:`neuraxle.pipeline.Pipeline`
         """
-        self.is_invalidated = True
-
-        processed_outputs = self.inverse_transform(data_container.data_inputs)
-        data_container.set_data_inputs(processed_outputs)
-
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+        data_container, context = self._will_process(data_container, context)
+        data_container = self._inverse_transform_data_container(data_container, context)
+        data_container = self._did_process(data_container, context)
 
         return data_container
 
-    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
+    def _inverse_transform_data_container(
+            self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        processed_outputs = self.inverse_transform(data_container.data_inputs)
+        data_container.set_data_inputs(processed_outputs)
+
+        return data_container
+
+    def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply a method to a step and its children.
 
         :param method: method to call with self
+        :param step_name: current pipeline step name
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Dict
         """
-        method(self, *kargs, **kwargs)
-        return self
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
 
-    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
+        return {
+            step_name: method(self, *kargs, **kwargs)
+        }
+
+    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply a method to a step and its children.
 
         :param method_name: method name that need to be called on all steps
+        :param step_name: current pipeline step name
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Dict
         """
-        if hasattr(self, method_name) and callable(getattr(self, method_name)):
-            getattr(self, method_name)(*kargs, **kwargs)
+        results = {}
 
-        return self
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
+
+        if hasattr(self, method_name) and callable(getattr(self, method_name)):
+            results[step_name] = getattr(self, method_name)(*kargs, **kwargs)
+
+        return results
 
     def get_step_by_name(self, name):
         if self.name == name:
@@ -903,6 +1009,8 @@ class BaseStep(ABC):
         data_container, context = self._will_fit(data_container, context)
 
         new_self = self._fit_data_container(data_container, context)
+
+        self._did_fit(data_container, context)
 
         return new_self
 
@@ -945,6 +1053,22 @@ class BaseStep(ABC):
 
         return data_container
 
+    def handle_predict(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Handle_transform in test mode.
+
+        :param data_container: the data container to transform
+        :param context: execution context
+        :return: transformed data container
+        """
+        was_train: bool = self.is_train
+        self.set_train(False)
+
+        data_container = self.handle_transform(data_container, context)
+
+        self.set_train(was_train)
+        return data_container
+
     def _will_fit(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
         """
         Before fit is called, apply side effects on the step, the data container, or the execution context.
@@ -954,7 +1078,7 @@ class BaseStep(ABC):
         :return: (data container, execution context)
         :rtype: (DataContainer, ExecutionContext)
         """
-        self.is_invalidated = True
+        self.invalidate()
         return data_container, context.push(self)
 
     def _did_fit(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -989,7 +1113,7 @@ class BaseStep(ABC):
         :return: (data container, execution context)
         :rtype: (DataContainer, ExecutionContext)
         """
-        self.is_invalidated = True
+        self.invalidate()
         return data_container, context.push(self)
 
     def _did_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -1019,7 +1143,7 @@ class BaseStep(ABC):
         return new_self, data_container
 
     def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+            DataContainer, ExecutionContext):
         """
         Apply side effects before transform.
 
@@ -1030,7 +1154,8 @@ class BaseStep(ABC):
         """
         return data_container, context.push(self)
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
+            DataContainer, ExecutionContext):
         """
         Apply side effects before any step method.
 
@@ -1094,11 +1219,6 @@ class BaseStep(ABC):
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
-        if data_container.summary_id is None:
-            data_container.set_summary_id(
-                data_container.hash_summary()
-            )
-
         summary_id = self.summary_hash(data_container)
         data_container.set_summary_id(summary_id)
 
@@ -1113,7 +1233,7 @@ class BaseStep(ABC):
         :return: (fitted self, tranformed data inputs)
         :rtype: Tuple[BaseStep, Any]
         """
-        self.is_invalidated = True
+        self.invalidate()
 
         new_self = self.fit(data_inputs, expected_outputs)
         out = new_self.transform(data_inputs)
@@ -1173,14 +1293,19 @@ class BaseStep(ABC):
 
     def predict(self, data_input):
         """
-        Predict data input expected output using transform method.
-        This is simply a shorthand method that does the same thing as func:`~.transform`.
+        Predict the expected output in test mode using func:`~.transform`, but by setting self to test mode first and then reverting the mode.
 
         :param data_input: data input to predict
         :return: prediction
         :rtype: Any
         """
-        return self.transform(data_input)
+        was_train: bool = self.is_train
+        self.set_train(False)
+
+        outputs = self.transform(data_input)
+
+        self.set_train(was_train)
+        return outputs
 
     def should_save(self) -> bool:
         """
@@ -1200,7 +1325,7 @@ class BaseStep(ABC):
         """
         return self.is_invalidated and self.is_initialized
 
-    def save(self, context: ExecutionContext) -> 'BaseStep':
+    def save(self, context: ExecutionContext, full_dump=False) -> 'BaseStep':
         """
         Save step using the execution context to create the directory to save the step into.
         The saving happens by looping through all of the step savers in the reversed order.
@@ -1211,6 +1336,8 @@ class BaseStep(ABC):
 
         :param context: context to save from
         :type context: ExecutionContext
+        :param full_dump: save full pipeline dump to be able to load everything without source code (false by default).
+        :type full_dump: bool
         :return: self
         :rtype: BaseStep
 
@@ -1219,32 +1346,43 @@ class BaseStep(ABC):
             :class:`BaseSaver`
         """
         context = context.push(self)
+        self.is_invalidated = False
 
-        if self.is_invalidated and self.is_initialized:
-            self.is_invalidated = False
+        def _initialize_if_needed(step):
+            if not step.is_initialized:
+                step.setup()
+            return step
 
-            context.mkdir()
-            stripped_step = copy(self)
+        def _invalidate(step):
+            step.invalidate()
 
-            # A final "visitor" saver will save anything that
-            # wasn't saved customly after stripping the rest.
-            savers_with_provided_default_stripped_saver = [context.stripped_saver] + self.savers
+        if full_dump:
+            # initialize and invalidate steps to make sure that all steps will be saved
+            self.apply_method(_initialize_if_needed)
+            self.apply_method(_invalidate)
 
-            for saver in reversed(savers_with_provided_default_stripped_saver):
-                # Each saver strips the step a bit more if needs be.
-                stripped_step = saver.save_step(stripped_step, context)
+        context.mkdir()
+        stripped_step = copy(self)
 
-            return stripped_step
+        # A final "visitor" saver will save anything that
+        # wasn't saved customly after stripping the rest.
+        savers_with_provided_default_stripped_saver = [context.stripped_saver] + self.savers
 
-        return self
+        for saver in reversed(savers_with_provided_default_stripped_saver):
+            # Each saver strips the step a bit more if needs be.
+            stripped_step = saver.save_step(stripped_step, context)
 
-    def load(self, context: ExecutionContext) -> 'BaseStep':
+        return stripped_step
+
+    def load(self, context: ExecutionContext, full_dump=False) -> 'BaseStep':
         """
         Load step using the execution context to create the directory of the saved step.
         Warning:
 
         :param context: execution context to load step from
-        :return:
+        :param full_dump: save full dump bool
+        :type full_dump: bool
+        :return: loaded step
 
         .. warning::
             Please do not override this method because on loading it is an identity
@@ -1256,11 +1394,13 @@ class BaseStep(ABC):
         """
         context = context.push(self)
 
-        # A final "visitor" saver might reload anything that wasn't saved customly after stripping the rest.
-        savers_with_provided_default_stripped_saver = [context.stripped_saver] + self.savers
+        savers = [context.stripped_saver] + self.savers
+        return self._load_step(context, savers)
 
+    def _load_step(self, context, savers):
+        # A final "visitor" saver might reload anything that wasn't saved customly after stripping the rest.
         loaded_self = self
-        for saver in savers_with_provided_default_stripped_saver:
+        for saver in savers:
             # Each saver unstrips the step a bit more if needed
             if saver.can_load(loaded_self, context):
                 loaded_self = saver.load_step(loaded_self, context)
@@ -1270,7 +1410,6 @@ class BaseStep(ABC):
                                                                                  self.__class__.__name__,
                                                                                  saver.__class__.__name__))
                 break
-
         return loaded_self
 
     def meta_fit(self, X_train, y_train, metastep: 'MetaStepMixin'):
@@ -1308,7 +1447,7 @@ class BaseStep(ABC):
         :param warn: (verbose) wheter or not to warn about the inexistence of the method.
         :return: self, a copy of self, or even perhaps a new or different BaseStep object.
         """
-        self.is_invalidated = True
+        self.invalidate()
         pending_new_base_step, pending_new_method, pending_method_to_assign_to = self.pending_mutate
 
         # Use everything that is pending if they are not none (ternaries).
@@ -1329,7 +1468,7 @@ class BaseStep(ABC):
 
             # 3. assign new method to old method
             setattr(new_base_step, method_to_assign_to, new_method)
-            self.is_invalidated = True
+            self.invalidate()
 
         except AttributeError as e:
             if warn:
@@ -1377,7 +1516,7 @@ class BaseStep(ABC):
         :return: self
         :rtype: BaseStep
         """
-        self.is_invalidated = True
+        self.invalidate()
 
         if new_method is None or method_to_assign_to is None:
             new_method = method_to_assign_to = "transform"  # No changes will be applied (transform will stay transform).
@@ -1465,6 +1604,14 @@ class BaseStep(ABC):
         return self.__repr__()
 
 
+def _sklearn_to_neuraxle_step(step) -> BaseStep:
+    if isinstance(step, BaseEstimator):
+        import neuraxle.steps.sklearn
+        step = neuraxle.steps.sklearn.SKLearnWrapper(step)
+        step.set_name(step.get_wrapped_sklearn_predictor().__class__.__name__)
+    return step
+
+
 class MetaStepMixin:
     """
     A class to represent a step that wraps another step. It can be used for many things.
@@ -1522,13 +1669,31 @@ class MetaStepMixin:
             self,
             wrapped: BaseStep = None
     ):
-        self.wrapped: BaseStep = wrapped
+        self.wrapped: BaseStep = _sklearn_to_neuraxle_step(wrapped)
+        self._ensure_proper_mixin_init_order()
 
+    def _ensure_proper_mixin_init_order(self):
         if not hasattr(self, 'savers'):
-            warnings.warn('Please initialize Mixins in the reverse order. MetaStepMixin should be initialized after BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers.'.format(self.wrapped.name))
+            warnings.warn(
+                'Please initialize Mixins in the good order. MetaStepMixin should be initialized after '
+                'BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers. Saving might fail.'.format(
+                    self.wrapped.name))
             self.savers = [MetaStepJoblibStepSaver()]
         else:
             self.savers.append(MetaStepJoblibStepSaver())
+
+    def set_step(self, step: BaseStep) -> BaseStep:
+        """
+        Set wrapped step to the given step.
+
+        :param step: new wrapped step
+        :type step: BaseStep
+        :return: self
+        :rtype: BaseStep
+        """
+        self.invalidate()
+        self.wrapped: BaseStep = _sklearn_to_neuraxle_step(step)
+        return self
 
     def setup(self) -> BaseStep:
         """
@@ -1540,6 +1705,18 @@ class MetaStepMixin:
         BaseStep.setup(self)
         self.wrapped.setup()
         self.is_initialized = True
+        return self
+
+    def teardown(self) -> BaseStep:
+        """
+        Teardown step. Also teardown the wrapped step.
+
+        :return: self
+        :rtype: BaseStep
+        """
+        BaseStep.teardown(self)
+        self.wrapped.teardown()
+        self.is_initialized = False
         return self
 
     def set_train(self, is_train: bool = True):
@@ -1556,7 +1733,7 @@ class MetaStepMixin:
                 else:
                     self.transform_test_(data_inputs)
 
-            def fit_transform(self, data_inputs, expected_outputs):
+            def fit_transform(self, data_inputs, expected_outputs=None):
                 if self.is_train:
                     self.fit_transform_train_(data_inputs, expected_outputs)
                 else:
@@ -1590,7 +1767,7 @@ class MetaStepMixin:
         .. seealso::
             :class:`neuraxle.hyperparams.space.HyperparameterSamples`
         """
-        self.is_invalidated = True
+        self.invalidate()
 
         hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
 
@@ -1619,7 +1796,7 @@ class MetaStepMixin:
             :func:`~BaseStep.update_hyperparams`,
             :class:`neuraxle.hyperparams.space.HyperparameterSamples`
         """
-        self.is_invalidated = True
+        self.invalidate()
 
         hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
 
@@ -1658,7 +1835,7 @@ class MetaStepMixin:
 
         :return: self
         """
-        self.is_invalidated = True
+        self.invalidate()
 
         hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
 
@@ -1685,19 +1862,6 @@ class MetaStepMixin:
             self.wrapped.name: self.wrapped.get_hyperparams_space().to_flat_as_dict_primitive()
         }).to_flat()
 
-    def set_step(self, step: BaseStep) -> BaseStep:
-        """
-        Set wrapped step to the given step.
-
-        :param step: new wrapped step
-        :type step: BaseStep
-        :return: self
-        :rtype: BaseStep
-        """
-        self.is_invalidated = True
-        self.wrapped: BaseStep = step
-        return self
-
     def get_step(self) -> BaseStep:
         """
         Get wrapped step
@@ -1709,6 +1873,38 @@ class MetaStepMixin:
 
     def get_best_model(self) -> BaseStep:
         return self.best_model
+
+    def handle_fit_transform(self, data_container, context):
+        previous_summary_id = data_container.summary_id
+
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_fit_transform(data_container, context)
+
+        new_self, data_container = self._fit_transform_data_container(data_container, context)
+
+        data_container = self._did_fit_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        data_container.set_summary_id(previous_summary_id)
+        data_container.set_summary_id(self.summary_hash(data_container))
+
+        return new_self, data_container
+
+    def handle_transform(self, data_container, context):
+        previous_summary_id = data_container.summary_id
+
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_transform_data_container(data_container, context)
+
+        data_container = self._transform_data_container(data_container, context)
+
+        data_container = self._did_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        data_container.set_summary_id(previous_summary_id)
+        data_container.set_summary_id(self.summary_hash(data_container))
+
+        return data_container
 
     def _fit_transform_data_container(self, data_container, context):
         self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
@@ -1722,16 +1918,24 @@ class MetaStepMixin:
         data_container = self.wrapped.handle_transform(data_container, context)
         return data_container
 
-    def fit_transform(self, data_inputs, expected_outputs):
+    def _inverse_transform_data_container(self, data_container, context):
+        data_container = self.wrapped.handle_inverse_transform(data_container, context)
+        return data_container
+
+    def fit_transform(self, data_inputs, expected_outputs=None):
         self.wrapped, data_inputs = self.wrapped.fit_transform(data_inputs, expected_outputs)
         return self, data_inputs
 
-    def fit(self, data_inputs, expected_outputs):
+    def fit(self, data_inputs, expected_outputs=None):
         self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
         return self
 
     def transform(self, data_inputs):
         data_inputs = self.wrapped.transform(data_inputs)
+        return data_inputs
+
+    def inverse_transform(self, data_inputs):
+        data_inputs = self.wrapped.inverse_transform(data_inputs)
         return data_inputs
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext):
@@ -1740,33 +1944,62 @@ class MetaStepMixin:
             return True
         return False
 
-    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
+    def resume(self, data_container: DataContainer, context: ExecutionContext):
+        context = context.push(self)
+        if not isinstance(self.wrapped, ResumableStepMixin):
+            raise Exception('cannot resume steps that don\' inherit from ResumableStepMixin')
+
+        data_container = self.wrapped.resume(data_container, context)
+        data_container = self._did_process(data_container, context)
+        return data_container
+
+    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply the method name to the meta step and its wrapped step.
 
         :param method_name: method name that need to be called on all steps
+        :param step_name: step name to apply the method to
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Union[Dict, Iterable]
         """
-        BaseStep.apply(self, method_name, *kargs, **kwargs)
-        self.wrapped.apply(method_name, *kargs, **kwargs)
-        return self
+        results = BaseStep.apply(self, method_name=method_name, step_name=step_name, *kargs, **kwargs)
 
-    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
+
+        if self.wrapped is not None:
+            wrapped_results = self.wrapped.apply(method_name=method_name, step_name=step_name, *kargs, **kwargs)
+            results.update(wrapped_results)
+
+        return results
+
+    def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Union[Dict, Iterable]:
         """
         Apply method to the meta step and its wrapped step.
 
         :param method: method to call with self
+        :param step_name: step name to apply the method to
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Union[Dict, Iterable]
         """
-        BaseStep.apply_method(self, method, *kargs, **kwargs)
-        self.wrapped = self.wrapped.apply_method(method, *kargs, **kwargs)
-        return self
+        results = BaseStep.apply_method(self, method=method, step_name=step_name, *kargs, **kwargs)
+
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
+
+        if self.wrapped is not None:
+            wrapped_results = self.wrapped.apply_method(method=method, step_name=step_name, *kargs, **kwargs)
+            results.update(wrapped_results)
+
+        return results
 
     def get_step_by_name(self, name):
         if self.wrapped.name == name:
@@ -1816,6 +2049,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
     """
     Custom saver for meta step mixin.
     """
+
     def __init__(self):
         JoblibStepSaver.__init__(self)
 
@@ -1881,51 +2115,14 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
 
 
-class ForceAlwaysHandleMixin:
-    """
-    A pipeline step that requires the implementation only of handler methods :
-
-        - handle_transform
-        - handle_fit_transform
-        - handle_fit
-
-    .. seealso::
-        :class:`BaseStep`
-    """
-
-    @abstractmethod
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
-        raise NotImplementedError('Must implement handle_fit in {0}'.format(self.name))
-
-    @abstractmethod
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
-        raise NotImplementedError('Must implement handle_transform in {0}'.format(self.name))
-
-    @abstractmethod
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
-        raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
-
-    def transform(self, data_inputs) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_transform instead.'.format(
-                self.name))
-
-    def fit(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Fit method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit instead.'.format(
-                self.name))
-
-    def fit_transform(self, data_inputs, expected_outputs=None) -> 'ForceAlwaysHandleMixin':
-        raise Exception(
-            'Fit transform method is not supported for {0}, because it inherits from ForceHandleMixin. Please use handle_fit_transform instead.'.format(
-                self.name))
-
-
 class NonFittableMixin:
     """
     A pipeline step that requires no fitting: fitting just returns self when called to do no action.
     Note: fit methods are not implemented
     """
+
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        return self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         return self, self._transform_data_container(data_container, context)
@@ -2013,16 +2210,18 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         for i, (_, sub_step) in enumerate(step):
             if sub_step.should_save():
                 sub_steps_savers.append((step[i].name, step[i].get_savers()))
+                sub_step.save(context)
             else:
                 sub_steps_savers.append((step[i].name, None))
-
-            sub_step.save(context)
 
         step.sub_steps_savers = sub_steps_savers
 
         # Third, strip the sub steps from truncable steps before saving
-        del step.steps
-        del step.steps_as_tuple
+        if hasattr(self, 'steps'):
+            del step.steps
+
+        if hasattr(self, 'steps_at_tuple'):
+            del step.steps_as_tuple
 
         return step
 
@@ -2050,7 +2249,9 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
                 sub_step = sub_step_to_load.load(context)
                 step.steps_as_tuple.append((step_name, sub_step))
 
-        step._refresh_steps()
+        operation = getattr(step, '_refresh_steps', None)
+        if callable(operation):
+            step._refresh_steps()
 
         return step
 
@@ -2155,38 +2356,57 @@ class TruncableSteps(BaseStep, ABC):
         for step_name, step in self.steps_as_tuple:
             step.teardown()
 
+        self.is_initialized = False
+
         return self
 
-    def apply(self, method_name: str, *kargs, **kwargs) -> 'BaseStep':
+    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply the method name to the pipeline step and all of its children.
 
         :param method_name: method name that need to be called on all steps
+        :param step_name: current pipeline step name
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Union[Dict, Iterable]
         """
-        BaseStep.apply(self, method_name, *kargs, **kwargs)
-        for step in self.values():
-            step.apply(method_name, *kargs, **kwargs)
-        return self
+        results = BaseStep.apply(self, method_name, step_name=step_name, *kargs, **kwargs)
 
-    def apply_method(self, method: Callable, *kargs, **kwargs) -> 'BaseStep':
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
+
+        for step in self.values():
+            sub_step_results = step.apply(method_name=method_name, step_name=step_name, *kargs, **kwargs)
+            results.update(sub_step_results)
+
+        return results
+
+    def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply a method to the pipeline step and all of its children.
 
         :param method: method to call with self
+        :param step_name: current pipeline step name
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: self (not a new step)
-        :rtype: BaseStep
+        :return: accumulated results
+        :rtype: Union[Dict, Iterable]
         """
-        BaseStep.apply_method(self, method, *kargs, **kwargs)
-        for step in self.values():
-            step.apply_method(method, *kargs, **kwargs)
+        results = BaseStep.apply_method(self, method=method, step_name=step_name, *kargs, **kwargs)
 
-        return self
+        if step_name is not None:
+            step_name = "{}__{}".format(step_name, self.name)
+        else:
+            step_name = self.name
+
+        for step in self.values():
+            sub_step_results = step.apply_method(method=method, step_name=step_name, *kargs, **kwargs)
+            results.update(sub_step_results)
+
+        return results
 
     def get_step_by_name(self, name):
         for step in self.values():
@@ -2216,10 +2436,7 @@ class TruncableSteps(BaseStep, ABC):
                 class_name = step[0]
                 step = step[1]
 
-            if isinstance(step, BaseEstimator):
-                import neuraxle.steps.sklearn
-                step = neuraxle.steps.sklearn.SKLearnWrapper(step)
-                step.set_name(step.get_wrapped_sklearn_predictor().__class__.__name__)
+            step = _sklearn_to_neuraxle_step(step)
 
             if class_name is None:
                 class_name = step.get_name()
@@ -2251,7 +2468,7 @@ class TruncableSteps(BaseStep, ABC):
             step = (_name, step)
             names_yet.add(step[0])
             patched.append(step)
-        self.is_invalidated = True
+        self.invalidate()
         return patched
 
     def _rename_step(self, step_name, class_name, names_yet: set):
@@ -2273,7 +2490,7 @@ class TruncableSteps(BaseStep, ABC):
         while step_name in names_yet:
             step_name = class_name + str(i)
             i += 1
-        self.is_invalidated = True
+        self.invalidate()
         return step_name
 
     def _refresh_steps(self):
@@ -2281,7 +2498,7 @@ class TruncableSteps(BaseStep, ABC):
         Private method to refresh inner state after having edited ``self.steps_as_tuple``
         (recreate ``self.steps`` from ``self.steps_as_tuple``).
         """
-        self.is_invalidated = True
+        self.invalidate()
         self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
         for name, step in self.items():
             step.name = name
@@ -2346,7 +2563,7 @@ class TruncableSteps(BaseStep, ABC):
         .. seealso::
             :class:`neuraxle.hyperparams.space.HyperparameterSamples`
         """
-        self.is_invalidated = True
+        self.invalidate()
 
         hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
 
@@ -2374,7 +2591,7 @@ class TruncableSteps(BaseStep, ABC):
             :func:`~BaseStep.update_hyperparams`,
             :class:`neuraxle.hyperparams.space.HyperparameterSamples`
         """
-        self.is_invalidated = True
+        self.invalidate()
 
         hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
 
@@ -2445,7 +2662,7 @@ class TruncableSteps(BaseStep, ABC):
         .. seealso::
             :class:`neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        self.is_invalidated = True
+        self.invalidate()
 
         hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
 
@@ -2843,6 +3060,10 @@ class ResumableStepMixin:
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def resume(self, data_container: DataContainer, context: ExecutionContext):
+        raise NotImplementedError()
+
     def __str__(self):
         return self.__repr__()
 
@@ -2863,6 +3084,191 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
     """
 
     def __init__(self, savers=None, name=None):
+        if savers is None:
+            savers = [JoblibStepSaver()]
         NonTransformableMixin.__init__(self)
         NonFittableMixin.__init__(self)
         BaseStep.__init__(self, name=name, savers=savers)
+
+
+class TransformHandlerOnlyMixin(NonFittableMixin):
+    """
+    A pipeline step that only requires the implementation of _transform_data_container.
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`NonFittableMixin`
+    """
+
+    @abstractmethod
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        raise NotImplementedError('Must implement _transform_data_container in {0}'.format(self.name))
+
+    def transform(self, data_inputs) -> 'HandleOnlyMixin':
+        raise Exception(
+            'Transform method is not supported for {0}, because it inherits from HandlerMixin. Please use handle_transform instead.'.format(
+                self.name))
+
+
+class HandleOnlyMixin:
+    """
+    A pipeline step that only requires the implementation of handler methods :
+        - _transform_data_container
+        - _fit_transform_data_container
+        - _fit_data_container
+
+    If forbids only implementing fit or transform or fit_transform without the handles. So it forces the handles.
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`TransformHandlerOnlyMixin`,
+        :class:`NonTransformableMixin`,
+        :class:`NonFittableMixin`,
+        :class:`ForceHandleMixin`,
+        :class:`ForceHandleOnlyMixin`
+    """
+
+    @abstractmethod
+    def _fit_data_container(
+            self, data_container: DataContainer, context: ExecutionContext
+    ) -> ('BaseStep', DataContainer):
+        raise NotImplementedError('Must implement _fit_data_container in {0}'.format(self.name))
+
+    @abstractmethod
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        raise NotImplementedError('Must implement _transform_data_container in {0}'.format(self.name))
+
+    @abstractmethod
+    def _fit_transform_data_container(
+            self, data_container: DataContainer, context: ExecutionContext
+    ) -> ('BaseStep', DataContainer):
+        raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
+
+    def transform(self, data_inputs) -> 'HandleOnlyMixin':
+        raise Exception(
+            'Transform method is not supported for {0}, because it inherits from HandleOnlyMixin. Please use handle_transform instead.'.format(
+                self.name))
+
+    def fit(self, data_inputs, expected_outputs=None) -> 'HandleOnlyMixin':
+        raise Exception(
+            'Fit method is not supported for {0}, because it inherits from HandleOnlyMixin. Please use handle_fit instead.'.format(
+                self.name))
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> 'HandleOnlyMixin':
+        raise Exception(
+            'Fit transform method is not supported for {0}, because it inherits from HandleOnlyMixin. Please use handle_fit_transform instead.'.format(
+                self.name))
+
+
+class ForceHandleMixin:
+    """
+    A step that automatically calls handle methods in the transform, fit, and fit_transform methods.
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`HandleOnlyMixin`,
+        :class:`TransformHandlerOnlyMixin`,
+        :class:`NonTransformableMixin`,
+        :class:`NonFittableMixin`,
+        :class:`ForceHandleOnlyMixin`
+    """
+
+    def __init__(self, cache_folder=None):
+        if cache_folder is None:
+            cache_folder = DEFAULT_CACHE_FOLDER
+        self.cache_folder = cache_folder
+
+    def transform(self, data_inputs):
+        execution_context = ExecutionContext(self.cache_folder, execution_mode=ExecutionMode.TRANSFORM)
+        context, data_container = self._encapsulate_data(
+            data_inputs, expected_outputs=None, execution_mode=ExecutionMode.TRANSFORM)
+
+        data_container = self.handle_transform(data_container, execution_context)
+
+        return data_container.data_inputs
+
+    def fit(self, data_inputs, expected_outputs=None) -> 'HandleOnlyMixin':
+        context, data_container = self._encapsulate_data(data_inputs, expected_outputs, ExecutionMode.FIT)
+        new_self = self.handle_fit(data_container, context)
+
+        return new_self
+
+    def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['HandleOnlyMixin', Iterable]:
+        context, data_container = self._encapsulate_data(data_inputs, expected_outputs, ExecutionMode.FIT_TRANSFORM)
+        new_self, data_container = self.handle_fit_transform(data_container, context)
+
+        return new_self, data_container.data_inputs
+
+    def _encapsulate_data(self, data_inputs, expected_outputs=None, execution_mode=None):
+        data_container = DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs)
+        context = ExecutionContext(root=self.cache_folder, execution_mode=execution_mode)
+
+        return context, data_container
+
+
+class ForceHandleOnlyMixin(ForceHandleMixin, HandleOnlyMixin):
+    """
+    A step that automatically calls handle methods in the transform, fit, and fit_transform methods.
+    It also requires the implementation of handler methods :
+        - _transform_data_container
+        - _fit_transform_data_container
+        - _fit_data_container
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`HandleOnlyMixin`,
+        :class:`TransformHandlerOnlyMixin`,
+        :class:`NonTransformableMixin`,
+        :class:`NonFittableMixin`,
+        :class:`ForceHandleMixin`
+    """
+
+    def __init__(self, cache_folder=None):
+        HandleOnlyMixin.__init__(self)
+        ForceHandleMixin.__init__(self, cache_folder)
+
+
+class EvaluableStepMixin:
+    """
+    A step that can be evaluated with the scoring functions.
+
+    .. seealso::
+        :class:`BaseStep`
+    """
+
+    @abstractmethod
+    def get_score(self):
+        raise NotImplementedError()
+
+class FullDumpLoader(Identity):
+    """
+    Identity step that can load the full dump of a pipeline step.
+    Used by :func:`~neuraxle.base.BaseStep.load`.
+
+    .. seealso::
+        :class:`ExecutionContext`
+        :class:`BaseStep`,
+        :class:`Identity`
+    """
+    def __init__(self, name, stripped_saver=None):
+        if stripped_saver is None:
+            stripped_saver = JoblibStepSaver()
+        Identity.__init__(self, name=name, savers=[stripped_saver])
+
+    def load(self, context: ExecutionContext, full_dump=True) -> BaseStep:
+        """
+        Load the full dump of a pipeline step.
+
+        :param context: execution context
+        :param full_dump: load full dump or not (always true, inherited from :class:`BaseStep`
+        :type full_dump: load full dump or not
+        :return: loaded step
+        :rtype: BaseStep
+        """
+        if not context.stripped_saver.can_load(self, context):
+            raise Exception('Cannot Load Full Dump For Step {}'.format(os.path.join(context.get_path(), self.name)))
+
+        loaded_self = context.stripped_saver.load_step(self, context)
+
+        context.pop()
+        return loaded_self.load(context, full_dump)

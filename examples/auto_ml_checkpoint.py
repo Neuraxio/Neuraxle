@@ -33,7 +33,8 @@ from sklearn.metrics import mean_squared_error
 from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import RandomSearch
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearchHyperparameterSelectionStrategy, validation_splitter
+from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.pipeline import ResumablePipeline, DEFAULT_CACHE_FOLDER, Pipeline
 from neuraxle.steps.flow import ExpandDim
 from neuraxle.steps.loop import ForEachDataInput
@@ -62,12 +63,20 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     ]).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
-    best_model = RandomSearch(
+    auto_ml = AutoML(
         pipeline,
-        n_iter=n_iter,
-        higher_score_is_better=True
-    ).fit(DATA_INPUTS, EXPECTED_OUTPUTS)
-    outputs = best_model.transform(DATA_INPUTS)
+        refit_trial=True,
+        n_trials=n_iter,
+        cache_folder_when_no_handle=str(tmpdir),
+        validation_split_function=validation_splitter(0.2),
+        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
+        callbacks=[
+            MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)
+        ]
+    )
+    auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
+    outputs = auto_ml.get_best_model().predict(DATA_INPUTS)
     time_b = time.time()
 
     actual_score = mean_squared_error(EXPECTED_OUTPUTS, outputs)
@@ -91,12 +100,20 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     ], cache_folder=tmpdir).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
-    best_model = RandomSearch(
+    auto_ml = AutoML(
         pipeline,
-        n_iter=n_iter,
-        higher_score_is_better=True
-    ).fit(DATA_INPUTS, EXPECTED_OUTPUTS)
-    outputs = best_model.transform(DATA_INPUTS)
+        refit_trial=False,
+        n_trials=n_iter,
+        cache_folder_when_no_handle=str(tmpdir),
+        validation_split_function=validation_splitter(0.2),
+        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
+        callbacks=[
+            MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)
+        ]
+    )
+    auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
+    outputs = auto_ml.get_best_model().predict(DATA_INPUTS)
     time_b = time.time()
     pipeline.flush_all_cache()
 
