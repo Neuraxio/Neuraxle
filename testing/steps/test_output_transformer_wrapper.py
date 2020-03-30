@@ -1,5 +1,7 @@
 from typing import Tuple, Any
 
+from py._path.local import LocalPath
+
 from neuraxle.base import BaseStep, NonFittableMixin, ExecutionContext, ExecutionMode
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
@@ -30,7 +32,7 @@ class MultiplyBy2OutputTransformer(NonFittableMixin, InputAndOutputTransformerMi
         return new_dis, new_eos
 
 
-def test_output_transformer_should_zip_data_input_and_expected_output_in_the_transformed_output(tmpdir):
+def test_output_transformer_should_zip_data_input_and_expected_output_in_the_transformed_output(tmpdir: LocalPath):
     pipeline = Pipeline([
         MultiplyBy2OutputTransformer()
     ])

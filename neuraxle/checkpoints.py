@@ -157,7 +157,7 @@ class StepSavingCheckpointer(BaseCheckpointer):
     ) -> DataContainer:
         if self.is_for_execution_mode(context.get_execution_mode()):
             # TODO: save the context by execution mode AND data container ids / summary
-            context.copy().save_all_unsaved()
+            context.copy().save()
 
         return data_container
 
@@ -193,11 +193,11 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         )
 
     .. seealso::
-        * :class:`BaseStep`
-        * :func:`ResumablePipeline._load_checkpoint`
-        * :class:`ResumableStepMixin`
-        * :class:`NonFittableMixin`
-        * :class:`NonTransformableMixin`
+        :class:`neuraxle.base.BaseStep`,
+        :func:`neuraxle.pipeline.ResumablePipeline._load_checkpoint`,
+        :class:`neuraxle.base.ResumableStepMixin`,
+        :class:`neuraxle.base.NonFittableMixin`,
+        :class:`neuraxle.base.NonTransformableMixin`
     """
 
     def __init__(
@@ -254,6 +254,17 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
             checkpointer.save_checkpoint(data_container, context)
 
         return data_container
+
+    def resume(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Same as read_checkpoint.
+
+        :param data_container: data container to load checkpoint from
+        :param context: execution mode to load checkpoint from
+        :return: loaded data container checkpoint
+        :rtype: neuraxle.data_container.DataContainer
+        """
+        return self.read_checkpoint(data_container, context)
 
     def read_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -675,7 +686,7 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         :return: data container checkpoint
         :rtype: neuraxle.data_container.DataContainer
         """
-        data_container_checkpoint = ListDataContainer.empty()
+        data_container_checkpoint = ListDataContainer.empty(original_data_container=data_container)
 
         current_ids = self.summary_checkpointer.read_summary(
             checkpoint_path=context.get_path(),
