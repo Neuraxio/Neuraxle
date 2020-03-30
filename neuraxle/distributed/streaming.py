@@ -20,6 +20,7 @@ Neuraxle steps for streaming data in parallel in the pipeline
     limitations under the License.
 
 """
+import warnings
 from abc import abstractmethod
 from multiprocessing import Queue
 from multiprocessing.context import Process
@@ -47,9 +48,19 @@ class ObservableQueueMixin:
     """
 
     def __init__(self, queue):
-        self.savers = [ObservableQueueStepSaver()]
         self.queue = queue
         self.observers = []
+        self._ensure_proper_mixin_init_order()
+
+    def _ensure_proper_mixin_init_order(self):
+        if not hasattr(self, 'savers'):
+            warnings.warn(
+                'Please initialize Mixins in the good order. ObservableQueueMixin should be initialized after '
+                'Appending the ObservableQueueStepSaver to the savers. Saving might fail.'
+            )
+            self.savers = [ObservableQueueStepSaver()]
+        else:
+            self.savers.append(ObservableQueueStepSaver())
 
     def subscribe(self, observer_queue_worker: 'ObservableQueueMixin') -> 'ObservableQueueMixin':
         """
@@ -120,7 +131,7 @@ class ObservableQueueStepSaver(BaseSaver):
         return step
 
 
-class QueueWorker(MetaStepMixin, ObservableQueueMixin, BaseStep):
+class QueueWorker(ObservableQueueMixin, MetaStepMixin, BaseStep):
     """
     Start multiple Process or Thread that process items from the queue of batches to process.
     It is both an observable, and observer.
@@ -147,8 +158,8 @@ class QueueWorker(MetaStepMixin, ObservableQueueMixin, BaseStep):
             additional_worker_arguments = [[] for _ in range(n_workers)]
 
         BaseStep.__init__(self)
-        ObservableQueueMixin.__init__(self, Queue(maxsize=max_size))
         MetaStepMixin.__init__(self, wrapped)
+        ObservableQueueMixin.__init__(self, Queue(maxsize=max_size))
 
         self.use_threading: bool = use_threading
         self.workers: List[Process] = []
@@ -581,7 +592,7 @@ class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
             step.put(data_container)
 
 
-class QueueJoiner(Joiner, ObservableQueueMixin):
+class QueueJoiner(ObservableQueueMixin, Joiner):
     """
     Observe the results of the queue worker of type :class:`QueueWorker`.
     Synchronize all of the workers together.

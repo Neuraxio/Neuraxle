@@ -2291,10 +2291,8 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         step.sub_steps_savers = sub_steps_savers
 
         # Third, strip the sub steps from truncable steps before saving
-        if hasattr(self, 'steps'):
+        if hasattr(step, 'steps'):
             del step.steps
-
-        if hasattr(self, 'steps_at_tuple'):
             del step.steps_as_tuple
 
         return step
