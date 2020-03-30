@@ -1,7 +1,7 @@
 """
-Neuraxle's Automatic Machine Learning Classes
-==================================================
-All steps, and abstractions needed to build Automatic Machine Learning algorithms in Neuraxle.
+Neuraxle's AutoML Classes
+====================================
+Classes used to build any Automatic Machine Learning strategies.
 
 ..
     Copyright 2019, Neuraxio Inc.
@@ -18,21 +18,31 @@ All steps, and abstractions needed to build Automatic Machine Learning algorithm
     See the License for the specific language governing permissions and
     limitations under the License.
 
+..
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+
 """
+
 import copy
 import glob
 import hashlib
 import json
+import math
 import os
+import time
 import traceback
 from abc import ABC, abstractmethod
-from enum import Enum
-from typing import List, Callable
+from typing import Callable, List, Union, Tuple, Iterable
 
-from neuraxle.base import MetaStepMixin, BaseStep, NonTransformableMixin, ExecutionContext
+import numpy as np
+
+from neuraxle.base import BaseStep, ExecutionContext, ForceHandleOnlyMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
-from neuraxle.metaopt.random import BaseCrossValidationWrapper, KFoldCrossValidationWrapper
+from neuraxle.metaopt.callbacks import BaseCallback, CallbackList, ScoringCallback
+from neuraxle.metaopt.random import BaseCrossValidationWrapper
+from neuraxle.metaopt.trial import Trial, TRIAL_STATUS, Trials
 
 
 class HyperparamsRepository(ABC):
@@ -40,45 +50,90 @@ class HyperparamsRepository(ABC):
     Hyperparams repository that saves hyperparams, and scores for every AutoML trial.
 
     .. seealso::
-        :class:`AutoMLSequentialWrapper`
-        :class:`AutoMLAlgorithm`,
-        :class:`BaseValidation`,
-        :class:`RandomSearchBaseAutoMLStrategy`,
-        :class:`HyperparameterSpace`,
-        :class:`HyperparameterSamples`
+        :class:`AutoML`,
+        :class:`Trainer`,
+        :class:`neuraxle.metaopt.trial.Trial`,
+        :class:`InMemoryHyperparamsRepository`,
+        :class:`HyperparamsJSONRepository`,
+        :class:`BaseHyperparameterSelectionStrategy`,
+        :class:`RandomSearchHyperparameterSelectionStrategy`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
-    @abstractmethod
-    def create_new_trial(self, hyperparams: HyperparameterSamples):
-        """
-        Create new hyperperams trial.
+    def __init__(self, hyperparameter_selection_strategy=None, cache_folder=None, best_retrained_model_folder=None):
+        if best_retrained_model_folder is None:
+            best_retrained_model_folder = os.path.join(cache_folder, 'best')
+        self.best_retrained_model_folder = best_retrained_model_folder
 
-        :param hyperparams: hyperparams
-        :type hyperparams: HyperparameterSamples
+        self.hyperparameter_selection_strategy = hyperparameter_selection_strategy
+        self.cache_folder = cache_folder
+
+    def set_strategy(self, hyperparameter_selection_strategy: 'BaseHyperparameterSelectionStrategy'):
+        """
+        Set hyperparameter selection strategy.
+
+        :param hyperparameter_selection_strategy: hyperparameter selection strategy.
         :return:
         """
-        pass
+        self.hyperparameter_selection_strategy = hyperparameter_selection_strategy
 
     @abstractmethod
     def load_all_trials(self, status: 'TRIAL_STATUS') -> 'Trials':
         """
         Load all hyperparameter trials with their corresponding score.
+        Sorted by creation date.
 
-        :return: (hyperparams, scores)
+        :return: Trials (hyperparams, scores)
         """
         pass
 
     @abstractmethod
-    def save_score_for_success_trial(self, hyperparams: HyperparameterSamples, score: float):
+    def save_trial(self, trial: 'Trial'):
         """
-        Save hyperparams, and score for a successful trial.
+        Save trial.
 
-        :return: (hyperparams, scores)
+        :param trial: trial to save.
+        :return:
         """
         pass
 
+    def get_best_hyperparams(self) -> HyperparameterSamples:
+        """
+        Get best hyperparams from all of the saved trials.
+
+        :return: best hyperparams.
+        """
+        trials = self.load_all_trials(status=TRIAL_STATUS.SUCCESS)
+        best_hyperparams = HyperparameterSamples(trials.get_best_hyperparams())
+        return best_hyperparams
+
+    def get_best_model(self):
+        """
+        Load the best model saved inside the best retrained model folder.
+
+        :return:
+        """
+        hyperparams: HyperparameterSamples = self.get_best_hyperparams()
+        trial_hash: str = self._get_trial_hash(HyperparameterSamples(hyperparams).to_flat_as_dict_primitive())
+        p: BaseStep = ExecutionContext(str(self.best_retrained_model_folder)).load(trial_hash)
+
+        return p
+
+    def save_best_model(self, step: BaseStep):
+        """
+        Save the best model inside the best retrained model folder.
+
+        :param step: step to save
+        :return: saved step
+        """
+        hyperparams = step.get_hyperparams().to_flat_as_dict_primitive()
+        trial_hash = self._get_trial_hash(hyperparams)
+        step.set_name(trial_hash).save(ExecutionContext(self.best_retrained_model_folder), full_dump=True)
+
+        return step
+
     @abstractmethod
-    def save_failure_for_trial(self, hyperparams: HyperparameterSamples, exception: Exception):
+    def new_trial(self, auto_ml_container: 'AutoMLContainer'):
         """
         Save hyperparams, and score for a failed trial.
 
@@ -87,6 +142,12 @@ class HyperparamsRepository(ABC):
         pass
 
     def _get_trial_hash(self, hp_dict):
+        """
+        Hash hyperparams with md5 to create a trial hash.
+
+        :param hp_dict:
+        :return:
+        """
         current_hyperparameters_hash = hashlib.md5(str.encode(str(hp_dict))).hexdigest()
         return current_hyperparameters_hash
 
@@ -101,363 +162,362 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
     .. code-block:: python
 
         InMemoryHyperparamsRepository(
-            print_new_trial=True,
-            print_success_trial=True,
-            print_exception=True
+            hyperparameter_selection_strategy=RandomSearchHyperparameterSelectionStrategy(),
+            print_func=print,
+            cache_folder='cache',
+            best_retrained_model_folder='best'
         )
 
-
     .. seealso::
-        :class:`HyperparamsRepository`,
-        :class:`HyperparameterSamples`,
-        :class:`AutoMLSequentialWrapper`
+        :class:`AutoML`,
+        :class:`Trainer`,
+        :class:`neuraxle.metaopt.trial.Trial`,
+        :class:`HyperparamsJSONRepository`,
+        :class:`BaseHyperparameterSelectionStrategy`,
+        :class:`RandomSearchHyperparameterSelectionStrategy`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
-    def __init__(self, print_new_trial=True, print_success_trial=True, print_exception=True, print_func: Callable = None):
-        HyperparamsRepository.__init__(self)
+    def __init__(self, hyperparameter_selection_strategy=None, print_func: Callable = None, cache_folder: str = None, best_retrained_model_folder=None):
+        HyperparamsRepository.__init__(
+            self,
+            hyperparameter_selection_strategy=hyperparameter_selection_strategy,
+            cache_folder=cache_folder,
+            best_retrained_model_folder=best_retrained_model_folder
+        )
         if print_func is None:
-           print_func = print
+            print_func = print
         self.print_func = print_func
+        self.cache_folder = cache_folder
 
         self.trials = Trials()
-        self.print_new_trial = print_new_trial
-        self.print_success_trial = print_success_trial
-        self.print_exception = print_exception
-
-    def create_new_trial(self, hyperparams: HyperparameterSamples):
-        if self.print_new_trial:
-            self.print_func('new trial:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
     def load_all_trials(self, status: 'TRIAL_STATUS' = None) -> 'Trials':
+        """
+        Load all trials with the given status.
+
+        :param status: trial status
+        :return: list of trials
+        """
         return self.trials.filter(status)
 
-    def save_score_for_success_trial(self, hyperparams: HyperparameterSamples, score: float):
-        self.trials.append(Trial(hyperparams, score, TRIAL_STATUS.SUCCESS))
+    def save_trial(self, trial: 'Trial'):
+        """
+        Save trial.
 
-        if self.print_success_trial:
-            self.print_func('score: {}'.format(score))
-            self.print_func('hyperparams:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+        :param trial: trial to save
+        :return:
+        """
+        self.print_func(trial)
+        self.trials.append(trial)
 
-    def save_failure_for_trial(self, hyperparams: HyperparameterSamples, exception: Exception):
-        if self.print_exception:
-            self.print_func(exception)
-            traceback_str = str(traceback.format_tb(exception.__traceback__))
-            self.print_func(traceback_str)
+    def new_trial(self, auto_ml_container: 'AutoMLContainer') -> 'Trial':
+        """
+        Create a new trial with the best next hyperparams.
+
+        :param auto_ml_container: auto ml data container
+        :return: trial
+        """
+        hyperparams = self.hyperparameter_selection_strategy.find_next_best_hyperparams(auto_ml_container)
+        self.print_func('new trial:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+
+        return Trial(hyperparams)
 
 
 class HyperparamsJSONRepository(HyperparamsRepository):
     """
     Hyperparams repository that saves json files for every AutoML trial.
 
+    Example usage :
+
+    .. code-block:: python
+
+        HyperparamsJSONRepository(
+            hyperparameter_selection_strategy=RandomSearchHyperparameterSelectionStrategy(),
+            cache_folder='cache',
+            best_retrained_model_folder='best'
+        )
+
+
     .. seealso::
-        :class:`HyperparamsRepository`,
-        :class:`HyperparameterSamples`,
-        :class:`AutoMLSequentialWrapper`
+        :class:`AutoML`,
+        :class:`Trainer`,
+        :class:`neuraxle.metaopt.trial.Trial`,
+        :class:`InMemoryHyperparamsRepository`,
+        :class:`HyperparamsJSONRepository`,
+        :class:`BaseHyperparameterSelectionStrategy`,
+        :class:`RandomSearchHyperparameterSelectionStrategy`,
+        :class:`neuraxle.hyperparams.trial.HyperparameterSamples`
     """
 
-    def __init__(self, folder):
-        self.cache_folder = folder
+    def __init__(self, hyperparameter_selection_strategy: 'BaseHyperparameterSelectionStrategy' = None, cache_folder=None,
+                 best_retrained_model_folder=None):
+        HyperparamsRepository.__init__(self, hyperparameter_selection_strategy=hyperparameter_selection_strategy,
+                                       cache_folder=cache_folder,
+                                       best_retrained_model_folder=best_retrained_model_folder)
 
-    def create_new_trial(self, hyperparams: HyperparameterSamples):
+    def save_trial(self, trial: 'Trial'):
+        """
+        Save trial json.
+
+        :param trial: trial to save
+        :return:
+        """
+        hp_dict = trial.hyperparams.to_flat_as_dict_primitive()
+        current_hyperparameters_hash = self._get_trial_hash(hp_dict)
+        self._remove_new_trial_json(current_hyperparameters_hash)
+
+        if trial.status == TRIAL_STATUS.SUCCESS:
+            trial_file_path = self._get_successful_trial_json_file_path(trial)
+        else:
+            trial_file_path = self._get_failed_trial_json_file_path(trial)
+
+        with open(trial_file_path, 'w+') as outfile:
+            json.dump(trial.to_json(), outfile)
+
+        # Sleeping to have a valid time difference between files when reloading them to sort them by creation time:
+        time.sleep(0.1)
+
+    def new_trial(self, auto_ml_container: 'AutoMLContainer'):
         """
         Create new hyperperams trial json file.
 
-        :param hyperparams: hyperparams
-        :type hyperparams: HyperparameterSamples
+        :param auto_ml_container: auto ml container
         :return:
         """
-        self._create_trial_json(hyperparams)
+        hyperparams = self.hyperparameter_selection_strategy.find_next_best_hyperparams(auto_ml_container)
+        trial = Trial(hyperparams, cache_folder=self.cache_folder)
+        self._create_trial_json(trial=trial)
+
+        return trial
 
     def load_all_trials(self, status: 'TRIAL_STATUS' = None) -> 'Trials':
         """
         Load all hyperparameter trials with their corresponding score.
-        Reads all the saved trial json files.
+        Reads all the saved trial json files, sorted by creation date.
 
         :return: (hyperparams, scores)
         """
-        trials = []
+        trials = Trials()
 
-        for base_path in glob.glob(os.path.join(self.cache_folder, '*.json')):
+        files = glob.glob(os.path.join(self.cache_folder, '*.json'))
+
+        # sort by created date:
+        def getmtimens(filename):
+            return os.stat(filename).st_mtime_ns
+
+        files.sort(key=getmtimens)
+
+        for base_path in files:
             with open(base_path) as f:
                 trial_json = json.load(f)
 
             if status is None or trial_json['status'] == status.value:
                 trials.append(Trial.from_json(trial_json))
 
-        return Trials(trials)
+        return trials
 
-    def save_score_for_success_trial(self, hyperparams: HyperparameterSamples, score: float):
-        """
-        Save hyperparams, and score for a successful trial.
-
-        :return: (hyperparams, scores)
-        """
-        self._save_successful_trial_json(hyperparams, score)
-
-    def save_failure_for_trial(self, hyperparams: HyperparameterSamples, exception: Exception):
-        """
-        Save hyperparams, and score for a failed trial.
-
-        :return: (hyperparams, scores)
-        """
-        self._save_failed_trial_json(hyperparams, exception)
-
-    def _create_trial_json(self, hyperparams):
+    def _create_trial_json(self, trial: 'Trial'):
         """
         Save new trial json file.
 
         :return: (hyperparams, scores)
         """
-        hp_dict = hyperparams.to_flat_as_dict_primitive()
+        hp_dict = trial.hyperparams.to_flat_as_dict_primitive()
         current_hyperparameters_hash = self._get_trial_hash(hp_dict)
+
+        if not os.path.exists(self.cache_folder):
+            os.makedirs(self.cache_folder)
 
         with open(os.path.join(self._get_new_trial_json_path(current_hyperparameters_hash)), 'w+') as outfile:
-            json.dump({
-                'hyperparams': hp_dict,
-                'score': None,
-                'status': TRIAL_STATUS.PLANNED.value
-            }, outfile)
+            json.dump(trial.to_json(), outfile)
 
-    def _save_successful_trial_json(self, hyperparams, score):
+    def _get_successful_trial_json_file_path(self, trial: 'Trial') -> str:
         """
-        Save trial json file.
+        Get the json path for the given successful trial.
 
-        :return: (hyperparams, scores)
+        :param trial: trial
+        :return: str
         """
-        hp_dict = hyperparams.to_flat_as_dict_primitive()
-        current_hyperparameters_hash = self._get_trial_hash(hp_dict)
-        self._remove_new_trial_json(current_hyperparameters_hash)
+        trial_hash = self._get_trial_hash(trial.hyperparams.to_flat_as_dict_primitive())
+        return os.path.join(
+            self.cache_folder,
+            str(float(trial.get_validation_scores()[-1])).replace('.', ',') + "_" + trial_hash
+        ) + '.json'
 
-        with open(os.path.join(self.cache_folder,
-                               str(float(score)).replace('.', ',') + "_" + current_hyperparameters_hash) + '.json',
-                  'w+') as outfile:
-            json.dump({
-                'hyperparams': hp_dict,
-                'score': score,
-                'status': TRIAL_STATUS.SUCCESS.value
-            }, outfile)
+    def _get_failed_trial_json_file_path(self, trial: 'Trial'):
+        """
+        Get the json path for the given failed trial.
+
+        :param trial:
+        :return:
+        """
+        trial_hash = self._get_trial_hash(trial.hyperparams.to_flat_as_dict_primitive())
+        return os.path.join(self.cache_folder, 'FAILED_' + trial_hash) + '.json'
 
     def _remove_new_trial_json(self, current_hyperparameters_hash):
+        """
+        Remove trial file associated with the given hyperparameters hash.
+
+        :param current_hyperparameters_hash:
+        :return:
+        """
         new_trial_json = self._get_new_trial_json_path(current_hyperparameters_hash)
         if os.path.exists(new_trial_json):
             os.remove(new_trial_json)
 
     def _get_new_trial_json_path(self, current_hyperparameters_hash):
+        """
+        Get new trial json path.
+
+        :param current_hyperparameters_hash:
+        :return:
+        """
         return os.path.join(self.cache_folder, "NEW_" + current_hyperparameters_hash) + '.json'
 
-    def _save_failed_trial_json(self, hyperparams, exception):
-        """
-        Save trial json file.
 
-        :return: (hyperparams, scores)
-        """
-        hp_dict = hyperparams.to_flat_as_dict_primitive()
-        current_hyperparameters_hash = self._get_trial_hash(hp_dict)
-        self._remove_new_trial_json(current_hyperparameters_hash)
-
-        with open(os.path.join(self.cache_folder, 'FAILED_' + current_hyperparameters_hash) + '.json', 'w+') as outfile:
-            json.dump({
-                'hyperparams': hp_dict,
-                'score': None,
-                'status': TRIAL_STATUS.FAILED.value,
-                'exception': str(exception)
-            }, outfile)
-
-
-class BaseHyperparameterOptimizer(ABC):
+class BaseHyperparameterSelectionStrategy(ABC):
     @abstractmethod
     def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials.
 
         :param auto_ml_container: trials data container
-        :type auto_ml_container: Trials
         :return: next best hyperparams
         :rtype: HyperparameterSamples
         """
         raise NotImplementedError()
 
 
-class AutoMLAlgorithm(MetaStepMixin, BaseStep):
-    """
-    Pipeline step that executes Automatic Machine Learning strategy.
-    It uses an hyperparameter optimizer of type :class:`BaseHyperparameterOptimizer` to find the next best hyperparams.
-    It uses a validation technique of type :class:`BaseCrossValidationWrapper` to calculate the score.
-
-    Please refer to :class:`AutoMLSequentialWrapper` for a usage example.
-
-    .. seealso::
-        :class:`BaseCrossValidationWrapper`,
-        :class:`HyperparameterSamples`,
-        :class:`BaseHyperparameterOptimizer`,
-        :class:`BaseCrossValidationWrapper`,
-        :class:`TrialsContainer`,
-        :class:`HyperparameterSpace`,
-        :class:`MetaStepMixin`,
-        :class:`BaseStep`
+class Trainer:
     """
 
-    def __init__(
-            self,
-            hyperparameter_optimizer: BaseHyperparameterOptimizer,
-            validation_technique: BaseCrossValidationWrapper = None,
-            higher_score_is_better=True
-    ):
-        BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, None)
+    Example usage :
 
-        if validation_technique is None:
-            validation_technique = KFoldCrossValidationWrapper()
-        self.validation_technique = validation_technique
-        self.higher_score_is_better = higher_score_is_better
-        self.hyperparameter_optimizer = hyperparameter_optimizer
+    .. code-block:: python
 
-    def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
-        """
-        Find the next best hyperparams using previous trials.
-
-        :param auto_ml_container: trials data container
-        :type auto_ml_container: Trials
-        :return: next best hyperparams
-        :rtype: HyperparameterSamples
-        """
-        return self.hyperparameter_optimizer.find_next_best_hyperparams(auto_ml_container)
-
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('AutoMLAlgorithm', float):
-        """
-        Fit cross validation with wrapped step, and return the score.
-
-        :param data_inputs: data inputs
-        :param expected_outputs: expected outputs to fit on
-        :return: self, step score
-        :rtype: (AutoMLAlgorithm, float)
-        """
-        step: BaseStep = copy.deepcopy(self.wrapped)
-        step: BaseCrossValidationWrapper = copy.copy(self.validation_technique).set_step(step)
-        step = step.fit(data_inputs, expected_outputs)
-        score = step.get_score()
-
-        return self, score
-
-    def get_best_hyperparams(self, trials: 'Trials') -> HyperparameterSamples:
-        """
-        Get the best hyperparams from all previous trials.
-
-        :return: best hyperparams
-        :rtype: HyperparameterSamples
-        """
-        return trials.get_best_hyperparams(higher_score_is_better=self.higher_score_is_better)
-
-    def fit(self, data_inputs, expected_outputs=None):
-        return self
-
-    def transform(self, data_inputs, expected_outputs=None):
-        return data_inputs
-
-
-class TRIAL_STATUS(Enum):
-    FAILED = 'failed'
-    SUCCESS = 'success'
-    PLANNED = 'planned'
-
-
-class AutoMLContainer:
-    """
-    Data object for auto ml.
-
-    .. seealso::
-        :class:`AutoMLSequentialWrapper`,
-        :class:`RandomSearch`,
-        :class:`HyperparamsRepository`,
-        :class:`MetaStepMixin`,
-        :class:`BaseStep`
-    """
-
-    def __init__(
-            self,
-            trials: 'Trials',
-            hyperparameter_space: HyperparameterSpace,
-            n_iters: int,
-            trial_number: int
-    ):
-        self.trials = trials
-        self.hyperparameter_space = hyperparameter_space
-        self.n_iters = n_iters
-        self.trial_number = trial_number
-
-
-class Trial:
-    def __init__(self, hyperparams: HyperparameterSamples, score: float, status: TRIAL_STATUS):
-        self.hyperparams = hyperparams
-        self.score = score
-        self.status = status
-
-    def to_json(self) -> dict:
-        return {
-            'hyperparams': self.hyperparams,
-            'score': self.score,
-            'status': self.status
-        }
-
-    @staticmethod
-    def from_json(trial_json) -> 'Trial':
-        return Trial(
-            hyperparams=trial_json['hyperparams'],
-            score=trial_json['score'],
-            status=trial_json['status']
+        trainer = Trainer(
+            callbacks=[],
+            epochs=10,
+            print_func=print
         )
 
+        repo_trial = trainer.fit(
+            p=p,
+            trial_repository=repo_trial,
+            train_data_container=training_data_container,
+            validation_data_container=validation_data_container,
+            context=context
+        )
 
-class Trials:
-    """
-    Data object containing auto ml trials.
+        pipeline = trainer.refit(repo_trial.pipeline, data_container, context)
+
 
     .. seealso::
-        :class:`AutoMLSequentialWrapper`,
-        :class:`RandomSearch`,
-        :class:`HyperparamsRepository`,
-        :class:`MetaStepMixin`,
-        :class:`BaseStep`
+        :class:`AutoML`,
+        :class:`Trainer`,
+        :class:`neuraxle.metaopt.trial.Trial`,
+        :class:`InMemoryHyperparamsRepository`,
+        :class:`HyperparamsJSONRepository`,
+        :class:`BaseHyperparameterSelectionStrategy`,
+        :class:`RandomSearchHyperparameterSelectionStrategy`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
     def __init__(
-        self,
-        trials: List[Trial] = None
+            self,
+            epochs,
+            metrics=None,
+            callbacks=None,
+            print_metrics=True,
+            print_func=None
     ):
-        if trials is None:
-            trials = []
-        self.trials: List[Trial] = trials
+        self.epochs = epochs
+        if metrics is None:
+            metrics = {}
+        self.metrics = metrics
+        self._initialize_metrics(metrics)
 
-    def get_best_hyperparams(self, higher_score_is_better: bool) -> HyperparameterSamples:
-        best_score = None
-        best_hyperparams = None
+        self.callbacks = CallbackList(callbacks)
 
-        for trial in self.trials:
-            if best_score is None or higher_score_is_better == (trial.score > best_score):
-                best_score = trial.score
-                best_hyperparams = trial.hyperparams
+        if print_func is None:
+            print_func = print
 
-        return best_hyperparams
+        self.print_func = print_func
+        self.print_metrics = print_metrics
 
-    def append(self, trial: Trial):
-        self.trials.append(trial)
+    def fit(self, p, train_data_container: DataContainer, validation_data_container: DataContainer, trial: Trial,
+            context: ExecutionContext) -> Trial:
+        """
+        Train pipeline using the training data container.
+        Track training, and validation metrics for each epoch.
 
-    def filter(self, status: TRIAL_STATUS) -> 'Trials':
-        trials = Trials()
-        for trial in self.trials:
-            if trial.status == status:
-                trials.append(trial)
+        :param p: pipeline to train on
+        :param train_data_container: train data container
+        :param validation_data_container: validation data container
+        :param trial: trial to execute
+        :param context: execution context
 
-        return trials
+        :return: executed trial
+        """
+        early_stopping = False
 
-    def __getitem__(self, item):
-        return self.trials[item]
+        for i in range(self.epochs):
+            self.print_func('\nepoch {}/{}'.format(i + 1, self.epochs))
+            p = p.handle_fit(train_data_container, context)
 
-    def __len__(self):
-        return len(self.trials)
+            y_pred_train = p.handle_predict(train_data_container, context)
+            y_pred_val = p.handle_predict(validation_data_container, context)
+
+            trial.set_fitted_pipeline(pipeline=p)
+
+            if self.callbacks.call(
+                    trial=trial,
+                    epoch_number=i,
+                    total_epochs=self.epochs,
+                    input_train=train_data_container,
+                    pred_train=y_pred_train,
+                    input_val=validation_data_container,
+                    pred_val=y_pred_val,
+                    is_finished_and_fitted=early_stopping
+            ):
+                break
+
+        return trial
+
+    def refit(self, p: BaseStep, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+        """
+        Refit the pipeline on the whole dataset (without any validation technique).
+
+        :param p: trial to refit
+        :param data_container: data container
+        :param context: execution context
+
+        :return: fitted pipeline
+        """
+        for i in range(self.epochs):
+            p = p.handle_fit(data_container, context)
+
+        return p
+
+    def _initialize_metrics(self, metrics):
+        """
+        Initialize metrics results dict for train, and validation using the metrics function dict.
+
+        :param metrics: metrics function dict
+        :type metrics: dict
+
+        :return:
+        """
+        self.metrics_results_train = {}
+        self.metrics_results_validation = {}
+
+        for m in metrics:
+            self.metrics_results_train[m] = []
+            self.metrics_results_validation[m] = []
 
 
-class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
+class AutoML(ForceHandleOnlyMixin, BaseStep):
     """
     A step to execute any Automatic Machine Learning Algorithms.
 
@@ -465,126 +525,181 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
 
     .. code-block:: python
 
-        auto_ml: AutoMLSequentialWrapper = AutoMLSequentialWrapper(
-            step=ForecastingPipeline(),
-            auto_ml_algorithm=AutoMLAlgorithm(
-                hyperparameter_optimizer=RandomSearchHyperparameterOptimizer(),
-                validation_technique=KFoldCrossValidationWrapper(),
-                higher_score_is_better=True
-            ),
-            hyperparams_repository=HyperparamsJSONRepository(),
-            n_iters=100
+        auto_ml = AutoML(
+            pipeline,
+            n_trials=n_iter,
+            validation_split_function=validation_splitter(0.2),
+            hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+            scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
+            callbacks=[
+                MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)
+            ],
+            refit_trial=True,
+            print_metrics=False,
+            cache_folder_when_no_handle=str(tmpdir)
         )
 
-        auto_ml: AutoMLSequentialWrapper = auto_ml.fit(data_inputs, expected_outputs)
-
-        best_model: ForecastingPipeline = auto_ml.get_best_model()
+        auto_ml = auto_ml.fit(data_inputs, expected_outputs)
 
 
     .. seealso::
-        :class:`AutoMLAlgorithm`,
+        :class:`neuraxle.base.BaseStep`,
+        :class:`neuraxle.base.ForceHandleOnlyMixin`,
+        :class:`Trainer`,
+        :class:`neuraxle.metaopt.trial.Trial`,
+        :class:`neuraxle.metaopt.trial.Trials`,
         :class:`HyperparamsRepository`,
-        :class:`RandomSearch`,
-        :class:`BaseHyperparameterOptimizer`,
-        :class:`RandomSearchHyperparameterOptimizer`,
-        :class:`MetaStepMixin`,
-        :class:`NonTransformableMixin`,
-        :class:`BaseStep`
+        :class:`InMemoryHyperparamsRepository`,
+        :class:`HyperparamsJSONRepository`,
+        :class:`BaseHyperparameterSelectionStrategy`,
+        :class:`RandomSearchHyperparameterSelectionStrategy`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
     def __init__(
             self,
-            wrapped: BaseStep,
-            auto_ml_algorithm: AutoMLAlgorithm,
+            pipeline,
+            validation_split_function: Callable,
+            refit_trial,
+            scoring_callback: ScoringCallback,
+            hyperparams_optimizer: BaseHyperparameterSelectionStrategy = None,
             hyperparams_repository: HyperparamsRepository = None,
-            n_iters: int = 100,
-            refit=True
+            n_trials: int = 10,
+            epochs: int = 1,
+            callbacks: List[BaseCallback] = None,
+            refit_scoring_function: Callable = None,
+            print_func: Callable = None,
+            cache_folder_when_no_handle=None
     ):
         BaseStep.__init__(self)
+        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
 
-        self.refit = refit
-        auto_ml_algorithm = auto_ml_algorithm.set_step(wrapped)
+        self.validation_split_function = create_split_data_container_function(validation_split_function)
 
-        MetaStepMixin.__init__(self, auto_ml_algorithm)
-        NonTransformableMixin.__init__(self)
+        if print_func is None:
+            print_func = print
+
+        if hyperparams_optimizer is None:
+            hyperparams_optimizer = RandomSearchHyperparameterSelectionStrategy()
+        self.hyperparameter_optimizer = hyperparams_optimizer
 
         if hyperparams_repository is None:
-            hyperparams_repository = InMemoryHyperparamsRepository()
+            hyperparams_repository = HyperparamsJSONRepository(hyperparams_optimizer, cache_folder_when_no_handle)
+        else:
+            hyperparams_repository.set_strategy(hyperparams_optimizer)
+
         self.hyperparams_repository = hyperparams_repository
-        self.n_iters = n_iters
 
-    def set_step(self, step: BaseStep) -> BaseStep:
-        self.wrapped.set_step(step)
+        self.pipeline = pipeline
+        self.print_func = print_func
 
-    def _fit_transform_data_container(self, data_container, context):
-        new_self = self._fit_data_container(data_container, context)
-        return new_self, new_self._transform_data_container(data_container, context)
+        self.n_trial = n_trials
+        self.hyperparams_repository = hyperparams_repository
+        self.hyperparameter_optimizer = hyperparams_optimizer
 
-    def fit_transform(self, data_inputs, expected_outputs):
-        new_self = self.fit(data_inputs, expected_outputs)
-        return new_self, new_self.transform(data_inputs)
+        self.refit_scoring_function = refit_scoring_function
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        if callbacks is None:
+            callbacks = []
+        self.callbacks = [scoring_callback] + callbacks
+
+        self.epochs = epochs
+        self.refit_trial = refit_trial
+
+        self.trainer = Trainer(
+            callbacks=self.callbacks,
+            epochs=self.epochs,
+            print_func=self.print_func
+        )
+
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
-        Find the best hyperparams using the wrapped AutoML strategy.
+        Run Auto ML Loop.
+        Find the best hyperparams using the hyperparameter optmizer.
+        Evaluate the pipeline on each trial using a validation technique.
 
-        :param data_container: data container to fit on
-        :type data_container: DataContainer
+        :param data_container: data container to fit
         :param context: execution context
-        :type context: ExecutionContext
-        :return: fitted self
-        :rtype: BaseStep
+
+        :return: self
         """
-        for i in range(self.n_iters):
-            auto_ml_trial_data_container: AutoMLContainer = self._load_auto_ml_data(i)
+        training_data_container, validation_data_container = self.validation_split_function(data_container)
 
-            hyperparams = self.wrapped.find_next_best_hyperparams(auto_ml_trial_data_container)
-            self.wrapped = self.wrapped.update_hyperparams(hyperparams)
+        for trial_number in range(self.n_trial):
+            self.print_func('\ntrial {}/{}'.format(trial_number + 1, self.n_trial))
 
-            self.hyperparams_repository.create_new_trial(hyperparams)
+            auto_ml_data = self._load_auto_ml_data(trial_number)
+            p = copy.deepcopy(self.pipeline)
 
-            try:
-                self.wrapped, data_container_with_score = self.wrapped.handle_fit_transform(data_container.copy(), context)
-                score = data_container_with_score.data_inputs
+            with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
+                try:
+                    p.update_hyperparams(repo_trial.hyperparams)
+                    repo_trial.set_hyperparams(p.get_hyperparams())
 
-                self.hyperparams_repository.save_score_for_success_trial(hyperparams, score)
-            except Exception as error:
-                self.hyperparams_repository.save_failure_for_trial(hyperparams, error)
+                    repo_trial = self.trainer.fit(
+                        p=p,
+                        train_data_container=training_data_container,
+                        validation_data_container=validation_data_container,
+                        trial=repo_trial,
+                        context=context
+                    )
 
-        if self.refit:
-            self.best_model = self._load_best_model().handle_fit(data_container.copy(), context)
+                    repo_trial.set_success()
+                    self.print_func('trial {}/{} score: {}'.format(trial_number + 1, self.n_trial, repo_trial.get_validation_scores()[-1]))
+                except Exception as error:
+                    track = traceback.format_exc()
+                    self.print_func(track)
+                    repo_trial.set_failed(error)
+
+            self.hyperparams_repository.save_trial(repo_trial)
+
+        best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
+
+        self.print_func('best hyperparams:\n{}'.format(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+        p: BaseStep = self._load_virgin_model(hyperparams=best_hyperparams)
+        if self.refit_trial:
+            p = self.trainer.refit(
+                p=p,
+                data_container=data_container,
+                context=context
+            )
+
+            self.hyperparams_repository.save_best_model(p)
 
         return self
 
-    def fit(self, data_inputs, expected_outputs=None) -> BaseStep:
+    def get_best_model(self):
         """
-        Find the best hyperparams using the wrapped AutoML strategy.
+        Get best model using the hyperparams repository.
 
-        :param data_inputs: data inputs
-        :param expected_outputs: expected ouptuts to fit on
-        :return: fitted self
+        :return:
+        """
+        return self.hyperparams_repository.get_best_model()
+
+    def _load_virgin_best_model(self) -> BaseStep:
+        """
+        Get the best model from all of the previous trials.
+
+        :return: best model step
         :rtype: BaseStep
         """
-        for i in range(self.n_iters):
-            auto_ml_trial_container: AutoMLContainer = self._load_auto_ml_data(i)
+        best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
+        p: Union[BaseCrossValidationWrapper, BaseStep] = copy.copy(self.pipeline)
+        p = p.update_hyperparams(best_hyperparams)
 
-            hyperparams: HyperparameterSamples = self.wrapped.find_next_best_hyperparams(auto_ml_trial_container)
-            self.wrapped = self.wrapped.update_hyperparams(hyperparams)
+        best_model = p.get_step()
+        return copy.deepcopy(best_model)
 
-            self.hyperparams_repository.create_new_trial(hyperparams)
+    def _load_virgin_model(self, hyperparams: HyperparameterSamples) -> BaseStep:
+        """
+        Load virigin model with the given hyperparams.
 
-            try:
-                self.wrapped, score = self.wrapped.fit_transform(data_inputs, expected_outputs)
-                self.hyperparams_repository.save_score_for_success_trial(hyperparams, score)
-            except Exception as error:
-                self.hyperparams_repository.save_failure_for_trial(hyperparams, error)
+        :return: best model step
+        :rtype: BaseStep
+        """
+        return copy.deepcopy(self.pipeline).update_hyperparams(hyperparams)
 
-        if self.refit:
-            self.best_model = self._load_best_model().fit(data_inputs, expected_outputs)
-
-        return self
-
-    def _load_auto_ml_data(self, trial_number: int) -> AutoMLContainer:
+    def _load_auto_ml_data(self, trial_number: int) -> 'AutoMLContainer':
         """
         Load data for all trials.
 
@@ -594,113 +709,251 @@ class AutoMLSequentialWrapper(NonTransformableMixin, MetaStepMixin, BaseStep):
         :rtype: Trials
         """
         trials = self.hyperparams_repository.load_all_trials(TRIAL_STATUS.SUCCESS)
+        hyperparams_space = self.pipeline.get_hyperparams_space()
 
         return AutoMLContainer(
             trial_number=trial_number,
             trials=trials,
-            hyperparameter_space=self.wrapped.get_hyperparams_space(),
-            n_iters=self.n_iters
+            hyperparameter_space=hyperparams_space,
         )
 
-    def _load_best_model(self) -> BaseStep:
-        """
-        Get the best model from all of the previous trials.
 
-        :return: best model step
-        :rtype: BaseStep
-        """
-        trials: Trials = self.hyperparams_repository.load_all_trials(TRIAL_STATUS.SUCCESS)
-        auto_ml_algorithm: AutoMLAlgorithm = self.wrapped
-        best_hyperparams = auto_ml_algorithm.get_best_hyperparams(trials)
-        auto_ml_algorithm = auto_ml_algorithm.update_hyperparams(best_hyperparams)
-
-        return copy.deepcopy(auto_ml_algorithm.get_step())
-
-    def transform(self, data_inputs):
-        if self.best_model is None:
-            raise Exception('Cannot transform AutoMLSequentialWrapper before fit')
-        return self.best_model.transform(data_inputs)
-
-    def _transform_data_container(self, data_container, context):
-        if self.best_model is None:
-            raise Exception('Cannot transform AutoMLSequentialWrapper before fit')
-        return self.best_model.handle_transform(data_container, context)
-
-    def get_best_model(self) -> BaseStep:
-        return self.best_model
-
-
-class RandomSearch(AutoMLSequentialWrapper):
+class AutoMLContainer:
     """
-    Random Search Automatic Machine Learning Algorithm that randomly samples the space of random variables.
-
-    Example usage :
-
-    .. code-block:: python
-
-        random_search = RandomSearch(
-            ForecastingPipeline(),
-            hyperparams_repository=HyperparamsJSONRepository(),
-            n_iters=100
-        )
+    Data object for auto ml.
 
     .. seealso::
-        :class:`AutoMLSequentialWrapper`,
-        :class:`AutoMLAlgorithm`,
+        :class:`Trainer`,
+        :class:`neuraxle.metaopt.trial.Trial`,
+        :class:`neuraxle.metaopt.trial.Trials`,
         :class:`HyperparamsRepository`,
         :class:`InMemoryHyperparamsRepository`,
         :class:`HyperparamsJSONRepository`,
-        :class:`RandomSearch`,
-        :class:`BaseHyperparameterOptimizer`,
-        :class:`RandomSearchHyperparameterOptimizer`
+        :class:`BaseHyperparameterSelectionStrategy`,
+        :class:`RandomSearchHyperparameterSelectionStrategy`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
     def __init__(
             self,
-            wrapped: BaseStep = None,
-            validation_technique=None,
-            hyperparams_repository: HyperparamsRepository = None,
-            higher_score_is_better=True,
-            n_iter: int = 10
+            trials: 'Trials',
+            hyperparameter_space: HyperparameterSpace,
+            trial_number: int
     ):
-        AutoMLSequentialWrapper.__init__(
-            self,
-            wrapped=wrapped,
-            auto_ml_algorithm=AutoMLAlgorithm(
-                hyperparameter_optimizer=RandomSearchHyperparameterOptimizer(),
-                validation_technique=validation_technique,
-                higher_score_is_better=higher_score_is_better
-            ),
-            hyperparams_repository=hyperparams_repository,
-            n_iters=n_iter
-        )
+        self.trials = trials
+        self.hyperparameter_space = hyperparameter_space
+        self.trial_number = trial_number
 
 
-class RandomSearchHyperparameterOptimizer(BaseHyperparameterOptimizer):
+class RandomSearchHyperparameterSelectionStrategy(BaseHyperparameterSelectionStrategy):
     """
     AutoML Hyperparameter Optimizer that randomly samples the space of random variables.
-
-    Please refer to :class:`AutoMLSequentialWrapper` for a usage example.
+    Please refer to :class:`AutoML` for a usage example.
 
     .. seealso::
-        :class:`AutoMLAlgorithm`,
-        :class:`BaseHyperparameterOptimizer`,
-        :class:`AutoMLSequentialWrapper`,
-        :class:`TrialsContainer`,
-        :class:`HyperparameterSamples`,
-        :class:`HyperparameterSpace`
+        :class:`Trainer`,
+        :class:`neuraxle.metaopt.trial.Trial`,
+        :class:`neuraxle.metaopt.trial.Trials`,
+        :class:`HyperparamsRepository`,
+        :class:`InMemoryHyperparamsRepository`,
+        :class:`HyperparamsJSONRepository`,
+        :class:`BaseHyperparameterSelectionStrategy`,
+        :class:`RandomSearchHyperparameterSelectionStrategy`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
     def __init__(self):
-        BaseHyperparameterOptimizer.__init__(self)
+        BaseHyperparameterSelectionStrategy.__init__(self)
 
     def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
         """
         Randomly sample the next hyperparams to try.
 
         :param auto_ml_container: trials data container
-        :type auto_ml_container: Trials
         :return: next best hyperparams
-        :rtype: HyperparameterSamples
         """
         return auto_ml_container.hyperparameter_space.rvs()
+
+
+ValidationSplitter = Callable
+
+
+def create_split_data_container_function(validation_splitter_function: Callable):
+    """
+    Wrap a validation split function with a split data container function.
+    A validation split function takes two arguments:  data inputs, and expected outputs.
+
+    :param validation_splitter_function:
+    :return:
+    """
+    def split_data_container(data_container: DataContainer) -> Tuple[DataContainer, DataContainer]:
+        train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = \
+            validation_splitter_function(data_container.data_inputs, data_container.expected_outputs)
+
+        train_data_container = DataContainer(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
+        validation_data_container = DataContainer(data_inputs=validation_data_inputs,
+                                                  expected_outputs=validation_expected_outputs)
+
+        return train_data_container, validation_data_container
+
+    return split_data_container
+
+
+def kfold_cross_validation_split(k_fold: int):
+    """
+    Create a function that splits data with K-Fold Cross-Validation resampling.
+
+    .. code-block:: python
+
+        # create a kfold cross validation splitter with 2 kfold
+        kfold_cross_validation_split(0.20)
+
+
+    :param k_fold: number of folds.
+    :return:
+    """
+    def split(data_inputs: Iterable, expected_outputs: Iterable):
+        data_inputs_train, data_inputs_val = _kfold_cross_validation_split(data_inputs)
+
+        if expected_outputs is not None:
+            expected_outputs_train, expected_outputs_val = _kfold_cross_validation_split(expected_outputs)
+            return data_inputs_train, expected_outputs_train, data_inputs_val, expected_outputs_val
+
+        return data_inputs_train, [None] * len(data_inputs_train), data_inputs_val,  [None] * len(data_inputs_val)
+
+    def _kfold_cross_validation_split(data_inputs):
+        splitted_train_data_inputs = []
+        splitted_validation_inputs = []
+
+        step = len(data_inputs) / float(k_fold)
+        for i in range(k_fold):
+            a = int(step * i)
+            b = int(step * (i + 1))
+            if b > len(data_inputs):
+                b = len(data_inputs)
+
+            validation = data_inputs[a:b]
+            train = np.concatenate((data_inputs[:a], data_inputs[b:]), axis=0)
+
+            splitted_validation_inputs.append(validation)
+            splitted_train_data_inputs.append(train)
+
+        return splitted_train_data_inputs, splitted_validation_inputs
+
+    return split
+
+
+def validation_splitter(test_size: float):
+    """
+    Create a function that splits data into a training, and a validation set.
+
+    .. code-block:: python
+
+        # create a validation splitter function with 80% train, and 20% validation
+        validation_splitter(0.20)
+
+
+    :param test_size: test size in float
+    :return:
+    """
+    def create_validation_splitter(splitter_function: Callable):
+        def splitter(data_inputs, expected_outputs=None) -> Tuple[Iterable, Iterable, Iterable, Iterable]:
+            train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = splitter_function(data_inputs, expected_outputs)
+            return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
+
+        return splitter
+
+    def split(data_inputs, expected_outputs=None) -> Tuple[List, List, List, List]:
+        """
+        Split data inputs, and expected outputs into a training set, and a validation set.
+
+        :param data_inputs: data inputs to split
+        :param expected_outputs: expected outputs to split
+        :return: train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
+        """
+        validation_data_inputs = validation_split(data_inputs)
+        validation_expected_outputs = None
+        if expected_outputs is not None:
+            validation_expected_outputs = validation_split(expected_outputs)
+
+        train_data_inputs = train_split(data_inputs)
+        train_expected_outputs = None
+        if expected_outputs is not None:
+            train_expected_outputs = train_split(expected_outputs)
+
+        return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
+
+    def train_split(data_inputs) -> List:
+        """
+        Split training set.
+
+        :param data_inputs: data inputs to split
+        :return: train_data_inputs
+        """
+        return data_inputs[0:_get_index_split(data_inputs)]
+
+    def validation_split(data_inputs) -> List:
+        """
+        Split validation set.
+
+        :param data_inputs: data inputs to split
+        :return: validation_data_inputs
+        """
+        return data_inputs[_get_index_split(data_inputs):]
+
+    def _get_index_split(data_inputs):
+        return math.floor(len(data_inputs) * (1 - test_size))
+
+    return create_validation_splitter(split)
+
+
+def validation_splitter_fold(test_size: float):
+    def create_validation_splitter(splitter_function: Callable):
+        def splitter(data_inputs, expected_outputs=None) -> Tuple[Iterable, Iterable, Iterable, Iterable]:
+            train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = splitter_function(data_inputs, expected_outputs)
+            return [train_data_inputs], [train_expected_outputs], [validation_data_inputs], [validation_expected_outputs]
+
+        return splitter
+
+    def split(data_inputs, expected_outputs=None) -> Tuple[List, List, List, List]:
+        """
+        Split data inputs, and expected outputs into a training set, and a validation set.
+
+        :param data_inputs: data inputs to split
+        :param expected_outputs: expected outputs to split
+        :return: train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
+        """
+        validation_data_inputs = validation_split(data_inputs)
+        validation_expected_outputs = None
+        if expected_outputs is not None:
+            validation_expected_outputs = validation_split(expected_outputs)
+
+        train_data_inputs = train_split(data_inputs)
+        train_expected_outputs = None
+        if expected_outputs is not None:
+            train_expected_outputs = train_split(expected_outputs)
+
+        return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
+
+    def train_split(data_inputs) -> List:
+        """
+        Split training set.
+
+        :param data_inputs: data inputs to split
+        :return: train_data_inputs
+        """
+        return data_inputs[0:_get_index_split(data_inputs)]
+
+    def validation_split(data_inputs) -> List:
+        """
+        Split validation set.
+
+        :param data_inputs: data inputs to split
+        :return: validation_data_inputs
+        """
+        return data_inputs[_get_index_split(data_inputs):]
+
+    def _get_index_split(data_inputs):
+        return math.floor(len(data_inputs) * (1 - test_size))
+
+    return create_validation_splitter(split)

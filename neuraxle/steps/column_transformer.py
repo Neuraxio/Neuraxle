@@ -93,13 +93,6 @@ class ColumnsSelectorND(MetaStepMixin, BaseStep):
         MetaStepMixin.__init__(self, col_selector)
         self.n_dimension = n_dimension
 
-    def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
-        self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
-        return self
-
-    def transform(self, data_inputs):
-        return self.wrapped.transform(data_inputs)
-
 
 class ColumnTransformer(FeatureUnion):
     """
@@ -122,7 +115,7 @@ class ColumnTransformer(FeatureUnion):
         ])
 
     .. seealso::
-        :class:`FeatureUnion`,
+        :class:`neuraxle.union.FeatureUnion`,
     """
 
     def __init__(self, column_chooser_steps_as_tuple: ColumnChooserTupleList, n_dimension: int = 3):

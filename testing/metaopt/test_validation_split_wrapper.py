@@ -3,7 +3,7 @@ import pytest
 
 from neuraxle.base import ExecutionContext, DEFAULT_CACHE_FOLDER
 from neuraxle.data_container import DataContainer
-from neuraxle.metaopt.auto_ml import RandomSearch
+from neuraxle.metaopt.deprecated import RandomSearch
 from neuraxle.metaopt.random import ValidationSplitWrapper
 from neuraxle.steps.misc import FitTransformCallbackStep, TapeCallbackFunction
 

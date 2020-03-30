@@ -23,19 +23,20 @@ You can find here output handlers steps that changes especially the data outputs
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-from neuraxle.base import ExecutionContext, BaseStep, MetaStepMixin
+from neuraxle.base import ExecutionContext, BaseStep, MetaStepMixin, ForceHandleOnlyMixin
 from neuraxle.data_container import DataContainer
 
 
-class OutputTransformerWrapper(MetaStepMixin, BaseStep):
+class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     """
     Transform expected output wrapper step that can sends the expected_outputs to the wrapped step
     so that it can transform the expected outputs.
     """
 
-    def __init__(self, wrapped):
+    def __init__(self, wrapped, cache_folder_when_no_handle=None):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
+        ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -56,8 +57,7 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
 
         return data_container
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    BaseStep, DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
         """
         Handle fit by passing expected outputs to the wrapped step fit method.
 
@@ -75,8 +75,7 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
 
         return self, data_container
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    BaseStep, DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
         """
         Handle fit transform by passing expected outputs to the wrapped step fit method.
         Update the expected outputs with the outputs.
@@ -118,18 +117,6 @@ class OutputTransformerWrapper(MetaStepMixin, BaseStep):
         data_container.set_current_ids(current_ids)
 
         return data_container
-
-    def fit(self, data_inputs, expected_outputs=None):
-        raise NotImplementedError('must be used inside a pipeline')
-
-    def fit_transform(self, data_inputs, expected_outputs=None):
-        raise NotImplementedError('must be used inside a pipeline')
-
-    def transform(self, data_inputs):
-        raise NotImplementedError('must be used inside a pipeline')
-
-    def inverse_transform(self, processed_outputs):
-        raise NotImplementedError('must be used inside a pipeline')
 
 
 class InputAndOutputTransformerMixin:
@@ -182,14 +169,3 @@ class InputAndOutputTransformerMixin:
 
         return new_self, data_container
 
-    def fit(self, data_inputs, expected_outputs=None):
-        raise NotImplementedError('must be used inside a pipeline')
-
-    def fit_transform(self, data_inputs, expected_outputs=None):
-        raise NotImplementedError('must be used inside a pipeline')
-
-    def transform(self, data_inputs):
-        raise NotImplementedError('must be used inside a pipeline')
-
-    def inverse_transform(self, processed_outputs):
-        raise NotImplementedError('must be used inside a pipeline')
