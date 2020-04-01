@@ -46,7 +46,7 @@ class DataContainer:
     Most of the time, you won't need to care about the DataContainer because it is the pipeline that manages it.
 
     .. seealso::
-        :class:`neuraxle.base.BaseHasher`,
+        :class:`~neuraxle.base.BaseHasher`,
         :class: `neuraxle.base.BaseStep`
     """
 

@@ -47,9 +47,9 @@ class DataShuffler(NonFittableMixin, InputAndOutputTransformerMixin, BaseStep):
 
     .. seealso::
         :class:`EpochRepeater`,
-        :class:`neuraxle.steps.flow.TrainOnlyWrapper`,
-        :class:`neuraxle.steps.output_handlers.InputAndOutputTransformerMixin`,
-        :class:`neuraxle.base.BaseStep`
+        :class:`~neuraxle.steps.flow.TrainOnlyWrapper`,
+        :class:`~neuraxle.steps.output_handlers.InputAndOutputTransformerMixin`,
+        :class:`~neuraxle.base.BaseStep`
     """
 
     def __init__(self, seed=None, increment_seed_after_each_fit=True):
@@ -92,10 +92,10 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
     .. seealso::
         :class:`DataShuffler`,
-        :class:`neuraxle.base.MetaStepMixin`,
-        :class:`neuraxle.steps.flow.TrainOnlyWrapper`,
-        :class:`neuraxle.steps.flow.TestOnlyWrapper`,
-        :class:`neuraxle.base.BaseStep`
+        :class:`~neuraxle.base.MetaStepMixin`,
+        :class:`~neuraxle.steps.flow.TrainOnlyWrapper`,
+        :class:`~neuraxle.steps.flow.TestOnlyWrapper`,
+        :class:`~neuraxle.base.BaseStep`
     """
 
     def __init__(self, wrapped, epochs, repeat_in_test_mode=False, cache_folder_when_no_handle=None):
@@ -223,10 +223,10 @@ class InnerConcatenateDataContainer(NonFittableMixin, NonTransformableMixin, Bas
 
 
     .. seealso::
-        :class:`neuraxle.base.NonFittableMixin`,
-        :class:`neuraxle.base.NonTransformableMixin`,
-        :class:`neuraxle.base.BaseStep`
-        :class:`neuraxle.data_container.DataContainer`
+        :class:`~neuraxle.base.NonFittableMixin`,
+        :class:`~neuraxle.base.NonTransformableMixin`,
+        :class:`~neuraxle.base.BaseStep`
+        :class:`~neuraxle.data_container.DataContainer`
     """
 
     def __init__(self, sub_data_container_names=None):
@@ -331,10 +331,10 @@ class ZipBatchDataContainer(NonFittableMixin, NonTransformableMixin, BaseStep):
 
 
     .. seealso::
-        :class:`neuraxle.base.NonFittableMixin`,
-        :class:`neuraxle.base.NonTransformableMixin`,
-        :class:`neuraxle.base.BaseStep`
-        :class:`neuraxle.data_container.DataContainer`
+        :class:`~neuraxle.base.NonFittableMixin`,
+        :class:`~neuraxle.base.NonTransformableMixin`,
+        :class:`~neuraxle.base.BaseStep`
+        :class:`~neuraxle.data_container.DataContainer`
     """
 
     def __init__(self, sub_data_container_names=None):

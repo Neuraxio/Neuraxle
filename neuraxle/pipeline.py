@@ -319,20 +319,29 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
 class MiniBatchSequentialPipeline(Pipeline):
     """
     Mini Batch Sequential Pipeline class to create a pipeline processing data inputs in batch.
+
     Provide a default batch size :
+
     .. code-block:: python
+
         sub_pipelines = [SomeStep()]
         pipeline = MiniBatchSequentialPipeline(sub_pipelines, batch_size=32)
+
+
     Or manually add a :class`Barrier` step to the mini batch sequential pipeline :
+
     .. code-block:: python
+
         sub_pipelines = [SomeStep(), Joiner(32)]
         pipeline = MiniBatchSequentialPipeline(sub_pipelines)
+
+
     .. seealso::
         :class:`Pipeline`,
         :class:`Barrier`,
         :class:`Joiner`,
-        :class:`neuraxle.data_container.DataContainer`,
-        :class:`neuraxle.base.ExecutionContext`
+        :class:`~neuraxle.data_container.DataContainer`,
+        :class:`~neuraxle.base.ExecutionContext`
     """
 
     def __init__(self, steps: NamedTupleList, batch_size=None):
@@ -377,6 +386,8 @@ class MiniBatchSequentialPipeline(Pipeline):
 
     def transform(self, data_inputs: Any):
         """
+        Transform data inputs with mini batching.
+
         :param data_inputs: the data input to transform
         :return: transformed data inputs
         """
@@ -391,6 +402,8 @@ class MiniBatchSequentialPipeline(Pipeline):
 
     def fit(self, data_inputs, expected_outputs=None) -> 'Pipeline':
         """
+        Fit with mini batching.
+
         :param data_inputs: the data input to fit on
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
@@ -408,6 +421,8 @@ class MiniBatchSequentialPipeline(Pipeline):
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('Pipeline', Any):
         """
+        Fit transform with mini batching.
+
         :param data_inputs: the data input to fit on
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
@@ -536,16 +551,22 @@ class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
     A Barrier step to be used in a minibatch sequential pipeline. It forces all the
     data inputs to get to the barrier in a sub pipeline before going through to the next sub-pipeline.
 
-    ```
-    p = MiniBatchSequentialPipeline([
-        SomeStep(),
-        SomeStep(),
-        Barrier(), # must be a concrete Barrier ex: Joiner()
-        SomeStep(),
-        SomeStep(),
-        Barrier(), # must be a concrete Barrier ex: Joiner()
-    ], batch_size=10)
-    ```
+    .. code-block:: python
+
+        p = MiniBatchSequentialPipeline([
+            SomeStep(),
+            SomeStep(),
+            Barrier(), # must be a concrete Barrier ex: Joiner()
+            SomeStep(),
+            SomeStep(),
+            Barrier(), # must be a concrete Barrier ex: Joiner()
+        ], batch_size=10)
+
+
+    .. seealso::
+        :class:`NonFittableMixin`,
+        :class:`NonTransformableMixin`,
+        :class:`~neuraxle.base.BaseStep`
     """
 
     @abstractmethod
@@ -566,19 +587,14 @@ class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple[
-        'Any', DataContainer]:
+    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple['Any', DataContainer]:
         """
         Execute the given pipeline :func:`~neuraxle.pipeline.Pipeline.fit_transform` with the given data container, and execution context.
 
         :param step: truncable steps to execute
-        :type step: Pipeline
         :param data_container: data container
-        :type data_container: DataContainer
         :param context: execution context
-        :type context: ExecutionContext
         :return: (fitted step, transformed data container)
-        :rtype: Tuple['Any', DataContainer]
         """
         raise NotImplementedError()
 
@@ -653,8 +669,8 @@ class CustomPipelineMixin:
     Boilerplate code for custom pipelines that only implements handle methods.
 
     .. seealso::
-        :class:`neuraxle.pipeline.MiniBatchSequentialPipeline`,
-        :class:`neuraxle.api.DeepLearningPipeline`
+        :class:`~neuraxle.pipeline.MiniBatchSequentialPipeline`,
+        :class:`~neuraxle.api.DeepLearningPipeline`
     """
     def transform(self, data_inputs: Any):
         """

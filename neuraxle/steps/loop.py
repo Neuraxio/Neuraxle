@@ -38,16 +38,16 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStepMixin, 
     Truncable step that fits/transforms each step for each of the data inputs, and expected outputs.
 
     .. seealso::
-        :class:`neuraxle.base.BaseStep`,
-        :class:`neuraxle.base.BaseSaver`,
-        :class:`neuraxle.base.BaseHasher`,
-        :class:`neuraxle.base.ResumableStepMixin`,
-        :class:`neuraxle.base.NonFittableMixin`,
-        :class:`neuraxle.base.NonTransformableMixin`,
-        :class:`neuraxle.pipeline.Pipeline`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`neuraxle.data_container.DataContainer`
+        :class:`~neuraxle.base.BaseStep`,
+        :class:`~neuraxle.base.BaseSaver`,
+        :class:`~neuraxle.base.BaseHasher`,
+        :class:`~neuraxle.base.ResumableStepMixin`,
+        :class:`~neuraxle.base.NonFittableMixin`,
+        :class:`~neuraxle.base.NonTransformableMixin`,
+        :class:`~neuraxle.pipeline.Pipeline`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`~neuraxle.data_container.DataContainer`
     """
 
     def __init__(
@@ -179,7 +179,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
         .. seealso::
             :func:`~BaseStep.update_hyperparams`,
-            :class:`neuraxle.hyperparams.space.HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
         MetaStepMixin.update_hyperparams(self, hyperparams)
         self.steps_as_tuple = [(name, step.set_hyperparams(self.wrapped.get_hyperparams())) for name, step in self.steps_as_tuple]
@@ -291,17 +291,17 @@ class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStepMixin, BaseSt
     Step that reduces a dimension instead of manually looping on it.
 
     .. seealso::
-        :class:`neuraxle.base.BaseStep`,
-        :class:`neuraxle.base.BaseSaver`,
-        :class:`neuraxle.base.BaseHasher`,
-        :class:`neuraxle.base.ResumableStepMixin`,
-        :class:`neuraxle.base.MetaStepMixin`,
-        :class:`neuraxle.base.NonFittableMixin`,
-        :class:`neuraxle.base.NonTransformableMixin`,
-        :class:`neuraxle.pipeline.Pipeline`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`neuraxle.data_container.DataContainer`
+        :class:`~neuraxle.base.BaseStep`,
+        :class:`~neuraxle.base.BaseSaver`,
+        :class:`~neuraxle.base.BaseHasher`,
+        :class:`~neuraxle.base.ResumableStepMixin`,
+        :class:`~neuraxle.base.MetaStepMixin`,
+        :class:`~neuraxle.base.NonFittableMixin`,
+        :class:`~neuraxle.base.NonTransformableMixin`,
+        :class:`~neuraxle.pipeline.Pipeline`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`~neuraxle.data_container.DataContainer`
     """
 
     def __init__(
