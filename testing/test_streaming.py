@@ -1,9 +1,13 @@
+import time
+
 import numpy as np
 
 from neuraxle.base import BaseStep, ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.distributed.streaming import SequentialQueuedPipeline, ParallelQueuedFeatureUnion, QueueJoiner
-from neuraxle.steps.misc import FitTransformCallbackStep
+from neuraxle.pipeline import Pipeline
+from neuraxle.steps.loop import ForEachDataInput
+from neuraxle.steps.misc import FitTransformCallbackStep, Sleep
 
 EXPECTED_OUTPUTS = np.array(range(100)) * 2 * 2 * 2 * 2
 EXPECTED_OUTPUTS_PARALLEL = np.array((np.array(range(100)) * 2).tolist() * 4)
@@ -82,6 +86,19 @@ def test_queued_pipeline_with_n_workers_step():
     assert np.array_equal(outputs, EXPECTED_OUTPUTS)
 
 
+def test_queued_pipeline_with_n_workers_step():
+    p = SequentialQueuedPipeline([
+        (1, MultiplyBy(2)),
+        (1, MultiplyBy(2)),
+        (1, MultiplyBy(2)),
+        (1, MultiplyBy(2))
+    ], batch_size=10, max_size=5)
+
+    outputs = p.transform(list(range(100)))
+
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+
+
 def test_queued_pipeline_with_step_name_n_worker_max_size():
     p = SequentialQueuedPipeline([
         ('1', 1, 5, MultiplyBy(2)),
@@ -132,6 +149,66 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_max_size():
     outputs = p.transform(list(range(100)))
 
     assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
+
+
+def test_parallel_queued_parallelize_correctly():
+    sleep_time = 0.001
+    p = SequentialQueuedPipeline([
+        ('1', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])),
+        ('2', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])),
+        ('3', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])),
+        ('4', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]))
+    ], batch_size=10)
+
+    a = time.time()
+    outputs_streaming = p.transform(list(range(100)))
+    b = time.time()
+    time_queued_pipeline = b - a
+
+    p = Pipeline([
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])
+    ])
+
+    a = time.time()
+    outputs_vanilla = p.transform(list(range(100)))
+    b = time.time()
+    time_vanilla_pipeline = b - a
+
+    assert time_queued_pipeline < time_vanilla_pipeline
+    assert np.array_equal(outputs_streaming, outputs_vanilla)
+
+
+def test_parallel_queued_parallelize_correctly():
+    sleep_time = 0.001
+    p = SequentialQueuedPipeline([
+        ('1', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])),
+        ('2', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])),
+        ('3', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])),
+        ('4', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]))
+    ], batch_size=10)
+
+    a = time.time()
+    outputs_streaming = p.transform(list(range(100)))
+    b = time.time()
+    time_queued_pipeline = b - a
+
+    p = Pipeline([
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])
+    ])
+
+    a = time.time()
+    outputs_vanilla = p.transform(list(range(100)))
+    b = time.time()
+    time_vanilla_pipeline = b - a
+
+    assert time_queued_pipeline < time_vanilla_pipeline
+    assert np.array_equal(outputs_streaming, outputs_vanilla)
 
 
 def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments_max_size():
