@@ -3,4 +3,4 @@
 Neuraxle hyperparameter examples
 -------------------------------------
 
-This demonstrates how to use sklearn classes in a neuraxle pipeline.
+This demonstrates how to use sklearn classes in a Neuraxle pipeline.
