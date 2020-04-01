@@ -168,6 +168,23 @@ class QueueWorker(ObservableQueueMixin, MetaStepMixin, BaseStep):
         self.additional_worker_arguments = additional_worker_arguments
         self.use_savers = use_savers
 
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+        """
+        Don't push to context before processing a QueueWorker step.
+
+        :param context: execution context
+        :type context: ExecutionContext
+        :return:
+        """
+        data_container, context = BaseStep._will_process(
+            self,
+            data_container=data_container,
+            context=context
+        )
+
+        context.pop()
+        return data_container, context
+
     def start(self, context: ExecutionContext):
         """
         Start multiple processes or threads with the worker function as a target.
@@ -451,8 +468,10 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         for name, step in self[:-1]:
             step.start(context)
 
+        batch_index = 0
         for data_container_batch in data_container_batches:
-            self.send_batch_to_queued_pipeline(data_container=data_container_batch)
+            self.send_batch_to_queued_pipeline(batch_index=batch_index, data_container=data_container_batch)
+            batch_index += 1
 
         data_container = self[-1].join(original_data_container=data_container)
         return data_container
@@ -494,12 +513,14 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         raise NotImplementedError()
 
     @abstractmethod
-    def send_batch_to_queued_pipeline(self, data_container):
+    def send_batch_to_queued_pipeline(self, batch_index: int, data_container: DataContainer):
         """
         Send batches to queued pipeline. It is blocking if there is no more space available in the multiprocessing queues.
         Workers might return batches in a different order, but the queue joiner will reorder them at the end.
         The queue joiner will use the summary ids to reorder all of the received batches.
 
+        :param batch_index: batch index
+        :param batch_size: batch size
         :param data_container: data container batch
         :return:
         """
@@ -537,10 +558,11 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
         for i, (name, step) in enumerate(self[1:]):
             self[i].subscribe(step)
 
-    def send_batch_to_queued_pipeline(self, data_container: DataContainer):
+    def send_batch_to_queued_pipeline(self, batch_index: int, data_container: DataContainer):
         """
         Send batches to process to the first queued worker.
 
+        :param batch_index: batch index
         :param data_container: data container batch
         :return:
         """
@@ -579,10 +601,11 @@ class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
         for name, step in self[:-1]:
             step.subscribe(self[-1])
 
-    def send_batch_to_queued_pipeline(self, data_container):
+    def send_batch_to_queued_pipeline(self, batch_index: int, data_container: DataContainer):
         """
         Send batches to process to all of the queued workers.
 
+        :param batch_index: batch index
         :param data_container: data container batch
         :return:
         """
