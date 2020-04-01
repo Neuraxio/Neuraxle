@@ -36,7 +36,7 @@ import numpy as np
 OPTIONAL_ENABLED_HYPERPARAM = 'enabled'
 
 
-class TrainOrTestOnlyWrapper(ResumableStepMixin, ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
+class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     """
     A wrapper to run wrapped step only in test mode, or only in train mode.
 
@@ -53,29 +53,25 @@ class TrainOrTestOnlyWrapper(ResumableStepMixin, ForceHandleOnlyMixin, MetaStepM
         p = TrainOnlyWrapper(Identity(), test_only=False)
 
     .. seealso::
-        :class:`TrainOnlyWrapper`,
-        :class:`TestOnlyWrapper`,
-        :class:`ForceHandleOnlyMixin`,
-        :class:`MetaStepMixin`,
-        :class:`BaseStep`
+        :class:`neuraxle.steps.flow.TrainOnlyWrapper`,
+        :class:`neuraxle.steps.flow.TestOnlyWrapper`,
+        :class:`neuraxle.base.ForceHandleMixin`,
+        :class:`neuraxle.base.MetaStepMixin`,
+        :class:`neuraxle.base.BaseStep`
     """
 
     def __init__(self, wrapped: BaseStep, is_train_only=True, cache_folder_when_no_handle=None):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
-        ResumableStepMixin.__init__(self)
 
         self.is_train_only = is_train_only
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
         """
         :param data_container: data container
-        :type data_container: DataContainer
         :param context: execution context
-        :type context: ExecutionContext
         :return: step, data_container
-        :type: (BaseStep, DataContainer)
         """
         if self._should_execute_wrapped_step():
             self.wrapped = self.wrapped.handle_fit(data_container, context)
@@ -85,11 +81,8 @@ class TrainOrTestOnlyWrapper(ResumableStepMixin, ForceHandleOnlyMixin, MetaStepM
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
         :param data_container: data container
-        :type data_container: DataContainer
         :param context: execution context
-        :type context: ExecutionContext
         :return: step, data_container
-        :type: (BaseStep, DataContainer)
         """
         if self._should_execute_wrapped_step():
             self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
@@ -99,11 +92,8 @@ class TrainOrTestOnlyWrapper(ResumableStepMixin, ForceHandleOnlyMixin, MetaStepM
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         :param data_container: data container
-        :type data_container: DataContainer
         :param context: execution context
-        :type context: ExecutionContext
         :return: step, data_container
-        :type: DataContainer
         """
         if self._should_execute_wrapped_step():
             return self.wrapped.handle_transform(data_container, context)
@@ -171,9 +161,15 @@ class Optional(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             Optional(Identity(), enabled=True)
         ])
 
+    .. seealso::
+        :class:`TrainOrTestOnlyWrapper`,
+        :class:`TrainOnlyWrapper`
+        :class:`neuraxle.base.MetaStepMixin`,
+        :class:`neuraxle.base.BaseStep`
     """
 
-    def __init__(self, wrapped: BaseStep, enabled: bool = True, nullified_return_value=None, cache_folder_when_no_handle=None, use_hyperparameter_space=True, nullify_hyperparams=True):
+    def __init__(self, wrapped: BaseStep, enabled: bool = True, nullified_return_value=None,
+                 cache_folder_when_no_handle=None, use_hyperparameter_space=True, nullify_hyperparams=True):
         hyperparameter_space = HyperparameterSpace({
             OPTIONAL_ENABLED_HYPERPARAM: Boolean()
         }) if use_hyperparameter_space else {}
@@ -198,11 +194,8 @@ class Optional(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         Nullify wrapped step hyperparams, and don't fit the wrapped step.
 
         :param data_container: data container
-        :type data_container: DataContainer
         :param context: execution context
-        :type context: ExecutionContext
         :return: step, data_container
-        :type: (BaseStep, DataContainer)
         """
         if self.hyperparams[OPTIONAL_ENABLED_HYPERPARAM]:
             self.wrapped = self.wrapped.handle_fit(data_container, context)
@@ -217,11 +210,8 @@ class Optional(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         Nullify wrapped step hyperparams, and don't fit_transform the wrapped step.
 
         :param data_container: data container
-        :type data_container: DataContainer
         :param context: execution context
-        :type context: ExecutionContext
         :return: step, data_container
-        :type: (BaseStep, DataContainer)
         """
         if self.hyperparams[OPTIONAL_ENABLED_HYPERPARAM]:
             self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
@@ -240,11 +230,8 @@ class Optional(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         Nullify wrapped step hyperparams, and don't transform the wrapped step.
 
         :param data_container: data container
-        :type data_container: DataContainer
         :param context: execution context
-        :type context: ExecutionContext
         :return: step, data_container
-        :type: DataContainer
         """
         if self.hyperparams[OPTIONAL_ENABLED_HYPERPARAM]:
             return self.wrapped.handle_transform(data_container, context)
@@ -267,7 +254,9 @@ class Optional(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         hyperparams_space = self.wrapped.get_hyperparams_space()
         self.wrapped.set_hyperparams(hyperparams_space.nullify())
 
+
 CHOICE_HYPERPARAM = 'choice'
+
 
 class ChooseOneStepOf(FeatureUnion):
     """
@@ -295,7 +284,7 @@ class ChooseOneStepOf(FeatureUnion):
         })
 
     .. seealso::
-        :class:`Pipeline`
+        :class:`neuraxle.pipeline.Pipeline`
         :class:`Optional`
     """
 
@@ -360,7 +349,8 @@ class ChooseOneStepOf(FeatureUnion):
         """
         step_names = list(self.keys())
         for step_name in step_names[:-1]:
-            self[step_name] = Optional(self[step_name].set_name('Optional({})'.format(step_name)), use_hyperparameter_space=False, nullify_hyperparams=False)
+            self[step_name] = Optional(self[step_name].set_name('Optional({})'.format(step_name)),
+                                       use_hyperparameter_space=False, nullify_hyperparams=False)
 
         self._refresh_steps()
 
@@ -392,7 +382,7 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
         })
 
     .. seealso::
-        :class:`Pipeline`
+        :class:`neuraxle.pipeline.Pipeline`
         :class:`Optional`
     """
 
@@ -453,15 +443,13 @@ class NumpyConcatenateOnCustomAxisIfNotEmpty(NonFittableMixin, BaseStep):
         return np.concatenate(data_inputs, axis=self.axis)
 
 
-
-
 class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseStep):
     """
     A step that selects non empty data inputs.
 
     .. seealso::
-        :class:`TransformHandlerMixin`,
-        :class:`BaseStep`
+        :class:`neuraxle.base.TransformHandlerOnlyMixin`,
+        :class:`neuraxle.base.BaseStep`
     """
 
     def __init__(self):
@@ -503,11 +491,11 @@ class ExpandDim(
         - The expected_outputs is a list of one element that contains the original expected outputs list.
 
     .. seealso::
-        :class:`ForceHandleMixin`,
-        :class:`MetaStepMixin`,
-        :class:`BaseStep`
-        :class:`BaseHasher`
-        :class:`ExpandedDataContainer`
+        :class:`neuraxle.base.ForceAlwaysHandleMixin`,
+        :class:`neuraxle.base.MetaStepMixin`,
+        :class:`neuraxle.base.BaseStep`
+        :class:`neuraxle.base.BaseHasher`
+        :class:`neuraxle.data_container.ExpandedDataContainer`
     """
 
     def __init__(self, wrapped: BaseStep):
@@ -522,6 +510,27 @@ class ExpandDim(
     def _did_process(self, data_container, context):
         data_container = BaseStep._did_process(self, data_container, context)
         return data_container.reduce_dim()
+
+    def resume(self, data_container: DataContainer, context: ExecutionContext):
+        context = context.push(self)
+        if not isinstance(self.wrapped, ResumableStepMixin):
+            raise Exception('cannot resume steps that don\' inherit from ResumableStepMixin')
+
+        old_current_ids = data_container.current_ids
+
+        data_container = self.wrapped.resume(data_container, context)
+
+        expanded_data_container = ExpandedDataContainer(
+            data_inputs=data_container.data_inputs,
+            expected_outputs=data_container.expected_outputs,
+            current_ids=data_container.current_ids,
+            summary_id=data_container.summary_id,
+            old_current_ids=old_current_ids
+        )
+
+        data_container = self._did_process(expanded_data_container, context)
+
+        return data_container
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
         context = context.push(self)
@@ -561,7 +570,8 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
             ("postprocessing_step", postprocessing_step)
         ])
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'ReversiblePreprocessingWrapper':
+    def _fit_data_container(self, data_container: DataContainer,
+                            context: ExecutionContext) -> 'ReversiblePreprocessingWrapper':
         """
         Handle fit by fitting preprocessing step, and postprocessing step.
 
@@ -591,11 +601,8 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
             - `reversed(1)`. Inverse transform preprocessing step
 
         :param data_container: data container to transform
-        :type data_container: DataContainer
         :param context: execution context
-        :type context: ExecutionContext
         :return: data_container
-        :rtype: DataContainer
         """
         data_container = self["preprocessing_step"].handle_transform(data_container,
                                                                      context.push(self["preprocessing_step"]))
@@ -619,11 +626,8 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
             - `reversed(1)`. Inverse transform preprocessing step
 
         :param data_container: data container to transform
-        :type data_container: DataContainer
         :param context: execution context
-        :type context: ExecutionContext
         :return: (self, data_container)
-        :rtype: (ReversiblePreprocessingWrapper, DataContainer)
         """
         self["preprocessing_step"], data_container = self["preprocessing_step"].handle_fit_transform(
             data_container,
