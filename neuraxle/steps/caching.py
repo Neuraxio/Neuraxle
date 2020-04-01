@@ -66,7 +66,7 @@ class ValueCachingWrapper(MetaStepMixin, BaseStep):
 
         :return: tuple(fitted pipeline, data_container)
         """
-        self.create_checkpoint_path(context.get_path())
+        self.create_checkpoint_path()
         self.flush_cache()
 
         self.wrapped = self.wrapped.fit(data_container.data_inputs, data_container.expected_outputs)
@@ -85,7 +85,7 @@ class ValueCachingWrapper(MetaStepMixin, BaseStep):
 
         :return: transformed data container
         """
-        self.create_checkpoint_path(context.get_path())
+        self.create_checkpoint_path()
         outputs = self._transform_with_cache(data_container)
         data_container.set_data_inputs(outputs)
 
@@ -114,12 +114,9 @@ class ValueCachingWrapper(MetaStepMixin, BaseStep):
         return outputs
 
     @abstractmethod
-    def create_checkpoint_path(self, step_path: str) -> str:
+    def create_checkpoint_path(self) -> str:
         """
         Create checkpoint path.
-
-        :param step_path: step path inside pipeline ex: ``Pipeline/step_name/`` 
-        :type step_path: str
 
         :return: checkpoint path
         """
@@ -189,8 +186,8 @@ class PickleValueCachingWrapper(ValueCachingWrapper):
     def transform(self, data_inputs):
         pass
 
-    def create_checkpoint_path(self, step_path: str) -> str:
-        self.checkpoint_path = os.path.join(self.cache_folder, step_path, VALUE_CACHING)
+    def create_checkpoint_path(self) -> str:
+        self.checkpoint_path = os.path.join(self.cache_folder, VALUE_CACHING)
 
         if not os.path.exists(self.checkpoint_path):
             os.makedirs(self.checkpoint_path)
