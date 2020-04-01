@@ -1,6 +1,6 @@
 .. _realworld_examples:
 
-Neuraxle caching examples
+Caching
 -------------------------------------
 
 This demonstrates how to use checkpoint in neuraxle.
