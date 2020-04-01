@@ -3,4 +3,4 @@
 Caching
 -------------------------------------
 
-This demonstrates how to use checkpoint in neuraxle.
+This demonstrates how to use checkpoints in Neuraxle.
