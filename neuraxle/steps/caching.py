@@ -29,6 +29,8 @@ import shutil
 from abc import abstractmethod, ABC
 from typing import Iterable, Any
 
+import joblib
+
 from neuraxle.base import MetaStepMixin, BaseStep, NonFittableMixin, NonTransformableMixin, \
     ExecutionContext
 from neuraxle.data_container import DataContainer
@@ -56,7 +58,8 @@ class ValueCachingWrapper(MetaStepMixin, BaseStep):
 
         self.cache_folder = cache_folder
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseStep', DataContainer):
         """
         Fit transform data container.
 
@@ -212,6 +215,42 @@ class PickleValueCachingWrapper(ValueCachingWrapper):
     def get_cache_path_for(self, data_input):
         hash_value = self._hash_value(data_input)
         return os.path.join(self.checkpoint_path, '{0}.pickle'.format(hash_value))
+
+
+class JoblibValueCachingWrapper(ValueCachingWrapper):
+    """
+    Joblib Value Caching Wrapper class that caches the wrapped step transformed data inputs using python ``pickle`` library.
+    """
+
+    def transform(self, data_inputs):
+        pass
+
+    def create_checkpoint_path(self) -> str:
+        self.checkpoint_path = os.path.join(self.cache_folder, VALUE_CACHING)
+
+        if not os.path.exists(self.checkpoint_path):
+            os.makedirs(self.checkpoint_path)
+
+        return self.checkpoint_path
+
+    def flush_cache(self):
+        shutil.rmtree(self.checkpoint_path)
+        os.mkdir(self.checkpoint_path)
+
+    def read_cache(self, data_input):
+        with open(self.get_cache_path_for(data_input), 'rb') as file_:
+            return joblib.load(file_)
+
+    def write_cache(self, data_input, output):
+        with open(self.get_cache_path_for(data_input), 'wb') as file_:
+            return joblib.dump(output, file_)
+
+    def contains_cache_for(self, data_input) -> bool:
+        return os.path.exists(self.get_cache_path_for(data_input))
+
+    def get_cache_path_for(self, data_input):
+        hash_value = self._hash_value(data_input)
+        return os.path.join(self.checkpoint_path, '{0}.joblib'.format(hash_value))
 
 
 class BaseValueHasher(ABC):
