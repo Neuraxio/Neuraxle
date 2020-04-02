@@ -38,7 +38,7 @@ def main():
         Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
         Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
         Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])
-    ], n_workers_per_step=8, max_size=10, batch_size=10)
+    ], n_workers_per_step=8, max_queue_size=10, batch_size=10)
 
     a = time.time()
     outputs_streaming = p.transform(list(range(100)))

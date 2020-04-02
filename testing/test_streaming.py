@@ -21,7 +21,7 @@ def test_queued_pipeline_with_step_incomplete_batch():
         MultiplyByN(2),
         MultiplyByN(2),
         MultiplyByN(2)
-    ], batch_size=10, n_workers_per_step=1, max_size=5)
+    ], batch_size=10, n_workers_per_step=1, max_queue_size=5)
 
     outputs = p.transform(list(range(15)))
 
@@ -34,7 +34,7 @@ def test_queued_pipeline_with_step():
         MultiplyByN(2),
         MultiplyByN(2),
         MultiplyByN(2)
-    ], batch_size=10, n_workers_per_step=1, max_size=5)
+    ], batch_size=10, n_workers_per_step=1, max_queue_size=5)
 
     outputs = p.transform(list(range(100)))
 
@@ -47,7 +47,7 @@ def test_queued_pipeline_with_step_name_step():
         ('2', MultiplyByN(2)),
         ('3', MultiplyByN(2)),
         ('4', MultiplyByN(2))
-    ], batch_size=10, n_workers_per_step=1, max_size=5)
+    ], batch_size=10, n_workers_per_step=1, max_queue_size=5)
 
     outputs = p.transform(list(range(100)))
 
@@ -60,27 +60,13 @@ def test_queued_pipeline_with_n_workers_step():
         (1, MultiplyByN(2)),
         (1, MultiplyByN(2)),
         (1, MultiplyByN(2))
-    ], batch_size=10, max_size=5)
+    ], batch_size=10, max_queue_size=5)
 
     outputs = p.transform(list(range(100)))
 
     assert np.array_equal(outputs, EXPECTED_OUTPUTS)
 
-
-def test_queued_pipeline_with_n_workers_step():
-    p = SequentialQueuedPipeline([
-        (1, MultiplyByN(2)),
-        (1, MultiplyByN(2)),
-        (1, MultiplyByN(2)),
-        (1, MultiplyByN(2))
-    ], batch_size=10, max_size=5)
-
-    outputs = p.transform(list(range(100)))
-
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
-
-
-def test_queued_pipeline_with_step_name_n_worker_max_size():
+def test_queued_pipeline_with_step_name_n_worker_max_queue_size():
     p = SequentialQueuedPipeline([
         ('1', 1, 5, MultiplyByN(2)),
         ('2', 1, 5, MultiplyByN(2)),
@@ -93,33 +79,33 @@ def test_queued_pipeline_with_step_name_n_worker_max_size():
     assert np.array_equal(outputs, EXPECTED_OUTPUTS)
 
 
-def test_queued_pipeline_with_step_name_n_worker_with_step_name_n_workers_and_default_max_size():
+def test_queued_pipeline_with_step_name_n_worker_with_step_name_n_workers_and_default_max_queue_size():
     p = SequentialQueuedPipeline([
         ('1', 1, MultiplyByN(2)),
         ('2', 1, MultiplyByN(2)),
         ('3', 1, MultiplyByN(2)),
         ('4', 1, MultiplyByN(2))
-    ], max_size=10, batch_size=10)
+    ], max_queue_size=10, batch_size=10)
 
     outputs = p.transform(list(range(100)))
 
     assert np.array_equal(outputs, EXPECTED_OUTPUTS)
 
 
-def test_queued_pipeline_with_step_name_n_worker_with_default_n_workers_and_default_max_size():
+def test_queued_pipeline_with_step_name_n_worker_with_default_n_workers_and_default_max_queue_size():
     p = SequentialQueuedPipeline([
         ('1', MultiplyByN(2)),
         ('2', MultiplyByN(2)),
         ('3', MultiplyByN(2)),
         ('4', MultiplyByN(2))
-    ], n_workers_per_step=1, max_size=10, batch_size=10)
+    ], n_workers_per_step=1, max_queue_size=10, batch_size=10)
 
     outputs = p.transform(list(range(100)))
 
     assert np.array_equal(outputs, EXPECTED_OUTPUTS)
 
 
-def test_parallel_queued_pipeline_with_step_name_n_worker_max_size():
+def test_parallel_queued_pipeline_with_step_name_n_worker_max_queue_size():
     p = ParallelQueuedFeatureUnion([
         ('1', 1, 5, MultiplyByN(2)),
         ('2', 1, 5, MultiplyByN(2)),
@@ -192,7 +178,7 @@ def test_parallel_queued_parallelize_correctly():
     assert np.array_equal(outputs_streaming, outputs_vanilla)
 
 
-def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments_max_size():
+def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments_max_queue_size():
     n_workers = 4
     worker_arguments = [('hyperparams', HyperparameterSamples({'multiply_by': 2})) for _ in range(n_workers)]
     p = ParallelQueuedFeatureUnion([
@@ -210,7 +196,7 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments()
     worker_arguments = [('hyperparams', HyperparameterSamples({'multiply_by': 2})) for _ in range(n_workers)]
     p = ParallelQueuedFeatureUnion([
         ('1', n_workers, worker_arguments, MultiplyByN()),
-    ], batch_size=10, max_size=5)
+    ], batch_size=10, max_queue_size=5)
 
     outputs = p.transform(list(range(100)))
 
@@ -218,39 +204,39 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments()
     assert np.array_equal(outputs, expected)
 
 
-def test_parallel_queued_pipeline_with_step_name_n_worker_with_step_name_n_workers_and_default_max_size():
+def test_parallel_queued_pipeline_with_step_name_n_worker_with_step_name_n_workers_and_default_max_queue_size():
     p = ParallelQueuedFeatureUnion([
         ('1', 1, MultiplyByN(2)),
         ('2', 1, MultiplyByN(2)),
         ('3', 1, MultiplyByN(2)),
         ('4', 1, MultiplyByN(2)),
-    ], max_size=10, batch_size=10)
+    ], max_queue_size=10, batch_size=10)
 
     outputs = p.transform(list(range(100)))
 
     assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
 
 
-def test_parallel_queued_pipeline_with_step_name_n_worker_with_default_n_workers_and_default_max_size():
+def test_parallel_queued_pipeline_with_step_name_n_worker_with_default_n_workers_and_default_max_queue_size():
     p = ParallelQueuedFeatureUnion([
         ('1', MultiplyByN(2)),
         ('2', MultiplyByN(2)),
         ('3', MultiplyByN(2)),
         ('4', MultiplyByN(2)),
-    ], n_workers_per_step=1, max_size=10, batch_size=10)
+    ], n_workers_per_step=1, max_queue_size=10, batch_size=10)
 
     outputs = p.transform(list(range(100)))
 
     assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
 
 
-def test_parallel_queued_pipeline_step_name_n_worker_with_default_n_workers_and_default_max_size():
+def test_parallel_queued_pipeline_step_name_n_worker_with_default_n_workers_and_default_max_queue_size():
     p = ParallelQueuedFeatureUnion([
         ('1', MultiplyByN(2)),
         ('2', MultiplyByN(2)),
         ('3', MultiplyByN(2)),
         ('4', MultiplyByN(2)),
-    ], n_workers_per_step=1, max_size=10, batch_size=10)
+    ], n_workers_per_step=1, max_queue_size=10, batch_size=10)
 
     outputs = p.transform(list(range(100)))
 
@@ -264,7 +250,7 @@ def test_queued_pipeline_saving(tmpdir):
         ('2', FitTransformCallbackStep()),
         ('3', FitTransformCallbackStep()),
         ('4', FitTransformCallbackStep()),
-    ], n_workers_per_step=1, max_size=10, batch_size=10)
+    ], n_workers_per_step=1, max_queue_size=10, batch_size=10)
 
     # When
     p, outputs = p.fit_transform(list(range(100)), list(range(100)))
@@ -302,7 +288,7 @@ def test_queued_pipeline_with_savers(tmpdir):
         ('2', MultiplyByN(2)),
         ('3', MultiplyByN(2)),
         ('4', MultiplyByN(2)),
-    ], n_workers_per_step=1, max_size=10, batch_size=10, use_savers=True, cache_folder=tmpdir)
+    ], n_workers_per_step=1, max_queue_size=10, batch_size=10, use_savers=True, cache_folder=tmpdir)
 
     # When
 
@@ -330,7 +316,7 @@ def test_sequential_queued_pipeline_should_fit_without_multiprocessing():
         (1, FitTransformCallbackStep()),
         (1, FitTransformCallbackStep()),
         (1, FitTransformCallbackStep())
-    ], batch_size=batch_size, max_size=5)
+    ], batch_size=batch_size, max_queue_size=5)
     queue_joiner_for_test = QueueJoinerForTest(batch_size=batch_size)
     p.steps[-1] = queue_joiner_for_test
     p.steps_as_tuple[-1] = (p.steps_as_tuple[-1][0], queue_joiner_for_test)
@@ -348,7 +334,7 @@ def test_sequential_queued_pipeline_should_fit_transform_without_multiprocessing
         (1, FitTransformCallbackStep(transform_function=lambda di: np.array(di) * 2)),
         (1, FitTransformCallbackStep(transform_function=lambda di: np.array(di) * 2)),
         (1, FitTransformCallbackStep(transform_function=lambda di: np.array(di) * 2))
-    ], batch_size=batch_size, max_size=5)
+    ], batch_size=batch_size, max_queue_size=5)
     queue_joiner_for_test = QueueJoinerForTest(batch_size=batch_size)
     p.steps[-1] = queue_joiner_for_test
     p.steps_as_tuple[-1] = (p.steps_as_tuple[-1][0], queue_joiner_for_test)

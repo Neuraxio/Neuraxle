@@ -148,7 +148,7 @@ class QueueWorker(ObservableQueueMixin, MetaStepMixin, BaseStep):
     def __init__(
             self,
             wrapped: BaseStep,
-            max_size: int,
+            max_queue_size: int,
             n_workers: int,
             use_threading: bool,
             additional_worker_arguments=None,
@@ -159,7 +159,7 @@ class QueueWorker(ObservableQueueMixin, MetaStepMixin, BaseStep):
 
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, wrapped)
-        ObservableQueueMixin.__init__(self, Queue(maxsize=max_size))
+        ObservableQueueMixin.__init__(self, Queue(maxsize=max_queue_size))
 
         self.use_threading: bool = use_threading
         self.workers: List[Process] = []
@@ -240,7 +240,7 @@ QueuedPipelineStepsTuple = Union[
     Tuple[int, BaseStep],  # (n_workers, step)
     Tuple[str, BaseStep],  # (step_name, step)
     Tuple[str, int, BaseStep],  # (step_name, n_workers, step)
-    Tuple[str, int, int, BaseStep],  # (step_name, n_workers, max_size, step)
+    Tuple[str, int, int, BaseStep],  # (step_name, n_workers, max_queue_size, step)
     Tuple[str, int, List[Tuple], BaseStep],  # (step_name, n_workers, additional_worker_arguments, step)
     Tuple[str, int, List[Tuple], BaseStep]  # (step_name, n_workers, additional_worker_arguments, step)
 ]
@@ -260,14 +260,14 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         p = QueuedPipeline([
             ('step_a', Identity()),
             ('step_b', Identity()),
-        ], n_workers=1, batch_size=10, max_size=10)
+        ], n_workers=1, batch_size=10, max_queue_size=10)
 
         # step name, number of workers, step
 
         p = QueuedPipeline([
             ('step_a', 1, Identity()),
             ('step_b', 1, Identity()),
-        ], batch_size=10, max_size=10)
+        ], batch_size=10, max_queue_size=10)
 
         # step name, number of workers, and max size
 
@@ -301,7 +301,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             steps: List[QueuedPipelineStepsTuple],
             batch_size,
             n_workers_per_step=None,
-            max_size=None,
+            max_queue_size=None,
             data_joiner=None,
             use_threading=False,
             use_savers=False,
@@ -313,7 +313,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         if data_joiner is None:
             data_joiner = NumpyConcatenateOuterBatch()
         self.data_joiner = data_joiner
-        self.max_size = max_size
+        self.max_queue_size = max_queue_size
         self.batch_size = batch_size
         self.n_workers_per_step = n_workers_per_step
         self.use_threading = use_threading
@@ -342,13 +342,13 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         return steps_as_tuple
 
     def _create_queue_worker(self, step: QueuedPipelineStepsTuple):
-        name, n_workers, additional_worker_arguments, max_size, actual_step = self._get_step_params(step)
+        name, n_workers, additional_worker_arguments, max_queue_size, actual_step = self._get_step_params(step)
 
         return QueueWorker(
             actual_step,
             n_workers=n_workers,
             use_threading=self.use_threading,
-            max_size=max_size,
+            max_queue_size=max_queue_size,
             additional_worker_arguments=additional_worker_arguments,
             use_savers=self.use_savers
         ).set_name('QueueWorker{}'.format(name))
@@ -360,13 +360,13 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :param step: tuple
         :type step: QueuedPipelineStepsTupleList
 
-        :return: return name, n_workers, max_size, actual_step
+        :return: return name, n_workers, max_queue_size, actual_step
         :rtype: tuple(str, int, int, BaseStep)
         """
         if isinstance(step, BaseStep):
             actual_step = step
             name = step.name
-            max_size = self.max_size
+            max_queue_size = self.max_queue_size
             n_workers = self.n_workers_per_step
             additional_arguments = []
         elif len(step) == 2:
@@ -376,25 +376,25 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             else:
                 n_workers, actual_step = step
                 name = actual_step.name
-            max_size = self.max_size
+            max_queue_size = self.max_queue_size
             additional_arguments = []
         elif len(step) == 3:
             name, n_workers, actual_step = step
-            max_size = self.max_size
+            max_queue_size = self.max_queue_size
             additional_arguments = []
         elif len(step) == 4:
             if isinstance(step[2], Iterable):
                 name, n_workers, additional_arguments, actual_step = step
-                max_size = self.max_size
+                max_queue_size = self.max_queue_size
             else:
-                name, n_workers, max_size, actual_step = step
+                name, n_workers, max_queue_size, actual_step = step
                 additional_arguments = []
         elif len(step) == 5:
-            name, n_workers, additional_arguments, max_size, actual_step = step
+            name, n_workers, additional_arguments, max_queue_size, actual_step = step
         else:
             raise Exception('Invalid Queued Pipeline Steps Shape.')
 
-        return name, n_workers, additional_arguments, max_size, actual_step
+        return name, n_workers, additional_arguments, max_queue_size, actual_step
 
     def setup(self) -> 'BaseStep':
         """
