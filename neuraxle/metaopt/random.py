@@ -164,7 +164,6 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
             test_size: float = 0.2,
             scoring_function=r2_score,
             run_validation_split_in_test_mode=True,
-            metrics_already_enabled=True,
             cache_folder_when_no_handle=None
     ):
         """
@@ -177,8 +176,6 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
         self.run_validation_split_in_test_mode = run_validation_split_in_test_mode
         self.test_size = test_size
         self.scoring_function = scoring_function
-
-        self.metrics_enabled = metrics_already_enabled
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('ValidationSplitWrapper', DataContainer):
         """
@@ -217,19 +214,13 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
 
         self._update_scores_train(results_data_container.data_inputs, results_data_container.expected_outputs)
 
-        if self.metrics_enabled:
-            self.wrapped.apply('disable_metrics')
-
-        self.set_train(False)
-        results_data_container = self.wrapped.handle_transform(validation_data_container, context.push(self.wrapped))
-        self.set_train(True)
+        results_data_container = self.wrapped.handle_predict(validation_data_container, context.push(self.wrapped))
 
         self._update_scores_validation(results_data_container.data_inputs, results_data_container.expected_outputs)
 
-        data_container = self.wrapped.handle_transform(data_container, context.push(self.wrapped))
-
-        if self.metrics_enabled:
-            self.wrapped.apply('enable_metrics')
+        self.wrapped.apply('disable_metrics')
+        data_container = self.wrapped.handle_predict(data_container, context.push(self.wrapped))
+        self.wrapped.apply('enable_metrics')
 
         return self, data_container
 

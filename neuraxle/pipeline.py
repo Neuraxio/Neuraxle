@@ -317,6 +317,13 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
 
 
 class CustomPipelineMixin:
+    """
+    Boilerplate code for custom pipelines that only implements handle methods.
+
+    .. seealso::
+        :class:`~neuraxle.pipeline.MiniBatchSequentialPipeline`,
+        :class:`~neuraxle.api.DeepLearningPipeline`
+    """
     def transform(self, data_inputs: Any):
         """
         :param data_inputs: the data input to transform
@@ -417,22 +424,30 @@ class CustomHandleMethodsMixin:
 class MiniBatchSequentialPipeline(CustomHandleMethodsMixin, CustomPipelineMixin, Pipeline):
     """
     Mini Batch Sequential Pipeline class to create a pipeline processing data inputs in batch.
+
     Provide a default batch size :
+
     .. code-block:: python
+
         sub_pipelines = [SomeStep()]
         pipeline = MiniBatchSequentialPipeline(sub_pipelines, batch_size=32)
+
+
     Or manually add a :class`Barrier` step to the mini batch sequential pipeline :
+
     .. code-block:: python
+
         sub_pipelines = [SomeStep(), Joiner(32)]
         pipeline = MiniBatchSequentialPipeline(sub_pipelines)
+
+
     .. seealso::
         :class:`Pipeline`,
         :class:`Barrier`,
         :class:`Joiner`,
-        :class:`DataContainer`,
-        :class:`ExecutionContext`
+        :class:`~neuraxle.data_container.DataContainer`,
+        :class:`~neuraxle.base.ExecutionContext`
     """
-
     def __init__(self, steps: NamedTupleList, batch_size=None, cache_folder=None):
         Pipeline.__init__(self, steps, cache_folder=cache_folder)
         CustomPipelineMixin.__init__(self)
@@ -587,16 +602,23 @@ class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
     """
     A Barrier step to be used in a minibatch sequential pipeline. It forces all the
     data inputs to get to the barrier in a sub pipeline before going through to the next sub-pipeline.
-    ```
-    p = MiniBatchSequentialPipeline([
-        SomeStep(),
-        SomeStep(),
-        Barrier(), # must be a concrete Barrier ex: Joiner()
-        SomeStep(),
-        SomeStep(),
-        Barrier(), # must be a concrete Barrier ex: Joiner()
-    ], batch_size=10)
-    ```
+
+    .. code-block:: python
+
+        p = MiniBatchSequentialPipeline([
+            SomeStep(),
+            SomeStep(),
+            Barrier(), # must be a concrete Barrier ex: Joiner()
+            SomeStep(),
+            SomeStep(),
+            Barrier(), # must be a concrete Barrier ex: Joiner()
+        ], batch_size=10)
+
+
+    .. seealso::
+        :class:`~neuraxle.base.NonFittableMixin`,
+        :class:`~neuraxle.base.NonTransformableMixin`,
+        :class:`~neuraxle.base.BaseStep`
     """
 
     @abstractmethod
@@ -619,13 +641,9 @@ class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
         """
         Execute the given pipeline :func:`~neuraxle.pipeline.Pipeline.fit_transform` with the given data container, and execution context.
         :param step: truncable steps to execute
-        :type step: Pipeline
         :param data_container: data container
-        :type data_container: DataContainer
         :param context: execution context
-        :type context: ExecutionContext
         :return: (fitted step, transformed data container)
-        :rtype: Tuple['Any', DataContainer]
         """
         raise NotImplementedError()
 
@@ -691,3 +709,4 @@ class Joiner(Barrier):
             )
 
         return step, output_data_container
+

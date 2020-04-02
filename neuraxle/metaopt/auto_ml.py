@@ -52,12 +52,12 @@ class HyperparamsRepository(ABC):
     .. seealso::
         :class:`AutoML`,
         :class:`Trainer`,
-        :class:`neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.trial.Trial`,
         :class:`InMemoryHyperparamsRepository`,
         :class:`HyperparamsJSONRepository`,
         :class:`BaseHyperparameterSelectionStrategy`,
         :class:`RandomSearchHyperparameterSelectionStrategy`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
     def __init__(self, hyperparameter_selection_strategy=None, cache_folder=None, best_retrained_model_folder=None):
@@ -171,11 +171,11 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
     .. seealso::
         :class:`AutoML`,
         :class:`Trainer`,
-        :class:`neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.trial.Trial`,
         :class:`HyperparamsJSONRepository`,
         :class:`BaseHyperparameterSelectionStrategy`,
         :class:`RandomSearchHyperparameterSelectionStrategy`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
     def __init__(self, hyperparameter_selection_strategy=None, print_func: Callable = None, cache_folder: str = None,
@@ -243,12 +243,12 @@ class HyperparamsJSONRepository(HyperparamsRepository):
     .. seealso::
         :class:`AutoML`,
         :class:`Trainer`,
-        :class:`neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.trial.Trial`,
         :class:`InMemoryHyperparamsRepository`,
         :class:`HyperparamsJSONRepository`,
         :class:`BaseHyperparameterSelectionStrategy`,
         :class:`RandomSearchHyperparameterSelectionStrategy`,
-        :class:`neuraxle.hyperparams.trial.HyperparameterSamples`
+        :class:`~neuraxle.hyperparams.trial.HyperparameterSamples`
     """
 
     def __init__(
@@ -393,7 +393,6 @@ class BaseHyperparameterSelectionStrategy(ABC):
 
         :param auto_ml_container: trials data container
         :return: next best hyperparams
-        :rtype: HyperparameterSamples
         """
         raise NotImplementedError()
 
@@ -425,12 +424,12 @@ class Trainer:
     .. seealso::
         :class:`AutoML`,
         :class:`Trainer`,
-        :class:`neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.trial.Trial`,
         :class:`InMemoryHyperparamsRepository`,
         :class:`HyperparamsJSONRepository`,
         :class:`BaseHyperparameterSelectionStrategy`,
         :class:`RandomSearchHyperparameterSelectionStrategy`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
     def __init__(
@@ -515,7 +514,6 @@ class Trainer:
         Initialize metrics results dict for train, and validation using the metrics function dict.
 
         :param metrics: metrics function dict
-        :type metrics: dict
 
         :return:
         """
@@ -561,17 +559,17 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
 
 
     .. seealso::
-        :class:`neuraxle.base.BaseStep`,
-        :class:`neuraxle.base.ForceHandleOnlyMixin`,
+        :class:`~neuraxle.base.BaseStep`,
+        :class:`~neuraxle.base.ForceHandleOnlyMixin`,
         :class:`Trainer`,
-        :class:`neuraxle.metaopt.trial.Trial`,
-        :class:`neuraxle.metaopt.trial.Trials`,
+        :class:`~neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.trial.Trials`,
         :class:`HyperparamsRepository`,
         :class:`InMemoryHyperparamsRepository`,
         :class:`HyperparamsJSONRepository`,
         :class:`BaseHyperparameterSelectionStrategy`,
         :class:`RandomSearchHyperparameterSelectionStrategy`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
     def __init__(
@@ -749,7 +747,6 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         Get the best model from all of the previous trials.
 
         :return: best model step
-        :rtype: BaseStep
         """
         best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
         p: Union[BaseCrossValidationWrapper, BaseStep] = copy.copy(self.pipeline)
@@ -763,7 +760,6 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         Load virigin model with the given hyperparams.
 
         :return: best model step
-        :rtype: BaseStep
         """
         return copy.deepcopy(self.pipeline).update_hyperparams(hyperparams)
 
@@ -774,14 +770,14 @@ class AutoMLContainer:
 
     .. seealso::
         :class:`Trainer`,
-        :class:`neuraxle.metaopt.trial.Trial`,
-        :class:`neuraxle.metaopt.trial.Trials`,
+        :class:`~neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.trial.Trials`,
         :class:`HyperparamsRepository`,
         :class:`InMemoryHyperparamsRepository`,
         :class:`HyperparamsJSONRepository`,
         :class:`BaseHyperparameterSelectionStrategy`,
         :class:`RandomSearchHyperparameterSelectionStrategy`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
     def __init__(
@@ -804,14 +800,14 @@ class RandomSearchHyperparameterSelectionStrategy(BaseHyperparameterSelectionStr
 
     .. seealso::
         :class:`Trainer`,
-        :class:`neuraxle.metaopt.trial.Trial`,
-        :class:`neuraxle.metaopt.trial.Trials`,
+        :class:`~neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.trial.Trials`,
         :class:`HyperparamsRepository`,
         :class:`InMemoryHyperparamsRepository`,
         :class:`HyperparamsJSONRepository`,
         :class:`BaseHyperparameterSelectionStrategy`,
         :class:`RandomSearchHyperparameterSelectionStrategy`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
     def __init__(self):

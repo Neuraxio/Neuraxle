@@ -177,8 +177,8 @@ class MultiplyByN(NonFittableMixin, BaseStep):
         # outputs => np.array([3])
 
     .. seealso::
-        :class:`neuraxle.base.NonFittableMixin`,
-        :class:`neuraxle.base.BaseStep`
+        :class:`~neuraxle.base.NonFittableMixin`,
+        :class:`~neuraxle.base.BaseStep`
     """
 
     def __init__(self, multiply_by=1):
@@ -219,8 +219,8 @@ class AddN(NonFittableMixin, BaseStep):
         # outputs => np.array([2])
 
     .. seealso::
-        :class:`neuraxle.base.NonFittableMixin`,
-        :class:`neuraxle.base.BaseStep`
+        :class:`~neuraxle.base.NonFittableMixin`,
+        :class:`~neuraxle.base.BaseStep`
     """
 
     def __init__(self, add=1):

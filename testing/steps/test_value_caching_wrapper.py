@@ -69,7 +69,7 @@ def test_should_flush_cache_on_every_fit(tmpdir):
     p = Pipeline([
         wrapper
     ])
-    wrapper.create_checkpoint_path(os.path.join(tmpdir, 'Pipeline', 'PickleValueCachingWrapper'))
+    wrapper.create_checkpoint_path()
     wrapper.write_cache(1, 10)
     wrapper.write_cache(2, 20)
 

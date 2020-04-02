@@ -202,9 +202,9 @@ class CallbackWrapper(HandleOnlyMixin, MetaStepMixin, BaseStep):
         callback_wrapper = CallbackWrapper(MultiplyByN(2), tape_transform_preprocessing, tape_fit_preprocessing, tape_inverse_transform_preprocessing)
 
     .. seealso::
-        :class:`neuraxle.base.HandleOnlyMixin`,
-        :class:`neuraxle.base.MetaStepMixin`,
-        :class:`neuraxle.base.BaseStep`
+        :class:`~neuraxle.base.HandleOnlyMixin`,
+        :class:`~neuraxle.base.MetaStepMixin`,
+        :class:`~neuraxle.base.BaseStep`
     """
     def __init__(
             self,
