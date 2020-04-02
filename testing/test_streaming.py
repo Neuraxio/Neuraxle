@@ -313,6 +313,25 @@ def test_queued_pipeline_saving(tmpdir):
     assert len(p[3].wrapped.fit_callback_function.data) == 10
 
 
+def test_queued_pipeline_with_savers(tmpdir):
+    # Given
+
+    p = ParallelQueuedFeatureUnion([
+        ('1', MultiplyBy(2)),
+        ('2', MultiplyBy(2)),
+        ('3', MultiplyBy(2)),
+        ('4', MultiplyBy(2)),
+    ], n_workers_per_step=1, max_size=10, batch_size=10, use_savers=True, cache_folder=tmpdir)
+
+    # When
+
+    outputs = p.transform(list(range(100)))
+
+    # Then
+
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
+
+
 class QueueJoinerForTest(QueueJoiner):
     def __init__(self, batch_size):
         super().__init__(batch_size)

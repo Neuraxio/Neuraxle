@@ -194,16 +194,16 @@ class QueueWorker(ObservableQueueMixin, MetaStepMixin, BaseStep):
         :return:
         """
         target_function = worker_function
-        # if self.use_savers:
-        #    self.wrapped.save(context, full_dump=True)
-        #    target_function = with_step_loading(worker_function)
+        if self.use_savers:
+            self.wrapped.save(context, full_dump=True)
+            target_function = worker_function
 
         self.workers = []
         for _, worker_arguments in zip(range(self.n_workers), self.additional_worker_arguments):
             if self.use_threading:
-                p = Thread(target=target_function, args=(self, context, worker_arguments))
+                p = Thread(target=target_function, args=(self, context, worker_arguments, self.use_savers))
             else:
-                p = Process(target=target_function, args=(self, context, worker_arguments))
+                p = Process(target=target_function, args=(self, context, worker_arguments, self.use_savers))
 
             p.daemon = True
             p.start()
@@ -222,35 +222,31 @@ class QueueWorker(ObservableQueueMixin, MetaStepMixin, BaseStep):
         self.observers = []
 
 
-# def with_step_loading(wrapped_function):
-#    def wrapped_worker_function(step: QueueWorker, batches_to_process: Queue, context: ExecutionContext, additional_worker_arguments):
-#        step.set_step(FullDumpLoader(step.wrapped.name).load(context))
-#        wrapped_function(step, batches_to_process, context, additional_worker_arguments)
-
-#    return wrapped_worker_function
-
-
-def worker_function(queue_worker: QueueWorker, context: ExecutionContext, additional_worker_arguments):
+def worker_function(queue_worker: QueueWorker, context: ExecutionContext, additional_worker_arguments, use_savers: bool):
     """
     Worker function that transforms the items inside the queue of items to process.
 
     :param queue_worker: step to transform
     :param additional_worker_arguments: any additional arguments that need to be passed to the workers
     :param context: execution context
-    :type context: ExecutionContext
+    :param use_savers: use savers
     :return:
     """
+    step = queue_worker.get_step()
+    if use_savers:
+        step = context.load(queue_worker.get_step().name)
+
     additional_worker_arguments = tuple(
         additional_worker_arguments[i: i + 2] for i in range(0, len(additional_worker_arguments), 2)
     )
 
     for argument_name, argument_value in additional_worker_arguments:
-        queue_worker.get_step().__dict__.update({argument_name: argument_value})
+        step.__dict__.update({argument_name: argument_value})
 
     while True:
         task: QueuedPipelineTask = queue_worker.get()
         summary_id = task.data_container.summary_id
-        data_container = queue_worker.handle_transform(task.data_container, context)
+        data_container = step.handle_transform(task.data_container, context)
         data_container = data_container.set_summary_id(summary_id)
         queue_worker.notify(QueuedPipelineTask(step_name=queue_worker.name, data_container=data_container))
 
@@ -324,6 +320,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             max_size=None,
             data_joiner=None,
             use_threading=False,
+            use_savers=False,
             cache_folder=None
     ):
         NonFittableMixin.__init__(self)
@@ -336,6 +333,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         self.batch_size = batch_size
         self.n_workers_per_step = n_workers_per_step
         self.use_threading = use_threading
+        self.use_savers = use_savers
 
         MiniBatchSequentialPipeline.__init__(self, steps=self._initialize_steps_as_tuple(steps),
                                              cache_folder=cache_folder)
@@ -367,7 +365,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             n_workers=n_workers,
             use_threading=self.use_threading,
             max_size=max_size,
-            additional_worker_arguments=additional_worker_arguments
+            additional_worker_arguments=additional_worker_arguments,
+            use_savers=self.use_savers
         ).set_name('QueueWorker{}'.format(name))
 
     def _get_step_params(self, step):
@@ -520,7 +519,6 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         The queue joiner will use the summary ids to reorder all of the received batches.
 
         :param batch_index: batch index
-        :param batch_size: batch size
         :param data_container: data container batch
         :return:
         """
