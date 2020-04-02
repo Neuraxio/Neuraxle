@@ -28,16 +28,17 @@ from neuraxle.distributed.streaming import SequentialQueuedPipeline
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEachDataInput
 from neuraxle.steps.misc import Sleep
-from testing.test_streaming import MultiplyBy
+from neuraxle.steps.numpy import MultiplyByN
 
 
 def main():
+    """
+    Process tasks of batch size 10 with 8 queued workers that have a max queue size of 10.
+    Each task doest the following: For each data input, sleep 0.02 seconds, and multiply by 2.
+    """
     sleep_time = 0.02
     p = SequentialQueuedPipeline([
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
     ], n_workers_per_step=8, max_queue_size=10, batch_size=10)
 
     a = time.time()
@@ -47,11 +48,12 @@ def main():
     print('SequentialQueuedPipeline')
     print('execution time: {} seconds'.format(time_queued_pipeline))
 
+    """
+    Process data inputs sequentially. 
+    For each data input, sleep 0.02 seconds, and then multiply by 2.
+    """
     p = Pipeline([
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
     ])
 
     a = time.time()
