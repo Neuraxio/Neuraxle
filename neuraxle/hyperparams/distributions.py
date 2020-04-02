@@ -1040,8 +1040,11 @@ class Continuous(rv_continuous, HyperparameterDistribution):
         :class:`neuraxle.base.BaseStep`
     """
     def __init__(self, min_included: int, max_included: int, null_default_value: int = None, **kwargs):
-        rv_continuous.__init__(self, a=min_included, b=max_included, **kwargs)
+        sk_learn_instance = rv_continuous(a=min_included, b=max_included)
         HyperparameterDistribution.__init__(self, null_default_value=null_default_value)
+
+    def _pdf(self, x):
+        return np.exp(-x**2 / 2.) / np.sqrt(2.0 * np.pi)
 
 
 class Discrete(rv_discrete, HyperparameterDistribution):
@@ -1069,14 +1072,14 @@ class Discrete(rv_discrete, HyperparameterDistribution):
         :class:`neuraxle.base.BaseStep`
     """
     def __init__(self, min_included: float, max_included: float, null_default_value: int = None, **kwargs):
-        rv_discrete.__init__(self, a=min_included, b=max_included, **kwargs)
+        sk_learn_instance = rv_discrete(a=min_included, b=max_included, **kwargs)
         HyperparameterDistribution.__init__(self, null_default_value)
 
     def pdf(self, x) -> float:
         pass
 
 
-class Histogram(rv_histogram, HyperparameterDistribution):
+class Histogram(HyperparameterDistribution):
     """
     Histogram distribution that inherits from `scipy.stats.rv_histogram <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_histogram.html#scipy.stats.rv_histogram>`_
 
@@ -1100,5 +1103,17 @@ class Histogram(rv_histogram, HyperparameterDistribution):
         :class:`neuraxle.base.BaseStep`
     """
     def __init__(self, histogram, null_default_value: int = None, **kwargs):
-        rv_histogram.__init__(self, histogram=histogram, **kwargs)
+        self.sk_learn_instance = rv_histogram(histogram=histogram, **kwargs)
         HyperparameterDistribution.__init__(self, null_default_value)
+
+    def rvs(self) -> float:
+        pass
+
+    def pdf(self, x, *args, **kwargs) -> float:
+        return self.sk_learn_instance.pdf(x, *args, **kwargs)
+
+    def cdf(self, x, *args, **kwargs) -> float:
+        return self.sk_learn_instance.cdf(x, *args, **kwargs)
+
+    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
+        pass
