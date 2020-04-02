@@ -316,354 +316,6 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         return False
 
 
-class MiniBatchSequentialPipeline(Pipeline):
-    """
-    Mini Batch Sequential Pipeline class to create a pipeline processing data inputs in batch.
-
-    Provide a default batch size :
-
-    .. code-block:: python
-
-        sub_pipelines = [SomeStep()]
-        pipeline = MiniBatchSequentialPipeline(sub_pipelines, batch_size=32)
-
-
-    Or manually add a :class`Barrier` step to the mini batch sequential pipeline :
-
-    .. code-block:: python
-
-        sub_pipelines = [SomeStep(), Joiner(32)]
-        pipeline = MiniBatchSequentialPipeline(sub_pipelines)
-
-
-    .. seealso::
-        :class:`Pipeline`,
-        :class:`Barrier`,
-        :class:`Joiner`,
-        :class:`~neuraxle.data_container.DataContainer`,
-        :class:`~neuraxle.base.ExecutionContext`
-    """
-
-    def __init__(self, steps: NamedTupleList, batch_size=None):
-        Pipeline.__init__(self, steps)
-        self._validate_barriers_batch_size(batch_size)
-        self._patch_missing_barrier(batch_size)
-        self._patch_barriers_batch_size(batch_size)
-
-    def _validate_barriers_batch_size(self, batch_size):
-        if batch_size is not None:
-            return
-
-        for _, step in self:
-            if isinstance(step, Barrier):
-                if step.batch_size is None:
-                    raise Exception(
-                        'Invalid Joiner batch size {}[{}]. Please provide a default batch size to MiniBatchSequentialPipeline, or add a batch size to {}[{}].'.format(
-                            self.name, step.name, self.name, step.name))
-
-    def _patch_barriers_batch_size(self, batch_size):
-        if batch_size is None:
-            return
-
-        for _, step in self:
-            if isinstance(step, Barrier):
-                if step.batch_size is not None:
-                    warnings.warn(
-                        'Replacing {}[{}].batch_size by {}.batch_size.'.format(self.name, step.name, self.name))
-                step.batch_size = batch_size
-
-    def _patch_missing_barrier(self, batch_size):
-        has_barrier = False
-
-        for _, step in self:
-            if isinstance(step, Barrier):
-                has_barrier = True
-
-        if not has_barrier:
-            self.steps_as_tuple.append(('Joiner', Joiner(batch_size)))
-
-        self._refresh_steps()
-
-    def transform(self, data_inputs: Any):
-        """
-        Transform data inputs with mini batching.
-
-        :param data_inputs: the data input to transform
-        :return: transformed data inputs
-        """
-        data_container = DataContainer(data_inputs=data_inputs, current_ids=None)
-
-        self.hash_data_container(data_container)
-
-        context = ExecutionContext(self.cache_folder, ExecutionMode.TRANSFORM)
-        data_container = self.handle_transform(data_container, context)
-
-        return data_container.data_inputs
-
-    def fit(self, data_inputs, expected_outputs=None) -> 'Pipeline':
-        """
-        Fit with mini batching.
-
-        :param data_inputs: the data input to fit on
-        :param expected_outputs: the expected data output to fit on
-        :return: the pipeline itself
-        """
-        self.setup()
-
-        data_container = DataContainer(data_inputs=data_inputs, current_ids=None, expected_outputs=expected_outputs)
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
-
-        context = ExecutionContext(self.cache_folder, ExecutionMode.FIT_TRANSFORM)
-        new_self = self.handle_fit(data_container, context)
-
-        return new_self
-
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('Pipeline', Any):
-        """
-        Fit transform with mini batching.
-
-        :param data_inputs: the data input to fit on
-        :param expected_outputs: the expected data output to fit on
-        :return: the pipeline itself
-        """
-        self.setup()
-
-        data_container = DataContainer(data_inputs=data_inputs, current_ids=None, expected_outputs=expected_outputs)
-
-        data_container = self.hash_data_container(data_container)
-
-        context = ExecutionContext(self.cache_folder, ExecutionMode.FIT_TRANSFORM)
-        new_self, data_container = self.handle_fit_transform(data_container, context)
-
-        return new_self, data_container.data_inputs
-
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        """
-        Transform all sub pipelines splitted by the Barrier steps.
-
-        :param data_container: data container to transform.
-        :param context: execution context
-        :return: data container
-        """
-        data_container, context = self._will_process(data_container, context)
-
-        sub_pipelines = self._create_sub_pipelines()
-
-        for sub_pipeline in sub_pipelines:
-            barrier = sub_pipeline[-1]
-            data_container = barrier.join_transform(
-                step=sub_pipeline,
-                data_container=data_container,
-                context=context
-            )
-
-            data_container = self.hash_data_container(data_container)
-
-        return data_container
-
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
-        """
-        Fit all sub pipelines splitted by the Barrier steps.
-
-        :param data_container: data container to transform.
-        :param context: execution context
-        :return: data container
-        """
-        data_container, context = self._will_process(data_container, context)
-
-        sub_pipelines = self._create_sub_pipelines()
-        index_start = 0
-
-        for sub_pipeline in sub_pipelines:
-            sub_pipeline.setup()
-
-            barrier = sub_pipeline[-1]
-            sub_pipeline, data_container = barrier.join_fit_transform(
-                step=sub_pipeline,
-                data_container=data_container,
-                context=context
-            )
-            current_ids = self.hash(data_container)
-            data_container.set_current_ids(current_ids)
-
-            new_self = self[:index_start] + sub_pipeline
-            if index_start + len(sub_pipeline) < len(self):
-                new_self += self[index_start + len(sub_pipeline):]
-
-            self.steps_as_tuple = new_self.steps_as_tuple
-            index_start += len(sub_pipeline)
-
-        return self
-
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
-        """
-        Transform all sub pipelines splitted by the Barrier steps.
-
-        :param data_container: data container to transform.
-        :param context: execution context
-        :return: data container
-        """
-        data_container, context = self._will_process(data_container, context)
-
-        sub_pipelines = self._create_sub_pipelines()
-        index_start = 0
-
-        for sub_pipeline in sub_pipelines:
-            sub_pipeline.setup()
-
-            barrier = sub_pipeline[-1]
-            sub_pipeline, data_container = barrier.join_fit_transform(
-                step=sub_pipeline,
-                data_container=data_container,
-                context=context
-            )
-
-            data_container = self.hash_data_container(data_container)
-
-            new_self = self[:index_start] + sub_pipeline
-            if index_start + len(sub_pipeline) < len(self):
-                new_self += self[index_start + len(sub_pipeline):]
-
-            self.steps_as_tuple = new_self.steps_as_tuple
-            index_start += len(sub_pipeline)
-
-        return self, data_container
-
-    def _create_sub_pipelines(self) -> List['MiniBatchSequentialPipeline']:
-        """
-        Create sub pipelines by splitting the steps by the join type name.
-
-        :return: list of sub pipelines
-        """
-        sub_pipelines: List[MiniBatchSequentialPipeline] = self.split(Barrier)
-        for sub_pipeline in sub_pipelines:
-            if not sub_pipeline.ends_with(Barrier):
-                raise Exception(
-                    'At least one Barrier step needs to be at the end of a streaming pipeline.'
-                )
-
-        return sub_pipelines
-
-
-class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
-    """
-    A Barrier step to be used in a minibatch sequential pipeline. It forces all the
-    data inputs to get to the barrier in a sub pipeline before going through to the next sub-pipeline.
-
-    .. code-block:: python
-
-        p = MiniBatchSequentialPipeline([
-            SomeStep(),
-            SomeStep(),
-            Barrier(), # must be a concrete Barrier ex: Joiner()
-            SomeStep(),
-            SomeStep(),
-            Barrier(), # must be a concrete Barrier ex: Joiner()
-        ], batch_size=10)
-
-
-    .. seealso::
-        :class:`NonFittableMixin`,
-        :class:`NonTransformableMixin`,
-        :class:`~neuraxle.base.BaseStep`
-    """
-
-    @abstractmethod
-    def join_transform(self, step: TruncableSteps, data_container: DataContainer,
-                       context: ExecutionContext) -> DataContainer:
-        """
-        Execute the given pipeline :func:`~neuraxle.pipeline.Pipeline.transform` with the given data container, and execution context.
-
-        :param step: truncable steps to execute
-        :type step: TruncableSteps
-        :param data_container: data container
-        :type data_container: DataContainer
-        :param context: execution context
-        :type context: ExecutionContext
-        :return: transformed data container
-        :rtype: DataContainer
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple['Any', DataContainer]:
-        """
-        Execute the given pipeline :func:`~neuraxle.pipeline.Pipeline.fit_transform` with the given data container, and execution context.
-
-        :param step: truncable steps to execute
-        :param data_container: data container
-        :param context: execution context
-        :return: (fitted step, transformed data container)
-        """
-        raise NotImplementedError()
-
-
-class Joiner(Barrier):
-    """
-    A Special Barrier step that joins the transformed mini batches together with list.extend method.
-    """
-
-    def __init__(self, batch_size):
-        Barrier.__init__(self)
-        self.batch_size = batch_size
-
-    def join_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        """
-        Concatenate the pipeline transform output of each batch of self.batch_size together.
-
-        :param step: pipeline to transform on
-        :type step: Pipeline
-        :param data_container: data container to transform
-        :type data_container: DataContainer
-        :param context: execution context
-        :return: transformed data container
-        :rtype: DataContainer
-        """
-        context = context.push(step)
-
-        data_container_batches = data_container.convolved_1d(
-            stride=self.batch_size,
-            kernel_size=self.batch_size
-        )
-
-        output_data_container = ListDataContainer.empty(original_data_container=data_container)
-        for data_container_batch in data_container_batches:
-            output_data_container.concat(
-                step._transform_data_container(data_container_batch, context)
-            )
-
-        return output_data_container
-
-    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple['Any', DataContainer]:
-        """
-        Concatenate the pipeline fit transform output of each batch of self.batch_size together.
-
-        :param step: pipeline to fit transform on
-        :type step: Pipeline
-        :param data_container: data container to fit transform on
-        :type data_container: DataContainer
-        :param context: execution context
-        :return: fitted self, transformed data inputs
-        :rtype: Tuple[Any, DataContainer]
-        """
-        context = context.push(step)
-
-        data_container_batches = data_container.convolved_1d(
-            stride=self.batch_size,
-            kernel_size=self.batch_size
-        )
-
-        output_data_container = ListDataContainer.empty(original_data_container=data_container)
-        for data_container_batch in data_container_batches:
-            step, data_container_batch = step._fit_transform_data_container(data_container_batch, context)
-            output_data_container.concat(
-                data_container_batch
-            )
-
-        return step, output_data_container
-
-
 class CustomPipelineMixin:
     """
     Boilerplate code for custom pipelines that only implements handle methods.
@@ -719,3 +371,342 @@ class CustomPipelineMixin:
         new_self, data_container = self.handle_fit_transform(data_container, context)
 
         return new_self, data_container.data_inputs
+
+
+class CustomHandleMethodsMixin:
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_transform_data_container(data_container, context)
+
+        data_container = self.transform_data_container(data_container, context)
+
+        data_container = self._did_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        return data_container
+
+    @abstractmethod
+    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        raise NotImplementedError()
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_fit(data_container, context)
+
+        new_self = self.fit_data_container(data_container, context)
+
+        data_container = self._did_fit(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        return new_self
+
+    @abstractmethod
+    def fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+        raise NotImplementedError()
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
+            'BaseStep', DataContainer):
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_fit(data_container, context)
+
+        new_self, data_container = self.fit_transform_data_container(data_container, context)
+
+        data_container = self._did_fit_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        return new_self, data_container
+
+    @abstractmethod
+    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[BaseStep, DataContainer]:
+        raise NotImplementedError()
+
+
+class MiniBatchSequentialPipeline(CustomHandleMethodsMixin, CustomPipelineMixin, Pipeline):
+    """
+    Mini Batch Sequential Pipeline class to create a pipeline processing data inputs in batch.
+
+    Provide a default batch size :
+
+    .. code-block:: python
+
+        sub_pipelines = [SomeStep()]
+        pipeline = MiniBatchSequentialPipeline(sub_pipelines, batch_size=32)
+
+
+    Or manually add a :class`Barrier` step to the mini batch sequential pipeline :
+
+    .. code-block:: python
+
+        sub_pipelines = [SomeStep(), Joiner(32)]
+        pipeline = MiniBatchSequentialPipeline(sub_pipelines)
+
+
+    .. seealso::
+        :class:`Pipeline`,
+        :class:`Barrier`,
+        :class:`Joiner`,
+        :class:`~neuraxle.data_container.DataContainer`,
+        :class:`~neuraxle.base.ExecutionContext`
+    """
+    def __init__(self, steps: NamedTupleList, batch_size=None, cache_folder=None):
+        Pipeline.__init__(self, steps, cache_folder=cache_folder)
+        CustomPipelineMixin.__init__(self)
+        CustomHandleMethodsMixin.__init__(self)
+        self.__validate_barriers_batch_size(batch_size)
+        self.__patch_missing_barrier(batch_size)
+        self.__patch_barriers_batch_size(batch_size)
+
+    def __validate_barriers_batch_size(self, batch_size):
+        if batch_size is not None:
+            return
+
+        for _, step in self:
+            if isinstance(step, Barrier):
+                if step.batch_size is None:
+                    raise Exception(
+                        'Invalid Joiner batch size {}[{}]. Please provide a default batch size to MiniBatchSequentialPipeline, or add a batch size to {}[{}].'.format(
+                            self.name, step.name, self.name, step.name))
+
+    def __patch_barriers_batch_size(self, batch_size):
+        if batch_size is None:
+            return
+
+        for _, step in self:
+            if isinstance(step, Barrier):
+                if step.batch_size is not None:
+                    warnings.warn(
+                        'Replacing {}[{}].batch_size by {}.batch_size.'.format(self.name, step.name, self.name))
+                step.batch_size = batch_size
+
+    def __patch_missing_barrier(self, batch_size):
+        has_barrier = False
+
+        for _, step in self:
+            if isinstance(step, Barrier):
+                has_barrier = True
+
+        if not has_barrier:
+            self.steps_as_tuple.append(('Joiner', Joiner(batch_size)))
+
+        self._refresh_steps()
+
+    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Transform all sub pipelines splitted by the Barrier steps.
+        :param data_container: data container to transform.
+        :param context: execution context
+        :return: data container
+        """
+        sub_pipelines = self._create_sub_pipelines()
+
+        for sub_pipeline in sub_pipelines:
+            barrier = sub_pipeline[-1]
+            data_container = barrier.join_transform(
+                step=sub_pipeline,
+                data_container=data_container,
+                context=context
+            )
+
+            data_container = self.hash_data_container(data_container)
+
+        return data_container
+
+    def fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+        """
+        Fit all sub pipelines splitted by the Barrier steps.
+        :param data_container: data container to transform.
+        :param context: execution context
+        :return: data container
+        """
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_transform_data_container(data_container, context)
+
+        sub_pipelines = self._create_sub_pipelines()
+        index_start = 0
+
+        for sub_pipeline in sub_pipelines:
+            sub_pipeline.setup()
+
+            barrier = sub_pipeline[-1]
+            sub_pipeline, data_container = barrier.join_fit_transform(
+                step=sub_pipeline,
+                data_container=data_container,
+                context=context
+            )
+            current_ids = self.hash(data_container)
+            data_container.set_current_ids(current_ids)
+
+            new_self = self[:index_start] + sub_pipeline
+            if index_start + len(sub_pipeline) < len(self):
+                new_self += self[index_start + len(sub_pipeline):]
+
+            self.steps_as_tuple = new_self.steps_as_tuple
+            index_start += len(sub_pipeline)
+
+        data_container = self._did_fit(data_container, context)
+        self._did_process(data_container, context)
+
+        return self
+
+    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[BaseStep, DataContainer]:
+        """
+        Transform all sub pipelines splitted by the Barrier steps.
+        :param data_container: data container to transform.
+        :param context: execution context
+        :return: data container
+        """
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_transform_data_container(data_container, context)
+
+        sub_pipelines = self._create_sub_pipelines()
+        index_start = 0
+
+        for sub_pipeline in sub_pipelines:
+            sub_pipeline.setup()
+
+            barrier = sub_pipeline[-1]
+            sub_pipeline, data_container = barrier.join_fit_transform(
+                step=sub_pipeline,
+                data_container=data_container,
+                context=context
+            )
+
+            data_container = self.hash_data_container(data_container)
+
+            new_self = self[:index_start] + sub_pipeline
+            if index_start + len(sub_pipeline) < len(self):
+                new_self += self[index_start + len(sub_pipeline):]
+
+            self.steps_as_tuple = new_self.steps_as_tuple
+            index_start += len(sub_pipeline)
+
+        data_container = self._did_fit_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        return self, data_container
+
+    def _create_sub_pipelines(self) -> List['MiniBatchSequentialPipeline']:
+        """
+        Create sub pipelines by splitting the steps by the join type name.
+        :return: list of sub pipelines
+        """
+        sub_pipelines: List[MiniBatchSequentialPipeline] = self.split(Barrier)
+        for sub_pipeline in sub_pipelines:
+            if not sub_pipeline.ends_with(Barrier):
+                raise Exception('At least one Barrier step needs to be at the end of a streaming pipeline.')
+
+        return sub_pipelines
+
+
+class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
+    """
+    A Barrier step to be used in a minibatch sequential pipeline. It forces all the
+    data inputs to get to the barrier in a sub pipeline before going through to the next sub-pipeline.
+
+    .. code-block:: python
+
+        p = MiniBatchSequentialPipeline([
+            SomeStep(),
+            SomeStep(),
+            Barrier(), # must be a concrete Barrier ex: Joiner()
+            SomeStep(),
+            SomeStep(),
+            Barrier(), # must be a concrete Barrier ex: Joiner()
+        ], batch_size=10)
+
+
+    .. seealso::
+        :class:`~neuraxle.base.NonFittableMixin`,
+        :class:`~neuraxle.base.NonTransformableMixin`,
+        :class:`~neuraxle.base.BaseStep`
+    """
+
+    @abstractmethod
+    def join_transform(self, step: TruncableSteps, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Execute the given pipeline :func:`~neuraxle.pipeline.Pipeline.transform` with the given data container, and execution context.
+        :param step: truncable steps to execute
+        :type step: TruncableSteps
+        :param data_container: data container
+        :type data_container: DataContainer
+        :param context: execution context
+        :type context: ExecutionContext
+        :return: transformed data container
+        :rtype: DataContainer
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple['Any', DataContainer]:
+        """
+        Execute the given pipeline :func:`~neuraxle.pipeline.Pipeline.fit_transform` with the given data container, and execution context.
+        :param step: truncable steps to execute
+        :param data_container: data container
+        :param context: execution context
+        :return: (fitted step, transformed data container)
+        """
+        raise NotImplementedError()
+
+
+class Joiner(Barrier):
+    """
+    A Special Barrier step that joins the transformed mini batches together with list.extend method.
+    """
+
+    def __init__(self, batch_size):
+        Barrier.__init__(self)
+        self.batch_size = batch_size
+
+    def join_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Concatenate the pipeline transform output of each batch of self.batch_size together.
+        :param step: pipeline to transform on
+        :type step: Pipeline
+        :param data_container: data container to transform
+        :type data_container: DataContainer
+        :param context: execution context
+        :return: transformed data container
+        :rtype: DataContainer
+        """
+        context = context.push(step)
+
+        data_container_batches = data_container.convolved_1d(
+            stride=self.batch_size,
+            kernel_size=self.batch_size
+        )
+
+        output_data_container = ListDataContainer.empty()
+        for data_container_batch in data_container_batches:
+            output_data_container.concat(
+                step._transform_data_container(data_container_batch, context)
+            )
+
+        return output_data_container
+
+    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple['Any', DataContainer]:
+        """
+        Concatenate the pipeline fit transform output of each batch of self.batch_size together.
+        :param step: pipeline to fit transform on
+        :type step: Pipeline
+        :param data_container: data container to fit transform on
+        :type data_container: DataContainer
+        :param context: execution context
+        :return: fitted self, transformed data inputs
+        :rtype: Tuple[Any, DataContainer]
+        """
+        context = context.push(step)
+
+        data_container_batches = data_container.convolved_1d(
+            stride=self.batch_size,
+            kernel_size=self.batch_size
+        )
+
+        output_data_container = ListDataContainer.empty()
+        for data_container_batch in data_container_batches:
+            step, data_container_batch = step._fit_transform_data_container(data_container_batch, context)
+            output_data_container.concat(
+                data_container_batch
+            )
+
+        return step, output_data_container
+
