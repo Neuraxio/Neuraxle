@@ -1,5 +1,5 @@
 """
-Neuraxle steps for streaming data in parallel in the pipeline
+Streaming Parallel Data Processing
 ===================================================================
 
 Neuraxle steps for streaming data in parallel in the pipeline
