@@ -8,38 +8,18 @@ from neuraxle.distributed.streaming import SequentialQueuedPipeline, ParallelQue
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEachDataInput
 from neuraxle.steps.misc import FitTransformCallbackStep, Sleep
+from neuraxle.steps.numpy import MultiplyByN
 
 EXPECTED_OUTPUTS = np.array(range(100)) * 2 * 2 * 2 * 2
 EXPECTED_OUTPUTS_PARALLEL = np.array((np.array(range(100)) * 2).tolist() * 4)
 
 
-class MultiplyBy(BaseStep):
-    def __init__(self, multiply_by=1):
-        BaseStep.__init__(self)
-        self.multiply_by = multiply_by
-
-    def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
-        return self
-
-    def transform(self, data_inputs):
-        if not isinstance(data_inputs, np.ndarray):
-            data_inputs = np.array(data_inputs)
-
-        return data_inputs * self.multiply_by
-
-    def inverse_transform(self, data_inputs):
-        if not isinstance(data_inputs, np.ndarray):
-            data_inputs = np.array(data_inputs)
-
-        return data_inputs / self.multiply_by
-
-
 def test_queued_pipeline_with_step_incomplete_batch():
     p = SequentialQueuedPipeline([
-        MultiplyBy(2),
-        MultiplyBy(2),
-        MultiplyBy(2),
-        MultiplyBy(2)
+        MultiplyByN(2),
+        MultiplyByN(2),
+        MultiplyByN(2),
+        MultiplyByN(2)
     ], batch_size=10, n_workers_per_step=1, max_size=5)
 
     outputs = p.transform(list(range(15)))
@@ -49,10 +29,10 @@ def test_queued_pipeline_with_step_incomplete_batch():
 
 def test_queued_pipeline_with_step():
     p = SequentialQueuedPipeline([
-        MultiplyBy(2),
-        MultiplyBy(2),
-        MultiplyBy(2),
-        MultiplyBy(2)
+        MultiplyByN(2),
+        MultiplyByN(2),
+        MultiplyByN(2),
+        MultiplyByN(2)
     ], batch_size=10, n_workers_per_step=1, max_size=5)
 
     outputs = p.transform(list(range(100)))
@@ -62,10 +42,10 @@ def test_queued_pipeline_with_step():
 
 def test_queued_pipeline_with_step_name_step():
     p = SequentialQueuedPipeline([
-        ('1', MultiplyBy(2)),
-        ('2', MultiplyBy(2)),
-        ('3', MultiplyBy(2)),
-        ('4', MultiplyBy(2))
+        ('1', MultiplyByN(2)),
+        ('2', MultiplyByN(2)),
+        ('3', MultiplyByN(2)),
+        ('4', MultiplyByN(2))
     ], batch_size=10, n_workers_per_step=1, max_size=5)
 
     outputs = p.transform(list(range(100)))
@@ -75,10 +55,10 @@ def test_queued_pipeline_with_step_name_step():
 
 def test_queued_pipeline_with_n_workers_step():
     p = SequentialQueuedPipeline([
-        (1, MultiplyBy(2)),
-        (1, MultiplyBy(2)),
-        (1, MultiplyBy(2)),
-        (1, MultiplyBy(2))
+        (1, MultiplyByN(2)),
+        (1, MultiplyByN(2)),
+        (1, MultiplyByN(2)),
+        (1, MultiplyByN(2))
     ], batch_size=10, max_size=5)
 
     outputs = p.transform(list(range(100)))
@@ -88,10 +68,10 @@ def test_queued_pipeline_with_n_workers_step():
 
 def test_queued_pipeline_with_n_workers_step():
     p = SequentialQueuedPipeline([
-        (1, MultiplyBy(2)),
-        (1, MultiplyBy(2)),
-        (1, MultiplyBy(2)),
-        (1, MultiplyBy(2))
+        (1, MultiplyByN(2)),
+        (1, MultiplyByN(2)),
+        (1, MultiplyByN(2)),
+        (1, MultiplyByN(2))
     ], batch_size=10, max_size=5)
 
     outputs = p.transform(list(range(100)))
@@ -101,10 +81,10 @@ def test_queued_pipeline_with_n_workers_step():
 
 def test_queued_pipeline_with_step_name_n_worker_max_size():
     p = SequentialQueuedPipeline([
-        ('1', 1, 5, MultiplyBy(2)),
-        ('2', 1, 5, MultiplyBy(2)),
-        ('3', 1, 5, MultiplyBy(2)),
-        ('4', 1, 5, MultiplyBy(2))
+        ('1', 1, 5, MultiplyByN(2)),
+        ('2', 1, 5, MultiplyByN(2)),
+        ('3', 1, 5, MultiplyByN(2)),
+        ('4', 1, 5, MultiplyByN(2))
     ], batch_size=10)
 
     outputs = p.transform(list(range(100)))
@@ -114,10 +94,10 @@ def test_queued_pipeline_with_step_name_n_worker_max_size():
 
 def test_queued_pipeline_with_step_name_n_worker_with_step_name_n_workers_and_default_max_size():
     p = SequentialQueuedPipeline([
-        ('1', 1, MultiplyBy(2)),
-        ('2', 1, MultiplyBy(2)),
-        ('3', 1, MultiplyBy(2)),
-        ('4', 1, MultiplyBy(2))
+        ('1', 1, MultiplyByN(2)),
+        ('2', 1, MultiplyByN(2)),
+        ('3', 1, MultiplyByN(2)),
+        ('4', 1, MultiplyByN(2))
     ], max_size=10, batch_size=10)
 
     outputs = p.transform(list(range(100)))
@@ -127,10 +107,10 @@ def test_queued_pipeline_with_step_name_n_worker_with_step_name_n_workers_and_de
 
 def test_queued_pipeline_with_step_name_n_worker_with_default_n_workers_and_default_max_size():
     p = SequentialQueuedPipeline([
-        ('1', MultiplyBy(2)),
-        ('2', MultiplyBy(2)),
-        ('3', MultiplyBy(2)),
-        ('4', MultiplyBy(2))
+        ('1', MultiplyByN(2)),
+        ('2', MultiplyByN(2)),
+        ('3', MultiplyByN(2)),
+        ('4', MultiplyByN(2))
     ], n_workers_per_step=1, max_size=10, batch_size=10)
 
     outputs = p.transform(list(range(100)))
@@ -140,10 +120,10 @@ def test_queued_pipeline_with_step_name_n_worker_with_default_n_workers_and_defa
 
 def test_parallel_queued_pipeline_with_step_name_n_worker_max_size():
     p = ParallelQueuedFeatureUnion([
-        ('1', 1, 5, MultiplyBy(2)),
-        ('2', 1, 5, MultiplyBy(2)),
-        ('3', 1, 5, MultiplyBy(2)),
-        ('4', 1, 5, MultiplyBy(2))
+        ('1', 1, 5, MultiplyByN(2)),
+        ('2', 1, 5, MultiplyByN(2)),
+        ('3', 1, 5, MultiplyByN(2)),
+        ('4', 1, 5, MultiplyByN(2))
     ], batch_size=10)
 
     outputs = p.transform(list(range(100)))
@@ -154,10 +134,10 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_max_size():
 def test_parallel_queued_parallelize_correctly():
     sleep_time = 0.001
     p = SequentialQueuedPipeline([
-        ('1', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])),
-        ('2', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])),
-        ('3', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])),
-        ('4', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]))
+        ('1', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
+        ('2', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
+        ('3', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
+        ('4', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]))
     ], batch_size=10)
 
     a = time.time()
@@ -166,10 +146,10 @@ def test_parallel_queued_parallelize_correctly():
     time_queued_pipeline = b - a
 
     p = Pipeline([
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])
     ])
 
     a = time.time()
@@ -184,10 +164,10 @@ def test_parallel_queued_parallelize_correctly():
 def test_parallel_queued_parallelize_correctly():
     sleep_time = 0.001
     p = SequentialQueuedPipeline([
-        ('1', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])),
-        ('2', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])),
-        ('3', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])),
-        ('4', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]))
+        ('1', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
+        ('2', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
+        ('3', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
+        ('4', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]))
     ], batch_size=10)
 
     a = time.time()
@@ -196,10 +176,10 @@ def test_parallel_queued_parallelize_correctly():
     time_queued_pipeline = b - a
 
     p = Pipeline([
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyBy(2)])
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
+        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])
     ])
 
     a = time.time()
@@ -215,7 +195,7 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments_m
     n_workers = 4
     worker_arguments = [('multiply_by', 2) for _ in range(n_workers)]
     p = ParallelQueuedFeatureUnion([
-        ('1', n_workers, worker_arguments, 5, MultiplyBy()),
+        ('1', n_workers, worker_arguments, 5, MultiplyByN()),
     ], batch_size=10)
 
     outputs = p.transform(list(range(100)))
@@ -228,7 +208,7 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments()
     n_workers = 4
     worker_arguments = [('multiply_by', 2) for _ in range(n_workers)]
     p = ParallelQueuedFeatureUnion([
-        ('1', n_workers, worker_arguments, MultiplyBy()),
+        ('1', n_workers, worker_arguments, MultiplyByN()),
     ], batch_size=10, max_size=5)
 
     outputs = p.transform(list(range(100)))
@@ -239,10 +219,10 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments()
 
 def test_parallel_queued_pipeline_with_step_name_n_worker_with_step_name_n_workers_and_default_max_size():
     p = ParallelQueuedFeatureUnion([
-        ('1', 1, MultiplyBy(2)),
-        ('2', 1, MultiplyBy(2)),
-        ('3', 1, MultiplyBy(2)),
-        ('4', 1, MultiplyBy(2)),
+        ('1', 1, MultiplyByN(2)),
+        ('2', 1, MultiplyByN(2)),
+        ('3', 1, MultiplyByN(2)),
+        ('4', 1, MultiplyByN(2)),
     ], max_size=10, batch_size=10)
 
     outputs = p.transform(list(range(100)))
@@ -252,10 +232,10 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_with_step_name_n_worke
 
 def test_parallel_queued_pipeline_with_step_name_n_worker_with_default_n_workers_and_default_max_size():
     p = ParallelQueuedFeatureUnion([
-        ('1', MultiplyBy(2)),
-        ('2', MultiplyBy(2)),
-        ('3', MultiplyBy(2)),
-        ('4', MultiplyBy(2)),
+        ('1', MultiplyByN(2)),
+        ('2', MultiplyByN(2)),
+        ('3', MultiplyByN(2)),
+        ('4', MultiplyByN(2)),
     ], n_workers_per_step=1, max_size=10, batch_size=10)
 
     outputs = p.transform(list(range(100)))
@@ -265,10 +245,10 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_with_default_n_workers
 
 def test_parallel_queued_pipeline_step_name_n_worker_with_default_n_workers_and_default_max_size():
     p = ParallelQueuedFeatureUnion([
-        ('1', MultiplyBy(2)),
-        ('2', MultiplyBy(2)),
-        ('3', MultiplyBy(2)),
-        ('4', MultiplyBy(2)),
+        ('1', MultiplyByN(2)),
+        ('2', MultiplyByN(2)),
+        ('3', MultiplyByN(2)),
+        ('4', MultiplyByN(2)),
     ], n_workers_per_step=1, max_size=10, batch_size=10)
 
     outputs = p.transform(list(range(100)))
@@ -317,10 +297,10 @@ def test_queued_pipeline_with_savers(tmpdir):
     # Given
 
     p = ParallelQueuedFeatureUnion([
-        ('1', MultiplyBy(2)),
-        ('2', MultiplyBy(2)),
-        ('3', MultiplyBy(2)),
-        ('4', MultiplyBy(2)),
+        ('1', MultiplyByN(2)),
+        ('2', MultiplyByN(2)),
+        ('3', MultiplyByN(2)),
+        ('4', MultiplyByN(2)),
     ], n_workers_per_step=1, max_size=10, batch_size=10, use_savers=True, cache_folder=tmpdir)
 
     # When

@@ -168,23 +168,6 @@ class QueueWorker(ObservableQueueMixin, MetaStepMixin, BaseStep):
         self.additional_worker_arguments = additional_worker_arguments
         self.use_savers = use_savers
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
-        """
-        Don't push to context before processing a QueueWorker step.
-
-        :param context: execution context
-        :type context: ExecutionContext
-        :return:
-        """
-        data_container, context = BaseStep._will_process(
-            self,
-            data_container=data_container,
-            context=context
-        )
-
-        context.pop()
-        return data_container, context
-
     def start(self, context: ExecutionContext):
         """
         Start multiple processes or threads with the worker function as a target.
@@ -195,7 +178,7 @@ class QueueWorker(ObservableQueueMixin, MetaStepMixin, BaseStep):
         """
         target_function = worker_function
         if self.use_savers:
-            self.wrapped.save(context, full_dump=True)
+            self.save(context, full_dump=True)
             target_function = worker_function
 
         self.workers = []
@@ -234,7 +217,8 @@ def worker_function(queue_worker: QueueWorker, context: ExecutionContext, additi
     """
     step = queue_worker.get_step()
     if use_savers:
-        step = context.load(queue_worker.get_step().name)
+        saved_queue_worker: QueueWorker = context.load(queue_worker.get_name())
+        step = saved_queue_worker.get_step()
 
     additional_worker_arguments = tuple(
         additional_worker_arguments[i: i + 2] for i in range(0, len(additional_worker_arguments), 2)
