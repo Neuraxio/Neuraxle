@@ -184,9 +184,9 @@ class QueueWorker(ObservableQueueMixin, MetaStepMixin, BaseStep):
         self.workers = []
         for _, worker_arguments in zip(range(self.n_workers), self.additional_worker_arguments):
             if self.use_threading:
-                p = Thread(target=target_function, args=(self, context, worker_arguments, self.use_savers))
+                p = Thread(target=target_function, args=(self, context,  self.use_savers, worker_arguments))
             else:
-                p = Process(target=target_function, args=(self, context, worker_arguments, self.use_savers))
+                p = Process(target=target_function, args=(self, context, self.use_savers, worker_arguments))
 
             p.daemon = True
             p.start()
@@ -205,14 +205,14 @@ class QueueWorker(ObservableQueueMixin, MetaStepMixin, BaseStep):
         self.observers = []
 
 
-def worker_function(queue_worker: QueueWorker, context: ExecutionContext, additional_worker_arguments, use_savers: bool):
+def worker_function(queue_worker: QueueWorker, context: ExecutionContext, use_savers: bool, additional_worker_arguments):
     """
     Worker function that transforms the items inside the queue of items to process.
 
     :param queue_worker: step to transform
-    :param additional_worker_arguments: any additional arguments that need to be passed to the workers
     :param context: execution context
     :param use_savers: use savers
+    :param additional_worker_arguments: any additional arguments that need to be passed to the workers
     :return:
     """
     step = queue_worker.get_step()

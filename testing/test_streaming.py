@@ -5,6 +5,7 @@ import numpy as np
 from neuraxle.base import BaseStep, ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.distributed.streaming import SequentialQueuedPipeline, ParallelQueuedFeatureUnion, QueueJoiner
+from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEachDataInput
 from neuraxle.steps.misc import FitTransformCallbackStep, Sleep
@@ -193,7 +194,7 @@ def test_parallel_queued_parallelize_correctly():
 
 def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments_max_size():
     n_workers = 4
-    worker_arguments = [('multiply_by', 2) for _ in range(n_workers)]
+    worker_arguments = [('hyperparams', HyperparameterSamples({'multiply_by': 2})) for _ in range(n_workers)]
     p = ParallelQueuedFeatureUnion([
         ('1', n_workers, worker_arguments, 5, MultiplyByN()),
     ], batch_size=10)
@@ -206,7 +207,7 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments_m
 
 def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments():
     n_workers = 4
-    worker_arguments = [('multiply_by', 2) for _ in range(n_workers)]
+    worker_arguments = [('hyperparams', HyperparameterSamples({'multiply_by': 2})) for _ in range(n_workers)]
     p = ParallelQueuedFeatureUnion([
         ('1', n_workers, worker_arguments, MultiplyByN()),
     ], batch_size=10, max_size=5)
