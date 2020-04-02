@@ -24,7 +24,7 @@ This demonstrates how you can use checkpoints in a pipeline to save computing ti
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-
+import os
 import time
 
 import numpy as np
@@ -33,8 +33,7 @@ from sklearn.metrics import mean_squared_error
 from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, RandomSearchHyperparameterSelectionStrategy, \
-    validation_splitter
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearchHyperparameterSelectionStrategy, ValidationSplitter
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.pipeline import ResumablePipeline, DEFAULT_CACHE_FOLDER, Pipeline
 from neuraxle.steps.flow import ExpandDim
@@ -43,7 +42,7 @@ from neuraxle.steps.misc import Sleep
 from neuraxle.steps.numpy import MultiplyByN
 
 
-def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
+def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
     DATA_INPUTS = np.array(range(100))
     EXPECTED_OUTPUTS = np.array(range(100, 200))
 
@@ -54,6 +53,7 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     })
 
     print('Classic Pipeline:')
+    classic_pipeline_folder = os.path.join(str(tmpdir), 'classic')
 
     pipeline = Pipeline([
         ('multiplication_1', MultiplyByN()),
@@ -61,20 +61,20 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
         ('multiplication_2', MultiplyByN()),
         ('sleep_2', ForEachDataInput(Sleep(sleep_time))),
         ('multiplication_3', MultiplyByN()),
-    ]).set_hyperparams_space(HYPERPARAMETER_SPACE)
+    ], cache_folder=classic_pipeline_folder).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
     auto_ml = AutoML(
         pipeline,
         refit_trial=True,
         n_trials=n_iter,
-        cache_folder_when_no_handle=str(tmpdir),
-        validation_split_function=validation_splitter(0.2),
+        cache_folder_when_no_handle=classic_pipeline_folder,
+        validation_splitter=ValidationSplitter(0.2),
         hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
             MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)
-        ]
+        ],
     )
     auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
     outputs = auto_ml.get_best_model().predict(DATA_INPUTS)
@@ -89,6 +89,7 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
     assert isinstance(actual_score, float)
 
     print('Resumable Pipeline:')
+    resumable_pipeline_folder = os.path.join(str(tmpdir), 'resumable')
 
     pipeline = ResumablePipeline([
         ('multiplication_1', MultiplyByN()),
@@ -98,15 +99,15 @@ def main(tmpdir, sleep_time: float = 0, n_iter: int = 10):
         ('sleep_2', ForEachDataInput(Sleep(sleep_time))),
         ('checkpoint2', ExpandDim(DefaultCheckpoint())),
         ('multiplication_3', MultiplyByN())
-    ], cache_folder=tmpdir).set_hyperparams_space(HYPERPARAMETER_SPACE)
+    ], cache_folder=resumable_pipeline_folder).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
     auto_ml = AutoML(
         pipeline,
-        refit_trial=False,
+        refit_trial=True,
         n_trials=n_iter,
-        cache_folder_when_no_handle=str(tmpdir),
-        validation_split_function=validation_splitter(0.2),
+        cache_folder_when_no_handle=resumable_pipeline_folder,
+        validation_splitter=ValidationSplitter(0.2),
         hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[

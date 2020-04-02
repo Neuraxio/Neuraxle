@@ -38,16 +38,16 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStepMixin, 
     Truncable step that fits/transforms each step for each of the data inputs, and expected outputs.
 
     .. seealso::
-        :class:`neuraxle.base.BaseStep`,
-        :class:`neuraxle.base.BaseSaver`,
-        :class:`neuraxle.base.BaseHasher`,
-        :class:`neuraxle.base.ResumableStepMixin`,
-        :class:`neuraxle.base.NonFittableMixin`,
-        :class:`neuraxle.base.NonTransformableMixin`,
-        :class:`neuraxle.pipeline.Pipeline`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`neuraxle.data_container.DataContainer`
+        :class:`~neuraxle.base.BaseStep`,
+        :class:`~neuraxle.base.BaseSaver`,
+        :class:`~neuraxle.base.BaseHasher`,
+        :class:`~neuraxle.base.ResumableStepMixin`,
+        :class:`~neuraxle.base.NonFittableMixin`,
+        :class:`~neuraxle.base.NonTransformableMixin`,
+        :class:`~neuraxle.pipeline.Pipeline`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`~neuraxle.data_container.DataContainer`
     """
 
     def __init__(
@@ -179,7 +179,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
         .. seealso::
             :func:`~BaseStep.update_hyperparams`,
-            :class:`HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
         MetaStepMixin.update_hyperparams(self, hyperparams)
         self.steps_as_tuple = [(name, step.set_hyperparams(self.wrapped.get_hyperparams())) for name, step in self.steps_as_tuple]
@@ -291,17 +291,17 @@ class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStepMixin, BaseSt
     Step that reduces a dimension instead of manually looping on it.
 
     .. seealso::
-        :class:`neuraxle.base.BaseStep`,
-        :class:`neuraxle.base.BaseSaver`,
-        :class:`neuraxle.base.BaseHasher`,
-        :class:`neuraxle.base.ResumableStepMixin`,
-        :class:`neuraxle.base.MetaStepMixin`,
-        :class:`neuraxle.base.NonFittableMixin`,
-        :class:`neuraxle.base.NonTransformableMixin`,
-        :class:`neuraxle.pipeline.Pipeline`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`neuraxle.data_container.DataContainer`
+        :class:`~neuraxle.base.BaseStep`,
+        :class:`~neuraxle.base.BaseSaver`,
+        :class:`~neuraxle.base.BaseHasher`,
+        :class:`~neuraxle.base.ResumableStepMixin`,
+        :class:`~neuraxle.base.MetaStepMixin`,
+        :class:`~neuraxle.base.NonFittableMixin`,
+        :class:`~neuraxle.base.NonTransformableMixin`,
+        :class:`~neuraxle.pipeline.Pipeline`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`~neuraxle.data_container.DataContainer`
     """
 
     def __init__(
@@ -352,22 +352,20 @@ class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStepMixin, BaseSt
         Flatten the first dimension of a list.
 
         :param list_to_flatten: list to flatten
-        :return: flattened list
+        :return: flattened list, len flattened lists
         """
-        if list_to_flatten is None:
-            return list_to_flatten
+        if not isinstance(list_to_flatten, np.ndarray):
+            list_to_flatten = np.array(list_to_flatten)
 
-        flattened = []
-        lengths = []
-        for i in list_to_flatten:
-            if i is None:
-                flattened.append(None)
-                lengths.append(1)
-            else:
-                new_item = list(i)
-                flattened.extend(new_item)
-                lengths.append(len(new_item))
-        return flattened, lengths
+        if len(list_to_flatten.shape) == 1:
+            return list_to_flatten, [1 for x in list_to_flatten]
+
+        list_to_flatten = list(list_to_flatten)
+        list_to_flatten = [list(x) for x in list_to_flatten]
+        len_list_to_flatten = [len(x) for x in list_to_flatten]
+        flattened_list = sum(list_to_flatten, [])
+
+        return flattened_list, len_list_to_flatten
 
     def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """

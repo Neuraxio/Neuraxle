@@ -6,7 +6,8 @@ from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, RandomSearchHyperparameterSelectionStrategy, \
-    kfold_cross_validation_split, create_split_data_container_function, validation_splitter, HyperparamsJSONRepository
+    HyperparamsJSONRepository, \
+    ValidationSplitter, KFoldCrossValidationSplitter
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCallbackStep
@@ -28,7 +29,7 @@ def test_automl_early_stopping_callback(tmpdir):
             linear_model.LinearRegression()
         ]),
         hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
-        validation_split_function=validation_splitter(0.20),
+        validation_splitter=ValidationSplitter(0.20),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
             MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False),
@@ -59,7 +60,7 @@ def test_automl_with_kfold(tmpdir):
             NumpyReshape(new_shape=(-1, 1)),
             linear_model.LinearRegression()
         ]),
-        validation_split_function=validation_splitter(0.20),
+        validation_splitter=ValidationSplitter(0.20),
         hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
@@ -69,6 +70,7 @@ def test_automl_with_kfold(tmpdir):
         n_trials=1,
         epochs=10,
         refit_trial=True,
+        print_func=print,
         hyperparams_repository=hp_repository
     )
 
@@ -86,22 +88,43 @@ def test_automl_with_kfold(tmpdir):
     assert mse < 1000
 
 
+def test_validation_splitter_should_split_data_properly():
+    # Given
+    data_inputs = np.random.random((4, 2, 2048, 6)).astype(np.float32)
+    expected_outputs = np.random.random((4, 2, 2048, 1)).astype(np.float32)
+    splitter = ValidationSplitter(test_size=0.2)
+
+    # When
+    validation_splits = splitter.split_data_container(DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs))
+    train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
+
+    train_di = train_di[0]
+    train_eo = train_eo[0]
+
+    validation_di = validation_di[0]
+    validation_eo = validation_eo[0]
+
+    # Then
+    assert len(train_di) == 3
+    assert np.array_equal(np.array(train_di), data_inputs[0:3])
+    assert len(train_eo) == 3
+    assert np.array_equal(np.array(train_eo), expected_outputs[0:3])
+
+    assert len(validation_di) == 1
+    assert np.array_equal(validation_di[0], data_inputs[-1])
+    assert len(validation_eo) == 1
+    assert np.array_equal(validation_eo[0], expected_outputs[-1])
+
+
 def test_kfold_cross_validation_should_split_data_properly():
     # Given
     data_inputs = np.random.random((4, 2, 2048, 6)).astype(np.float32)
     expected_outputs = np.random.random((4, 2, 2048, 1)).astype(np.float32)
-    splitter = create_split_data_container_function(kfold_cross_validation_split(k_fold=4))
+    splitter = KFoldCrossValidationSplitter(k_fold=4)
 
     # When
-    train_data_container, validation_data_container = splitter(
-        DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs)
-    )
-
-    train_di = train_data_container.data_inputs
-    train_eo = train_data_container.expected_outputs
-
-    validation_di = validation_data_container.data_inputs
-    validation_eo = validation_data_container.expected_outputs
+    validation_splits = splitter.split_data_container(DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs))
+    train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 
     # Then
     assert len(train_di[0]) == 3
@@ -156,16 +179,12 @@ def test_kfold_cross_validation_should_split_data_properly_bug():
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
     )
-    splitter = create_split_data_container_function(kfold_cross_validation_split(k_fold=2))
+    splitter = KFoldCrossValidationSplitter(k_fold=2)
 
     # When
-    train_data_container, validation_data_container = splitter(data_container)
+    validation_splits = splitter.split_data_container(data_container)
 
-    train_di = train_data_container.data_inputs
-    train_eo = train_data_container.expected_outputs
-
-    validation_di = validation_data_container.data_inputs
-    validation_eo = validation_data_container.expected_outputs
+    train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 
     # Then
     assert len(train_di[0]) == 6
@@ -193,3 +212,17 @@ def test_kfold_cross_validation_should_split_data_properly_bug():
     assert np.array_equal(np.array(validation_di[1]), data_inputs[5:])
     assert len(validation_eo[1]) == 6
     assert np.array_equal(validation_eo[1], expected_outputs[5:])
+
+
+def extract_validation_split_data(validation_splits):
+    train_di = []
+    train_eo = []
+    validation_di = []
+    validation_eo = []
+    for train_dc, validation_dc in validation_splits:
+        train_di.append(train_dc.data_inputs)
+        train_eo.append(train_dc.expected_outputs)
+
+        validation_di.append(validation_dc.data_inputs)
+        validation_eo.append(validation_dc.expected_outputs)
+    return train_di, train_eo, validation_di, validation_eo

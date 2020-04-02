@@ -1,6 +1,6 @@
 .. _realworld_examples:
 
-Neuraxle hyperparameter examples
+Hyperparameters
 -------------------------------------
 
-This demonstrates how to add hyperparameters to neuraxle pipelines.
+This demonstrates how to add hyperparameters to Neuraxle pipelines.

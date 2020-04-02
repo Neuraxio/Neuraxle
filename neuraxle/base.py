@@ -52,7 +52,7 @@ class BaseHasher(ABC):
     to hash hyperparameters, and data inputs ids together after each transform.
 
     .. seealso::
-        :class:`DataContainer`
+        :class:`~neuraxle.data_container.DataContainer`
 
     """
 
@@ -65,7 +65,6 @@ class BaseHasher(ABC):
         :param hyperparameters: step hyperparameters to hash with current ids
         :type hyperparameters: HyperparameterSamples
         :return: the new hashed current id
-        :rtype: str
         """
         raise NotImplementedError()
 
@@ -75,13 +74,9 @@ class BaseHasher(ABC):
         Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together.
 
         :param current_ids: current hashed ids (can be None if this function has not been called yet)
-        :type current_ids: List[str]
         :param hyperparameters: step hyperparameters to hash with current ids
-        :type hyperparameters: HyperparameterSamples
         :param data_inputs: data inputs to hash current ids for
-        :type data_inputs: Iterable
         :return: the new hashed current ids
-        :rtype: List[str]
         """
         raise NotImplementedError()
 
@@ -96,8 +91,8 @@ class HashlibMd5Hasher(BaseHasher):
     to hash hyperparameters, and data inputs ids together after each transform.
 
     .. seealso::
-        :class`BaseHasher`,
-        :class:`DataContainer`
+        :class:`~neuraxle.base.BaseHasher`,
+        :class:`~neuraxle.data_container.DataContainer`
 
     """
 
@@ -107,9 +102,7 @@ class HashlibMd5Hasher(BaseHasher):
 
         :param current_id: current hashed id
         :param hyperparameters: step hyperparameters to hash with current ids
-        :type hyperparameters: HyperparameterSamples
         :return: the new hashed current id
-        :rtype: str
         """
         m = hashlib.md5()
 
@@ -128,13 +121,9 @@ class HashlibMd5Hasher(BaseHasher):
         using  `hashlib.md5 <https://docs.python.org/3/library/hashlib.html>`_
 
         :param current_ids: current hashed ids (can be None if this function has not been called yet)
-        :type current_ids: List[str]
         :param hyperparameters: step hyperparameters to hash with current ids
-        :type hyperparameters: HyperparameterSamples
         :param data_inputs: data inputs to hash current ids for
-        :type data_inputs: Iterable
         :return: the new hashed current ids
-        :rtype: List[str]
         """
         if current_ids is None:
             if isinstance(data_inputs, Iterable):
@@ -174,11 +163,8 @@ class BaseSaver(ABC):
         Save step with execution context.
 
         :param step: step to save
-        :type step: BaseStep
         :param context: execution context
-        :type context: ExecutionContext
         :param save_savers:
-        :type save_savers: bool
         :return:
         """
         raise NotImplementedError()
@@ -189,9 +175,7 @@ class BaseSaver(ABC):
         Returns true if we can load the given step with the given execution context.
 
         :param step: step to load
-        :type step: BaseStep
         :param context: execution context to load from
-        :type context: ExecutionContext
         :return:
         """
         raise NotImplementedError()
@@ -221,8 +205,8 @@ class JoblibStepSaver(BaseSaver):
     The saver receives a *stripped* version of the step so that it can be saved by joblib.
 
     .. seealso::
-        :class:`BaseSaver`,
-        :class:`ExecutionContext`
+        :class:`~neuraxle.base.BaseSaver`,
+        :class:`~neuraxle.base.ExecutionContext`
     """
 
     def can_load(self, step: 'BaseStep', context: 'ExecutionContext') -> bool:
@@ -230,11 +214,8 @@ class JoblibStepSaver(BaseSaver):
         Returns true if the given step has been saved with the given execution context.
 
         :param step: step that might have been saved
-        :type step: BaseStep
         :param context: execution context
-        :type context: ExecutionContext
         :return: if we can load the step with the given context
-        :rtype: bool
         """
         return os.path.exists(
             self._create_step_path(context, step)
@@ -245,11 +226,8 @@ class JoblibStepSaver(BaseSaver):
         Create step path for the given context.
 
         :param context: execution context
-        :type context: ExecutionContext
         :param step: step to save, or load
-        :type step: BaseStep
         :return: path
-        :rtype: str
         """
         return os.path.join(context.get_path(), '{0}.joblib'.format(step.name))
 
@@ -258,9 +236,7 @@ class JoblibStepSaver(BaseSaver):
         Saved step stripped out of things that would make it unserializable.
 
         :param step: stripped step to save
-        :type step: BaseStep
         :param context: execution context to save from
-        :type context: ExecutionContext
         :return:
         """
         context.mkdir()
@@ -275,9 +251,7 @@ class JoblibStepSaver(BaseSaver):
         Load stripped step.
 
         :param step: stripped step to load
-        :type step: BaseStep
         :param context: execution context to load from
-        :type context: ExecutionContext
         :return:
         """
         loaded_step = load(self._create_step_path(context, step))
@@ -311,8 +285,8 @@ class ExecutionContext:
         * :func:`~neuraxle.steps.caching.ValueCachingWrapper.handle_fit_transform`
 
     .. seealso::
-        :class:`BaseStep`,
-        :class:`ValueCachingWrapper`
+        :class:`~neuraxle.base.BaseStep`,
+        :class:`~neuraxle.steps.caching.ValueCachingWrapper`
     """
 
     def __init__(
@@ -344,7 +318,6 @@ class ExecutionContext:
         This method is called from a step checkpointer inside a :class:`Checkpoint`.
 
         :param full_dump: save full pipeline dump to be able to load everything without source code (false by default).
-        :type full_dump: bool
         :return:
 
         .. seealso::
@@ -377,7 +350,6 @@ class ExecutionContext:
         Returns True if the last step should be saved.
 
         :return: if the last step should be saved
-        :rtype: bool
         """
         if len(self.parents) > 0:
             return self.parents[-1].should_save()
@@ -396,7 +368,6 @@ class ExecutionContext:
         Pop the context. Returns True if it successfully popped an item from the parents list.
 
         :return: if an item has been popped
-        :rtype: bool
         """
         if len(self) == 0:
             return False
@@ -408,9 +379,7 @@ class ExecutionContext:
         Pushes a step in the parents of the execution context.
 
         :param step: step to add to the execution context
-        :type step: BaseStep
         :return: self
-        :rtype: ExecutionContext
         """
         return ExecutionContext(root=self.root, execution_mode=self.execution_mode, parents=self.parents + [step])
 
@@ -422,7 +391,6 @@ class ExecutionContext:
         Get last parent.
 
         :return: the last parent base step
-        :rtype: BaseStep
         """
         return self.parents[-1]
 
@@ -442,7 +410,6 @@ class ExecutionContext:
 
         :param is_absolute: bool to say if we want to add root to the path or not
         :return: current context path
-        :rtype: str
         """
         parents_with_path = [self.root] if is_absolute else []
         parents_with_path += [p.name for p in self.parents]
@@ -455,7 +422,6 @@ class ExecutionContext:
         Returns a list of the parent names.
 
         :return: list of parents step names
-        :rtype: List[str]
         """
         return [p.name for p in self.parents]
 
@@ -464,7 +430,6 @@ class ExecutionContext:
         Return True if the context has parent steps.
 
         :return: if parents len is 0
-        :rtype: bool
         """
         return len(self) == 0
 
@@ -473,9 +438,7 @@ class ExecutionContext:
         Load full dump at the given path.
 
         :param path: pipeline step path
-        :type path: str
         :return: loaded step
-        :rtype: BaseStep
 
         .. seealso::
             :class:`FullDumpLoader`,
@@ -499,7 +462,6 @@ class ExecutionContext:
         Create the parents by using the path of the current execution context.
 
         :return: fake identity execution context
-        :rtype: ExecutionContext
 
         .. seealso::
             :class:`FullDumpLoader`,
@@ -577,14 +539,14 @@ class BaseStep(ABC):
 
     .. note:: All heavy initialization logic should be done inside the *setup* method (e.g.: things inside GPU), and NOT in the constructor.
     .. seealso::
-        :class:`neuraxle.pipeline.Pipeline`,
-        :class:`NonFittableMixin`,
-        :class:`NonTransformableMixin`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`BaseSaver`,
-        :class:`BaseHasher`,
-        :class:`DataContainer`
+        :class:`~neuraxle.pipeline.Pipeline`,
+        :class:`~neuraxle.base.NonFittableMixin`,
+        :class:`~neuraxle.base.NonTransformableMixin`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`~neuraxle.base.BaseSaver`,
+        :class:`~neuraxle.base.BaseHasher`,
+        :class:`~neuraxle.data_container.DataContainer`
     """
 
     def __init__(
@@ -628,12 +590,10 @@ class BaseStep(ABC):
         This is used to create unique ids for the data checkpoints.
 
         :param data_container: data container
-        :type data_container: DataContainer
         :return: hashed current ids
-        :rtype: List[str]
 
         .. seealso::
-            :class:`neuraxle.checkpoints.Checkpoint`
+            :class:`~neuraxle.checkpoints.Checkpoint`
         """
         if data_container.summary_id is None:
             data_container.set_summary_id(data_container.hash_summary())
@@ -653,12 +613,10 @@ class BaseStep(ABC):
         This is used to create unique ids for the data checkpoints.
 
         :param data_container: data container
-        :type data_container: DataContainer
         :return: hashed current ids
-        :rtype: List[str]
 
         .. seealso::
-            :class:`neuraxle.checkpoints.Checkpoint`
+            :class:`~neuraxle.checkpoints.Checkpoint`
         """
         current_ids = data_container.current_ids
         for h in self.hashers:
@@ -674,7 +632,6 @@ class BaseStep(ABC):
         The setup method is called for each step before any fit, or fit_transform.
 
         :return: self
-        :rtype: BaseStep
         """
         self.is_initialized = True
         return self
@@ -684,7 +641,6 @@ class BaseStep(ABC):
         Invalidate step.
 
         :return: self
-        :rtype: BaseStep
         """
         self.is_invalidated = True
         return self
@@ -695,7 +651,6 @@ class BaseStep(ABC):
         Override this method if you need to clear memory.
 
         :return: self
-        :rtype: BaseStep
         """
         self.is_initialized = False
         return self
@@ -706,7 +661,6 @@ class BaseStep(ABC):
         Set pipeline step mode to train or test.
 
         :param is_train: is training mode or not
-        :type is_train: bool
         :return:
 
         .. seealso::
@@ -734,7 +688,6 @@ class BaseStep(ABC):
         Get the name of the pipeline step.
 
         :return: the name, a string.
-        :rtype: str
 
         .. note:: A step name is the same value as the one in the keys of :class:`Pipeline`.steps_as_tuple
         """
@@ -745,7 +698,6 @@ class BaseStep(ABC):
         Get the step savers of a pipeline step.
 
         :return: step savers
-        :rtype: List[BaseSaver]
 
         .. seealso::
             :class:`BaseSaver`
@@ -757,7 +709,6 @@ class BaseStep(ABC):
         Set the step savers of a pipeline step.
 
         :return: self
-        :rtype: BaseStep
 
         .. seealso::
             :class:`BaseSaver`
@@ -779,10 +730,9 @@ class BaseStep(ABC):
 
         :param hyperparams: hyperparameters
         :return: self
-        :rtype: BaseStep
 
         .. seealso::
-            :class:`neuraxle.hyperparams.space.HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
         self.invalidate()
         self.hyperparams = HyperparameterSamples(hyperparams).to_flat()
@@ -810,13 +760,11 @@ class BaseStep(ABC):
             assert step.get_hyperparams()['weight_decay'] == 0.001
 
         :param hyperparams: hyperparameters
-        :type hyperparams: HyperparameterSamples
         :return: self
-        :rtype: BaseStep
 
         .. seealso::
             :func:`~BaseStep.update_hyperparams`,
-            :class:`neuraxle.hyperparams.space.HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
         self.hyperparams.update(hyperparams)
         self.hyperparams = HyperparameterSamples(self.hyperparams).to_flat()
@@ -824,13 +772,12 @@ class BaseStep(ABC):
 
     def get_hyperparams(self) -> HyperparameterSamples:
         """
-        Get step hyperparameters as :class:`neuraxle.hyperparams.space.HyperparameterSamples`.
+        Get step hyperparameters as :class:`~neuraxle.hyperparams.space.HyperparameterSamples`.
 
         :return: step hyperparameters
-        :rtype: HyperparameterSamples
 
         .. seealso::
-            * :class:`neuraxle.hyperparams.space.HyperparameterSamples`
+            * :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
         return self.hyperparams
 
@@ -847,10 +794,9 @@ class BaseStep(ABC):
             assert hyperparams == {"learning_rate": 0.1}
 
         :param **params: arbitrary number of arguments for hyperparameters
-        :rtype: BaseStep
 
         .. seealso::
-            :class:`neuraxle.hyperparams.space.HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
         return self.set_hyperparams(HyperparameterSamples(params))
 
@@ -867,10 +813,9 @@ class BaseStep(ABC):
             assert hyperparams == {"learning_rate": 0.1}
 
         :return: hyperparameters
-        :rtype: dict
 
         .. seealso::
-            :class:`neuraxle.hyperparams.space.HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
         return self.get_hyperparams().to_flat_as_ordered_dict_primitive()
 
@@ -887,16 +832,46 @@ class BaseStep(ABC):
             }))
 
         :param hyperparams_space: hyperparameters space
-        :type hyperparams_space: HyperparameterSpace
         :return: self
-        :rtype: BaseStep
 
         .. seealso::
-            :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
-            :class:`neuraxle.hyperparams.distributions.HyperparameterDistribution`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
+            :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
         """
         self.invalidate()
         self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
+        return self
+
+    def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
+        """
+        Update the step hyperparameter spaces without removing the already-set hyperparameters.
+        This can be useful to add more hyperparameter spaces to the existing ones without flushing the ones that were already set.
+
+        Example :
+
+        .. code-block:: python
+
+            step.set_hyperparams_space(HyperparameterSpace({
+                'learning_rate': LogNormal(0.5, 0.5)
+                'weight_decay': LogNormal(0.001, 0.0005)
+            }))
+
+            step.update_hyperparams_space(HyperparameterSpace({
+                'learning_rate': LogNormal(0.5, 0.1)
+            }))
+
+            assert step.get_hyperparams_space()['learning_rate'] == LogNormal(0.5, 0.1)
+            assert step.get_hyperparams_space()['weight_decay'] == LogNormal(0.001, 0.0005)
+
+        :param hyperparams_space: hyperparameters space
+        :return: self
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
+        """
+        self.hyperparams_space.update(hyperparams_space)
+        self.hyperparams_space = HyperparameterSamples(self.hyperparams_space).to_flat()
         return self
 
     def get_hyperparams_space(self) -> HyperparameterSpace:
@@ -910,11 +885,10 @@ class BaseStep(ABC):
             step.get_hyperparams_space()
 
         :return: step hyperparams space
-        :rtype: HyperparameterSpace
 
         .. seealso::
-            :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
-            :class:`neuraxle.hyperparams.distributions.HyperparameterDistribution`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
+            :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
         """
         return self.hyperparams_space
 
@@ -928,8 +902,8 @@ class BaseStep(ABC):
         :return: data_container
 
         .. seealso::
-            :class:`DataContainer`,
-            :class:`neuraxle.pipeline.Pipeline`
+            :class:`~neuraxle.data_container.DataContainer`,
+            :class:`~neuraxle.pipeline.Pipeline`
         """
         data_container, context = self._will_process(data_container, context)
         data_container = self._inverse_transform_data_container(data_container, context)
@@ -953,7 +927,6 @@ class BaseStep(ABC):
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
-        :rtype: Dict
         """
         if step_name is not None:
             step_name = "{}__{}".format(step_name, self.name)
@@ -973,7 +946,6 @@ class BaseStep(ABC):
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
-        :rtype: Dict
         """
         results = {}
 
@@ -1002,8 +974,8 @@ class BaseStep(ABC):
         :return: tuple(fitted pipeline, data_container)
 
         .. seealso::
-            :class:`DataContainer`,
-            :class:`neuraxle.pipeline.Pipeline`
+            :class:`~neuraxle.data_container.DataContainer`,
+            :class:`~neuraxle.pipeline.Pipeline`
         """
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit(data_container, context)
@@ -1076,7 +1048,6 @@ class BaseStep(ABC):
         :param data_container: data container
         :param context: execution context
         :return: (data container, execution context)
-        :rtype: (DataContainer, ExecutionContext)
         """
         self.invalidate()
         return data_container, context.push(self)
@@ -1088,7 +1059,6 @@ class BaseStep(ABC):
         :param data_container: data container
         :param context: execution context
         :return: (data container, execution context)
-        :rtype: (DataContainer, ExecutionContext)
         """
         return data_container
 
@@ -1099,7 +1069,6 @@ class BaseStep(ABC):
         :param data_container: data container
         :param context: execution context
         :return: (fitted self, data container)
-        :rtype: (BaseStep, DataContainer)
         """
         return self.fit(data_container.data_inputs, data_container.expected_outputs)
 
@@ -1111,7 +1080,6 @@ class BaseStep(ABC):
         :param data_container: data container
         :param context: execution context
         :return: (data container, execution context)
-        :rtype: (DataContainer, ExecutionContext)
         """
         self.invalidate()
         return data_container, context.push(self)
@@ -1123,7 +1091,6 @@ class BaseStep(ABC):
         :param data_container: data container
         :param context: execution context
         :return: (fitted self, data container)
-        :rtype: (BaseStep, DataContainer)
         """
         return data_container
 
@@ -1135,7 +1102,6 @@ class BaseStep(ABC):
         :param data_container: data container
         :param context: execution context
         :return: (fitted self, data container)
-        :rtype: (BaseStep, DataContainer)
         """
         new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
         data_container.set_data_inputs(out)
@@ -1150,7 +1116,6 @@ class BaseStep(ABC):
         :param data_container: data container
         :param context: execution context
         :return: (data container, execution context)
-        :rtype: (DataContainer, ExecutionContext)
         """
         return data_container, context.push(self)
 
@@ -1162,7 +1127,6 @@ class BaseStep(ABC):
         :param data_container: data container
         :param context: execution context
         :return: (data container, execution context)
-        :rtype: (DataContainer, ExecutionContext)
         """
         self.setup()
         return data_container, context
@@ -1174,7 +1138,6 @@ class BaseStep(ABC):
         :param data_container: data container
         :param context: execution context
         :return: (data container, execution context)
-        :rtype: (DataContainer, ExecutionContext)
         """
         data_container = self.hash_data_container(data_container)
         return data_container
@@ -1186,7 +1149,6 @@ class BaseStep(ABC):
         :param data_container: data container
         :param context: execution context
         :return: data container
-        :rtype: DataContainer
         """
         return data_container
 
@@ -1197,7 +1159,6 @@ class BaseStep(ABC):
         :param data_container: data container
         :param context: execution context
         :return: data container
-        :rtype: DataContainer
         """
         out = self.transform(data_container.data_inputs)
         data_container.set_data_inputs(out)
@@ -1212,9 +1173,7 @@ class BaseStep(ABC):
         #. Hash summary id with hyperparams.
 
         :param data_container: the data container to transform
-        :type data_container: DataContainer
         :return: transformed data container
-        :rtype: DataContainer
         """
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
@@ -1231,7 +1190,6 @@ class BaseStep(ABC):
         :param data_inputs: data inputs
         :param expected_outputs: expected outputs to fit on
         :return: (fitted self, tranformed data inputs)
-        :rtype: Tuple[BaseStep, Any]
         """
         self.invalidate()
 
@@ -1248,7 +1206,6 @@ class BaseStep(ABC):
         :param data_inputs: data inputs
         :param expected_outputs: expected outputs to fit on
         :return: fitted self
-        :rtype: BaseStep
         """
         raise NotImplementedError(
             "TODO: Implement this method in {}, or have this class inherit from the NonFittableMixin.".format(
@@ -1261,7 +1218,6 @@ class BaseStep(ABC):
 
         :param data_inputs: data inputs
         :return: transformed data inputs
-        :rtype: Any
         """
         raise NotImplementedError(
             "TODO: Implement this method in {}, or have this class inherit from the NonTransformableMixin.".format(
@@ -1287,7 +1243,6 @@ class BaseStep(ABC):
 
         :param processed_outputs: processed data inputs
         :return: inverse transformed processed outputs
-        :rtype: Any
         """
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
@@ -1297,7 +1252,6 @@ class BaseStep(ABC):
 
         :param data_input: data input to predict
         :return: prediction
-        :rtype: Any
         """
         was_train: bool = self.is_train
         self.set_train(False)
@@ -1321,7 +1275,6 @@ class BaseStep(ABC):
             * the step name has changed func:`~neuraxle.base.BaseStep.set_name`
 
         :return: if the step should be saved
-        :rtype: bool
         """
         return self.is_invalidated and self.is_initialized
 
@@ -1335,11 +1288,8 @@ class BaseStep(ABC):
         stripped version of the step.
 
         :param context: context to save from
-        :type context: ExecutionContext
         :param full_dump: save full pipeline dump to be able to load everything without source code (false by default).
-        :type full_dump: bool
         :return: self
-        :rtype: BaseStep
 
         .. seealso::
             :class:`ExecutionContext`,
@@ -1381,7 +1331,6 @@ class BaseStep(ABC):
 
         :param context: execution context to load step from
         :param full_dump: save full dump bool
-        :type full_dump: bool
         :return: loaded step
 
         .. warning::
@@ -1508,13 +1457,9 @@ class BaseStep(ABC):
             p = p.fit(X_train, y_train)  # Then fit the classifier and other new things
 
         :param new_base_step: if it is not None, upon calling ``mutate``, the object it will mutate to will be this provided new_base_step.
-        :type new_base_step: BaseStep
         :param method_to_assign_to: if it is not None, upon calling ``mutate``, the method_to_affect will be the one that is used on the provided new_base_step.
-        :type method_to_assign_to: str
         :param new_method: if it is not None, upon calling ``mutate``, the new_method will be the one that is used on the provided new_base_step.
-        :type new_method: str
         :return: self
-        :rtype: BaseStep
         """
         self.invalidate()
 
@@ -1577,7 +1522,6 @@ class BaseStep(ABC):
 
         :return: a copy of self, reversed. Each contained object will also have been reversed if self is a pipeline.
         .. seealso::
-            :func:`~neuraxle.base.BaseStep.__reversed__`,
             :func:`~neuraxle.base.BaseStep.inverse_transform`
         """
         return self.mutate(new_method="inverse_transform", method_to_assign_to="transform")
@@ -1616,11 +1560,11 @@ class MetaStepMixin:
     """
     A class to represent a step that wraps another step. It can be used for many things.
 
-    For example, :class:`ForEachDataInputs` adds a loop before any calls to the wrapped step :
+    For example, :class:`~neuraxle.steps.loop.ForEachDataInput` adds a loop before any calls to the wrapped step :
 
     .. code-block:: python
 
-        class ForEachDataInputs(MetaStepMixin, BaseStep):
+        class ForEachDataInput(MetaStepMixin, BaseStep):
             def __init__(
                 self,
                 wrapped: BaseStep
@@ -1657,12 +1601,11 @@ class MetaStepMixin:
                 return self, outputs
 
     .. seealso::
-        :class:`ForEachDataInputs`,
-        :class:`MetaSKLearnWrapper`,
-        :class:`RandomSearch`,
-        :class:`BaseCrossValidation`,
-        :class:`ValueCachingWrapper`,
-        :class:`StepClonerForEachDataInput`
+        :class:`~neuraxle.steps.loop.ForEachDataInput`,
+        :class:`~neuraxle.metaopt.sklearn.MetaSKLearnWrapper`,
+        :class:`~neuraxle.metaopt.random.BaseCrossValidationWrapper`,
+        :class:`~neuraxle.steps.caching.ValueCachingWrapper`,
+        :class:`~neuraxle.steps.loop.StepClonerForEachDataInput`
     """
 
     def __init__(
@@ -1687,9 +1630,7 @@ class MetaStepMixin:
         Set wrapped step to the given step.
 
         :param step: new wrapped step
-        :type step: BaseStep
         :return: self
-        :rtype: BaseStep
         """
         self.invalidate()
         self.wrapped: BaseStep = _sklearn_to_neuraxle_step(step)
@@ -1700,11 +1641,21 @@ class MetaStepMixin:
         Initialize step before it runs. Also initialize the wrapped step.
 
         :return: self
-        :rtype: BaseStep
         """
         BaseStep.setup(self)
         self.wrapped.setup()
         self.is_initialized = True
+        return self
+
+    def teardown(self) -> BaseStep:
+        """
+        Teardown step. Also teardown the wrapped step.
+
+        :return: self
+        """
+        BaseStep.teardown(self)
+        self.wrapped.teardown()
+        self.is_initialized = False
         return self
 
     def set_train(self, is_train: bool = True):
@@ -1748,12 +1699,10 @@ class MetaStepMixin:
             }))
 
         :param hyperparams: hyperparameters
-        :type hyperparams: HyperparameterSamples
         :return: self
-        :rtype: BaseStep
 
         .. seealso::
-            :class:`HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
         self.invalidate()
 
@@ -1776,13 +1725,11 @@ class MetaStepMixin:
         Please refer to :func:`~BaseStep.update_hyperparams`.
 
         :param hyperparams: hyperparameters
-        :type hyperparams: HyperparameterSamples
         :return: self
-        :rtype: BaseStep
 
         .. seealso::
             :func:`~BaseStep.update_hyperparams`,
-            :class:`HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
         self.invalidate()
 
@@ -1801,13 +1748,12 @@ class MetaStepMixin:
 
     def get_hyperparams(self) -> HyperparameterSamples:
         """
-        Get step hyperparameters as :class:`HyperparameterSamples` with flattened hyperparams.
+        Get step hyperparameters as :class:`~neuraxle.hyperparams.space.HyperparameterSamples` with flattened hyperparams.
 
         :return: step hyperparameters
-        :rtype: HyperparameterSamples
 
         .. seealso::
-            :class:`HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
         return HyperparameterSamples({
             **self.hyperparams.to_flat_as_dict_primitive(),
@@ -1819,8 +1765,6 @@ class MetaStepMixin:
         Set meta step and wrapped step hyperparams space using the given hyperparams space.
 
         :param hyperparams_space: ordered dict containing all hyperparameter spaces
-        :type hyperparams_space: HyperparameterSpace
-
         :return: self
         """
         self.invalidate()
@@ -1838,12 +1782,38 @@ class MetaStepMixin:
 
         return self
 
+    def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> BaseStep:
+        """
+        Update the step, and the wrapped step hyperparams without removing the already set hyperparameters.
+        Please refer to :func:`~BaseStep.update_hyperparams`.
+
+        :param hyperparams_space: hyperparameters
+        :return: self
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+        """
+        self.is_invalidated = True
+
+        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
+
+        remainders = dict()
+        for name, hparams_space in hyperparams_space.items():
+            if name == self.wrapped.name:
+                self.wrapped.update_hyperparams_space(hparams_space)
+            else:
+                remainders[name] = hparams_space
+
+        self.hyperparams_space.update(remainders)
+
+        return self
+
     def get_hyperparams_space(self) -> HyperparameterSpace:
         """
         Get meta step and wrapped step hyperparams as a flat hyperparameter space
 
         :return: hyperparameters_space
-        :rtype: HyperparameterSpace
         """
         return HyperparameterSpace({
             **self.hyperparams_space.to_flat_as_dict_primitive(),
@@ -1855,7 +1825,6 @@ class MetaStepMixin:
         Get wrapped step
 
         :return: self.wrapped
-        :rtype: BaseStep
         """
         return self.wrapped
 
@@ -1950,7 +1919,6 @@ class MetaStepMixin:
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
-        :rtype: Union[Dict, Iterable]
         """
         results = BaseStep.apply(self, method_name=method_name, step_name=step_name, *kargs, **kwargs)
 
@@ -1974,7 +1942,6 @@ class MetaStepMixin:
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
-        :rtype: Union[Dict, Iterable]
         """
         results = BaseStep.apply_method(self, method=method, step_name=step_name, *kargs, **kwargs)
 
@@ -2015,13 +1982,9 @@ class MetaStepMixin:
         Add pending mutate self, self.wrapped. Please refer to :func:`~neuraxle.base.BaseStep.will_mutate_to` for more information.
 
         :param new_base_step: if it is not None, upon calling ``mutate``, the object it will mutate to will be this provided new_base_step.
-        :type new_base_step: BaseStep
         :param method_to_assign_to: if it is not None, upon calling ``mutate``, the method_to_affect will be the one that is used on the provided new_base_step.
-        :type method_to_assign_to: str
         :param new_method: if it is not None, upon calling ``mutate``, the new_method will be the one that is used on the provided new_base_step.
-        :type new_method: str
         :return: self
-        :rtype: BaseStep
         """
         new_self = BaseStep.will_mutate_to(self, new_base_step, new_method, method_to_assign_to)
         return new_self
@@ -2050,9 +2013,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
         #. Save meta step with wrapped step savers.
 
         :param step: meta step to save
-        :type step: MetaStepMixin
         :param context: execution context
-        :type context: ExecutionContext
         :return:
         """
         # First, save the wrapped step savers
@@ -2080,11 +2041,8 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
         #. Refresh steps
 
         :param step: step to load
-        :type step: BaseStep
         :param context: execution context
-        :type context: ExecutionContext
         :return: loaded truncable steps
-        :rtype: TruncableSteps
         """
         step_name, savers = step.wrapped_step_name_and_savers
 
@@ -2187,9 +2145,7 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         #. Strip steps from truncable steps at the end.
 
         :param step: step to save
-        :type step: TruncableSteps
         :param context: execution context
-        :type context: ExecutionContext
         :return:
         """
 
@@ -2219,11 +2175,8 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         #. Refresh steps
 
         :param step: step to load
-        :type step: BaseStep
         :param context: execution context
-        :type context: ExecutionContext
         :return: loaded truncable steps
-        :rtype: TruncableSteps
         """
         step.steps_as_tuple = []
 
@@ -2253,8 +2206,8 @@ class TruncableSteps(BaseStep, ABC):
     * self.steps_as_tuple contains a list of tuple of step name, and step
 
     .. seealso::
-        :class:`Pipeline`,
-        :class:`FeatureUnion`
+        :class:`~neuraxle.pipeline.Pipeline`,
+        :class:`~neuraxle.union.FeatureUnion`
     """
 
     def __init__(
@@ -2273,12 +2226,9 @@ class TruncableSteps(BaseStep, ABC):
         Returns true if self.steps before index are the same as other.steps before index.
 
         :param other: other truncable steps to compare
-        :type other: TruncableSteps
         :param index: max step index to compare
-        :type index: int
 
         :return: bool
-        :rtype: bool
         """
         steps_before_index = self[:index]
         for current_index, (step_name, step) in enumerate(steps_before_index):
@@ -2296,9 +2246,7 @@ class TruncableSteps(BaseStep, ABC):
         before the index into the current steps
 
         :param saved_pipeline: saved pipeline
-        :type saved_pipeline: TruncableSteps
         :param index: step index
-        :type index: int
         :return:
         """
         self.set_hyperparams(saved_pipeline.get_hyperparams())
@@ -2312,7 +2260,6 @@ class TruncableSteps(BaseStep, ABC):
         Set steps as tuple.
 
         :param steps_as_tuple: list of tuple containing step name and step
-        :type steps_as_tuple: NamedTupleList
         :return:
         """
         steps_as_tuple = self._wrap_non_base_steps(steps_as_tuple)
@@ -2324,7 +2271,6 @@ class TruncableSteps(BaseStep, ABC):
         Initialize step before it runs.
 
         :return: self
-        :rtype: BaseStep
         """
         if self.is_initialized:
             return self
@@ -2339,10 +2285,11 @@ class TruncableSteps(BaseStep, ABC):
         Teardowns all of the sub steps as well.
 
         :return: self
-        :rtype: BaseStep
         """
         for step_name, step in self.steps_as_tuple:
             step.teardown()
+
+        self.is_initialized = False
 
         return self
 
@@ -2355,7 +2302,6 @@ class TruncableSteps(BaseStep, ABC):
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
-        :rtype: Union[Dict, Iterable]
         """
         results = BaseStep.apply(self, method_name, step_name=step_name, *kargs, **kwargs)
 
@@ -2379,7 +2325,6 @@ class TruncableSteps(BaseStep, ABC):
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
-        :rtype: Union[Dict, Iterable]
         """
         results = BaseStep.apply_method(self, method=method, step_name=step_name, *kargs, **kwargs)
 
@@ -2435,7 +2380,6 @@ class TruncableSteps(BaseStep, ABC):
         Make sure that each sub step has a unique name, and add a name to the sub steps that don't have one already.
 
         :param steps_as_tuple: a NamedTupleList
-        :type steps_as_tuple: a NamedTupleList
         :return: a NamedTupleList with fixed names
         """
         # TODO: document more the type of the `steps as tuple`.
@@ -2463,13 +2407,9 @@ class TruncableSteps(BaseStep, ABC):
         Ensure uniqueness with the names yet parameter.
 
         :param step_name: step name
-        :type step_name: str
         :param class_name: class name
-        :type class_name: str
         :param names_yet: names already taken
-        :type names_yet: set
         :return: new step name
-        :rtype: str
         """
         # Add suffix number to name if it is already used to ensure name uniqueness.
         i = 1
@@ -2491,7 +2431,7 @@ class TruncableSteps(BaseStep, ABC):
 
     def get_hyperparams(self) -> HyperparameterSamples:
         """
-        Get step hyperparameters as :class:`HyperparameterSamples`.
+        Get step hyperparameters as :class:`~neuraxle.space.HyperparameterSamples`.
 
         Example :
 
@@ -2507,10 +2447,9 @@ class TruncableSteps(BaseStep, ABC):
             # hp ==>  { 'learning_rate': 0.1, 'some_step__learning_rate': 0.2 }
 
         :return: step hyperparameters
-        :rtype: HyperparameterSamples
 
         .. seealso::
-            :class:`HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
         hyperparams = dict()
 
@@ -2531,7 +2470,7 @@ class TruncableSteps(BaseStep, ABC):
 
     def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
         """
-        Set step hyperparameters to the given :class:`HyperparameterSamples`.
+        Set step hyperparameters to the given :class:`~neuraxle.space.HyperparameterSamples`.
 
         Example :
 
@@ -2544,10 +2483,9 @@ class TruncableSteps(BaseStep, ABC):
             }))
 
         :return: step hyperparameters
-        :rtype: HyperparameterSamples
 
         .. seealso::
-            :class:`HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
         self.invalidate()
 
@@ -2569,13 +2507,11 @@ class TruncableSteps(BaseStep, ABC):
         Please refer to :func:`~BaseStep.update_hyperparams`.
 
         :param hyperparams: hyperparams to update
-        :type hyperparams: HyperparameterSamples
         :return: step
-        :rtype: BaseStep
 
         .. seealso::
             :func:`~BaseStep.update_hyperparams`,
-            :class:`HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
         self.invalidate()
 
@@ -2593,7 +2529,7 @@ class TruncableSteps(BaseStep, ABC):
 
     def get_hyperparams_space(self):
         """
-        Get step hyperparameters space as :class:`HyperparameterSpace`.
+        Get step hyperparameters space as :class:`~neuraxle.space.HyperparameterSpace`.
 
         Example :
 
@@ -2609,10 +2545,9 @@ class TruncableSteps(BaseStep, ABC):
             # hp ==>  { 'learning_rate': RandInt(0,5), 'some_step__learning_rate': RandInt(0,10) }
 
         :return: step hyperparameters space
-        :rtype: HyperparameterSpace
 
         .. seealso::
-            :class:`HyperparameterSpace`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
         all_hyperparams = HyperparameterSpace()
         for step_name, step in self.steps_as_tuple:
@@ -2626,9 +2561,35 @@ class TruncableSteps(BaseStep, ABC):
 
         return all_hyperparams.to_flat()
 
+    def update_hyperparams_space(self, hyperparams_space: Union[HyperparameterSpace, OrderedDict, dict]) -> BaseStep:
+        """
+        Update the steps hyperparameters without removing the already-set hyperparameters.
+        Please refer to :func:`~BaseStep.update_hyperparams`.
+
+        :param hyperparams_space: hyperparams_space to update
+        :return: step
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`~neuraxle.space.HyperparameterSamples`
+        """
+        self.is_invalidated = True
+
+        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
+
+        remainders = dict()
+        for name, hparams_space in hyperparams_space.items():
+            if name in self.steps.keys():
+                self.steps[name].update_hyperparams_space(HyperparameterSamples(hparams_space))
+            else:
+                remainders[name] = hparams_space
+        self.hyperparams_space.update(remainders)
+
+        return self
+
     def set_hyperparams_space(self, hyperparams_space: Union[HyperparameterSpace, OrderedDict, dict]) -> BaseStep:
         """
-        Set step hyperparameters space as :class:`HyperparameterSpace`.
+        Set step hyperparameters space as :class:`~neuraxle.hyperparams.space.HyperparameterSpace`.
 
         Example :
 
@@ -2641,12 +2602,10 @@ class TruncableSteps(BaseStep, ABC):
             }))
 
         :param hyperparams_space: hyperparameters space
-        :type hyperparams_space: Union[HyperparameterSpace, OrderedDict, dict]
         :return: self
-        :rtype: BaseStep
 
         .. seealso::
-            :class:`HyperparameterSpace`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
         self.invalidate()
 
@@ -2720,9 +2679,7 @@ class TruncableSteps(BaseStep, ABC):
         Set one step with a key, and a value.
 
         :param key: slice, index, or step name
-        :type key: Union[slice, int, str]
         :param new_step: step
-        :type new_step: BaseStep
         """
         if isinstance(key, str):
             index = 0
@@ -2756,14 +2713,12 @@ class TruncableSteps(BaseStep, ABC):
             p['2'] # returns the second SomeStep()
 
         :param key: slice, index, or step name
-        :type key: Union[slice, int, str]
 
         :return: truncated self
-        :rtype: Union[TruncableSteps, BaseStep]
 
 
         .. seealso::
-            :class:`DataContainer`,
+            :class:`~neuraxle.data_container.DataContainer`,
             `Getting model attributes from scikit-learn pipeline on stackoverflow <https://stackoverflow.com/questions/28822756/getting-model-attributes-from-scikit-learn-pipeline/58359509#58359509>`_
         """
         if isinstance(key, slice):
@@ -2829,9 +2784,7 @@ class TruncableSteps(BaseStep, ABC):
         Concatenate the given truncable steps to self.
 
         :param other: other truncable steps
-        :type other: TruncableSteps
         :return: new truncable steps with concatenated steps
-        :rtype: TruncableSteps
         """
         self.set_steps(self.steps_as_tuple + other.steps_as_tuple)
         return self
@@ -2841,7 +2794,6 @@ class TruncableSteps(BaseStep, ABC):
         Returns all of the steps as tuples items (step_name, step).
 
         :return: step items tuple : (step name, step)
-        :rtype: ItemsView
         """
         return self.steps.items()
 
@@ -2850,7 +2802,6 @@ class TruncableSteps(BaseStep, ABC):
         Returns the step names.
 
         :return: list of step names
-        :rtype: KeysView
         """
         return self.steps.keys()
 
@@ -2859,7 +2810,6 @@ class TruncableSteps(BaseStep, ABC):
         Get step values.
 
         :return: all of the steps
-        :rtype: ValuesView
         """
         return self.steps.values()
 
@@ -2868,9 +2818,7 @@ class TruncableSteps(BaseStep, ABC):
         Add an item to steps as tuple.
 
         :param item: item tuple (step name, step)
-        :type item: Tuple[str, 'BaseStep']
         :return: self
-        :rtype: TruncableSteps
         """
         self.steps_as_tuple.append(item)
         self._refresh_steps()
@@ -2881,7 +2829,6 @@ class TruncableSteps(BaseStep, ABC):
         Pop the last step.
 
         :return: last step
-        :rtype: BaseStep
         """
         return self.popitem()[-1]
 
@@ -2890,9 +2837,7 @@ class TruncableSteps(BaseStep, ABC):
         Pop the last step, or the step with the given key
 
         :param key: step name to pop, or None
-        :type key: str
         :return: last step item
-        :rtype: Tuple[str, BaseStep]
 
         """
         if key is None:
@@ -2908,7 +2853,6 @@ class TruncableSteps(BaseStep, ABC):
         Pop the first step.
 
         :return: first step
-        :rtype: BaseStep
         """
         return self.popfrontitem()[-1]
 
@@ -2917,7 +2861,6 @@ class TruncableSteps(BaseStep, ABC):
         Pop the first step.
 
         :return: first step item
-        :rtype: Tuple[str, BaseStep]
         """
         item = self.steps_as_tuple.pop(0)
         self._refresh_steps()
@@ -2953,7 +2896,6 @@ class TruncableSteps(BaseStep, ABC):
         Split truncable steps by a step class name.
 
         :param step_type: step class type to split from.
-        :type step_type: str
         :return: list of truncable steps containing the splitted steps
         """
         sub_pipelines = []
@@ -2978,10 +2920,8 @@ class TruncableSteps(BaseStep, ABC):
         Returns true if truncable steps end with a step of the given type.
 
         :param step_type: step type
-        :type step_type: type
 
         :return: if truncable steps ends with the given step type
-        :rtype: bool
         """
         return isinstance(self[-1], step_type)
 
@@ -3006,7 +2946,6 @@ class TruncableSteps(BaseStep, ABC):
                     self.fit_transform_test_(data_inputs, expected_outputs)
 
         :param is_train: if the step is in train mode (True) or test mode (False)
-        :type is_train: bool
         :return: self
         """
         self.is_train = is_train
@@ -3042,7 +2981,6 @@ class ResumableStepMixin:
         :param data_container: data container to resume from
         :param context: execution context to resume from
         :return: if we can resume
-        :rtype: bool
         """
         raise NotImplementedError()
 
@@ -3226,6 +3164,7 @@ class EvaluableStepMixin:
     def get_score(self):
         raise NotImplementedError()
 
+
 class FullDumpLoader(Identity):
     """
     Identity step that can load the full dump of a pipeline step.
@@ -3247,9 +3186,7 @@ class FullDumpLoader(Identity):
 
         :param context: execution context
         :param full_dump: load full dump or not (always true, inherited from :class:`BaseStep`
-        :type full_dump: load full dump or not
         :return: loaded step
-        :rtype: BaseStep
         """
         if not context.stripped_saver.can_load(self, context):
             raise Exception('Cannot Load Full Dump For Step {}'.format(os.path.join(context.get_path(), self.name)))
