@@ -23,6 +23,7 @@ from collections import Counter
 
 import pytest
 import scipy
+from scipy.stats import norm
 
 from neuraxle.hyperparams.distributions import *
 
@@ -221,8 +222,6 @@ def test_lognormal():
     LogUniform(0.001, 10),
     Normal(0.0, 1.0),
     LogNormal(0.0, 2.0),
-    Continuous(1, 10),
-    Discrete(0.0, 1.0),
     Histogram(histogram=np.histogram(norm.rvs(size=100000, loc=0, scale=1.5, random_state=123), bins=100))
 ])
 def test_can_restore_each_distributions(hd):
@@ -321,3 +320,16 @@ def test_histogram_cdf():
     assert hist_dist.cdf(x=np.max(data)) == 1.0
     assert 0.55 > hist_dist.cdf(x=np.median(data)) > 0.45
     assert hist_dist.cdf(x=np.min(data)) == 0.0
+
+
+def test_discrete_poison_rvs():
+    poisson_distribution = Poisson(
+        min_included=0.0,
+        max_included=1.0,
+        null_default_value=0.0
+    )
+
+    sample = poisson_distribution.rvs()
+
+    assert 0.0 < sample < 1.0
+
