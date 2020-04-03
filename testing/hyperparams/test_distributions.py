@@ -325,6 +325,19 @@ def test_histogram_cdf():
 def test_discrete_poison_rvs():
     poisson_distribution = Poisson(
         min_included=0.0,
+        max_included=10.0,
+        null_default_value=0.0,
+        mu=0.6
+    )
+
+    sample = poisson_distribution.rvs()
+
+    assert 0.0 < sample
+
+
+def test_continuous_poison_rvs():
+    poisson_distribution = Poisson(
+        min_included=0.0,
         max_included=1.0,
         null_default_value=0.0
     )
@@ -332,4 +345,3 @@ def test_discrete_poison_rvs():
     sample = poisson_distribution.rvs()
 
     assert 0.0 < sample < 1.0
-

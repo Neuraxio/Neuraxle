@@ -1016,24 +1016,26 @@ class LogNormal(HyperparameterDistribution):
 
 
 class BaseWrappedSKLeanDistribution(HyperparameterDistribution):
-    def __init__(self, sk_learn_instance, null_default_value):
+    def __init__(self, sk_learn_instance, null_default_value, **kwargs):
+        self.kwargs = kwargs
         self.sk_learn_distribution = sk_learn_instance
         HyperparameterDistribution.__init__(self, null_default_value=null_default_value)
 
     def rvs(self, *args, **kwargs) -> float:
-        return self.sk_learn_distribution.rvs(*args, **kwargs)
+        return self.sk_learn_distribution.rvs(*args, **self.kwargs, **kwargs)
 
     def pdf(self, x, *args, **kwargs) -> float:
-        return self.sk_learn_distribution.pdf(x, *args, **kwargs)
+        return self.sk_learn_distribution.pdf(x, *args, **self.kwargs, **kwargs)
 
     def cdf(self, x, *args, **kwargs) -> float:
-        return self.sk_learn_distribution.cdf(x, *args, **kwargs)
+        return self.sk_learn_distribution.cdf(x, *args, **self.kwargs, **kwargs)
 
     def to_sk_learn(self):
         return self.sk_learn_distribution
 
 
-class Continuous(BaseWrappedSKLeanDistribution, HyperparameterDistribution):
+class BaseContinuousDistribution(rv_continuous, BaseWrappedSKLeanDistribution, HyperparameterDistribution,
+                                 metaclass=ABCMeta):
     """
     Discrete distribution that inherits from `scipy.stats.rv_continuous <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
 
@@ -1059,67 +1061,51 @@ class Continuous(BaseWrappedSKLeanDistribution, HyperparameterDistribution):
     """
 
     def __init__(self, min_included: int, max_included: int, null_default_value: int = None, **kwargs):
+        super().__init__(a=min_included, b=max_included, *kwargs)
         BaseWrappedSKLeanDistribution.__init__(
             self,
             sk_learn_instance=rv_continuous(a=min_included, b=max_included, *kwargs),
             null_default_value=null_default_value
         )
 
-
-class BaseDiscreteDistribution(rv_discrete, BaseWrappedSKLeanDistribution, HyperparameterDistribution, metaclass=ABCMeta):
-    """
-    Discrete distribution that inherits from `scipy.stats.rv_discrete <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_discrete.html#scipy.stats.rv_discrete>`_
-
-    Example usage :
-
-    .. code-block:: python
-
-        hist_dist = Discrete(
-             min_included=0.0,
-             max_included=2.0,
-             null_default_value=0.0
-        )
-
-
-    .. seealso::
-        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
-        :class:`Histogram`,
-        :class:`Continuous`,
-        :class:`HyperparameterDistribution`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`neuraxle.base.BaseStep`
-    """
-
-    def __init__(self, min_included: float, max_included: float, null_default_value: int = None):
-        BaseWrappedSKLeanDistribution.__init__(
-            self,
-            sk_learn_instance=rv_discrete(a=min_included, b=max_included),
-            null_default_value=null_default_value
-        )
-
-    def _pmf(self, k, *args):
-        return self.pmf(k, *args)
+    def _pdf(self, x, *args, **kwargs):
+        return self.probability_density_function(x, *args, **kwargs)
 
     @abstractmethod
-    def probability_mass_function(self):
+    def probability_density_function(self, x):
         pass
 
 
-class Poisson(BaseDiscreteDistribution):
-    """
-    """
-    def __init__(self, min_included: float, max_included: float, null_default_value: float = None):
-        i = 0
-        BaseDiscreteDistribution.__init__(
+class Gaussian(BaseContinuousDistribution):
+    def __init__(self, min_included: int, max_included: int, null_default_value: float = None):
+        BaseContinuousDistribution.__init__(
             self,
             min_included=min_included,
             max_included=max_included,
             null_default_value=null_default_value
         )
 
-    def probability_mass_function(self, mu, k):
+    def probability_density_function(self, x):
+        return math.exp(-x ** 2 / 2.) / np.sqrt(2.0 * np.pi)
+
+
+class PoissonDiscreteDistribution(rv_discrete, metaclass=ABCMeta):
+    def _pmf(self, k, mu):
         return math.exp(-mu) * mu ** k / factorial(k)
+
+
+class Poisson(BaseWrappedSKLeanDistribution):
+    def __init__(self, min_included: float, max_included: float, null_default_value: float = None, mu=0.6):
+        super().__init__(
+            sk_learn_instance=PoissonDiscreteDistribution(
+                a=min_included,
+                b=max_included
+            ),
+            null_default_value=null_default_value,
+            additional_arguments={'mu': mu}
+        )
+
+        self.mu = mu
 
 
 class Histogram(BaseWrappedSKLeanDistribution, HyperparameterDistribution):
