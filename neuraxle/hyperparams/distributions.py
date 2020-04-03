@@ -32,10 +32,11 @@ import sys
 from abc import abstractmethod, ABCMeta, ABC
 from typing import List
 
+from scipy.integrate import quad
 from scipy.special import factorial
 import math
 import numpy as np
-from scipy.stats import truncnorm, rv_histogram, rv_continuous, rv_discrete
+from scipy.stats import truncnorm, rv_histogram, rv_continuous, rv_discrete, norm
 
 
 class HyperparameterDistribution(metaclass=ABCMeta):
@@ -1025,7 +1026,10 @@ class BaseWrappedSKLeanDistribution(HyperparameterDistribution):
         return self.sk_learn_distribution.rvs(*args, **self.kwargs, **kwargs)
 
     def pdf(self, x, *args, **kwargs) -> float:
-        return self.sk_learn_distribution.pdf(x, *args, **self.kwargs, **kwargs)
+        if hasattr(self.sk_learn_distribution, 'pdf'):
+            return self.sk_learn_distribution.pdf(x, *args, **self.kwargs, **kwargs)
+        else:
+            return self.sk_learn_distribution.pmf(x, *args, **self.kwargs, **kwargs)
 
     def cdf(self, x, *args, **kwargs) -> float:
         return self.sk_learn_distribution.cdf(x, *args, **self.kwargs, **kwargs)
@@ -1039,16 +1043,35 @@ class GaussianDiscreteDistribution(rv_discrete, metaclass=ABCMeta):
         return math.exp(-x ** 2 / 2.) / np.sqrt(2.0 * np.pi)
 
 
+class GaussianContinuousDistribution(rv_continuous, metaclass=ABCMeta):
+    def _pdf(self, x):
+        return math.exp(-x ** 2 / 2.) / np.sqrt(2.0 * np.pi)
+
+
 class PoissonDiscreteDistribution(rv_discrete, metaclass=ABCMeta):
     def _pmf(self, k, mu):
         return math.exp(-mu) * mu ** k / factorial(k)
 
 
-class Gaussian(BaseWrappedSKLeanDistribution):
+class GaussianContinuous(BaseWrappedSKLeanDistribution):
     def __init__(self, min_included: int, max_included: int, null_default_value: float = None):
         BaseWrappedSKLeanDistribution.__init__(
             self,
+            sk_learn_distribution=GaussianContinuousDistribution(
+                name='gaussian_continuous',
+                a=min_included,
+                b=max_included
+            ),
+            null_default_value=null_default_value
+        )
+
+
+class GaussianDiscrete(BaseWrappedSKLeanDistribution):
+    def __init__(self, min_included: float, max_included: float, null_default_value: float = None):
+        BaseWrappedSKLeanDistribution.__init__(
+            self,
             sk_learn_distribution=GaussianDiscreteDistribution(
+                name='gaussian_discrete',
                 a=min_included,
                 b=max_included
             ),

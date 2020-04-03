@@ -289,34 +289,10 @@ def test_histogram_rvs():
         null_default_value=0.0
     )
 
-    sample = hist_dist.rvs()
-
-    assert min(data) < sample < max(data)
-
-
-def test_histogram_pdf():
-    data = norm.rvs(size=10000, loc=0, scale=1.5, random_state=123)
-    histogram = np.histogram(data, bins=100)
-    hist_dist = Histogram(
-        histogram=histogram,
-        null_default_value=0.0
-    )
-
-    pdf = hist_dist.pdf(x=1.0)
-
-    assert 1.0 > pdf > 0.0
+    assert min(data) < hist_dist.rvs() < max(data)
+    assert 1.0 > hist_dist.pdf(x=1.0) > 0.0
     assert hist_dist.pdf(x=np.max(data)) == 0.0
     assert hist_dist.pdf(x=np.min(data)) < 0.001
-
-
-def test_histogram_cdf():
-    data = norm.rvs(size=10000, loc=0, scale=1.5, random_state=123)
-    histogram = np.histogram(data, bins=100)
-    hist_dist = Histogram(
-        histogram=histogram,
-        null_default_value=0.0
-    )
-
     assert hist_dist.cdf(x=np.max(data)) == 1.0
     assert 0.55 > hist_dist.cdf(x=np.median(data)) > 0.45
     assert hist_dist.cdf(x=np.min(data)) == 0.0
@@ -330,19 +306,34 @@ def test_discrete_poison_rvs():
         mu=0.5
     )
 
-    sample = poisson_distribution.rvs()
-    print(sample)
+    rvs = poisson_distribution.rvs()
+    pdf = poisson_distribution.pdf(0.5)
+    cdf = poisson_distribution.cdf(0.5)
 
-    assert 0.0 < sample
 
-
-def test_gaussian_rvs():
-    gaussian_distribution = Gaussian(
+def test_continuous_gaussian_pdf():
+    gaussian_distribution = GaussianContinuous(
         min_included=0,
-        max_included=1,
+        max_included=10,
         null_default_value=0.0
     )
 
-    sample = gaussian_distribution.rvs()
+    rvs = gaussian_distribution.rvs()
+    pdf = gaussian_distribution.pdf(0.5)
+    cdf = gaussian_distribution.cdf(0.5)
 
-    assert 0.0 < sample < 1.0
+    # assert 0.0 < sample < 1.0
+
+
+def test_discrete_gaussian_pdf():
+    gaussian_distribution = GaussianDiscrete(
+        min_included=0.0,
+        max_included=10.0,
+        null_default_value=0.0
+    )
+
+    rvs = gaussian_distribution.rvs()
+    pdf = gaussian_distribution.pdf(0.5)
+    cdf = gaussian_distribution.cdf(0.5)
+
+    # assert 0.0 < sample < 1.0
