@@ -55,7 +55,7 @@ class SomeStepWithHyperparams(BaseStep):
         pass
 
 
-class SomeMetaStepWithHyperparams(MetaStepMixin):
+class SomeMetaStepWithHyperparams(MetaStepMixin, BaseStep):
     def __init__(self):
         BaseStep.__init__(self)
         MetaStepMixin.__init__(self, SomeStepWithHyperparams())
