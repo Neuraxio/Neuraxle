@@ -1016,9 +1016,9 @@ class LogNormal(HyperparameterDistribution):
 
 
 class BaseWrappedSKLeanDistribution(HyperparameterDistribution):
-    def __init__(self, sk_learn_instance, null_default_value, **kwargs):
+    def __init__(self, sk_learn_distribution, null_default_value, **kwargs):
         self.kwargs = kwargs
-        self.sk_learn_distribution = sk_learn_instance
+        self.sk_learn_distribution = sk_learn_distribution
         HyperparameterDistribution.__init__(self, null_default_value=null_default_value)
 
     def rvs(self, *args, **kwargs) -> float:
@@ -1034,58 +1034,8 @@ class BaseWrappedSKLeanDistribution(HyperparameterDistribution):
         return self.sk_learn_distribution
 
 
-class BaseContinuousDistribution(rv_continuous, BaseWrappedSKLeanDistribution, HyperparameterDistribution,
-                                 metaclass=ABCMeta):
-    """
-    Discrete distribution that inherits from `scipy.stats.rv_continuous <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
-
-    Example usage :
-
-    .. code-block:: python
-
-        hist_dist = Discrete(
-             min_included=0.0,
-             max_included=2.0,
-             null_default_value=0.0
-        )
-
-
-    .. seealso::
-        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
-        :class:`Histogram`,
-        :class:`Discrete`,
-        :class:`HyperparameterDistribution`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`neuraxle.base.BaseStep`
-    """
-
-    def __init__(self, min_included: int, max_included: int, null_default_value: int = None, **kwargs):
-        super().__init__(a=min_included, b=max_included, *kwargs)
-        BaseWrappedSKLeanDistribution.__init__(
-            self,
-            sk_learn_instance=rv_continuous(a=min_included, b=max_included, *kwargs),
-            null_default_value=null_default_value
-        )
-
-    def _pdf(self, x, *args, **kwargs):
-        return self.probability_density_function(x, *args, **kwargs)
-
-    @abstractmethod
-    def probability_density_function(self, x):
-        pass
-
-
-class Gaussian(BaseContinuousDistribution):
-    def __init__(self, min_included: int, max_included: int, null_default_value: float = None):
-        BaseContinuousDistribution.__init__(
-            self,
-            min_included=min_included,
-            max_included=max_included,
-            null_default_value=null_default_value
-        )
-
-    def probability_density_function(self, x):
+class GaussianDiscreteDistribution(rv_discrete, metaclass=ABCMeta):
+    def _pdf(self, x):
         return math.exp(-x ** 2 / 2.) / np.sqrt(2.0 * np.pi)
 
 
@@ -1094,15 +1044,27 @@ class PoissonDiscreteDistribution(rv_discrete, metaclass=ABCMeta):
         return math.exp(-mu) * mu ** k / factorial(k)
 
 
+class Gaussian(BaseWrappedSKLeanDistribution):
+    def __init__(self, min_included: int, max_included: int, null_default_value: float = None):
+        BaseWrappedSKLeanDistribution.__init__(
+            self,
+            sk_learn_distribution=GaussianDiscreteDistribution(
+                a=min_included,
+                b=max_included
+            ),
+            null_default_value=null_default_value
+        )
+
+
 class Poisson(BaseWrappedSKLeanDistribution):
     def __init__(self, min_included: float, max_included: float, null_default_value: float = None, mu=0.6):
         super().__init__(
-            sk_learn_instance=PoissonDiscreteDistribution(
+            sk_learn_distribution=PoissonDiscreteDistribution(
                 a=min_included,
                 b=max_included
             ),
             null_default_value=null_default_value,
-            additional_arguments={'mu': mu}
+            mu=mu
         )
 
         self.mu = mu
@@ -1132,9 +1094,9 @@ class Histogram(BaseWrappedSKLeanDistribution, HyperparameterDistribution):
         :class:`neuraxle.base.BaseStep`
     """
 
-    def __init__(self, histogram, null_default_value: float = None, **kwargs):
+    def __init__(self, histogram: np.histogram, null_default_value: float = None, **kwargs):
         BaseWrappedSKLeanDistribution.__init__(
             self,
-            sk_learn_instance=rv_histogram(histogram=histogram, **kwargs),
+            sk_learn_distribution=rv_histogram(histogram=histogram, **kwargs),
             null_default_value=null_default_value
         )

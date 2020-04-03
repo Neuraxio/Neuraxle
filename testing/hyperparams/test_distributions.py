@@ -327,21 +327,22 @@ def test_discrete_poison_rvs():
         min_included=0.0,
         max_included=10.0,
         null_default_value=0.0,
-        mu=0.6
+        mu=0.5
     )
 
     sample = poisson_distribution.rvs()
+    print(sample)
 
     assert 0.0 < sample
 
 
-def test_continuous_poison_rvs():
-    poisson_distribution = Poisson(
-        min_included=0.0,
-        max_included=1.0,
+def test_gaussian_rvs():
+    gaussian_distribution = Gaussian(
+        min_included=0,
+        max_included=1,
         null_default_value=0.0
     )
 
-    sample = poisson_distribution.rvs()
+    sample = gaussian_distribution.rvs()
 
     assert 0.0 < sample < 1.0
