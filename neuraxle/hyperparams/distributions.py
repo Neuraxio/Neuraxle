@@ -27,15 +27,15 @@ the distribution.
 """
 
 import copy
+import math
 import random
 import sys
 from abc import abstractmethod, ABCMeta
-from typing import List
-from scipy.stats import norm
-from scipy.integrate import quad
-import math
-import numpy as np
 from typing import List, Tuple, Union
+
+import numpy as np
+from scipy.integrate import quad
+from scipy.stats import norm
 from scipy.stats import truncnorm
 
 
@@ -80,6 +80,50 @@ class HyperparameterDistribution(metaclass=ABCMeta):
         :param x: value where the cumulative distribution function is evaluated.
 
         :return: The cumulative distribution function value.
+        """
+        pass
+
+    @abstractmethod
+    def min(self) -> float:
+        """
+        Abstract method for obtaining minimum value that can sampled in distribution.
+
+        :return: minimal value that can be sampled from distribution.
+        """
+        pass
+
+    @abstractmethod
+    def max(self) -> float:
+        """
+        Abstract method for obtaining maximal value that can sampled in distribution.
+
+        :return: maximal value that can be sampled from distribution.
+        """
+        pass
+
+    @abstractmethod
+    def mean(self) -> float:
+        """
+        Abstract method for calculating distribution mean value.
+
+        :return: distribution mean value.
+        """
+        pass
+
+    def std(self) -> float:
+        """
+        Base method to calculate distribution std value by taking sqrt of variance value.
+
+        :return: distribution std value.
+        """
+        return math.sqrt(self.var())
+
+    @abstractmethod
+    def var(self) -> float:
+        """
+        Abstract method for calculate distribution variance value.
+
+        : return: distribution variance value.
         """
         pass
 
@@ -244,6 +288,18 @@ class Boolean(HyperparameterDistribution):
 
         return 0.
 
+    def min(self):
+        return 0
+
+    def max(self):
+        return 1
+
+    def mean(self):
+        return 0.5
+
+    def var(self):
+        return 0.5 * (1 - 0.5)
+
 
 class Choice(HyperparameterDistribution):
     """Get a random value from a choice list of possible value for this hyperparameter.
@@ -341,6 +397,19 @@ class Choice(HyperparameterDistribution):
         :return: the number of choices.
         """
         return len(self.choice_list)
+
+    def min(self):
+        return 0.
+
+    def max(self):
+        return len(self)
+
+    def mean(self):
+        length = len(self)
+        return (length - 1) / 2
+
+    def var(self):
+# TODO: with equation of uniform discret
 
 
 class PriorityChoice(HyperparameterDistribution):
@@ -452,6 +521,19 @@ class PriorityChoice(HyperparameterDistribution):
         """
         return len(self.choice_list)
 
+    def min(self):
+        return 0.
+
+    def max(self):
+        return len(self)
+
+    def mean(self):
+        length = len(self)
+        return (length - 1) / 2
+
+    def var(self):
+# TODO: with equation of uniform discret
+
 
 class WrappedHyperparameterDistributions(HyperparameterDistribution):
     def __init__(self, hd: HyperparameterDistribution = None, hds: List[HyperparameterDistribution] = None,
@@ -520,6 +602,49 @@ class Quantized(WrappedHyperparameterDistributions):
             self.hd.narrow_space_from_best_guess(best_guess, kept_space_ratio),
             null_default_value=self.null_default_value
         ).was_narrowed_from(kept_space_ratio, self)
+
+    def min(self):
+        return round(self.hd.min())
+
+    def max(self):
+        return round(self.hd.max())
+
+    def mean(self) -> float:
+        # We will perform two sum starting from floor(mean of original distribution) and from ceil(mean of orignal  distribution).
+        original_mean = self.hd.mean()
+
+        # First sum
+        starting_decreasing_value = math.floor(original_mean)
+        decreasing_sum = _calculate_sum(lambda x: x * self.pdf(x), [starting_decreasing_value, -np.inf])
+
+        # Second sum
+        starting_increasing_value = math.ceil(original_mean)
+        if (starting_increasing_value - starting_decreasing_value) < 1e-10:
+            starting_increasing_value += 1
+
+        increasing_sum = _calculate_sum(lambda x: x * self.pdf(x), [starting_increasing_value, np.inf])
+
+        return decreasing_sum + increasing_sum
+
+    def var(self) -> float:
+        # first moment
+        first_moment = self.mean()
+
+        # Calculate second moment
+        # We will perform two sum starting from floor(mean of original distribution) and from ceil(mean of orignal  distribution).
+        original_mean = self.hd.mean()
+        # First sum
+        starting_decreasing_value = math.floor(original_mean)
+        decreasing_sum = _calculate_sum(lambda x: x ** 2 * self.pdf(x), [starting_decreasing_value, -np.inf])
+        # Second sum
+        starting_increasing_value = math.ceil(original_mean)
+        if (starting_increasing_value - starting_decreasing_value) < 1e-10:
+            starting_increasing_value += 1
+        increasing_sum = _calculate_sum(lambda x: x ** 2 * self.pdf(x), [starting_increasing_value, np.inf])
+
+        second_moment = decreasing_sum + increasing_sum
+
+        return second_moment - first_moment ** 2
 
 
 class RandInt(HyperparameterDistribution):
@@ -593,6 +718,18 @@ class RandInt(HyperparameterDistribution):
             return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
         return RandInt(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio,
                                                                                                       self)
+
+    def min(self):
+        return self.min_included
+
+    def max(self):
+        return self.max_included
+
+    def mean(self):
+        return (self.max_included + self.min_included) / 2
+
+    def var(self):
+        return  # TODO : do var function.
 
 
 class Uniform(HyperparameterDistribution):
@@ -678,6 +815,18 @@ class Uniform(HyperparameterDistribution):
         return Uniform(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio,
                                                                                                       self)
 
+    def min(self):
+        return self.min_included
+
+    def max(self):
+        return self.max_included
+
+    def mean(self):
+        return (self.min_included + self.max_included) / 2
+
+    def var(self):
+# TODO: write var with uniform function.
+
 
 class LogUniform(HyperparameterDistribution):
     """Get a LogUniform distribution.
@@ -761,6 +910,19 @@ class LogUniform(HyperparameterDistribution):
         return LogUniform(2 ** new_min_included, 2 ** new_max_included, 2 ** self.null_default_value).was_narrowed_from(
             kept_space_ratio, self)
 
+    def min(self):
+        return self.min_included
+
+    def max(self):
+        return self.max_included
+
+    def mean(self):
+
+    # TODO: calculate mean for loguniform function.
+
+    def std(self):
+# TODO: calculate std for log uniform function.
+
 
 class Normal(HyperparameterDistribution):
     """Get a normal distribution."""
@@ -786,8 +948,8 @@ class Normal(HyperparameterDistribution):
         else:
             HyperparameterDistribution.__init__(self, null_default_value)
 
-        self.mean = mean
-        self.std = std
+        self._mean = mean
+        self._std = std
         self.hard_clip_min = hard_clip_min
         self.hard_clip_max = hard_clip_max
 
@@ -798,18 +960,18 @@ class Normal(HyperparameterDistribution):
         :return: a float.
         """
         if self.hard_clip_min is None and self.hard_clip_max is None:
-            result = float(np.random.normal(self.mean, self.std))
+            result = float(np.random.normal(self._mean, self._std))
         else:
             a = -np.inf
             b = np.inf
 
             if self.hard_clip_min is not None:
-                a = (self.hard_clip_min - self.mean) / self.std
+                a = (self.hard_clip_min - self._mean) / self._std
 
             if self.hard_clip_max is not None:
-                b = (self.hard_clip_max - self.mean) / self.std
+                b = (self.hard_clip_max - self._mean) / self._std
 
-            result = truncnorm.rvs(a=a, b=b, loc=self.mean, scale=self.std)
+            result = truncnorm.rvs(a=a, b=b, loc=self._mean, scale=self._std)
 
         if not math.isfinite(result):
             return self.rvs()
@@ -833,14 +995,14 @@ class Normal(HyperparameterDistribution):
             b = np.inf
 
             if self.hard_clip_min is not None:
-                a = (self.hard_clip_min - self.mean) / self.std
+                a = (self.hard_clip_min - self._mean) / self._std
 
             if self.hard_clip_max is not None:
-                b = (self.hard_clip_max - self.mean) / self.std
+                b = (self.hard_clip_max - self._mean) / self._std
 
-            return truncnorm.pdf(x, a=a, b=b, loc=self.mean, scale=self.std)
+            return truncnorm.pdf(x, a=a, b=b, loc=self._mean, scale=self._std)
 
-        return norm.pdf(x, loc=self.mean, scale=self.std)
+        return norm.pdf(x, loc=self._mean, scale=self._std)
 
     def cdf(self, x) -> float:
         """
@@ -859,14 +1021,14 @@ class Normal(HyperparameterDistribution):
             b = np.inf
 
             if self.hard_clip_min is not None:
-                a = (self.hard_clip_min - self.mean) / self.std
+                a = (self.hard_clip_min - self._mean) / self._std
 
             if self.hard_clip_max is not None:
-                b = (self.hard_clip_max - self.mean) / self.std
+                b = (self.hard_clip_max - self._mean) / self._std
 
-            return truncnorm.cdf(x, a=a, b=b, loc=self.mean, scale=self.std)
+            return truncnorm.cdf(x, a=a, b=b, loc=self._mean, scale=self._std)
 
-        return norm.cdf(x, loc=self.mean, scale=self.std)
+        return norm.cdf(x, loc=self._mean, scale=self._std)
 
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
         """
@@ -880,15 +1042,30 @@ class Normal(HyperparameterDistribution):
         :return: a new HyperparameterDistribution that has been narrowed down.
         """
         lost_space_ratio = 1.0 - kept_space_ratio
-        if isinstance(self.mean, tuple):
-            self.mean = self.mean[0]
-        new_mean = self.mean * kept_space_ratio + best_guess * lost_space_ratio
-        new_std = self.std * kept_space_ratio
+        if isinstance(self._mean, tuple):
+            self._mean = self._mean[0]
+        new_mean = self._mean * kept_space_ratio + best_guess * lost_space_ratio
+        new_std = self._std * kept_space_ratio
         if new_std <= 0.0:
             return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
         return Normal(
             new_mean, new_std, self.hard_clip_min, self.hard_clip_max, self.null_default_value
         ).was_narrowed_from(kept_space_ratio, self)
+
+    def min(self):
+        return self.hard_clip_min or -1 * np.inf
+
+    def max(self):
+        return self.hard_clip_max or np.inf
+
+    def mean(self):
+        return self._mean
+
+    def std(self):
+        return self._std
+
+    def var(self):
+        return self._std ** 2
 
 
 class LogNormal(HyperparameterDistribution):
@@ -1017,6 +1194,19 @@ class LogNormal(HyperparameterDistribution):
             new_mean, new_std, self.hard_clip_min, self.hard_clip_max, self.null_default_value
         ).was_narrowed_from(kept_space_ratio, self)
 
+    def min(self):
+        return self.hard_clip_min or 0.
+
+    def max(self):
+        return self.hard_clip_max or np.inf
+
+    def mean(self):
+
+    # TODO calculate mean of logNormal.
+
+    def var(self):
+# TODO calculate var of logNormal.
+
 
 class DistributionMixture(HyperparameterDistribution):
     """Get a mixture of multiple distribution"""
@@ -1040,7 +1230,8 @@ class DistributionMixture(HyperparameterDistribution):
                                means: Union[List[float], Tuple[float, ...]],
                                stds: Union[List[float], Tuple[float, ...]],
                                distributions_mins: Union[List[float], Tuple[float, ...]],
-                               distributions_max: Union[List[float], Tuple[float, ...]], use_logs: bool = False, use_quantized_distributions: bool = False):
+                               distributions_max: Union[List[float], Tuple[float, ...]], use_logs: bool = False,
+                               use_quantized_distributions: bool = False):
 
         distribution_class = Normal
 
@@ -1144,13 +1335,81 @@ class DistributionMixture(HyperparameterDistribution):
         Calculate minimal domain value of the mixture.
         :return: minimal domain value of the mixtture.
         """
-        distributions_min = [distribution.min() for distribution in self.distributions]
-        return np.amin(distributions_min)
+        return min([distribution.min() for distribution in self.distributions])
 
     def max(self) -> float:
         """
         Calculate minimal domain value of the mixture.
         :return: minimal domain value of the mixtture.
         """
-        distributions_max = [distribution.msx() for distribution in self.distributions]
-        return np.amax(distributions_max)
+        return max([distribution.msx() for distribution in self.distributions])
+
+
+def _calculate_sum(eval_func, limits: List[float], value_step: float = 1., tol: float = 1e-10,
+                   number_value_before_stop=5):
+    if np.isinf(limits[0]) and np.isinf(limits[1]):
+        raise ValueError("Cannot calculate a sum on infinite terms.")
+
+    if np.isposinf(limits[0]):
+        starting_value = limits[1]
+        stop_value = limits[0]
+        method = "increasing"
+    elif np.isposinf(limits[1]):
+        starting_value = limits[0]
+        stop_value = limits[1]
+        method = "increasing"
+    elif np.isneginf(limits[0]):
+        starting_value = limits[1]
+        stop_value = limits[0]
+        method = "decreasing"
+    elif np.isneginf(limits[1]):
+        starting_value = limits[0]
+        stop_value = limits[1]
+        method = "decreasing"
+    elif np.greater(limits[1], limits[0]):
+        starting_value = limits[0]
+        stop_value = limits[1]
+        method = "increasing"
+    else:
+        starting_value = limits[1]
+        stop_value = limits[0]
+        method = "increasing"
+
+    stopping = False
+    current_x = starting_value
+    number_negligable_result = 0
+    total_sum = 0
+
+    while stopping is False:
+
+        if method.lower() == "increasing":
+            comparaison = np.greater
+        else:
+            comparaison = np.less
+
+        reach_end = comparaison(current_x, stop_value)
+
+        if reach_end:
+            stopping = True
+            break
+
+        current_result = eval_func(current_x)
+        total_sum += current_result
+
+        is_negligeable = current_result < tol
+
+        if is_negligeable:
+            number_negligable_result += 1
+        else:
+            number_negligable_result = 0
+
+        if is_negligeable and number_negligable_result > number_value_before_stop:
+            stopping = True
+            break
+
+        if method.lower() == "increasing":
+            current_x += value_step
+        else:
+            current_x -= value_step
+
+    return total_sum
