@@ -22,6 +22,7 @@ Tests for Hyperparameters Distributions
 from collections import Counter
 
 import pytest
+import scipy
 
 from neuraxle.hyperparams.distributions import *
 
@@ -280,3 +281,43 @@ def test_priority_choice_threshold_narrowing():
     assert isinstance(hd, PriorityChoice)
     assert len(hd) == 4
     assert hd.get_current_narrowing_value() == 1.0
+
+
+def test_histogram_rvs():
+    data = norm.rvs(size=10000, loc=0, scale=1.5, random_state=123)
+    hist_dist = Histogram(
+        histogram=np.histogram(data, bins=100),
+        null_default_value=0.0
+    )
+
+    sample = hist_dist.rvs()
+
+    assert min(data) < sample < max(data)
+
+
+def test_histogram_pdf():
+    data = norm.rvs(size=10000, loc=0, scale=1.5, random_state=123)
+    histogram = np.histogram(data, bins=100)
+    hist_dist = Histogram(
+        histogram=histogram,
+        null_default_value=0.0
+    )
+
+    pdf = hist_dist.pdf(x=1.0)
+
+    assert 1.0 > pdf > 0.0
+    assert hist_dist.pdf(x=np.max(data)) == 0.0
+    assert hist_dist.pdf(x=np.min(data)) < 0.001
+
+
+def test_histogram_cdf():
+    data = norm.rvs(size=10000, loc=0, scale=1.5, random_state=123)
+    histogram = np.histogram(data, bins=100)
+    hist_dist = Histogram(
+        histogram=histogram,
+        null_default_value=0.0
+    )
+
+    assert hist_dist.cdf(x=np.max(data)) == 1.0
+    assert 0.55 > hist_dist.cdf(x=np.median(data)) > 0.45
+    assert hist_dist.cdf(x=np.min(data)) == 0.0
