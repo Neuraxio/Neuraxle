@@ -53,11 +53,11 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         p = TrainOnlyWrapper(Identity(), test_only=False)
 
     .. seealso::
-        :class:`neuraxle.steps.flow.TrainOnlyWrapper`,
-        :class:`neuraxle.steps.flow.TestOnlyWrapper`,
-        :class:`neuraxle.base.ForceHandleMixin`,
-        :class:`neuraxle.base.MetaStepMixin`,
-        :class:`neuraxle.base.BaseStep`
+        :class:`~neuraxle.steps.flow.TrainOnlyWrapper`,
+        :class:`~neuraxle.steps.flow.TestOnlyWrapper`,
+        :class:`~neuraxle.base.ForceHandleMixin`,
+        :class:`~neuraxle.base.MetaStepMixin`,
+        :class:`~neuraxle.base.BaseStep`
     """
 
     def __init__(self, wrapped: BaseStep, is_train_only=True, cache_folder_when_no_handle=None):
@@ -164,8 +164,8 @@ class Optional(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     .. seealso::
         :class:`TrainOrTestOnlyWrapper`,
         :class:`TrainOnlyWrapper`
-        :class:`neuraxle.base.MetaStepMixin`,
-        :class:`neuraxle.base.BaseStep`
+        :class:`~neuraxle.base.MetaStepMixin`,
+        :class:`~neuraxle.base.BaseStep`
     """
 
     def __init__(self, wrapped: BaseStep, enabled: bool = True, nullified_return_value=None,
@@ -284,7 +284,7 @@ class ChooseOneStepOf(FeatureUnion):
         })
 
     .. seealso::
-        :class:`neuraxle.pipeline.Pipeline`
+        :class:`~neuraxle.pipeline.Pipeline`
         :class:`Optional`
     """
 
@@ -382,7 +382,7 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
         })
 
     .. seealso::
-        :class:`neuraxle.pipeline.Pipeline`
+        :class:`~neuraxle.pipeline.Pipeline`
         :class:`Optional`
     """
 
@@ -448,8 +448,8 @@ class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseStep):
     A step that selects non empty data inputs.
 
     .. seealso::
-        :class:`neuraxle.base.TransformHandlerOnlyMixin`,
-        :class:`neuraxle.base.BaseStep`
+        :class:`~neuraxle.base.TransformHandlerOnlyMixin`,
+        :class:`~neuraxle.base.BaseStep`
     """
 
     def __init__(self):
@@ -491,11 +491,11 @@ class ExpandDim(
         - The expected_outputs is a list of one element that contains the original expected outputs list.
 
     .. seealso::
-        :class:`neuraxle.base.ForceAlwaysHandleMixin`,
-        :class:`neuraxle.base.MetaStepMixin`,
-        :class:`neuraxle.base.BaseStep`
-        :class:`neuraxle.base.BaseHasher`
-        :class:`neuraxle.data_container.ExpandedDataContainer`
+        :class:`~neuraxle.base.ForceAlwaysHandleMixin`,
+        :class:`~neuraxle.base.MetaStepMixin`,
+        :class:`~neuraxle.base.BaseStep`
+        :class:`~neuraxle.base.BaseHasher`
+        :class:`~neuraxle.data_container.ExpandedDataContainer`
     """
 
     def __init__(self, wrapped: BaseStep):

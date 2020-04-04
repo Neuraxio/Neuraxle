@@ -140,6 +140,13 @@ class FitTransformCallbackStep(BaseStep):
 
         self.transform_function = transform_function
         self.more_arguments = more_arguments
+
+        if transform_callback_function is None:
+            transform_callback_function = TapeCallbackFunction()
+
+        if fit_callback_function is None:
+            fit_callback_function = TapeCallbackFunction()
+
         self.fit_callback_function = fit_callback_function
         self.transform_callback_function = transform_callback_function
 
@@ -164,6 +171,22 @@ class FitTransformCallbackStep(BaseStep):
     def inverse_transform(self, processed_outputs):
         return processed_outputs
 
+    def clear_callbacks(self):
+        cleared_callbacks = {
+           self.name: {
+               'transform': self.transform_callback_function.data,
+               'fit': self.fit_callback_function.data
+           }
+        }
+
+        self.transform_callback_function.data = []
+        self.transform_callback_function.name_tape = []
+
+        self.fit_callback_function.data = []
+        self.fit_callback_function.name_tape = []
+
+        return cleared_callbacks
+
 
 class CallbackWrapper(HandleOnlyMixin, MetaStepMixin, BaseStep):
     """
@@ -179,9 +202,9 @@ class CallbackWrapper(HandleOnlyMixin, MetaStepMixin, BaseStep):
         callback_wrapper = CallbackWrapper(MultiplyByN(2), tape_transform_preprocessing, tape_fit_preprocessing, tape_inverse_transform_preprocessing)
 
     .. seealso::
-        :class:`neuraxle.base.HandleOnlyMixin`,
-        :class:`neuraxle.base.MetaStepMixin`,
-        :class:`neuraxle.base.BaseStep`
+        :class:`~neuraxle.base.HandleOnlyMixin`,
+        :class:`~neuraxle.base.MetaStepMixin`,
+        :class:`~neuraxle.base.BaseStep`
     """
     def __init__(
             self,

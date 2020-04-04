@@ -29,14 +29,14 @@ import shutil
 from abc import abstractmethod, ABC
 from typing import Iterable, Any
 
-from neuraxle.base import MetaStepMixin, BaseStep, NonFittableMixin, NonTransformableMixin, \
-    ExecutionContext
+import joblib
+
+from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.pipeline import DEFAULT_CACHE_FOLDER
-from neuraxle.steps.misc import VALUE_CACHING
 
 
-class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin, BaseStep):
+class ValueCachingWrapper(MetaStepMixin, BaseStep):
     """
     Value caching wrapper wraps a step to cache the values.
     """
@@ -54,7 +54,7 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
         if self.value_hasher is None:
             self.value_hasher = Md5Hasher()
 
-        self.cache_folder = cache_folder
+        self.value_caching_folder = cache_folder
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
@@ -66,7 +66,7 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
 
         :return: tuple(fitted pipeline, data_container)
         """
-        self.create_checkpoint_path(context.get_path())
+        self.create_checkpoint_path()
         self.flush_cache()
 
         self.wrapped = self.wrapped.fit(data_container.data_inputs, data_container.expected_outputs)
@@ -85,7 +85,7 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
 
         :return: transformed data container
         """
-        self.create_checkpoint_path(context.get_path())
+        self.create_checkpoint_path()
         outputs = self._transform_with_cache(data_container)
         data_container.set_data_inputs(outputs)
 
@@ -114,12 +114,9 @@ class ValueCachingWrapper(MetaStepMixin, NonFittableMixin, NonTransformableMixin
         return outputs
 
     @abstractmethod
-    def create_checkpoint_path(self, step_path: str) -> str:
+    def create_checkpoint_path(self) -> str:
         """
         Create checkpoint path.
-
-        :param step_path: step path inside pipeline ex: ``Pipeline/step_name/`` 
-        :type step_path: str
 
         :return: checkpoint path
         """
@@ -186,20 +183,15 @@ class PickleValueCachingWrapper(ValueCachingWrapper):
     Value Caching Wrapper class that caches the wrapped step transformed data inputs using python ``pickle`` library.
     """
 
-    def transform(self, data_inputs):
-        pass
+    def create_checkpoint_path(self) -> str:
+        if not os.path.exists(self.value_caching_folder):
+            os.makedirs(self.value_caching_folder)
 
-    def create_checkpoint_path(self, step_path: str) -> str:
-        self.checkpoint_path = os.path.join(self.cache_folder, step_path, VALUE_CACHING)
-
-        if not os.path.exists(self.checkpoint_path):
-            os.makedirs(self.checkpoint_path)
-
-        return self.checkpoint_path
+        return self.value_caching_folder
 
     def flush_cache(self):
-        shutil.rmtree(self.checkpoint_path)
-        os.mkdir(self.checkpoint_path)
+        shutil.rmtree(self.value_caching_folder)
+        os.mkdir(self.value_caching_folder)
 
     def read_cache(self, data_input):
         with open(self.get_cache_path_for(data_input), 'rb') as file_:
@@ -214,7 +206,38 @@ class PickleValueCachingWrapper(ValueCachingWrapper):
 
     def get_cache_path_for(self, data_input):
         hash_value = self._hash_value(data_input)
-        return os.path.join(self.checkpoint_path, '{0}.pickle'.format(hash_value))
+        return os.path.join(self.value_caching_folder, '{0}.pickle'.format(hash_value))
+
+
+class JoblibValueCachingWrapper(ValueCachingWrapper):
+    """
+    Joblib Value Caching Wrapper class that caches the wrapped step transformed data inputs using python ``pickle`` library.
+    """
+
+    def create_checkpoint_path(self) -> str:
+        if not os.path.exists(self.value_caching_folder):
+            os.makedirs(self.value_caching_folder)
+
+        return self.value_caching_folder
+
+    def flush_cache(self):
+        shutil.rmtree(self.value_caching_folder)
+        os.mkdir(self.value_caching_folder)
+
+    def read_cache(self, data_input):
+        with open(self.get_cache_path_for(data_input), 'rb') as file_:
+            return joblib.load(file_)
+
+    def write_cache(self, data_input, output):
+        with open(self.get_cache_path_for(data_input), 'wb') as file_:
+            return joblib.dump(output, file_)
+
+    def contains_cache_for(self, data_input) -> bool:
+        return os.path.exists(self.get_cache_path_for(data_input))
+
+    def get_cache_path_for(self, data_input):
+        hash_value = self._hash_value(data_input)
+        return os.path.join(self.value_caching_folder, '{0}.joblib'.format(hash_value))
 
 
 class BaseValueHasher(ABC):
