@@ -1016,10 +1016,10 @@ class LogNormal(HyperparameterDistribution):
         ).was_narrowed_from(kept_space_ratio, self)
 
 
-class BaseWrappedSKLeanDistribution(HyperparameterDistribution):
-    def __init__(self, sk_learn_distribution, null_default_value, **kwargs):
+class BaseWrappedScipyDistribution(HyperparameterDistribution):
+    def __init__(self, scipy_distribution, null_default_value, **kwargs):
         self.kwargs = kwargs
-        self.sk_learn_distribution = sk_learn_distribution
+        self.sk_learn_distribution = scipy_distribution
         HyperparameterDistribution.__init__(self, null_default_value=null_default_value)
 
     def rvs(self, *args, **kwargs) -> float:
@@ -1038,21 +1038,50 @@ class BaseWrappedSKLeanDistribution(HyperparameterDistribution):
         return self.sk_learn_distribution
 
 
-class GaussianContinuousDistribution(rv_continuous, metaclass=ABCMeta):
+class GaussianScipyDistribution(rv_continuous, metaclass=ABCMeta):
     def _pdf(self, x):
         return math.exp(-x ** 2 / 2.) / np.sqrt(2.0 * np.pi)
 
 
-class PoissonDiscreteDistribution(rv_discrete, metaclass=ABCMeta):
+class PoissonScipyDistribution(rv_discrete, metaclass=ABCMeta):
     def _pmf(self, k, mu):
         return math.exp(-mu) * mu ** k / factorial(k)
 
 
-class GaussianContinuous(BaseWrappedSKLeanDistribution):
+class Gaussian(BaseWrappedScipyDistribution):
+    """
+    Gaussian distribution that inherits from `scipy.stats.rv_continuous <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
+
+    Example usage :
+
+    .. code-block:: python
+
+        gaussian_distribution = GaussianContinuous(
+            min_included=0,
+            max_included=10,
+            null_default_value=0.0
+        )
+
+        assert 0.0 <= gaussian_distribution.rvs() <= 10.0
+        assert gaussian_distribution.pdf(10) < 0.001
+        assert gaussian_distribution.pdf(0) < 0.42
+        assert 0.55 > gaussian_distribution.cdf(5.0) > 0.45
+        assert gaussian_distribution.cdf(0) == 0.0
+
+
+    .. seealso::
+        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
+        :class:`Discrete`,
+        :class:`Continuous`,
+        :class:`HyperparameterDistribution`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`neuraxle.base.BaseStep`
+    """
     def __init__(self, min_included: int, max_included: int, null_default_value: float = None):
-        BaseWrappedSKLeanDistribution.__init__(
+        BaseWrappedScipyDistribution.__init__(
             self,
-            sk_learn_distribution=GaussianContinuousDistribution(
+            scipy_distribution=GaussianScipyDistribution(
                 name='gaussian_continuous',
                 a=min_included,
                 b=max_included
@@ -1061,10 +1090,42 @@ class GaussianContinuous(BaseWrappedSKLeanDistribution):
         )
 
 
-class Poisson(BaseWrappedSKLeanDistribution):
+class Poisson(BaseWrappedScipyDistribution):
+    """
+    Poisson distribution that inherits from `scipy.stats.rv_discrete <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_histogram.html#scipy.stats.rv_histogram>`_
+
+    Example usage :
+
+    .. code-block:: python
+
+        poisson_distribution = Poisson(
+            min_included=0.0,
+            max_included=10.0,
+            null_default_value=0.0,
+            mu=5.0
+        )
+
+        rvs = [poisson_distribution.rvs() for i in range(10)]
+        assert not all(x == rvs[0] for x in rvs)
+        assert 0.0 <= poisson_distribution.rvs() <= 10.0
+        assert poisson_distribution.pdf(10) == 0.01813278870782187
+        assert np.isclose(poisson_distribution.pdf(0), 0.006737946999085467)
+        assert poisson_distribution.cdf(5.0) == 0.6159606548330632
+        assert poisson_distribution.cdf(0) == 0.006737946999085467
+
+
+    .. seealso::
+        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
+        :class:`Discrete`,
+        :class:`Continuous`,
+        :class:`HyperparameterDistribution`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`neuraxle.base.BaseStep`
+    """
     def __init__(self, min_included: float, max_included: float, null_default_value: float = None, mu=0.6):
         super().__init__(
-            sk_learn_distribution=PoissonDiscreteDistribution(
+            scipy_distribution=PoissonScipyDistribution(
                 a=min_included,
                 b=max_included
             ),
@@ -1075,7 +1136,7 @@ class Poisson(BaseWrappedSKLeanDistribution):
         self.mu = mu
 
 
-class Histogram(BaseWrappedSKLeanDistribution, HyperparameterDistribution):
+class Histogram(BaseWrappedScipyDistribution, HyperparameterDistribution):
     """
     Histogram distribution that inherits from `scipy.stats.rv_histogram <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_histogram.html#scipy.stats.rv_histogram>`_
 
@@ -1088,20 +1149,29 @@ class Histogram(BaseWrappedSKLeanDistribution, HyperparameterDistribution):
              null_default_value=0.0
         )
 
+        assert min(data) <= hist_dist.rvs() <= max(data)
+        assert 1.0 > hist_dist.pdf(x=1.0) > 0.0
+        assert hist_dist.pdf(x=np.max(data)) == 0.0
+        assert hist_dist.pdf(x=np.min(data)) < 0.001
+        assert hist_dist.cdf(x=np.max(data)) == 1.0
+        assert 0.55 > hist_dist.cdf(x=np.median(data)) > 0.45
+        assert hist_dist.cdf(x=np.min(data)) == 0.0
+
 
     .. seealso::
-        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
-        :class:`Discrete`,
-        :class:`Continuous`,
         :class:`HyperparameterDistribution`,
+        :class:`BaseWrappedScipyDistribution`,
+        :class:`Poisson`,
+        :class:`Gaussian`,
+        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
         :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
         :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
         :class:`neuraxle.base.BaseStep`
     """
 
     def __init__(self, histogram: np.histogram, null_default_value: float = None, **kwargs):
-        BaseWrappedSKLeanDistribution.__init__(
+        BaseWrappedScipyDistribution.__init__(
             self,
-            sk_learn_distribution=rv_histogram(histogram=histogram, **kwargs),
+            scipy_distribution=rv_histogram(histogram=histogram, **kwargs),
             null_default_value=null_default_value
         )

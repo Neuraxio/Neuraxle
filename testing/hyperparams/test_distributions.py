@@ -299,7 +299,7 @@ def test_histogram():
 
 
 def test_continuous_gaussian():
-    gaussian_distribution = GaussianContinuous(
+    gaussian_distribution = Gaussian(
         min_included=0,
         max_included=10,
         null_default_value=0.0
