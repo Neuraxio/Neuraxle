@@ -73,6 +73,40 @@ class UniformScipyDistribution(rv_continuous):
         return 0.
 
 
+class Uniform(BaseWrappedScipyDistribution):
+    """Get a uniform distribution."""
+
+    def __init__(self, min_included: float, max_included: float, null_default_value=None):
+        """
+        Create a random uniform distribution.
+        A random float between the two values somehow inclusively will be returned.
+
+        :param min_included: minimum integer, included.
+        :type min_included: float
+        :param max_included: maximum integer, might be included - for more info, see `examples <https://docs.python.org/2/library/random.html#random.uniform>`__
+        :type max_included: float
+        :param null_default_value: null default value for distribution. if None, take the min_included
+        :type null_default_value: int
+        """
+        if null_default_value is None:
+            null_default_value = min_included
+
+        self.min_included: float = min_included
+        self.max_included: float = max_included
+
+        BaseWrappedScipyDistribution.__init__(
+            self,
+            scipy_distribution=UniformScipyDistribution(
+                name='uniform',
+                a=min_included,
+                b=max_included
+            ),
+            null_default_value=null_default_value,
+            min_included=min_included,
+            max_included=max_included
+        )
+
+
 class LogUniformScipyDistribution(rv_continuous):
     def _pdf(self, x, log2_min_included, log2_max_included) -> float:
         """
@@ -89,8 +123,44 @@ class LogUniformScipyDistribution(rv_continuous):
         return 0.
 
 
+class LogUniform(BaseWrappedScipyDistribution):
+    def __init__(self, min_included: float, max_included: float, null_default_value=None):
+        """
+        Create a quantized random log uniform distribution.
+        A random float between the two values inclusively will be returned.
+
+        :param min_included: minimum integer, should be somehow included.
+        :param max_included: maximum integer, should be somehow included.
+        :param null_default_value: null default value for distribution. if None, take the min_included
+        :type null_default_value: int
+        """
+        if null_default_value is None:
+            null_default_value = math.log2(min_included)
+        else:
+            null_default_value = math.log2(null_default_value)
+
+        self.min_included: float = min_included
+        self.max_included: float = max_included
+        self.log2_min_included = math.log2(min_included)
+        self.log2_max_included = math.log2(max_included)
+
+        BaseWrappedScipyDistribution.__init__(
+            self,
+            scipy_distribution=NormalScipyDistribution(
+                name='log_uniform',
+                a=self.min_included,
+                b=self.max_included
+            ),
+            null_default_value=null_default_value,
+            min_included=self.min_included,
+            max_included=self.max_included,
+            log2_min_included=self.log2_min_included,
+            log2_max_included=self.log2_max_included,
+        )
+
+
 class NormalScipyDistribution(rv_continuous):
-    def _pdf(self, x, hard_clip_min, hard_clip_max) -> float:
+    def _pdf(self, x, hard_clip_min, hard_clip_max, mean, std) -> float:
         """
         Calculate the Normal probability distribution value at position `x`.
         :param x: value where the probability distribution function is evaluated.
@@ -108,56 +178,50 @@ class NormalScipyDistribution(rv_continuous):
             b = np.inf
 
             if hard_clip_min is not None:
-                a = (hard_clip_min - self.mean()) / self.std()
+                a = (hard_clip_min - mean) / std
 
             if hard_clip_max is not None:
-                b = (hard_clip_max - self.mean()) / self.std()
+                b = (hard_clip_max - mean) / std
 
-            return truncnorm.pdf(x, a=a, b=b, loc=self.mean(), scale=self.std())
+            return truncnorm.pdf(x, a=a, b=b, loc=mean, scale=std)
 
-        return norm.pdf(x, loc=self.mean(), scale=self.std())
+        return norm.pdf(x, loc=mean, scale=std)
 
 
 class Normal(BaseWrappedScipyDistribution):
-    """
-    LogNormal distribution that wraps a `continuous scipy distribution <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
+    """Get a normal distribution."""
 
-    Example usage :
+    def __init__(self, mean: float, std: float,
+                 hard_clip_min: float = None, hard_clip_max: float = None, null_default_value: float = None):
+        """
+        Create a normal distribution from mean and standard deviation.
 
-    .. code-block:: python
+        :param mean: the most common value to pop
+        :type mean: float
+        :param std: the standard deviation (that is, the sqrt of the variance).
+        :type std: float
+        :param hard_clip_min: if not none, rvs will return max(result, hard_clip_min).
+        :type hard_clip_min: float
+        :param hard_clip_max: if not none, rvs will return min(result, hard_clip_min).
+        :type hard_clip_max: float
+        :param null_default_value: if none, null default value will be set to hard_clip_min.
+        :type null_default_value: float
+        """
+        if null_default_value is None:
+            null_default_value = hard_clip_min
 
-        gaussian_distribution = GaussianContinuous(
-            min_included=0,
-            max_included=10,
-            null_default_value=0.0
-        )
-
-        assert 0.0 <= gaussian_distribution.rvs() <= 10.0
-        assert gaussian_distribution.pdf(10) < 0.001
-        assert gaussian_distribution.pdf(0) < 0.42
-        assert 0.55 > gaussian_distribution.cdf(5.0) > 0.45
-        assert gaussian_distribution.cdf(0) == 0.0
-
-
-    .. seealso::
-        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
-        :class:`Discrete`,
-        :class:`Continuous`,
-        :class:`HyperparameterDistribution`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`neuraxle.base.BaseStep`
-    """
-
-    def __init__(self, min_included: int, max_included: int, null_default_value: float = None):
         BaseWrappedScipyDistribution.__init__(
             self,
-            scipy_distribution=NormalScipyDistribution(
-                name='normal',
-                a=min_included,
-                b=max_included
+            scipy_distribution=LogNormalScipyDistribution(
+                name='log_normal',
+                a=hard_clip_min,
+                b=hard_clip_max
             ),
-            null_default_value=null_default_value
+            null_default_value=null_default_value,
+            hard_clip_min=hard_clip_min,
+            hard_clip_max=hard_clip_max,
+            mean=mean,
+            std=std
         )
 
 
@@ -234,11 +298,6 @@ class GaussianScipyDistribution(rv_continuous):
         return math.exp(-x ** 2 / 2.) / np.sqrt(2.0 * np.pi)
 
 
-class PoissonScipyDistribution(rv_discrete):
-    def _pmf(self, k, mu):
-        return math.exp(-mu) * mu ** k / factorial(k)
-
-
 class Gaussian(BaseWrappedScipyDistribution):
     """
     Gaussian distribution that inherits from `scipy.stats.rv_continuous <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
@@ -280,6 +339,11 @@ class Gaussian(BaseWrappedScipyDistribution):
             ),
             null_default_value=null_default_value
         )
+
+
+class PoissonScipyDistribution(rv_discrete):
+    def _pmf(self, k, mu):
+        return math.exp(-mu) * mu ** k / factorial(k)
 
 
 class Poisson(BaseWrappedScipyDistribution):
