@@ -39,13 +39,208 @@ class BaseWrappedScipyDistribution(HyperparameterDistribution):
             return self.sk_learn_distribution.pmf(x, *args, **self.kwargs, **kwargs)
 
     def cdf(self, x, *args, **kwargs) -> float:
+        """
+        Cumulative distribution function of the given x.
+
+        :param x:
+        :param args:
+        :param kwargs:
+        :return:
+        """
         return self.sk_learn_distribution.cdf(x, *args, **self.kwargs, **kwargs)
+
+    def entropy(self, *args, **kwargs):
+        """
+        Differential entropy of the RV.
+        
+        :return: 
+        """
+        return self.sk_learn_distribution.entropy(*args, **self.kwargs, **kwargs)
+
+    def expect(self, *args, **kwargs):
+        """
+        Calculate expected value of a function with respect to the distribution by numerical integration.
+
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        return self.sk_learn_distribution.expect(*args, **self.kwargs, **kwargs)
+
+    def fit(self, data, *args, **kwargs):
+        """
+        Return MLEs for shape( if applicable), location, and scale parameters from data.
+
+        :param data:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        return self.sk_learn_distribution.fit(*args, **self.kwargs, **kwargs)
+
+    def fit_loc_scale(self, data, *args):
+        """
+        Estimate loc and scale parameters from data using 1 st and 2 nd moments. 
+        
+        :param data: 
+        :return: 
+        """
+        return self.sk_learn_distribution.fit_loc_scale(data, *args)
+
+    def freeze(self, *args, **kwargs):
+        """
+        Freeze the distribution for the given arguments.
+
+        :return:
+        """
+        return self.sk_learn_distribution.freeze(*args, **kwargs)
+
+    def interval(self, alpha, *args, **kwargs):
+        """
+        Confidence interval with equal areas around the median.
+
+        :param alpha:
+        :return:
+        """
+        return self.sk_learn_distribution.interval(alpha, *args, **kwargs)
+
+    def isf(self, q, *args, **kwargs):
+        """
+        Inverse survival function(inverse of sf) at q of the given RV.
+
+        :param q:
+        :return:
+        """
+        return self.sk_learn_distribution.isf(q, *args, **kwargs)
+
+    def logcdf(self, x, *args, **kwargs):
+        """
+        Log of the cumulative distribution function at x of the given RV.
+
+        :param x:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        return self.sk_learn_distribution.logcdf(x, *args, **kwargs)
+
+    def logpdf(self, x, *args, **kwargs):
+        """
+        Log of the probability density function at x of the given RV.
+
+        :param x:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        return self.sk_learn_distribution.logpdf(x, *args, **kwargs)
+
+    def logsf(self, x, *args, **kwargs):
+        """
+        Log of the survival function of the given RV.
+
+        :param x:
+        :return:
+        """
+        return self.sk_learn_distribution.logsf(x, *args, **kwargs)
+
+    def mean(self, *args, **kwargs):
+        """
+        Mean of the distribution.
+
+        :return:
+        """
+        return self.sk_learn_distribution.mean(*args, **kwargs)
+
+    def median(self, *args, **kwargs):
+        """
+        Median of the distribution.
+
+        :return:
+        """
+        return self.sk_learn_distribution.median(*args, **kwargs)
+
+    def moment(self, n, *args, **kwargs):
+        """
+        n-th order non-central moment of distribution.
+
+        :param n:
+        :return:
+        """
+        return self.sk_learn_distribution.moment(n, *args, **kwargs)
+
+    def nnlf(self, theta, x):
+        """
+        Return negative loglikelihood function.
+
+        :param theta:
+        :param x:
+        :return:
+        """
+        return self.sk_learn_distribution.nnlf(theta, x)
+
+    def ppf(self, q, *args, **kwargs):
+        """
+        Percent point function(inverse of cdf) at q of the given RV.
+
+        :param q:
+        :return:
+        """
+        return self.sk_learn_distribution.ppf(q, *args, **kwargs)
+
+    def sf(self, x, *args, **kwargs):
+        """
+        Survival function(1 - cdf) at x of the given RV.
+
+        :param x:
+        :return:
+        """
+        return self.sk_learn_distribution.sf(x, *args, **kwargs)
+
+    def stats(self, *args, **kwargs):
+        """
+        Some statistics of the given RV.
+
+        :return:
+        """
+        return self.sk_learn_distribution.stats(*args, **kwargs)
+
+    def std(self, *args, **kwargs):
+        """
+        Standard deviation of the distribution.
+
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        return self.sk_learn_distribution.std(*args, **kwargs)
+
+    def support(self, *args, **kwargs):
+        """
+        Return the support of the distribution.
+
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        return self.sk_learn_distribution.support(*args, **kwargs)
+
+    def var(self, *args, **kwargs):
+        """
+        Variance of the distribution.
+
+        :return:
+        """
+        return self.sk_learn_distribution.var(*args, **kwargs)
 
     def to_sk_learn(self):
         return self.sk_learn_distribution
 
 
 class RandInt(BaseWrappedScipyDistribution):
+    """
+    Rand int scipy distribution. Check out `scipy.stats.randint for more info <https://docs.scipy.org/doc/scipy-0.15.1/reference/generated/scipy.stats.randint.html>`_
+    """
     def __init__(self, min_included: int, max_included: int, null_default_value: float = None):
         BaseWrappedScipyDistribution.__init__(
             self,
@@ -55,6 +250,9 @@ class RandInt(BaseWrappedScipyDistribution):
 
 
 class UniformScipyDistribution(rv_continuous):
+    """
+    Uniform scipy distribution. Check out `scipy.stats.rv_continuous for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
+    """
     def _pdf(self, x, min_included, max_included):
         """
         Calculate the Uniform probability distribution value at position `x`.
@@ -74,8 +272,18 @@ class UniformScipyDistribution(rv_continuous):
 
 
 class Uniform(BaseWrappedScipyDistribution):
-    """Get a uniform distribution."""
+    """
+    Get a uniform distribution.
 
+    .. seealso::
+        :class:`UniformScipyDistribution`,
+        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
+        :class:`HyperparameterDistribution`,
+        :class:`BaseWrappedScipyDistribution`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`neuraxle.base.BaseStep`
+    """
     def __init__(self, min_included: float, max_included: float, null_default_value=None):
         """
         Create a random uniform distribution.
@@ -108,6 +316,9 @@ class Uniform(BaseWrappedScipyDistribution):
 
 
 class LogUniformScipyDistribution(rv_continuous):
+    """
+    Log Uniform scipy distribution. Check out `scipy.stats.rv_continuous for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
+    """
     def _pdf(self, x, log2_min_included, log2_max_included) -> float:
         """
         Calculate the logUniform probability distribution value at position `x`.
@@ -124,6 +335,18 @@ class LogUniformScipyDistribution(rv_continuous):
 
 
 class LogUniform(BaseWrappedScipyDistribution):
+    """
+    Get a LogUniform distribution.
+
+    .. seealso::
+        :class:`LogUniformScipyDistribution`,
+        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
+        :class:`HyperparameterDistribution`,
+        :class:`BaseWrappedScipyDistribution`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`neuraxle.base.BaseStep`
+    """
     def __init__(self, min_included: float, max_included: float, null_default_value=None):
         """
         Create a quantized random log uniform distribution.
@@ -160,6 +383,9 @@ class LogUniform(BaseWrappedScipyDistribution):
 
 
 class NormalScipyDistribution(rv_continuous):
+    """
+    Normal scipy distribution. Check out `scipy.stats.rv_continuous for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
+    """
     def _pdf(self, x, hard_clip_min, hard_clip_max, mean, std) -> float:
         """
         Calculate the Normal probability distribution value at position `x`.
@@ -189,7 +415,18 @@ class NormalScipyDistribution(rv_continuous):
 
 
 class Normal(BaseWrappedScipyDistribution):
-    """Get a normal distribution."""
+    """
+    Get a normal distribution.
+
+    .. seealso::
+        :class:`NormalScipyDistribution`,
+        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
+        :class:`HyperparameterDistribution`,
+        :class:`BaseWrappedScipyDistribution`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`neuraxle.base.BaseStep`
+    """
 
     def __init__(self, mean: float, std: float,
                  hard_clip_min: float = None, hard_clip_max: float = None, null_default_value: float = None):
@@ -226,6 +463,9 @@ class Normal(BaseWrappedScipyDistribution):
 
 
 class LogNormalScipyDistribution(rv_continuous):
+    """
+    Log Normal scipy distribution. Check out `scipy.stats.rv_continuous for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
+    """
     def _pdf(self, x, hard_clip_min, hard_clip_max, log2_space_mean, log2_space_std, *args):
         if hard_clip_min is not None and (x < hard_clip_min):
             return 0.
@@ -258,24 +498,24 @@ class LogNormal(BaseWrappedScipyDistribution):
 
     .. code-block:: python
 
-        gaussian_distribution = GaussianContinuous(
+        distribution = LogNormal(
             min_included=0,
             max_included=10,
             null_default_value=0.0
         )
 
-        assert 0.0 <= gaussian_distribution.rvs() <= 10.0
-        assert gaussian_distribution.pdf(10) < 0.001
-        assert gaussian_distribution.pdf(0) < 0.42
-        assert 0.55 > gaussian_distribution.cdf(5.0) > 0.45
-        assert gaussian_distribution.cdf(0) == 0.0
+        assert 0.0 <= distribution.rvs() <= 10.0
+        assert distribution.pdf(10) < 0.001
+        assert distribution.pdf(0) < 0.42
+        assert 0.55 > distribution.cdf(5.0) > 0.45
+        assert distribution.cdf(0) == 0.0
 
 
     .. seealso::
+        :class:`LogNormalScipyDistribution`,
         :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
-        :class:`Discrete`,
-        :class:`Continuous`,
         :class:`HyperparameterDistribution`,
+        :class:`BaseWrappedScipyDistribution`,
         :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
         :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
         :class:`neuraxle.base.BaseStep`
@@ -294,6 +534,9 @@ class LogNormal(BaseWrappedScipyDistribution):
 
 
 class GaussianScipyDistribution(rv_continuous):
+    """
+    Gaussian scipy distribution. Check out `scipy.stats.rv_continuous for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
+    """
     def _pdf(self, x):
         return math.exp(-x ** 2 / 2.) / np.sqrt(2.0 * np.pi)
 
@@ -306,7 +549,7 @@ class Gaussian(BaseWrappedScipyDistribution):
 
     .. code-block:: python
 
-        gaussian_distribution = GaussianContinuous(
+        gaussian_distribution = Gaussian(
             min_included=0,
             max_included=10,
             null_default_value=0.0
@@ -320,9 +563,9 @@ class Gaussian(BaseWrappedScipyDistribution):
 
 
     .. seealso::
+        :class:`GaussianScipyDistribution`,
+        :class:`BaseWrappedScipyDistribution`,
         :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
-        :class:`Discrete`,
-        :class:`Continuous`,
         :class:`HyperparameterDistribution`,
         :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
         :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
@@ -342,6 +585,9 @@ class Gaussian(BaseWrappedScipyDistribution):
 
 
 class PoissonScipyDistribution(rv_discrete):
+    """
+    Poisson scipy distribution. Check out `scipy.stats.rv_discrete for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_discrete.html#scipy.stats.rv_discrete>`_
+    """
     def _pmf(self, k, mu):
         return math.exp(-mu) * mu ** k / factorial(k)
 
@@ -372,12 +618,12 @@ class Poisson(BaseWrappedScipyDistribution):
 
     .. seealso::
         :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
-        :class:`Discrete`,
-        :class:`Continuous`,
+        :class:`PoissonScipyDistribution`,
         :class:`HyperparameterDistribution`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`neuraxle.base.BaseStep`
+        :class:`BaseWrappedScipyDistribution`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`~neuraxle.base.BaseStep`
     """
 
     def __init__(self, min_included: float, max_included: float, null_default_value: float = None, mu=0.6):
@@ -422,9 +668,9 @@ class Histogram(BaseWrappedScipyDistribution, HyperparameterDistribution):
         :class:`Poisson`,
         :class:`Gaussian`,
         :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`neuraxle.base.BaseStep`
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`~neuraxle.base.BaseStep`
     """
 
     def __init__(self, histogram: np.histogram, null_default_value: float = None, **kwargs):
