@@ -23,7 +23,7 @@ Pipeline Steps For Looping
 
 """
 import copy
-from typing import List
+from typing import List, Callable, Dict, Iterable, Union
 
 import numpy as np
 
@@ -157,38 +157,19 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         self.steps_as_tuple: List[NamedTupleList] = []
         self.copy_op = copy_op
 
-    def set_train(self, is_train: bool = True):
-        MetaStepMixin.set_train(self, is_train)
-        [step.set_train(is_train) for _, step in self]
-        return self
+    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
+        results = MetaStepMixin.apply(self, method_name=method_name, step_name=step_name, *kargs, **kwargs)
+        if len(self) > 0:
+            for _, step in self:
+                results.update(step.apply(method_name=method_name, step_name=step_name, *kargs, **kwargs))
+        return results
 
-    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
-        MetaStepMixin.set_hyperparams(self, hyperparams)
-        self.steps_as_tuple = [(name, step.set_hyperparams(self.wrapped.get_hyperparams())) for name, step in self]
-        return self
-
-    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
-        """
-        Update the step hyperparameters without removing the already-set hyperparameters.
-        Please refer to :func:`~BaseStep.update_hyperparams`.
-
-        :param hyperparams: hyperparams to update
-        :type hyperparams: HyperparameterSamples
-        :return: self
-        :rtype: BaseStep
-
-        .. seealso::
-            :func:`~BaseStep.update_hyperparams`,
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
-        """
-        MetaStepMixin.update_hyperparams(self, hyperparams)
-        self.steps_as_tuple = [(name, step.set_hyperparams(self.wrapped.get_hyperparams())) for name, step in self.steps_as_tuple]
-        return self
-
-    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
-        MetaStepMixin.set_hyperparams_space(self, hyperparams_space)
-        self.steps_as_tuple = [(name, step.set_hyperparams_space(self.wrapped.get_hyperparams_space())) for name, step in self]
-        return self
+    def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Union[Dict, Iterable]:
+        results = MetaStepMixin.apply_method(self, method=method, step_name=step_name, *kargs, **kwargs)
+        if len(self) > 0:
+            for _, step in self:
+                results.update(step.apply_method(method=method, step_name=step_name, *kargs, **kwargs))
+        return results
 
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         data_container, context = BaseStep._will_process(self, data_container, context)
@@ -284,6 +265,14 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         :return: iter(self.steps_as_tuple)
         """
         return iter(self.steps_as_tuple)
+
+    def __len__(self):
+        """
+        Get number of steps cloned for each data input.
+
+        :return: len(self.steps_as_tuple)
+        """
+        return len(self.steps_as_tuple)
 
 
 class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStepMixin, BaseStep):

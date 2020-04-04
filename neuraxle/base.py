@@ -41,6 +41,8 @@ from sklearn.base import BaseEstimator
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
+RECURSIVE_STEP_SEPARATOR = '__'
+
 DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
 
 
@@ -667,6 +669,7 @@ class BaseStep(ABC):
             :func:`BaseStep.set_train`
         """
         self.is_train = is_train
+        self.apply(method_name='set_train', is_train=is_train, children_only=True)
         return self
 
     def set_name(self, name: str):
@@ -735,7 +738,18 @@ class BaseStep(ABC):
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
         self.invalidate()
-        self.hyperparams = HyperparameterSamples(hyperparams).to_flat()
+
+        remainders = dict()
+        for name, hparams in hyperparams.items():
+            if RECURSIVE_STEP_SEPARATOR in name:
+                if name.split(RECURSIVE_STEP_SEPARATOR)[-1].starts_with(self.name):
+                    self.hyperparams = HyperparameterSamples(hyperparams[hparams])
+                else:
+                    remainders[name] = hparams
+            else:
+                self.hyperparams = HyperparameterSamples(hyperparams[hparams])
+
+        self.apply(method_name='set_hyperparams', hyperparams=remainders, children_only=True)
         return self
 
     def update_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
@@ -768,6 +782,18 @@ class BaseStep(ABC):
         """
         self.hyperparams.update(hyperparams)
         self.hyperparams = HyperparameterSamples(self.hyperparams).to_flat()
+
+        remainders = dict()
+        for name, hparams in hyperparams.items():
+            if RECURSIVE_STEP_SEPARATOR in name:
+                if name.split(RECURSIVE_STEP_SEPARATOR)[-1].starts_with(self.name):
+                    self.hyperparams.update(HyperparameterSamples(hparams).to_flat())
+                else:
+                    remainders[name] = hparams
+            else:
+                self.hyperparams.update(HyperparameterSamples(hparams).to_flat())
+
+        self.apply(method_name='update_hyperparams', hyperparams=remainders, children_only=True)
         return self
 
     def get_hyperparams(self) -> HyperparameterSamples:
@@ -839,7 +865,18 @@ class BaseStep(ABC):
             :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
         """
         self.invalidate()
-        self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
+
+        remainders = dict()
+        for name, hparams_space in hyperparams_space.items():
+            if RECURSIVE_STEP_SEPARATOR in name:
+                if name.split(RECURSIVE_STEP_SEPARATOR)[-1].starts_with(self.name):
+                    self.hyperparams_space = HyperparameterSpace(hparams_space).to_flat()
+                else:
+                    remainders[name] = hparams_space
+            else:
+                self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
+
+        self.apply(method_name='set_hyperparams_space', hyperparams_space=remainders, children_only=True)
         return self
 
     def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
@@ -872,6 +909,18 @@ class BaseStep(ABC):
         """
         self.hyperparams_space.update(hyperparams_space)
         self.hyperparams_space = HyperparameterSamples(self.hyperparams_space).to_flat()
+
+        remainders = dict()
+        for name, hparams_space in hyperparams_space.items():
+            if RECURSIVE_STEP_SEPARATOR in name:
+                if name.split(RECURSIVE_STEP_SEPARATOR)[-1].starts_with(self.name):
+                    self.hyperparams_space.update(HyperparameterSpace(hparams_space).to_flat())
+                else:
+                    remainders[name] = hparams_space
+            else:
+                self.hyperparams_space.update(HyperparameterSpace(hparams_space).to_flat())
+
+        self.apply(method_name='update_hyperparams_space', hyperparams_space=remainders, children_only=True)
         return self
 
     def get_hyperparams_space(self) -> HyperparameterSpace:
@@ -918,16 +967,20 @@ class BaseStep(ABC):
 
         return data_container
 
-    def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Dict:
+    def apply_method(self, method: Callable, step_name=None, children_only: bool=False, *kargs, **kwargs) -> Dict:
         """
         Apply a method to a step and its children.
 
         :param method: method to call with self
         :param step_name: current pipeline step name
+        :param children_only: apply method only to the sub steps
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
         """
+        if children_only:
+            return {}
+
         if step_name is not None:
             step_name = "{}__{}".format(step_name, self.name)
         else:
@@ -937,17 +990,20 @@ class BaseStep(ABC):
             step_name: method(self, *kargs, **kwargs)
         }
 
-    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
+    def apply(self, method_name: str, step_name=None, children_only: bool=False, *kargs, **kwargs) -> Dict:
         """
         Apply a method to a step and its children.
 
         :param method_name: method name that need to be called on all steps
         :param step_name: current pipeline step name
+        :param children_only: apply method only to the sub steps
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
         """
         results = {}
+        if children_only:
+            return results
 
         if step_name is not None:
             step_name = "{}__{}".format(step_name, self.name)
@@ -1308,8 +1364,8 @@ class BaseStep(ABC):
 
         if full_dump:
             # initialize and invalidate steps to make sure that all steps will be saved
-            self.apply_method(_initialize_if_needed)
-            self.apply_method(_invalidate)
+            self.apply_method(method=_initialize_if_needed)
+            self.apply_method(method=_invalidate)
 
         context.mkdir()
         stripped_step = copy(self)
@@ -1658,33 +1714,6 @@ class MetaStepMixin:
         self.is_initialized = False
         return self
 
-    def set_train(self, is_train: bool = True):
-        """
-        Set pipeline step mode to train or test. Also set wrapped step mode to train or test.
-
-        For instance, you can add a simple if statement to direct to the right implementation:
-
-        .. code-block:: python
-
-            def transform(self, data_inputs):
-                if self.is_train:
-                    self.transform_train_(data_inputs)
-                else:
-                    self.transform_test_(data_inputs)
-
-            def fit_transform(self, data_inputs, expected_outputs=None):
-                if self.is_train:
-                    self.fit_transform_train_(data_inputs, expected_outputs)
-                else:
-                    self.fit_transform_test_(data_inputs, expected_outputs)
-
-        :param is_train: bool
-        :return:
-        """
-        self.is_train = is_train
-        self.wrapped.set_train(is_train)
-        return self
-
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
         """
         Set step hyperparameters, and wrapped step hyperparams with the given hyperparams.
@@ -1910,17 +1939,18 @@ class MetaStepMixin:
         data_container = self._did_process(data_container, context)
         return data_container
 
-    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
+    def apply(self, method_name: str, step_name=None, children_only=False, *kargs, **kwargs) -> Dict:
         """
         Apply the method name to the meta step and its wrapped step.
 
         :param method_name: method name that need to be called on all steps
         :param step_name: step name to apply the method to
+        :param children_only: apply method to children only
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
         """
-        results = BaseStep.apply(self, method_name=method_name, step_name=step_name, *kargs, **kwargs)
+        results = BaseStep.apply(self, method_name=method_name, step_name=step_name, children_only=children_only, *kargs, **kwargs)
 
         if step_name is not None:
             step_name = "{}__{}".format(step_name, self.name)
@@ -1933,17 +1963,18 @@ class MetaStepMixin:
 
         return results
 
-    def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Union[Dict, Iterable]:
+    def apply_method(self, method: Callable, step_name=None, children_only=False, *kargs, **kwargs) -> Union[Dict, Iterable]:
         """
         Apply method to the meta step and its wrapped step.
 
         :param method: method to call with self
         :param step_name: step name to apply the method to
+        :param children_only: apply method to children only
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
         """
-        results = BaseStep.apply_method(self, method=method, step_name=step_name, *kargs, **kwargs)
+        results = BaseStep.apply_method(self, method=method, step_name=step_name, children_only=children_only, *kargs, **kwargs)
 
         if step_name is not None:
             step_name = "{}__{}".format(step_name, self.name)
@@ -2302,17 +2333,18 @@ class TruncableSteps(BaseStep, ABC):
 
         return self
 
-    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
+    def apply(self, method_name: str, step_name=None, children_only: bool = False, *kargs, **kwargs) -> Dict:
         """
         Apply the method name to the pipeline step and all of its children.
 
         :param method_name: method name that need to be called on all steps
         :param step_name: current pipeline step name
+        :param children_only: apply method only to the sub steps
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
         """
-        results = BaseStep.apply(self, method_name, step_name=step_name, *kargs, **kwargs)
+        results = BaseStep.apply(self, method_name, step_name=step_name, children_only=children_only, *kargs, **kwargs)
 
         if step_name is not None:
             step_name = "{}__{}".format(step_name, self.name)
@@ -2325,17 +2357,18 @@ class TruncableSteps(BaseStep, ABC):
 
         return results
 
-    def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Dict:
+    def apply_method(self, method: Callable, step_name=None, children_only=False, *kargs, **kwargs) -> Dict:
         """
         Apply a method to the pipeline step and all of its children.
 
         :param method: method to call with self
         :param step_name: current pipeline step name
+        :param children_only: apply method only to the sub steps
         :param kargs: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
         """
-        results = BaseStep.apply_method(self, method=method, step_name=step_name, *kargs, **kwargs)
+        results = BaseStep.apply_method(self, method=method, step_name=step_name, children_only=children_only, *kargs, **kwargs)
 
         if step_name is not None:
             step_name = "{}__{}".format(step_name, self.name)
@@ -2477,65 +2510,6 @@ class TruncableSteps(BaseStep, ABC):
 
         return hyperparams.to_flat()
 
-    def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
-        """
-        Set step hyperparameters to the given :class:`~neuraxle.space.HyperparameterSamples`.
-
-        Example :
-
-        .. code-block:: python
-
-            p = Pipeline([SomeStep()])
-            p.set_hyperparams(HyperparameterSamples({
-                'learning_rate': 0.1,
-                'some_step__learning_rate': 0.2 # will set SomeStep() hyperparam 'learning_rate' to 0.2
-            }))
-
-        :return: step hyperparameters
-
-        .. seealso::
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
-        """
-        self.invalidate()
-
-        hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
-
-        remainders = dict()
-        for name, hparams in hyperparams.items():
-            if name in self.steps.keys():
-                self.steps[name].set_hyperparams(HyperparameterSamples(hparams))
-            else:
-                remainders[name] = hparams
-        self.hyperparams = HyperparameterSamples(remainders)
-
-        return self
-
-    def update_hyperparams(self, hyperparams: Union[HyperparameterSamples, OrderedDict, dict]) -> BaseStep:
-        """
-        Update the steps hyperparameters without removing the already-set hyperparameters.
-        Please refer to :func:`~BaseStep.update_hyperparams`.
-
-        :param hyperparams: hyperparams to update
-        :return: step
-
-        .. seealso::
-            :func:`~BaseStep.update_hyperparams`,
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
-        """
-        self.invalidate()
-
-        hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
-
-        remainders = dict()
-        for name, hparams in hyperparams.items():
-            if name in self.steps.keys():
-                self.steps[name].update_hyperparams(HyperparameterSamples(hparams))
-            else:
-                remainders[name] = hparams
-        self.hyperparams.update(remainders)
-
-        return self
-
     def get_hyperparams_space(self):
         """
         Get step hyperparameters space as :class:`~neuraxle.space.HyperparameterSpace`.
@@ -2569,66 +2543,6 @@ class TruncableSteps(BaseStep, ABC):
         )
 
         return all_hyperparams.to_flat()
-
-    def update_hyperparams_space(self, hyperparams_space: Union[HyperparameterSpace, OrderedDict, dict]) -> BaseStep:
-        """
-        Update the steps hyperparameters without removing the already-set hyperparameters.
-        Please refer to :func:`~BaseStep.update_hyperparams`.
-
-        :param hyperparams_space: hyperparams_space to update
-        :return: step
-
-        .. seealso::
-            :func:`~BaseStep.update_hyperparams`,
-            :class:`~neuraxle.space.HyperparameterSamples`
-        """
-        self.is_invalidated = True
-
-        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
-
-        remainders = dict()
-        for name, hparams_space in hyperparams_space.items():
-            if name in self.steps.keys():
-                self.steps[name].update_hyperparams_space(HyperparameterSamples(hparams_space))
-            else:
-                remainders[name] = hparams_space
-        self.hyperparams_space.update(remainders)
-
-        return self
-
-    def set_hyperparams_space(self, hyperparams_space: Union[HyperparameterSpace, OrderedDict, dict]) -> BaseStep:
-        """
-        Set step hyperparameters space as :class:`~neuraxle.hyperparams.space.HyperparameterSpace`.
-
-        Example :
-
-        .. code-block:: python
-
-            p = Pipeline([SomeStep()])
-            p.set_hyperparams_space(HyperparameterSpace({
-                'learning_rate': RandInt(0,5),
-                'some_step__learning_rate': RandInt(0, 10) # will set SomeStep() 'learning_rate' hyperparam space to RandInt(0, 10)
-            }))
-
-        :param hyperparams_space: hyperparameters space
-        :return: self
-
-        .. seealso::
-            :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
-        """
-        self.invalidate()
-
-        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
-
-        remainders = dict()
-        for name, hparams in hyperparams_space.items():
-            if name in self.keys():
-                self.steps[name].set_hyperparams_space(HyperparameterSpace(hparams))
-            else:
-                remainders[name] = hparams
-        self.hyperparams_space = HyperparameterSpace(remainders)
-
-        return self
 
     def should_save(self):
         """

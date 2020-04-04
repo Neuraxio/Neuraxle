@@ -159,3 +159,7 @@ def test_step_cloner_should_load_sub_steps(tmpdir):
 def _create_data(shape):
     data_inputs = np.random.random(shape).astype(np.float32)
     return data_inputs
+
+
+def test_step_cloner_should_set_train(tmpdir):
+    pass
