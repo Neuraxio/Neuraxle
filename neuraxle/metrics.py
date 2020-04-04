@@ -45,9 +45,9 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
 
 
     .. seealso::
-        :class:`neuraxle.api.DeepLearningPipeline`,
-        :class:`neuraxle.base.MetaStepMixin`,
-        :class:`neuraxle.base.BaseStep`
+        :class:`~neuraxle.api.DeepLearningPipeline`,
+        :class:`~neuraxle.base.MetaStepMixin`,
+        :class:`~neuraxle.base.BaseStep`
     """
 
     def __init__(
@@ -93,7 +93,7 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
         """
         Calculate metrics results after fit, or transform if there is an expected outputs in the data container.
         Also, calculate validation metrics if there is a sub data container named validation in the data container.
-        Please refer to :class:`neuraxle.data_container.DataContainer` for more information about sub data containers.
+        Please refer to :class:`~neuraxle.data_container.DataContainer` for more information about sub data containers.
 
         :param data_container: data container to calculate metrics for
         :type data_container: DataContainer
