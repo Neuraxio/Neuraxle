@@ -1038,11 +1038,6 @@ class BaseWrappedSKLeanDistribution(HyperparameterDistribution):
         return self.sk_learn_distribution
 
 
-class GaussianDiscreteDistribution(rv_discrete, metaclass=ABCMeta):
-    def _pdf(self, x):
-        return math.exp(-x ** 2 / 2.) / np.sqrt(2.0 * np.pi)
-
-
 class GaussianContinuousDistribution(rv_continuous, metaclass=ABCMeta):
     def _pdf(self, x):
         return math.exp(-x ** 2 / 2.) / np.sqrt(2.0 * np.pi)
@@ -1059,19 +1054,6 @@ class GaussianContinuous(BaseWrappedSKLeanDistribution):
             self,
             sk_learn_distribution=GaussianContinuousDistribution(
                 name='gaussian_continuous',
-                a=min_included,
-                b=max_included
-            ),
-            null_default_value=null_default_value
-        )
-
-
-class GaussianDiscrete(BaseWrappedSKLeanDistribution):
-    def __init__(self, min_included: float, max_included: float, null_default_value: float = None):
-        BaseWrappedSKLeanDistribution.__init__(
-            self,
-            sk_learn_distribution=GaussianDiscreteDistribution(
-                name='gaussian_discrete',
                 a=min_included,
                 b=max_included
             ),
