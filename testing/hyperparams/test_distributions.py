@@ -22,10 +22,9 @@ Tests for Hyperparameters Distributions
 from collections import Counter
 
 import pytest
-import scipy
-from scipy.stats import norm
 
 from neuraxle.hyperparams.distributions import *
+from neuraxle.hyperparams.scipy_distributions import LogNormal, Gaussian, Poisson, Histogram
 
 NUM_TRIALS = 50000
 

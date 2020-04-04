@@ -24,6 +24,7 @@ from pprint import pprint
 import pytest
 
 from neuraxle.hyperparams.distributions import *
+from neuraxle.hyperparams.scipy_distributions import LogNormal
 from neuraxle.hyperparams.space import flat_to_nested_dict, nested_dict_to_flat, HyperparameterSpace, \
     HyperparameterSamples
 
