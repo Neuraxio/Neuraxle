@@ -1,6 +1,6 @@
 # Contributing to Neuraxle
 
-For contributing, read the [section `Community` of the README](https://github.com/Neuraxio/Neuraxle#community). 
+For contributing, read the [Community](https://github.com/Neuraxio/Neuraxle#community) section of the README.
 
 We'd love to see you comment in an issue if you want to do it. 
 
