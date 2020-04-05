@@ -56,9 +56,19 @@ def test_boolean_distribution():
     assert hd.cdf(-0.1) == 0.
     assert hd.cdf(1.1) == 1.
 
+    assert hd.min() == 0
+    assert hd.max() == 1
+    assert abs(hd.mean() - 0.5) < 1e-6
+    assert abs(hd.std() - 0.5) < 1e-6
+    assert abs(hd.var() - 0.25) < 1e-6
+    # Verify that hd mean and variance also correspond to mean and variance of sampling.
+    assert abs(hd.mean() - np.mean(samples)) < 1e-2
+    assert abs(hd.var() - np.var(samples)) < 1e-2
+
 @pytest.mark.parametrize("ctor", [Choice, PriorityChoice])
 def test_choice_and_priority_choice(ctor):
-    hd = ctor([0, 1, False, "Test"])
+    choice_list = [0, 1, False, "Test"]
+    hd = ctor(choice_list)
 
     samples = get_many_samples_for(hd)
     z0 = Counter(samples).get(0)
@@ -72,23 +82,35 @@ def test_choice_and_priority_choice(ctor):
     assert zNone > NUM_TRIALS * 0.2
     assert zTest > NUM_TRIALS * 0.2
 
-    assert (hd.pdf(0) - 1 / 4) < 1e-6
-    assert (hd.pdf(1) - 1 / 4) < 1e-6
-    assert (hd.pdf(False) - 1/4) < 1e-6
-    assert (hd.pdf("Test") - 1 / 4) < 1e-6
+    assert abs(hd.pdf(0) - 1 / 4) < 1e-6
+    assert abs(hd.pdf(1) - 1 / 4) < 1e-6
+    assert abs(hd.pdf(False) - 1/4) < 1e-6
+    assert abs(hd.pdf("Test") - 1 / 4) < 1e-6
 
-    assert (hd.cdf(0) - 1 / 4) < 1e-6
-    assert (hd.cdf(1) - 2 / 4) < 1e-6
-    assert (hd.cdf(False) - 3 / 4) < 1e-6
+    assert abs(hd.cdf(0) - 1 / 4) < 1e-6
+    assert abs(hd.cdf(1) - 2 / 4) < 1e-6
+    assert abs(hd.cdf(False) - 3 / 4) < 1e-6
     assert hd.cdf("Test") == 1.
 
     with pytest.raises(ValueError):
         assert hd.pdf(3) == 0.
         assert hd.cdf(3) == 0.
 
+    assert hd.min() == 0
+    assert hd.max() == len(choice_list)
+    assert abs(hd.mean() - (len(choice_list) - 1) / 2) < 1e-6
+    assert abs(hd.var() - (len(choice_list)**2 - 1) / 12) < 1e-6
+    assert abs(hd.std() - math.sqrt((len(choice_list)**2 - 1) / 12)) < 1e-6
+    # Convert samples in sample index
+    samples_index = [get_index_in_list_with_bool(choice_list, sample) for sample in samples]
+    # Verify that hd mean and variance also correspond to mean and variance of sampling.
+    assert abs(hd.mean() - np.mean(samples_index)) < 1e-2
+    assert abs(hd.var() - np.var(samples_index)) < 1e-2
 
 def test_quantized_uniform():
-    hd = Quantized(Uniform(-10, 10))
+    low = -10
+    high = 10
+    hd = Quantized(Uniform(low, high))
 
     samples = get_many_samples_for(hd)
 
@@ -112,9 +134,20 @@ def test_quantized_uniform():
     assert abs(hd.cdf(9.2) - 19.5 / 20) < 1e-6
     assert hd.cdf(10) == 1.
 
+    assert hd.min() == low
+    assert hd.max() == high
+    assert abs(hd.mean() - 1.75) < 1e-6
+    assert abs(hd.var() - 30.4375) < 1e-6
+    assert abs(hd.std() - 5.5170191) < 1e-6
+    # Verify that hd mean and variance also correspond to mean and variance of sampling.
+    assert abs(hd.mean() - np.mean(samples)) < 1e-2
+    assert abs(hd.var() - np.var(samples)) < 1e-2
+
 
 def test_randint():
-    hd = RandInt(-10, 10)
+    low = -10
+    high = 10
+    hd = RandInt(low, high)
 
     samples = get_many_samples_for(hd)
 
@@ -139,8 +172,19 @@ def test_randint():
     assert abs(hd.cdf(10) - 1.) < 1e-6
     assert hd.cdf(10.1) == 1.
 
+    assert hd.min() == low
+    assert hd.max() == high
+    assert abs(hd.mean() - (10 - 10) / 2) < 1e-6
+    assert abs(hd.var() - ((high - low + 1)**2 - 1) / 12) < 1e-6
+    assert abs(hd.std() - math.sqrt(((high - low + 1)**2 - 1) / 12)) < 1e-6
+    # Verify that hd mean and variance also correspond to mean and variance of sampling.
+    assert abs(hd.mean() - np.mean(samples)) < 5e-2
+    assert abs(hd.var() - np.var(samples)) < 5e-2
+
 def test_uniform():
-    hd = Uniform(-10, 10)
+    low = -10
+    high = 10
+    hd = Uniform(low, high)
 
     samples = get_many_samples_for(hd)
 
@@ -155,8 +199,19 @@ def test_uniform():
     assert abs(hd.cdf(0) - (0 + 10) / (10 + 10)) < 1e-6
     assert hd.cdf(10.1) == 1.
 
+    assert hd.min() == low
+    assert hd.max() == high
+    assert abs(hd.mean() - (10 - 10) / 2) < 1e-6
+    assert abs(hd.var() - 1/12 * (high - low)**2) < 1e-6
+    assert abs(hd.std() - math.sqrt(1/12 * (high - low)**2)) < 1e-6
+    # Verify that hd mean and variance also correspond to mean and variance of sampling.
+    assert abs(hd.mean() - np.mean(samples)) < 5e-2
+    assert abs(hd.var() - np.var(samples)) < 5e-2
+
 def test_loguniform():
-    hd = LogUniform(0.001, 10)
+    min_included = 0.001
+    max_included = 10
+    hd = LogUniform(min_included, max_included)
 
     samples = get_many_samples_for(hd)
 
@@ -171,9 +226,20 @@ def test_loguniform():
     assert abs(hd.cdf(2) - (math.log2(2) - math.log2(0.001)) / (math.log2(10) - math.log2(0.001))) < 1e-6
     assert hd.cdf(10.1) == 1.
 
+    assert hd.min() == min_included
+    assert hd.max() == max_included
+    assert abs(hd.mean() - (max_included - min_included) / (math.log(2) * (math.log2(max_included) - math.log2(min_included)))) < 1e-6
+    esperance_squared = (max_included ** 2 - min_included ** 2) / (
+                2 * math.log(2) * (math.log2(max_included) - math.log2(min_included)))
+    assert abs(hd.var() - (esperance_squared - hd.mean()**2)) < 1e-6
+    # Verify that hd mean and variance also correspond to mean and variance of sampling.
+    assert abs(hd.mean() - np.mean(samples)) < 5e-2
+    assert abs(hd.var() - np.var(samples)) < 1e-1
 
 def test_normal():
-    hd = Normal(0.0, 1.0)
+    hd_mean = 0.0
+    hd_std = 1.0
+    hd = Normal(hd_mean, hd_std)
 
     samples = get_many_samples_for(hd)
 
@@ -188,9 +254,19 @@ def test_normal():
     assert abs(hd.cdf(0.) - 0.5) < 1e-6
     assert abs(hd.cdf(1.) - 0.8413447460685429) < 1e-6
 
+    assert hd.min() == -np.inf
+    assert hd.max() == np.inf
+    assert abs(hd.mean() - hd_mean) < 1e-6
+    assert abs(hd.var() - hd_std**2) < 1e-6
+    assert abs(hd.std() - hd_std) < 1e-6
+    # Verify that hd mean and variance also correspond to mean and variance of sampling.
+    assert abs(hd.mean() - np.mean(samples)) < 5e-2
+    assert abs(hd.var() - np.var(samples)) < 5e-2
 
 def test_lognormal():
-    hd = LogNormal(0.0, 2.0)
+    log2_space_mean = 0.0
+    log2_space_std = 2.0
+    hd = LogNormal(log2_space_mean, log2_space_std)
 
     samples = get_many_samples_for(hd)
 
@@ -205,7 +281,14 @@ def test_lognormal():
     assert hd.cdf(1.) == 0.5
     assert abs(hd.cdf(5.) - 0.8771717397015799) < 1e-6
 
-
+    assert hd.min() == 0
+    assert hd.max() == np.inf
+    # assert abs(hd.mean() - hd_mean) < 1e-6
+    # assert abs(hd.var() - hd_std**2) < 1e-6
+    # assert abs(hd.std() - hd_std) < 1e-6
+    # Verify that hd mean and variance also correspond to mean and variance of sampling.
+    assert abs(hd.mean() - np.mean(samples)) < 6e-2
+    assert abs((hd.var() - np.var(samples)) / hd.var()) < 1e-2
 
 @pytest.mark.parametrize("hd", [
     FixedHyperparameter(0),

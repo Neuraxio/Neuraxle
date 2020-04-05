@@ -31,7 +31,7 @@ import math
 import random
 import sys
 from abc import abstractmethod, ABCMeta
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Any
 
 import numpy as np
 from scipy.integrate import quad
@@ -223,6 +223,38 @@ class FixedHyperparameter(HyperparameterDistribution):
 
         return 0.
 
+    def min(self):
+        """
+        Calculate minimum value that can be sampled in a fixed distribution.
+
+        :return: minimal value return from distribution.
+        """
+        return self.value
+
+    def max(self):
+        """
+        Calculate maximum value that can be sampled in a fixed distribution.
+
+        :return: maximum value return from distribution.
+        """
+        return self.value
+
+    def mean(self):
+        """
+        Calculate mean value (also called esperance) of the random variable.
+
+        :return: mean value of the random variable.
+        """
+        return self.value
+
+    def var(self):
+        """
+        Calculate variance value of the random variable.
+
+        :return: variance value of the random variable.
+        """
+        return 0
+
 
 # TODO: Mixin this or something:
 # class DelayedAdditionOf(MalleableDistribution):
@@ -289,15 +321,35 @@ class Boolean(HyperparameterDistribution):
         return 0.
 
     def min(self):
+        """
+        Calculate minimum value that can be sampled in a boolean distribution.
+
+        :return: minimal value return from distribution.
+        """
         return 0
 
     def max(self):
+        """
+        Calculate maximum value that can be sampled in a boolean distribution.
+
+        :return: maximum value return from distribution.
+        """
         return 1
 
     def mean(self):
+        """
+        Calculate mean value (also called esperance) of the random variable.
+
+        :return: mean value of the random variable.
+        """
         return 0.5
 
     def var(self):
+        """
+        Calculate variance value of the random variable.
+
+        :return: variance value of the random variable.
+        """
         return 0.5 * (1 - 0.5)
 
 
@@ -361,7 +413,7 @@ class Choice(HyperparameterDistribution):
         :return: value of the cumulative distribution function.
         """
         try:
-            index = self.choice_list.index(x)
+            index = get_index_in_list_with_bool(self.choice_list, x)
         except ValueError:
             raise ValueError(
                 "Item not found in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
@@ -399,17 +451,42 @@ class Choice(HyperparameterDistribution):
         return len(self.choice_list)
 
     def min(self):
+        """
+        Calculate minimum value that can be sampled in a choice distribution.
+
+        Here the minimal index in the list is return. In this case it returns 0.
+
+        :return: minimal value return from distribution.
+        """
         return 0.
 
     def max(self):
+        """
+        Calculate maximal value that can be sampled in a choice distribution.
+
+        Here the maximal index in the list is return. In this case it returns the length value of the list.
+
+        :return: maximal value return from distribution.
+        """
         return len(self)
 
     def mean(self):
+        """
+        Calculate mean value (also called esperance) of the random variable.
+
+        :return: mean value of the random variable.
+        """
         length = len(self)
         return (length - 1) / 2
 
     def var(self):
-# TODO: with equation of uniform discret
+        """
+        Calculate variance value of the random variable.
+
+        :return: variance value of the random variable.
+        """
+        length = len(self)
+        return (length ** 2 - 1) / 12
 
 
 class PriorityChoice(HyperparameterDistribution):
@@ -473,7 +550,8 @@ class PriorityChoice(HyperparameterDistribution):
         :return: value of the cumulative distribution function.
         """
         try:
-            index = self.choice_list.index(x)
+
+            index = get_index_in_list_with_bool(self.choice_list, x)
         except ValueError:
             raise ValueError(
                 "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
@@ -522,17 +600,42 @@ class PriorityChoice(HyperparameterDistribution):
         return len(self.choice_list)
 
     def min(self):
+        """
+        Calculate minimum value that can be sampled in a priority choice distribution.
+
+        Here the minimal index in the list is return. In this case it returns 0.
+
+        :return: minimal value return from distribution.
+        """
         return 0.
 
     def max(self):
+        """
+        Calculate maximal value that can be sampled in a priority choice distribution.
+
+        Here the maximal index in the list is return. In this case it returns the length value of the list.
+
+        :return: maximal value return from distribution.
+        """
         return len(self)
 
     def mean(self):
+        """
+        Calculate mean value (also called esperance) of the random variable.
+
+        :return: mean value of the random variable.
+        """
         length = len(self)
         return (length - 1) / 2
 
     def var(self):
-# TODO: with equation of uniform discret
+        """
+        Calculate variance value of the random variable.
+
+        :return: variance value of the random variable.
+        """
+        length = len(self)
+        return (length ** 2 - 1) / 12
 
 
 class WrappedHyperparameterDistributions(HyperparameterDistribution):
@@ -604,12 +707,27 @@ class Quantized(WrappedHyperparameterDistributions):
         ).was_narrowed_from(kept_space_ratio, self)
 
     def min(self):
+        """
+        Calculate minimum value that can be sampled in the quanitzed version of the distribution.
+
+        :return: minimal value return from distribution.
+        """
         return round(self.hd.min())
 
     def max(self):
+        """
+        Calculate maximal value that can be sampled in the quantized version of the distribution.
+
+        :return: maximal value return from distribution.
+        """
         return round(self.hd.max())
 
     def mean(self) -> float:
+        """
+        Calculate mean value (also called esperance) of the random variable.
+
+        :return: mean value of the random variable.
+        """
         # We will perform two sum starting from floor(mean of original distribution) and from ceil(mean of orignal  distribution).
         original_mean = self.hd.mean()
 
@@ -627,6 +745,11 @@ class Quantized(WrappedHyperparameterDistributions):
         return decreasing_sum + increasing_sum
 
     def var(self) -> float:
+        """
+        Calculate variance value of the random variable.
+
+        :return: variance value of the random variable.
+        """
         # first moment
         first_moment = self.mean()
 
@@ -720,16 +843,36 @@ class RandInt(HyperparameterDistribution):
                                                                                                       self)
 
     def min(self):
+        """
+        Calculate minimum value that can be sampled in the randint distribution.
+
+        :return: minimal value return from distribution.
+        """
         return self.min_included
 
     def max(self):
+        """
+        Calculate maximal value that can be sampled in the randint distribution.
+
+        :return: maximal value return from distribution.
+        """
         return self.max_included
 
     def mean(self):
+        """
+        Calculate mean value (also called esperance) of the random variable.
+
+        :return: mean value of the random variable.
+        """
         return (self.max_included + self.min_included) / 2
 
     def var(self):
-        return  # TODO : do var function.
+        """
+        Calculate variance value of the random variable.
+
+        :return: variance value of the random variable.
+        """
+        return ((self.max_included - self.min_included + 1) ** 2 - 1) / 12
 
 
 class Uniform(HyperparameterDistribution):
@@ -816,16 +959,36 @@ class Uniform(HyperparameterDistribution):
                                                                                                       self)
 
     def min(self):
+        """
+        Calculate minimum value that can be sampled in the uniform distribution.
+
+        :return: minimal value return from distribution.
+        """
         return self.min_included
 
     def max(self):
+        """
+        Calculate maximal value that can be sampled in the uniform distribution.
+
+        :return: maximal value return from distribution.
+        """
         return self.max_included
 
     def mean(self):
+        """
+        Calculate mean value (also called esperance) of the random variable.
+
+        :return: mean value of the random variable.
+        """
         return (self.min_included + self.max_included) / 2
 
     def var(self):
-# TODO: write var with uniform function.
+        """
+        Calculate variance value of the random variable.
+
+        :return: variance value of the random variable.
+        """
+        return (self.max_included - self.min_included) ** 2 / 12
 
 
 class LogUniform(HyperparameterDistribution):
@@ -911,17 +1074,45 @@ class LogUniform(HyperparameterDistribution):
             kept_space_ratio, self)
 
     def min(self):
+        """
+        Calculate minimum value that can be sampled in the LogUniform distribution.
+
+        :return: minimal value return from distribution.
+        """
         return self.min_included
 
     def max(self):
+        """
+        Calculate maximal value that can be sampled in the LogUniform distribution.
+
+        :return: maximal value return from distribution.
+        """
         return self.max_included
 
     def mean(self):
+        """
+        Calculate mean value (also called esperance) of the random variable.
 
-    # TODO: calculate mean for loguniform function.
+        :return: mean value of the random variable.
+        """
+        if self.log2_min_included == self.log2_max_included:
+            return self.log2_max_included
 
-    def std(self):
-# TODO: calculate std for log uniform function.
+        return (self.max_included - self.min_included) / (
+                    math.log(2) * (self.log2_max_included - self.log2_min_included))
+
+    def var(self):
+        """
+        Calculate variance value of the random variable.
+
+        :return: variance value of the random variable.
+        """
+        if self.log2_min_included == self.log2_max_included:
+            return 0.
+
+        esperance_squared = (self.max_included ** 2 - self.min_included ** 2) / (
+                    2 * math.log(2) * (self.log2_max_included - self.log2_min_included))
+        return esperance_squared - (self.mean() ** 2)
 
 
 class Normal(HyperparameterDistribution):
@@ -1053,18 +1244,43 @@ class Normal(HyperparameterDistribution):
         ).was_narrowed_from(kept_space_ratio, self)
 
     def min(self):
+        """
+        Calculate minimum value that can be sampled in the Normal distribution.
+
+        :return: minimal value return from distribution.
+        """
         return self.hard_clip_min or -1 * np.inf
 
     def max(self):
+        """
+        Calculate minimum value that can be sampled in the Normal distribution.
+
+        :return: minimal value return from distribution.
+        """
         return self.hard_clip_max or np.inf
 
     def mean(self):
+        """
+        Calculate mean value (also called esperance) of the random variable.
+
+        :return: mean value of the random variable.
+        """
         return self._mean
 
     def std(self):
+        """
+        Calculate standard deviation value of the random variable.
+
+        :return: standard deviation value of the random variable.
+        """
         return self._std
 
     def var(self):
+        """
+        Calculate variance value of the random variable.
+
+        :return: variance value of the random variable.
+        """
         return self._std ** 2
 
 
@@ -1195,17 +1411,95 @@ class LogNormal(HyperparameterDistribution):
         ).was_narrowed_from(kept_space_ratio, self)
 
     def min(self):
+        """
+        Calculate minimum value that can be sampled in the LogNormal distribution.
+
+        :return: minimal value return from distribution.
+        """
         return self.hard_clip_min or 0.
 
     def max(self):
+        """
+        Calculate maximal value that can be sampled in the LogNormal distribution.
+
+        :return: maximal value return from distribution.
+        """
         return self.hard_clip_max or np.inf
 
     def mean(self):
+        """
+        Calculate mean value (also called esperance) of the random variable.
 
-    # TODO calculate mean of logNormal.
+        :return: mean value of the random variable.
+        """
+        const = math.exp(math.log(2) * self.log2_space_mean + math.log(2) ** 2 * self.log2_space_std ** 2 / 2)
+        if self.hard_clip_min is None and self.hard_clip_max is None:
+            mean = const
+            return mean
+
+        if self.hard_clip_min == self.hard_clip_min:
+            return self.hard_clip_min
+
+        mean_to_calculate_cdf = self.log2_space_mean + math.log(2) * self.log2_space_std ** 2
+
+        if self.hard_clip_min is None:
+            cdf_min = 0.
+            log_normal_cdf_min = 0
+        else:
+            log_normal_cdf_min = norm.cdf(math.log2(self.hard_clip_min), loc=mean_to_calculate_cdf,
+                                          scale=self.log2_space_std)
+            cdf_min = norm.cdf(math.log2(self.hard_clip_min), loc=self.log2_space_mean, scale=self.log2_space_std)
+
+        if self.hard_clip_max is None:
+            cdf_max = 1.
+            log_normal_cdf_max = 1
+        else:
+            log_normal_cdf_max = norm.cdf(math.log2(self.hard_clip_max), loc=mean_to_calculate_cdf,
+                                          scale=self.log2_space_std)
+            cdf_max = norm.cdf(math.log2(self.hard_clip_max), loc=self.log2_space_mean, scale=self.log2_space_std)
+
+        const_norm = const / (cdf_max - cdf_min)
+        mean = const_norm * (log_normal_cdf_max - log_normal_cdf_min)
+        return mean
 
     def var(self):
-# TODO calculate var of logNormal.
+        """
+        Calculate variance value (also called esperance) of the random variable.
+
+        :return: variance value of the random variable.
+        """
+        # Use the mean**2 to calculate variance, with variance = moment_2 - mean**2.
+        mean_squarred = self.mean()**2
+        const_moment_2 = math.exp(2 * math.log(2) * self.log2_space_mean + 2*math.log(2) ** 2 * self.log2_space_std ** 2)
+        if self.hard_clip_min is None and self.hard_clip_max is None:
+            variance = const_moment_2 - mean_squarred
+            return variance
+
+        if self.hard_clip_min == self.hard_clip_min:
+            return 0.
+
+        mean_to_calculate_cdf_for_variance = self.log2_space_mean + 2*math.log(2) * self.log2_space_std ** 2
+
+        if self.hard_clip_min is None:
+            cdf_min = 0.
+            log_normal_cdf_min = 0
+        else:
+            cdf_min = norm.cdf(math.log2(self.hard_clip_min), loc=self.log2_space_mean, scale=self.log2_space_std)
+            log_normal_cdf_min = norm.cdf(math.log2(self.hard_clip_min), loc=mean_to_calculate_cdf_for_variance,
+                                          scale=self.log2_space_std)
+
+        if self.hard_clip_max is None:
+            cdf_max = 1.
+            log_normal_cdf_max = 1
+        else:
+            cdf_max = norm.cdf(math.log2(self.hard_clip_max), loc=self.log2_space_mean, scale=self.log2_space_std)
+            log_normal_cdf_max = norm.cdf(math.log2(self.hard_clip_max), loc=mean_to_calculate_cdf_for_variance,
+                                          scale=self.log2_space_std)
+
+        const_norm = const_moment_2 / (cdf_max - cdf_min)
+        moment_2 = const_norm * (log_normal_cdf_max - log_normal_cdf_min)
+        variance = moment_2 - mean_squarred
+        return variance
 
 
 class DistributionMixture(HyperparameterDistribution):
@@ -1232,6 +1526,20 @@ class DistributionMixture(HyperparameterDistribution):
                                distributions_mins: Union[List[float], Tuple[float, ...]],
                                distributions_max: Union[List[float], Tuple[float, ...]], use_logs: bool = False,
                                use_quantized_distributions: bool = False):
+        """
+        Create a gaussian mixture.
+
+         Will create a mixture distribution which consist of multiple gaussians of different amplitudes, means, standard deviations, mins and max.
+
+        :param distribution_amplitudes: list of different amplitudes to infer to the mixture. The amplitudes are normalized to sum to 1.
+        :param means: list of means to infer mean to each gaussian.
+        :param stds: list of standard deviations to infer standard deviation to each gaussian.
+        :param distributions_mins: list of minimum value that will clip each gaussian. If it is -Inf or None, it will not be clipped.
+        :param distributions_max: list of maximal value that will clip each gaussian. If it is +Inf or None, it will not be clipped.
+        :param distributions_max: bool weither to use a quantized version or not.
+
+        :return DistributionMixture instance
+        """
 
         distribution_class = Normal
 
@@ -1272,6 +1580,7 @@ class DistributionMixture(HyperparameterDistribution):
     def pdf(self, x) -> float:
         """
         Calculate the mixture probability distribution value at position `x`.
+
         :param x: value where the probability distribution function is evaluated.
         :return: value of the probability distribution function.
         """
@@ -1285,6 +1594,7 @@ class DistributionMixture(HyperparameterDistribution):
     def cdf(self, x) -> float:
         """
         Calculate the mixture cumulative distribution value at position `x`.
+
         :param x: value where the cumulative distribution function is evaluated.
         :return: value of the cumulative distribution function.
         """
@@ -1298,6 +1608,7 @@ class DistributionMixture(HyperparameterDistribution):
     def mean(self) -> float:
         """
         Calculate mean of the mixture.
+
         :return: mean value of the mixtture.
         """
         # Since mean is linear, the mean is simply the weighted summed (using distribution amplitude) of each distribution mean.
@@ -1311,6 +1622,7 @@ class DistributionMixture(HyperparameterDistribution):
     def var(self) -> float:
         """
         Calculate variance of the mixture.
+
         :return: standard deviation value of the mixtture.
         """
         # Usually the var will be the sum(Variance) + 2 sum(Covariance).
@@ -1326,6 +1638,7 @@ class DistributionMixture(HyperparameterDistribution):
     def std(self) -> float:
         """
         Calculate standard deviation of the mixture.
+
         :return: standard deviation value of the mixtture.
         """
         return math.sqrt(self.var())
@@ -1333,6 +1646,7 @@ class DistributionMixture(HyperparameterDistribution):
     def min(self) -> float:
         """
         Calculate minimal domain value of the mixture.
+
         :return: minimal domain value of the mixtture.
         """
         return min([distribution.min() for distribution in self.distributions])
@@ -1340,6 +1654,7 @@ class DistributionMixture(HyperparameterDistribution):
     def max(self) -> float:
         """
         Calculate minimal domain value of the mixture.
+
         :return: minimal domain value of the mixtture.
         """
         return max([distribution.msx() for distribution in self.distributions])
@@ -1413,3 +1728,16 @@ def _calculate_sum(eval_func, limits: List[float], value_step: float = 1., tol: 
             current_x -= value_step
 
     return total_sum
+
+
+def get_index_in_list_with_bool(choice_list: List[Any], value: Any) -> int:
+    for choice_index, choice in enumerate(choice_list):
+        if choice == value and not isinstance(choice, bool) and not isinstance(value, bool):
+            index = choice_index
+            return index
+
+        if choice is value:
+            index = choice_index
+            return index
+
+    raise ValueError("{} is not in list".format(value))
