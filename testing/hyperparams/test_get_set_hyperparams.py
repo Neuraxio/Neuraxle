@@ -204,28 +204,48 @@ def test_pipeline_should_set_hyperparams():
     assert p[1].hyperparams['hp'] == 3
 
 
-def test_pipeline_should_set_hyperparams_space():
+def test_pipeline_should_get_hyperparams():
     p = Pipeline([
         SomeStep().set_name('step_1'),
         SomeStep().set_name('step_2')
     ])
+    p.set_hyperparams(HyperparameterSamples({
+        'hp': 1,
+        'step_1__hp': 2,
+        'step_2__hp': 3
+    }))
 
+    hyperparams = p.get_hyperparams()
+
+    assert isinstance(hyperparams, HyperparameterSamples)
+    assert hyperparams['hp'] == 1
+    assert hyperparams['step_1__hp'] == 2
+    assert hyperparams['step_2__hp'] == 3
+
+
+def test_pipeline_should_get_hyperparams_space():
+    p = Pipeline([
+        SomeStep().set_name('step_1'),
+        SomeStep().set_name('step_2')
+    ])
     p.set_hyperparams_space(HyperparameterSpace({
         'hp': RandInt(1, 2),
         'step_1__hp': RandInt(2, 3),
         'step_2__hp': RandInt(3, 4)
     }))
 
-    assert isinstance(p.hyperparams_space, HyperparameterSpace)
+    hyperparams_space = p.get_hyperparams_space()
 
-    assert p.hyperparams_space['hp'].min_included == 1
-    assert p.hyperparams_space['hp'].max_included == 2
+    assert isinstance(hyperparams_space, HyperparameterSpace)
 
-    assert p[0].hyperparams_space['hp'].min_included == 2
-    assert p[0].hyperparams_space['hp'].max_included == 3
+    assert hyperparams_space['hp'].min_included == 1
+    assert hyperparams_space['hp'].max_included == 2
 
-    assert p[1].hyperparams_space['hp'].min_included == 3
-    assert p[1].hyperparams_space['hp'].max_included == 4
+    assert hyperparams_space['step_1__hp'].min_included == 2
+    assert hyperparams_space['step_1__hp'].max_included == 3
+
+    assert hyperparams_space['step_2__hp'].min_included == 3
+    assert hyperparams_space['step_2__hp'].max_included == 4
 
 
 def test_pipeline_should_update_hyperparams():

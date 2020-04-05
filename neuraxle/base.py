@@ -814,7 +814,16 @@ class BaseStep(ABC):
         .. seealso::
             * :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
-        return self.hyperparams
+        results = self.apply(method_name='get_hyperparams', children_only=True)
+        results = HyperparameterSamples({
+            RECURSIVE_STEP_SEPARATOR.join(key.split(RECURSIVE_STEP_SEPARATOR)[1:]): value.to_flat()
+            for key, value in results.items()
+        }).to_flat()
+
+        return HyperparameterSamples({
+            **self.hyperparams.to_flat_as_dict_primitive(),
+            **results
+        })
 
     def set_params(self, **params) -> 'BaseStep':
         """
@@ -930,13 +939,23 @@ class BaseStep(ABC):
 
             step.get_hyperparams_space()
 
+
         :return: step hyperparams space
 
         .. seealso::
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
             :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
         """
-        return self.hyperparams_space
+        results = self.apply(method_name='get_hyperparams_space', children_only=True)
+        results = HyperparameterSpace({
+            RECURSIVE_STEP_SEPARATOR.join(key.split(RECURSIVE_STEP_SEPARATOR)[1:]): value.to_flat()
+            for key, value in results.items()
+        }).to_flat()
+
+        return HyperparameterSpace({
+            **self.hyperparams_space,
+            **results
+        })
 
     def handle_inverse_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -1711,31 +1730,6 @@ class MetaStepMixin:
         self.is_initialized = False
         return self
 
-    def get_hyperparams(self) -> HyperparameterSamples:
-        """
-        Get step hyperparameters as :class:`~neuraxle.hyperparams.space.HyperparameterSamples` with flattened hyperparams.
-
-        :return: step hyperparameters
-
-        .. seealso::
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
-        """
-        return HyperparameterSamples({
-            **self.hyperparams.to_flat_as_dict_primitive(),
-            self.wrapped.name: self.wrapped.get_hyperparams().to_flat_as_dict_primitive()
-        }).to_flat()
-
-    def get_hyperparams_space(self) -> HyperparameterSpace:
-        """
-        Get meta step and wrapped step hyperparams as a flat hyperparameter space
-
-        :return: hyperparameters_space
-        """
-        return HyperparameterSpace({
-            **self.hyperparams_space.to_flat_as_dict_primitive(),
-            self.wrapped.name: self.wrapped.get_hyperparams_space().to_flat_as_dict_primitive()
-        }).to_flat()
-
     def get_step(self) -> BaseStep:
         """
         Get wrapped step
@@ -1840,7 +1834,7 @@ class MetaStepMixin:
         results = BaseStep.apply(self, method_name=method_name, step_name=step_name, children_only=children_only, *kargs, **kwargs)
 
         if step_name is not None:
-            step_name = "{}__{}".format(step_name, self.name)
+            step_name = "{}{}{}".format(step_name, RECURSIVE_STEP_SEPARATOR, self.name)
         else:
             step_name = self.name
 
@@ -1864,7 +1858,7 @@ class MetaStepMixin:
         results = BaseStep.apply_method(self, method=method, step_name=step_name, children_only=children_only, *kargs, **kwargs)
 
         if step_name is not None:
-            step_name = "{}__{}".format(step_name, self.name)
+            step_name = "{}{}{}".format(step_name, RECURSIVE_STEP_SEPARATOR, self.name)
         else:
             step_name = self.name
 
@@ -2357,79 +2351,6 @@ class TruncableSteps(BaseStep, ABC):
         self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
         for name, step in self.items():
             step.name = name
-
-    def get_hyperparams(self) -> HyperparameterSamples:
-        """
-        Get step hyperparameters as :class:`~neuraxle.space.HyperparameterSamples`.
-
-        Example :
-
-        .. code-block:: python
-
-            p = Pipeline([SomeStep()])
-            p.set_hyperparams(HyperparameterSamples({
-                'learning_rate': 0.1,
-                'some_step__learning_rate': 0.2 # will set SomeStep() hyperparam 'learning_rate' to 0.2
-            }))
-
-            hp = p.get_hyperparams()
-            # hp ==>  { 'learning_rate': 0.1, 'some_step__learning_rate': 0.2 }
-
-        :return: step hyperparameters
-
-        .. seealso::
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
-        """
-        hyperparams = dict()
-
-        for k, v in self.steps.items():
-            hparams = v.get_hyperparams()  # TODO: oop diamond problem?
-            if hasattr(v, "hyperparams"):
-                hparams.update(v.hyperparams)
-            if len(hparams) > 0:
-                hyperparams[k] = hparams
-
-        hyperparams = HyperparameterSamples(hyperparams)
-
-        hyperparams.update(
-            BaseStep.get_hyperparams(self)
-        )
-
-        return hyperparams.to_flat()
-
-    def get_hyperparams_space(self):
-        """
-        Get step hyperparameters space as :class:`~neuraxle.space.HyperparameterSpace`.
-
-        Example :
-
-        .. code-block:: python
-
-            p = Pipeline([SomeStep()])
-            p.set_hyperparams_space(HyperparameterSpace({
-                'learning_rate': RandInt(0,5),
-                'some_step__learning_rate': RandInt(0, 10) # will set SomeStep() 'learning_rate' hyperparam space to RandInt(0, 10)
-            }))
-
-            hp = p.get_hyperparams_space()
-            # hp ==>  { 'learning_rate': RandInt(0,5), 'some_step__learning_rate': RandInt(0,10) }
-
-        :return: step hyperparameters space
-
-        .. seealso::
-            :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
-        """
-        all_hyperparams = HyperparameterSpace()
-        for step_name, step in self.steps_as_tuple:
-            hspace = step.get_hyperparams_space()
-            all_hyperparams.update({
-                step_name: hspace
-            })
-        all_hyperparams.update(
-            BaseStep.get_hyperparams_space(self)
-        )
-
-        return all_hyperparams.to_flat()
 
     def should_save(self):
         """
