@@ -78,8 +78,9 @@ class SKLearnWrapper(BaseStep):
             return self.wrapped_sklearn_predictor.predict(data_inputs)
         return self.wrapped_sklearn_predictor.transform(data_inputs)
 
-    def set_hyperparams(self, flat_hyperparams: HyperparameterSamples) -> BaseStep:
-        BaseStep.set_hyperparams(self, flat_hyperparams)
+    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
+        BaseStep.set_hyperparams(self, hyperparams)
+        flat_hyperparams = HyperparameterSamples(self.hyperparams).to_flat()
         self.wrapped_sklearn_predictor.set_params(**HyperparameterSamples(flat_hyperparams).to_flat_as_dict_primitive())
         return self
 
