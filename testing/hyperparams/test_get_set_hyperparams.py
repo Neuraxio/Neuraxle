@@ -1,6 +1,7 @@
 from neuraxle.base import MetaStepMixin, BaseStep, NonFittableMixin, NonTransformableMixin
 from neuraxle.hyperparams.distributions import RandInt, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
+from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from testing.test_pipeline import SomeStep
 
@@ -179,6 +180,88 @@ def test_step_cloner_should_get_hyperparams_space():
 
 
 RAND_INT_META_STEP = RandInt(0, 10)
+
+
+def test_pipeline_should_set_hyperparams():
+    p = Pipeline([
+        SomeStep().set_name('step_1'),
+        SomeStep().set_name('step_2')
+    ])
+
+    p.set_hyperparams(HyperparameterSamples({
+        'hp': 1,
+        'step_1__hp': 2,
+        'step_2__hp': 3
+    }))
+
+    assert isinstance(p.hyperparams, HyperparameterSpace)
+    assert p.hyperparams['hp'] == 1
+    assert p[0].hyperparams['hp'] == 2
+    assert p[1].hyperparams['hp'] == 3
+
+
+def test_pipeline_should_set_hyperparams_space():
+    p = Pipeline([
+        SomeStep().set_name('step_1'),
+        SomeStep().set_name('step_2')
+    ])
+
+    p.set_hyperparams_space(HyperparameterSpace({
+        'hp': RandInt(1, 2),
+        'step_1__hp': RandInt(2, 3),
+        'step_2__hp': RandInt(3, 4)
+    }))
+
+    assert isinstance(p.hyperparams, HyperparameterSpace)
+    assert p.hyperparams_space['hp'] == RandInt(1, 2)
+    assert p[0].hyperparams_space['hp'] == RandInt(2, 3)
+    assert p[1].hyperparams_space['hp'] == RandInt(3, 4)
+
+
+def test_pipeline_should_update_hyperparams():
+    p = Pipeline([
+        SomeStep().set_name('step_1'),
+        SomeStep().set_name('step_2')
+    ])
+
+    p.set_hyperparams(HyperparameterSamples({
+        'hp': 1,
+        'step_1__hp': 2,
+        'step_2__hp': 3
+    }))
+
+    p.set_hyperparams(HyperparameterSamples({
+        'hp': 4,
+        'step_2__hp': 6
+    }))
+
+    assert isinstance(p.hyperparams, HyperparameterSpace)
+    assert p.hyperparams['hp'] == 4
+    assert p[0].hyperparams['hp'] == 2
+    assert p[1].hyperparams['hp'] == 6
+
+
+def test_pipeline_should_update_hyperparams_space():
+    p = Pipeline([
+        SomeStep().set_name('step_1'),
+        SomeStep().set_name('step_2')
+    ])
+
+    p.set_hyperparams_space(HyperparameterSpace({
+        'hp': RandInt(1, 2),
+        'step_1__hp': RandInt(2, 3),
+        'step_2__hp': RandInt(3, 4)
+    }))
+    p.update_hyperparams_space(HyperparameterSpace({
+        'hp': RandInt(4, 6),
+        'step_1__hp': RandInt(2, 3),
+        'step_2__hp': RandInt(6, 8)
+    }))
+
+    assert isinstance(p.hyperparams, HyperparameterSpace)
+    assert p.hyperparams_space['hp'] == RandInt(4, 6)
+    assert p[0].hyperparams_space['hp'] == RandInt(2, 3)
+    assert p[1].hyperparams_space['hp'] == RandInt(6, 8)
 
 
 def test_meta_step_mixin_should_get_hyperparams():
