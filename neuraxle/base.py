@@ -752,7 +752,7 @@ class BaseStep(ABC):
             else:
                 step_hyperparams[name] = hparams
 
-        self.hyperparams = HyperparameterSamples(step_hyperparams)
+        self.hyperparams = HyperparameterSamples(step_hyperparams) if len(step_hyperparams) > 0 else self.hyperparams
 
         self.apply(method_name='set_hyperparams', hyperparams=remainders, children_only=True)
         return self
@@ -886,8 +886,9 @@ class BaseStep(ABC):
             else:
                 step_hyperparams_space[name] = hparams_space
 
-        self.hyperparams_space = HyperparameterSpace(step_hyperparams_space)
+        self.hyperparams_space = HyperparameterSpace(step_hyperparams_space) if len(step_hyperparams_space) > 0 else self.hyperparams_space
         self.apply(method_name='set_hyperparams_space', hyperparams_space=remainders, children_only=True)
+
         return self
 
     def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
@@ -934,6 +935,7 @@ class BaseStep(ABC):
 
         self.hyperparams_space.update(HyperparameterSpace(step_hyperparams_space).to_flat())
         self.apply(method_name='update_hyperparams_space', hyperparams_space=remainders, children_only=True)
+
         return self
 
     def get_hyperparams_space(self) -> HyperparameterSpace:
