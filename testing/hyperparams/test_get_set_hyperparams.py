@@ -24,7 +24,11 @@ HYPE_SAMPLE = HyperparameterSamples({
 
 
 class SomeMetaStepMixin(NonTransformableMixin, NonFittableMixin, MetaStepMixin, BaseStep):
-    pass
+    def __init__(self, wrapped: BaseStep):
+        BaseStep.__init__(self)
+        NonTransformableMixin.__init__(self)
+        NonFittableMixin.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
 
 
 class SomeStepInverseTransform(SomeStep):
@@ -194,7 +198,7 @@ def test_pipeline_should_set_hyperparams():
         'step_2__hp': 3
     }))
 
-    assert isinstance(p.hyperparams, HyperparameterSpace)
+    assert isinstance(p.hyperparams, HyperparameterSamples)
     assert p.hyperparams['hp'] == 1
     assert p[0].hyperparams['hp'] == 2
     assert p[1].hyperparams['hp'] == 3
@@ -212,10 +216,16 @@ def test_pipeline_should_set_hyperparams_space():
         'step_2__hp': RandInt(3, 4)
     }))
 
-    assert isinstance(p.hyperparams, HyperparameterSpace)
-    assert p.hyperparams_space['hp'] == RandInt(1, 2)
-    assert p[0].hyperparams_space['hp'] == RandInt(2, 3)
-    assert p[1].hyperparams_space['hp'] == RandInt(3, 4)
+    assert isinstance(p.hyperparams_space, HyperparameterSpace)
+
+    assert p.hyperparams_space['hp'].min_included == 1
+    assert p.hyperparams_space['hp'].max_included == 2
+
+    assert p[0].hyperparams_space['hp'].min_included == 2
+    assert p[0].hyperparams_space['hp'].max_included == 3
+
+    assert p[1].hyperparams_space['hp'].min_included == 3
+    assert p[1].hyperparams_space['hp'].max_included == 4
 
 
 def test_pipeline_should_update_hyperparams():
@@ -230,12 +240,12 @@ def test_pipeline_should_update_hyperparams():
         'step_2__hp': 3
     }))
 
-    p.set_hyperparams(HyperparameterSamples({
+    p.update_hyperparams(HyperparameterSamples({
         'hp': 4,
         'step_2__hp': 6
     }))
 
-    assert isinstance(p.hyperparams, HyperparameterSpace)
+    assert isinstance(p.hyperparams, HyperparameterSamples)
     assert p.hyperparams['hp'] == 4
     assert p[0].hyperparams['hp'] == 2
     assert p[1].hyperparams['hp'] == 6
@@ -254,14 +264,19 @@ def test_pipeline_should_update_hyperparams_space():
     }))
     p.update_hyperparams_space(HyperparameterSpace({
         'hp': RandInt(4, 6),
-        'step_1__hp': RandInt(2, 3),
         'step_2__hp': RandInt(6, 8)
     }))
 
-    assert isinstance(p.hyperparams, HyperparameterSpace)
-    assert p.hyperparams_space['hp'] == RandInt(4, 6)
-    assert p[0].hyperparams_space['hp'] == RandInt(2, 3)
-    assert p[1].hyperparams_space['hp'] == RandInt(6, 8)
+    assert isinstance(p.hyperparams_space, HyperparameterSpace)
+
+    assert p.hyperparams_space['hp'].min_included == 4
+    assert p.hyperparams_space['hp'].max_included == 6
+
+    assert p[0].hyperparams_space['hp'].min_included == 2
+    assert p[0].hyperparams_space['hp'].max_included == 3
+
+    assert p[1].hyperparams_space['hp'].min_included == 6
+    assert p[1].hyperparams_space['hp'].max_included == 8
 
 
 def test_meta_step_mixin_should_get_hyperparams():

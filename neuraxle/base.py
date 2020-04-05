@@ -738,13 +738,15 @@ class BaseStep(ABC):
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
         self.invalidate()
+        hyperparams = HyperparameterSamples(hyperparams).to_flat()
 
         remainders = dict()
         step_hyperparams = dict()
         for name, hparams in hyperparams.items():
             if RECURSIVE_STEP_SEPARATOR in name:
-                if str(name.split(RECURSIVE_STEP_SEPARATOR)[-1]).startswith(self.name):
-                    step_hyperparams[name] = hparams
+                name_split = name.split(RECURSIVE_STEP_SEPARATOR)
+                if str(name_split[-2]).startswith(self.name):
+                    step_hyperparams[name_split[-1]] = hparams
                 else:
                     remainders[name] = hparams
             else:
@@ -783,15 +785,15 @@ class BaseStep(ABC):
             :func:`~BaseStep.update_hyperparams`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
-        self.hyperparams.update(hyperparams)
-        self.hyperparams = HyperparameterSamples(self.hyperparams).to_flat()
+        hyperparams = HyperparameterSamples(hyperparams).to_flat()
 
         remainders = dict()
         step_hyperparams = dict()
         for name, hparams in hyperparams.items():
             if RECURSIVE_STEP_SEPARATOR in name:
-                if str(name.split(RECURSIVE_STEP_SEPARATOR)[-1]).startswith(self.name):
-                    step_hyperparams[name] = hparams
+                name_split = name.split(RECURSIVE_STEP_SEPARATOR)
+                if str(name_split[-2]).startswith(self.name):
+                    step_hyperparams[name_split[-1]] = hparams
                 else:
                     remainders[name] = hparams
             else:
@@ -870,13 +872,15 @@ class BaseStep(ABC):
             :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
         """
         self.invalidate()
-
+        hyperparams_space = HyperparameterSamples(hyperparams_space).to_flat()
         remainders = dict()
         step_hyperparams_space = dict()
+
         for name, hparams_space in hyperparams_space.items():
             if RECURSIVE_STEP_SEPARATOR in name:
-                if str(name.split(RECURSIVE_STEP_SEPARATOR)[-1]).startswith(self.name):
-                    step_hyperparams_space[name] = hparams_space
+                name_split = name.split(RECURSIVE_STEP_SEPARATOR)
+                if str(name_split[-2]).startswith(self.name):
+                    step_hyperparams_space[name_split[-1]] = hparams_space
                 else:
                     remainders[name] = hparams_space
             else:
@@ -914,15 +918,15 @@ class BaseStep(ABC):
             :func:`~BaseStep.update_hyperparams`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        self.hyperparams_space.update(hyperparams_space)
-        self.hyperparams_space = HyperparameterSamples(self.hyperparams_space).to_flat()
-
+        hyperparams_space = HyperparameterSamples(hyperparams_space).to_flat()
         remainders = dict()
         step_hyperparams_space = dict()
+
         for name, hparams_space in hyperparams_space.items():
             if RECURSIVE_STEP_SEPARATOR in name:
-                if str(name.split(RECURSIVE_STEP_SEPARATOR)[-1]).startswith(self.name):
-                    step_hyperparams_space[name] = hparams_space
+                name_split = name.split(RECURSIVE_STEP_SEPARATOR)
+                if str(name_split[-2]).startswith(self.name):
+                    step_hyperparams_space[name_split[-1]] = hparams_space
                 else:
                     remainders[name] = hparams_space
             else:
@@ -1723,67 +1727,6 @@ class MetaStepMixin:
         self.is_initialized = False
         return self
 
-    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
-        """
-        Set step hyperparameters, and wrapped step hyperparams with the given hyperparams.
-
-        Example :
-
-        .. code-block:: python
-
-            step.set_hyperparams(HyperparameterSamples({
-                'learning_rate': 0.10
-                'wrapped__learning_rate': 0.10 # this will set the wrapped step 'learning_rate' hyperparam
-            }))
-
-        :param hyperparams: hyperparameters
-        :return: self
-
-        .. seealso::
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
-        """
-        self.invalidate()
-
-        hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
-
-        remainders = dict()
-        for name, hparams in hyperparams.items():
-            if name == self.wrapped.name:
-                self.wrapped.set_hyperparams(hparams)
-            else:
-                remainders[name] = hparams
-
-        self.hyperparams = HyperparameterSamples(remainders)
-
-        return self
-
-    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
-        """
-        Update the step, and the wrapped step hyperparams without removing the already set hyperparameters.
-        Please refer to :func:`~BaseStep.update_hyperparams`.
-
-        :param hyperparams: hyperparameters
-        :return: self
-
-        .. seealso::
-            :func:`~BaseStep.update_hyperparams`,
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
-        """
-        self.invalidate()
-
-        hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams).to_nested_dict()
-
-        remainders = dict()
-        for name, hparams in hyperparams.items():
-            if name == self.wrapped.name:
-                self.wrapped.update_hyperparams(hparams)
-            else:
-                remainders[name] = hparams
-
-        self.hyperparams.update(remainders)
-
-        return self
-
     def get_hyperparams(self) -> HyperparameterSamples:
         """
         Get step hyperparameters as :class:`~neuraxle.hyperparams.space.HyperparameterSamples` with flattened hyperparams.
@@ -1797,55 +1740,6 @@ class MetaStepMixin:
             **self.hyperparams.to_flat_as_dict_primitive(),
             self.wrapped.name: self.wrapped.get_hyperparams().to_flat_as_dict_primitive()
         }).to_flat()
-
-    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
-        """
-        Set meta step and wrapped step hyperparams space using the given hyperparams space.
-
-        :param hyperparams_space: ordered dict containing all hyperparameter spaces
-        :return: self
-        """
-        self.invalidate()
-
-        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
-
-        remainders = dict()
-        for name, hparams in hyperparams_space.items():
-            if name == self.wrapped.name:
-                self.wrapped.set_hyperparams_space(hparams)
-            else:
-                remainders[name] = hparams
-
-        self.hyperparams_space = HyperparameterSpace(remainders)
-
-        return self
-
-    def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> BaseStep:
-        """
-        Update the step, and the wrapped step hyperparams without removing the already set hyperparameters.
-        Please refer to :func:`~BaseStep.update_hyperparams`.
-
-        :param hyperparams_space: hyperparameters
-        :return: self
-
-        .. seealso::
-            :func:`~BaseStep.update_hyperparams`,
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
-        """
-        self.is_invalidated = True
-
-        hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space).to_nested_dict()
-
-        remainders = dict()
-        for name, hparams_space in hyperparams_space.items():
-            if name == self.wrapped.name:
-                self.wrapped.update_hyperparams_space(hparams_space)
-            else:
-                remainders[name] = hparams_space
-
-        self.hyperparams_space.update(remainders)
-
-        return self
 
     def get_hyperparams_space(self) -> HyperparameterSpace:
         """
