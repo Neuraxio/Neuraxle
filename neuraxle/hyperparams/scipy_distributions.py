@@ -7,7 +7,7 @@ from scipy.stats import rv_continuous, norm, rv_discrete, rv_histogram, truncnor
 from neuraxle.hyperparams.distributions import HyperparameterDistribution
 
 
-class BaseWrappedScipyDistribution(HyperparameterDistribution):
+class ScipyDistributionWrapper(HyperparameterDistribution):
     """
     Base class for a distribution that wraps a scipy distribution.
 
@@ -15,7 +15,7 @@ class BaseWrappedScipyDistribution(HyperparameterDistribution):
 
     .. code-block:: python
 
-        distribution = BaseWrappedScipyDistribution(
+        distribution = ScipyDistributionWrapper(
             scipy_distribution=rv_histogram(histogram=histogram),
             null_default_value=null_default_value
         )
@@ -76,7 +76,7 @@ class BaseWrappedScipyDistribution(HyperparameterDistribution):
         :param kwargs:
         :return:
         """
-        return self.sk_learn_distribution.fit(*args, **self.kwargs, **kwargs)
+        return self.sk_learn_distribution.fit(data, *args, **self.kwargs, **kwargs)
 
     def fit_loc_scale(self, data, *args):
         """
@@ -237,12 +237,12 @@ class BaseWrappedScipyDistribution(HyperparameterDistribution):
         return self.sk_learn_distribution
 
 
-class RandInt(BaseWrappedScipyDistribution):
+class RandInt(ScipyDistributionWrapper):
     """
     Rand int scipy distribution. Check out `scipy.stats.randint for more info <https://docs.scipy.org/doc/scipy-0.15.1/reference/generated/scipy.stats.randint.html>`_
     """
     def __init__(self, min_included: int, max_included: int, null_default_value: float = None):
-        BaseWrappedScipyDistribution.__init__(
+        ScipyDistributionWrapper.__init__(
             self,
             scipy_distribution=randint(low=min_included, high=max_included),
             null_default_value=null_default_value
@@ -271,7 +271,7 @@ class UniformScipyDistribution(rv_continuous):
         return 0.
 
 
-class Uniform(BaseWrappedScipyDistribution):
+class Uniform(ScipyDistributionWrapper):
     """
     Get a uniform distribution.
 
@@ -279,7 +279,7 @@ class Uniform(BaseWrappedScipyDistribution):
         :class:`UniformScipyDistribution`,
         :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
         :class:`HyperparameterDistribution`,
-        :class:`BaseWrappedScipyDistribution`,
+        :class:`ScipyDistributionWrapper`,
         :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
         :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
         :class:`neuraxle.base.BaseStep`
@@ -302,7 +302,7 @@ class Uniform(BaseWrappedScipyDistribution):
         self.min_included: float = min_included
         self.max_included: float = max_included
 
-        BaseWrappedScipyDistribution.__init__(
+        ScipyDistributionWrapper.__init__(
             self,
             scipy_distribution=UniformScipyDistribution(
                 name='uniform',
@@ -334,7 +334,7 @@ class LogUniformScipyDistribution(rv_continuous):
         return 0.
 
 
-class LogUniform(BaseWrappedScipyDistribution):
+class LogUniform(ScipyDistributionWrapper):
     """
     Get a LogUniform distribution.
 
@@ -342,7 +342,7 @@ class LogUniform(BaseWrappedScipyDistribution):
         :class:`LogUniformScipyDistribution`,
         :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
         :class:`HyperparameterDistribution`,
-        :class:`BaseWrappedScipyDistribution`,
+        :class:`ScipyDistributionWrapper`,
         :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
         :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
         :class:`neuraxle.base.BaseStep`
@@ -367,7 +367,7 @@ class LogUniform(BaseWrappedScipyDistribution):
         self.log2_min_included = math.log2(min_included)
         self.log2_max_included = math.log2(max_included)
 
-        BaseWrappedScipyDistribution.__init__(
+        ScipyDistributionWrapper.__init__(
             self,
             scipy_distribution=NormalScipyDistribution(
                 name='log_uniform',
@@ -414,7 +414,7 @@ class NormalScipyDistribution(rv_continuous):
         return norm.pdf(x, loc=mean, scale=std)
 
 
-class Normal(BaseWrappedScipyDistribution):
+class Normal(ScipyDistributionWrapper):
     """
     Get a normal distribution.
 
@@ -422,7 +422,7 @@ class Normal(BaseWrappedScipyDistribution):
         :class:`NormalScipyDistribution`,
         :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
         :class:`HyperparameterDistribution`,
-        :class:`BaseWrappedScipyDistribution`,
+        :class:`ScipyDistributionWrapper`,
         :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
         :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
         :class:`neuraxle.base.BaseStep`
@@ -447,7 +447,7 @@ class Normal(BaseWrappedScipyDistribution):
         if null_default_value is None:
             null_default_value = hard_clip_min
 
-        BaseWrappedScipyDistribution.__init__(
+        ScipyDistributionWrapper.__init__(
             self,
             scipy_distribution=LogNormalScipyDistribution(
                 name='log_normal',
@@ -490,7 +490,7 @@ class LogNormalScipyDistribution(rv_continuous):
         return pdf_x / (cdf_max - cdf_min)
 
 
-class LogNormal(BaseWrappedScipyDistribution):
+class LogNormal(ScipyDistributionWrapper):
     """
     LogNormal distribution that wraps a `continuous scipy distribution <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
 
@@ -515,14 +515,14 @@ class LogNormal(BaseWrappedScipyDistribution):
         :class:`LogNormalScipyDistribution`,
         :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
         :class:`HyperparameterDistribution`,
-        :class:`BaseWrappedScipyDistribution`,
+        :class:`ScipyDistributionWrapper`,
         :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
         :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
         :class:`neuraxle.base.BaseStep`
     """
 
-    def __init__(self, min_included: int, max_included: int, null_default_value: float = None):
-        BaseWrappedScipyDistribution.__init__(
+    def __init__(self, min_included: float, max_included: float, null_default_value: float = None):
+        ScipyDistributionWrapper.__init__(
             self,
             scipy_distribution=LogNormalScipyDistribution(
                 name='log_normal',
@@ -541,7 +541,7 @@ class GaussianScipyDistribution(rv_continuous):
         return math.exp(-x ** 2 / 2.) / np.sqrt(2.0 * np.pi)
 
 
-class Gaussian(BaseWrappedScipyDistribution):
+class Gaussian(ScipyDistributionWrapper):
     """
     Gaussian distribution that inherits from `scipy.stats.rv_continuous <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
 
@@ -564,7 +564,7 @@ class Gaussian(BaseWrappedScipyDistribution):
 
     .. seealso::
         :class:`GaussianScipyDistribution`,
-        :class:`BaseWrappedScipyDistribution`,
+        :class:`ScipyDistributionWrapper`,
         :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
         :class:`HyperparameterDistribution`,
         :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
@@ -573,7 +573,7 @@ class Gaussian(BaseWrappedScipyDistribution):
     """
 
     def __init__(self, min_included: int, max_included: int, null_default_value: float = None):
-        BaseWrappedScipyDistribution.__init__(
+        ScipyDistributionWrapper.__init__(
             self,
             scipy_distribution=GaussianScipyDistribution(
                 name='gaussian',
@@ -592,7 +592,7 @@ class PoissonScipyDistribution(rv_discrete):
         return math.exp(-mu) * mu ** k / factorial(k)
 
 
-class Poisson(BaseWrappedScipyDistribution):
+class Poisson(ScipyDistributionWrapper):
     """
     Poisson distribution that inherits from `scipy.stats.rv_discrete <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_histogram.html#scipy.stats.rv_histogram>`_
 
@@ -620,7 +620,7 @@ class Poisson(BaseWrappedScipyDistribution):
         :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
         :class:`PoissonScipyDistribution`,
         :class:`HyperparameterDistribution`,
-        :class:`BaseWrappedScipyDistribution`,
+        :class:`ScipyDistributionWrapper`,
         :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
         :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
         :class:`~neuraxle.base.BaseStep`
@@ -640,7 +640,7 @@ class Poisson(BaseWrappedScipyDistribution):
         self.mu = mu
 
 
-class Histogram(BaseWrappedScipyDistribution, HyperparameterDistribution):
+class Histogram(ScipyDistributionWrapper, HyperparameterDistribution):
     """
     Histogram distribution that inherits from `scipy.stats.rv_histogram <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_histogram.html#scipy.stats.rv_histogram>`_
 
@@ -664,7 +664,7 @@ class Histogram(BaseWrappedScipyDistribution, HyperparameterDistribution):
 
     .. seealso::
         :class:`HyperparameterDistribution`,
-        :class:`BaseWrappedScipyDistribution`,
+        :class:`ScipyDistributionWrapper`,
         :class:`Poisson`,
         :class:`Gaussian`,
         :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
@@ -674,7 +674,7 @@ class Histogram(BaseWrappedScipyDistribution, HyperparameterDistribution):
     """
 
     def __init__(self, histogram: np.histogram, null_default_value: float = None, **kwargs):
-        BaseWrappedScipyDistribution.__init__(
+        ScipyDistributionWrapper.__init__(
             self,
             scipy_distribution=rv_histogram(histogram=histogram, **kwargs),
             null_default_value=null_default_value
