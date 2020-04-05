@@ -740,14 +740,17 @@ class BaseStep(ABC):
         self.invalidate()
 
         remainders = dict()
+        step_hyperparams = dict()
         for name, hparams in hyperparams.items():
             if RECURSIVE_STEP_SEPARATOR in name:
-                if name.split(RECURSIVE_STEP_SEPARATOR)[-1].starts_with(self.name):
-                    self.hyperparams = HyperparameterSamples(hyperparams[hparams])
+                if str(name.split(RECURSIVE_STEP_SEPARATOR)[-1]).startswith(self.name):
+                    step_hyperparams[name] = hparams
                 else:
                     remainders[name] = hparams
             else:
-                self.hyperparams = HyperparameterSamples(hyperparams[hparams])
+                step_hyperparams[name] = hparams
+
+        self.hyperparams = HyperparameterSamples(step_hyperparams)
 
         self.apply(method_name='set_hyperparams', hyperparams=remainders, children_only=True)
         return self
@@ -784,15 +787,17 @@ class BaseStep(ABC):
         self.hyperparams = HyperparameterSamples(self.hyperparams).to_flat()
 
         remainders = dict()
+        step_hyperparams = dict()
         for name, hparams in hyperparams.items():
             if RECURSIVE_STEP_SEPARATOR in name:
-                if name.split(RECURSIVE_STEP_SEPARATOR)[-1].starts_with(self.name):
-                    self.hyperparams.update(HyperparameterSamples(hparams).to_flat())
+                if str(name.split(RECURSIVE_STEP_SEPARATOR)[-1]).startswith(self.name):
+                    step_hyperparams[name] = hparams
                 else:
                     remainders[name] = hparams
             else:
-                self.hyperparams.update(HyperparameterSamples(hparams).to_flat())
+                step_hyperparams[name] = hparams
 
+        self.hyperparams.update(step_hyperparams)
         self.apply(method_name='update_hyperparams', hyperparams=remainders, children_only=True)
         return self
 
@@ -867,15 +872,17 @@ class BaseStep(ABC):
         self.invalidate()
 
         remainders = dict()
+        step_hyperparams_space = dict()
         for name, hparams_space in hyperparams_space.items():
             if RECURSIVE_STEP_SEPARATOR in name:
-                if name.split(RECURSIVE_STEP_SEPARATOR)[-1].starts_with(self.name):
-                    self.hyperparams_space = HyperparameterSpace(hparams_space).to_flat()
+                if str(name.split(RECURSIVE_STEP_SEPARATOR)[-1]).startswith(self.name):
+                    step_hyperparams_space[name] = hparams_space
                 else:
                     remainders[name] = hparams_space
             else:
-                self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
+                step_hyperparams_space[name] = hparams_space
 
+        self.hyperparams_space = HyperparameterSpace(step_hyperparams_space)
         self.apply(method_name='set_hyperparams_space', hyperparams_space=remainders, children_only=True)
         return self
 
@@ -911,15 +918,17 @@ class BaseStep(ABC):
         self.hyperparams_space = HyperparameterSamples(self.hyperparams_space).to_flat()
 
         remainders = dict()
+        step_hyperparams_space = dict()
         for name, hparams_space in hyperparams_space.items():
             if RECURSIVE_STEP_SEPARATOR in name:
-                if name.split(RECURSIVE_STEP_SEPARATOR)[-1].starts_with(self.name):
-                    self.hyperparams_space.update(HyperparameterSpace(hparams_space).to_flat())
+                if str(name.split(RECURSIVE_STEP_SEPARATOR)[-1]).startswith(self.name):
+                    step_hyperparams_space[name] = hparams_space
                 else:
                     remainders[name] = hparams_space
             else:
-                self.hyperparams_space.update(HyperparameterSpace(hparams_space).to_flat())
+                step_hyperparams_space[name] = hparams_space
 
+        self.hyperparams_space.update(HyperparameterSpace(step_hyperparams_space).to_flat())
         self.apply(method_name='update_hyperparams_space', hyperparams_space=remainders, children_only=True)
         return self
 
@@ -982,7 +991,7 @@ class BaseStep(ABC):
             return {}
 
         if step_name is not None:
-            step_name = "{}__{}".format(step_name, self.name)
+            step_name = "{}{}{}".format(step_name, RECURSIVE_STEP_SEPARATOR, self.name)
         else:
             step_name = self.name
 
@@ -1006,7 +1015,7 @@ class BaseStep(ABC):
             return results
 
         if step_name is not None:
-            step_name = "{}__{}".format(step_name, self.name)
+            step_name = "{}{}{}".format(step_name, RECURSIVE_STEP_SEPARATOR, self.name)
         else:
             step_name = self.name
 
@@ -2347,7 +2356,7 @@ class TruncableSteps(BaseStep, ABC):
         results = BaseStep.apply(self, method_name, step_name=step_name, children_only=children_only, *kargs, **kwargs)
 
         if step_name is not None:
-            step_name = "{}__{}".format(step_name, self.name)
+            step_name = "{}{}{}".format(step_name, RECURSIVE_STEP_SEPARATOR, self.name)
         else:
             step_name = self.name
 
@@ -2371,7 +2380,7 @@ class TruncableSteps(BaseStep, ABC):
         results = BaseStep.apply_method(self, method=method, step_name=step_name, children_only=children_only, *kargs, **kwargs)
 
         if step_name is not None:
-            step_name = "{}__{}".format(step_name, self.name)
+            step_name = "{}{}{}".format(step_name, RECURSIVE_STEP_SEPARATOR, self.name)
         else:
             step_name = self.name
 
