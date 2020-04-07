@@ -242,7 +242,7 @@ class RandInt(ScipyDistributionWrapper):
     Rand int scipy distribution. Check out `scipy.stats.randint for more info <https://docs.scipy.org/doc/scipy-0.15.1/reference/generated/scipy.stats.randint.html>`_
     """
     def __init__(self, min_included: int, max_included: int, null_default_value: float = None):
-        ScipyDistributionWrapper.__init__(
+        super().__init__(
             self,
             scipy_distribution=randint(low=min_included, high=max_included),
             null_default_value=null_default_value
