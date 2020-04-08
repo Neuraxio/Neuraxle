@@ -243,8 +243,9 @@ class RandInt(ScipyDistributionWrapper):
     """
     def __init__(self, min_included: int, max_included: int, null_default_value: float = None):
         super().__init__(
-            self,
-            scipy_distribution=randint(low=min_included, high=max_included),
+            scipy_distribution=randint,
+            low=min_included,
+            high=max_included,
             null_default_value=null_default_value
         )
 
@@ -304,14 +305,10 @@ class Uniform(ScipyDistributionWrapper):
 
         ScipyDistributionWrapper.__init__(
             self,
-            scipy_distribution=UniformScipyDistribution(
-                name='uniform',
-                a=min_included,
-                b=max_included
-            ),
-            null_default_value=null_default_value,
+            scipy_distribution=UniformScipyDistribution(name='uniform', a=min_included, b=max_included),
             min_included=min_included,
-            max_included=max_included
+            max_included=max_included,
+            null_default_value=null_default_value
         )
 
 
@@ -369,14 +366,12 @@ class LogUniform(ScipyDistributionWrapper):
 
         ScipyDistributionWrapper.__init__(
             self,
-            scipy_distribution=NormalScipyDistribution(
-                name='log_uniform',
+            scipy_distribution=LogUniformScipyDistribution(
                 a=self.min_included,
-                b=self.max_included
+                b=self.max_included,
+                name='log_uniform'
             ),
             null_default_value=null_default_value,
-            min_included=self.min_included,
-            max_included=self.max_included,
             log2_min_included=self.log2_min_included,
             log2_max_included=self.log2_max_included,
         )

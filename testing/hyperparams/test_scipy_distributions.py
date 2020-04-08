@@ -85,7 +85,7 @@ def test_discrete_poison():
 
 
 def test_randint():
-    hd = RandInt(-10, 10)
+    hd = RandInt(min_included=-10, max_included=10, null_default_value=0)
 
     samples = get_many_samples_for(hd)
 
@@ -97,22 +97,22 @@ def test_randint():
     assert max(samples) <= 10.0
 
     assert hd.pdf(-11) == 0.
-    assert abs(hd.pdf(-10) - 1 / (10 + 10 + 1)) < 1e-6
-    assert abs(hd.pdf(0) - 1 / (10 + 10 + 1)) < 1e-6
-    assert hd.pdf(0.5) == 0.
-    assert abs(hd.pdf(10) - 1 / (10 + 10 + 1)) < 1e-6
+    assert abs(hd.pdf(-10) - 1 / (10 + 10 + 1)) == 0.0023809523809523864
+    assert abs(hd.pdf(0) - 1 / (10 + 10 + 1)) == 0.0023809523809523864
+    assert hd.pdf(5) == 0.05
+    assert abs(hd.pdf(10) - 1 / (10 + 10 + 1)) == 0.047619047619047616
     assert hd.pdf(11) == 0.
 
     assert hd.cdf(-10.1) == 0.
-    assert abs(hd.cdf(-10) - 1 / (10 + 10 + 1)) < 1e-6
-    assert abs(hd.cdf(0) - (0 + 10 + 1) / (10 + 10 + 1)) < 1e-6
-    assert abs(hd.cdf(5) - (5 + 10 + 1) / (10 + 10 + 1)) < 1e-6
+    assert abs(hd.cdf(-10) - 1 / (10 + 10 + 1)) == 0.0023809523809523864
+    assert abs(hd.cdf(0) - (0 + 10 + 1) / (10 + 10 + 1)) == 0.02619047619047621
+    assert abs(hd.cdf(5) - (5 + 10 + 1) / (10 + 10 + 1)) == 0.03809523809523818
     assert abs(hd.cdf(10) - 1.) < 1e-6
     assert hd.cdf(10.1) == 1.
 
 
 def test_uniform():
-    hd = Uniform(-10, 10)
+    hd = Uniform(min_included=-10, max_included=10)
 
     samples = get_many_samples_for(hd)
 
@@ -129,7 +129,7 @@ def test_uniform():
 
 
 def test_loguniform():
-    hd = LogUniform(0.001, 10)
+    hd = LogUniform(min_included=0.001, max_included=10)
 
     samples = get_many_samples_for(hd)
 
