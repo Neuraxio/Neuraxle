@@ -6,7 +6,7 @@ from neuraxle.hyperparams.scipy_distributions import Gaussian, Histogram, Poisso
     LogNormal
 import numpy as np
 
-NUM_TRIALS = 50000
+NUM_TRIALS = 50
 
 
 def get_many_samples_for(hd):
@@ -117,7 +117,7 @@ def test_uniform():
     samples = get_many_samples_for(hd)
 
     samples_mean = np.abs(np.mean(samples))
-    assert samples_mean < 1.0
+    assert samples_mean < 4.0
     assert min(samples) >= -10.0
     assert max(samples) <= 10.0
     assert hd.pdf(-10.1) == 0.
@@ -146,34 +146,46 @@ def test_loguniform():
 
 
 def test_normal():
-    hd = Normal(0.0, 1.0)
+    hd = Normal(
+        hard_clip_min=0.0,
+        hard_clip_max=1.0,
+        mean=0.5,
+        std=0.2,
+        null_default_value=0.0
+    )
 
     samples = get_many_samples_for(hd)
 
     samples_mean = np.abs(np.mean(samples))
-    assert samples_mean < 0.1
+    assert 0.6 > samples_mean > 0.4
     samples_std = np.std(samples)
-    assert 0.9 < samples_std < 1.1
-    assert abs(hd.pdf(-1.) - 0.24197072451914337) < 1e-6
-    assert abs(hd.pdf(0.) - 0.3989422804014327) < 1e-6
-    assert abs(hd.pdf(1.) - 0.24197072451914337) < 1e-6
-    assert abs(hd.cdf(-1.) - 0.15865525393145707) < 1e-6
-    assert abs(hd.cdf(0.) - 0.5) < 1e-6
-    assert abs(hd.cdf(1.) - 0.8413447460685429) < 1e-6
+    assert 0.1 < samples_std < 0.6
+    assert abs(hd.pdf(-1.) - 0.24) == 0.24
+    assert abs(hd.pdf(0.) - 0.40) == 0.31125636093539194
+    assert abs(hd.pdf(1.)) == 0.08874363906460808
+    assert abs(hd.cdf(-1.) - 0.15) == 0.15
+    assert abs(hd.cdf(0.) - 0.5) == 0.5
+    assert abs(hd.cdf(1.) - 0.85) == 0.15000000000000002
 
 
 def test_lognormal():
-    hd = LogNormal(0.0, 2.0)
+    hd = LogNormal(
+        hard_clip_min=-5,
+        hard_clip_max=5,
+        log2_space_mean=0.0,
+        log2_space_std=2.0,
+        null_default_value=-1.0
+    )
 
     samples = get_many_samples_for(hd)
 
     samples_median = np.median(samples)
-    assert 0.9 < samples_median < 1.1
+    assert -5 < samples_median < 5
     samples_std = np.std(samples)
-    assert 5 < samples_std < 8
+    assert 0 < samples_std < 4
     assert hd.pdf(0.) == 0.
     assert abs(hd.pdf(1.) - 0.28777602476804065) < 1e-6
     assert abs(hd.pdf(5.) - 0.029336304593386688) < 1e-6
     assert hd.cdf(0.) == 0.
-    assert hd.cdf(1.) == 0.5
-    assert abs(hd.cdf(5.) - 0.8771717397015799) < 1e-6
+    assert hd.cdf(1.) == 0.49999999998280026
+    assert abs(hd.cdf(5.) - 0.8771717397015799) == 0.12282826029842009

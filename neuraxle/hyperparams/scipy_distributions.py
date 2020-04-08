@@ -1,6 +1,7 @@
 import math
 
 import numpy as np
+from scipy.linalg._solve_toeplitz import asarray
 from scipy.special import factorial
 from scipy.stats import rv_continuous, norm, rv_discrete, rv_histogram, truncnorm, randint
 
@@ -241,6 +242,7 @@ class RandInt(ScipyDistributionWrapper):
     """
     Rand int scipy distribution. Check out `scipy.stats.randint for more info <https://docs.scipy.org/doc/scipy-0.15.1/reference/generated/scipy.stats.randint.html>`_
     """
+
     def __init__(self, min_included: int, max_included: int, null_default_value: float = None):
         super().__init__(
             scipy_distribution=randint,
@@ -254,6 +256,7 @@ class UniformScipyDistribution(rv_continuous):
     """
     Uniform scipy distribution. Check out `scipy.stats.rv_continuous for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
     """
+
     def _pdf(self, x, min_included, max_included):
         """
         Calculate the Uniform probability distribution value at position `x`.
@@ -271,6 +274,16 @@ class UniformScipyDistribution(rv_continuous):
         # Manage case where it is outside the probability distribution function.
         return 0.
 
+    def _argcheck(self, *args):
+        cond = 1
+        for arg in args:
+            cond = np.logical_and(
+                cond,
+                isinstance(arg, np.ndarray) and \
+                (arg.dtype == np.float or arg.dtype == np.int)
+            )
+        return cond
+
 
 class Uniform(ScipyDistributionWrapper):
     """
@@ -285,6 +298,7 @@ class Uniform(ScipyDistributionWrapper):
         :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
         :class:`neuraxle.base.BaseStep`
     """
+
     def __init__(self, min_included: float, max_included: float, null_default_value=None):
         """
         Create a random uniform distribution.
@@ -316,6 +330,7 @@ class LogUniformScipyDistribution(rv_continuous):
     """
     Log Uniform scipy distribution. Check out `scipy.stats.rv_continuous for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
     """
+
     def _pdf(self, x, log2_min_included, log2_max_included) -> float:
         """
         Calculate the logUniform probability distribution value at position `x`.
@@ -329,6 +344,17 @@ class LogUniformScipyDistribution(rv_continuous):
             return 1 / (x * math.log(2) * (log2_max_included - log2_min_included))
 
         return 0.
+
+    def _argcheck(self, *args):
+        cond = 1
+        for arg in args:
+            cond = np.logical_and(
+                cond,
+                isinstance(arg, np.ndarray) and \
+                (arg.dtype == np.float or arg.dtype == np.int)
+            )
+        return cond
+
 
 
 class LogUniform(ScipyDistributionWrapper):
@@ -344,6 +370,7 @@ class LogUniform(ScipyDistributionWrapper):
         :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
         :class:`neuraxle.base.BaseStep`
     """
+
     def __init__(self, min_included: float, max_included: float, null_default_value=None):
         """
         Create a quantized random log uniform distribution.
@@ -381,6 +408,7 @@ class NormalScipyDistribution(rv_continuous):
     """
     Normal scipy distribution. Check out `scipy.stats.rv_continuous for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
     """
+
     def _pdf(self, x, hard_clip_min, hard_clip_max, mean, std) -> float:
         """
         Calculate the Normal probability distribution value at position `x`.
@@ -408,84 +436,18 @@ class NormalScipyDistribution(rv_continuous):
 
         return norm.pdf(x, loc=mean, scale=std)
 
+    def _argcheck(self, *args):
+        cond = 1
+        for arg in args:
+            cond = np.logical_and(
+                cond,
+                isinstance(arg, np.ndarray) and \
+                (arg.dtype == np.float or arg.dtype == np.int)
+            )
+        return cond
+
 
 class Normal(ScipyDistributionWrapper):
-    """
-    Get a normal distribution.
-
-    .. seealso::
-        :class:`NormalScipyDistribution`,
-        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
-        :class:`HyperparameterDistribution`,
-        :class:`ScipyDistributionWrapper`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`neuraxle.base.BaseStep`
-    """
-
-    def __init__(self, mean: float, std: float,
-                 hard_clip_min: float = None, hard_clip_max: float = None, null_default_value: float = None):
-        """
-        Create a normal distribution from mean and standard deviation.
-
-        :param mean: the most common value to pop
-        :type mean: float
-        :param std: the standard deviation (that is, the sqrt of the variance).
-        :type std: float
-        :param hard_clip_min: if not none, rvs will return max(result, hard_clip_min).
-        :type hard_clip_min: float
-        :param hard_clip_max: if not none, rvs will return min(result, hard_clip_min).
-        :type hard_clip_max: float
-        :param null_default_value: if none, null default value will be set to hard_clip_min.
-        :type null_default_value: float
-        """
-        if null_default_value is None:
-            null_default_value = hard_clip_min
-
-        ScipyDistributionWrapper.__init__(
-            self,
-            scipy_distribution=LogNormalScipyDistribution(
-                name='log_normal',
-                a=hard_clip_min,
-                b=hard_clip_max
-            ),
-            null_default_value=null_default_value,
-            hard_clip_min=hard_clip_min,
-            hard_clip_max=hard_clip_max,
-            mean=mean,
-            std=std
-        )
-
-
-class LogNormalScipyDistribution(rv_continuous):
-    """
-    Log Normal scipy distribution. Check out `scipy.stats.rv_continuous for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
-    """
-    def _pdf(self, x, hard_clip_min, hard_clip_max, log2_space_mean, log2_space_std, *args):
-        if hard_clip_min is not None and (x < hard_clip_min):
-            return 0.
-
-        if hard_clip_max is not None and (x > hard_clip_max):
-            return 0.
-
-        if x <= 0:
-            return 0.
-
-        cdf_min = 0.
-        cdf_max = 1.
-
-        if hard_clip_min is not None:
-            cdf_min = norm.cdf(math.log2(hard_clip_min), loc=log2_space_mean, scale=log2_space_std)
-
-        if hard_clip_max is not None:
-            cdf_max = norm.cdf(math.log2(hard_clip_max), loc=log2_space_mean, scale=log2_space_std)
-
-        pdf_x = 1 / (x * math.log(2) * log2_space_std * math.sqrt(2 * math.pi)) * math.exp(
-            -(math.log2(x) - log2_space_mean) ** 2 / (2 * log2_space_std ** 2))
-        return pdf_x / (cdf_max - cdf_min)
-
-
-class LogNormal(ScipyDistributionWrapper):
     """
     LogNormal distribution that wraps a `continuous scipy distribution <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
 
@@ -516,15 +478,109 @@ class LogNormal(ScipyDistributionWrapper):
         :class:`neuraxle.base.BaseStep`
     """
 
-    def __init__(self, min_included: float, max_included: float, null_default_value: float = None):
-        ScipyDistributionWrapper.__init__(
+    def __init__(
+        self,
+        mean: float,
+        std: float,
+        hard_clip_min: float = None,
+        hard_clip_max: float = None,
+        null_default_value: float = None
+    ):
+        super().__init__(
+            scipy_distribution=NormalScipyDistribution(
+                name='normal',
+                a=hard_clip_min,
+                b=hard_clip_max
+            ),
+            mean=mean,
+            std=std,
+            hard_clip_min=hard_clip_min,
+            hard_clip_max=hard_clip_max,
+            null_default_value=null_default_value
+        )
+
+
+class LogNormalScipyDistribution(rv_continuous):
+    """
+    Log Normal scipy distribution. Check out `scipy.stats.rv_continuous for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
+    """
+
+    def _pdf(self, x, log2_space_mean, log2_space_std):
+        if x <= 0:
+            return 0.
+
+        cdf_min = 0.
+        cdf_max = 1.
+
+        pdf_x = 1 / (x * math.log(2) * log2_space_std * math.sqrt(2 * math.pi)) * math.exp(
+            -(math.log2(x) - log2_space_mean) ** 2 / (2 * log2_space_std ** 2))
+        return pdf_x / (cdf_max - cdf_min)
+
+    def _argcheck(self, *args):
+        cond = 1
+        for arg in args:
+            cond = np.logical_and(
+                cond,
+                isinstance(arg, np.ndarray) and \
+                (arg.dtype == np.float or arg.dtype == np.int or arg == np.array(None))
+            )
+        return cond
+
+
+class LogNormal(ScipyDistributionWrapper):
+    """
+    Get a normal distribution.
+
+    .. seealso::
+        :class:`NormalScipyDistribution`,
+        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
+        :class:`HyperparameterDistribution`,
+        :class:`ScipyDistributionWrapper`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`neuraxle.base.BaseStep`
+    """
+
+    def __init__(
             self,
+            log2_space_mean: float,
+            log2_space_std: float,
+            hard_clip_min: float,
+            hard_clip_max: float,
+            null_default_value: float = None
+    ):
+        """
+        Create a normal distribution from mean and standard deviation.
+
+        :param log2_space_mean: the most common value to pop
+        :type log2_space_mean: float
+        :param log2_space_std: the standard deviation (that is, the sqrt of the variance).
+        :type log2_space_std: float
+        :param hard_clip_min: if not none, rvs will return max(result, hard_clip_min).
+        :type hard_clip_min: float
+        :param hard_clip_max: if not none, rvs will return min(result, hard_clip_min).
+        :type hard_clip_max: float
+        :param null_default_value: if none, null default value will be set to hard_clip_min.
+        :type null_default_value: float
+        """
+        if null_default_value is None:
+            null_default_value = hard_clip_min
+
+        if hard_clip_min is None:
+            hard_clip_min = np.nan
+
+        if hard_clip_max is None:
+            hard_clip_max = np.nan
+
+        super().__init__(
             scipy_distribution=LogNormalScipyDistribution(
                 name='log_normal',
-                a=min_included,
-                b=max_included
+                a=hard_clip_min,
+                b=hard_clip_max
             ),
-            null_default_value=null_default_value
+            null_default_value=null_default_value,
+            log2_space_mean=log2_space_mean,
+            log2_space_std=log2_space_std
         )
 
 
@@ -532,6 +588,7 @@ class GaussianScipyDistribution(rv_continuous):
     """
     Gaussian scipy distribution. Check out `scipy.stats.rv_continuous for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
     """
+
     def _pdf(self, x):
         return math.exp(-x ** 2 / 2.) / np.sqrt(2.0 * np.pi)
 
@@ -583,6 +640,7 @@ class PoissonScipyDistribution(rv_discrete):
     """
     Poisson scipy distribution. Check out `scipy.stats.rv_discrete for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_discrete.html#scipy.stats.rv_discrete>`_
     """
+
     def _pmf(self, k, mu):
         return math.exp(-mu) * mu ** k / factorial(k)
 
