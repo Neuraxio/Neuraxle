@@ -27,12 +27,12 @@ the distribution.
 """
 
 import copy
-import math
 import random
 import sys
 from abc import abstractmethod, ABCMeta
 from typing import List, Tuple, Union, Any
 
+import math
 import numpy as np
 from scipy.integrate import quad
 from scipy.stats import norm
@@ -712,7 +712,10 @@ class Quantized(WrappedHyperparameterDistributions):
 
         :return: minimal value return from distribution.
         """
-        return round(self.hd.min())
+        hd_min = self.hd.min()
+        if np.isneginf(hd_min):
+            return hd_min
+        return round(hd_min)
 
     def max(self):
         """
@@ -720,7 +723,10 @@ class Quantized(WrappedHyperparameterDistributions):
 
         :return: maximal value return from distribution.
         """
-        return round(self.hd.max())
+        hd_max = self.hd.max()
+        if np.isposinf(hd_max):
+            return hd_max
+        return round(hd_max)
 
     def mean(self) -> float:
         """
@@ -1099,7 +1105,7 @@ class LogUniform(HyperparameterDistribution):
             return self.log2_max_included
 
         return (self.max_included - self.min_included) / (
-                    math.log(2) * (self.log2_max_included - self.log2_min_included))
+                math.log(2) * (self.log2_max_included - self.log2_min_included))
 
     def var(self):
         """
@@ -1111,7 +1117,7 @@ class LogUniform(HyperparameterDistribution):
             return 0.
 
         esperance_squared = (self.max_included ** 2 - self.min_included ** 2) / (
-                    2 * math.log(2) * (self.log2_max_included - self.log2_min_included))
+                2 * math.log(2) * (self.log2_max_included - self.log2_min_included))
         return esperance_squared - (self.mean() ** 2)
 
 
@@ -1265,7 +1271,23 @@ class Normal(HyperparameterDistribution):
 
         :return: mean value of the random variable.
         """
-        return self._mean
+        if self.hard_clip_min is None and self.hard_clip_max is None:
+            return self._mean
+
+        if self.hard_clip_min is None:
+            alpha = -np.inf
+        else:
+            alpha = (self.hard_clip_min - self._mean) / self._std
+
+        if self.hard_clip_max is None:
+            beta = np.inf
+        else:
+            beta = (self.hard_clip_max - self._mean) / self._std
+
+        Z = norm.cdf(beta) - norm.cdf(alpha)
+
+        mean = self._mean + (norm.pdf(alpha) - norm.pdf(beta)) / Z * self._std
+        return mean
 
     def std(self):
         """
@@ -1273,7 +1295,10 @@ class Normal(HyperparameterDistribution):
 
         :return: standard deviation value of the random variable.
         """
-        return self._std
+        if self.hard_clip_min is None and self.hard_clip_max is None:
+            return self._std
+
+        return math.sqrt(self.var())
 
     def var(self):
         """
@@ -1281,7 +1306,35 @@ class Normal(HyperparameterDistribution):
 
         :return: variance value of the random variable.
         """
-        return self._std ** 2
+        if self.hard_clip_min is None and self.hard_clip_max is None:
+            return self._std ** 2
+
+        if self.hard_clip_min is None:
+            alpha = -np.inf
+        else:
+            alpha = (self.hard_clip_min - self._mean) / self._std
+
+        if self.hard_clip_max is None:
+            beta = np.inf
+        else:
+            beta = (self.hard_clip_max - self._mean) / self._std
+
+        Z = norm.cdf(beta) - norm.cdf(alpha)
+
+        if self.hard_clip_max is None:
+            # Case of one side truncated gaussian (lower tail truncated).
+            variance = self._std ** 2 * (1 + alpha * norm.pdf(alpha) / Z - (norm.pdf(alpha) / Z) ** 2)
+            return variance
+
+        if self.hard_clip_min is None:
+            # Case of one side truncated gaussian (upper tail truncated).
+            variance = self._std ** 2 * (1 + - beta * norm.pdf(beta) / Z - (norm.pdf(beta) / Z) ** 2)
+            return variance
+
+        # Case of both side truncated gaussian.
+        variance = self._std ** 2 * (1 + (alpha * norm.pdf(alpha) - beta * norm.pdf(beta)) / Z - (
+                (norm.pdf(alpha) - norm.pdf(beta)) / Z) ** 2)
+        return variance
 
 
 class LogNormal(HyperparameterDistribution):
@@ -1437,7 +1490,7 @@ class LogNormal(HyperparameterDistribution):
             mean = const
             return mean
 
-        if self.hard_clip_min == self.hard_clip_min:
+        if self.hard_clip_min == self.hard_clip_max:
             return self.hard_clip_min
 
         mean_to_calculate_cdf = self.log2_space_mean + math.log(2) * self.log2_space_std ** 2
@@ -1469,16 +1522,17 @@ class LogNormal(HyperparameterDistribution):
         :return: variance value of the random variable.
         """
         # Use the mean**2 to calculate variance, with variance = moment_2 - mean**2.
-        mean_squarred = self.mean()**2
-        const_moment_2 = math.exp(2 * math.log(2) * self.log2_space_mean + 2*math.log(2) ** 2 * self.log2_space_std ** 2)
+        mean_squarred = self.mean() ** 2
+        const_moment_2 = math.exp(
+            2 * math.log(2) * self.log2_space_mean + 2 * math.log(2) ** 2 * self.log2_space_std ** 2)
         if self.hard_clip_min is None and self.hard_clip_max is None:
             variance = const_moment_2 - mean_squarred
             return variance
 
-        if self.hard_clip_min == self.hard_clip_min:
+        if self.hard_clip_min == self.hard_clip_max:
             return 0.
 
-        mean_to_calculate_cdf_for_variance = self.log2_space_mean + 2*math.log(2) * self.log2_space_std ** 2
+        mean_to_calculate_cdf_for_variance = self.log2_space_mean + 2 * math.log(2) * self.log2_space_std ** 2
 
         if self.hard_clip_min is None:
             cdf_min = 0.
@@ -1550,10 +1604,10 @@ class DistributionMixture(HyperparameterDistribution):
 
         for mean, std, single_min, single_max in zip(means, stds, distributions_mins, distributions_max):
 
-            if np.isneginf(single_min):
+            if single_min is None or np.isneginf(single_min):
                 single_min = None
 
-            if np.isposinf(single_max):
+            if single_max is None or np.isposinf(single_max):
                 single_max = None
 
             distribution_instance = distribution_class(mean, std, hard_clip_min=single_min, hard_clip_max=single_max)
@@ -1609,9 +1663,14 @@ class DistributionMixture(HyperparameterDistribution):
         """
         Calculate mean of the mixture.
 
+        Mean of the distribution mixture is calculated using the following equation:
+
+        .. math:: mean = \sum_{i=1}^n w_i * \mu_i,
+
+        where :math:`w_i` and :math:`\mu_i` are respectively the amplitude and mean of each distribution.
+
         :return: mean value of the mixtture.
         """
-        # Since mean is linear, the mean is simply the weighted summed (using distribution amplitude) of each distribution mean.
         mean_result = 0
 
         for distribution_amplitude, distribution in zip(self.distribution_amplitudes, self.distributions):
@@ -1623,16 +1682,21 @@ class DistributionMixture(HyperparameterDistribution):
         """
         Calculate variance of the mixture.
 
+        Variance of a mixture is calculated using the following equation:
+
+        .. math:: variance = (\sum_{i=1}^n w_i * \sigma_i * \mu_i) - \mu^2,
+
+        where :math:`w_i`, :math:`\sigma_i` and :math:`\mu_i` are respectively the amplitude,
+        standard deviation and mean of each distribution and :math:`\mu` is the mean of the whole mixture.
+
         :return: standard deviation value of the mixtture.
         """
-        # Usually the var will be the sum(Variance) + 2 sum(Covariance).
-        # But since all distribution function are independents, the equation is
-        # Var(a * X0 + b * X1 + c * X2) = a^2 * Var(X0) + b^2 Var(X1)+ c^2 Var(X2)
-        var_result = 0
+        second_moment = 0
 
         for distribution_amplitude, distribution in zip(self.distribution_amplitudes, self.distributions):
-            var_result += (distribution_amplitude ** 2 * distribution.var())
+            second_moment += distribution_amplitude * (distribution.var() + distribution.mean() ** 2)
 
+        var_result = second_moment - self.mean() ** 2
         return var_result
 
     def std(self) -> float:
@@ -1657,14 +1721,52 @@ class DistributionMixture(HyperparameterDistribution):
 
         :return: minimal domain value of the mixtture.
         """
-        return max([distribution.msx() for distribution in self.distributions])
+        return max([distribution.max() for distribution in self.distributions])
 
 
 def _calculate_sum(eval_func, limits: List[float], value_step: float = 1., tol: float = 1e-10,
                    number_value_before_stop=5):
+    method, starting_value, stop_value = _get_sum_starting_info(limits)
+
+    current_x = starting_value
+    number_negligible_result = 0
+    total_sum = 0
+
+    if method.lower() == "increasing":
+        comparison = np.greater
+    else:
+        comparison = np.less
+
+    while True:
+        reach_end = comparison(current_x, stop_value)
+
+        if reach_end:
+            break
+
+        current_result = eval_func(current_x)
+        total_sum += current_result
+
+        is_negligible = abs(current_result) < tol
+
+        if is_negligible:
+            number_negligible_result += 1
+        else:
+            number_negligible_result = 0
+
+        if is_negligible and number_negligible_result > number_value_before_stop:
+            break
+
+        if method.lower() == "increasing":
+            current_x += value_step
+        else:
+            current_x -= value_step
+
+    return total_sum
+
+
+def _get_sum_starting_info(limits):
     if np.isinf(limits[0]) and np.isinf(limits[1]):
         raise ValueError("Cannot calculate a sum on infinite terms.")
-
     if np.isposinf(limits[0]):
         starting_value = limits[1]
         stop_value = limits[0]
@@ -1689,45 +1791,7 @@ def _calculate_sum(eval_func, limits: List[float], value_step: float = 1., tol: 
         starting_value = limits[1]
         stop_value = limits[0]
         method = "increasing"
-
-    stopping = False
-    current_x = starting_value
-    number_negligable_result = 0
-    total_sum = 0
-
-    while stopping is False:
-
-        if method.lower() == "increasing":
-            comparaison = np.greater
-        else:
-            comparaison = np.less
-
-        reach_end = comparaison(current_x, stop_value)
-
-        if reach_end:
-            stopping = True
-            break
-
-        current_result = eval_func(current_x)
-        total_sum += current_result
-
-        is_negligeable = current_result < tol
-
-        if is_negligeable:
-            number_negligable_result += 1
-        else:
-            number_negligable_result = 0
-
-        if is_negligeable and number_negligable_result > number_value_before_stop:
-            stopping = True
-            break
-
-        if method.lower() == "increasing":
-            current_x += value_step
-        else:
-            current_x -= value_step
-
-    return total_sum
+    return method, starting_value, stop_value
 
 
 def get_index_in_list_with_bool(choice_list: List[Any], value: Any) -> int:
