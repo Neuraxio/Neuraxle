@@ -30,7 +30,7 @@ import copy
 import random
 import sys
 from abc import abstractmethod, ABCMeta
-from typing import List, Tuple, Union, Any
+from typing import List, Tuple, Union, Any, Optional
 
 import math
 import numpy as np
@@ -281,8 +281,27 @@ class FixedHyperparameter(HyperparameterDistribution):
 class Boolean(HyperparameterDistribution):
     """Get a random boolean hyperparameter."""
 
-    def __init__(self, null_default_value=False):
+    def __init__(self,  proba_is_true: Optional[float] = None, null_default_value=False):
+        """
+        Create a boolean hyperparameter with given probability.
+
+        Boolean distribution is in fact a Bernouilli distribution where given probability
+        set occurance probability of having value 1. (1 - probability) gives occurance probability of having value 0.
+
+        :param proba: a float corresponding to proportion of 1 over 0.
+        :type proba: float
+        :param null_default_value: default value for distribution
+        :type null_default_value: default choice value. if None, default choice value will be the first choice
+        """
         HyperparameterDistribution.__init__(self, null_default_value)
+
+        if proba_is_true is None:
+            proba_is_true = 0.5
+
+        if not (0 <= proba_is_true <= 1):
+            raise ValueError("Probability must be between 0 and 1 (inclusively).")
+
+        self.proba_is_true = proba_is_true
 
     def rvs(self):
         """
@@ -290,7 +309,7 @@ class Boolean(HyperparameterDistribution):
 
         :return: True or False (random).
         """
-        return random.choice([True, False])
+        return np.random.choice([False, True], p=[1 - self.proba_is_true, self.proba_is_true])
 
     def pdf(self, x) -> float:
         """
@@ -298,8 +317,11 @@ class Boolean(HyperparameterDistribution):
         :param x: value where the probability mass function is evaluated.
         :return: value of the probability mass function.
         """
-        if (x is True) or (x == 1) or (x is False) or (x == 0):
-            return 0.5
+        if (x is True) or (x == 1):
+            return self.proba_is_true
+
+        if (x is False) or (x == 0):
+            return 1 - self.proba_is_true
 
         return 0.
 
@@ -313,7 +335,7 @@ class Boolean(HyperparameterDistribution):
             return 0.
 
         if (0 <= x < 1) or (x is False):
-            return 0.5
+            return 1 - self.proba_is_true
 
         if x >= 1 or (x is True):
             return 1.
@@ -342,7 +364,7 @@ class Boolean(HyperparameterDistribution):
 
         :return: mean value of the random variable.
         """
-        return 0.5
+        return self.proba_is_true
 
     def var(self):
         """
@@ -350,7 +372,7 @@ class Boolean(HyperparameterDistribution):
 
         :return: variance value of the random variable.
         """
-        return 0.5 * (1 - 0.5)
+        return self.proba_is_true * (1 - self.proba_is_true)
 
 
 class Choice(HyperparameterDistribution):
@@ -361,7 +383,7 @@ class Choice(HyperparameterDistribution):
     the first item will be kept alone.
     """
 
-    def __init__(self, choice_list: List, null_default_value=None):
+    def __init__(self, choice_list: List, probas: Optional[List[float]] = None, null_default_value=None):
         """
         Create a random choice hyperparameter from the given list.
 
@@ -380,13 +402,21 @@ class Choice(HyperparameterDistribution):
 
         self.choice_list = choice_list
 
+        if probas is None:
+            probas = [1 / len(self.choice_list) for _ in self.choice_list]
+
+        # Normalize probas juste in case sum is not equal to one.
+        self.probas = np.array(probas) / np.sum(probas)
+
     def rvs(self):
         """
         Get one of the items randomly.
 
         :return: one of the items of the list.
         """
-        return random.choice(self.choice_list)
+        choice_index = np.arange(0, len(self), 1)
+        rvs_index = np.random.choice(choice_index, p=self.probas)
+        return self.choice_list[rvs_index]
 
     def pdf(self, x) -> float:
         """
@@ -401,7 +431,8 @@ class Choice(HyperparameterDistribution):
                 "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
         else:
             if x_in_choice:
-                return 1 / (len(self.choice_list))
+                index = get_index_in_list_with_bool(self.choice_list, x)
+                return self.probas[index]
 
         return 0.
 
@@ -422,7 +453,8 @@ class Choice(HyperparameterDistribution):
         except AttributeError:
             raise ValueError("choice_list param should be a list.")
         else:
-            return (index + 1) / len(self.choice_list)
+            probas = np.array(self.probas)
+            return np.sum(probas[0:index + 1])
 
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.0) -> HyperparameterDistribution:
         """
@@ -476,8 +508,10 @@ class Choice(HyperparameterDistribution):
 
         :return: mean value of the random variable.
         """
-        length = len(self)
-        return (length - 1) / 2
+        choice_index = np.arange(0, len(self), 1)
+        probas = np.array(self.probas)
+        mean = np.sum(choice_index * probas)
+        return mean
 
     def var(self):
         """
@@ -485,8 +519,12 @@ class Choice(HyperparameterDistribution):
 
         :return: variance value of the random variable.
         """
-        length = len(self)
-        return (length ** 2 - 1) / 12
+        choice_index = np.arange(0, len(self), 1)
+        probas = np.array(self.probas)
+        mean = np.sum(choice_index * probas)
+        second_moment = np.sum(choice_index**2 * probas)
+        var = second_moment - mean**2
+        return var
 
 
 class PriorityChoice(HyperparameterDistribution):
@@ -496,7 +534,7 @@ class PriorityChoice(HyperparameterDistribution):
     unless there is a best guess that surpasses some of the top choices.
     """
 
-    def __init__(self, choice_list: List, null_default_value=None):
+    def __init__(self, choice_list: List, probas: Optional[List[float]] = None, null_default_value=None):
         """
         Create a random choice hyperparameter from the given list (choice_list).
         The first parameters in the choice_list will be kept longer when narrowing the space.
@@ -517,13 +555,21 @@ class PriorityChoice(HyperparameterDistribution):
         HyperparameterDistribution.__init__(self, null_default_value)
         self.choice_list = choice_list
 
+        if probas is None:
+            probas = [1 / len(self.choice_list) for _ in self.choice_list]
+
+        # Normalize probas juste in case sum is not equal to one.
+        self.probas = np.array(probas) / np.sum(probas)
+
     def rvs(self):
         """
         Get one of the items randomly.
 
         :return: one of the items of the list.
         """
-        return random.choice(self.choice_list)
+        choice_index = np.arange(0, len(self), 1)
+        rvs_index = np.random.choice(choice_index, p=self.probas)
+        return self.choice_list[rvs_index]
 
     def pdf(self, x) -> float:
         """
@@ -538,7 +584,8 @@ class PriorityChoice(HyperparameterDistribution):
                 "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
         else:
             if x_in_choice:
-                return 1 / (len(self.choice_list))
+                index = get_index_in_list_with_bool(self.choice_list, x)
+                return self.probas[index]
 
         return 0.
 
@@ -560,7 +607,8 @@ class PriorityChoice(HyperparameterDistribution):
         except AttributeError:
             raise ValueError("choice_list param should be a list.")
         else:
-            return (index + 1) / len(self.choice_list)
+            probas = np.array(self.probas)
+            return np.sum(probas[0:index + 1])
 
     def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.0) -> HyperparameterDistribution:
         """
@@ -625,8 +673,10 @@ class PriorityChoice(HyperparameterDistribution):
 
         :return: mean value of the random variable.
         """
-        length = len(self)
-        return (length - 1) / 2
+        choice_index = np.arange(0, len(self), 1)
+        probas = np.array(self.probas)
+        mean = np.sum(choice_index * probas)
+        return mean
 
     def var(self):
         """
@@ -634,8 +684,12 @@ class PriorityChoice(HyperparameterDistribution):
 
         :return: variance value of the random variable.
         """
-        length = len(self)
-        return (length ** 2 - 1) / 12
+        choice_index = np.arange(0, len(self), 1)
+        probas = np.array(self.probas)
+        mean = np.sum(choice_index * probas)
+        second_moment = np.sum(choice_index ** 2 * probas)
+        var = second_moment - mean ** 2
+        return var
 
 
 class WrappedHyperparameterDistributions(HyperparameterDistribution):
@@ -1564,8 +1618,11 @@ class DistributionMixture(HyperparameterDistribution):
         """
         Create a mixture of multiple distributions.
 
+        Distribution amplitude are normalized to make sure that the sum equals one.
+        This normalization ensure to keep a random variable at the end (0 < probability < 1).
+
         :param distributions: list of multiple instantiated distribution.
-        :param distribution_amplitudes: list of float representing the amplitude for each distribution.
+        :param distribution_amplitudes: list of float representing the amplitude in the probability distribution function for each distribution.
         """
         # Normalize distribution amplitude
         distribution_amplitudes = np.array(distribution_amplitudes)
@@ -1719,7 +1776,7 @@ class DistributionMixture(HyperparameterDistribution):
         """
         Calculate minimal domain value of the mixture.
 
-        :return: minimal domain value of the mixtture.
+        :return: minimal domain value of the mixture.
         """
         return max([distribution.max() for distribution in self.distributions])
 
@@ -1805,3 +1862,4 @@ def get_index_in_list_with_bool(choice_list: List[Any], value: Any) -> int:
             return index
 
     raise ValueError("{} is not in list".format(value))
+ 

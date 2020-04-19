@@ -65,6 +65,40 @@ def test_boolean_distribution():
     assert abs(hd.mean() - np.mean(samples)) < 1e-2
     assert abs(hd.var() - np.var(samples)) < 1e-2
 
+def test_boolean_distribution_with_proba():
+    proba_is_true = 0.7
+    hd = Boolean(proba_is_true=proba_is_true)
+
+    samples = get_many_samples_for(hd)
+    falses = Counter(samples).get(False)
+    trues = Counter(samples).get(True)
+
+    # You'd need to win the lotto for this test to fail. Or a broken random sampler. Or a bug.
+    assert trues > NUM_TRIALS * (proba_is_true - 0.1)
+    assert falses > NUM_TRIALS * (1 - proba_is_true - 0.1)
+    assert abs(hd.pdf(False) - (1 - proba_is_true)) < 1e-6
+    assert abs(hd.pdf(0.) - (1 - proba_is_true)) < 1e-6
+    assert abs(hd.pdf(True) - proba_is_true) < 1e-6
+    assert abs(hd.pdf(1.) - proba_is_true) < 1e-6
+    assert abs(hd.pdf(-0.1) - 0.) < 1e-6
+    assert abs(hd.pdf(1.1) - 0.) < 1e-6
+
+    assert abs(hd.cdf(False) - (1-proba_is_true)) < 1e-6
+    assert abs(hd.cdf(0.) - (1-proba_is_true)) < 1e-6
+    assert abs(hd.cdf(True) - 1.) < 1e-6
+    assert abs(hd.cdf(1.) - 1.) < 1e-6
+    assert abs(hd.cdf(-0.1) - 0.) < 1e-6
+    assert abs(hd.cdf(1.1) - 1.) < 1e-6
+
+    assert hd.min() == 0
+    assert hd.max() == 1
+    assert abs(hd.mean() - proba_is_true) < 1e-6
+    assert abs(hd.std() - math.sqrt(proba_is_true * (1-proba_is_true))) < 1e-6
+    assert abs(hd.var() - proba_is_true * (1-proba_is_true)) < 1e-6
+    # Verify that hd mean and variance also correspond to mean and variance of sampling.
+    assert abs(hd.mean() - np.mean(samples)) < 1e-2
+    assert abs(hd.var() - np.var(samples)) < 1e-2
+
 
 @pytest.mark.parametrize("ctor", [Choice, PriorityChoice])
 def test_choice_and_priority_choice(ctor):
@@ -108,6 +142,50 @@ def test_choice_and_priority_choice(ctor):
     assert abs((hd.mean() - np.mean(samples_index)) / hd.mean()) < 1e-1
     assert abs((hd.var() - np.var(samples_index)) / hd.var()) < 1e-1
 
+
+@pytest.mark.parametrize("ctor", [Choice, PriorityChoice])
+def test_choice_and_priority_choice_with_probas(ctor):
+    probas = [0.1, 0.4, 0.3, 0.2]
+    probas_array = np.array(probas)
+    choice_list = [0, 1, False, "Test"]
+    hd = ctor(choice_list, probas=probas)
+
+    samples = get_many_samples_for(hd)
+    z0 = Counter(samples).get(0)
+    z1 = Counter(samples).get(1)
+    zNone = Counter(samples).get(False)
+    zTest = Counter(samples).get("Test")
+
+    # You'd need to win the lotto for this test to fail. Or a broken random sampler. Or a bug.
+    assert z0 > NUM_TRIALS * (probas[0] - 0.05)
+    assert z1 > NUM_TRIALS * (probas[1] - 0.05)
+    assert zNone > NUM_TRIALS * (probas[2] - 0.05)
+    assert zTest > NUM_TRIALS * (probas[3] - 0.05)
+
+    assert abs(hd.pdf(0) - probas[0]) < 1e-6
+    assert abs(hd.pdf(1) - probas[1]) < 1e-6
+    assert abs(hd.pdf(False) - probas[2]) < 1e-6
+    assert abs(hd.pdf("Test") - probas[3]) < 1e-6
+
+    assert abs(hd.cdf(0) - probas_array[0]) < 1e-6
+    assert abs(hd.cdf(1) - np.sum(probas_array[0:2])) < 1e-6
+    assert abs(hd.cdf(False) - np.sum(probas_array[0:3])) < 1e-6
+    assert abs(hd.cdf("Test") - 1.) < 1e-6
+
+    with pytest.raises(ValueError):
+        assert hd.pdf(3) == 0.
+        assert hd.cdf(3) == 0.
+
+    assert hd.min() == 0
+    assert hd.max() == len(choice_list)
+    assert abs(hd.mean() - 1.6) < 1e-6
+    assert abs(hd.var() - 0.84) < 1e-6
+    assert abs(hd.std() - 0.9165151389911679) < 1e-6
+    # Convert samples in sample index
+    samples_index = [get_index_in_list_with_bool(choice_list, sample) for sample in samples]
+    # Verify that hd mean and variance also correspond to mean and variance of sampling.
+    assert abs((hd.mean() - np.mean(samples_index)) / hd.mean()) < 1e-1
+    assert abs((hd.var() - np.var(samples_index)) / hd.var()) < 1e-1
 
 def test_quantized_uniform():
     low = -10
@@ -239,7 +317,7 @@ def test_loguniform():
     assert abs(hd.var() - (esperance_squared - hd.mean() ** 2)) < 1e-6
     # Verify that hd mean and variance also correspond to mean and variance of sampling.
     assert abs(hd.mean() - np.mean(samples)) < 5e-2
-    assert abs(hd.var() - np.var(samples)) < 1e-1
+    assert abs(hd.var() - np.var(samples)) < 2.5e-1
 
 
 def test_normal():
@@ -402,7 +480,7 @@ def test_lognormal():
     assert abs(hd.std() - 6.313561927710787) < 1e-6
     # Verify that hd mean and variance also correspond to mean and variance of sampling.
     assert abs(hd.mean() - np.mean(samples)) < 1e-1
-    assert abs((hd.var() - np.var(samples)) / hd.var()) < 1e-1
+    assert abs((hd.var() - np.var(samples)) / hd.var()) < 2.5e-1
 
 
 def test_lognormal_clipped():
