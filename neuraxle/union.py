@@ -32,7 +32,28 @@ from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
 class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
-    """Parallelize the union of many pipeline steps."""
+    """
+    Parallelize the union of many pipeline steps.
+
+
+    .. code-block:: python
+
+        p = Pipeline([
+            FeatureUnion([
+                Mean(),
+                Std(),
+            ], joiner=NumpyConcatenateInnerFeatures())
+        ])
+
+        data_inputs = np.random.randint((1, 20))
+
+    .. seealso::
+        :class:`ModelStacking`,
+        :class:`AddFeatures`,
+        :class:`~neuraxle.base.ForceHandleOnlyMixin`,
+        :class:`~neuraxle.base.TruncableSteps`,
+        :class:`~neuraxle.base.BaseStep`
+    """
 
     def __init__(
             self,
@@ -132,7 +153,26 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
 
 
 class AddFeatures(FeatureUnion):
-    """Parallelize the union of many pipeline steps AND concatenate the new features to the received inputs using Identity."""
+    """
+    Parallelize the union of many pipeline steps AND concatenate the new features to the received inputs using Identity.
+
+    .. code-block:: python
+
+        pipeline = Pipeline([
+            AddFeatures([
+                PCA(n_components=2),
+                FastICA(n_components=2),
+            ])
+        ])
+
+
+    .. seealso::
+        :class:`FeatureUnion`,
+        :class:`ModelStacking`,
+        :class:`~neuraxle.base.ForceHandleOnlyMixin`,
+        :class:`~neuraxle.base.TruncableSteps`,
+        :class:`~neuraxle.base.BaseStep`
+    """
 
     def __init__(self, steps_as_tuple: NamedTupleList, **kwargs):
         """
@@ -145,7 +185,47 @@ class AddFeatures(FeatureUnion):
 
 
 class ModelStacking(FeatureUnion):
-    """Performs a ``FeatureUnion`` of steps, and then send the joined result to the above judge step."""
+    """
+    Performs a ``FeatureUnion`` of steps, and then send the joined result to the above judge step.
+
+    Usage example:
+
+    .. code-block:: python
+
+        model_stacking = Pipeline([
+            ModelStacking([
+                SKLearnWrapper(
+                    GradientBoostingRegressor(),
+                    HyperparameterSpace({
+                        "n_estimators": RandInt(50, 600), "max_depth": RandInt(1, 10),
+                        "learning_rate": LogUniform(0.07, 0.7)
+                    })
+                ),
+                SKLearnWrapper(
+                    KMeans(),
+                    HyperparameterSpace({
+                        "n_clusters": RandInt(5, 10)
+                    })
+                ),
+            ],
+                joiner=NumpyTranspose(),
+                judge=SKLearnWrapper(
+                    Ridge(),
+                    HyperparameterSpace({
+                        "alpha": LogUniform(0.7, 1.4),
+                        "fit_intercept": Boolean()
+                    })
+                ),
+            )
+        ])
+
+    .. seealso::
+        :class:`FeatureUnion`,
+        :class:`AddFeatures`,
+        :class:`~neuraxle.base.ForceHandleOnlyMixin`,
+        :class:`~neuraxle.base.TruncableSteps`,
+        :class:`~neuraxle.base.BaseStep`
+    """
 
     def __init__(
             self,

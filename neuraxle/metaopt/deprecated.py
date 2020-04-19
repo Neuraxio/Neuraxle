@@ -30,13 +30,39 @@ from sklearn.metrics import r2_score
 from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, ForceHandleOnlyMixin, \
     EvaluableStepMixin
 from neuraxle.data_container import DataContainer
-from neuraxle.hyperparams.space import HyperparameterSamples
+from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
-from neuraxle.metaopt.auto_ml import RandomSearchHyperparameterSelectionStrategy, AutoMLContainer
+from neuraxle.metaopt.auto_ml import RandomSearchHyperparameterSelectionStrategy
 from neuraxle.metaopt.trial import TRIAL_STATUS
 from neuraxle.metaopt.random import BaseCrossValidationWrapper, BaseValidation
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
+
+class AutoMLContainer:
+    """
+    Data object for auto ml.
+
+    .. seealso::
+        :class:`Trainer`,
+        :class:`~neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.trial.Trials`,
+        :class:`HyperparamsRepository`,
+        :class:`InMemoryHyperparamsRepository`,
+        :class:`HyperparamsJSONRepository`,
+        :class:`BaseHyperparameterSelectionStrategy`,
+        :class:`RandomSearchHyperparameterSelectionStrategy`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+    """
+
+    def __init__(
+            self,
+            trials: 'Trials',
+            hyperparameter_space: HyperparameterSpace,
+            trial_number: int
+    ):
+        self.trials = trials
+        self.hyperparameter_space = hyperparameter_space
+        self.trial_number = trial_number
 
 
 class HyperparamsRepository(ABC):
@@ -686,9 +712,11 @@ class Trials:
         s = "Trials({})".format(str([str(t) for t in self.trials]))
         return s
 
+
 class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValidation, ABC):
     # TODO: change default argument of scoring_function...
-    def __init__(self, wrapped=None, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch(), cache_folder_when_no_handle=None,
+    def __init__(self, wrapped=None, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch(),
+                 cache_folder_when_no_handle=None,
                  split_data_container_during_fit=True, predict_after_fit=True):
         BaseValidation.__init__(self, wrapped=wrapped, scoring_function=scoring_function)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
@@ -747,6 +775,7 @@ class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseV
     @abstractmethod
     def split(self, data_inputs, expected_outputs):
         raise NotImplementedError("TODO")
+
 
 class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
     def __init__(
@@ -817,3 +846,5 @@ class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
             slice = data_inputs[a:b]
             splitted_data_inputs.append(slice)
         return splitted_data_inputs
+
+

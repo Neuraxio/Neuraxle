@@ -115,7 +115,7 @@ class ColumnTransformer(FeatureUnion):
         ])
 
     .. seealso::
-        :class:`FeatureUnion`,
+        :class:`~neuraxle.union.FeatureUnion`,
     """
 
     def __init__(self, column_chooser_steps_as_tuple: ColumnChooserTupleList, n_dimension: int = 3):
