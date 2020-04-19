@@ -56,6 +56,10 @@ ready to be sent to an instance of the pipeline to try and score it, for example
     See the License for the specific language governing permissions and
     limitations under the License.
 
+..
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+
 """
 
 from collections import OrderedDict
@@ -183,6 +187,15 @@ class HyperparameterSpace(HyperparameterSamples):
                 v = v.rvs()
             new_items.append((k, v))
         return HyperparameterSamples(new_items)
+
+    def nullify(self):
+        new_items = []
+        for k, v in self.items():
+            if isinstance(v, HyperparameterDistribution) or isinstance(v, HyperparameterSpace):
+                v = v.nullify()
+            new_items.append((k, v))
+        return HyperparameterSamples(new_items)
+
 
     def narrow_space_from_best_guess(
             self, best_guesses: 'HyperparameterSpace', kept_space_ratio: float = 0.5

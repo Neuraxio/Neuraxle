@@ -1,7 +1,29 @@
+
 Neuraxle Pipelines
 ==================
 
     Code Machine Learning Pipelines - The Right Way.
+
+.. image:: https://img.shields.io/github/workflow/status/Neuraxio/Neuraxle/Test%20Python%20Package/master?   :alt: Build
+    :target: https://github.com/Neuraxio/Neuraxle
+
+.. image:: https://img.shields.io/gitter/room/Neuraxio/Neuraxle?   :alt: Gitter
+    :target: https://gitter.im/Neuraxle/community
+
+.. image:: https://img.shields.io/pypi/l/neuraxle?   :alt: PyPI - License
+    :target: https://www.neuraxle.org/stable/Neuraxle/README.html#license
+
+.. image:: https://img.shields.io/pypi/dm/neuraxle?   :alt: PyPI - Downloads
+    :target: https://pypi.org/project/neuraxle/
+
+.. image:: https://img.shields.io/github/commit-activity/m/neuraxio/neuraxle?   :alt: GitHub commit activity
+    :target: https://github.com/Neuraxio/Neuraxle
+
+.. image:: https://img.shields.io/github/v/release/neuraxio/neuraxle?   :alt: GitHub release (latest by date)
+    :target: https://pypi.org/project/neuraxle/
+
+
+.. image:: https://www.neuraxio.com/en/blog/assets/pipeline_1_small.jpg
 
 Neuraxle is a Machine Learning (ML) library for building neat pipelines,
 providing the right abstractions to both ease research, development, and
@@ -36,18 +58,18 @@ such:
         AddFeatures([
             # Add (concatenate) features in parallel, that are
             # themselves derived of the existing features:
-            SKLearnWrapper(PCA(n_components=2)),
-            SKLearnWrapper(FastICA(n_components=2)),
+            PCA(n_components=2),
+            FastICA(n_components=2),
         ]),
         RidgeModelStacking([
             # Here is an ensemble of 4 models or feature extractors,
             # That are themselves then fed to a ridge regression which
             # will act as a judge to finalize the prediction.
-            SKLearnWrapper(LinearRegression()),
-            SKLearnWrapper(LogisticRegression()),
-            SKLearnWrapper(GradientBoostingRegressor(n_estimators=500)),
-            SKLearnWrapper(GradientBoostingRegressor(max_depth=5)),
-            SKLearnWrapper(KMeans()),
+            LinearRegression(),
+            LogisticRegression(),
+            GradientBoostingRegressor(n_estimators=500),
+            GradientBoostingRegressor(max_depth=5),
+            KMeans(),
         ])
     ])
     # Note: here all the steps were imported from scikit-learn,
@@ -59,19 +81,160 @@ such:
 
     # Once it learned, the pipeline can process new and
     # unseen data for making predictions.
-    y_test_predicted = p.transform(X_test)
+    y_test_predicted = p.predict(X_test)
 
-    # Easy REST API deployment.
+Visit the
+`examples <https://www.neuraxle.org/stable/examples/index.html>`__
+to get more a feeling of how it works, and inspiration.
+
+Deep Learning Pipelines
+-----------------------
+
+Here is how to use deep learning algorithms within a Neuraxle Pipeline.
+
+Deep Learning Pipeline Definition
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Defining a Deep Learning pipeline is more complex. 
+It needs a composition of many steps to: 
+
+-  Loop on data for many epochs, but just during training.
+-  Shuffle the data, just during training.
+-  Use minibatches to process the data, which avoids to blow RAM. Your steps will fit incrementally.
+-  Process data that is 2D, 3D, 4D, or even 5D or ND, with transformers made for 2D data slices.
+-  Actually use your Deep Learning algorithm within your pipeline for it to learn and predict.
+
+Below, we define a pipeline for time series classification using
+a LSTM RNN. It includes data preprocessing steps as well as the
+data flow management. `Time Series data is 3D <https://qr.ae/TZjoMb>`__.
+
+.. code:: python
+    
+    deep_learning_seq_classif_pipeline = EpochRepeater(Pipeline([
+        # X data shape: (batch, different_lengths, n_feature_columns)
+        # y data shape: (batch, different_lengths)
+        # Split X and Y into windows using 
+        # an InputAndOutputTransformerMixin
+        # abstraction to transform y too:
+        SliceTimeSeries(window_size=128, last_label_as_seq_label=True),
+        # X data shape: (more_than_batch, 128, n_feature_columns)
+        # y data shape: (more_than_batch, 128)
+        TrainOnlyWrapper(DataShuffler(seed=42)),
+        MiniBatchSequentialPipeline([
+            # X data shape: (batch_size, 128, n_feature_columns)
+            # y data shape: (batch_size, 128)
+            # Loop on 2D slices of the batch's 3D time series
+            # data cube to apply 2D transformers:
+            ForEachDataInput(Pipeline([
+                # X data shape: (128, n_feature_columns)
+                # y data shape: (128)
+                # This step will load the lazy-loadable data
+                # into a brick:
+                ToNumpy(np_dtype=np.float32),
+                # Fill nan and inf values with 0:
+                DefaultValuesFiller(0.0),
+                # Transform the columns (that is the innermost
+                # axis/dim of data named `n_feature_columns`):
+                ColumnTransformer([
+                    # Columns 0, 1, 2, 3 and 4 needs to be
+                    # normalized by mean and variance (std):
+                    (range(0, 5), MeanVarianceNormalizer()),
+                    # Column 5 needs to have it's `log plus 1` 
+                    # value taken before normalization.
+                    (5, Pipeline([
+                        Log1P(), 
+                        MeanVarianceNormalizer()
+                    ]))
+                    # Note that omited columns are discarded. 
+                    # Also, multiple transformers on a column will 
+                    # concatenate the results. 
+                ]),
+                # Transform the labels' indices to one-hot vectors.
+                OutputTransformerWrapper(
+                    OneHotEncoder(nb_columns=6, name='labels'))
+                # X data shape: (128, n_feature_columns)
+                # y data shape: (128, 6)
+            ])),
+            # X data shape: (batch_size, 128, n_feature_columns)
+            # y data shape: (batch_size, 128, 6)
+            # Classification with a deep neural network,
+            # using the Neuraxle-TensorFlow and/or
+            # Neuraxle-PyTorch extensions:
+            ClassificationLSTM(n_stacked=2, n_residual=3),
+            # X data shape: (batch_size, 128, 6)
+            # y data shape: (batch_size, 128, 6)
+        ], batch_size=32),
+        # X data shape: (batch_size, 128, 6)
+    ]), epochs=200, fit_only=True)
+
+Deep Learning Pipeline Training and Evaluation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Here we train and evaluate with a train-validation split. Note that
+automatic hyperparameter tuning would require only a few more lines
+of code: see our
+`hyperparameter tuning example <https://www.neuraxle.org/stable/examples/boston_housing_meta_optimization.html#sphx-glr-examples-boston-housing-meta-optimization-py>`__.
+
+.. code:: python
+
+    # Wrap the pipeline by a validation strategy,
+    # this could have been Cross Validation as well:
+    training_pipeline = ValidationSplitWrapper(
+        deep_learning_seq_classif_pipeline,
+        val_size=0.1,
+        scoring_function=sklearn.metrics.accuracy_score
+    )
+
+    # Fitting and evaluating the pipeline.
+    # X_train data shape: (batch, different_lengths, n_feature_columns)
+    # y_train data shape: (batch, different_lengths)
+    training_pipeline.fit(X_train, y_train)
+    # Note that X_train and y_train can be lazy loaders.
+    print('Train accuracy: {}'.format(
+        training_pipeline.scores_train_mean))
+    print('Validation accuracy: {}'.format(
+        training_pipeline.scores_validation_mean))
+
+    # Recover the pipeline in test mode:
+    production_pipeline = training_pipeline.get_step()
+    production_pipeline.set_train(False)
+
+Deep Learning Production Pipeline
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Deploying your deep learning app to a JSON REST API. Refer
+to `Flask's deployment documentation <https://flask.palletsprojects.com/en/1.1.x/tutorial/deploy/>`__
+for more info on deployment servers and security.
+
+.. code:: python
+
+    # Will now serve the pipeline to a REST API as an example:
+    # Note that having saved the pipeline to disk
+    # (for reloading this in another file) would be easy, too, using savers.
     app = FlaskRestApiWrapper(
-        json_decoder=CustomJSONDecoderFor2DArray(),
-        wrapped=p,
-        json_encoder=CustomJSONEncoderOfOutputs(),
+        json_decoder=YourCustomJSONDecoderFor2DArray(),
+        wrapped=production_pipeline,
+        json_encoder=YourCustomJSONEncoderOfOutputs()
     ).get_app()
     app.run(debug=False, port=5000)
 
-Visit the
-`examples <https://www.neuraxle.neuraxio.com/stable/examples/index.html>`__
-to get more a feeling of how it works, and inspiration.
+Calling a Deployed Pipeline
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This could be ran from another distant computer to call your app:
+
+.. code:: python
+
+    p = APICaller(
+        json_encoder=YourCustomJSONEncoderOfInputs(),
+        url="http://127.0.0.1:5000/",
+        json_decoder=YourCustomJSONDecoderOfOutputs()
+    )
+    y_pred = p.predict(X_test)
+    print(y_pred)
+
+Note that we'll soon have better remote proxy design patterns for distant
+pipelines, and distant parallel processing and distant parallel training.
 
 Why Neuraxle?
 -------------
@@ -96,24 +259,37 @@ Compatibility
     pipeline steps.
 
 This means that you can use
-`scikit-learn <https://scikit-learn.org/stable/>`__,
+`scikit-learn <https://arxiv.org/pdf/1201.0490v4.pdf>`__,
 `Keras <https://keras.io/>`__,
-`TensorFlow <https://www.tensorflow.org/>`__,
-`PyTorch <https://pytorch.org/>`__ and/or **any other machine learning
-library** you like within and throughout your Neuraxle pipelines.
+`TensorFlow <https://arxiv.org/pdf/1603.04467v2.pdf>`__,
+`PyTorch <https://openreview.net/pdf?id=BJJsrmfCZ>`__,
+`Hyperopt <https://pdfs.semanticscholar.org/d4f4/9717c9adb46137f49606ebbdf17e3598b5a5.pdf>`__,
+`Ray <https://arxiv.org/pdf/1712.05889v2.pdf>`__ 
+and/or **any other machine learning library** you like within and
+throughout your Neuraxle pipelines.
 
-Parallel Computing
-~~~~~~~~~~~~~~~~~~
+Parallel Computing and Serialization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Neuraxle offer multiple parallel processing features using
-`joblib <https://joblib.readthedocs.io/en/latest/parallel.html>`__. Most
-parallel processing in Neuraxle happens in the
-`pipeline <https://www.neuraxle.neuraxio.com/stable/api/neuraxle.pipeline.html>`__
-and
-`union <https://www.neuraxle.neuraxio.com/stable/api/neuraxle.union.html>`__
-modules, and as such, neuraxle can be easily parallelized on a cluster
-of computers using `distributed <https://ml.dask.org/joblib.html>`__ as
-its `joblib backend <https://ml.dask.org/joblib.html>`__.
+Neuraxle offer multiple parallel processing features. One magical thing 
+that we did are Savers. Savers allow you to define how a step can be 
+serialized. This way, it's possible to avoid Python's parallel 
+processing limitations and pitfalls. 
+
+Let's suppose that your pipeline has a step that imports code from
+another library and that this code isn't serializable (e.g.: some
+code written in C++ and interacting with the GPUs or anything funky).
+To make this step serializable, just define a saver which will tell
+the step how to dump itself to disk and reload itself. This will
+allow the step to be sent to a remote computer or to be threadable
+by reloading the save. The save can be dumped to a RAM disk for
+more performance and avoid truly writing to disks.
+
+Neuraxle is compatible with most other ML and DL libraries. We're
+currently already writing savers for PyTorch and TensorFlow in the
+`Neuraxle-PyTorch <https://github.com/Neuraxio/Neuraxle-PyTorch>`__ 
+and `Neuraxle-TensorFlow <https://github.com/Neuraxio/Neuraxle-TensorFlow>`__ 
+extensions of this project.
 
 Time Series Processing
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -121,7 +297,8 @@ Time Series Processing
 Although Neuraxle is not limited to just time series processing
 projects, it's especially good for those projects, as one of the goals
 of Neuraxle is to provides a few abstractions that are useful for time
-series projects.
+series projects, as
+`Time Series data is often 3D <https://qr.ae/TZjoMb>`__ or even ND.
 
 With the various abstractions that Neuraxle provides, it's easy to get
 started building a time-series processing project. Neuraxle is also the
@@ -129,7 +306,8 @@ backbone of `the Neuraxio Time Series
 project <https://www.neuraxio.com/en/time-series-solution>`__, which is
 a premium software package built on top of Neuraxle for business boost
 their time series machine learning projects by providing out-of-the-box
-specialized pipeline steps.
+specialized pipeline steps. Some of those specialized steps are featured
+in the `Deep Learning Pipelines <#deep-learning-pipelines>`__ section above.
 
 Note: `the Neuraxio Time Series
 project <https://www.neuraxio.com/en/time-series-solution>`__ is
@@ -221,8 +399,8 @@ Community
 ---------
 
 Join our `Slack
-workspace <https://join.slack.com/t/neuraxio-open-source/shared_invite/enQtNjc0NzM1NTI5MTczLWUwZmI5NjhkMzRmYzc1MGE5ZTE0YWRkYWI3NWIzZjc1YTRlM2Y1MzRmYzFmM2FiNWNhNGZlZDhhMzkyMTQ1ZTQ>`__ and our `Gitter <https://gitter.im/Neuraxle/community>`__!
-We <3 collaborators.
+workspace <https://join.slack.com/t/neuraxio/shared_invite/zt-8lyw42c5-4PuWjTT8dQqeFK3at1s_dQ>`__ and our `Gitter <https://gitter.im/Neuraxle/community>`__!
+We <3 collaborators. You can also subscribe to our `mailing list <https://www.neuraxio.com/en/blog/index.html>`__ where we will post updates and news. 
 
 For **technical questions**, we recommend posting them on
 `StackOverflow <https://stackoverflow.com/questions/tagged/machine-learning>`__
@@ -253,40 +431,21 @@ License
 Neuraxle is licensed under the `Apache License, Version
 2.0 <https://github.com/Neuraxio/Neuraxle/blob/master/LICENSE>`__.
 
-Summary of the License
-^^^^^^^^^^^^^^^^^^^^^^
+Citation
+~~~~~~~~~~~~
 
-At `Neuraxio <https://www.neuraxio.com/en/>`__, we have open-source at
-heart. We want *you* to be able to use Neuraxio's Neuraxle as much as
-possible without copyleft restrictions. For this reasons, Neuraxle don't
-depend on copyleft librairies and is neither licensed under a copyleft
-license. This way, Neuraxle is quite permissive.
+You may cite our `extended abstract <https://www.researchgate.net/publication/337002011_Neuraxle_-_A_Python_Framework_for_Neat_Machine_Learning_Pipelines>`__ that was presented at the Montreal Artificial Intelligence Symposium (MAIS) 2019. Here is the bibtex code to cite:
 
-The License is very permissive and not very restrictive.
+.. code:: bibtex
 
-Permissions:
- - Commercial use
- - Modification
- - Distribution
- - Patent use
- - Private use
-
-Limitations:
- - Trademark use
- - Liability
- - Warranty
-
-Conditions:
- - License and copyright notice
- - State changes
-
-For example, if Neuraxle is used within a larger project, it doesn't
-necessarily mean that the larger project is also licensed under the same
-license. Licensed works, modifications, and larger works may be
-distributed under different terms and without source code.
-
-Note: this Summary of the License is not legal advice. Refer to the `full
-license <https://github.com/Neuraxio/Neuraxle/blob/master/LICENSE>`__.
+    @misc{neuraxle,
+    author = {Chevalier, Guillaume and Brillant, Alexandre and Hamel, Eric},
+    year = {2019},
+    month = {09},
+    pages = {},
+    title = {Neuraxle - A Python Framework for Neat Machine Learning Pipelines},
+    doi = {10.13140/RG.2.2.33135.59043}
+    }
 
 Contributors
 ~~~~~~~~~~~~
@@ -298,6 +457,7 @@ Thanks to everyone who contributed to the project:
 -  Éric Hamel: https://github.com/Eric2Hamel
 -  Jérôme Blanchet: https://github.com/JeromeBlanchet
 -  Michaël Lévesque-Dion: https://github.com/mlevesquedion
+-  Philippe Racicot: https://github.com/Vaunorage
 
 Supported By
 ~~~~~~~~~~~~
@@ -305,5 +465,29 @@ Supported By
 We thank these organisations for generously supporting the project:
 
 -  Neuraxio Inc.: https://github.com/Neuraxio
--  Umanéo Technologies Inc.: https://umaneo.com
 
+
+.. raw:: html
+
+    <img src="https://www.neuraxio.com/images/neuraxio_logo_transparent.png" width="140px">
+
+
+-  Umanéo Technologies Inc.: https://www.umaneo.com/
+
+.. raw:: html
+
+    <img src="https://uploads-ssl.webflow.com/5be35e61c9728278fc5f4150/5c6dabf76fc786262e6654a0_signature-courriel-logo-umaneo.png" width="200px">
+
+
+-  Solution Nexam Inc.: https://www.nexam.io/
+
+.. raw:: html
+
+    <img src="https://www.neuraxio.com/images/solution_nexam_io.jpg" width="180px">
+
+
+-  La Cité, LP: http://www.lacitelp.com/
+
+.. raw:: html
+
+    <img src="https://www.neuraxio.com/images/La-Cite-LP.png" width="260">

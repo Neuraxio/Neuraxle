@@ -18,7 +18,12 @@ Those steps works with scikit-learn (sklearn) transformers and estimators.
     See the License for the specific language governing permissions and
     limitations under the License.
 
+..
+    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
+    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
+
 """
+import inspect
 from typing import Any
 
 from sklearn.base import BaseEstimator
@@ -41,25 +46,31 @@ class SKLearnWrapper(BaseStep):
         if not isinstance(wrapped_sklearn_predictor, BaseEstimator):
             raise ValueError("The wrapped_sklearn_predictor must be an instance of scikit-learn's BaseEstimator.")
         self.wrapped_sklearn_predictor = wrapped_sklearn_predictor
-        params: HyperparameterSamples = wrapped_sklearn_predictor.get_params()
-        super().__init__(hyperparams=params, hyperparams_space=hyperparams_space)
+        params: HyperparameterSamples = HyperparameterSamples(wrapped_sklearn_predictor.get_params())
+        BaseStep.__init__(self, hyperparams=params, hyperparams_space=hyperparams_space)
         self.return_all_sklearn_default_params_on_get = return_all_sklearn_default_params_on_get
         self.name += "_" + wrapped_sklearn_predictor.__class__.__name__
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
 
         if hasattr(self.wrapped_sklearn_predictor, 'fit_transform'):
-            out = self.wrapped_sklearn_predictor.fit_transform(data_inputs, expected_outputs)
+            if expected_outputs is None or len(inspect.getfullargspec(self.wrapped_sklearn_predictor.fit).args) < 3:
+                out = self.wrapped_sklearn_predictor.fit_transform(data_inputs)
+            else:
+                out = self.wrapped_sklearn_predictor.fit_transform(data_inputs, expected_outputs)
             return self, out
 
-        self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs, expected_outputs)
+        self.fit(data_inputs, expected_outputs)
+
         if hasattr(self.wrapped_sklearn_predictor, 'predict'):
             return self, self.wrapped_sklearn_predictor.predict(data_inputs)
-
         return self, self.wrapped_sklearn_predictor.transform(data_inputs)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'SKLearnWrapper':
-        self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs, expected_outputs)
+        if expected_outputs is None or len(inspect.getfullargspec(self.wrapped_sklearn_predictor.fit).args) < 3:
+            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs)
+        else:
+            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs, expected_outputs)
         return self
 
     def transform(self, data_inputs):
@@ -67,16 +78,19 @@ class SKLearnWrapper(BaseStep):
             return self.wrapped_sklearn_predictor.predict(data_inputs)
         return self.wrapped_sklearn_predictor.transform(data_inputs)
 
-    def set_hyperparams(self, flat_hyperparams: dict) -> BaseStep:
-        super().set_hyperparams(flat_hyperparams)
-        self.wrapped_sklearn_predictor.set_params(**flat_hyperparams)
+    def set_hyperparams(self, flat_hyperparams: HyperparameterSamples) -> BaseStep:
+        BaseStep.set_hyperparams(self, flat_hyperparams)
+        self.wrapped_sklearn_predictor.set_params(**HyperparameterSamples(flat_hyperparams).to_flat_as_dict_primitive())
         return self
 
     def get_hyperparams(self):
         if self.return_all_sklearn_default_params_on_get:
-            return self.wrapped_sklearn_predictor.get_params()
+            return HyperparameterSamples(self.wrapped_sklearn_predictor.get_params()).to_flat()
         else:
-            return super(SKLearnWrapper, self).get_hyperparams()
+            return BaseStep.get_hyperparams(self)
+
+    def get_wrapped_sklearn_predictor(self):
+        return self.wrapped_sklearn_predictor
 
     def __repr__(self):
         return self.__str__()
@@ -91,7 +105,8 @@ class SKLearnWrapper(BaseStep):
 
 class RidgeModelStacking(ModelStacking):
     def __init__(self, brothers):
-        super().__init__(
+        ModelStacking.__init__(
+            self,
             brothers,
             SKLearnWrapper(
                 Ridge(),

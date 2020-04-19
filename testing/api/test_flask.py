@@ -21,7 +21,7 @@ Tests for Flask.
 
 import numpy as np
 
-from neuraxle.api.flask import JSONDataResponseEncoder, JSONDataBodyDecoder, FlaskRestApiWrapper
+from neuraxle.rest.flask import JSONDataResponseEncoder, JSONDataBodyDecoder, FlaskRestApiWrapper
 from neuraxle.base import BaseStep, NonFittableMixin
 
 
@@ -36,7 +36,6 @@ def setup_api():
             :param data_inputs: json object
             :return: np array for data inputs
             """
-            print(data_inputs)
             return np.array(data_inputs)
 
     class Encoder(JSONDataResponseEncoder):
@@ -50,7 +49,7 @@ def setup_api():
             :return:
             """
             return {
-                'predictions': data_inputs.tolist()
+                'predictions': np.array(data_inputs).tolist()
             }
 
     class Multiplier(NonFittableMixin, BaseStep):

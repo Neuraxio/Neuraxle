@@ -1,5 +1,5 @@
 """
-Neuraxle's Base Classes
+Neuraxle
 ====================================
 This is the core of Neuraxle. Most pipeline steps derive (inherit) from those classes. They are worth noticing.
 
@@ -34,7 +34,7 @@ setup(
                 'abstractions to both ease research, development, and deployment of your ML applications.',
     long_description=_README,
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "Intended Audience :: Education",
         "Intended Audience :: Financial and Insurance Industry",
@@ -67,14 +67,14 @@ setup(
         "Topic :: Software Development :: Build Tools",
         "Topic :: Software Development :: Libraries",
         "Topic :: Software Development :: Libraries :: Python Modules",
-        # Topic :: Software Development :: Object Brokering,
+        "Topic :: Software Development :: Object Brokering",
         "Topic :: Software Development :: Pre-processors",
         "Topic :: Software Development :: Quality Assurance",
         "Topic :: Software Development :: Testing",
         "Topic :: System",
-        # Topic :: System :: Clustering,
-        # Topic :: System :: Distributed Computing,
-        # Topic :: System :: Networking,
+        "Topic :: System :: Clustering",
+        "Topic :: System :: Distributed Computing",
+        "Topic :: System :: Networking",
         # Topic :: System :: Systems Administration,
         "Topic :: Text Processing",
         "Topic :: Text Processing :: Filters",
@@ -92,10 +92,36 @@ setup(
     setup_requires=["pytest-runner"],
     install_requires=[
         'numpy', 'scipy', 'matplotlib', 'scikit-learn>=0.20.3', 'joblib>=0.13.2',
-        'Flask>=1.1.1', 'Flask-RESTful>=0.3.7'
+        'Flask>=1.1.1', 'Flask-RESTful>=0.3.7', 'conv==0.2'
     ],
     tests_require=["pytest", "pytest-cov"],
     include_package_data=True,
     license='Apache 2.0',
     keywords='pipeline pipelines data science machine learning deep learning'
 )
+
+print("""
+____________________________________________________________________
+
+ Thank you for installing
+   _   _                               __
+  | \ | |                             |  |
+  |  \| | ___  _   _  _ __  ___ __  __ | |  ___
+  | . ` |/ _ \| | | || ' _||__ \\\\ \/ / | | / _ \\
+  | |\  || __|| |_| | | |  / _ | >  <  | | | __|
+  |_| \_|\___| \__,_||___| \_,_|/_/\_\ |__|\___|
+
+
+ Learn more:
+ - https://www.neuraxle.org/stable/index.html
+
+ Contribute:
+ - https://gitter.im/Neuraxle/community
+
+ Open issue:
+ - https://github.com/Neuraxio/Neuraxle
+
+ Ask questions:
+ - https://stackoverflow.com/questions/tagged/neuraxle
+____________________________________________________________________
+""")

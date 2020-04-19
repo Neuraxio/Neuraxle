@@ -22,29 +22,14 @@ Tests for Pipelines
 import numpy as np
 import pytest
 
-from neuraxle.base import BaseStep, RangeHasher
 from neuraxle.hyperparams.distributions import RandInt, LogUniform
 from neuraxle.hyperparams.space import nested_dict_to_flat, HyperparameterSpace
 from neuraxle.pipeline import Pipeline
+from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.steps.sklearn import SKLearnWrapper
-from neuraxle.steps.util import TransformCallbackStep, TapeCallbackFunction
 from neuraxle.union import Identity, AddFeatures, ModelStacking
-
-AN_INPUT = "I am an input"
-AN_EXPECTED_OUTPUT = "I am an expected output"
-
-
-class SomeStep(BaseStep):
-    def __init__(self, hyperparams_space: HyperparameterSpace = None, hasher=RangeHasher()):
-        super().__init__(hyperparams=None, hyperparams_space=hyperparams_space, hasher=hasher)
-
-    def fit_one(self, data_input, expected_output=None) -> 'SomeStep':
-        return self
-
-    def transform_one(self, data_input):
-        return AN_EXPECTED_OUTPUT
-
+from testing.mocks.step_mocks import SomeStep, AN_INPUT, AN_EXPECTED_OUTPUT
 
 steps_lists = [
     [("just_one_step", SomeStep())],
@@ -204,6 +189,90 @@ def test_pipeline_set_one_hyperparam_level_two_dict():
     assert p["c"].hyperparams == dict()
 
 
+def test_pipeline_update_hyperparam_level_one_flat():
+    p = Pipeline([
+        ("a", SomeStep()),
+        ("b", SomeStep()),
+        ("c", SomeStep())
+    ])
+    p.set_hyperparams({
+        "a__learning_rate": 7,
+        "a__other_hp": 8
+    })
+
+    p.update_hyperparams({
+        "a__learning_rate": 0.01
+    })
+
+    assert p["a"].hyperparams["learning_rate"] == 0.01
+    assert p["a"].hyperparams["other_hp"] == 8
+    assert p["b"].hyperparams == dict()
+    assert p["c"].hyperparams == dict()
+
+
+def test_pipeline_update_hyperparam_level_one_dict():
+    p = Pipeline([
+        ("a", SomeStep()),
+        ("b", SomeStep()),
+        ("c", SomeStep())
+    ])
+    p.set_hyperparams({"b": {"learning_rate": 7, "other_hp": 8}})
+
+    p.update_hyperparams({"b": {"learning_rate": 0.01}})
+
+    assert p["b"].hyperparams["learning_rate"] == 0.01
+    assert p["b"].hyperparams["other_hp"] == 8
+    assert p["a"].hyperparams == dict()
+    assert p["c"].hyperparams == dict()
+
+
+def test_pipeline_update_hyperparam_level_two_flat():
+    p = Pipeline([
+        ("a", SomeStep()),
+        ("b", Pipeline([
+            ("a", SomeStep()),
+            ("b", SomeStep()),
+            ("c", SomeStep())
+        ])),
+        ("c", SomeStep())
+    ])
+    p.set_hyperparams({
+        "b__a__learning_rate": 7,
+        "b__a__other_hp": 8,
+    })
+
+    p.update_hyperparams({
+        "b__a__learning_rate": 0.01
+    })
+
+    assert p["b"]["a"].hyperparams["learning_rate"] == 0.01
+    assert p["b"]["a"].hyperparams["other_hp"] == 8
+    assert p["b"]["c"].hyperparams == dict()
+    assert p["b"].hyperparams == dict()
+    assert p["c"].hyperparams == dict()
+
+
+def test_pipeline_update_hyperparam_level_two_dict():
+    p = Pipeline([
+        ("a", SomeStep()),
+        ("b", Pipeline([
+            ("a", SomeStep()),
+            ("b", SomeStep()),
+            ("c", SomeStep())
+        ])),
+        ("c", SomeStep())
+    ])
+    p.set_hyperparams({"b": {"a": {"learning_rate": 7, "other_hp": 8}, "learning_rate": 9}})
+
+    p.update_hyperparams({"b": {"a": {"learning_rate": 0.01}}})
+
+    assert p["b"]["a"].hyperparams["learning_rate"] == 0.01
+    assert p["b"]["a"].hyperparams["other_hp"] == 8
+    assert p["b"]["c"].hyperparams == dict()
+    assert p["b"].hyperparams["learning_rate"] == 9
+    assert p["c"].hyperparams == dict()
+
+
 def test_pipeline_tosklearn():
     import sklearn.pipeline
     the_step = SomeStep()
@@ -234,7 +303,13 @@ def test_pipeline_tosklearn():
     p = sklearn.pipeline.Pipeline([('sk', p)])
 
     p.set_params(**{"sk__b__a__z__learning_rate": 11})
-    assert p.named_steps["sk"].p["b"].wrapped_sklearn_predictor.named_steps["a"]["z"]["learning_rate"] == 11
+
+    sk_ = p.named_steps["sk"]
+    b_ = sk_.p["b"]
+    predictor = b_.wrapped_sklearn_predictor
+    a_ = predictor.named_steps["a"]
+    z_ = a_["z"]
+    assert z_.get_params()["learning_rate"] == 11
 
     p.set_params(**nested_dict_to_flat({
         "sk__b": {
@@ -243,7 +318,8 @@ def test_pipeline_tosklearn():
         }
     }))
     # p.set_params(**{"sk__b__a__z__learning_rate": 12})
-    assert p.named_steps["sk"].p["b"].wrapped_sklearn_predictor.named_steps["a"]["z"]["learning_rate"] == 12
+    assert p.named_steps["sk"].p["b"].wrapped_sklearn_predictor.named_steps["a"]["z"].get_params()[
+               "learning_rate"] == 12
     print(the_step.get_hyperparams())
     # assert the_step.get_hyperparams()["learning_rate"] == 12  # TODO: debug why wouldn't this work
 
