@@ -1,11 +1,12 @@
 import math
+from typing import Optional, List, Any, Union, Tuple
 
 import numpy as np
-from scipy.linalg._solve_toeplitz import asarray
+from scipy.integrate import quad
 from scipy.special import factorial
 from scipy.stats import rv_continuous, norm, rv_discrete, rv_histogram, truncnorm, randint
 
-from neuraxle.hyperparams.distributions import HyperparameterDistribution
+from neuraxle.hyperparams.distributions import HyperparameterDistribution, WrappedHyperparameterDistributions
 
 
 class ScipyDistributionWrapper(HyperparameterDistribution):
@@ -356,7 +357,6 @@ class LogUniformScipyDistribution(rv_continuous):
         return cond
 
 
-
 class LogUniform(ScipyDistributionWrapper):
     """
     Get a LogUniform distribution.
@@ -479,12 +479,12 @@ class Normal(ScipyDistributionWrapper):
     """
 
     def __init__(
-        self,
-        mean: float,
-        std: float,
-        hard_clip_min: float = None,
-        hard_clip_max: float = None,
-        null_default_value: float = None
+            self,
+            mean: float,
+            std: float,
+            hard_clip_min: float = None,
+            hard_clip_max: float = None,
+            null_default_value: float = None
     ):
         super().__init__(
             scipy_distribution=NormalScipyDistribution(
@@ -693,7 +693,7 @@ class Poisson(ScipyDistributionWrapper):
         self.mu = mu
 
 
-class Histogram(ScipyDistributionWrapper, HyperparameterDistribution):
+class Histogram(ScipyDistributionWrapper):
     """
     Histogram distribution that inherits from `scipy.stats.rv_histogram <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_histogram.html#scipy.stats.rv_histogram>`_
 
@@ -732,3 +732,346 @@ class Histogram(ScipyDistributionWrapper, HyperparameterDistribution):
             scipy_distribution=rv_histogram(histogram=histogram, **kwargs),
             null_default_value=null_default_value
         )
+
+
+class FixedScipyDistribution(rv_continuous):
+    def _pdf(self, x, value):
+        if x == value:
+            return 1.
+        return 0.
+
+
+class FixedHyperparameter(ScipyDistributionWrapper):
+    """This is an hyperparameter that won't change again, but that is still expressed as a distribution."""
+
+    def __init__(self, value, null_default_value=None):
+        """
+        Create a still hyperparameter
+
+        :param value: what will be returned by calling ``.rvs()``.
+        """
+        self.value = value
+        ScipyDistributionWrapper.__init__(
+            self,
+            scipy_distribution=FixedScipyDistribution(),
+            value=value,
+            null_default_value=null_default_value
+        )
+
+
+class BooleanScipyDistribution(rv_continuous):
+    def _pdf(self, x, proba_is_true):
+        """
+        Calculate the boolean probability mass function value at position `x`.
+        :param x: value where the probability mass function is evaluated.
+        :return: value of the probability mass function.
+        """
+        if (x is True) or (x == 1):
+            return proba_is_true
+
+        if (x is False) or (x == 0):
+            return 1 - proba_is_true
+
+        return 0.
+
+
+class Boolean(ScipyDistributionWrapper):
+    """Get a random boolean hyperparameter."""
+
+    def __init__(self, proba_is_true: Optional[float] = None, null_default_value=False):
+        """
+        Create a boolean hyperparameter with given probability.
+
+        Boolean distribution is in fact a Bernouilli distribution where given probability
+        set occurance probability of having value 1. (1 - probability) gives occurance probability of having value 0.
+
+        :param proba: a float corresponding to proportion of 1 over 0.
+        :type proba: float
+        :param null_default_value: default value for distribution
+        :type null_default_value: default choice value. if None, default choice value will be the first choice
+        """
+        if proba_is_true is None:
+            proba_is_true = 0.5
+
+        if not (0 <= proba_is_true <= 1):
+            raise ValueError("Probability must be between 0 and 1 (inclusively).")
+
+        self.proba_is_true = proba_is_true
+        ScipyDistributionWrapper.__init__(
+            self,
+            BooleanScipyDistribution(),
+            null_default_value=null_default_value,
+            proba_is_true=proba_is_true
+        )
+
+
+class ChoiceScipyDistribution(rv_discrete):
+    def _pmf(self, x, choice_list, probas):
+        """
+        Calculate the choice probability mass function value at position `x`.
+        :param x: value where the probability mass function is evaluated.
+        :return: value of the probability mass function.
+        """
+        try:
+            x_in_choice = x in choice_list
+        except (TypeError, ValueError, AttributeError):
+            raise ValueError(
+                "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
+        else:
+            if x_in_choice:
+                index = get_index_in_list_with_bool(choice_list, x)
+                return probas[index]
+
+        return 0.
+
+
+class PriorityChoiceScipyDistribution(rv_discrete):
+    def _pmf(self, x, choice_list, probas):
+        """
+        Calculate the choice probability mass function value at position `x`.
+        :param x: value where the probability mass function is evaluated.
+        :return: value of the probability mass function.
+        """
+        try:
+            x_in_choice = x in choice_list
+        except (TypeError, ValueError, AttributeError):
+            raise ValueError(
+                "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
+        else:
+            if x_in_choice:
+                index = get_index_in_list_with_bool(choice_list, x)
+                return probas[index]
+
+        return 0.
+
+
+def get_index_in_list_with_bool(choice_list: List[Any], value: Any) -> int:
+    for choice_index, choice in enumerate(choice_list):
+        if choice == value and not isinstance(choice, bool) and not isinstance(value, bool):
+            index = choice_index
+            return index
+
+        if choice is value:
+            index = choice_index
+            return index
+
+    raise ValueError("{} is not in list".format(value))
+
+
+class Choice(ScipyDistributionWrapper):
+    """Get a random value from a choice list of possible value for this hyperparameter.
+
+    When narrowed, the choice will only collapse to a single element when narrowed enough.
+    For example, if there are 4 items in the list, only at a narrowing value of 0.25 that
+    the first item will be kept alone.
+    """
+
+    def __init__(self, choice_list: List, probas: Optional[List[float]] = None, null_default_value=None):
+        """
+        Create a random choice hyperparameter from the given list.
+
+        :param choice_list: a list of values to sample from.
+        :type choice_list: List
+        :param null_default_value: default value for distribution
+        :type null_default_value: default choice value. if None, default choice value will be the first choice
+        """
+        self.choice_list = choice_list
+
+        if probas is None:
+            probas = [1 / len(self.choice_list) for _ in self.choice_list]
+
+        # Normalize probas juste in case sum is not equal to one.
+        self.probas = np.array(probas) / np.sum(probas)
+
+        if null_default_value is None:
+            ScipyDistributionWrapper.__init__(
+                self,
+                scipy_distribution=ChoiceScipyDistribution(),
+                choice_list=choice_list,
+                probas=probas,
+                null_default_value=choice_list[0]
+            )
+        elif null_default_value in choice_list:
+            ScipyDistributionWrapper.__init__(
+                self,
+                scipy_distribution=ChoiceScipyDistribution(),
+                choice_list=choice_list,
+                probas=probas,
+                null_default_value=null_default_value
+            )
+        else:
+            raise ValueError(
+                'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
+
+
+class PriorityChoice(ScipyDistributionWrapper):
+    """Get a random value from a choice list of possible value for this hyperparameter.
+
+    The first parameters are kept until the end when the list is narrowed (it is narrowed progressively),
+    unless there is a best guess that surpasses some of the top choices.
+    """
+
+    def __init__(self, choice_list: List, probas: Optional[List[float]] = None, null_default_value=None):
+        """
+        Create a random choice hyperparameter from the given list (choice_list).
+        The first parameters in the choice_list will be kept longer when narrowing the space.
+
+        :param choice_list: a list of values to sample from.
+        :type choice_list: List
+        :param null_default_value: default value for distribution
+        :type null_default_value: default choice value. if None, default choice value will be the first choice
+        """
+        self.choice_list = choice_list
+
+        # Normalize probas juste in case sum is not equal to one.
+        self.probas = np.array(probas) / np.sum(probas)
+
+        if probas is None:
+            probas = [1 / len(self.choice_list) for _ in self.choice_list]
+
+        if null_default_value is None:
+            ScipyDistributionWrapper.__init__(
+                self,
+                scipy_distribution=PriorityChoiceScipyDistribution(),
+                probas=probas,
+                choice_list=choice_list,
+                null_default_value=choice_list[0]
+            )
+        elif null_default_value in choice_list:
+            ScipyDistributionWrapper.__init__(
+                self,
+                scipy_distribution=PriorityChoiceScipyDistribution(),
+                probas=probas,
+                choice_list=choice_list,
+                null_default_value=null_default_value
+            )
+        else:
+            raise ValueError(
+                'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
+
+
+class QuantizedScipyDistribution(rv_continuous):
+    def _pdf(self, x, hd):
+        """
+        Calculate the Quantized probability mass function value at position `x` of a continuous distribution.
+        :param x: value where the probability mass function is evaluated.
+        :return: value of the probability mass function.
+        """
+        # In order to calculate the pdf for any quantized distribution,
+        # we have to perform the integral from x-0.5 to x+0.5 (because of round).
+        if isinstance(x, int) or (isinstance(x, float) and x.is_integer()):
+            return quad(hd.pdf, x - 0.5, x + 0.5)[0]
+        return 0.
+
+
+class Quantized(WrappedHyperparameterDistributions, ScipyDistributionWrapper):
+    """A quantized wrapper for another distribution: will round() the rvs number."""
+
+    def __init__(self, hd: HyperparameterDistribution = None, hds: List[HyperparameterDistribution] = None, null_default_value = None):
+        WrappedHyperparameterDistributions.__init__(self, hd=hd, hds=hds, null_default_value=null_default_value)
+        ScipyDistributionWrapper.__init__(
+            self,
+            scipy_distribution=QuantizedScipyDistribution(),
+            hd=self.hd,
+            null_default_value=self.null_default_value
+        )
+
+
+class DistributionMixtureScipyDistribution(rv_continuous):
+    def _pdf(self, x, distributions, distribution_amplitudes):
+        """
+        Calculate the mixture probability distribution value at position `x`.
+
+        :param x: value where the probability distribution function is evaluated.
+        :return: value of the probability distribution function.
+        """
+        pdf_result = 0
+
+        for distribution_amplitude, distribution in zip(distribution_amplitudes, distributions):
+            pdf_result += (distribution_amplitude * distribution.pdf(x))
+
+        return pdf_result
+
+
+class DistributionMixture(ScipyDistributionWrapper):
+    """Get a mixture of multiple distribution"""
+
+    def __init__(
+            self,
+            distributions: Union[List[HyperparameterDistribution], Tuple[HyperparameterDistribution, ...]],
+            distribution_amplitudes: Union[List[float], Tuple[float, ...]]
+    ):
+        """
+        Create a mixture of multiple distributions.
+
+        Distribution amplitude are normalized to make sure that the sum equals one.
+        This normalization ensure to keep a random variable at the end (0 < probability < 1).
+
+        :param distributions: list of multiple instantiated distribution.
+        :param distribution_amplitudes: list of float representing the amplitude in the probability distribution function for each distribution.
+        """
+        # Normalize distribution amplitude
+        distribution_amplitudes = np.array(distribution_amplitudes)
+        distribution_amplitudes = distribution_amplitudes / np.sum(distribution_amplitudes)
+        self.distributions = distributions
+        self.distribution_amplitudes = distribution_amplitudes
+
+        ScipyDistributionWrapper.__init__(
+            self,
+            scipy_distribution=DistributionMixtureScipyDistribution(),
+            distributions=distributions,
+            distribution_amplitudes=distribution_amplitudes,
+            null_default_value=None
+        )
+
+    @staticmethod
+    def build_gaussian_mixture(
+            distribution_amplitudes: Union[List[float], Tuple[float, ...]],
+            means: Union[List[float], Tuple[float, ...]],
+            stds: Union[List[float], Tuple[float, ...]],
+            distributions_mins: Union[List[float], Tuple[float, ...]],
+            distributions_max: Union[List[float], Tuple[float, ...]],
+            use_logs: bool = False,
+            use_quantized_distributions: bool = False
+    ):
+        """
+        Create a gaussian mixture.
+
+         Will create a mixture distribution which consist of multiple gaussians of different amplitudes, means, standard deviations, mins and max.
+
+        :param distribution_amplitudes: list of different amplitudes to infer to the mixture. The amplitudes are normalized to sum to 1.
+        :param means: list of means to infer mean to each gaussian.
+        :param stds: list of standard deviations to infer standard deviation to each gaussian.
+        :param distributions_mins: list of minimum value that will clip each gaussian. If it is -Inf or None, it will not be clipped.
+        :param distributions_max: list of maximal value that will clip each gaussian. If it is +Inf or None, it will not be clipped.
+        :param distributions_max: bool weither to use a quantized version or not.
+        :param use_logs:
+        :param use_quantized_distributions:
+
+        :return DistributionMixture instance
+        """
+
+        distribution_class = Normal
+
+        if use_logs:
+            distribution_class = LogNormal
+
+        distributions = []
+
+        for mean, std, single_min, single_max in zip(means, stds, distributions_mins, distributions_max):
+
+            if single_min is None or np.isneginf(single_min):
+                single_min = None
+
+            if single_max is None or np.isposinf(single_max):
+                single_max = None
+
+            distribution_instance = distribution_class(mean, std, hard_clip_min=single_min, hard_clip_max=single_max)
+
+            if use_quantized_distributions:
+                distribution_instance = Quantized(distribution_instance)
+
+            distributions.append(distribution_instance)
+
+        return DistributionMixture(distributions, distribution_amplitudes)
+
