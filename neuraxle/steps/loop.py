@@ -23,12 +23,12 @@ Pipeline Steps For Looping
 
 """
 import copy
-from typing import List
+from typing import List, Callable
 
 import numpy as np
 
 from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, \
-    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList
+    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, Identity
 from neuraxle.data_container import ListDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
@@ -70,10 +70,15 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStepMixin, 
         :return: self
         """
         for current_id, di, eo in data_container:
-            self.wrapped = self.wrapped.handle_fit(
-                DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
-                context
-            )
+            try:
+                self.wrapped = self.wrapped.handle_fit(
+                    DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
+                    context
+                )
+            except ContinueException:
+                continue
+            except BreakException:
+                break
         return self
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
@@ -89,16 +94,22 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStepMixin, 
         output_data_container = ListDataContainer.empty(original_data_container=data_container)
 
         for current_id, di, eo in data_container:
-            output = self.wrapped.handle_transform(
-                DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
-                context
-            )
+            try:
+                output = self.wrapped.handle_transform(
+                    DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
+                    context
+                )
 
-            output_data_container.append(
-                current_id,
-                output.data_inputs,
-                output.expected_outputs
-            )
+                output_data_container.append(
+                    current_id,
+                    output.data_inputs,
+                    output.expected_outputs
+                )
+            except ContinueException:
+                continue
+            except BreakException:
+                break
+
         output_data_container.summary_id = data_container.summary_id
 
         return output_data_container
@@ -117,16 +128,20 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStepMixin, 
         output_data_container = ListDataContainer.empty(original_data_container=data_container)
 
         for current_id, di, eo in data_container:
-            self.wrapped, output = self.wrapped.handle_fit_transform(
-                DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
-                context
-            )
-
-            output_data_container.append(
-                current_id,
-                output.data_inputs,
-                output.expected_outputs
-            )
+            try:
+                self.wrapped, output = self.wrapped.handle_fit_transform(
+                    DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
+                    context
+                )
+                output_data_container.append(
+                    current_id,
+                    output.data_inputs,
+                    output.expected_outputs
+                )
+            except ContinueException:
+                continue
+            except BreakException:
+                break
 
         output_data_container.summary_id = data_container.summary_id
 
@@ -144,6 +159,36 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStepMixin, 
         if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context):
             return True
         return False
+
+
+class ContinueException(Exception):
+    pass
+
+
+class BreakException(Exception):
+    pass
+
+
+class Break(Identity):
+    def __init__(self, condition_function: Callable):
+        Identity.__init__(self)
+        self.condition_function = condition_function
+
+    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        if self.condition_function(data_container):
+            raise BreakException()
+        return data_container
+
+
+class Continue(Identity):
+    def __init__(self, condition_function: Callable):
+        Identity.__init__(self)
+        self.condition_function = condition_function
+
+    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        if self.condition_function(data_container):
+            raise ContinueException()
+        return data_container
 
 
 class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
@@ -182,12 +227,14 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
         MetaStepMixin.update_hyperparams(self, hyperparams)
-        self.steps_as_tuple = [(name, step.set_hyperparams(self.wrapped.get_hyperparams())) for name, step in self.steps_as_tuple]
+        self.steps_as_tuple = [(name, step.set_hyperparams(self.wrapped.get_hyperparams())) for name, step in
+                               self.steps_as_tuple]
         return self
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
         MetaStepMixin.set_hyperparams_space(self, hyperparams_space)
-        self.steps_as_tuple = [(name, step.set_hyperparams_space(self.wrapped.get_hyperparams_space())) for name, step in self]
+        self.steps_as_tuple = [(name, step.set_hyperparams_space(self.wrapped.get_hyperparams_space())) for name, step
+                               in self]
         return self
 
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
@@ -200,7 +247,8 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
     def _copy_one_step_per_data_input(self, data_container):
         # One copy of step per data input:
-        steps = [self.copy_op(self.wrapped).set_name('{}[{}]'.format(self.wrapped.name, i)) for i in range(len(data_container))]
+        steps = [self.copy_op(self.wrapped).set_name('{}[{}]'.format(self.wrapped.name, i)) for i in
+                 range(len(data_container))]
         self.steps_as_tuple = [(step.name, step) for step in steps]
         self.invalidate()
 
