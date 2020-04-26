@@ -319,7 +319,10 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
         for base_path in files:
             with open(base_path) as f:
-                trial_json = json.load(f)
+                try:
+                    trial_json = json.load(f)
+                except Exception as err:
+                    continue
 
             if status is None or trial_json['status'] == status.value:
                 trials.append(Trial.from_json(trial_json=trial_json))
