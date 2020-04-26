@@ -3,63 +3,125 @@ Tree parzen estimator
 ====================================
 Code for tree parzen estimator auto ml.
 """
-import numpy as np
-from typing import Optional
-from copy import deepcopy
-from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.hyperparams.distributions import DistributionMixture, Choice
-from .auto_ml import BaseHyperparameterOptimizer, RandomSearchHyperparameterOptimizer, TRIAL_STATUS
 from collections import Counter
 
-def _linear_forgetting_Weights(number_samples, number_recent_trial_at_full_weights):
-    """This part of code has been taken from Hyperopt (https://github.com/hyperopt) code."""
-    if number_samples == 0:
-        return np.asarray([])
+import numpy as np
 
-    if number_samples < number_recent_trial_at_full_weights:
-        return np.ones(number_samples)
+from neuraxle.hyperparams.distributions import DistributionMixture, Choice, Quantized, LogNormal, LogUniform, RandInt, \
+    PriorityChoice
+from neuraxle.hyperparams.space import HyperparameterSamples
+from neuraxle.metaopt.auto_ml import BaseHyperparameterSelectionStrategy, RandomSearchHyperparameterSelectionStrategy, \
+    TRIAL_STATUS
 
-    weights_ramp = np.linspace(1.0 / number_samples, 1.0, number_samples - number_recent_trial_at_full_weights)
-    weights_flat = np.ones(number_recent_trial_at_full_weights)
-    weights = np.concatenate((weights_ramp, weights_flat), axis=0)
-
-    return weights
+_INDEPENDANT_DISCRET_DISTRIBUTION = (Choice, PriorityChoice, RandInt)
+_LOG_DISTRIBUTION = (LogNormal, LogUniform)
+_QUANTIZED_DISTRIBUTION = (Quantized,)
 
 
-class TreeParzenEstimatorHyperparameterOptimizer(BaseHyperparameterOptimizer):
+class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelectionStrategy):
 
-    def __init__(self, number_of_initial_random_step: int = 40, quantile_threshold: float = 30,
+    def __init__(self, number_of_initial_random_step: int = 40, quantile_threshold: float = 0.3,
+                 number_good_trials_max_cap: int = 25,
                  number_possible_hyperparams_candidates=100,
                  prior_weight: float = 0.,
                  use_linear_forgetting_weights: bool = False,
                  number_recent_trial_at_full_weights=25):
         super().__init__()
-        self.initial_auto_ml_algo = RandomSearchHyperparameterOptimizer()
+        self.initial_auto_ml_algo = RandomSearchHyperparameterSelectionStrategy()
         self.number_of_initial_random_step = number_of_initial_random_step
         self.quantile_threshold = quantile_threshold
+        self.number_good_trials_max_cap = number_good_trials_max_cap
         self.number_possible_hyperparams_candidates = number_possible_hyperparams_candidates
         self.prior_weight = prior_weight
         self.use_linear_forgetting_weights = use_linear_forgetting_weights
         self.number_recent_trial_at_full_weights = number_recent_trial_at_full_weights
 
+    def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
+        """
+        Find the next best hyperparams using previous trials.
+
+        :param auto_ml_container: trials data container
+        :type auto_ml_container: Trials
+        :return: next best hyperparams
+        :rtype: HyperparameterSamples
+        """
+        # Flatten hyperparameter space
+        flat_hyperparameter_space = auto_ml_container.hyperparameter_space.to_flat()
+
+        if auto_ml_container.trial_number < self.number_of_initial_random_step:
+            # Perform random search
+            return self.initial_auto_ml_algo.find_next_best_hyperparams(auto_ml_container)
+
+        # Keep only success trials
+        success_trials = auto_ml_container.trials.filter(TRIAL_STATUS.SUCCESS)
+
+        # Split trials into good and bad using quantile threshold.
+        good_trials, bad_trials = self._split_trials(success_trials)
+
+        # Create gaussian mixture of good and gaussian mixture of bads.
+        good_posteriors = self._create_posterior(flat_hyperparameter_space, good_trials)
+        bad_posteriors = self._create_posterior(flat_hyperparameter_space, bad_trials)
+
+        best_hyperparams = []
+        for (hyperparam_key, good_posterior) in good_posteriors.items():
+            best_new_hyperparam_value = None
+            best_ratio = None
+            for _ in range(self.number_possible_hyperparams_candidates):
+                # Sample possible new hyperparams in the good_trials.
+                possible_new_hyperparm = good_posterior.rvs()
+
+                # Verify if we use the ratio directly or we use the loglikelihood of b_post under both distribution like hyperopt.
+                # In hyperopt they use :
+                # # calculate the log likelihood of b_post under both distributions
+                # below_llik = fn_lpdf(*([b_post] + b_post.pos_args), **b_kwargs)
+                # above_llik = fn_lpdf(*([b_post] + a_post.pos_args), **a_kwargs)
+                #
+                # # improvement = below_llik - above_llik
+                # # new_node = scope.broadcast_best(b_post, improvement)
+                # new_node = scope.broadcast_best(b_post, below_llik, above_llik)
+
+                # Verify ratio good pdf versus bad pdf for all possible new hyperparms.
+                # Used what is describe in the article which is the ratio (gamma + g(x) / l(x) ( 1- gamma))^-1 that we have to maximize.
+                # Since there is ^-1, we have to maximize l(x) / g(x)
+                # Only the best ratio is kept and is the new best hyperparams.
+                # Seems to take log of pdf and not pdf directly probable to have `-` instead of `/`.
+                # TODO: Maybe they use the likelyhood to sum over all possible parameters to find the max so it become a join distribution of all hyperparameters, would make sense.
+                # TODO: verify is for quantized we do not want to do cdf(value higher) - cdf(value lower) to have pdf.
+                ratio = good_posterior.pdf(possible_new_hyperparm) / bad_posteriors[hyperparam_key].pdf(
+                    possible_new_hyperparm)
+
+                if best_new_hyperparam_value is None:
+                    best_new_hyperparam_value = possible_new_hyperparm
+                    best_ratio = ratio
+                else:
+                    if ratio > best_ratio:
+                        best_new_hyperparam_value = possible_new_hyperparm
+                        best_ratio[hyperparam_key] = ratio
+
+            best_hyperparams.append((hyperparam_key, best_new_hyperparam_value))
+        return HyperparameterSamples(best_hyperparams)
+
     def _split_trials(self, success_trials):
         # Split trials into good and bad using quantile threshold.
         # TODO: maybe better place in the Trials class.
+        # TODO: manage higher_score_is_better.
         trials_scores = np.array([trial.score for trial in success_trials])
-
-        # TODO: do we want to clip the number of good trials like in hyperopt.
-        percentile_thresholds = np.percentile(trials_scores, self.quantile_threshold)
+        trial_sorted_indexes = np.argsort(trials_scores)
 
         # In hyperopt they use this to split, where default_gamma_cap = 25. They clip the max of item they use in the good item.
         # default_gamma_cap is link to the number of recent_trial_at_full_weight also.
         # n_below = min(int(np.ceil(gamma * np.sqrt(len(l_vals)))), gamma_cap)
+        n_good = int(min(np.ceil(self.quantile_threshold * len(trials_scores)), self.number_good_trials_max_cap))
+
+        good_trials_indexes = trial_sorted_indexes[:n_good]
+        bad_trials_indexes = trial_sorted_indexes[n_good:]
 
         good_trials = []
         bad_trials = []
-        for trial in success_trials:
-            if trial.score < percentile_thresholds:
+        for trial_index, trial in enumerate(success_trials):
+            if trial_index in good_trials_indexes:
                 good_trials.append(trial)
-            else:
+            if bad_trials_indexes in bad_trials_indexes:
                 bad_trials.append(trial)
         return good_trials, bad_trials
 
@@ -73,8 +135,7 @@ class TreeParzenEstimatorHyperparameterOptimizer(BaseHyperparameterOptimizer):
             # Get distribution_trials
             distribution_trials = [trial.hyperparams.to_flat_as_dict_primitive()[hyperparam_key] for trial in trials]
 
-            # TODO : create a discret and uniform class in order to be able to discretize them.
-            if isinstance(hyperparam_distribution, discret_distribution):
+            if isinstance(hyperparam_distribution, _INDEPENDANT_DISCRET_DISTRIBUTION):
                 # If hyperparams is a discret distribution
                 posterior_distribution = self._reweights_categorical(hyperparam_distribution, distribution_trials)
 
@@ -117,18 +178,24 @@ class TreeParzenEstimatorHyperparameterOptimizer(BaseHyperparameterOptimizer):
         reweighted_probas = np.array(reweighted_probas)
         reweighted_probas = reweighted_probas / np.sum(reweighted_probas)
 
-        # TODO: create a choice with list os probas.
-        return Choice(values, reweighted_probas)
+        if isinstance(hyperparam_distribution, PriorityChoice):
+            return PriorityChoice(values, probas=reweighted_probas)
 
-
+        return Choice(values, probas=reweighted_probas)
 
     def _create_gaussian_mixture(self, hyperparam_distribution, distribution_trials):
 
-        # TODO: add Condition if log distribution or not.
-        use_logs = False
+        # TODO: see how to manage distribution mixture here.
 
-        # TODO: add condition if quantized distribution.
+        use_logs = False
+        if isinstance(hyperparam_distribution, _LOG_DISTRIBUTION):
+            use_logs = True
+
         use_quantized_distributions = False
+        if isinstance(hyperparam_distribution, Quantized):
+            use_quantized_distributions = True
+            if isinstance(hyperparam_distribution.hd, _LOG_DISTRIBUTION):
+                use_logs = True
 
         # Find means, std, amplitudes, min and max.
         distribution_amplitudes, means, stds, distributions_mins, distributions_max = self._adaptive_parzen_normal(
@@ -144,7 +211,7 @@ class TreeParzenEstimatorHyperparameterOptimizer(BaseHyperparameterOptimizer):
         return gmm
 
     def _adaptive_parzen_normal(self, hyperparam_distribution, distribution_trials):
-        """This part of code is enterily inspire from Hyperopt (https://github.com/hyperopt) code."""
+        """This code is enterily inspire from Hyperopt (https://github.com/hyperopt) code."""
 
         # TODO: check if someone use the DistributionMixture how to manage it in here.
         # TODO: Distribution Mixture : Treat has a standard distribution or prior distribution is all small gaussian for each distribution in the distribution mixture.
@@ -214,7 +281,6 @@ class TreeParzenEstimatorHyperparameterOptimizer(BaseHyperparameterOptimizer):
         else:
             # From tpe article : TPE substitutes an equally-weighted mixture of that prior with Gaussians centered at each observations.
             distribution_amplitudes = np.ones(len(means))
-            # distribution_amplitudes = [hyperparam_distribution.pdf(mean) for mean in means]
 
         if use_prior:
             sorted_stds[prior_pos] = prior_sigma
@@ -231,63 +297,17 @@ class TreeParzenEstimatorHyperparameterOptimizer(BaseHyperparameterOptimizer):
 
         return sorted_distribution_amplitudes, sorted_means, sorted_stds, distributions_mins, distributions_max
 
-    def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
-        """
-        Find the next best hyperparams using previous trials.
 
-        :param auto_ml_container: trials data container
-        :type auto_ml_container: Trials
-        :return: next best hyperparams
-        :rtype: HyperparameterSamples
-        """
-        # Flatten hyperparameter space
-        flat_hyperparameter_space = auto_ml_container.hyperparameter_space.to_flat()
+def _linear_forgetting_Weights(number_samples, number_recent_trial_at_full_weights):
+    """This code has been taken from Hyperopt (https://github.com/hyperopt) code."""
+    if number_samples == 0:
+        return np.asarray([])
 
-        if auto_ml_container.trial_number < self.number_of_initial_random_step:
-            # Perform random search
-            return self.initial_auto_ml_algo.find_next_best_hyperparams(auto_ml_container)
+    if number_samples < number_recent_trial_at_full_weights:
+        return np.ones(number_samples)
 
-        # Keep only success trials
-        success_trials = auto_ml_container.trials.filter(TRIAL_STATUS.SUCCESS)
+    weights_ramp = np.linspace(1.0 / number_samples, 1.0, number_samples - number_recent_trial_at_full_weights)
+    weights_flat = np.ones(number_recent_trial_at_full_weights)
+    weights = np.concatenate((weights_ramp, weights_flat), axis=0)
 
-        # Split trials into good and bad using quantile threshold.
-        good_trials, bad_trials = self._split_trials(success_trials)
-
-        # Create gaussian mixture of good and gaussian mixture of bads.
-        good_posteriors = self._create_posterior(flat_hyperparameter_space, good_trials)
-        bad_posteriors = self._create_posterior(flat_hyperparameter_space, bad_trials)
-
-        best_hyperparams = []
-        for (hyperparam_key, good_posterior) in good_posteriors.items():
-            best_new_hyperparam_value = None
-            best_ratio = None
-            for _ in range(self.number_possible_hyperparams_candidates):
-                # Sample possible new hyperparams in the good_trials.
-                possible_new_hyperparm = good_posterior.rvs()
-
-                # Verify if we use the ratio directly or we use the loglikelihood of b_post under both distribution like hyperopt.
-                # In hyperopt they use :
-                # # calculate the log likelihood of b_post under both distributions
-                # below_llik = fn_lpdf(*([b_post] + b_post.pos_args), **b_kwargs)
-                # above_llik = fn_lpdf(*([b_post] + a_post.pos_args), **a_kwargs)
-                #
-                # # improvement = below_llik - above_llik
-                # # new_node = scope.broadcast_best(b_post, improvement)
-                # new_node = scope.broadcast_best(b_post, below_llik, above_llik)
-
-                # Verify ratio good pdf versus bad pdf for all possible new hyperparms.
-                # Used what is describe in the article which is the ratio g(x) / l(x) that we have to maximize.
-                # Only the best ratio is kept and is the new best hyperparams.
-                ratio = bad_posteriors[hyperparam_key].pdf(possible_new_hyperparm) / good_posterior.pdf(
-                    possible_new_hyperparm)
-
-                if best_new_hyperparam_value is None:
-                    best_new_hyperparam_value = possible_new_hyperparm
-                    best_ratio = ratio
-                else:
-                    if ratio > best_ratio:
-                        best_new_hyperparam_value = possible_new_hyperparm
-                        best_ratio[hyperparam_key] = ratio
-
-            best_hyperparams.append((hyperparam_key, best_new_hyperparam_value))
-        return HyperparameterSamples(best_hyperparams)
+    return weights
