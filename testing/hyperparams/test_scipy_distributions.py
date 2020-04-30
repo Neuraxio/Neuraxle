@@ -1,9 +1,11 @@
 import math
+from typing import Counter
 
+import pytest
 from scipy.stats import norm
 
 from neuraxle.hyperparams.scipy_distributions import Gaussian, Histogram, Poisson, RandInt, Uniform, LogUniform, Normal, \
-    LogNormal
+    LogNormal, Choice, PriorityChoice, get_index_in_list_with_bool
 import numpy as np
 
 NUM_TRIALS = 50
@@ -189,3 +191,49 @@ def test_lognormal():
     assert hd.cdf(0.) == 0.
     assert hd.cdf(1.) == 0.49999999998280026
     assert abs(hd.cdf(5.) - 0.8771717397015799) == 0.12282826029842009
+
+@pytest.mark.parametrize("ctor", [Choice, PriorityChoice])
+def test_choice_and_priority_choice(ctor):
+    choice_list = [0, 1, False, "Test"]
+    hd = ctor(choice_list)
+
+    samples = get_many_samples_for(hd)
+    z0 = Counter(samples).get(0)
+    z1 = Counter(samples).get(1)
+    zNone = Counter(samples).get(False)
+    zTest = Counter(samples).get("Test")
+
+    # You'd need to win the lotto for this test to fail. Or a broken random sampler. Or a bug.
+    assert z0 > NUM_TRIALS * 0.2
+    assert z1 > NUM_TRIALS * 0.2
+    assert zNone > NUM_TRIALS * 0.2
+    assert zTest > NUM_TRIALS * 0.2
+
+    assert (hd.pdf(0) - 1 / 4) < 1e-6
+    assert (hd.pdf(1) - 1 / 4) < 1e-6
+    assert (hd.pdf(False) - 1 / 4) < 1e-6
+    assert (hd.pdf("Test") - 1 / 4) < 1e-6
+    assert abs(hd.pdf(0) - 1 / 4) < 1e-6
+    assert abs(hd.pdf(1) - 1 / 4) < 1e-6
+    assert abs(hd.pdf(False) - 1 / 4) < 1e-6
+    assert abs(hd.pdf("Test") - 1 / 4) < 1e-6
+
+    assert abs(hd.cdf(0) - 1 / 4) < 1e-6
+    assert abs(hd.cdf(1) - 2 / 4) < 1e-6
+    assert abs(hd.cdf(False) - 3 / 4) < 1e-6
+    assert hd.cdf("Test") == 1.
+
+    with pytest.raises(ValueError):
+        assert hd.pdf(3) == 0.
+        assert hd.cdf(3) == 0.
+
+    assert hd.min() == 0
+    assert hd.max() == len(choice_list)
+    assert abs(hd.mean() - (len(choice_list) - 1) / 2) < 1e-6
+    assert abs(hd.var() - (len(choice_list) ** 2 - 1) / 12) < 1e-6
+    assert abs(hd.std() - math.sqrt((len(choice_list) ** 2 - 1) / 12)) < 1e-6
+    # Convert samples in sample index
+    samples_index = [get_index_in_list_with_bool(choice_list, sample) for sample in samples]
+    # Verify that hd mean and variance also correspond to mean and variance of sampling.
+    assert abs((hd.mean() - np.mean(samples_index)) / hd.mean()) < 1e-1
+    assert abs((hd.var() - np.var(samples_index)) / hd.var()) < 1e-1

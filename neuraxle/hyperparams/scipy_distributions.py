@@ -1,5 +1,6 @@
 import math
-from typing import Optional, List, Any, Union, Tuple
+from abc import abstractmethod
+from typing import Optional, List, Any
 
 import numpy as np
 from scipy.integrate import quad
@@ -26,19 +27,20 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :class:`HyperparameterDistribution`
     """
 
-    def __init__(self, scipy_distribution, null_default_value, **kwargs):
+    def __init__(self, scipy_distribution, null_default_value, is_continuous, **kwargs):
         self.kwargs = kwargs
         self.sk_learn_distribution = scipy_distribution
+        self.is_continuous = is_continuous
         HyperparameterDistribution.__init__(self, null_default_value=null_default_value)
 
     def rvs(self, *args, **kwargs) -> float:
-        return self.sk_learn_distribution.rvs(*args, **self.kwargs, **kwargs)
+        return self.sk_learn_distribution.rvs(*args, **kwargs)
 
     def pdf(self, x, *args, **kwargs) -> float:
         if hasattr(self.sk_learn_distribution, 'pdf'):
-            return self.sk_learn_distribution.pdf(x, *args, **self.kwargs, **kwargs)
+            return self.sk_learn_distribution.pdf(x, *args, **kwargs)
         else:
-            return self.sk_learn_distribution.pmf(x, *args, **self.kwargs, **kwargs)
+            return self.sk_learn_distribution.pmf(x, *args, **kwargs)
 
     def cdf(self, x, *args, **kwargs) -> float:
         """
@@ -49,7 +51,7 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param kwargs:
         :return:
         """
-        return self.sk_learn_distribution.cdf(x, *args, **self.kwargs, **kwargs)
+        return self.sk_learn_distribution.cdf(x, *args, **kwargs)
 
     def entropy(self, *args, **kwargs):
         """
@@ -57,7 +59,7 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         
         :return: 
         """
-        return self.sk_learn_distribution.entropy(*args, **self.kwargs, **kwargs)
+        return self.sk_learn_distribution.entropy(*args, **kwargs)
 
     def expect(self, *args, **kwargs):
         """
@@ -67,7 +69,7 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param kwargs:
         :return:
         """
-        return self.sk_learn_distribution.expect(*args, **self.kwargs, **kwargs)
+        return self.sk_learn_distribution.expect(*args, **kwargs)
 
     def fit(self, data, *args, **kwargs):
         """
@@ -78,7 +80,7 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param kwargs:
         :return:
         """
-        return self.sk_learn_distribution.fit(data, *args, **self.kwargs, **kwargs)
+        return self.sk_learn_distribution.fit(data, *args, **kwargs)
 
     def fit_loc_scale(self, data, *args):
         """
@@ -145,6 +147,12 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :return:
         """
         return self.sk_learn_distribution.logsf(x, *args, **kwargs)
+
+    def min(self):
+        return self.sk_learn_distribution.min()
+
+    def max(self):
+        return self.sk_learn_distribution.max()
 
     def mean(self, *args, **kwargs):
         """
@@ -239,54 +247,63 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         return self.sk_learn_distribution
 
 
+class BaseDiscreteDistribution(ScipyDistributionWrapper):
+    def __init__(self, name, min_included, max_included, null_default_value, **kwargs):
+        scipy_dist_obj = rv_discrete(
+            name=name,
+            a=min_included,
+            b=max_included,
+            **kwargs
+        )
+        scipy_dist_obj._pmf = self.pmf
+        super().__init__(
+            scipy_distribution=scipy_dist_obj,
+            null_default_value=null_default_value,
+            is_continuous=False
+        )
+
+    @abstractmethod
+    def pmf(self, x, *args):
+        pass
+
+
+class BaseContinuousDistribution(ScipyDistributionWrapper):
+    def __init__(self, name, min_included, max_included, null_default_value, **kwargs):
+        scipy_dist_obj = rv_continuous(
+            name=name,
+            a=min_included,
+            b=max_included,
+            **kwargs
+        )
+        scipy_dist_obj._pdf = self.pdf,
+        super().__init__(
+            scipy_distribution=scipy_dist_obj,
+            null_default_value=null_default_value,
+            is_continuous=True
+        )
+
+    @abstractmethod
+    def pdf(self, x, *args):
+        pass
+
+
 class RandInt(ScipyDistributionWrapper):
     """
     Rand int scipy distribution. Check out `scipy.stats.randint for more info <https://docs.scipy.org/doc/scipy-0.15.1/reference/generated/scipy.stats.randint.html>`_
     """
 
-    def __init__(self, min_included: int, max_included: int, null_default_value: float = None):
+    def __init__(self, min_included: int, max_included: int, null_default_value: float = None, **kwargs):
+        self.min_included = min_included
+        self.max_included = max_included
+
         super().__init__(
-            scipy_distribution=randint,
-            low=min_included,
-            high=max_included,
-            null_default_value=null_default_value
+            scipy_distribution=randint(low=min_included, high=max_included, **kwargs),
+            null_default_value=null_default_value,
+            is_continuous=False
         )
 
 
-class UniformScipyDistribution(rv_continuous):
-    """
-    Uniform scipy distribution. Check out `scipy.stats.rv_continuous for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
-    """
-
-    def _pdf(self, x, min_included, max_included):
-        """
-        Calculate the Uniform probability distribution value at position `x`.
-
-        :param x: value where the probability distribution function is evaluated.
-        :return: value of the probability distribution function.
-        """
-
-        if min_included == max_included and (x == min_included):
-            return 1.
-
-        if (x >= min_included) and (x <= max_included):
-            return 1 / (max_included - min_included)
-
-        # Manage case where it is outside the probability distribution function.
-        return 0.
-
-    def _argcheck(self, *args):
-        cond = 1
-        for arg in args:
-            cond = np.logical_and(
-                cond,
-                isinstance(arg, np.ndarray) and \
-                (arg.dtype == np.float or arg.dtype == np.int)
-            )
-        return cond
-
-
-class Uniform(ScipyDistributionWrapper):
+class Uniform(BaseContinuousDistribution):
     """
     Get a uniform distribution.
 
@@ -318,46 +335,32 @@ class Uniform(ScipyDistributionWrapper):
         self.min_included: float = min_included
         self.max_included: float = max_included
 
-        ScipyDistributionWrapper.__init__(
-            self,
-            scipy_distribution=UniformScipyDistribution(name='uniform', a=min_included, b=max_included),
+        super().__init__(
+            name='uniform',
             min_included=min_included,
             max_included=max_included,
             null_default_value=null_default_value
         )
 
-
-class LogUniformScipyDistribution(rv_continuous):
-    """
-    Log Uniform scipy distribution. Check out `scipy.stats.rv_continuous for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
-    """
-
-    def _pdf(self, x, log2_min_included, log2_max_included) -> float:
+    def pdf(self, x):
         """
-        Calculate the logUniform probability distribution value at position `x`.
+        Calculate the Uniform probability distribution value at position `x`.
+
         :param x: value where the probability distribution function is evaluated.
         :return: value of the probability distribution function.
         """
-        if (log2_min_included == log2_max_included) and x == 2 ** log2_min_included:
+
+        if self.min_included == self.max_included and (x == self.min_included):
             return 1.
 
-        if (x >= 2 ** log2_min_included) and (x <= 2 ** log2_max_included):
-            return 1 / (x * math.log(2) * (log2_max_included - log2_min_included))
+        if (x >= self.min_included) and (x <= self.max_included):
+            return 1 / (self.max_included - self.min_included)
 
+        # Manage case where it is outside the probability distribution function.
         return 0.
 
-    def _argcheck(self, *args):
-        cond = 1
-        for arg in args:
-            cond = np.logical_and(
-                cond,
-                isinstance(arg, np.ndarray) and \
-                (arg.dtype == np.float or arg.dtype == np.int)
-            )
-        return cond
 
-
-class LogUniform(ScipyDistributionWrapper):
+class LogUniform(BaseContinuousDistribution):
     """
     Get a LogUniform distribution.
 
@@ -391,63 +394,30 @@ class LogUniform(ScipyDistributionWrapper):
         self.log2_min_included = math.log2(min_included)
         self.log2_max_included = math.log2(max_included)
 
-        ScipyDistributionWrapper.__init__(
-            self,
-            scipy_distribution=LogUniformScipyDistribution(
-                a=self.min_included,
-                b=self.max_included,
-                name='log_uniform'
-            ),
+        super().__init__(
+            name='log_uniform',
             null_default_value=null_default_value,
-            log2_min_included=self.log2_min_included,
-            log2_max_included=self.log2_max_included,
+            min_included=self.log2_min_included,
+            max_included=self.log2_max_included
         )
 
-
-class NormalScipyDistribution(rv_continuous):
-    """
-    Normal scipy distribution. Check out `scipy.stats.rv_continuous for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
-    """
-
-    def _pdf(self, x, hard_clip_min, hard_clip_max, mean, std) -> float:
+    def pdf(self, x) -> float:
         """
-        Calculate the Normal probability distribution value at position `x`.
+        Calculate the logUniform probability distribution value at position `x`.
+
         :param x: value where the probability distribution function is evaluated.
         :return: value of the probability distribution function.
         """
+        if (self.log2_min_included == self.log2_max_included) and x == 2 ** self.log2_min_included:
+            return 1.
 
-        if hard_clip_min is not None and (x < hard_clip_min):
-            return 0.
+        if (x >= 2 ** self.log2_min_included) and (x <= 2 ** self.log2_max_included):
+            return 1 / (x * math.log(2) * (self.log2_max_included - self.log2_min_included))
 
-        if hard_clip_max is not None and (x > hard_clip_max):
-            return 0.
-
-        if hard_clip_min is not None or hard_clip_max is not None:
-            a = -np.inf
-            b = np.inf
-
-            if hard_clip_min is not None:
-                a = (hard_clip_min - mean) / std
-
-            if hard_clip_max is not None:
-                b = (hard_clip_max - mean) / std
-
-            return truncnorm.pdf(x, a=a, b=b, loc=mean, scale=std)
-
-        return norm.pdf(x, loc=mean, scale=std)
-
-    def _argcheck(self, *args):
-        cond = 1
-        for arg in args:
-            cond = np.logical_and(
-                cond,
-                isinstance(arg, np.ndarray) and \
-                (arg.dtype == np.float or arg.dtype == np.int)
-            )
-        return cond
+        return 0.
 
 
-class Normal(ScipyDistributionWrapper):
+class Normal(BaseContinuousDistribution):
     """
     LogNormal distribution that wraps a `continuous scipy distribution <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
 
@@ -487,47 +457,46 @@ class Normal(ScipyDistributionWrapper):
             null_default_value: float = None
     ):
         super().__init__(
-            scipy_distribution=NormalScipyDistribution(
-                name='normal',
-                a=hard_clip_min,
-                b=hard_clip_max
-            ),
-            mean=mean,
-            std=std,
-            hard_clip_min=hard_clip_min,
-            hard_clip_max=hard_clip_max,
+            name='normal',
+            min_included=hard_clip_min,
+            max_included=hard_clip_max,
             null_default_value=null_default_value
         )
 
+        self.hard_clip_min = hard_clip_min
+        self.hard_clip_max = hard_clip_max
+        self.mean = mean
+        self.std = std
 
-class LogNormalScipyDistribution(rv_continuous):
-    """
-    Log Normal scipy distribution. Check out `scipy.stats.rv_continuous for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
-    """
+    def pdf(self, x) -> float:
+        """
+        Calculate the Normal probability distribution value at position `x`.
+        :param x: value where the probability distribution function is evaluated.
+        :return: value of the probability distribution function.
+        """
 
-    def _pdf(self, x, log2_space_mean, log2_space_std):
-        if x <= 0:
+        if self.hard_clip_min is not None and (x < self.hard_clip_min):
             return 0.
 
-        cdf_min = 0.
-        cdf_max = 1.
+        if self.hard_clip_max is not None and (x > self.hard_clip_max):
+            return 0.
 
-        pdf_x = 1 / (x * math.log(2) * log2_space_std * math.sqrt(2 * math.pi)) * math.exp(
-            -(math.log2(x) - log2_space_mean) ** 2 / (2 * log2_space_std ** 2))
-        return pdf_x / (cdf_max - cdf_min)
+        if self.hard_clip_min is not None or self.hard_clip_max is not None:
+            a = -np.inf
+            b = np.inf
 
-    def _argcheck(self, *args):
-        cond = 1
-        for arg in args:
-            cond = np.logical_and(
-                cond,
-                isinstance(arg, np.ndarray) and \
-                (arg.dtype == np.float or arg.dtype == np.int or arg == np.array(None))
-            )
-        return cond
+            if self.hard_clip_min is not None:
+                a = (self.hard_clip_min - self.mean) / self.std
+
+            if self.hard_clip_max is not None:
+                b = (self.hard_clip_max - self.mean) / self.std
+
+            return truncnorm.pdf(x, a=a, b=b, loc=self.mean, scale=self.std)
+
+        return norm.pdf(x, loc=self.mean, scale=self.std)
 
 
-class LogNormal(ScipyDistributionWrapper):
+class LogNormal(BaseContinuousDistribution):
     """
     Get a normal distribution.
 
@@ -572,28 +541,31 @@ class LogNormal(ScipyDistributionWrapper):
         if hard_clip_max is None:
             hard_clip_max = np.nan
 
+        self.log2_space_mean = log2_space_mean
+        self.log2_space_std = log2_space_std
+
         super().__init__(
-            scipy_distribution=LogNormalScipyDistribution(
-                name='log_normal',
-                a=hard_clip_min,
-                b=hard_clip_max
-            ),
-            null_default_value=null_default_value,
+            name='log_normal',
+            min_included=hard_clip_min,
+            max_included=hard_clip_max,
             log2_space_mean=log2_space_mean,
-            log2_space_std=log2_space_std
+            log2_space_std=log2_space_std,
+            null_default_value=null_default_value
         )
 
+    def pdf(self, x):
+        if x <= 0:
+            return 0.
 
-class GaussianScipyDistribution(rv_continuous):
-    """
-    Gaussian scipy distribution. Check out `scipy.stats.rv_continuous for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
-    """
+        cdf_min = 0.
+        cdf_max = 1.
 
-    def _pdf(self, x):
-        return math.exp(-x ** 2 / 2.) / np.sqrt(2.0 * np.pi)
+        pdf_x = 1 / (x * math.log(2) * self.log2_space_std * math.sqrt(2 * math.pi)) * math.exp(
+            -(math.log2(x) - self.log2_space_mean) ** 2 / (2 * self.log2_space_std ** 2))
+        return pdf_x / (cdf_max - cdf_min)
 
 
-class Gaussian(ScipyDistributionWrapper):
+class Gaussian(BaseContinuousDistribution):
     """
     Gaussian distribution that inherits from `scipy.stats.rv_continuous <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
 
@@ -625,27 +597,22 @@ class Gaussian(ScipyDistributionWrapper):
     """
 
     def __init__(self, min_included: int, max_included: int, null_default_value: float = None):
-        ScipyDistributionWrapper.__init__(
+        self.max_included = max_included
+        self.min_included = min_included
+
+        BaseContinuousDistribution.__init__(
             self,
-            scipy_distribution=GaussianScipyDistribution(
-                name='gaussian',
-                a=min_included,
-                b=max_included
-            ),
+            name='gaussian',
+            min_included=min_included,
+            max_included=max_included,
             null_default_value=null_default_value
         )
 
-
-class PoissonScipyDistribution(rv_discrete):
-    """
-    Poisson scipy distribution. Check out `scipy.stats.rv_discrete for more info <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_discrete.html#scipy.stats.rv_discrete>`_
-    """
-
-    def _pmf(self, k, mu):
-        return math.exp(-mu) * mu ** k / factorial(k)
+    def pdf(self, x):
+        return math.exp(-x ** 2 / 2.) / np.sqrt(2.0 * np.pi)
 
 
-class Poisson(ScipyDistributionWrapper):
+class Poisson(BaseDiscreteDistribution):
     """
     Poisson distribution that inherits from `scipy.stats.rv_discrete <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_histogram.html#scipy.stats.rv_histogram>`_
 
@@ -681,16 +648,15 @@ class Poisson(ScipyDistributionWrapper):
 
     def __init__(self, min_included: float, max_included: float, null_default_value: float = None, mu=0.6):
         super().__init__(
-            scipy_distribution=PoissonScipyDistribution(
-                a=min_included,
-                b=max_included,
-                name='poisson'
-            ),
-            null_default_value=null_default_value,
-            mu=mu
+            min_included=min_included,
+            max_included=max_included,
+            name='poisson',
+            null_default_value=null_default_value
         )
-
         self.mu = mu
+
+    def pmf(self, x):
+        return math.exp(-self.mu) * self.mu ** x / factorial(x)
 
 
 class Histogram(ScipyDistributionWrapper):
@@ -730,18 +696,12 @@ class Histogram(ScipyDistributionWrapper):
         ScipyDistributionWrapper.__init__(
             self,
             scipy_distribution=rv_histogram(histogram=histogram, **kwargs),
-            null_default_value=null_default_value
+            null_default_value=null_default_value,
+            is_continuous=True
         )
 
 
-class FixedScipyDistribution(rv_continuous):
-    def _pdf(self, x, value):
-        if x == value:
-            return 1.
-        return 0.
-
-
-class FixedHyperparameter(ScipyDistributionWrapper):
+class FixedHyperparameter(BaseDiscreteDistribution):
     """This is an hyperparameter that won't change again, but that is still expressed as a distribution."""
 
     def __init__(self, value, null_default_value=None):
@@ -751,31 +711,21 @@ class FixedHyperparameter(ScipyDistributionWrapper):
         :param value: what will be returned by calling ``.rvs()``.
         """
         self.value = value
-        ScipyDistributionWrapper.__init__(
-            self,
-            scipy_distribution=FixedScipyDistribution(),
-            value=value,
+
+        super().__init__(
+            name='fixed',
+            min_included=value,
+            max_included=value,
             null_default_value=null_default_value
         )
 
-
-class BooleanScipyDistribution(rv_continuous):
-    def _pdf(self, x, proba_is_true):
-        """
-        Calculate the boolean probability mass function value at position `x`.
-        :param x: value where the probability mass function is evaluated.
-        :return: value of the probability mass function.
-        """
-        if (x is True) or (x == 1):
-            return proba_is_true
-
-        if (x is False) or (x == 0):
-            return 1 - proba_is_true
-
+    def _pdf(self, x):
+        if x == self.value:
+            return 1.
         return 0.
 
 
-class Boolean(ScipyDistributionWrapper):
+class Boolean(BaseDiscreteDistribution):
     """Get a random boolean hyperparameter."""
 
     def __init__(self, proba_is_true: Optional[float] = None, null_default_value=False):
@@ -797,50 +747,25 @@ class Boolean(ScipyDistributionWrapper):
             raise ValueError("Probability must be between 0 and 1 (inclusively).")
 
         self.proba_is_true = proba_is_true
-        ScipyDistributionWrapper.__init__(
-            self,
-            BooleanScipyDistribution(),
-            null_default_value=null_default_value,
-            proba_is_true=proba_is_true
+
+        super().__init__(
+            name='boolean',
+            min_included=0,
+            max_included=1,
+            null_default_value=null_default_value
         )
 
-
-class ChoiceScipyDistribution(rv_discrete):
-    def _pmf(self, x, choice_list, probas):
+    def pmf(self, x):
         """
-        Calculate the choice probability mass function value at position `x`.
+        Calculate the boolean probability mass function value at position `x`.
         :param x: value where the probability mass function is evaluated.
         :return: value of the probability mass function.
         """
-        try:
-            x_in_choice = x in choice_list
-        except (TypeError, ValueError, AttributeError):
-            raise ValueError(
-                "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
-        else:
-            if x_in_choice:
-                index = get_index_in_list_with_bool(choice_list, x)
-                return probas[index]
+        if (x is True) or (x == 1):
+            return self.proba_is_true
 
-        return 0.
-
-
-class PriorityChoiceScipyDistribution(rv_discrete):
-    def _pmf(self, x, choice_list, probas):
-        """
-        Calculate the choice probability mass function value at position `x`.
-        :param x: value where the probability mass function is evaluated.
-        :return: value of the probability mass function.
-        """
-        try:
-            x_in_choice = x in choice_list
-        except (TypeError, ValueError, AttributeError):
-            raise ValueError(
-                "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
-        else:
-            if x_in_choice:
-                index = get_index_in_list_with_bool(choice_list, x)
-                return probas[index]
+        if (x is False) or (x == 0):
+            return 1 - self.proba_is_true
 
         return 0.
 
@@ -858,7 +783,7 @@ def get_index_in_list_with_bool(choice_list: List[Any], value: Any) -> int:
     raise ValueError("{} is not in list".format(value))
 
 
-class Choice(ScipyDistributionWrapper):
+class Choice(BaseDiscreteDistribution):
     """Get a random value from a choice list of possible value for this hyperparameter.
 
     When narrowed, the choice will only collapse to a single element when narrowed enough.
@@ -884,27 +809,45 @@ class Choice(ScipyDistributionWrapper):
         self.probas = np.array(probas) / np.sum(probas)
 
         if null_default_value is None:
-            ScipyDistributionWrapper.__init__(
-                self,
-                scipy_distribution=ChoiceScipyDistribution(),
-                choice_list=choice_list,
-                probas=probas,
-                null_default_value=choice_list[0]
-            )
+            null_default_value = choice_list[0]
         elif null_default_value in choice_list:
-            ScipyDistributionWrapper.__init__(
-                self,
-                scipy_distribution=ChoiceScipyDistribution(),
-                choice_list=choice_list,
-                probas=probas,
-                null_default_value=null_default_value
-            )
+            null_default_value = null_default_value
         else:
             raise ValueError(
                 'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
 
+        super().__init__(
+            name='choise',
+            min_included=0,
+            max_included=len(choice_list) - 1,
+            null_default_value=null_default_value
+        )
 
-class PriorityChoice(ScipyDistributionWrapper):
+    def rvs(self, *args, **kwargs):
+        sample_choice_index = super().rvs(*args, **kwargs)
+        return self.choice_list[int(sample_choice_index)]
+
+    def pmf(self, x):
+        """
+        Calculate the choice probability mass function value at position `x`.
+
+        :param x: value where the probability mass function is evaluated.
+        :return: value of the probability mass function.
+        """
+        try:
+            x_in_choice = x in self.choice_list
+        except (TypeError, ValueError, AttributeError):
+            raise ValueError(
+                "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
+        else:
+            if x_in_choice:
+                index = get_index_in_list_with_bool(self.choice_list, x)
+                return self.probas[index]
+
+        return 0.
+
+
+class PriorityChoice(BaseDiscreteDistribution):
     """Get a random value from a choice list of possible value for this hyperparameter.
 
     The first parameters are kept until the end when the list is narrowed (it is narrowed progressively),
@@ -923,35 +866,87 @@ class PriorityChoice(ScipyDistributionWrapper):
         """
         self.choice_list = choice_list
 
-        # Normalize probas juste in case sum is not equal to one.
-        self.probas = np.array(probas) / np.sum(probas)
-
         if probas is None:
             probas = [1 / len(self.choice_list) for _ in self.choice_list]
 
+        # Normalize probas juste in case sum is not equal to one.
+        self.probas = np.array(probas) / np.sum(probas)
+
         if null_default_value is None:
-            ScipyDistributionWrapper.__init__(
-                self,
-                scipy_distribution=PriorityChoiceScipyDistribution(),
-                probas=probas,
-                choice_list=choice_list,
-                null_default_value=choice_list[0]
-            )
+            null_default_value = choice_list[0]
+
         elif null_default_value in choice_list:
-            ScipyDistributionWrapper.__init__(
-                self,
-                scipy_distribution=PriorityChoiceScipyDistribution(),
-                probas=probas,
-                choice_list=choice_list,
-                null_default_value=null_default_value
-            )
+            null_default_value = null_default_value
         else:
             raise ValueError(
                 'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
 
+        BaseDiscreteDistribution.__init__(
+            self,
+            min_included=0,
+            max_included=len(self) - 1,
+            name='priority_choice',
+            null_default_value=null_default_value
+        )
 
-class QuantizedScipyDistribution(rv_continuous):
-    def _pdf(self, x, hd):
+    def rvs(self, *args, **kwargs):
+        sample_choice_index = super().rvs(*args, **kwargs)
+        return self.choice_list[int(sample_choice_index)]
+
+    def pmf(self, x):
+        """
+        Calculate the choice probability mass function value at position `x`.
+        :param x: value where the probability mass function is evaluated.
+        :return: value of the probability mass function.
+        """
+        try:
+            x_in_choice = x in self.choice_list
+        except (TypeError, ValueError, AttributeError):
+            raise ValueError(
+                "Item not find in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list."
+            )
+        else:
+            if x_in_choice:
+                index = get_index_in_list_with_bool(self.choice_list, x)
+                return self.probas[index]
+
+        return 0.
+
+
+class Quantized(WrappedHyperparameterDistributions, BaseContinuousDistribution):
+    """A quantized wrapper for another distribution: will round() the rvs number."""
+
+    def __init__(self, hd: HyperparameterDistribution = None, hds: List[HyperparameterDistribution] = None,
+                 null_default_value=None):
+        WrappedHyperparameterDistributions.__init__(
+            self,
+            hd=hd,
+            hds=hds,
+            null_default_value=null_default_value
+        )
+
+        hd_min = self.hd.min()
+        if np.isneginf(hd_min):
+            min_included = hd_min
+        else:
+            min_included = round(hd_min)
+
+        hd_max = self.hd.max()
+        if np.isposinf(hd_max):
+            max_included = hd_max
+        else:
+            max_included = round(hd_max)
+
+        BaseContinuousDistribution.__init__(
+            self,
+            name='quantized',
+            min_included=min_included,
+            max_included=max_included,
+            null_default_value=self.null_default_value,
+            is_continuous=True
+        )
+
+    def pdf(self, x):
         """
         Calculate the Quantized probability mass function value at position `x` of a continuous distribution.
         :param x: value where the probability mass function is evaluated.
@@ -960,118 +955,5 @@ class QuantizedScipyDistribution(rv_continuous):
         # In order to calculate the pdf for any quantized distribution,
         # we have to perform the integral from x-0.5 to x+0.5 (because of round).
         if isinstance(x, int) or (isinstance(x, float) and x.is_integer()):
-            return quad(hd.pdf, x - 0.5, x + 0.5)[0]
+            return quad(self.hd.pdf, x - 0.5, x + 0.5)[0]
         return 0.
-
-
-class Quantized(WrappedHyperparameterDistributions, ScipyDistributionWrapper):
-    """A quantized wrapper for another distribution: will round() the rvs number."""
-
-    def __init__(self, hd: HyperparameterDistribution = None, hds: List[HyperparameterDistribution] = None, null_default_value = None):
-        WrappedHyperparameterDistributions.__init__(self, hd=hd, hds=hds, null_default_value=null_default_value)
-        ScipyDistributionWrapper.__init__(
-            self,
-            scipy_distribution=QuantizedScipyDistribution(),
-            hd=self.hd,
-            null_default_value=self.null_default_value
-        )
-
-
-class DistributionMixtureScipyDistribution(rv_continuous):
-    def _pdf(self, x, distributions, distribution_amplitudes):
-        """
-        Calculate the mixture probability distribution value at position `x`.
-
-        :param x: value where the probability distribution function is evaluated.
-        :return: value of the probability distribution function.
-        """
-        pdf_result = 0
-
-        for distribution_amplitude, distribution in zip(distribution_amplitudes, distributions):
-            pdf_result += (distribution_amplitude * distribution.pdf(x))
-
-        return pdf_result
-
-
-class DistributionMixture(ScipyDistributionWrapper):
-    """Get a mixture of multiple distribution"""
-
-    def __init__(
-            self,
-            distributions: Union[List[HyperparameterDistribution], Tuple[HyperparameterDistribution, ...]],
-            distribution_amplitudes: Union[List[float], Tuple[float, ...]]
-    ):
-        """
-        Create a mixture of multiple distributions.
-
-        Distribution amplitude are normalized to make sure that the sum equals one.
-        This normalization ensure to keep a random variable at the end (0 < probability < 1).
-
-        :param distributions: list of multiple instantiated distribution.
-        :param distribution_amplitudes: list of float representing the amplitude in the probability distribution function for each distribution.
-        """
-        # Normalize distribution amplitude
-        distribution_amplitudes = np.array(distribution_amplitudes)
-        distribution_amplitudes = distribution_amplitudes / np.sum(distribution_amplitudes)
-        self.distributions = distributions
-        self.distribution_amplitudes = distribution_amplitudes
-
-        ScipyDistributionWrapper.__init__(
-            self,
-            scipy_distribution=DistributionMixtureScipyDistribution(),
-            distributions=distributions,
-            distribution_amplitudes=distribution_amplitudes,
-            null_default_value=None
-        )
-
-    @staticmethod
-    def build_gaussian_mixture(
-            distribution_amplitudes: Union[List[float], Tuple[float, ...]],
-            means: Union[List[float], Tuple[float, ...]],
-            stds: Union[List[float], Tuple[float, ...]],
-            distributions_mins: Union[List[float], Tuple[float, ...]],
-            distributions_max: Union[List[float], Tuple[float, ...]],
-            use_logs: bool = False,
-            use_quantized_distributions: bool = False
-    ):
-        """
-        Create a gaussian mixture.
-
-         Will create a mixture distribution which consist of multiple gaussians of different amplitudes, means, standard deviations, mins and max.
-
-        :param distribution_amplitudes: list of different amplitudes to infer to the mixture. The amplitudes are normalized to sum to 1.
-        :param means: list of means to infer mean to each gaussian.
-        :param stds: list of standard deviations to infer standard deviation to each gaussian.
-        :param distributions_mins: list of minimum value that will clip each gaussian. If it is -Inf or None, it will not be clipped.
-        :param distributions_max: list of maximal value that will clip each gaussian. If it is +Inf or None, it will not be clipped.
-        :param distributions_max: bool weither to use a quantized version or not.
-        :param use_logs:
-        :param use_quantized_distributions:
-
-        :return DistributionMixture instance
-        """
-
-        distribution_class = Normal
-
-        if use_logs:
-            distribution_class = LogNormal
-
-        distributions = []
-
-        for mean, std, single_min, single_max in zip(means, stds, distributions_mins, distributions_max):
-
-            if single_min is None or np.isneginf(single_min):
-                single_min = None
-
-            if single_max is None or np.isposinf(single_max):
-                single_max = None
-
-            distribution_instance = distribution_class(mean, std, hard_clip_min=single_min, hard_clip_max=single_max)
-
-            if use_quantized_distributions:
-                distribution_instance = Quantized(distribution_instance)
-
-            distributions.append(distribution_instance)
-
-        return DistributionMixture(distributions, distribution_amplitudes)
-
