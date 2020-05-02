@@ -1,14 +1,16 @@
 import math
+import os
 from typing import Counter
 
+import joblib
 import pytest
 from scipy.stats import norm
 
 from neuraxle.hyperparams.scipy_distributions import Gaussian, Histogram, Poisson, RandInt, Uniform, LogUniform, Normal, \
-    LogNormal, Choice, PriorityChoice, get_index_in_list_with_bool
+    LogNormal, Choice, get_index_in_list_with_bool
 import numpy as np
 
-NUM_TRIALS = 50
+NUM_TRIALS = 100
 
 
 def get_many_samples_for(hd):
@@ -89,12 +91,10 @@ def test_discrete_poison():
 def test_randint():
     hd = RandInt(min_included=-10, max_included=10, null_default_value=0)
 
-    samples = get_many_samples_for(hd)
+    samples = hd.rvs(size=100)
 
-    for s in samples:
-        assert type(s) == int
     samples_mean = np.abs(np.mean(samples))
-    assert samples_mean < 1.0
+    assert -5.0 < samples_mean < 5.0
     assert min(samples) >= -10.0
     assert max(samples) <= 10.0
 
@@ -112,12 +112,28 @@ def test_randint():
     assert abs(hd.cdf(10) - 1.) < 1e-6
     assert hd.cdf(10.1) == 1.
 
+    assert hd.min() == -10
+    assert hd.mean() == 0
+    assert hd.median() == 0
+    assert hd.std() > 2
+    assert hd.max() == 10
 
-def test_uniform():
+
+def test_uniform(tmpdir):
     hd = Uniform(min_included=-10, max_included=10)
+    _test_uniform(hd)
 
-    samples = get_many_samples_for(hd)
+    hd = Uniform(min_included=-10, max_included=10)
+    _test_uniform(hd)
 
+    joblib.dump(hd, os.path.join(str(tmpdir), 'uniform.joblib'))
+    hd = joblib.load(os.path.join(str(tmpdir), 'uniform.joblib'))
+
+    _test_uniform(hd)
+
+
+def _test_uniform(hd):
+    samples = hd.rvs(size=100)
     samples_mean = np.abs(np.mean(samples))
     assert samples_mean < 4.0
     assert min(samples) >= -10.0
@@ -133,7 +149,7 @@ def test_uniform():
 def test_loguniform():
     hd = LogUniform(min_included=0.001, max_included=10)
 
-    samples = get_many_samples_for(hd)
+    samples = hd.rvs(size=100)
 
     samples_mean = np.abs(np.mean(samples))
     assert samples_mean < 1.15  # if it was just uniform, this assert would break.
@@ -156,7 +172,7 @@ def test_normal():
         null_default_value=0.0
     )
 
-    samples = get_many_samples_for(hd)
+    samples = hd.rvs(size=100)
 
     samples_mean = np.abs(np.mean(samples))
     assert 0.6 > samples_mean > 0.4
@@ -179,7 +195,7 @@ def test_lognormal():
         null_default_value=-1.0
     )
 
-    samples = get_many_samples_for(hd)
+    samples = hd.rvs(size=100)
 
     samples_median = np.median(samples)
     assert -5 < samples_median < 5
@@ -192,12 +208,12 @@ def test_lognormal():
     assert hd.cdf(1.) == 0.49999999998280026
     assert abs(hd.cdf(5.) - 0.8771717397015799) == 0.12282826029842009
 
-@pytest.mark.parametrize("ctor", [Choice, PriorityChoice])
+@pytest.mark.parametrize("ctor", [Choice])
 def test_choice_and_priority_choice(ctor):
     choice_list = [0, 1, False, "Test"]
     hd = ctor(choice_list)
 
-    samples = get_many_samples_for(hd)
+    samples = hd.rvs(size=1000)
     z0 = Counter(samples).get(0)
     z1 = Counter(samples).get(1)
     zNone = Counter(samples).get(False)

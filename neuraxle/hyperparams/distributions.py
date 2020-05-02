@@ -418,6 +418,7 @@ class Choice(HyperparameterDistribution):
         rvs_index = np.random.choice(choice_index, p=self.probas)
         return self.choice_list[rvs_index]
 
+
     def pdf(self, x) -> float:
         """
         Calculate the choice probability mass function value at position `x`.
