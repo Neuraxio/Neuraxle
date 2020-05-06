@@ -297,7 +297,7 @@ def test_pipeline_tosklearn():
             "b__learning_rate": 9
         }
     })
-    assert the_step.get_hyperparams()["learning_rate"] == 7
+    assert p.get_hyperparams()['b__a__z__learning_rate'] == 7
 
     p = p.tosklearn()
     p = sklearn.pipeline.Pipeline([('sk', p)])

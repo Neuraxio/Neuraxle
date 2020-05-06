@@ -78,16 +78,11 @@ class SKLearnWrapper(BaseStep):
             return self.wrapped_sklearn_predictor.predict(data_inputs)
         return self.wrapped_sklearn_predictor.transform(data_inputs)
 
-    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
-        BaseStep.set_hyperparams(self, hyperparams)
-
-        # this should work
-        flat_hyperparams = {
-            '__'.join(key.split('__')[1:]): value for key, value in HyperparameterSamples(hyperparams).to_flat().items()
-        }
-
-        flat_hyperparams = HyperparameterSamples(flat_hyperparams).to_flat()
-        self.wrapped_sklearn_predictor.set_params(**HyperparameterSamples(flat_hyperparams).to_flat_as_dict_primitive())
+    def _set_hyperparams(self, hyperparams: HyperparameterSamples, root=False) -> BaseStep:
+        BaseStep._set_hyperparams(self, hyperparams)
+        step_hyperparams, remainders = BaseStep._create_recursive_step_values_and_remainders(self, hyperparams, root)
+        self.wrapped_sklearn_predictor.set_params(**HyperparameterSamples(step_hyperparams).to_flat_as_dict_primitive())
+        self.wrapped_sklearn_predictor.set_params(**HyperparameterSamples(HyperparameterSamples(remainders).to_flat()).to_flat_as_dict_primitive())
         return self
 
     def get_hyperparams(self):
