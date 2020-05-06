@@ -737,14 +737,18 @@ class BaseStep(ABC):
         .. seealso::
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
+        self._set_hyperparams(hyperparams=hyperparams, root=True)
+        return self
+
+    def _set_hyperparams(self, hyperparams: HyperparameterSamples, root=False) -> 'BaseStep':
         self.invalidate()
 
         hyperparams = HyperparameterSamples(hyperparams).to_flat()
 
-        step_hyperparams, remainders = self._create_recursive_step_values_and_remainders(hyperparams)
+        step_hyperparams, remainders = self._create_recursive_step_values_and_remainders(hyperparams, root)
         self.hyperparams = HyperparameterSamples(step_hyperparams) if len(step_hyperparams) > 0 else self.hyperparams
 
-        self.apply(method_name='set_hyperparams', hyperparams=remainders, children_only=True)
+        self.apply(method_name='_set_hyperparams', hyperparams=remainders, children_only=True)
 
         return self
 
@@ -776,16 +780,20 @@ class BaseStep(ABC):
             :func:`~BaseStep.update_hyperparams`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
+        self._update_hyperparams(hyperparams=hyperparams, root=True)
+        return self
+
+    def _update_hyperparams(self, hyperparams: HyperparameterSamples, root=False) -> 'BaseStep':
         hyperparams = HyperparameterSamples(hyperparams).to_flat()
 
-        step_hyperparams, remainders = self._create_recursive_step_values_and_remainders(hyperparams)
+        step_hyperparams, remainders = self._create_recursive_step_values_and_remainders(hyperparams, root)
         self.hyperparams.update(step_hyperparams)
 
-        self.apply(method_name='update_hyperparams', hyperparams=remainders, children_only=True)
+        self.apply(method_name='_update_hyperparams', hyperparams=remainders, children_only=True)
 
         return self
 
-    def _create_recursive_step_values_and_remainders(self, hyperparams):
+    def _create_recursive_step_values_and_remainders(self, hyperparams, root=False):
         remainders = dict()
         step_values_dict = dict()
 
@@ -797,7 +805,7 @@ class BaseStep(ABC):
                     step_values_dict[name_split[-1]] = hparams
                 elif name_split[0] == self.name:
                     remainders[RECURSIVE_STEP_SEPARATOR.join(name_split[1:])] = hparams
-                else:
+                elif root:
                     remainders[name] = hparams
 
             else:
@@ -882,13 +890,17 @@ class BaseStep(ABC):
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
             :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
         """
+        self._set_hyperparams_space(hyperparams_space=hyperparams_space, root=True)
+        return self
+
+    def _set_hyperparams_space(self, hyperparams_space: HyperparameterSpace, root=False) -> 'BaseStep':
         self.invalidate()
         hyperparams_space = HyperparameterSamples(hyperparams_space).to_flat()
 
-        step_hyperparams_space, remainders = self._create_recursive_step_values_and_remainders(hyperparams_space)
+        step_hyperparams_space, remainders = self._create_recursive_step_values_and_remainders(hyperparams_space, root)
         self.hyperparams_space = HyperparameterSpace(step_hyperparams_space) if len(step_hyperparams_space) > 0 else self.hyperparams_space
 
-        self.apply(method_name='set_hyperparams_space', hyperparams_space=remainders, children_only=True)
+        self.apply(method_name='_set_hyperparams_space', hyperparams_space=remainders, children_only=True)
 
         return self
 
@@ -920,12 +932,16 @@ class BaseStep(ABC):
             :func:`~BaseStep.update_hyperparams`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
+        self._update_hyperparams_space(hyperparams_space=hyperparams_space, root=True)
+        return self
+
+    def _update_hyperparams_space(self, hyperparams_space: HyperparameterSpace, root=False) -> 'BaseStep':
         hyperparams_space = HyperparameterSamples(hyperparams_space).to_flat()
 
-        step_hyperparams_space, remainders = self._create_recursive_step_values_and_remainders(hyperparams_space)
+        step_hyperparams_space, remainders = self._create_recursive_step_values_and_remainders(hyperparams_space, root)
         self.hyperparams_space.update(HyperparameterSpace(step_hyperparams_space).to_flat())
 
-        self.apply(method_name='update_hyperparams_space', hyperparams_space=remainders, children_only=True)
+        self.apply(method_name='_update_hyperparams_space', hyperparams_space=remainders, children_only=True)
 
         return self
 
