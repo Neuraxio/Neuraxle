@@ -271,6 +271,7 @@ class Distribution(rv_continuous):
     def _pdf(self, x):
         return 0.0
 
+
 class BaseContinuousDistribution(ScipyDistributionWrapper):
     def __init__(self, name, min_included, max_included, null_default_value, **kwargs):
         scipy_distribution = Distribution(
@@ -320,7 +321,6 @@ class RandInt(ScipyDistributionWrapper):
 
     def max(self):
         return self.max_included
-
 
 
 class Uniform(BaseContinuousDistribution):
@@ -835,7 +835,7 @@ class Choice(BaseDiscreteDistribution):
                 'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
 
         super().__init__(
-            name='choise',
+            name='choice',
             min_included=0,
             max_included=len(choice_list) - 1,
             null_default_value=null_default_value
@@ -848,7 +848,53 @@ class Choice(BaseDiscreteDistribution):
         return self.choice_list[int(sample_choice_index)]
 
     def pdf(self, x, *args, **kwargs):
-        return self.sk_learn_distribution.pmf(self.choice_list.index(x), *args, **kwargs, **self.scipy_distribution_arguments)
+        choice_index = [str(choice) for choice in self.choice_list].index(str(x))
+        return self.sk_learn_distribution.pmf(choice_index, *args, **kwargs, **self.scipy_distribution_arguments)
+
+    def cdf(self, x, *args, **kwargs):
+        try:
+            index = [str(choice) for choice in self.choice_list].index(str(x))
+        except ValueError:
+            raise ValueError(
+                "Item not found in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
+        except (NotImplementedError, NotImplemented):
+            raise ValueError("A correct method for __eq__ should be defined for all item in the list.")
+        except AttributeError:
+            raise ValueError("choice_list param should be a list.")
+        else:
+            probas = np.array(self.probas)
+            return np.sum(probas[0:index + 1])
+
+    def mean(self):
+        """
+        Calculate mean value (also called esperance) of the random variable.
+        :return: mean value of the random variable.
+        """
+        choice_index = np.arange(0, len(self), 1)
+        probas = np.array(self.probas)
+        mean = np.sum(choice_index * probas)
+        return mean
+
+    def var(self):
+        """
+        Calculate variance value of the random variable.
+        :return: variance value of the random variable.
+        """
+        choice_index = np.arange(0, len(self), 1)
+        probas = np.array(self.probas)
+        mean = np.sum(choice_index * probas)
+        second_moment = np.sum(choice_index ** 2 * probas)
+        var = second_moment - mean ** 2
+        return var
+
+    def min(self):
+        return 0
+
+    def max(self):
+        return len(self.choice_list) - 1
+
+    def std(self):
+        return np.std([i for i, _ in enumerate(self.choice_list)])
 
     def pmf(self, x):
         """
@@ -857,14 +903,13 @@ class Choice(BaseDiscreteDistribution):
         :param x: value where the probability mass function is evaluated.
         :return: value of the probability mass function.
         """
-        if len(self.choice_list) -1 >= x[-1] >= 0:
+        if len(self.choice_list) - 1 >= x[-1] >= 0:
             return sum([self.probas[int(i)] for i in x])
         else:
             return 0.
 
     def __len__(self):
         return len(self.choice_list)
-
 
 
 class Quantized(WrappedHyperparameterDistributions, BaseContinuousDistribution):

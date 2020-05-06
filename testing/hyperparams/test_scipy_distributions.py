@@ -245,7 +245,7 @@ def test_choice_and_priority_choice(ctor):
         assert hd.cdf(3) == 0.
 
     assert hd.min() == 0
-    assert hd.max() == len(choice_list)
+    assert hd.max() == len(choice_list) - 1
     assert abs(hd.mean() - (len(choice_list) - 1) / 2) < 1e-6
     assert abs(hd.var() - (len(choice_list) ** 2 - 1) / 12) < 1e-6
     assert abs(hd.std() - math.sqrt((len(choice_list) ** 2 - 1) / 12)) < 1e-6
