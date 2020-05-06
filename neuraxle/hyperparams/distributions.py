@@ -309,7 +309,7 @@ class Boolean(HyperparameterDistribution):
 
         :return: True or False (random).
         """
-        return np.random.choice([False, True], p=[1 - self.proba_is_true, self.proba_is_true])
+        return bool(np.random.choice([False, True], p=[1 - self.proba_is_true, self.proba_is_true]))
 
     def pdf(self, x) -> float:
         """
