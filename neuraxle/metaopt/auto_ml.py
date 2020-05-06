@@ -322,6 +322,8 @@ class HyperparamsJSONRepository(HyperparamsRepository):
                 try:
                     trial_json = json.load(f)
                 except Exception as err:
+                    print('invalid trial json file'.format(base_path))
+                    print(traceback.format_exc())
                     continue
 
             if status is None or trial_json['status'] == status.value:
