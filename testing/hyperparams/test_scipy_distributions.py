@@ -1,6 +1,6 @@
 import math
 import os
-from typing import Counter
+from collections import Counter
 
 import joblib
 import pytest
@@ -207,6 +207,7 @@ def test_lognormal():
     assert hd.cdf(0.) == 0.
     assert hd.cdf(1.) == 0.49999999998280026
     assert abs(hd.cdf(5.) - 0.8771717397015799) == 0.12282826029842009
+
 
 @pytest.mark.parametrize("ctor", [Choice])
 def test_choice_and_priority_choice(ctor):
