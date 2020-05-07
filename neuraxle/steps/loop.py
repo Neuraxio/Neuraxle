@@ -28,7 +28,7 @@ from typing import List, Callable, Dict, Iterable, Union
 import numpy as np
 
 from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, \
-    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList
+    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, StepWithChildrenMixin
 from neuraxle.data_container import ListDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
@@ -157,41 +157,16 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         self.steps_as_tuple: List[NamedTupleList] = []
         self.copy_op = copy_op
 
-    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
+    def get_children(self) -> List[BaseStep]:
         """
-        Apply a method to all of the cloned steps.
+        Get the list of all the children for that step.
 
-        :param method_name: method name that need to be called on all steps
-        :param step_name: current pipeline step name
-        :param kargs: any additional arguments to be passed to the method
-        :param kwargs: any additional positional arguments to be passed to the method
-        :return: accumulated results
+        :return: list of children
         """
-        results = MetaStepMixin.apply(self, method_name=method_name, step_name=step_name, *kargs, **kwargs)
-        if len(self) > 0:
-            for _, step in self:
-                results.update(step.apply(method_name=method_name, step_name=step_name, *kargs, **kwargs))
-        return results
-
-    def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Union[Dict, Iterable]:
-        """
-        Apply method to the meta step and its wrapped step.
-
-        :param method: method to call with self
-        :param step_name: step name to apply the method to
-        :param kargs: any additional arguments to be passed to the method
-        :param kwargs: any additional positional arguments to be passed to the method
-        :return: accumulated results
-        """
-        # apply method on wrapped step before cloned steps.
-        results = MetaStepMixin.apply_method(self, method=method, step_name=step_name, *kargs, **kwargs)
-
-        # apply method on cloned steps
-        if len(self) > 0:
-            for _, step in self:
-                results.update(step.apply_method(method=method, step_name=step_name, *kargs, **kwargs))
-
-        return results
+        children: List[BaseStep] = MetaStepMixin.get_children(self)
+        cloned_children = self.steps_as_tuple
+        children.extend(cloned_children)
+        return children
 
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         data_container, context = BaseStep._will_process(self, data_container, context)

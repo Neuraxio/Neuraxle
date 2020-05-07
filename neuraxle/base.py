@@ -1645,7 +1645,124 @@ def _sklearn_to_neuraxle_step(step) -> BaseStep:
     return step
 
 
-class MetaStepMixin:
+class StepWithChildrenMixin:
+    """
+    Mixin to add behavior to the steps that have children (sub steps).
+
+    .. seealso::
+        :class:`~neuraxle.base.MetaStepMixin`,
+        :class:`~neuraxle.base.TruncableSteps`,
+        :class:`~neuraxle.base.TruncableSteps`
+    """
+    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
+        """
+        Apply method to root, and children steps.
+        Split the root, and children values inside the arguments of type RecursiveDict.
+
+        :param method_name:
+        :param step_name:
+        :param kargs:
+        :param kwargs:
+        :return:
+        """
+        root_kwargs, children_kwargs = self._get_root_and_children_kwargs(**kwargs)
+        root_kargs, children_kargs = self._get_root_and_children_kargs(*kargs)
+
+        results = BaseStep.apply(self, method_name=method_name, step_name=step_name, *root_kargs, **root_kwargs)
+
+        step_name = self._get_step_name_for_children(step_name)
+        for children in self.get_children():
+            children_results = children.apply(method_name=method_name, step_name=step_name, *children_kargs, **children_kwargs)
+            results.update(children_results)
+
+        return results
+
+    def _get_step_name_for_children(self, step_name):
+        """
+        Return the pipeline step name (path separated by __).
+
+        :param step_name: current accumulated pipelien step name or path
+        :return:
+        """
+        if step_name is not None:
+            step_name = "{}{}{}".format(step_name, RECURSIVE_STEP_SEPARATOR, self.name)
+        else:
+            step_name = self.name
+        return step_name
+
+    def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Union[Dict, Iterable]:
+        """
+        Apply method to root, and children steps.
+        Split the root, and children values inside the arguments of type RecursiveDict.
+
+        :param method: method to call with self
+        :param step_name: step name to apply the method to
+        :param children_only: apply method to children only
+        :param kargs: any additional arguments to be passed to the method
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: accumulated results
+        """
+        root_kwargs, children_kwargs = self._get_root_and_children_kwargs(**kwargs)
+        root_kargs, children_kargs = self._get_root_and_children_kargs(*kargs)
+
+        results = BaseStep.apply_method(self, method=method, step_name=step_name, *root_kargs, **root_kwargs)
+
+        step_name = self._get_step_name_for_children(step_name)
+        for children in self.get_children():
+            children_results = children.apply_method(method=method, step_name=step_name, *children_kargs, **children_kwargs)
+            results.update(children_results)
+
+        return results
+
+    def _get_root_and_children_kargs(self, *kargs):
+        """
+        Split root, and children values inside *kargs.
+
+        :param kargs: kargs values
+        :return:
+        """
+        root_kargs = list()
+        children_kargs = list()
+        for arg in kargs:
+            if isinstance(arg, RecursiveDict):
+                root_kargs.append(arg.get_root_values(self.name))
+                children_kargs.append(arg.get_children_values(self.name))
+            else:
+                root_kargs.append(arg)
+                children_kargs.append(arg)
+
+        return root_kargs, children_kargs
+
+    def _get_root_and_children_kwargs(self, **kwargs):
+        """
+        Split root, and children values inside *kwargs.
+
+        :param kwargs: kwargs values
+        :return:
+        """
+        root_kwargs = dict()
+        children_kwargs = dict()
+        for key in kwargs:
+            if isinstance(kwargs[key], RecursiveDict):
+                root_kwargs[key] = kwargs[key].get_root_values(self.name)
+                children_kwargs[key] = kwargs[key].get_children_values(self.name)
+            else:
+                root_kwargs[key] = kwargs[key]
+                children_kwargs[key] = kwargs[key]
+
+        return root_kwargs, children_kwargs
+
+    @abstractmethod
+    def get_children(self) -> List[BaseStep]:
+        """
+        Get the list of all the children for that step.
+
+        :return:
+        """
+        pass
+
+
+class MetaStepMixin(StepWithChildrenMixin):
     """
     A class to represent a step that wraps another step. It can be used for many things.
 
@@ -1837,56 +1954,13 @@ class MetaStepMixin:
         data_container = self._did_process(data_container, context)
         return data_container
 
-    def apply(self, method_name: str, step_name=None, children_only=False, *kargs, **kwargs) -> Dict:
+    def get_children(self) -> List[BaseStep]:
         """
-        Apply the method name to the meta step and its wrapped step.
+        Get the list of all the children for that step.
 
-        :param method_name: method name that need to be called on all steps
-        :param step_name: step name to apply the method to
-        :param children_only: apply method to children only
-        :param kargs: any additional arguments to be passed to the method
-        :param kwargs: any additional positional arguments to be passed to the method
-        :return: accumulated results
+        :return:
         """
-        results = BaseStep.apply(self, method_name=method_name, step_name=step_name, children_only=children_only,
-                                 *kargs, **kwargs)
-
-        if step_name is not None:
-            step_name = "{}{}{}".format(step_name, RECURSIVE_STEP_SEPARATOR, self.name)
-        else:
-            step_name = self.name
-
-        if self.wrapped is not None:
-            wrapped_results = self.wrapped.apply(method_name=method_name, step_name=step_name, *kargs, **kwargs)
-            results.update(wrapped_results)
-
-        return results
-
-    def apply_method(self, method: Callable, step_name=None, children_only=False, *kargs, **kwargs) -> Union[
-        Dict, Iterable]:
-        """
-        Apply method to the meta step and its wrapped step.
-
-        :param method: method to call with self
-        :param step_name: step name to apply the method to
-        :param children_only: apply method to children only
-        :param kargs: any additional arguments to be passed to the method
-        :param kwargs: any additional positional arguments to be passed to the method
-        :return: accumulated results
-        """
-        results = BaseStep.apply_method(self, method=method, step_name=step_name, children_only=children_only, *kargs,
-                                        **kwargs)
-
-        if step_name is not None:
-            step_name = "{}{}{}".format(step_name, RECURSIVE_STEP_SEPARATOR, self.name)
-        else:
-            step_name = self.name
-
-        if self.wrapped is not None:
-            wrapped_results = self.wrapped.apply_method(method=method, step_name=step_name, *kargs, **kwargs)
-            results.update(wrapped_results)
-
-        return results
+        return [self.wrapped]
 
     def get_step_by_name(self, name):
         if self.wrapped.name == name:
@@ -2138,7 +2212,7 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         return step
 
 
-class TruncableSteps(BaseStep, ABC):
+class TruncableSteps(StepWithChildrenMixin, BaseStep, ABC):
     """
     Step that contains multiple steps. :class:`Pipeline` inherits form this class.
     It is possible to truncate this step * :func:`~neuraxle.base.TruncableSteps.__getitem__`
@@ -2158,6 +2232,7 @@ class TruncableSteps(BaseStep, ABC):
             hyperparams_space: HyperparameterSpace = dict()
     ):
         BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
+        StepWithChildrenMixin.__init__(self)
         self.set_steps(steps_as_tuple)
 
         self.set_savers([TruncableJoblibStepSaver()] + self.savers)
@@ -2234,54 +2309,13 @@ class TruncableSteps(BaseStep, ABC):
 
         return self
 
-    def apply(self, method_name: str, step_name=None, children_only: bool = False, *kargs, **kwargs) -> Dict:
+    def get_children(self) -> List[BaseStep]:
         """
-        Apply the method name to the pipeline step and all of its children.
+        Get the list of sub step inside the step with children.
 
-        :param method_name: method name that need to be called on all steps
-        :param step_name: current pipeline step name
-        :param children_only: apply method only to the sub steps
-        :param kargs: any additional arguments to be passed to the method
-        :param kwargs: any additional positional arguments to be passed to the method
-        :return: accumulated results
+        :return: children steps
         """
-        results = BaseStep.apply(self, method_name, step_name=step_name, children_only=children_only, *kargs, **kwargs)
-
-        if step_name is not None:
-            step_name = "{}{}{}".format(step_name, RECURSIVE_STEP_SEPARATOR, self.name)
-        else:
-            step_name = self.name
-
-        for step in self.values():
-            sub_step_results = step.apply(method_name=method_name, step_name=step_name, *kargs, **kwargs)
-            results.update(sub_step_results)
-
-        return results
-
-    def apply_method(self, method: Callable, step_name=None, children_only=False, *kargs, **kwargs) -> Dict:
-        """
-        Apply a method to the pipeline step and all of its children.
-
-        :param method: method to call with self
-        :param step_name: current pipeline step name
-        :param children_only: apply method only to the sub steps
-        :param kargs: any additional arguments to be passed to the method
-        :param kwargs: any additional positional arguments to be passed to the method
-        :return: accumulated results
-        """
-        results = BaseStep.apply_method(self, method=method, step_name=step_name, children_only=children_only, *kargs,
-                                        **kwargs)
-
-        if step_name is not None:
-            step_name = "{}{}{}".format(step_name, RECURSIVE_STEP_SEPARATOR, self.name)
-        else:
-            step_name = self.name
-
-        for step in self.values():
-            sub_step_results = step.apply_method(method=method, step_name=step_name, *kargs, **kwargs)
-            results.update(sub_step_results)
-
-        return results
+        return self.values()
 
     def get_step_by_name(self, name):
         for step in self.values():
@@ -2992,76 +3026,3 @@ class FullDumpLoader(Identity):
 
         context.pop()
         return loaded_self.load(context, full_dump)
-
-
-class StepsWithChildrenMixin:
-    def apply(self, method_name: str, step_name=None, *kargs, **kwargs) -> Dict:
-        """
-        Apply method to root, and children steps.
-        Split the root, and children values inside the arguments of type RecursiveDict.
-
-        :param method_name:
-        :param step_name:
-        :param kargs:
-        :param kwargs:
-        :return:
-        """
-        root_kwargs, children_kwargs = self._get_root_and_children_kwargs(**kwargs)
-        root_kargs, children_kargs = self._get_root_and_children_kargs(*kargs)
-
-        results = BaseStep.apply(self, method_name=method_name, step_name=step_name, *root_kargs, **root_kwargs)
-        children_results = self.apply_to_children(self, method_name=method_name, step_name=step_name, *root_kargs, **root_kwargs)
-        results.update(children_results)
-
-        return results
-
-    def _get_root_and_children_kargs(self, *kargs):
-        """
-        Split root, and children values inside *kargs.
-
-        :param kargs: kargs values
-        :return:
-        """
-        root_kargs = list()
-        children_kargs = list()
-        for arg in kargs:
-            if isinstance(arg, RecursiveDict):
-                root_kargs.append(arg.get_root_values(self.name))
-                children_kargs.append(arg.get_children_values(self.name))
-            else:
-                root_kargs.append(arg)
-                children_kargs.append(arg)
-
-        return root_kargs, children_kargs
-
-    def _get_root_and_children_kwargs(self, **kwargs):
-        """
-        Split root, and children values inside *kwargs.
-
-        :param kwargs: kwargs values
-        :return:
-        """
-        root_kwargs = dict()
-        children_kwargs = dict()
-        for key in kwargs:
-            if isinstance(kwargs[key], RecursiveDict):
-                root_kwargs[key] = kwargs[key].get_root_values(self.name)
-                children_kwargs[key] = kwargs[key].get_children_values(self.name)
-            else:
-                root_kwargs[key] = kwargs[key]
-                children_kwargs[key] = kwargs[key]
-
-        return root_kwargs, children_kwargs
-
-    @abstractmethod
-    def apply_to_children(self, method_name: str, step_name=None, *kargs, **kwargs):
-        """
-        Base method to apply a method to all sub steps.
-
-        :param method_name: method name that need to be called on all steps
-        :param step_name: current pipeline step name
-        :param kargs: any additional arguments to be passed to the method
-        :param kwargs: any additional positional arguments to be passed to the method
-        :return: accumulated results
-        """
-        pass
