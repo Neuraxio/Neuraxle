@@ -938,34 +938,35 @@ class BaseStep(ABC):
 
         return data_container
 
-    def apply(self, method: str, *kargs, **kwargs) -> Dict:
+    def apply(self, method: Union[str, Callable], ra: '_RecursiveArguments' = None, *args, **kwargs) -> RecursiveDict:
         """
         Apply a method to a step and its children.
 
         :param method: method name that need to be called on all steps
-        :param kargs: any additional arguments to be passed to the method
+        :param ra: recursive arguments
+        :param args: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
         """
-        results = self._apply(method=method, arguments=_RecursiveArguments(context=self.name, *kargs, **kwargs))
-        return results.to_flat_as_dict_primitive()
+        if ra is None:
+            ra = _RecursiveArguments(*args, **kwargs)
 
-    def _apply(self, method: str, arguments: '_RecursiveArguments') -> RecursiveDict:
+        return self._apply(method=method, ra=ra)
+
+    def _apply(self, method: str, ra: '_RecursiveArguments') -> Any:
         """
         Apply a method to a step and its children.
 
         :param method: method name that need to be called on all steps
-        :param arguments: current pipeline step name
-        :return: recursive dict containing the results
+        :param ra: current pipeline step name
+        :return: method outputs, or None if no method has been applied
         """
-        results = RecursiveDict()
-        kargs, kwargs = arguments[self.name]
         if isinstance(method, Callable):
-            results[arguments.context] = method(self, *kargs, **kwargs)
+            return method(self, *ra.kargs, **ra.kwargs)
         elif hasattr(self, method) and callable(getattr(self, method)):
-            results[arguments.context] = getattr(self, method)(*kargs, **kwargs)
+            return getattr(self, method)(*ra.kargs, **ra.kwargs)
 
-        return results
+        return None
 
     def get_step_by_name(self, name):
         if self.name == name:
@@ -1565,20 +1566,12 @@ def _sklearn_to_neuraxle_step(step) -> BaseStep:
 
 
 class _RecursiveArguments:
-    def __init__(self, context: str, *kargs, **kwargs):
-        self.context = context
+    def __init__(self, ra=None, *kargs, **kwargs):
+        if ra is not None:
+            kargs = ra.kargs
+            kwargs = ra.kwargs
         self.kargs = kargs
         self.kwargs = kwargs
-
-    def push(self, step_name: str):
-        """
-        Push step name to context.
-
-        :param step_name: step name
-        :return:
-        """
-        self.context = "{}{}{}".format(self.context, RecursiveDict.DEFAULT_SEPARATOR, step_name)
-        return step_name
 
     def __getitem__(self, item: str):
         """
@@ -1588,29 +1581,32 @@ class _RecursiveArguments:
         :return:
         """
         if item is None:
-            # ra[None] gives the root level and purges the childs in the returned new copy of RA.
-            pass
+            arguments = list()
+            keyword_arguments = dict()
+            for arg in self.kargs:
+                if isinstance(arg, RecursiveDict):
+                    arguments.append(arg[item])
+            for key in self.kwargs:
+                if isinstance(self.kwargs[key], RecursiveDict):
+                    keyword_arguments[key] = self.kwargs[key][item]
+                else:
+                    keyword_arguments[key] = keyword_arguments[key]
+            return _RecursiveArguments(*arguments, **keyword_arguments)
+        else:
+            arguments = list()
+            keyword_arguments = dict()
+            for arg in self.kargs:
+                if isinstance(arg, RecursiveDict):
+                    arguments.append(arg[item])
+            for key in self.kwargs:
+                if isinstance(self.kwargs[key], RecursiveDict):
+                    keyword_arguments[key] = self.kwargs[key][item]
+                else:
+                    keyword_arguments[key] = keyword_arguments[key]
+            return _RecursiveArguments(*arguments, **keyword_arguments)
 
-        arguments = self._get_arguments_for(item)
-        keyword_arguments = self._get_keyword_arguments_for(item)
-
-        return arguments, keyword_arguments
-
-    def _get_keyword_arguments_for(self, item):
-        keyword_arguments = dict()
-        for key in self.kwargs:
-            if isinstance(self.kwargs[key], RecursiveDict):
-                keyword_arguments[key] = self.kwargs[key][item]
-            else:
-                keyword_arguments[key] = keyword_arguments[key]
-        return keyword_arguments
-
-    def _get_arguments_for(self, item):
-        arguments = list()
-        for arg in self.kargs:
-            if isinstance(arg, RecursiveDict):
-                arguments.append(arg[item])
-        return arguments
+    def __iter__(self):
+        return self.kwargs
 
 # def apply(func, ra=None, *, **):
 #     ra: _RecursiveArguments = _RecursiveArguments(ra=ra, *, **)
@@ -1633,7 +1629,7 @@ class _HasChildrenMixin:
         :class:`~neuraxle.base.TruncableSteps`,
         :class:`~neuraxle.base.TruncableSteps`
     """
-    def _apply(self, method: Union[str, Callable], ra: _RecursiveArguments = None, *args, **kwargs) -> RecursiveDict:
+    def apply(self, method: Union[str, Callable], ra: _RecursiveArguments = None, *args, **kwargs) -> RecursiveDict:
         """
         Apply method to root, and children steps.
         Split the root, and children values inside the arguments of type RecursiveDict.
@@ -1642,11 +1638,16 @@ class _HasChildrenMixin:
         :param ra: recursive arguments
         :return:
         """
-        ra: _RecursiveArguments = _RecursiveArguments(arguments=ra, *args, **kwargs)
-        results: RecursiveDict = BaseStep.apply(self, method=method, ra=ra[None])
-        for children in self.get_children():
-            results[children.get_name()] = children._apply(method=method, arguments=ra)
+        ra: _RecursiveArguments = _RecursiveArguments(ra=ra, *args, **kwargs)
+        results: RecursiveDict = RecursiveDict()
+        results[self.get_name()] = BaseStep.apply(self, method=method, ra=ra[None])
+        results: RecursiveDict = self._apply_childrends(results=results, method=method, ra=ra)
 
+        return results
+
+    def _apply_childrends(self, results: RecursiveDict, method: Union[str, Callable], ra: _RecursiveArguments):
+        for children in self.get_children():
+            results[children.get_name()] = children.apply(method=method, ra=ra)
         return results
 
     @abstractmethod
@@ -1667,7 +1668,7 @@ class _HasChildrenMixin:
             :func:`~BaseStep.update_hyperparams`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        self._apply(method='_update_hyperparams', ra=_RecursiveArguments(context=self.name, hyperparams=hyperparams))
+        self.apply(method='_update_hyperparams', ra=_RecursiveArguments(hyperparams=hyperparams))
         return self
 
     def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
@@ -1679,7 +1680,7 @@ class _HasChildrenMixin:
             :func:`~BaseStep.update_hyperparams_space`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        self._apply(method='_update_hyperparams_space', ra=_RecursiveArguments(context=self.name, hyperparams_space=hyperparams_space))
+        self.apply(method='_update_hyperparams_space', ra=_RecursiveArguments(hyperparams_space=hyperparams_space))
         return self
 
     def get_hyperparams_space(self) -> HyperparameterSpace:
@@ -1691,7 +1692,7 @@ class _HasChildrenMixin:
             :func:`~BaseStep.get_hyperparams_space`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        return HyperparameterSpace(**self._apply(method='_get_hyperparams_space', ra=_RecursiveArguments(context=self.name)))
+        return HyperparameterSpace(**self.apply(method='_get_hyperparams_space', ra=_RecursiveArguments()))
 
     def get_hyperparams(self) -> HyperparameterSamples:
         """
@@ -1702,7 +1703,7 @@ class _HasChildrenMixin:
             :func:`~BaseStep.get_hyperparams`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        return HyperparameterSamples(**self._apply(method='_get_hyperparams', ra=_RecursiveArguments(context=self.name)))
+        return HyperparameterSamples(**self.apply(method='_get_hyperparams', ra=_RecursiveArguments()))
 
     def set_train(self, is_train: bool = True) -> BaseStep:
         """
@@ -1715,7 +1716,7 @@ class _HasChildrenMixin:
         .. seealso::
             :func:`BaseStep.set_train`
         """
-        self._apply(method='_set_train', ra=_RecursiveArguments(context=self.name, is_train=is_train))
+        self.apply(method='_set_train', ra=_RecursiveArguments(is_train=is_train))
         return self
 
 
@@ -2272,7 +2273,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
 
         :return: children steps
         """
-        return self.values()
+        return list(self.values())
 
     def get_step_by_name(self, name):
         for step in self.values():
