@@ -28,7 +28,7 @@ from typing import List, Callable, Dict, Iterable, Union
 import numpy as np
 
 from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, \
-    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, StepWithChildrenMixin
+    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, _HasChildrenMixin
 from neuraxle.data_container import ListDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 

@@ -78,23 +78,18 @@ class SKLearnWrapper(BaseStep):
             return self.wrapped_sklearn_predictor.predict(data_inputs)
         return self.wrapped_sklearn_predictor.transform(data_inputs)
 
-    def _set_hyperparams(self, hyperparams: HyperparameterSamples, root=False) -> BaseStep:
+    def _set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
         """
         Set hyperparams for base step, and the wrapped sklearn_predictor.
 
         :param hyperparams:
-        :param root:
-        :return:
+        :return: self
         """
-        BaseStep._set_hyperparams(self, hyperparams)
-        step_hyperparams, remainders = BaseStep._create_recursive_step_values_and_remainders(self, hyperparams, root)
-
         # flatten the step hyperparams, and set the wrapped sklearn predictor params
-        self.wrapped_sklearn_predictor.set_params(**HyperparameterSamples(step_hyperparams).to_flat_as_dict_primitive())
+        self.wrapped_sklearn_predictor.set_params(**HyperparameterSamples(hyperparams).to_flat_as_dict_primitive())
 
         # there is remainders when we need to set params for steps that are inside sklearn.pipeline.Pipeline...
-        self.wrapped_sklearn_predictor.set_params(
-            **HyperparameterSamples(HyperparameterSamples(remainders).to_flat()).to_flat_as_dict_primitive())
+        self.wrapped_sklearn_predictor.set_params(**HyperparameterSamples(HyperparameterSamples(hyperparams).to_flat()).to_flat_as_dict_primitive())
 
         return self
 
