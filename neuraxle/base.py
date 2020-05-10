@@ -1586,11 +1586,13 @@ class _RecursiveArguments:
             for arg in self.kargs:
                 if isinstance(arg, RecursiveDict):
                     arguments.append(arg[item])
+                else:
+                    arguments.append(arg)
             for key in self.kwargs:
                 if isinstance(self.kwargs[key], RecursiveDict):
                     keyword_arguments[key] = self.kwargs[key][item]
                 else:
-                    keyword_arguments[key] = keyword_arguments[key]
+                    keyword_arguments[key] = self.kwargs[key]
             return _RecursiveArguments(*arguments, **keyword_arguments)
         else:
             arguments = list()
@@ -1598,11 +1600,13 @@ class _RecursiveArguments:
             for arg in self.kargs:
                 if isinstance(arg, RecursiveDict):
                     arguments.append(arg[item])
+                else:
+                    arguments.append(arg)
             for key in self.kwargs:
                 if isinstance(self.kwargs[key], RecursiveDict):
                     keyword_arguments[key] = self.kwargs[key][item]
                 else:
-                    keyword_arguments[key] = keyword_arguments[key]
+                    keyword_arguments[key] = self.kwargs[key]
             return _RecursiveArguments(*arguments, **keyword_arguments)
 
     def __iter__(self):
@@ -1647,7 +1651,7 @@ class _HasChildrenMixin:
 
     def _apply_childrends(self, results: RecursiveDict, method: Union[str, Callable], ra: _RecursiveArguments):
         for children in self.get_children():
-            results[children.get_name()] = children.apply(method=method, ra=ra)
+            results[children.get_name()] = children.apply(method=method, ra=ra[children.get_name()])
         return results
 
     @abstractmethod

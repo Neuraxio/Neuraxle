@@ -20,19 +20,21 @@ def test_recursive_arguments_should_get_root_level():
     })}
 
 
-def test_recursive_arguments_should_get_one_recursive_level():
+def test_recursive_arguments_should_get_recursive_levels():
     ra = _RecursiveArguments(hyperparams=HyperparameterSamples({
         'hp0': 0,
         'hp1': 1,
         'stepa__hp2': 2,
-        'stepb__hp3': 3
+        'stepb__hp3': 3,
+        'stepb__stepd__hp4': 4
     }))
 
-    ra = ra['stepa']
+    ra = ra['stepb']
 
     ra.kargs == []
     ra.kwargs == {'hyperparams': HyperparameterSamples({
-        'stepa__hp2': 2
+        'stepb__hp3': 2,
+        'stepb__stepd__hp4': 4
     })}
 
 
@@ -64,7 +66,7 @@ def test_has_children_mixin_apply_should_apply_method_to_direct_childrends():
     p.apply('set_hyperparams', ra=None, hyperparams=HyperparameterSamples({
         'a__hp': 0,
         'b__hp': 1,
-        'Pipeline__hp': 2,
+        'Pipeline__hp': 2
     }))
 
     assert p['a'].get_hyperparams()['hp'] == 0

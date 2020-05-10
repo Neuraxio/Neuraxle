@@ -89,21 +89,8 @@ class RecursiveDict(OrderedDict):
         self.separator = separator
         self.recursive_dict_constructor = recursive_dict_constructor
 
-    def get_children_values(self, root_name: str, from_root=True) -> 'RecursiveDict':
-        remainders = RecursiveDict(self.separator)
-        for name, hparams in self.items():
-            if self.separator in name:
-                name_split = name.split(self.separator)
-
-                if name_split[0] == root_name:
-                    remainders[self.separator.join(name_split[1:])] = hparams
-                elif from_root:
-                    remainders[name] = hparams
-
-        return remainders
-
     def __getitem__(self, item: str = None):
-        item_values = dict()
+        item_values = self.recursive_dict_constructor()
 
         for name, values in self.items():
             if item is None and not self.separator in name:
@@ -111,8 +98,8 @@ class RecursiveDict(OrderedDict):
 
             if self.separator in name:
                 name_split = name.split(self.separator)
-                if str(name_split[-2]) == item and len(name_split) == 2:
-                    item_values[name_split[-1]] = values
+                if str(name_split[0]) == item:
+                    item_values[self.separator.join(name_split[1:])] = values
 
         return item_values
 
