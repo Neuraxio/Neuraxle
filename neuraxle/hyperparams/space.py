@@ -103,7 +103,14 @@ class RecursiveDict(OrderedDict):
                 if str(name_split[0]) == item:
                     item_values[self.separator.join(name_split[1:])] = values
 
+            if item == name:
+                item_values = values
+
         return item_values
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        pass
 
     def to_flat(self) -> 'RecursiveDict':
         """
