@@ -220,7 +220,7 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         :return: trial
         """
         hyperparams = self.hyperparameter_selection_strategy.find_next_best_hyperparams(auto_ml_container)
-        self.print_func('new trial:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+        self.print_func('new trial:\n{}'.format(json.dumps(hyperparams.flat_to_nested_dict(), sort_keys=True, indent=4)))
 
         return Trial(hyperparams=hyperparams, main_metric_name=auto_ml_container.main_scoring_metric_name)
 
@@ -680,7 +680,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
         best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
 
         self.print_func(
-            'best hyperparams:\n{}'.format(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+            'best hyperparams:\n{}'.format(json.dumps(best_hyperparams.flat_to_nested_dict(), sort_keys=True, indent=4)))
         p: BaseStep = self._load_virgin_model(hyperparams=best_hyperparams)
 
         if self.refit_trial:

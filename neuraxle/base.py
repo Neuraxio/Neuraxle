@@ -722,7 +722,7 @@ class BaseStep(ABC):
         self.savers: List[BaseSaver] = savers
         return self
 
-    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
+    def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]) -> 'BaseStep':
         """
         Set the step hyperparameters.
 
@@ -742,10 +742,10 @@ class BaseStep(ABC):
         """
         return self._set_hyperparams(hyperparams)
 
-    def _set_hyperparams(self, hyperparams):
+    def _set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]):
         self.invalidate()
         hyperparams = HyperparameterSamples(hyperparams).to_flat()
-        self.hyperparams = HyperparameterSamples(hyperparams) if len(hyperparams) > 0 else self.hyperparams
+        self.hyperparams = hyperparams if len(hyperparams) > 0 else self.hyperparams
         return self
 
     def update_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
@@ -1643,8 +1643,7 @@ class _HasChildrenMixin:
         :return:
         """
         ra: _RecursiveArguments = _RecursiveArguments(ra=ra, *args, **kwargs)
-        results: RecursiveDict = RecursiveDict()
-        results[self.get_name()] = BaseStep.apply(self, method=method, ra=ra[None])
+        results = BaseStep.apply(self, method=method, ra=ra[None])
         results: RecursiveDict = self._apply_childrends(results=results, method=method, ra=ra)
 
         return results
@@ -1696,7 +1695,7 @@ class _HasChildrenMixin:
             :func:`~BaseStep.get_hyperparams_space`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        return HyperparameterSpace(**self.apply(method='_get_hyperparams_space', ra=_RecursiveArguments()))
+        return HyperparameterSpace(self.apply(method='_get_hyperparams_space', ra=_RecursiveArguments()))
 
     def get_hyperparams(self) -> HyperparameterSamples:
         """
@@ -1707,7 +1706,7 @@ class _HasChildrenMixin:
             :func:`~BaseStep.get_hyperparams`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        return HyperparameterSamples(**self.apply(method='_get_hyperparams', ra=_RecursiveArguments()))
+        return HyperparameterSamples(self.apply(method='_get_hyperparams', ra=_RecursiveArguments()))
 
     def set_train(self, is_train: bool = True) -> BaseStep:
         """
