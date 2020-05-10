@@ -344,8 +344,8 @@ class MetricCallback(BaseCallback):
     def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
              is_finished_and_fitted: bool):
-        train_score = self.metric_function(pred_train.data_inputs, pred_train.expected_outputs)
-        validation_score = self.metric_function(pred_val.data_inputs, pred_val.expected_outputs)
+        train_score = self.metric_function(pred_train.expected_outputs, pred_train.data_inputs)
+        validation_score = self.metric_function(pred_val.expected_outputs, pred_val.data_inputs)
 
         trial.add_metric_results_train(
             name=self.name,
