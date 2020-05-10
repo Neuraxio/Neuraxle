@@ -12,6 +12,7 @@ from neuraxle.hyperparams.distributions import DistributionMixture, Choice, Quan
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.metaopt.auto_ml import BaseHyperparameterSelectionStrategy, RandomSearchHyperparameterSelectionStrategy, \
     TRIAL_STATUS
+from neuraxle.metaopt.trial import Trial, Trials
 
 _INDEPENDANT_DISCRET_DISTRIBUTION = (Choice, PriorityChoice, RandInt)
 _LOG_DISTRIBUTION = (LogNormal, LogUniform)
@@ -96,16 +97,16 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
                 else:
                     if ratio > best_ratio:
                         best_new_hyperparam_value = possible_new_hyperparm
-                        best_ratio[hyperparam_key] = ratio
+                        best_ratio = ratio
 
             best_hyperparams.append((hyperparam_key, best_new_hyperparam_value))
         return HyperparameterSamples(best_hyperparams)
 
-    def _split_trials(self, success_trials):
+    def _split_trials(self, success_trials: Trials):
         # Split trials into good and bad using quantile threshold.
         # TODO: maybe better place in the Trials class.
         # TODO: manage higher_score_is_better.
-        trials_scores = np.array([trial.score for trial in success_trials])
+        trials_scores = np.array([trial.get_validation_score() for trial in success_trials])
         trial_sorted_indexes = np.argsort(trials_scores)
 
         # In hyperopt they use this to split, where default_gamma_cap = 25. They clip the max of item they use in the good item.
@@ -221,9 +222,9 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
         prior_mean = hyperparam_distribution.mean()
         prior_sigma = hyperparam_distribution.std()
 
-        means = distribution_trials
-        distributions_mins = hyperparam_distribution.min() * len(means)
-        distributions_max = hyperparam_distribution.max() * len(means)
+        means = np.array(distribution_trials)
+        distributions_mins = hyperparam_distribution.min() * np.ones_like(means)
+        distributions_max = hyperparam_distribution.max() * np.ones_like(means)
 
         # Index to sort in increasing order the means.
         # Easier in order to insert prior.
