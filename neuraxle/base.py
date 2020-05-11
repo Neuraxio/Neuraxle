@@ -1317,8 +1317,8 @@ class BaseStep(ABC):
 
         if full_dump:
             # initialize and invalidate steps to make sure that all steps will be saved
-            self.apply_method(method=_initialize_if_needed)
-            self.apply_method(method=_invalidate)
+            self.apply(method=_initialize_if_needed)
+            self.apply(method=_invalidate)
 
         context.mkdir()
         stripped_step = copy(self)

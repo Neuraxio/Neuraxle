@@ -164,7 +164,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         :return: list of children
         """
         children: List[BaseStep] = MetaStepMixin.get_children(self)
-        cloned_children = self.steps_as_tuple
+        cloned_children = [step for _, step in self.steps_as_tuple]
         children.extend(cloned_children)
         return children
 
