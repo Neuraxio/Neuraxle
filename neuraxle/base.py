@@ -1643,8 +1643,19 @@ class _HasChildrenMixin:
         :return:
         """
         ra: _RecursiveArguments = _RecursiveArguments(ra=ra, *args, **kwargs)
-        results = BaseStep.apply(self, method=method, ra=ra[None])
+        results = RecursiveDict()
+
+        results = self._apply_root(method, ra, results)
         results: RecursiveDict = self._apply_childrends(results=results, method=method, ra=ra)
+
+        return results
+
+    def _apply_root(self, method, ra, results):
+        root_results = BaseStep.apply(self, method=method, ra=ra[None])
+        root_results = self._purge_apply_results(root_results)
+
+        if root_results is not None:
+            results = root_results
 
         return results
 
@@ -1652,10 +1663,22 @@ class _HasChildrenMixin:
         for children in self.get_children():
             children_results = children.apply(method=method, ra=ra[children.get_name()])
 
+            children_results = self._purge_apply_results(children_results)
+
             # aggregate results when the output type is a recursive dict.
-            if isinstance(children_results, RecursiveDict):
+            if children_results is not None:
                 results[children.get_name()] = children_results
+
         return results
+
+    def _purge_apply_results(self, results):
+        if isinstance(results, RecursiveDict):
+            return results
+
+        if isinstance(results, dict) and not isinstance(results, RecursiveDict):
+            return RecursiveDict(**results)
+
+        return None
 
     @abstractmethod
     def get_children(self) -> List[BaseStep]:
