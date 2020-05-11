@@ -31,7 +31,7 @@ def test_recursive_dict_to_nested_dict():
     }
     r = HyperparameterSamples(**dict_values)
 
-    r = r.flat_to_nested_dict()
+    r = r.to_nested_dict()
 
     expected_dict_values = {
         'hp': 1,
@@ -65,7 +65,7 @@ def test_hyperparams_to_nested_dict():
     }
     r = HyperparameterSamples(**dict_values)
 
-    r = r.flat_to_nested_dict()
+    r = r.to_nested_dict()
 
     expected_dict_values = {
         'hp': 1,

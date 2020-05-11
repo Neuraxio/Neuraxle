@@ -160,7 +160,7 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
 
     def create_new_trial(self, hyperparams: HyperparameterSamples):
         if self.print_new_trial:
-            self.print_func('new trial:\n{}'.format(json.dumps(hyperparams.flat_to_nested_dict(), sort_keys=True, indent=4)))
+            self.print_func('new trial:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
     def load_all_trials(self, status: 'TRIAL_STATUS' = None) -> 'Trials':
         return self.trials.filter(status)
@@ -171,7 +171,7 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         if self.print_success_trial:
             self.print_func('score: {}'.format(score))
             self.print_func(
-                'hyperparams:\n{}'.format(json.dumps(hyperparams.flat_to_nested_dict(), sort_keys=True, indent=4)))
+                'hyperparams:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
     def save_failure_for_trial(self, hyperparams: HyperparameterSamples, exception: Exception):
         if self.print_exception:

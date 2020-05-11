@@ -814,6 +814,9 @@ class BaseStep(ABC):
         .. seealso::
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
+        return self._set_params(params)
+
+    def _set_params(self, params):
         return self.set_hyperparams(HyperparameterSamples(params))
 
     def get_params(self) -> dict:
@@ -833,6 +836,9 @@ class BaseStep(ABC):
         .. seealso::
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
         """
+        return self._get_params()
+
+    def _get_params(self):
         return self.get_hyperparams().to_flat_as_ordered_dict_primitive()
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
@@ -854,10 +860,13 @@ class BaseStep(ABC):
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
             :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
         """
+        return self._set_hyperparams_space(hyperparams_space)
+
+    def _set_hyperparams_space(self, hyperparams_space):
         self.invalidate()
         hyperparams_space = HyperparameterSamples(hyperparams_space).to_flat()
-        self.hyperparams_space = HyperparameterSpace(hyperparams_space) if len(hyperparams_space) > 0 else self.hyperparams_space
-
+        self.hyperparams_space = HyperparameterSpace(hyperparams_space) if len(
+            hyperparams_space) > 0 else self.hyperparams_space
         return self
 
     def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
@@ -888,10 +897,12 @@ class BaseStep(ABC):
             :func:`~BaseStep.update_hyperparams`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
+        return self._update_hyperparams_space(hyperparams_space)
+
+    def _update_hyperparams_space(self, hyperparams_space):
         self.invalidate()
         hyperparams_space = HyperparameterSamples(hyperparams_space).to_flat()
         self.hyperparams_space.update(HyperparameterSpace(hyperparams_space).to_flat())
-
         return self
 
     def get_hyperparams_space(self) -> HyperparameterSpace:
@@ -911,6 +922,9 @@ class BaseStep(ABC):
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
             :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
         """
+        return self._get_hyperparams_space()
+
+    def _get_hyperparams_space(self):
         return HyperparameterSpace(self.hyperparams_space.to_flat_as_dict_primitive())
 
     def handle_inverse_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -1612,17 +1626,6 @@ class _RecursiveArguments:
     def __iter__(self):
         return self.kwargs
 
-# def apply(func, ra=None, *, **):
-#     ra: _RecursiveArguments = _RecursiveArguments(ra=ra, *, **)
-#     result: RecursiveDict = BaseStep.apply(self, func, ra[None])  # ra[None] gives the root level and purges the childs in the returned new copy of RA.
-#     result: RecursiveDict = self.apply_childrends(self, result, func, ra)
-#     return result
-#
-# def apply_childrends(self, result: RecursiveDict, func: Union, ra: _RecursiveArguments) -> RecursiveDict:
-#     for children in self.get_kids():
-#         result[children.get_name()] = children.apply(func, ra[children.get_name()])
-#     return result
-
 
 class _HasChildrenMixin:
     """
@@ -1698,7 +1701,9 @@ class _HasChildrenMixin:
             :func:`~BaseStep.update_hyperparams`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        self.apply(method='_update_hyperparams', ra=_RecursiveArguments(hyperparams=hyperparams))
+        if not isinstance(hyperparams, RecursiveDict):
+            hyperparams = HyperparameterSamples(hyperparams)
+        self.apply(method='_update_hyperparams', ra=_RecursiveArguments(hyperparams=hyperparams.to_flat()))
         return self
 
     def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
@@ -1710,7 +1715,9 @@ class _HasChildrenMixin:
             :func:`~BaseStep.update_hyperparams_space`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        self.apply(method='_update_hyperparams_space', ra=_RecursiveArguments(hyperparams_space=hyperparams_space))
+        if not isinstance(hyperparams_space, RecursiveDict):
+            hyperparams_space = HyperparameterSpace(hyperparams_space)
+        self.apply(method='_update_hyperparams_space', ra=_RecursiveArguments(hyperparams_space=hyperparams_space.to_flat()))
         return self
 
     def get_hyperparams_space(self) -> HyperparameterSpace:
@@ -1722,7 +1729,8 @@ class _HasChildrenMixin:
             :func:`~BaseStep.get_hyperparams_space`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        return HyperparameterSpace(self.apply(method='_get_hyperparams_space', ra=_RecursiveArguments()))
+        results: HyperparameterSpace = self.apply(method='_get_hyperparams_space', ra=_RecursiveArguments())
+        return results.to_flat()
 
     def get_hyperparams(self) -> HyperparameterSamples:
         """
@@ -1733,7 +1741,50 @@ class _HasChildrenMixin:
             :func:`~BaseStep.get_hyperparams`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        return HyperparameterSamples(self.apply(method='_get_hyperparams', ra=_RecursiveArguments()))
+        results: HyperparameterSamples = self.apply(method='_get_hyperparams', ra=_RecursiveArguments())
+        return results.to_flat()
+
+    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
+        """
+        Set all the pipeline hyperparams by applying :func:`~BaseStep.set_hyperparams` to all steps.
+
+        .. seealso::
+            :func:`~BaseStep.apply`,
+            :func:`~BaseStep.set_hyperparams`,
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+        """
+        if not isinstance(hyperparams, RecursiveDict):
+            hyperparams = HyperparameterSamples(hyperparams)
+        self.apply(method='_set_hyperparams', ra=_RecursiveArguments(hyperparams=hyperparams.to_flat()))
+        return self
+
+    def set_params(self, hyperparams: HyperparameterSamples) -> BaseStep:
+        """
+        Set all the pipeline hyperparams by applying :func:`~BaseStep.set_hyperparams` to all steps.
+
+        .. seealso::
+            :func:`~BaseStep.apply`,
+            :func:`~BaseStep.set_hyperparams`,
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+        """
+        if not isinstance(hyperparams, RecursiveDict):
+            hyperparams = HyperparameterSamples(hyperparams)
+        self.apply(method='_set_params', ra=_RecursiveArguments(hyperparams=hyperparams.to_flat()))
+        return self
+
+    def set_hyperparams_space(self, hyperparams_space: HyperparameterSamples) -> BaseStep:
+        """
+        Set all the pipeline hyperparams space by applying :func:`~BaseStep.set_hyperparams_space` to all steps.
+
+        .. seealso::
+            :func:`~BaseStep.apply`,
+            :func:`~BaseStep.set_hyperparams`,
+            :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
+        """
+        if not isinstance(hyperparams_space, RecursiveDict):
+            hyperparams_space = HyperparameterSpace(hyperparams_space)
+        self.apply(method='_set_hyperparams_space', ra=_RecursiveArguments(hyperparams_space=hyperparams_space.to_flat()))
+        return self
 
     def set_train(self, is_train: bool = True) -> BaseStep:
         """

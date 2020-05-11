@@ -108,10 +108,6 @@ class RecursiveDict(OrderedDict):
 
         return item_values
 
-    def __setitem__(self, key, value):
-        super().__setitem__(key, value)
-        pass
-
     def to_flat(self) -> 'RecursiveDict':
         """
         Will create an equivalent flat HyperparameterSamples.
@@ -120,7 +116,7 @@ class RecursiveDict(OrderedDict):
         """
         return nested_dict_to_flat(self, dict_ctor=type(self))
 
-    def flat_to_nested_dict(self) -> 'RecursiveDict':
+    def to_nested_dict(self) -> 'RecursiveDict':
         """
         Will create an equivalent nested dict HyperparameterSamples.
 
