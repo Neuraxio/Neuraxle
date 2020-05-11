@@ -1650,7 +1650,11 @@ class _HasChildrenMixin:
 
     def _apply_childrends(self, results: RecursiveDict, method: Union[str, Callable], ra: _RecursiveArguments):
         for children in self.get_children():
-            results[children.get_name()] = children.apply(method=method, ra=ra[children.get_name()])
+            children_results = children.apply(method=method, ra=ra[children.get_name()])
+
+            # aggregate results when the output type is a recursive dict.
+            if isinstance(children_results, RecursiveDict):
+                results[children.get_name()] = children_results
         return results
 
     @abstractmethod
