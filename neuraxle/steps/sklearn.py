@@ -24,12 +24,12 @@ Those steps works with scikit-learn (sklearn) transformers and estimators.
 
 """
 import inspect
-from typing import Any
+from typing import Any, List
 
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import Ridge
 
-from neuraxle.base import BaseStep
+from neuraxle.base import BaseStep, _HasChildrenMixin
 from neuraxle.hyperparams.distributions import LogUniform, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 from neuraxle.steps.numpy import NumpyTranspose
@@ -86,18 +86,17 @@ class SKLearnWrapper(BaseStep):
         :return: self
         """
         # flatten the step hyperparams, and set the wrapped sklearn predictor params
-        self.wrapped_sklearn_predictor.set_params(**HyperparameterSamples(hyperparams).to_flat_as_dict_primitive())
-
-        # there is remainders when we need to set params for steps that are inside sklearn.pipeline.Pipeline...
-        self.wrapped_sklearn_predictor.set_params(**HyperparameterSamples(HyperparameterSamples(hyperparams).to_flat()).to_flat_as_dict_primitive())
+        hyperparams = HyperparameterSamples(hyperparams)
+        BaseStep._set_hyperparams(self, hyperparams.to_flat())
+        self.wrapped_sklearn_predictor.set_params(**hyperparams.to_flat_as_dict_primitive())
 
         return self
 
-    def get_hyperparams(self):
+    def _get_hyperparams(self):
         if self.return_all_sklearn_default_params_on_get:
             return HyperparameterSamples(self.wrapped_sklearn_predictor.get_params()).to_flat()
         else:
-            return BaseStep.get_hyperparams(self)
+            return BaseStep._get_hyperparams(self)
 
     def get_wrapped_sklearn_predictor(self):
         return self.wrapped_sklearn_predictor
