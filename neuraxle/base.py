@@ -28,6 +28,7 @@ import hashlib
 import inspect
 import os
 import pprint
+import traceback
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
@@ -1086,12 +1087,18 @@ class BaseStep(ABC):
         if ra is None:
             ra = _RecursiveArguments(*args, **kwargs)
 
-        if isinstance(method, Callable):
-            return method(self, *ra.kargs, **ra.kwargs)
-        elif hasattr(self, method) and callable(getattr(self, method)):
-            return getattr(self, method)(*ra.kargs, **ra.kwargs)
+        kargs = ra.kargs
 
-        return RecursiveDict()
+        if isinstance(method, str) and hasattr(self, method) and callable(getattr(self, method)):
+            method = getattr(self, method)
+        else:
+            kargs = [self] + list(kargs)
+
+        try:
+            return method(*kargs, **ra.kwargs)
+        except Exception:
+            print('{}: Failed to apply method {}.'.format(self.name, method))
+            print(traceback.format_stack())
 
     def get_step_by_name(self, name):
         if self.name == name:
