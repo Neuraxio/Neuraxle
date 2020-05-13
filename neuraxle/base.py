@@ -1722,7 +1722,8 @@ class _HasChildrenMixin:
         return results
 
     def _apply_root(self, method: Union[str, Callable], ra: _RecursiveArguments):
-        root_results: RecursiveDict = BaseStep.apply(self, method=method, ra=ra[None])
+        terminal_ra: _RecursiveArguments = ra[None]
+        root_results: RecursiveDict = BaseStep.apply(self, method=method, ra=terminal_ra)
         root_results: RecursiveDict = self._purge_apply_results(root_results)
         return root_results
 
