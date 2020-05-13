@@ -1,13 +1,12 @@
-<!---
-Thank you for opening a pull request!
+<!-- Thank you for opening a pull request!
 
 Please add example code and a good description for us to properly review your code.
 
 If this is your first contribution, you'll need to sign the Contributor License Agreement to allow us to use your changes: 
 https://docs.google.com/forms/d/e/1FAIpQLSfDP3eCQoV0tMq296OfbOpNn-QkHwfJQLkS0MVjSHiZQXPw2Q/viewform
 
-Please fill in the informations below if this is pertinent for your Pull Request. 
--->
+Please fill in the informations below if this is pertinent for your Pull Request. -->
+
 
 # What it is
 
@@ -23,8 +22,14 @@ I coded it this way:
 
 Here is how you can use this new code as a end user: 
 
-<!---
-Checklist before merging PR: 
+```python 
+Note: 
+Please make dimensions and types clear to the reader.
+E.g.: in the event fictious data is processed in this code example.
+```
+
+
+<!-- Checklist before merging PR: 
 
 [ ] The above description of the pull request was used to document the new code. 
 [ ] Class names and argument / API variables are very clear: there is no possible ambiguity. 
