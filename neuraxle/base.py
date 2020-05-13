@@ -1765,7 +1765,7 @@ class _HasChildrenMixin:
         """
         if not isinstance(hyperparams, RecursiveDict):
             hyperparams = HyperparameterSamples(hyperparams)
-        self.apply(method='_update_hyperparams', ra=_RecursiveArguments(hyperparams=hyperparams.to_flat()))
+        self.apply(method='_update_hyperparams', hyperparams=hyperparams.to_flat())
         return self
 
     def update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> 'BaseStep':
@@ -1779,7 +1779,7 @@ class _HasChildrenMixin:
         """
         if not isinstance(hyperparams_space, RecursiveDict):
             hyperparams_space = HyperparameterSpace(hyperparams_space)
-        self.apply(method='_update_hyperparams_space', ra=_RecursiveArguments(hyperparams_space=hyperparams_space.to_flat()))
+        self.apply(method='_update_hyperparams_space', hyperparams_space=hyperparams_space.to_flat())
         return self
 
     def get_hyperparams_space(self) -> HyperparameterSpace:
@@ -1791,7 +1791,7 @@ class _HasChildrenMixin:
             :func:`~BaseStep.get_hyperparams_space`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        results: HyperparameterSpace = self.apply(method='_get_hyperparams_space', ra=_RecursiveArguments())
+        results: HyperparameterSpace = self.apply(method='_get_hyperparams_space')
         return results.to_flat()
 
     def get_hyperparams(self) -> HyperparameterSamples:
@@ -1803,7 +1803,7 @@ class _HasChildrenMixin:
             :func:`~BaseStep.get_hyperparams`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        results: HyperparameterSamples = self.apply(method='_get_hyperparams', ra=_RecursiveArguments())
+        results: HyperparameterSamples = self.apply(method='_get_hyperparams')
         return results.to_flat()
 
     def set_hyperparams(self, hyperparams: Union[Dict, HyperparameterSamples]) -> BaseStep:
@@ -1817,7 +1817,7 @@ class _HasChildrenMixin:
         """
         if not isinstance(hyperparams, RecursiveDict):
             hyperparams = HyperparameterSamples(hyperparams)
-        self.apply(method='_set_hyperparams', ra=_RecursiveArguments(hyperparams=hyperparams.to_flat()))
+        self.apply(method='_set_hyperparams', hyperparams=hyperparams.to_flat())
         return self
 
     def set_params(self, hyperparams: Union[Dict, HyperparameterSamples]) -> BaseStep:
@@ -1831,7 +1831,7 @@ class _HasChildrenMixin:
         """
         if not isinstance(hyperparams, RecursiveDict):
             hyperparams = HyperparameterSamples(hyperparams)
-        self.apply(method='_set_params', ra=_RecursiveArguments(hyperparams=hyperparams.to_flat()))
+        self.apply(method='_set_params', hyperparams=hyperparams.to_flat())
         return self
 
     def set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> BaseStep:
@@ -1845,7 +1845,7 @@ class _HasChildrenMixin:
         """
         if not isinstance(hyperparams_space, RecursiveDict):
             hyperparams_space = HyperparameterSpace(hyperparams_space)
-        self.apply(method='_set_hyperparams_space', ra=_RecursiveArguments(hyperparams_space=hyperparams_space.to_flat()))
+        self.apply(method='_set_hyperparams_space', hyperparams_space=hyperparams_space.to_flat())
         return self
 
     def set_train(self, is_train: bool = True) -> BaseStep:
@@ -1859,7 +1859,7 @@ class _HasChildrenMixin:
         .. seealso::
             :func:`BaseStep.set_train`
         """
-        self.apply(method='_set_train', ra=_RecursiveArguments(is_train=is_train))
+        self.apply(method='_set_train', is_train=is_train)
         return self
 
 
