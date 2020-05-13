@@ -819,7 +819,7 @@ class BaseStep(ABC):
         :return: self
 
         .. note::
-            This is a recursive method.
+            This is a recursive method that will call :func:`BaseStep._set_hyperparams` in the end.
         .. seealso::
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
             :class:̀_HasChildrenMixin`,
@@ -863,7 +863,7 @@ class BaseStep(ABC):
         :return: self
 
         .. note::
-            This is a recursive method.
+            This is a recursive method that will call :func:`BaseStep._update_hyperparams` in the end.
         .. seealso::
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
             :class:̀_HasChildrenMixin`,
@@ -886,7 +886,7 @@ class BaseStep(ABC):
         :return: step hyperparameters
 
         .. note::
-            This is a recursive method.
+            This is a recursive method that will call :func:`BaseStep._get_hyperparams` in the end.
         .. seealso::
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
             :class:̀_HasChildrenMixin`,
@@ -915,7 +915,7 @@ class BaseStep(ABC):
         :param **params: arbitrary number of arguments for hyperparameters
 
         .. note::
-            This is a recursive method.
+            This is a recursive method that will call :func:`BaseStep._set_params` in the end.
         .. seealso::
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
             :class:̀_HasChildrenMixin`,
@@ -946,7 +946,7 @@ class BaseStep(ABC):
         :return: hyperparameters
 
         .. note::
-            This is a recursive method.
+            This is a recursive method that will call :func:`BaseStep._get_params` in the end.
         .. seealso::
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
             :class:̀_HasChildrenMixin`,
@@ -980,7 +980,7 @@ class BaseStep(ABC):
             :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
 
         .. note::
-            This is a recursive method.
+            This is a recursive method that will call :func:`BaseStep._set_hyperparams_space` in the end.
         .. seealso::
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
             :class:̀_HasChildrenMixin`,
@@ -1024,6 +1024,8 @@ class BaseStep(ABC):
         :param hyperparams_space: hyperparameters space
         :return: self
 
+        .. note::
+            This is a recursive method that will call :func:`BaseStep._update_hyperparams_space` in the end.
         .. seealso::
             :func:`~BaseStep.update_hyperparams`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
@@ -1052,6 +1054,8 @@ class BaseStep(ABC):
 
         :return: step hyperparams space
 
+        .. note::
+            This is a recursive method that will call :func:`BaseStep._get_hyperparams_space` in the end.
         .. seealso::
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
             :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
