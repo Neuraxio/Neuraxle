@@ -2057,9 +2057,13 @@ class MetaStepMixin(_HasChildrenMixin):
 
     def get_children(self) -> List[BaseStep]:
         """
-        Get the list of all the children for that step.
+        Get the list of all the childs for that step.
+        :class:`_HasChildrenMixin` calls this method to apply methods to all of the childs for that step.
 
-        :return:
+        :return: list of child steps
+
+        .. seealso::
+            :class:`_HasChildrenMixin`
         """
         return [self.wrapped]
 
