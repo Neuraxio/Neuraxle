@@ -638,9 +638,14 @@ class BaseStep(ABC):
 
     def invalidate(self) -> 'BaseStep':
         """
-        Invalidate step.
+        Invalidate a step, and all of its children.
 
         :return: self
+        .. note::
+            This is a recursive method used in :class:̀_HasChildrenMixin`.
+        .. seealso::
+            :func:`BaseStep.apply`,
+            :func:`_HasChildrenMixin._apply`
         """
         return self._invalidate()
 
@@ -666,8 +671,12 @@ class BaseStep(ABC):
         :param is_train: is training mode or not
         :return:
 
+        .. note::
+            This is a recursive method used in :class:̀_HasChildrenMixin`.
         .. seealso::
-            :func:`BaseStep.set_train`
+            :func:`BaseStep.apply`,
+            :func:`_HasChildrenMixin._apply`,
+            :func:`_HasChildrenMixin._set_train`
         """
         return self._set_train(is_train)
 
@@ -737,8 +746,14 @@ class BaseStep(ABC):
         :param hyperparams: hyperparameters
         :return: self
 
+        .. note::
+            This is a recursive method.
         .. seealso::
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
+            :class:̀_HasChildrenMixin`,
+            :func:`BaseStep.apply`,
+            :func:`_HasChildrenMixin._apply`,
+            :func:`_HasChildrenMixin._set_train`
         """
         return self._set_hyperparams(hyperparams)
 
@@ -772,9 +787,14 @@ class BaseStep(ABC):
         :param hyperparams: hyperparameters
         :return: self
 
+        .. note::
+            This is a recursive method.
         .. seealso::
-            :func:`~BaseStep.update_hyperparams`,
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
+            :class:̀_HasChildrenMixin`,
+            :func:`BaseStep.apply`,
+            :func:`_HasChildrenMixin._apply`,
+            :func:`_HasChildrenMixin._update_hyperparams`
         """
         self._update_hyperparams(hyperparams)
 
@@ -789,8 +809,14 @@ class BaseStep(ABC):
 
         :return: step hyperparameters
 
+        .. note::
+            This is a recursive method.
         .. seealso::
-            * :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
+            :class:̀_HasChildrenMixin`,
+            :func:`BaseStep.apply`,
+            :func:`_HasChildrenMixin._apply`,
+            :func:`_HasChildrenMixin._get_hyperparams`
         """
         return self._get_hyperparams()
 
@@ -811,8 +837,14 @@ class BaseStep(ABC):
 
         :param **params: arbitrary number of arguments for hyperparameters
 
+        .. note::
+            This is a recursive method.
         .. seealso::
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
+            :class:̀_HasChildrenMixin`,
+            :func:`BaseStep.apply`,
+            :func:`_HasChildrenMixin._apply`,
+            :func:`_HasChildrenMixin._set_params`
         """
         return self._set_params(params)
 
@@ -833,8 +865,14 @@ class BaseStep(ABC):
 
         :return: hyperparameters
 
+        .. note::
+            This is a recursive method.
         .. seealso::
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
+            :class:̀_HasChildrenMixin`,
+            :func:`BaseStep.apply`,
+            :func:`_HasChildrenMixin._apply`,
+            :func:`_HasChildrenMixin._get_params`
         """
         return self._get_params()
 
@@ -859,6 +897,15 @@ class BaseStep(ABC):
         .. seealso::
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
             :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
+
+        .. note::
+            This is a recursive method.
+        .. seealso::
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
+            :class:̀_HasChildrenMixin`,
+            :func:`BaseStep.apply`,
+            :func:`_HasChildrenMixin._apply`,
+            :func:`_HasChildrenMixin._get_params`
         """
         return self._set_hyperparams_space(hyperparams_space)
 
