@@ -31,7 +31,7 @@ from sklearn.linear_model import Ridge
 
 from neuraxle.base import BaseStep, _HasChildrenMixin
 from neuraxle.hyperparams.distributions import LogUniform, Boolean
-from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
+from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.union import ModelStacking
 
@@ -88,7 +88,9 @@ class SKLearnWrapper(BaseStep):
         # flatten the step hyperparams, and set the wrapped sklearn predictor params
         hyperparams = HyperparameterSamples(hyperparams)
         BaseStep._set_hyperparams(self, hyperparams.to_flat())
-        self.wrapped_sklearn_predictor.set_params(**hyperparams.to_flat_as_dict_primitive())
+        self.wrapped_sklearn_predictor.set_params(
+            **hyperparams.with_separator(RecursiveDict.DEFAULT_SEPARATOR).to_flat_as_dict_primitive()
+        )
 
         return self
 

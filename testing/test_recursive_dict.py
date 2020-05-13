@@ -18,14 +18,14 @@ def test_recursive_dict_to_flat(separator):
     }
     r = RecursiveDict(separator=separator, **dict_values)
 
-    r = r.to_flat()
+    r = r.to_flat_as_dict_primitive()
 
     expected_dict_values = {
         'hp': 1,
         'stepa{}hp'.format(separator): 2,
         'stepa{0}stepb{0}hp'.format(separator): 3
     }
-    assert r == RecursiveDict(separator=separator, **expected_dict_values)
+    assert r == expected_dict_values
 
 
 def test_recursive_dict_to_flat_different_separator():

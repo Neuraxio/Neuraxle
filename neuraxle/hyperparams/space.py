@@ -161,13 +161,16 @@ class RecursiveDict(OrderedDict):
         :param dict_ctor: ``OrderedDict`` by default. Will use this as a class to create the new returned dict.
         :return: a flat hyperparameter dictionary.
         """
+        if isinstance(dict_ctor, RecursiveDict):
+            ret = dict_ctor(self.separator)
+        else:
+            ret = dict_ctor()
 
-        ret = dict_ctor()
         for k, v in self.items():
             if isinstance(v, dict) or isinstance(v, OrderedDict) or isinstance(v, dict_ctor):
                 nested_dict = v
                 if not isinstance(v, RecursiveDict):
-                    nested_dict = RecursiveDict(v)
+                    nested_dict = RecursiveDict(v, separator=self.separator)
                 _ret = nested_dict.nested_dict_to_flat(dict_ctor=type(nested_dict))
                 for key, val in _ret.items():
                     ret[k + nested_dict.separator + key] = val
@@ -182,8 +185,13 @@ class RecursiveDict(OrderedDict):
         :param dict_ctor: ``OrderedDict`` by default. Will use this as a class to create the new returned dict.
         :return: a nested hyperparameter dictionary.
         """
-        pre_ret = dict_ctor()
-        ret = dict_ctor()
+        if isinstance(dict_ctor, RecursiveDict):
+            pre_ret = dict_ctor(self.separator)
+            ret = dict_ctor(self.separator)
+        else:
+            pre_ret = dict_ctor()
+            ret = dict_ctor()
+
         for k, v in self.items():
             k, _, key = k.partition(self.separator)
             if len(key) > 0:
@@ -195,9 +203,23 @@ class RecursiveDict(OrderedDict):
         for k, v in pre_ret.items():
             flat_dict = v
             if not isinstance(v, RecursiveDict):
-                flat_dict = RecursiveDict(v)
+                flat_dict = RecursiveDict(v, separator=self.separator)
             ret[k] = flat_dict.flat_to_nested_dict(dict_ctor=dict_ctor)
         return ret
+
+    def with_separator(self, separator):
+        """
+        Create a new recursive dict that uses the given separator at each level.
+
+        :param separator:
+        :return:
+        """
+        return type(self)(
+            separator=separator,
+            **{
+                key.replace(self.separator, separator): value if not isinstance(value, RecursiveDict) \
+                    else value.with_separator(separator) for key, value in self.items()
+            })
 
 
 class HyperparameterSamples(RecursiveDict):
