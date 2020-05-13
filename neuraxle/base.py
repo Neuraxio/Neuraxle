@@ -1709,17 +1709,17 @@ class _HasChildrenMixin:
         :return:
         """
         ra: _RecursiveArguments = _RecursiveArguments(ra=ra, *args, **kwargs)
-        results = self._apply_root(method, ra)
+        results: RecursiveDict = self._apply_root(method, ra)
         results: RecursiveDict = self._apply_childrens(results=results, method=method, ra=ra)
 
         return results
 
     def _apply_root(self, method: Union[str, Callable], ra: _RecursiveArguments):
-        root_results = BaseStep.apply(self, method=method, ra=ra[None])
-        root_results = self._purge_apply_results(root_results)
+        root_results: RecursiveDict = BaseStep.apply(self, method=method, ra=ra[None])
+        root_results: RecursiveDict = self._purge_apply_results(root_results)
         return root_results
 
-    def _apply_childrens(self, results: RecursiveDict, method: Union[str, Callable], ra: _RecursiveArguments):
+    def _apply_childrens(self, results: RecursiveDict, method: Union[str, Callable], ra: _RecursiveArguments) -> RecursiveDict:
         for children in self.get_children():
             children_results = children.apply(method=method, ra=ra[children.get_name()])
 
@@ -1728,7 +1728,7 @@ class _HasChildrenMixin:
 
         return results
 
-    def _purge_apply_results(self, results):
+    def _purge_apply_results(self, results) -> RecursiveDict:
         if isinstance(results, RecursiveDict):
             return results
 
