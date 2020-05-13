@@ -521,11 +521,11 @@ class _RecursiveArguments:
                     arguments.append(arg[item])
                 else:
                     arguments.append(arg)
-            for key in self.kwargs:
-                if isinstance(self.kwargs[key], RecursiveDict):
-                    keyword_arguments[key] = self.kwargs[key][item]
+            for key, arg in self.kwargs.items():
+                if isinstance(arg, RecursiveDict):
+                    keyword_arguments[key] = arg[item]
                 else:
-                    keyword_arguments[key] = self.kwargs[key]
+                    keyword_arguments[key] = arg
             return _RecursiveArguments(*arguments, **keyword_arguments)
         else:
             arguments = list()
@@ -535,11 +535,11 @@ class _RecursiveArguments:
                     arguments.append(arg[item])
                 else:
                     arguments.append(arg)
-            for key in self.kwargs:
-                if isinstance(self.kwargs[key], RecursiveDict):
-                    keyword_arguments[key] = self.kwargs[key][item]
+            for key, arg in self.kwargs.items():
+                if isinstance(arg, RecursiveDict):
+                    keyword_arguments[key] = arg[item]
                 else:
-                    keyword_arguments[key] = self.kwargs[key]
+                    keyword_arguments[key] = arg
             return _RecursiveArguments(*arguments, **keyword_arguments)
 
     def __iter__(self):
