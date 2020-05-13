@@ -485,6 +485,67 @@ class ExecutionContext:
         return len(self.parents)
 
 
+class _RecursiveArguments:
+    """
+    This class is used by :func:`~neuraxle.base.BaseStep.apply`, and :class:`_HasChildrenMixin` to pass the right arguments to steps with children.
+
+    .. seealso::
+        :class:`_HasChildrenMixin`,
+        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
+        :func:`~neuraxle.base.BaseStep.get_hyperparams_space`,
+        :func:`~neuraxle.base.BaseStep.get_hyperparams`,
+        :func:`~neuraxle.base.BaseStep.set_hyperparams`,
+        :func:`~neuraxle.base.BaseStep.update_hyperparams`,
+        :func:`~neuraxle.base.BaseStep.update_hyperparams_space`,
+        :func:`~neuraxle.base.BaseStep.invalidate`
+    """
+    def __init__(self, ra=None, *kargs, **kwargs):
+        if ra is not None:
+            kargs = ra.kargs
+            kwargs = ra.kwargs
+        self.kargs = kargs
+        self.kwargs = kwargs
+
+    def __getitem__(self, item: str):
+        """
+        Return arguments for the given path.
+
+        :param item: root name
+        :return:
+        """
+        if item is None:
+            arguments = list()
+            keyword_arguments = dict()
+            for arg in self.kargs:
+                if isinstance(arg, RecursiveDict):
+                    arguments.append(arg[item])
+                else:
+                    arguments.append(arg)
+            for key in self.kwargs:
+                if isinstance(self.kwargs[key], RecursiveDict):
+                    keyword_arguments[key] = self.kwargs[key][item]
+                else:
+                    keyword_arguments[key] = self.kwargs[key]
+            return _RecursiveArguments(*arguments, **keyword_arguments)
+        else:
+            arguments = list()
+            keyword_arguments = dict()
+            for arg in self.kargs:
+                if isinstance(arg, RecursiveDict):
+                    arguments.append(arg[item])
+                else:
+                    arguments.append(arg)
+            for key in self.kwargs:
+                if isinstance(self.kwargs[key], RecursiveDict):
+                    keyword_arguments[key] = self.kwargs[key][item]
+                else:
+                    keyword_arguments[key] = self.kwargs[key]
+            return _RecursiveArguments(*arguments, **keyword_arguments)
+
+    def __iter__(self):
+        return self.kwargs
+
+
 class BaseStep(ABC):
     """
     Base class for a pipeline step.
@@ -1007,7 +1068,7 @@ class BaseStep(ABC):
 
         return data_container
 
-    def apply(self, method: Union[str, Callable], ra: '_RecursiveArguments' = None, *args, **kwargs) -> RecursiveDict:
+    def apply(self, method: Union[str, Callable], ra: _RecursiveArguments = None, *args, **kwargs) -> RecursiveDict:
         """
         Apply a method to a step and its children.
 
@@ -1626,53 +1687,6 @@ def _sklearn_to_neuraxle_step(step) -> BaseStep:
         step = neuraxle.steps.sklearn.SKLearnWrapper(step)
         step.set_name(step.get_wrapped_sklearn_predictor().__class__.__name__)
     return step
-
-class _RecursiveArguments:
-    def __init__(self, ra=None, *kargs, **kwargs):
-        if ra is not None:
-            kargs = ra.kargs
-            kwargs = ra.kwargs
-        self.kargs = kargs
-        self.kwargs = kwargs
-
-    def __getitem__(self, item: str):
-        """
-        Return arguments for the given path.
-
-        :param item: root name
-        :return:
-        """
-        if item is None:
-            arguments = list()
-            keyword_arguments = dict()
-            for arg in self.kargs:
-                if isinstance(arg, RecursiveDict):
-                    arguments.append(arg[item])
-                else:
-                    arguments.append(arg)
-            for key in self.kwargs:
-                if isinstance(self.kwargs[key], RecursiveDict):
-                    keyword_arguments[key] = self.kwargs[key][item]
-                else:
-                    keyword_arguments[key] = self.kwargs[key]
-            return _RecursiveArguments(*arguments, **keyword_arguments)
-        else:
-            arguments = list()
-            keyword_arguments = dict()
-            for arg in self.kargs:
-                if isinstance(arg, RecursiveDict):
-                    arguments.append(arg[item])
-                else:
-                    arguments.append(arg)
-            for key in self.kwargs:
-                if isinstance(self.kwargs[key], RecursiveDict):
-                    keyword_arguments[key] = self.kwargs[key][item]
-                else:
-                    keyword_arguments[key] = self.kwargs[key]
-            return _RecursiveArguments(*arguments, **keyword_arguments)
-
-    def __iter__(self):
-        return self.kwargs
 
 
 class _HasChildrenMixin:
