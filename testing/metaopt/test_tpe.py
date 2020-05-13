@@ -21,9 +21,9 @@ def test_tpe_simple_uniform(tmpdir):
     auto_ml = AutoML(
         pipeline=Pipeline([
             FitTransformCallbackStep().set_name('callback'),
-            AddN(0.).set_hyperparams_space((HyperparameterSpace({
-                'basic_dist_value': Uniform(-1, 3),
-            }))),
+            AddN(0.).set_hyperparams_space(HyperparameterSpace({
+                'add': Uniform(-1, 3),
+            })),
         ]),
         hyperparams_optimizer=TreeParzenEstimatorHyperparameterSelectionStrategy(number_of_initial_random_step=20,
                                                                                  quantile_threshold=0.3,
@@ -32,7 +32,7 @@ def test_tpe_simple_uniform(tmpdir):
                                                                                  prior_weight=0.,
                                                                                  use_linear_forgetting_weights=False,
                                                                                  number_recent_trial_at_full_weights=25),
-        validation_splitter=ValidationSplitter(0.10),
+        validation_splitter=ValidationSplitter(0.5),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
             MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False),
@@ -44,11 +44,11 @@ def test_tpe_simple_uniform(tmpdir):
     )
 
     # When
-    data_inputs = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    data_inputs = np.array([0, 0])
     expected_outputs = 1.5 * np.ones_like(data_inputs)
     auto_ml = auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
     p = auto_ml.get_best_model().get_hyperparams()
 
-    assert (p["AddN__basic_dist_value"] - 1.5) < 1e-4
+    assert (p["AddN__add"] - 1.5) < 1e-4
