@@ -834,7 +834,7 @@ class BaseStep(ABC):
         self.hyperparams = hyperparams if len(hyperparams) > 0 else self.hyperparams
         return self
 
-    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
+    def update_hyperparams(self, hyperparams: Union[Dict, HyperparameterSamples]) -> 'BaseStep':
         """
         Update the step hyperparameters without removing the already-set hyperparameters.
         This can be useful to add more hyperparameters to the existing ones without flushing the ones that were already set.
@@ -871,7 +871,7 @@ class BaseStep(ABC):
 
         return self
 
-    def _update_hyperparams(self, hyperparams: HyperparameterSamples):
+    def _update_hyperparams(self, hyperparams: Union[Dict, HyperparameterSamples]):
         self.hyperparams.update(HyperparameterSamples(hyperparams).to_flat())
 
     def get_hyperparams(self) -> HyperparameterSamples:
@@ -919,7 +919,7 @@ class BaseStep(ABC):
         """
         return self._set_params(params)
 
-    def _set_params(self, params):
+    def _set_params(self, params: dict):
         return self.set_hyperparams(HyperparameterSamples(params))
 
     def get_params(self) -> dict:
@@ -950,7 +950,7 @@ class BaseStep(ABC):
     def _get_params(self):
         return self.get_hyperparams().to_flat_as_ordered_dict_primitive()
 
-    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
+    def set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> 'BaseStep':
         """
         Set step hyperparameters space.
 
@@ -980,14 +980,14 @@ class BaseStep(ABC):
         """
         return self._set_hyperparams_space(hyperparams_space)
 
-    def _set_hyperparams_space(self, hyperparams_space):
+    def _set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]):
         self.invalidate()
         hyperparams_space = HyperparameterSamples(hyperparams_space).to_flat()
         self.hyperparams_space = HyperparameterSpace(hyperparams_space) if len(
             hyperparams_space) > 0 else self.hyperparams_space
         return self
 
-    def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
+    def update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> 'BaseStep':
         """
         Update the step hyperparameter spaces without removing the already-set hyperparameters.
         This can be useful to add more hyperparameter spaces to the existing ones without flushing the ones that were already set.
@@ -1017,7 +1017,7 @@ class BaseStep(ABC):
         """
         return self._update_hyperparams_space(hyperparams_space)
 
-    def _update_hyperparams_space(self, hyperparams_space):
+    def _update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]):
         self.invalidate()
         hyperparams_space = HyperparameterSamples(hyperparams_space).to_flat()
         self.hyperparams_space.update(HyperparameterSpace(hyperparams_space).to_flat())
@@ -1754,7 +1754,7 @@ class _HasChildrenMixin:
         """
         pass
 
-    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
+    def update_hyperparams(self, hyperparams: Union[Dict, HyperparameterSamples]) -> 'BaseStep':
         """
         Update hyperparams recursively by applying :func:`~BaseStep.update_hyperparams_space` to all steps.
 
@@ -1768,7 +1768,7 @@ class _HasChildrenMixin:
         self.apply(method='_update_hyperparams', ra=_RecursiveArguments(hyperparams=hyperparams.to_flat()))
         return self
 
-    def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
+    def update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> 'BaseStep':
         """
         Update hyperparams space recursively by applying :func:`~BaseStep.update_hyperparams_space` to all steps.
 
@@ -1806,7 +1806,7 @@ class _HasChildrenMixin:
         results: HyperparameterSamples = self.apply(method='_get_hyperparams', ra=_RecursiveArguments())
         return results.to_flat()
 
-    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
+    def set_hyperparams(self, hyperparams: Union[Dict, HyperparameterSamples]) -> BaseStep:
         """
         Set all the pipeline hyperparams by applying :func:`~BaseStep.set_hyperparams` to all steps.
 
@@ -1820,7 +1820,7 @@ class _HasChildrenMixin:
         self.apply(method='_set_hyperparams', ra=_RecursiveArguments(hyperparams=hyperparams.to_flat()))
         return self
 
-    def set_params(self, hyperparams: HyperparameterSamples) -> BaseStep:
+    def set_params(self, hyperparams: Union[Dict, HyperparameterSamples]) -> BaseStep:
         """
         Set all the pipeline hyperparams by applying :func:`~BaseStep.set_hyperparams` to all steps.
 
@@ -1834,7 +1834,7 @@ class _HasChildrenMixin:
         self.apply(method='_set_params', ra=_RecursiveArguments(hyperparams=hyperparams.to_flat()))
         return self
 
-    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> BaseStep:
+    def set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> BaseStep:
         """
         Set all the pipeline hyperparams space by applying :func:`~BaseStep.set_hyperparams_space` to all steps.
 
