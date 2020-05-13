@@ -638,7 +638,15 @@ class BaseStep(ABC):
 
     def invalidate(self) -> 'BaseStep':
         """
-        Invalidate a step, and all of its children.
+        Invalidate a step, and all of its children. Invalidating a step makes it eligible to be saved again.
+
+        A step is invalidated when any of the following things happen :
+            * a mutation has been performed on the step : func:`~.mutate`
+            * an hyperparameter has changed func:`~.set_hyperparams`
+            * an hyperparameter space has changed func:`~.set_hyperparams_space`
+            * a call to the fit method func:`~.handle_fit`
+            * a call to the fit_transform method func:`~.handle_fit_transform`
+            * the step name has changed func:`~neuraxle.base.BaseStep.set_name`
 
         :return: self
         .. note::
