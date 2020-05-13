@@ -959,6 +959,22 @@ class BaseStep(ABC):
         """
         Set step hyperparameters space.
 
+          Example :
+
+        .. code-block:: python
+
+            step.set_hyperparams_space(HyperparameterSpace({
+                'learning_rate': LogNormal(0.5, 0.5)
+                'weight_decay': LogNormal(0.001, 0.0005)
+            }))
+
+            step.update_hyperparams_space(HyperparameterSpace({
+                'learning_rate': LogNormal(0.5, 0.1)
+            }))
+
+            assert step.get_hyperparams_space()['learning_rate'] == LogNormal(0.5, 0.1)
+            assert step.get_hyperparams_space()['weight_decay'] == LogNormal(0.001, 0.0005)
+
         Example :
 
         .. code-block:: python
