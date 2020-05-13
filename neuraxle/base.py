@@ -1834,7 +1834,7 @@ class _HasChildrenMixin:
         self.apply(method='_set_params', ra=_RecursiveArguments(hyperparams=hyperparams.to_flat()))
         return self
 
-    def set_hyperparams_space(self, hyperparams_space: HyperparameterSamples) -> BaseStep:
+    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> BaseStep:
         """
         Set all the pipeline hyperparams space by applying :func:`~BaseStep.set_hyperparams_space` to all steps.
 

@@ -89,7 +89,7 @@ def test_step_cloner_update_hyperparams_should_update_wrapped_step_hyperparams()
     }))
 
     p.update_hyperparams(HyperparameterSamples({
-        SOME_STEP_HP: SOME_STEP_HP_VALUE + 1,
+        SOME_STEP_HP: SOME_STEP_HP_VALUE + 1
     }))
 
     assert isinstance(p.hyperparams, HyperparameterSamples)
