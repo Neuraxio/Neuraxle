@@ -827,9 +827,7 @@ class BaseStep(ABC):
             :func:`_HasChildrenMixin._apply`,
             :func:`_HasChildrenMixin._set_train`
         """
-        if not isinstance(hyperparams, RecursiveDict):
-            hyperparams = HyperparameterSamples(hyperparams)
-        self.apply(method='_set_hyperparams', hyperparams=hyperparams.to_flat())
+        self.apply(method='_set_hyperparams', hyperparams=HyperparameterSamples(hyperparams).to_flat())
         return self
 
     def _set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]):
@@ -871,9 +869,7 @@ class BaseStep(ABC):
             :func:`_HasChildrenMixin._apply`,
             :func:`_HasChildrenMixin._update_hyperparams`
         """
-        if not isinstance(hyperparams, RecursiveDict):
-            hyperparams = HyperparameterSamples(hyperparams)
-        self.apply(method='_update_hyperparams', hyperparams=hyperparams.to_flat())
+        self.apply(method='_update_hyperparams', hyperparams=HyperparameterSamples(hyperparams).to_flat())
         return self
 
     def _update_hyperparams(self, hyperparams: Union[Dict, HyperparameterSamples]):
@@ -923,9 +919,7 @@ class BaseStep(ABC):
             :func:`_HasChildrenMixin._apply`,
             :func:`_HasChildrenMixin._set_params`
         """
-        if not isinstance(params, RecursiveDict):
-            params = HyperparameterSamples(params)
-        self.apply(method='_set_params', params=params.to_flat())
+        self.apply(method='_set_params', params=HyperparameterSamples(params).to_flat())
         return self
 
     def _set_params(self, params: dict):
@@ -988,9 +982,7 @@ class BaseStep(ABC):
             :func:`_HasChildrenMixin._apply`,
             :func:`_HasChildrenMixin._get_params`
         """
-        if not isinstance(hyperparams_space, RecursiveDict):
-            hyperparams_space = HyperparameterSpace(hyperparams_space)
-        self.apply(method='_set_hyperparams_space', hyperparams_space=hyperparams_space.to_flat())
+        self.apply(method='_set_hyperparams_space', hyperparams_space=HyperparameterSpace(hyperparams_space).to_flat())
         return self
 
     def _set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]):
@@ -1030,9 +1022,7 @@ class BaseStep(ABC):
             :func:`~BaseStep.update_hyperparams`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        if not isinstance(hyperparams_space, RecursiveDict):
-            hyperparams_space = HyperparameterSpace(hyperparams_space)
-        self.apply(method='_update_hyperparams_space', hyperparams_space=hyperparams_space.to_flat())
+        self.apply(method='_update_hyperparams_space', hyperparams_space=HyperparameterSpace(hyperparams_space).to_flat())
         return self
 
     def _update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]):
