@@ -506,24 +506,24 @@ class _RecursiveArguments:
         self.kargs = kargs
         self.kwargs = kwargs
 
-    def __getitem__(self, item: str):
+    def __getitem__(self, child_step_name: str):
         """
         Return arguments for the given path.
 
-        :param item: root name
-        :return:
+        :param child_step_name: child step name, or None if we want to get root values.
+        :return: recursive argument for the given child step name
         """
-        if item is None:
+        if child_step_name is None:
             arguments = list()
             keyword_arguments = dict()
             for arg in self.kargs:
                 if isinstance(arg, RecursiveDict):
-                    arguments.append(arg[item])
+                    arguments.append(arg[child_step_name])
                 else:
                     arguments.append(arg)
             for key, arg in self.kwargs.items():
                 if isinstance(arg, RecursiveDict):
-                    keyword_arguments[key] = arg[item]
+                    keyword_arguments[key] = arg[child_step_name]
                 else:
                     keyword_arguments[key] = arg
             return _RecursiveArguments(*arguments, **keyword_arguments)
@@ -532,12 +532,12 @@ class _RecursiveArguments:
             keyword_arguments = dict()
             for arg in self.kargs:
                 if isinstance(arg, RecursiveDict):
-                    arguments.append(arg[item])
+                    arguments.append(arg[child_step_name])
                 else:
                     arguments.append(arg)
             for key, arg in self.kwargs.items():
                 if isinstance(arg, RecursiveDict):
-                    keyword_arguments[key] = arg[item]
+                    keyword_arguments[key] = arg[child_step_name]
                 else:
                     keyword_arguments[key] = arg
             return _RecursiveArguments(*arguments, **keyword_arguments)
