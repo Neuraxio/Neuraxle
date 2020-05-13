@@ -508,7 +508,8 @@ class _RecursiveArguments:
 
     def __getitem__(self, child_step_name: str):
         """
-        Return arguments for the given path.
+        Return recursive arguments for the given child step name.
+        If child step name is None, return the root values.
 
         :param child_step_name: child step name, or None if we want to get root values.
         :return: recursive argument for the given child step name
@@ -1709,7 +1710,7 @@ class _HasChildrenMixin:
         """
         ra: _RecursiveArguments = _RecursiveArguments(ra=ra, *args, **kwargs)
         results = self._apply_root(method, ra)
-        results: RecursiveDict = self._apply_childrends(results=results, method=method, ra=ra)
+        results: RecursiveDict = self._apply_childrens(results=results, method=method, ra=ra)
 
         return results
 
@@ -1718,7 +1719,7 @@ class _HasChildrenMixin:
         root_results = self._purge_apply_results(root_results)
         return root_results
 
-    def _apply_childrends(self, results: RecursiveDict, method: Union[str, Callable], ra: _RecursiveArguments):
+    def _apply_childrens(self, results: RecursiveDict, method: Union[str, Callable], ra: _RecursiveArguments):
         for children in self.get_children():
             children_results = children.apply(method=method, ra=ra[children.get_name()])
 
