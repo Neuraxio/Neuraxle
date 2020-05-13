@@ -1029,7 +1029,7 @@ class BaseStep(ABC):
         elif hasattr(self, method) and callable(getattr(self, method)):
             return getattr(self, method)(*ra.kargs, **ra.kwargs)
 
-        return None
+        return RecursiveDict()
 
     def get_step_by_name(self, name):
         if self.name == name:
@@ -1694,31 +1694,22 @@ class _HasChildrenMixin:
         :return:
         """
         ra: _RecursiveArguments = _RecursiveArguments(ra=ra, *args, **kwargs)
-        results = RecursiveDict()
-
-        results = self._apply_root(method, ra, results)
+        results = self._apply_root(method, ra)
         results: RecursiveDict = self._apply_childrends(results=results, method=method, ra=ra)
 
         return results
 
-    def _apply_root(self, method, ra, results):
+    def _apply_root(self, method: Union[str, Callable], ra: _RecursiveArguments):
         root_results = BaseStep.apply(self, method=method, ra=ra[None])
         root_results = self._purge_apply_results(root_results)
-
-        if root_results is not None:
-            results = root_results
-
-        return results
+        return root_results
 
     def _apply_childrends(self, results: RecursiveDict, method: Union[str, Callable], ra: _RecursiveArguments):
         for children in self.get_children():
             children_results = children.apply(method=method, ra=ra[children.get_name()])
 
             children_results = self._purge_apply_results(children_results)
-
-            # aggregate results when the output type is a recursive dict.
-            if children_results is not None:
-                results[children.get_name()] = children_results
+            results[children.get_name()] = children_results
 
         return results
 
@@ -1729,7 +1720,7 @@ class _HasChildrenMixin:
         if isinstance(results, dict) and not isinstance(results, RecursiveDict):
             return RecursiveDict(**results)
 
-        return None
+        return RecursiveDict()
 
     @abstractmethod
     def get_children(self) -> List[BaseStep]:
