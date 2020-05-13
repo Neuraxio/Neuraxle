@@ -1,7 +1,34 @@
+import pytest
+
 from neuraxle.hyperparams.space import RecursiveDict, HyperparameterSamples
 
+POINT_SEPARATOR = '.'
 
-def test_recursive_dict_to_flat():
+
+@pytest.mark.parametrize("separator", ["__", ".", "___"])
+def test_recursive_dict_to_flat(separator):
+    dict_values = {
+        'hp': 1,
+        'stepa': {
+            'hp': 2,
+            'stepb': {
+                'hp': 3
+            }
+        }
+    }
+    r = RecursiveDict(separator=separator, **dict_values)
+
+    r = r.to_flat()
+
+    expected_dict_values = {
+        'hp': 1,
+        'stepa{}hp'.format(separator): 2,
+        'stepa{0}stepb{0}hp'.format(separator): 3
+    }
+    assert r == RecursiveDict(separator=separator, **expected_dict_values)
+
+
+def test_recursive_dict_to_flat_different_separator():
     dict_values = {
         'hp': 1,
         'stepa': {
@@ -12,15 +39,17 @@ def test_recursive_dict_to_flat():
         }
     }
     r = RecursiveDict(separator='__', **dict_values)
+    r['stepa'] = RecursiveDict(r['stepa'], separator='.')
+    r['stepa']['stepb'] = RecursiveDict(r['stepa']['stepb'], separator='$$$')
 
     r = r.to_flat()
 
     expected_dict_values = {
         'hp': 1,
-        'stepa__hp': 2,
-        'stepa__stepb__hp': 3
+        'stepa.hp': 2,
+        'stepa.stepb$$$hp': 3
     }
-    assert r == RecursiveDict(separator='__', **expected_dict_values)
+    assert r.to_flat_as_dict_primitive() == expected_dict_values
 
 
 def test_recursive_dict_to_nested_dict():
@@ -85,9 +114,20 @@ def test_recursive_dict_copy_constructor():
         'stepa__hp': 2,
         'stepa__stepb__hp': 3
     }
-    r = RecursiveDict('__', RecursiveDict(**dict_values))
+    r = RecursiveDict(RecursiveDict(**dict_values), separator='__')
 
     assert r == RecursiveDict(**dict_values)
+
+
+def test_recursive_dict_copy_constructor_should_set_separator():
+    dict_values = {
+        'hp': 1,
+        'stepa__hp': 2,
+        'stepa__stepb__hp': 3
+    }
+    r = RecursiveDict(RecursiveDict(**dict_values, separator=POINT_SEPARATOR))
+
+    assert r.separator == POINT_SEPARATOR
 
 
 def test_hyperparams_copy_constructor():

@@ -23,7 +23,7 @@ import numpy as np
 import pytest
 
 from neuraxle.hyperparams.distributions import RandInt, LogUniform
-from neuraxle.hyperparams.space import nested_dict_to_flat, HyperparameterSpace
+from neuraxle.hyperparams.space import HyperparameterSpace, RecursiveDict
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction
 from neuraxle.steps.numpy import NumpyTranspose
@@ -311,12 +311,12 @@ def test_pipeline_tosklearn():
     z_ = a_["z"]
     assert z_.get_params()["learning_rate"] == 11
 
-    p.set_params(**nested_dict_to_flat({
+    p.set_params(**RecursiveDict({
         "sk__b": {
             "a__z__learning_rate": 12,
             "b__learning_rate": 9
         }
-    }))
+    }).to_flat())
     # p.set_params(**{"sk__b__a__z__learning_rate": 12})
     assert p.named_steps["sk"].p["b"].wrapped_sklearn_predictor.named_steps["a"]["z"].get_params()[
                "learning_rate"] == 12

@@ -295,12 +295,12 @@ class ChooseOneStepOf(FeatureUnion):
 
         if hyperparams is None:
             choices = list(self.keys())[:-1]
-            self.set_hyperparams(HyperparameterSamples({
+            self.set_hyperparams({
                 CHOICE_HYPERPARAM: choices[0]
-            }))
-            self.set_hyperparams_space(HyperparameterSpace({
+            })
+            self.set_hyperparams_space({
                 CHOICE_HYPERPARAM: Choice(choices)
-            }))
+            })
 
     def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, dict]):
         """

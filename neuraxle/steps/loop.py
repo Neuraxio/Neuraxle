@@ -180,7 +180,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         # One copy of step per data input:
         steps = [self.copy_op(self.wrapped).set_name('{}[{}]'.format(self.wrapped.name, i)) for i in range(len(data_container))]
         self.steps_as_tuple = [(step.name, step) for step in steps]
-        self.invalidate()
+        self._invalidate()
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         fitted_steps_data_containers = []

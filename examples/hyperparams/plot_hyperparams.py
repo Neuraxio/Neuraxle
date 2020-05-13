@@ -45,11 +45,11 @@ def main():
         ])
     ])
 
-    p.set_hyperparams_space(HyperparameterSpace({
+    p.set_hyperparams_space({
         'step1__multiply_by': RandInt(42, 50),
         'step2__multiply_by': RandInt(-10, 0),
         'Pipeline__PCA__n_components': RandInt(2, 3)
-    }))
+    })
 
     samples = p.get_hyperparams_space().rvs()
     p.set_hyperparams(samples)

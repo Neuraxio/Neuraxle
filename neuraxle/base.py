@@ -644,7 +644,7 @@ class BaseStep(ABC):
 
         self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
         self.is_initialized = False
-        self.invalidate()
+        self._invalidate()
         self.is_train: bool = True
 
     def summary_hash(self, data_container: DataContainer) -> str:
@@ -718,7 +718,8 @@ class BaseStep(ABC):
             :func:`BaseStep.apply`,
             :func:`_HasChildrenMixin._apply`
         """
-        return self._invalidate()
+        self.apply(method='_invalidate')
+        return self
 
     def _invalidate(self):
         self.is_invalidated = True
@@ -767,7 +768,7 @@ class BaseStep(ABC):
             A step name is the same value as the one in the keys of :py:attr:`~neuraxle.pipeline.Pipeline.steps_as_tuple`
         """
         self.name = name
-        self.invalidate()
+        self._invalidate()
         return self
 
     def get_name(self) -> str:
@@ -831,7 +832,7 @@ class BaseStep(ABC):
         return self
 
     def _set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]):
-        self.invalidate()
+        self._invalidate()
         hyperparams = HyperparameterSamples(hyperparams).to_flat()
         self.hyperparams = hyperparams if len(hyperparams) > 0 else self.hyperparams
         return self
@@ -982,11 +983,12 @@ class BaseStep(ABC):
             :func:`_HasChildrenMixin._apply`,
             :func:`_HasChildrenMixin._get_params`
         """
-        self.apply(method='_set_hyperparams_space', hyperparams_space=HyperparameterSpace(hyperparams_space).to_flat())
+        self.apply(method='_set_hyperparams_space', hyperparams_space=HyperparameterSpace(
+            hyperparams_space).to_flat())
         return self
 
     def _set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]):
-        self.invalidate()
+        self._invalidate()
         hyperparams_space = HyperparameterSamples(hyperparams_space).to_flat()
         self.hyperparams_space = HyperparameterSpace(hyperparams_space) if len(
             hyperparams_space) > 0 else self.hyperparams_space
@@ -1022,11 +1024,12 @@ class BaseStep(ABC):
             :func:`~BaseStep.update_hyperparams`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        self.apply(method='_update_hyperparams_space', hyperparams_space=HyperparameterSpace(hyperparams_space).to_flat())
+        self.apply(method='_update_hyperparams_space', hyperparams_space=HyperparameterSpace(
+            hyperparams_space).to_flat())
         return self
 
     def _update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]):
-        self.invalidate()
+        self._invalidate()
         hyperparams_space = HyperparameterSamples(hyperparams_space).to_flat()
         self.hyperparams_space.update(HyperparameterSpace(hyperparams_space).to_flat())
         return self
@@ -1201,7 +1204,7 @@ class BaseStep(ABC):
         :param context: execution context
         :return: (data container, execution context)
         """
-        self.invalidate()
+        self._invalidate()
         return data_container, context.push(self)
 
     def _did_fit(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -1233,7 +1236,7 @@ class BaseStep(ABC):
         :param context: execution context
         :return: (data container, execution context)
         """
-        self.invalidate()
+        self._invalidate()
         return data_container, context.push(self)
 
     def _did_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -1343,7 +1346,7 @@ class BaseStep(ABC):
         :param expected_outputs: expected outputs to fit on
         :return: (fitted self, tranformed data inputs)
         """
-        self.invalidate()
+        self._invalidate()
 
         new_self = self.fit(data_inputs, expected_outputs)
         out = new_self.transform(data_inputs)
@@ -1456,7 +1459,7 @@ class BaseStep(ABC):
             return step
 
         def _invalidate(step):
-            step.invalidate()
+            step._invalidate()
 
         if full_dump:
             # initialize and invalidate steps to make sure that all steps will be saved
@@ -1548,7 +1551,7 @@ class BaseStep(ABC):
         :param warn: (verbose) wheter or not to warn about the inexistence of the method.
         :return: self, a copy of self, or even perhaps a new or different BaseStep object.
         """
-        self.invalidate()
+        self._invalidate()
         pending_new_base_step, pending_new_method, pending_method_to_assign_to = self.pending_mutate
 
         # Use everything that is pending if they are not none (ternaries).
@@ -1569,7 +1572,7 @@ class BaseStep(ABC):
 
             # 3. assign new method to old method
             setattr(new_base_step, method_to_assign_to, new_method)
-            self.invalidate()
+            self._invalidate()
 
         except AttributeError as e:
             if warn:
@@ -1613,7 +1616,7 @@ class BaseStep(ABC):
         :param new_method: if it is not None, upon calling ``mutate``, the new_method will be the one that is used on the provided new_base_step.
         :return: self
         """
-        self.invalidate()
+        self._invalidate()
 
         if new_method is None or method_to_assign_to is None:
             new_method = method_to_assign_to = "transform"  # No changes will be applied (transform will stay transform).
@@ -1766,7 +1769,6 @@ class _HasChildrenMixin:
         pass
 
 
-
 class MetaStepMixin(_HasChildrenMixin):
     """
     A class to represent a step that wraps another step. It can be used for many things.
@@ -1843,7 +1845,7 @@ class MetaStepMixin(_HasChildrenMixin):
         :param step: new wrapped step
         :return: self
         """
-        self.invalidate()
+        self._invalidate()
         self.wrapped: BaseStep = _sklearn_to_neuraxle_step(step)
         return self
 
@@ -2385,7 +2387,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
             step = (_name, step)
             names_yet.add(step[0])
             patched.append(step)
-        self.invalidate()
+        self._invalidate()
         return patched
 
     def _rename_step(self, step_name, class_name, names_yet: set):
@@ -2403,7 +2405,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         while step_name in names_yet:
             step_name = class_name + str(i)
             i += 1
-        self.invalidate()
+        self._invalidate()
         return step_name
 
     def _refresh_steps(self):
@@ -2411,7 +2413,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         Private method to refresh inner state after having edited ``self.steps_as_tuple``
         (recreate ``self.steps`` from ``self.steps_as_tuple``).
         """
-        self.invalidate()
+        self._invalidate()
         self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
         for name, step in self.items():
             step.name = name
