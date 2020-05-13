@@ -1015,21 +1015,15 @@ class BaseStep(ABC):
         :param ra: recursive arguments
         :param args: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
-        :return: accumulated results
+        :return: method outputs, or None if no method has been applied
+
+        .. seealso::
+            :class:`_RecursiveArguments`,
+            :class:`_HasChildrenMixin`
         """
         if ra is None:
             ra = _RecursiveArguments(*args, **kwargs)
 
-        return self._apply(method=method, ra=ra)
-
-    def _apply(self, method: str, ra: '_RecursiveArguments') -> Any:
-        """
-        Apply a method to a step and its children.
-
-        :param method: method name that need to be called on all steps
-        :param ra: current pipeline step name
-        :return: method outputs, or None if no method has been applied
-        """
         if isinstance(method, Callable):
             return method(self, *ra.kargs, **ra.kwargs)
         elif hasattr(self, method) and callable(getattr(self, method)):
@@ -1632,7 +1626,6 @@ def _sklearn_to_neuraxle_step(step) -> BaseStep:
         step = neuraxle.steps.sklearn.SKLearnWrapper(step)
         step.set_name(step.get_wrapped_sklearn_predictor().__class__.__name__)
     return step
-
 
 class _RecursiveArguments:
     def __init__(self, ra=None, *kargs, **kwargs):
