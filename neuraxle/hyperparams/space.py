@@ -106,7 +106,7 @@ class RecursiveDict(OrderedDict):
 
         return item_values
 
-    def to_flat(self) -> 'RecursiveDict':
+    def to_flat(self) -> dict:
         """
         Will create an equivalent flat HyperparameterSamples.
 
