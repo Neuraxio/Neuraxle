@@ -30,8 +30,8 @@ from abc import ABC
 VALUE_CACHING = 'value_caching'
 from typing import List, Any
 
-from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, ExecutionContext, MetaStepMixin, \
-    HandleOnlyMixin
+from neuraxle.base import BaseStep, NonTransformableMixin, ExecutionContext, MetaStepMixin, \
+    HandleOnlyMixin, _FittableStep
 from neuraxle.data_container import DataContainer
 
 
@@ -92,7 +92,7 @@ class FitCallbackStep(NonTransformableMixin, BaseCallbackStep):
         return self
 
 
-class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
+class TransformCallbackStep(BaseCallbackStep):
     """Call a callback method on transform and inverse transform."""
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
@@ -128,11 +128,12 @@ class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
         return processed_outputs
 
 
-class FitTransformCallbackStep(BaseStep):
+class FitTransformCallbackStep(_FittableStep, BaseStep):
     def __init__(self, transform_callback_function=None, fit_callback_function=None, more_arguments: List = tuple(),
                  transform_function=None,
                  hyperparams=None):
         BaseStep.__init__(self, hyperparams)
+
         if transform_callback_function is None:
             transform_callback_function = TapeCallbackFunction()
         if fit_callback_function is None:
@@ -377,7 +378,7 @@ class HandleCallbackStep(HandleOnlyMixin, BaseStep):
         return self, data_container
 
 
-class Sleep(NonFittableMixin, BaseStep):
+class Sleep(BaseStep):
     def __init__(self, sleep_time=0.1, hyperparams=None, hyperparams_space=None):
         BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         self.sleep_time = sleep_time

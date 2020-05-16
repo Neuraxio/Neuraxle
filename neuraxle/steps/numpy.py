@@ -26,21 +26,20 @@ Those steps works with NumPy (np) arrays.
 
 import numpy as np
 
-from neuraxle.base import NonFittableMixin, BaseStep, DataContainer, ExecutionContext, ForceHandleOnlyMixin, \
+from neuraxle.base import BaseStep, DataContainer, ExecutionContext, ForceHandleOnlyMixin, \
     ForceHandleMixin
 from neuraxle.hyperparams.space import HyperparameterSamples
 
 
-class NumpyFlattenDatum(NonFittableMixin, BaseStep):
+class NumpyFlattenDatum(BaseStep):
     def __init__(self):
         BaseStep.__init__(self)
-        NonFittableMixin.__init__(self)
 
     def transform(self, data_inputs):
         return data_inputs.reshape(data_inputs.shape[0], -1)
 
 
-class NumpyConcatenateOnCustomAxis(NonFittableMixin, BaseStep):
+class NumpyConcatenateOnCustomAxis(BaseStep):
     """
     Numpy concetenation step where the concatenation is performed along the specified custom axis.
     """
@@ -53,7 +52,6 @@ class NumpyConcatenateOnCustomAxis(NonFittableMixin, BaseStep):
         """
         self.axis = axis
         BaseStep.__init__(self)
-        NonFittableMixin.__init__(self)
 
     def _transform_data_container(self, data_container, context):
         """
@@ -109,10 +107,9 @@ class NumpyConcatenateOuterBatch(NumpyConcatenateOnCustomAxis):
         NumpyConcatenateOnCustomAxis.__init__(self, axis=0)
 
 
-class NumpyTranspose(NonFittableMixin, BaseStep):
+class NumpyTranspose(BaseStep):
     def __init__(self):
         BaseStep.__init__(self)
-        NonFittableMixin.__init__(self)
 
     def _transform_data_container(self, data_container, context):
         """
@@ -139,12 +136,11 @@ class NumpyTranspose(NonFittableMixin, BaseStep):
         return np.array(data_inputs).transpose()
 
 
-class NumpyShapePrinter(NonFittableMixin, BaseStep):
+class NumpyShapePrinter(BaseStep):
 
     def __init__(self, custom_message: str = ""):
         self.custom_message = custom_message
         BaseStep.__init__(self)
-        NonFittableMixin.__init__(self)
 
     def transform(self, data_inputs):
         self._print(data_inputs)
@@ -161,7 +157,7 @@ class NumpyShapePrinter(NonFittableMixin, BaseStep):
         print(self.__class__.__name__ + " (one):", data_input.shape, self.custom_message)
 
 
-class MultiplyByN(NonFittableMixin, BaseStep):
+class MultiplyByN(BaseStep):
     """
     Step to multiply a numpy array.
     Accepts an integer for the number to multiply by.
@@ -177,12 +173,10 @@ class MultiplyByN(NonFittableMixin, BaseStep):
         # outputs => np.array([3])
 
     .. seealso::
-        :class:`~neuraxle.base.NonFittableMixin`,
         :class:`~neuraxle.base.BaseStep`
     """
 
     def __init__(self, multiply_by=1):
-        NonFittableMixin.__init__(self)
         BaseStep.__init__(
             self,
             hyperparams=HyperparameterSamples({
@@ -203,7 +197,7 @@ class MultiplyByN(NonFittableMixin, BaseStep):
         return data_inputs / self.hyperparams['multiply_by']
 
 
-class AddN(NonFittableMixin, BaseStep):
+class AddN(BaseStep):
     """
     Step to add a scalar to a numpy array.
     Accepts an integer for the number to add to every data inputs.
@@ -219,12 +213,10 @@ class AddN(NonFittableMixin, BaseStep):
         # outputs => np.array([2])
 
     .. seealso::
-        :class:`~neuraxle.base.NonFittableMixin`,
         :class:`~neuraxle.base.BaseStep`
     """
 
     def __init__(self, add=1):
-        NonFittableMixin.__init__(self)
         BaseStep.__init__(
             self,
             hyperparams=HyperparameterSamples({
@@ -245,7 +237,7 @@ class AddN(NonFittableMixin, BaseStep):
         return data_inputs - self.hyperparams['add']
 
 
-class Sum(NonFittableMixin, BaseStep):
+class Sum(BaseStep):
     """
     Step sum numpy array using np.sum.
 
@@ -261,12 +253,10 @@ class Sum(NonFittableMixin, BaseStep):
         # outputs => 6)
 
     .. seealso::
-        :class:`NonFittableMixin`,
         :class:`BaseStep`
     """
 
     def __init__(self, axis):
-        NonFittableMixin.__init__(self)
         BaseStep.__init__(self)
         self.axis = axis
 
@@ -278,7 +268,7 @@ class Sum(NonFittableMixin, BaseStep):
         return data_inputs
 
 
-class OneHotEncoder(NonFittableMixin, BaseStep):
+class OneHotEncoder(BaseStep):
     """
     Step to one hot a set of columns.
     Accepts Integer Columns and converts it ot a one_hot.
@@ -350,7 +340,7 @@ class ToNumpy(ForceHandleMixin, BaseStep):
         return data_container.to_numpy(), context
 
 
-class NumpyReshape(NonFittableMixin, BaseStep):
+class NumpyReshape(BaseStep):
     """
     Reshape numpy array in data inputs.
 
@@ -362,13 +352,11 @@ class NumpyReshape(NonFittableMixin, BaseStep):
        assert np.array_equal(outputs, np.array([[1],[0],[3]]))
 
     .. seealso::
-        :class:`NonFittableMixin`
         :class:`BaseStep`
     """
 
     def __init__(self, new_shape):
         BaseStep.__init__(self)
-        NonFittableMixin.__init__(self)
         self.new_shape = new_shape
 
     def transform(self, data_inputs):

@@ -28,7 +28,7 @@ from typing import List, Tuple, Union
 
 import numpy as np
 
-from neuraxle.base import BaseStep, NonFittableMixin, MetaStepMixin
+from neuraxle.base import BaseStep, MetaStepMixin
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEachDataInput
 from neuraxle.union import FeatureUnion
@@ -37,7 +37,7 @@ ColumnSelectionType = Union[Tuple[int, BaseStep], Tuple[List[int], BaseStep], Tu
 ColumnChooserTupleList = List[ColumnSelectionType]
 
 
-class ColumnSelector2D(NonFittableMixin, BaseStep):
+class ColumnSelector2D(BaseStep):
     """
     A ColumnSelector2D selects column in a sequence.
     """

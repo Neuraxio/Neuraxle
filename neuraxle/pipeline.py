@@ -29,15 +29,15 @@ from abc import ABC, abstractmethod
 from copy import copy
 from typing import Any, Tuple, List
 
-from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, NonFittableMixin, \
-    ExecutionContext, ExecutionMode, NonTransformableMixin, MetaStepMixin
+from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, ExecutionContext, ExecutionMode, \
+    NonTransformableMixin, MetaStepMixin, _FittableStep
 from neuraxle.checkpoints import Checkpoint
 from neuraxle.data_container import DataContainer, ListDataContainer
 
 DEFAULT_CACHE_FOLDER = 'cache'
 
 
-class BasePipeline(TruncableSteps, ABC):
+class BasePipeline(_FittableStep, TruncableSteps, ABC):
     def __init__(self, steps: NamedTupleList):
         TruncableSteps.__init__(self, steps_as_tuple=steps)
 
@@ -373,55 +373,7 @@ class CustomPipelineMixin:
         return new_self, data_container.data_inputs
 
 
-class CustomHandleMethodsMixin:
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        data_container, context = self._will_process(data_container, context)
-        data_container, context = self._will_transform_data_container(data_container, context)
-
-        data_container = self.transform_data_container(data_container, context)
-
-        data_container = self._did_transform(data_container, context)
-        data_container = self._did_process(data_container, context)
-
-        return data_container
-
-    @abstractmethod
-    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        raise NotImplementedError()
-
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
-        data_container, context = self._will_process(data_container, context)
-        data_container, context = self._will_fit(data_container, context)
-
-        new_self = self.fit_data_container(data_container, context)
-
-        data_container = self._did_fit(data_container, context)
-        data_container = self._did_process(data_container, context)
-
-        return new_self
-
-    @abstractmethod
-    def fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
-        raise NotImplementedError()
-
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
-        data_container, context = self._will_process(data_container, context)
-        data_container, context = self._will_fit(data_container, context)
-
-        new_self, data_container = self.fit_transform_data_container(data_container, context)
-
-        data_container = self._did_fit_transform(data_container, context)
-        data_container = self._did_process(data_container, context)
-
-        return new_self, data_container
-
-    @abstractmethod
-    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[BaseStep, DataContainer]:
-        raise NotImplementedError()
-
-
-class MiniBatchSequentialPipeline(CustomHandleMethodsMixin, CustomPipelineMixin, Pipeline):
+class MiniBatchSequentialPipeline(CustomPipelineMixin, Pipeline):
     """
     Mini Batch Sequential Pipeline class to create a pipeline processing data inputs in batch.
 
@@ -451,7 +403,6 @@ class MiniBatchSequentialPipeline(CustomHandleMethodsMixin, CustomPipelineMixin,
     def __init__(self, steps: NamedTupleList, batch_size=None, cache_folder=None):
         Pipeline.__init__(self, steps, cache_folder=cache_folder)
         CustomPipelineMixin.__init__(self)
-        CustomHandleMethodsMixin.__init__(self)
         self.__validate_barriers_batch_size(batch_size)
         self.__patch_missing_barrier(batch_size)
         self.__patch_barriers_batch_size(batch_size)
@@ -490,7 +441,7 @@ class MiniBatchSequentialPipeline(CustomHandleMethodsMixin, CustomPipelineMixin,
 
         self._refresh_steps()
 
-    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Transform all sub pipelines splitted by the Barrier steps.
         :param data_container: data container to transform.
@@ -511,7 +462,7 @@ class MiniBatchSequentialPipeline(CustomHandleMethodsMixin, CustomPipelineMixin,
 
         return data_container
 
-    def fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
         """
         Fit all sub pipelines splitted by the Barrier steps.
         :param data_container: data container to transform.
@@ -548,7 +499,7 @@ class MiniBatchSequentialPipeline(CustomHandleMethodsMixin, CustomPipelineMixin,
 
         return self
 
-    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[BaseStep, DataContainer]:
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[BaseStep, DataContainer]:
         """
         Transform all sub pipelines splitted by the Barrier steps.
         :param data_container: data container to transform.
@@ -598,7 +549,7 @@ class MiniBatchSequentialPipeline(CustomHandleMethodsMixin, CustomPipelineMixin,
         return sub_pipelines
 
 
-class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
+class Barrier(NonTransformableMixin, BaseStep, ABC):
     """
     A Barrier step to be used in a minibatch sequential pipeline. It forces all the
     data inputs to get to the barrier in a sub pipeline before going through to the next sub-pipeline.
@@ -616,7 +567,6 @@ class Barrier(NonFittableMixin, NonTransformableMixin, BaseStep, ABC):
 
 
     .. seealso::
-        :class:`~neuraxle.base.NonFittableMixin`,
         :class:`~neuraxle.base.NonTransformableMixin`,
         :class:`~neuraxle.base.BaseStep`
     """

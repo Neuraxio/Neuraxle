@@ -21,7 +21,7 @@ The neuraxle classes to track metrics results.
 """
 from typing import Dict
 
-from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext
+from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, _FittableStep
 from neuraxle.data_container import DataContainer
 
 

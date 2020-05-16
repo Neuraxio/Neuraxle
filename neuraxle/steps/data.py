@@ -22,8 +22,8 @@ You can find here steps that take action on data.
 import random
 from typing import Iterable
 
-from neuraxle.base import BaseStep, MetaStepMixin, NonFittableMixin, ExecutionContext, HandleOnlyMixin, \
-    ForceHandleOnlyMixin
+from neuraxle.base import BaseStep, MetaStepMixin, ExecutionContext, HandleOnlyMixin, \
+    ForceHandleOnlyMixin, _FittableStep
 from neuraxle.base import NonTransformableMixin
 from neuraxle.data_container import DataContainer, _inner_concatenate_np_array
 from neuraxle.pipeline import Pipeline
@@ -31,7 +31,7 @@ from neuraxle.steps.flow import TrainOnlyWrapper
 from neuraxle.steps.output_handlers import InputAndOutputTransformerMixin
 
 
-class DataShuffler(NonFittableMixin, InputAndOutputTransformerMixin, BaseStep):
+class DataShuffler(InputAndOutputTransformerMixin, BaseStep):
     """
     Data Shuffling step that shuffles data inputs, and expected_outputs at the same time.
 
@@ -197,7 +197,7 @@ class TrainShuffled(Pipeline):
         ])
 
 
-class InnerConcatenateDataContainer(NonFittableMixin, NonTransformableMixin, BaseStep):
+class InnerConcatenateDataContainer(NonTransformableMixin, BaseStep):
     """
     Concatenate inner features of sub data containers along `axis=-1`..
 
@@ -223,7 +223,6 @@ class InnerConcatenateDataContainer(NonFittableMixin, NonTransformableMixin, Bas
 
 
     .. seealso::
-        :class:`~neuraxle.base.NonFittableMixin`,
         :class:`~neuraxle.base.NonTransformableMixin`,
         :class:`~neuraxle.base.BaseStep`
         :class:`~neuraxle.data_container.DataContainer`
@@ -232,7 +231,6 @@ class InnerConcatenateDataContainer(NonFittableMixin, NonTransformableMixin, Bas
     def __init__(self, sub_data_container_names=None):
         BaseStep.__init__(self)
         NonTransformableMixin.__init__(self)
-        NonFittableMixin.__init__(self)
 
         self.data_sources = sub_data_container_names
 
@@ -305,7 +303,7 @@ class InnerConcatenateDataContainer(NonFittableMixin, NonTransformableMixin, Bas
         return data_container
 
 
-class ZipBatchDataContainer(NonFittableMixin, NonTransformableMixin, BaseStep):
+class ZipBatchDataContainer(NonTransformableMixin, BaseStep):
     """
     Concatenate outer batch of sub data containers along `axis=0`..
 
@@ -331,7 +329,6 @@ class ZipBatchDataContainer(NonFittableMixin, NonTransformableMixin, BaseStep):
 
 
     .. seealso::
-        :class:`~neuraxle.base.NonFittableMixin`,
         :class:`~neuraxle.base.NonTransformableMixin`,
         :class:`~neuraxle.base.BaseStep`
         :class:`~neuraxle.data_container.DataContainer`
@@ -340,7 +337,6 @@ class ZipBatchDataContainer(NonFittableMixin, NonTransformableMixin, BaseStep):
     def __init__(self, sub_data_container_names=None):
         BaseStep.__init__(self)
         NonTransformableMixin.__init__(self)
-        NonFittableMixin.__init__(self)
 
         self.data_sources = sub_data_container_names
 

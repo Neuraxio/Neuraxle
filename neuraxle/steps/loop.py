@@ -28,7 +28,7 @@ from typing import List
 import numpy as np
 
 from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, \
-    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList
+    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, _FittableStep
 from neuraxle.data_container import ListDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
@@ -42,7 +42,6 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStepMixin, 
         :class:`~neuraxle.base.BaseSaver`,
         :class:`~neuraxle.base.BaseHasher`,
         :class:`~neuraxle.base.ResumableStepMixin`,
-        :class:`~neuraxle.base.NonFittableMixin`,
         :class:`~neuraxle.base.NonTransformableMixin`,
         :class:`~neuraxle.pipeline.Pipeline`,
         :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
@@ -296,7 +295,6 @@ class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStepMixin, BaseSt
         :class:`~neuraxle.base.BaseHasher`,
         :class:`~neuraxle.base.ResumableStepMixin`,
         :class:`~neuraxle.base.MetaStepMixin`,
-        :class:`~neuraxle.base.NonFittableMixin`,
         :class:`~neuraxle.base.NonTransformableMixin`,
         :class:`~neuraxle.pipeline.Pipeline`,
         :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,

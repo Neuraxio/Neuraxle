@@ -26,7 +26,7 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
 from typing import Union
 
 from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin, \
-    HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin, NonFittableMixin
+    HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin, _FittableStep
 from neuraxle.data_container import ExpandedDataContainer
 from neuraxle.hyperparams.distributions import Boolean, Choice
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
@@ -401,7 +401,7 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
         self._refresh_steps()
 
 
-class NumpyConcatenateOnCustomAxisIfNotEmpty(NonFittableMixin, BaseStep):
+class NumpyConcatenateOnCustomAxisIfNotEmpty(BaseStep):
     """
     Numpy concetenation step where the concatenation is performed along the specified custom axis.
     """
@@ -414,7 +414,6 @@ class NumpyConcatenateOnCustomAxisIfNotEmpty(NonFittableMixin, BaseStep):
         """
         self.axis = axis
         BaseStep.__init__(self)
-        NonFittableMixin.__init__(self)
 
     def _transform_data_container(self, data_container, context):
         """

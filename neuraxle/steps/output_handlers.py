@@ -23,7 +23,7 @@ You can find here output handlers steps that changes especially the data outputs
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-from neuraxle.base import ExecutionContext, BaseStep, MetaStepMixin, ForceHandleOnlyMixin
+from neuraxle.base import ExecutionContext, BaseStep, MetaStepMixin, ForceHandleOnlyMixin, _FittableStep
 from neuraxle.data_container import DataContainer
 
 

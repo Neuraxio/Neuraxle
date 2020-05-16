@@ -31,7 +31,7 @@ from enum import Enum
 from typing import List, Tuple, Any
 
 from neuraxle.base import ResumableStepMixin, BaseStep, ExecutionContext, \
-    ExecutionMode, NonTransformableMixin, NonFittableMixin, Identity
+    ExecutionMode, NonTransformableMixin, Identity
 from neuraxle.data_container import DataContainer, ListDataContainer
 
 
@@ -40,7 +40,7 @@ class DataCheckpointType(Enum):
     EXPECTED_OUTPUT = 'eo'
 
 
-class BaseCheckpointer(NonFittableMixin, NonTransformableMixin, BaseStep):
+class BaseCheckpointer(NonTransformableMixin, BaseStep):
     """
     Base class to implement a step checkpoint or data container checkpoint.
 
@@ -163,7 +163,7 @@ class StepSavingCheckpointer(BaseCheckpointer):
         return True
 
 
-class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, BaseStep):
+class Checkpoint(NonTransformableMixin, ResumableStepMixin, BaseStep):
     """
     Resumable Checkpoint Step to load, and save both data checkpoints, and step checkpoints.
     Checkpoint uses a list of step checkpointers(List[StepCheckpointer]), and data checkpointers(List[BaseCheckpointer]).
@@ -193,7 +193,6 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :class:`~neuraxle.base.BaseStep`,
         :func:`neuraxle.pipeline.ResumablePipeline._load_checkpoint`,
         :class:`~neuraxle.base.ResumableStepMixin`,
-        :class:`~neuraxle.base.NonFittableMixin`,
         :class:`~neuraxle.base.NonTransformableMixin`
     """
 

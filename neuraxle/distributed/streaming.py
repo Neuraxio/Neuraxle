@@ -27,7 +27,7 @@ from multiprocessing.context import Process
 from threading import Thread
 from typing import Tuple, List, Union, Iterable
 
-from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin, NonFittableMixin, BaseSaver
+from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin, BaseSaver, _FittableStep
 from neuraxle.data_container import DataContainer, ListDataContainer
 from neuraxle.pipeline import Pipeline, CustomPipelineMixin, MiniBatchSequentialPipeline, Joiner
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
@@ -307,7 +307,6 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             use_savers=False,
             cache_folder=None
     ):
-        NonFittableMixin.__init__(self)
         CustomPipelineMixin.__init__(self)
 
         if data_joiner is None:
@@ -421,7 +420,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         all_steps_are_not_fittable = True
 
         for _, step in self[:-1]:
-            if not isinstance(step.get_step(), NonFittableMixin):
+            if not isinstance(step.get_step(), _FittableStep):
                 all_steps_are_not_fittable = False
 
         if all_steps_are_not_fittable:

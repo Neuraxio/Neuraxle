@@ -485,7 +485,7 @@ class ExecutionContext:
         return len(self.parents)
 
 
-class BaseTransformer(ABC):
+class _TransformerStep:
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
         """
         Apply side effects before any step method.
@@ -522,7 +522,7 @@ class BaseTransformer(ABC):
         :param context: execution context
         :return: tuple(fitted pipeline, data_container)
         """
-        return self.handle_transform(data_container, context)
+        return self, self.handle_transform(data_container, context)
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -565,7 +565,19 @@ class BaseTransformer(ABC):
         return data_container
 
     def __call__(self, *args, **kwargs) -> Any:
-        pass
+        return self.transform(*args)
+
+    @abstractmethod
+    def transform(self, data_inputs):
+        """
+        Transform given data inputs.
+
+        :param data_inputs: data inputs
+        :return: transformed data inputs
+        """
+        raise NotImplementedError(
+            "TODO: Implement this method in {}, or have this class inherit from the NonTransformableMixin.".format(
+                self.__class__.__name__))
 
     def handle_predict(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -583,6 +595,21 @@ class BaseTransformer(ABC):
         self.set_train(was_train)
         return data_container
 
+    def predict(self, data_input):
+        """
+        Predict the expected output in test mode using func:`~.transform`, but by setting self to test mode first and then reverting the mode.
+
+        :param data_input: data input to predict
+        :return: prediction
+        """
+        was_train: bool = self.is_train
+        self.set_train(False)
+
+        outputs = self(data_input)
+
+        self.set_train(was_train)
+        return outputs
+
     def _did_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Apply side effects after transform.
@@ -592,6 +619,54 @@ class BaseTransformer(ABC):
         :return: data container
         """
         return data_container
+
+    def handle_inverse_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.inverse_transform`.
+        The default behavior is to rehash current ids with the step hyperparameters.
+
+        :param data_container: the data container to inverse transform
+        :param context: execution context
+        :return: data_container
+
+        .. seealso::
+            :class:`~neuraxle.data_container.DataContainer`,
+            :class:`~neuraxle.pipeline.Pipeline`
+        """
+        data_container, context = self._will_process(data_container, context)
+        data_container = self._inverse_transform_data_container(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        return data_container
+
+    def _inverse_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        processed_outputs = self.inverse_transform(data_container.data_inputs)
+        data_container.set_data_inputs(processed_outputs)
+
+        return data_container
+
+    def inverse_transform(self, processed_outputs):
+        """
+        Inverse Transform the given transformed data inputs.
+
+        :func:`~neuraxle.base.BaseStep.mutate` or :func:`~neuraxle.base.BaseStep.reverse` can be called to change the default transform behavior :
+
+        .. code-block:: python
+
+            p = Pipeline([MultiplyBy()])
+
+            _in = np.array([1, 2])
+
+            _out = p.transform(_in)
+
+            _regenerated_in = reversed(p).transform(_out)
+
+            assert np.array_equal(_regenerated_in, _in)
+
+        :param processed_outputs: processed data inputs
+        :return: inverse transformed processed outputs
+        """
+        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
     def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -605,7 +680,7 @@ class BaseTransformer(ABC):
         return data_container
 
 
-class _FittableMixin(ABC):
+class _FittableStep:
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
@@ -639,7 +714,7 @@ class _FittableMixin(ABC):
         self.invalidate()
         return data_container, context.push(self)
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> '_FittableStep':
         """
         Fit data container.
 
@@ -650,8 +725,35 @@ class _FittableMixin(ABC):
         return self.fit(data_container.data_inputs, data_container.expected_outputs)
 
     @abstractmethod
-    def fit(self, data_inputs, expected_outputs):
+    def fit(self, data_inputs, expected_outputs) -> '_FittableStep':
+        """
+        Fit data inputs on the given expected outputs.
+
+        :param data_inputs: data inputs
+        :param expected_outputs: expected outputs to fit on.
+        :return: self
+        """
         raise NotImplementedError("TODO: Implement this method in {}, or have this class inherit from the NonFittableMixin.".format(self.__class__.__name__))
+
+    def meta_fit(self, X_train, y_train, metastep: 'MetaStepMixin'):
+        """
+        Uses a meta optimization technique (AutoML) to find the best hyperparameters in the given
+        hyperparameter space.
+
+        Usage: ``p = p.meta_fit(X_train, y_train, metastep=RandomSearch(n_iter=10, scoring_function=r2_score, higher_score_is_better=True))``
+
+        Call ``.mutate(new_method="inverse_transform", method_to_assign_to="transform")``, and the
+        current estimator will become
+
+        :param X_train: data_inputs.
+        :param y_train: expected_outputs.
+        :param metastep: a metastep, that is, a step that can sift through the hyperparameter space of another estimator.
+        :return: your best self.
+        """
+        metastep.set_step(self)
+        metastep = metastep.fit(X_train, y_train)
+        best_step = metastep.get_best_model()
+        return best_step
 
     def _did_fit(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -706,6 +808,21 @@ class _FittableMixin(ABC):
 
         return new_self, data_container
 
+    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+        """
+        Fit, and transform step with the given data inputs, and expected outputs.
+
+        :param data_inputs: data inputs
+        :param expected_outputs: expected outputs to fit on
+        :return: (fitted self, tranformed data inputs)
+        """
+        self.invalidate()
+
+        new_self = self.fit(data_inputs, expected_outputs)
+        out = new_self(data_inputs)
+
+        return new_self, out
+
     def _did_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Apply side effects after fit transform.
@@ -716,14 +833,8 @@ class _FittableMixin(ABC):
         """
         return data_container
 
-    @abstractmethod
-    def fit_transform(self, data_inputs, expected_outputs):
-        raise NotImplementedError("TODO: Implement this method in {}, or have this class inherit from the NonFittableMixin.".format(self.__class__.__name__))
 
-
-
-
-class BaseStep(ABC):
+class BaseStep(_TransformerStep, ABC):
     """
     Base class for a pipeline step.
 
@@ -795,6 +906,8 @@ class BaseStep(ABC):
             savers: List[BaseSaver] = None,
             hashers: List[BaseHasher] = None
     ):
+        _TransformerStep.__init__(self)
+
         if hyperparams is None:
             hyperparams = dict()
         if hyperparams_space is None:
@@ -1130,32 +1243,6 @@ class BaseStep(ABC):
         """
         return self.hyperparams_space
 
-    def handle_inverse_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        """
-        Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.inverse_transform`.
-        The default behavior is to rehash current ids with the step hyperparameters.
-
-        :param data_container: the data container to inverse transform
-        :param context: execution context
-        :return: data_container
-
-        .. seealso::
-            :class:`~neuraxle.data_container.DataContainer`,
-            :class:`~neuraxle.pipeline.Pipeline`
-        """
-        data_container, context = self._will_process(data_container, context)
-        data_container = self._inverse_transform_data_container(data_container, context)
-        data_container = self._did_process(data_container, context)
-
-        return data_container
-
-    def _inverse_transform_data_container(
-            self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        processed_outputs = self.inverse_transform(data_container.data_inputs)
-        data_container.set_data_inputs(processed_outputs)
-
-        return data_container
-
     def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply a method to a step and its children.
@@ -1202,207 +1289,6 @@ class BaseStep(ABC):
             return self
         return None
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
-        """
-        Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
-        The default behavior is to rehash current ids with the step hyperparameters.
-
-        :param data_container: the data container to transform
-        :param context: execution context
-        :return: tuple(fitted pipeline, data_container)
-
-        .. seealso::
-            :class:`~neuraxle.data_container.DataContainer`,
-            :class:`~neuraxle.pipeline.Pipeline`
-        """
-        data_container, context = self._will_process(data_container, context)
-        data_container, context = self._will_fit(data_container, context)
-
-        new_self = self._fit_data_container(data_container, context)
-
-        self._did_fit(data_container, context)
-
-        return new_self
-
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
-        """
-        Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.fit_transform`.
-        The default behavior is to rehash current ids with the step hyperparameters.
-
-        :param data_container: the data container to transform
-        :param context: execution context
-        :return: tuple(fitted pipeline, data_container)
-        """
-        data_container, context = self._will_process(data_container, context)
-        data_container, context = self._will_fit_transform(data_container, context)
-
-        new_self, data_container = self._fit_transform_data_container(data_container, context)
-
-        data_container = self._did_fit_transform(data_container, context)
-        data_container = self._did_process(data_container, context)
-
-        return new_self, data_container
-
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        """
-        Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.transform`.
-        The default behavior is to rehash current ids with the step hyperparameters.
-
-        :param data_container: the data container to transform
-        :param context: execution context
-        :return: transformed data container
-        """
-        data_container, context = self._will_process(data_container, context)
-        data_container, context = self._will_transform_data_container(data_container, context)
-
-        data_container = self._transform_data_container(data_container, context)
-
-        data_container = self._did_transform(data_container, context)
-        data_container = self._did_process(data_container, context)
-
-        return data_container
-
-    def handle_predict(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        """
-        Handle_transform in test mode.
-
-        :param data_container: the data container to transform
-        :param context: execution context
-        :return: transformed data container
-        """
-        was_train: bool = self.is_train
-        self.set_train(False)
-
-        data_container = self.handle_transform(data_container, context)
-
-        self.set_train(was_train)
-        return data_container
-
-    def _will_fit(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
-        """
-        Before fit is called, apply side effects on the step, the data container, or the execution context.
-
-        :param data_container: data container
-        :param context: execution context
-        :return: (data container, execution context)
-        """
-        self.invalidate()
-        return data_container, context.push(self)
-
-    def _did_fit(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        """
-        Apply side effects before fit is called.
-
-        :param data_container: data container
-        :param context: execution context
-        :return: (data container, execution context)
-        """
-        return data_container
-
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
-        """
-        Fit data container.
-
-        :param data_container: data container
-        :param context: execution context
-        :return: (fitted self, data container)
-        """
-        return self.fit(data_container.data_inputs, data_container.expected_outputs)
-
-    def _will_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-            DataContainer, ExecutionContext):
-        """
-        Apply side effects before fit_transform is called.
-
-        :param data_container: data container
-        :param context: execution context
-        :return: (data container, execution context)
-        """
-        self.invalidate()
-        return data_container, context.push(self)
-
-    def _did_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        """
-        Apply side effects after fit transform.
-
-        :param data_container: data container
-        :param context: execution context
-        :return: (fitted self, data container)
-        """
-        return data_container
-
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
-        """
-        Fit transform data container.
-
-        :param data_container: data container
-        :param context: execution context
-        :return: (fitted self, data container)
-        """
-        new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
-        data_container.set_data_inputs(out)
-
-        return new_self, data_container
-
-    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            DataContainer, ExecutionContext):
-        """
-        Apply side effects before transform.
-
-        :param data_container: data container
-        :param context: execution context
-        :return: (data container, execution context)
-        """
-        return data_container, context.push(self)
-
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
-            DataContainer, ExecutionContext):
-        """
-        Apply side effects before any step method.
-
-        :param data_container: data container
-        :param context: execution context
-        :return: (data container, execution context)
-        """
-        self.setup()
-        return data_container, context
-
-    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        """
-        Apply side effects after any step method.
-
-        :param data_container: data container
-        :param context: execution context
-        :return: (data container, execution context)
-        """
-        data_container = self.hash_data_container(data_container)
-        return data_container
-
-    def _did_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        """
-        Apply side effects after transform.
-
-        :param data_container: data container
-        :param context: execution context
-        :return: data container
-        """
-        return data_container
-
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        """
-        Transform data container.
-
-        :param data_container: data container
-        :param context: execution context
-        :return: data container
-        """
-        out = self.transform(data_container.data_inputs)
-        data_container.set_data_inputs(out)
-
-        return data_container
-
     def hash_data_container(self, data_container):
         """
         Hash data container using self.hashers.
@@ -1420,84 +1306,6 @@ class BaseStep(ABC):
         data_container.set_summary_id(summary_id)
 
         return data_container
-
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
-        """
-        Fit, and transform step with the given data inputs, and expected outputs.
-
-        :param data_inputs: data inputs
-        :param expected_outputs: expected outputs to fit on
-        :return: (fitted self, tranformed data inputs)
-        """
-        self.invalidate()
-
-        new_self = self.fit(data_inputs, expected_outputs)
-        out = new_self.transform(data_inputs)
-
-        return new_self, out
-
-    @abstractmethod
-    def fit(self, data_inputs, expected_outputs=None) -> 'BaseStep':
-        """
-        Fit step with the given data inputs, and expected outputs.
-
-        :param data_inputs: data inputs
-        :param expected_outputs: expected outputs to fit on
-        :return: fitted self
-        """
-        raise NotImplementedError(
-            "TODO: Implement this method in {}, or have this class inherit from the NonFittableMixin.".format(
-                self.__class__.__name__))
-
-    @abstractmethod
-    def transform(self, data_inputs):
-        """
-        Transform given data inputs.
-
-        :param data_inputs: data inputs
-        :return: transformed data inputs
-        """
-        raise NotImplementedError(
-            "TODO: Implement this method in {}, or have this class inherit from the NonTransformableMixin.".format(
-                self.__class__.__name__))
-
-    def inverse_transform(self, processed_outputs):
-        """
-        Inverse Transform the given transformed data inputs.
-
-        :func:`~neuraxle.base.BaseStep.mutate` or :func:`~neuraxle.base.BaseStep.reverse` can be called to change the default transform behavior :
-
-        .. code-block:: python
-
-            p = Pipeline([MultiplyBy()])
-
-            _in = np.array([1, 2])
-
-            _out = p.transform(_in)
-
-            _regenerated_in = reversed(p).transform(_out)
-
-            assert np.array_equal(_regenerated_in, _in)
-
-        :param processed_outputs: processed data inputs
-        :return: inverse transformed processed outputs
-        """
-        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
-
-    def predict(self, data_input):
-        """
-        Predict the expected output in test mode using func:`~.transform`, but by setting self to test mode first and then reverting the mode.
-
-        :param data_input: data input to predict
-        :return: prediction
-        """
-        was_train: bool = self.is_train
-        self.set_train(False)
-
-        outputs = self.transform(data_input)
-
-        self.set_train(was_train)
-        return outputs
 
     def should_save(self) -> bool:
         """
@@ -1598,26 +1406,6 @@ class BaseStep(ABC):
                                                                                  saver.__class__.__name__))
                 break
         return loaded_self
-
-    def meta_fit(self, X_train, y_train, metastep: 'MetaStepMixin'):
-        """
-        Uses a meta optimization technique (AutoML) to find the best hyperparameters in the given
-        hyperparameter space.
-
-        Usage: ``p = p.meta_fit(X_train, y_train, metastep=RandomSearch(n_iter=10, scoring_function=r2_score, higher_score_is_better=True))``
-
-        Call ``.mutate(new_method="inverse_transform", method_to_assign_to="transform")``, and the
-        current estimator will become
-
-        :param X_train: data_inputs.
-        :param y_train: expected_outputs.
-        :param metastep: a metastep, that is, a step that can sift through the hyperparameter space of another estimator.
-        :return: your best self.
-        """
-        metastep.set_step(self)
-        metastep = metastep.fit(X_train, y_train)
-        best_step = metastep.get_best_model()
-        return best_step
 
     def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
         """
@@ -1794,7 +1582,7 @@ def _sklearn_to_neuraxle_step(step) -> BaseStep:
     return step
 
 
-class MetaStepMixin:
+class MetaStepMixin(_FittableStep):
     """
     A class to represent a step that wraps another step. It can be used for many things.
 
@@ -1850,6 +1638,8 @@ class MetaStepMixin:
             self,
             wrapped: BaseStep = None
     ):
+        _FittableStep.__init__(self)
+
         self.wrapped: BaseStep = _sklearn_to_neuraxle_step(wrapped)
         self._ensure_proper_mixin_init_order()
 
@@ -2071,15 +1861,7 @@ class MetaStepMixin:
 
     def handle_fit_transform(self, data_container, context):
         previous_summary_id = data_container.summary_id
-
-        data_container, context = self._will_process(data_container, context)
-        data_container, context = self._will_fit_transform(data_container, context)
-
-        new_self, data_container = self._fit_transform_data_container(data_container, context)
-
-        data_container = self._did_fit_transform(data_container, context)
-        data_container = self._did_process(data_container, context)
-
+        new_self, data_container = _FittableStep.handle_fit_transform(self, data_container, context)
         data_container.set_summary_id(previous_summary_id)
         data_container.set_summary_id(self.summary_hash(data_container))
 
@@ -2087,15 +1869,7 @@ class MetaStepMixin:
 
     def handle_transform(self, data_container, context):
         previous_summary_id = data_container.summary_id
-
-        data_container, context = self._will_process(data_container, context)
-        data_container, context = self._will_transform_data_container(data_container, context)
-
-        data_container = self._transform_data_container(data_container, context)
-
-        data_container = self._did_transform(data_container, context)
-        data_container = self._did_process(data_container, context)
-
+        data_container = _TransformerStep.handle_transform(self, data_container, context)
         data_container.set_summary_id(previous_summary_id)
         data_container.set_summary_id(self.summary_hash(data_container))
 
@@ -2297,40 +2071,6 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
 
 
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
-
-
-class NonFittableMixin:
-    """
-    A pipeline step that requires no fitting: fitting just returns self when called to do no action.
-    Note: fit methods are not implemented
-    """
-
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
-        data_container, context = self._will_process(data_container, context)
-        data_container, context = self._will_transform_data_container(data_container, context)
-
-        data_container = self._transform_data_container(data_container, context)
-
-        data_container = self._did_transform(data_container, context)
-        data_container = self._did_process(data_container, context)
-
-        return self, data_container
-
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
-        return self
-
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
-        return self, self._transform_data_container(data_container, context)
-
-    def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
-        """
-        Don't fit.
-
-        :param data_inputs: the data that would normally be fitted on.
-        :param expected_outputs: the data that would normally be fitted on.
-        :return: self
-        """
-        return self
 
 
 class NonTransformableMixin:
@@ -3239,7 +2979,7 @@ class ResumableStepMixin:
         return self.__repr__()
 
 
-class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
+class Identity(NonTransformableMixin, BaseStep):
     """
     A pipeline step that has no effect at all but to return the same data without changes.
 
@@ -3258,11 +2998,10 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
         if savers is None:
             savers = [JoblibStepSaver()]
         NonTransformableMixin.__init__(self)
-        NonFittableMixin.__init__(self)
         BaseStep.__init__(self, name=name, savers=savers)
 
 
-class TransformHandlerOnlyMixin(NonFittableMixin):
+class TransformHandlerOnlyMixin():
     """
     A pipeline step that only requires the implementation of _transform_data_container.
 

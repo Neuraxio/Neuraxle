@@ -32,7 +32,7 @@ import numpy as np
 from sklearn.metrics import r2_score
 
 from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, HandleOnlyMixin, ForceHandleOnlyMixin, \
-    EvaluableStepMixin
+    EvaluableStepMixin, _FittableStep
 from neuraxle.data_container import DataContainer
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnCustomAxis
