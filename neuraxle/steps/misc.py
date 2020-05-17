@@ -74,8 +74,14 @@ class BaseCallbackStep(BaseStep, ABC):
         """
         self.callback_function(data, *self.more_arguments)
 
+    def transform(self, data_inputs):
+        return data_inputs
 
-class FitCallbackStep(NonTransformableMixin, BaseCallbackStep):
+    def inverse_transform(self, processed_outputs):
+        return processed_outputs
+
+
+class FitCallbackStep(_FittableStep, BaseCallbackStep):
     """Call a callback method on fit."""
 
     def fit(self, data_inputs, expected_outputs=None) -> 'FitCallbackStep':
@@ -133,6 +139,7 @@ class FitTransformCallbackStep(_FittableStep, BaseStep):
                  transform_function=None,
                  hyperparams=None):
         BaseStep.__init__(self, hyperparams)
+        _FittableStep.__init__(self)
 
         if transform_callback_function is None:
             transform_callback_function = TapeCallbackFunction()
@@ -174,10 +181,10 @@ class FitTransformCallbackStep(_FittableStep, BaseStep):
 
     def clear_callbacks(self):
         cleared_callbacks = {
-           self.name: {
-               'transform': self.transform_callback_function.data,
-               'fit': self.fit_callback_function.data
-           }
+            self.name: {
+                'transform': self.transform_callback_function.data,
+                'fit': self.fit_callback_function.data
+            }
         }
 
         self.transform_callback_function.data = []
@@ -207,6 +214,7 @@ class CallbackWrapper(HandleOnlyMixin, MetaStepMixin, BaseStep):
         :class:`~neuraxle.base.MetaStepMixin`,
         :class:`~neuraxle.base.BaseStep`
     """
+
     def __init__(
             self,
             wrapped,
@@ -352,7 +360,7 @@ class TapeCallbackFunction:
         return self.name_tape
 
 
-class HandleCallbackStep(HandleOnlyMixin, BaseStep):
+class HandleCallbackStep(_FittableStep, HandleOnlyMixin, BaseStep):
     def __init__(
             self,
             handle_fit_callback,
@@ -376,6 +384,12 @@ class HandleCallbackStep(HandleOnlyMixin, BaseStep):
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         self.handle_fit_transform_callback((data_container, context))
         return self, data_container
+
+    def fit(self, data_inputs, expected_outputs) -> '_FittableStep':
+        return self
+
+    def inverse_transform(self, processed_outputs):
+        return processed_outputs
 
 
 class Sleep(BaseStep):

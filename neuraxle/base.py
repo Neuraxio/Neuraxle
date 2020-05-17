@@ -567,6 +567,17 @@ class _TransformerStep:
     def __call__(self, *args, **kwargs) -> Any:
         return self.transform(*args)
 
+    def fit_transform(self, data_inputs, expected_outputs=None):
+        """
+        Fit transform given data inputs. By default, a step only transforms in the fit transform method.
+        To add fitting to your step, see class:`_FittableStep` for more info.
+
+        :param data_inputs: data inputs
+        :param expected_outputs: expected outputs to fit on
+        :return: transformed data inputs
+        """
+        return self, self.transform(data_inputs)
+
     @abstractmethod
     def transform(self, data_inputs):
         """
@@ -681,6 +692,9 @@ class _TransformerStep:
 
 
 class _FittableStep:
+    def __init__(self, fit_data_container_callback=None, fit_transform_data_container_callback=None, transform_data_container_callback=None):
+        pass
+
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
@@ -700,6 +714,7 @@ class _FittableStep:
         new_self = self._fit_data_container(data_container, context)
 
         self._did_fit(data_container, context)
+        self._did_process(data_container, context)
 
         return new_self
 

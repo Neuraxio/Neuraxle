@@ -542,7 +542,7 @@ class ExpandDim(
         return False
 
 
-class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
+class ReversiblePreprocessingWrapper(HandleOnlyMixin, _FittableStep, TruncableSteps):
     """
     TruncableSteps with a preprocessing step(1), and a postprocessing step(2)
     that inverse transforms with the preprocessing step at the end (1, 2, reversed(1)).
@@ -563,11 +563,12 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
     """
 
     def __init__(self, preprocessing_step, postprocessing_step):
-        HandleOnlyMixin.__init__(self)
         TruncableSteps.__init__(self, [
             ("preprocessing_step", preprocessing_step),
             ("postprocessing_step", postprocessing_step)
         ])
+        _FittableStep.__init__(self)
+        HandleOnlyMixin.__init__(self)
 
     def _fit_data_container(self, data_container: DataContainer,
                             context: ExecutionContext) -> 'ReversiblePreprocessingWrapper':

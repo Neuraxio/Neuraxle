@@ -29,14 +29,14 @@ from typing import Any
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import Ridge
 
-from neuraxle.base import BaseStep
+from neuraxle.base import BaseStep, _FittableStep
 from neuraxle.hyperparams.distributions import LogUniform, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.union import ModelStacking
 
 
-class SKLearnWrapper(BaseStep):
+class SKLearnWrapper(_FittableStep, BaseStep):
     def __init__(
             self,
             wrapped_sklearn_predictor,

@@ -31,7 +31,7 @@ from enum import Enum
 from typing import List, Tuple, Any
 
 from neuraxle.base import ResumableStepMixin, BaseStep, ExecutionContext, \
-    ExecutionMode, NonTransformableMixin, Identity
+    ExecutionMode, NonTransformableMixin, Identity, _FittableStep, HandleOnlyMixin
 from neuraxle.data_container import DataContainer, ListDataContainer
 
 
@@ -163,7 +163,7 @@ class StepSavingCheckpointer(BaseCheckpointer):
         return True
 
 
-class Checkpoint(NonTransformableMixin, ResumableStepMixin, BaseStep):
+class Checkpoint(NonTransformableMixin, HandleOnlyMixin, ResumableStepMixin, _FittableStep, BaseStep):
     """
     Resumable Checkpoint Step to load, and save both data checkpoints, and step checkpoints.
     Checkpoint uses a list of step checkpointers(List[StepCheckpointer]), and data checkpointers(List[BaseCheckpointer]).
@@ -201,6 +201,9 @@ class Checkpoint(NonTransformableMixin, ResumableStepMixin, BaseStep):
             all_checkpointers: List[BaseCheckpointer] = None,
     ):
         BaseStep.__init__(self)
+        _FittableStep.__init__(self)
+        ResumableStepMixin.__init__(self)
+        HandleOnlyMixin.__init__(self)
         self.all_checkpointers = all_checkpointers
 
     def _fit_data_container(self, data_container, context) -> 'Checkpoint':
