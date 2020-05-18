@@ -58,7 +58,7 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
     def __init__(
             self,
             steps_as_tuple: NamedTupleList,
-            joiner: NonFittableMixin = NumpyConcatenateInnerFeatures(),
+            joiner: NonFittableMixin = None,
             n_jobs: int = None,
             backend: str = "threading",
             cache_folder_when_no_handle: str = None
@@ -70,6 +70,8 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
         :param n_jobs: The number of jobs for the parallelized ``joblib.Parallel`` loop in fit and in transform.
         :param backend: The type of parallelization to do with ``joblib.Parallel``. Possible values: "loky", "multiprocessing", "threading", "dask" if you use dask, and more.
         """
+        if joiner is None:
+            joiner = NumpyConcatenateInnerFeatures()
         steps_as_tuple.append(('joiner', joiner))
         TruncableSteps.__init__(self, steps_as_tuple)
         self.n_jobs = n_jobs
