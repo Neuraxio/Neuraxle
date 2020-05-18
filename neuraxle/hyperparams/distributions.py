@@ -1413,6 +1413,8 @@ class LogNormal(HyperparameterDistribution):
         self.log2_space_mean = log2_space_mean
         self.log2_space_std = log2_space_std
         self.hard_clip_min = hard_clip_min
+        if self.hard_clip_min is not None and self.hard_clip_min <= 0:
+            self.hard_clip_min = None
         self.hard_clip_max = hard_clip_max
 
     def rvs(self) -> float:

@@ -8,13 +8,13 @@ from collections import Counter
 import numpy as np
 
 from neuraxle.hyperparams.distributions import DistributionMixture, Choice, Quantized, LogNormal, LogUniform, RandInt, \
-    PriorityChoice
+    PriorityChoice, Boolean
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.metaopt.auto_ml import BaseHyperparameterSelectionStrategy, RandomSearchHyperparameterSelectionStrategy, \
     TRIAL_STATUS
-from neuraxle.metaopt.trial import Trial, Trials
+from neuraxle.metaopt.trial import Trials
 
-_INDEPENDANT_DISCRET_DISTRIBUTION = (Choice, PriorityChoice, RandInt)
+_INDEPENDANT_DISCRET_DISTRIBUTION = (Boolean, Choice, PriorityChoice, RandInt)
 _LOG_DISTRIBUTION = (LogNormal, LogUniform)
 _QUANTIZED_DISTRIBUTION = (Quantized,)
 
