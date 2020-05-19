@@ -692,9 +692,6 @@ class _TransformerStep:
 
 
 class _FittableStep:
-    def __init__(self, fit_data_container_callback=None, fit_transform_data_container_callback=None, transform_data_container_callback=None):
-        pass
-
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
@@ -847,6 +844,128 @@ class _FittableStep:
         :return: (fitted self, data container)
         """
         return data_container
+
+
+class _CustomHandlerMethods:
+    """
+    A class to represent a step that needs to add special behavior on top of the normal handler methods.
+
+    Apply additional behavior (mini-batching, parallel processing, etc.) before calling the internal handler methods :
+        - :func:`~neuraxle.base._FittableStep._fit_data_container`
+        - :func:`~neuraxle.base._FittableStep._fit_transform_data_container`
+        - :func:`~neuraxle.base._TransformerStep._transform_data_container`
+
+    .. seealso::
+        :class:`~neuraxle.base._FittableStep`,
+        :class:`~neuraxle.base._TransformerStep`,
+        :class:`~neuraxle.pipeline.MiniBatchSequentialPipeline`,
+        :class:`~neuraxle.distributed.streaming.BaseQueuedPipeline`
+    """
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
+        """
+        Handle fit with a custom handler method for fitting the data container.
+        The custom method to override is fit_data_container.
+
+        :param data_container: the data container to transform
+        :param context: execution context
+        :return: tuple(fitted pipeline, data_container)
+
+        .. seealso::
+            :class:`~neuraxle.base._FittableStep̀,
+            :class:`~neuraxle.data_container.DataContainer`,
+            :class:`~neuraxle.base.ExecutionContext`
+        """
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_fit(data_container, context)
+
+        new_self = self.fit_data_container(data_container, context)
+
+        self._did_fit(data_container, context)
+        self._did_process(data_container, context)
+
+        return new_self
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        Handle fit_transform with a custom handler method for fitting, and transforming the data container.
+        The custom method to override is fit_transform_data_container.
+
+        :param data_container: the data container to transform
+        :param context: execution context
+        :return: tuple(fitted pipeline, data_container)
+
+        .. seealso::
+            :class:`~neuraxle.base._FittableStep̀,
+            :class:`~neuraxle.data_container.DataContainer`,
+            :class:`~neuraxle.base.ExecutionContext`
+        """
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_fit_transform(data_container, context)
+
+        new_self, data_container = self.fit_transform_data_container(data_container, context)
+
+        data_container = self._did_fit_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        return new_self, data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Handle transform with a custom handler method for transforming the data container.
+        The custom method to override is transform_data_container.
+
+        :param data_container: the data container to transform
+        :param context: execution context
+        :return: transformed data container
+
+        .. seealso::
+            :class:`~neuraxle.base._TransformerStep̀,
+            :class:`~neuraxle.data_container.DataContainer`,
+            :class:`~neuraxle.base.ExecutionContext`
+        """
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_transform_data_container(data_container, context)
+
+        data_container = self.transform_data_container(data_container, context)
+
+        data_container = self._did_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        return data_container
+
+    @abstractmethod
+    def fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Custom fit data container method.
+
+        :param data_container: data container to fit on
+        :param context: execution context
+        :return: fitted self
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Custom fit transform data container method.
+
+        :param data_container: data container to fit on
+        :param context: execution context
+        :return: fitted self, transformed data container
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Custom transform data container method.
+
+        :param data_container: data container to transform
+        :param context: execution context
+        :return: transformed data container
+        """
+        raise NotImplementedError()
 
 
 class BaseStep(_TransformerStep, ABC):

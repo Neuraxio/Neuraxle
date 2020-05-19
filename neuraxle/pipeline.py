@@ -30,7 +30,8 @@ from copy import copy
 from typing import Any, Tuple, List
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, ExecutionContext, ExecutionMode, \
-    NonTransformableMixin, MetaStepMixin, _FittableStep, HandleOnlyMixin, ForceHandleOnlyMixin
+    NonTransformableMixin, MetaStepMixin, _FittableStep, HandleOnlyMixin, ForceHandleOnlyMixin, _CustomHandlerMethods, \
+    ForceHandleMixin
 from neuraxle.checkpoints import Checkpoint
 from neuraxle.data_container import DataContainer, ListDataContainer
 
@@ -299,7 +300,70 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         return False
 
 
-class MiniBatchSequentialPipeline(ForceHandleOnlyMixin, Pipeline):
+class CustomHandlerMethodsMixin:
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
+        """
+        Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
+        The default behavior is to rehash current ids with the step hyperparameters.
+
+        :param data_container: the data container to transform
+        :param context: execution context
+        :return: tuple(fitted pipeline, data_container)
+
+        .. seealso::
+            :class:`~neuraxle.data_container.DataContainer`,
+            :class:`~neuraxle.pipeline.Pipeline`
+        """
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_fit(data_container, context)
+
+        new_self = self.fit_data_container(data_container, context)
+
+        self._did_fit(data_container, context)
+        self._did_process(data_container, context)
+
+        return new_self
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+        """
+        Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.fit_transform`.
+        The default behavior is to rehash current ids with the step hyperparameters.
+
+        :param data_container: the data container to transform
+        :param context: execution context
+        :return: tuple(fitted pipeline, data_container)
+        """
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_fit_transform(data_container, context)
+
+        new_self, data_container = self.fit_transform_data_container(data_container, context)
+
+        data_container = self._did_fit_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        return new_self, data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.transform`.
+        The default behavior is to rehash current ids with the step hyperparameters.
+
+        :param data_container: the data container to transform
+        :param context: execution context
+        :return: transformed data container
+        """
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_transform_data_container(data_container, context)
+
+        data_container = self.transform_data_container(data_container, context)
+
+        data_container = self._did_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        return data_container
+
+
+class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipeline):
     """
     Mini Batch Sequential Pipeline class to create a pipeline processing data inputs in batch.
 
@@ -328,7 +392,7 @@ class MiniBatchSequentialPipeline(ForceHandleOnlyMixin, Pipeline):
     """
     def __init__(self, steps: NamedTupleList, batch_size=None, cache_folder=None):
         Pipeline.__init__(self, steps, cache_folder=cache_folder)
-        ForceHandleOnlyMixin.__init__(self)
+        ForceHandleMixin.__init__(self)
         self.__validate_barriers_batch_size(batch_size)
         self.__patch_missing_barrier(batch_size)
         self.__patch_barriers_batch_size(batch_size)
@@ -367,7 +431,7 @@ class MiniBatchSequentialPipeline(ForceHandleOnlyMixin, Pipeline):
 
         self._refresh_steps()
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Transform all sub pipelines splitted by the Barrier steps.
         :param data_container: data container to transform.
@@ -388,7 +452,7 @@ class MiniBatchSequentialPipeline(ForceHandleOnlyMixin, Pipeline):
 
         return data_container
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+    def fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
         """
         Fit all sub pipelines splitted by the Barrier steps.
         :param data_container: data container to transform.
@@ -419,7 +483,7 @@ class MiniBatchSequentialPipeline(ForceHandleOnlyMixin, Pipeline):
 
         return self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[BaseStep, DataContainer]:
+    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[BaseStep, DataContainer]:
         """
         Transform all sub pipelines splitted by the Barrier steps.
         :param data_container: data container to transform.

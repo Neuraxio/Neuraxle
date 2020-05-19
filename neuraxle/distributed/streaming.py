@@ -29,7 +29,7 @@ from typing import Tuple, List, Union, Iterable
 
 from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin, BaseSaver, _FittableStep
 from neuraxle.data_container import DataContainer, ListDataContainer
-from neuraxle.pipeline import Pipeline, CustomPipelineMixin, MiniBatchSequentialPipeline, Joiner
+from neuraxle.pipeline import Pipeline, MiniBatchSequentialPipeline, Joiner
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
 
