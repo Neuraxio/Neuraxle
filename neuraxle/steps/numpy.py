@@ -346,7 +346,8 @@ class ToNumpy(ForceHandleMixin, BaseStep):
     Convert data inputs, and expected outputs to a numpy array.
     """
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
+            DataContainer, ExecutionContext):
         return data_container.to_numpy(), context
 
 
@@ -373,3 +374,104 @@ class NumpyReshape(NonFittableMixin, BaseStep):
 
     def transform(self, data_inputs):
         return np.reshape(data_inputs, newshape=self.new_shape)
+
+
+class NumpyRavel(NonFittableMixin, BaseStep):
+    def transform(self, data_inputs):
+        if data_inputs is None:
+            return data_inputs
+
+        data_inputs = data_inputs if isinstance(data_inputs, np.ndarray) else np.array(data_inputs)
+        return data_inputs.ravel()
+
+
+class NumpyFFT(NonFittableMixin, BaseStep):
+    def __init__(self, axis=None):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+        if axis is None:
+            axis = -2
+        self.axis = axis
+
+    def transform(self, data_inputs):
+        """
+        Featurize time series data with FFT using np.fft.rfft
+
+        :param data_inputs: time series data of 3D shape: [batch_size, time_steps, sensors_readings]
+        :return: featurized data is of 2D shape: [batch_size, n_features]
+        """
+        transformed_data = np.fft.rfft(data_inputs, axis=-2)
+        return transformed_data
+
+
+class NumpyAbs(NonFittableMixin, BaseStep):
+    def transform(self, data_inputs):
+        """
+        Will featurize data with a max.
+
+        :param data_inputs: 3D time series of shape [batch_size, time_steps, sensors]
+        :return: featurized time series of shape [batch_size, features]
+        """
+        return np.abs(data_inputs)
+
+
+class NumpyMean(NonFittableMixin, BaseStep):
+    def transform(self, data_inputs):
+        """
+        Will featurize data with a mean.
+
+        :param data_inputs: 3D time series of shape [batch_size, time_steps, sensors]
+        :return: featurized time series of shape [batch_size, features]
+        """
+        return np.mean(data_inputs, axis=-2)
+
+
+class NumpyMedian(NonFittableMixin, BaseStep):
+    def transform(self, data_inputs):
+        """
+        Will featurize data with a median.
+
+        :param data_inputs: 3D time series of shape [batch_size, time_steps, sensors]
+        :return: featurized time series of shape [batch_size, features]
+        """
+        return np.median(data_inputs, axis=-2)
+
+
+class NumpyMin(NonFittableMixin, BaseStep):
+    def transform(self, data_inputs):
+        """
+        Will featurize data with a min.
+
+        :param data_inputs: 3D time series of shape [batch_size, time_steps, sensors]
+        :return: featurized time series of shape [batch_size, features]
+        """
+        return np.min(data_inputs, axis=-2)
+
+
+class NumpyMax(NonFittableMixin, BaseStep):
+    def transform(self, data_inputs):
+        """
+        Will featurize data with a max.
+
+        :param data_inputs: 3D time series of shape [batch_size, time_steps, sensors]
+        :return: featurized time series of shape [batch_size, features]
+        """
+        return np.max(data_inputs, axis=-2)
+
+
+class FFTPeakBinWithValue(NonFittableMixin, BaseStep):
+    def transform(self, data_inputs):
+        """
+        Will compute peak fft bins (int), and their magnitudes' value (float), to concatenate them.
+
+        :param data_inputs: real magnitudes of an fft. It could be of shape [batch_size, bins, features].
+        :return: Two arrays without bins concatenated on feature axis. Shape: [batch_size, 2 * features]
+        """
+        time_bins_axis = -2
+        peak_bin = np.argmax(data_inputs, axis=time_bins_axis)
+        peak_bin_val = np.max(data_inputs, axis=time_bins_axis)
+
+        # Notice that here another FeatureUnion could have been used with a joiner:
+        transformed = np.concatenate([peak_bin, peak_bin_val], axis=-1)
+
+        return transformed
