@@ -23,19 +23,18 @@ You can find here output handlers steps that changes especially the data outputs
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-from neuraxle.base import ExecutionContext, BaseStep, MetaStepMixin, ForceHandleOnlyMixin, _FittableStep
+from neuraxle.base import ExecutionContext, BaseStep, MetaStep, ForceHandleOnlyMixin, _FittableStep
 from neuraxle.data_container import DataContainer
 
 
-class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
+class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
     """
     Transform expected output wrapper step that can sends the expected_outputs to the wrapped step
     so that it can transform the expected outputs.
     """
 
     def __init__(self, wrapped, cache_folder_when_no_handle=None):
-        BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, wrapped)
+        MetaStep.__init__(self, wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:

@@ -29,14 +29,14 @@ from typing import Any
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import Ridge
 
-from neuraxle.base import BaseStep, _FittableStep
+from neuraxle.base import BaseStep
 from neuraxle.hyperparams.distributions import LogUniform, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.union import ModelStacking
 
 
-class SKLearnWrapper(_FittableStep, BaseStep):
+class SKLearnWrapper(BaseStep):
     def __init__(
             self,
             wrapped_sklearn_predictor,
@@ -79,7 +79,7 @@ class SKLearnWrapper(_FittableStep, BaseStep):
         return self.wrapped_sklearn_predictor.transform(data_inputs)
 
     def set_hyperparams(self, flat_hyperparams: HyperparameterSamples) -> BaseStep:
-        BaseStep.set_hyperparams(self, flat_hyperparams)
+        super().set_hyperparams(flat_hyperparams)
         self.wrapped_sklearn_predictor.set_params(**HyperparameterSamples(flat_hyperparams).to_flat_as_dict_primitive())
         return self
 

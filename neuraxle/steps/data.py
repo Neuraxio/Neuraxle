@@ -22,8 +22,7 @@ You can find here steps that take action on data.
 import random
 from typing import Iterable
 
-from neuraxle.base import BaseStep, MetaStepMixin, ExecutionContext, HandleOnlyMixin, \
-    ForceHandleOnlyMixin, _FittableStep
+from neuraxle.base import BaseStep, MetaStep, ExecutionContext, ForceHandleOnlyMixin, TransformerStep
 from neuraxle.base import NonTransformableMixin
 from neuraxle.data_container import DataContainer, _inner_concatenate_np_array
 from neuraxle.pipeline import Pipeline
@@ -31,7 +30,7 @@ from neuraxle.steps.flow import TrainOnlyWrapper
 from neuraxle.steps.output_handlers import InputAndOutputTransformerMixin
 
 
-class DataShuffler(InputAndOutputTransformerMixin, BaseStep):
+class DataShuffler(InputAndOutputTransformerMixin, TransformerStep):
     """
     Data Shuffling step that shuffles data inputs, and expected_outputs at the same time.
 
@@ -53,8 +52,8 @@ class DataShuffler(InputAndOutputTransformerMixin, BaseStep):
     """
 
     def __init__(self, seed=None, increment_seed_after_each_fit=True):
+        TransformerStep.__init__(self)
         InputAndOutputTransformerMixin.__init__(self)
-        BaseStep.__init__(self)
         if seed is None:
             seed = 42
         self.seed = seed
@@ -79,7 +78,7 @@ class DataShuffler(InputAndOutputTransformerMixin, BaseStep):
         return list(data_inputs_shuffled), list(expected_outputs_shuffled)
 
 
-class EpochRepeater(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
+class EpochRepeater(ForceHandleOnlyMixin, MetaStep, BaseStep):
     """
     Repeat wrapped step fit, or transform for the number of epochs passed in the constructor.
 
@@ -100,7 +99,7 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
 
     def __init__(self, wrapped, epochs, repeat_in_test_mode=False, cache_folder_when_no_handle=None):
         BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, wrapped)
+        MetaStep.__init__(self, wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
 
         self.repeat_in_test_mode = repeat_in_test_mode
@@ -197,7 +196,7 @@ class TrainShuffled(Pipeline):
         ])
 
 
-class InnerConcatenateDataContainer(NonTransformableMixin, BaseStep):
+class InnerConcatenateDataContainer(ForceHandleOnlyMixin, TransformerStep):
     """
     Concatenate inner features of sub data containers along `axis=-1`..
 
@@ -229,12 +228,12 @@ class InnerConcatenateDataContainer(NonTransformableMixin, BaseStep):
     """
 
     def __init__(self, sub_data_container_names=None):
-        BaseStep.__init__(self)
-        NonTransformableMixin.__init__(self)
+        TransformerStep.__init__(self)
+        ForceHandleOnlyMixin.__init__(self)
 
         self.data_sources = sub_data_container_names
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('TransformerStep', DataContainer):
         """
         Merge sub data containers into the current data container.
 
@@ -243,7 +242,7 @@ class InnerConcatenateDataContainer(NonTransformableMixin, BaseStep):
         :param context: execution context
         :type context: ExecutionContext
         :return: base step, data container
-        :rtype: Tuple[BaseStep, DataContainer]
+        :rtype: Tuple[TransformerStep, DataContainer]
         """
         return self, self._concatenate_sub_data_containers(data_container)
 
@@ -303,7 +302,7 @@ class InnerConcatenateDataContainer(NonTransformableMixin, BaseStep):
         return data_container
 
 
-class ZipBatchDataContainer(NonTransformableMixin, BaseStep):
+class ZipBatchDataContainer(ForceHandleOnlyMixin, TransformerStep):
     """
     Concatenate outer batch of sub data containers along `axis=0`..
 
@@ -335,23 +334,10 @@ class ZipBatchDataContainer(NonTransformableMixin, BaseStep):
     """
 
     def __init__(self, sub_data_container_names=None):
-        BaseStep.__init__(self)
-        NonTransformableMixin.__init__(self)
+        TransformerStep.__init__(self)
+        ForceHandleOnlyMixin.__init__(self)
 
         self.data_sources = sub_data_container_names
-
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
-        """
-        Merge sub data containers into the current data container.
-
-        :param data_container: data container to zip
-        :type data_container: DataContainer
-        :param context: execution context
-        :type context: ExecutionContext
-        :return: base step, data container
-        :rtype: Tuple[BaseStep, DataContainer]
-        """
-        return self, self._batch_zip_sub_data_containers(data_container)
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """

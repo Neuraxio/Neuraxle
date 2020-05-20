@@ -1,4 +1,4 @@
-from neuraxle.base import BaseStep, TruncableSteps, MetaStepMixin
+from neuraxle.base import BaseStep, TruncableSteps, MetaStep
 from neuraxle.hyperparams.distributions import LogUniform, Quantized, RandInt, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
@@ -54,10 +54,10 @@ class SomeStepWithHyperparams(BaseStep):
         pass
 
 
-class SomeMetaStepWithHyperparams(MetaStepMixin, BaseStep):
+class SomeMetaStepWithHyperparams(MetaStep, BaseStep):
     def __init__(self):
         BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, SomeStepWithHyperparams())
+        MetaStep.__init__(self, SomeStepWithHyperparams())
 
     def transform(self, data_inputs):
         pass

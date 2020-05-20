@@ -158,7 +158,7 @@ class BaseSaver(ABC):
     """
 
     @abstractmethod
-    def save_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
+    def save_step(self, step: 'TransformerStep', context: 'ExecutionContext') -> 'TransformerStep':
         """
         Save step with execution context.
 
@@ -170,7 +170,7 @@ class BaseSaver(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def can_load(self, step: 'BaseStep', context: 'ExecutionContext'):
+    def can_load(self, step: 'TransformerStep', context: 'ExecutionContext'):
         """
         Returns true if we can load the given step with the given execution context.
 
@@ -181,7 +181,7 @@ class BaseSaver(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def load_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
+    def load_step(self, step: 'TransformerStep', context: 'ExecutionContext') -> 'TransformerStep':
         """
         Load step with execution context.
 
@@ -209,7 +209,7 @@ class JoblibStepSaver(BaseSaver):
         :class:`~neuraxle.base.ExecutionContext`
     """
 
-    def can_load(self, step: 'BaseStep', context: 'ExecutionContext') -> bool:
+    def can_load(self, step: 'TransformerStep', context: 'ExecutionContext') -> bool:
         """
         Returns true if the given step has been saved with the given execution context.
 
@@ -231,7 +231,7 @@ class JoblibStepSaver(BaseSaver):
         """
         return os.path.join(context.get_path(), '{0}.joblib'.format(step.name))
 
-    def save_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
+    def save_step(self, step: 'TransformerStep', context: 'ExecutionContext') -> 'TransformerStep':
         """
         Saved step stripped out of things that would make it unserializable.
 
@@ -246,7 +246,7 @@ class JoblibStepSaver(BaseSaver):
 
         return step
 
-    def load_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
+    def load_step(self, step: 'TransformerStep', context: 'ExecutionContext') -> 'TransformerStep':
         """
         Load stripped step.
 
@@ -355,7 +355,7 @@ class ExecutionContext:
             return self.parents[-1].should_save()
         return False
 
-    def pop_item(self) -> 'BaseStep':
+    def pop_item(self) -> 'TransformerStep':
         """
         Change the execution context to be the same as the latest parent context.
 
@@ -374,7 +374,7 @@ class ExecutionContext:
         self.pop_item()
         return True
 
-    def push(self, step: 'BaseStep') -> 'ExecutionContext':
+    def push(self, step: 'TransformerStep') -> 'ExecutionContext':
         """
         Pushes a step in the parents of the execution context.
 
@@ -386,7 +386,7 @@ class ExecutionContext:
     def copy(self):
         return ExecutionContext(root=self.root, execution_mode=self.execution_mode, parents=copy(self.parents))
 
-    def peek(self) -> 'BaseStep':
+    def peek(self) -> 'TransformerStep':
         """
         Get last parent.
 
@@ -433,7 +433,7 @@ class ExecutionContext:
         """
         return len(self) == 0
 
-    def load(self, path: str) -> 'BaseStep':
+    def load(self, path: str) -> 'TransformerStep':
         """
         Load full dump at the given path.
 
@@ -496,7 +496,7 @@ class _TransformerStep:
         """
         return data_container, context
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'TransformerStep':
         """
         Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
         The default behavior is to rehash current ids with the step hyperparameters.
@@ -512,7 +512,7 @@ class _TransformerStep:
         self._did_process(data_container, context)
         return self
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('TransformerStep', DataContainer):
         """
         Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.fit_transform`.
         The default behavior is to rehash current ids with the step hyperparameters.
@@ -746,7 +746,7 @@ class _FittableStep:
         """
         raise NotImplementedError("TODO: Implement this method in {}, or have this class inherit from the NonFittableMixin.".format(self.__class__.__name__))
 
-    def meta_fit(self, X_train, y_train, metastep: 'MetaStepMixin'):
+    def meta_fit(self, X_train, y_train, metastep: 'MetaStep'):
         """
         Uses a meta optimization technique (AutoML) to find the best hyperparameters in the given
         hyperparameter space.
@@ -967,7 +967,491 @@ class _CustomHandlerMethods:
         raise NotImplementedError()
 
 
-class BaseStep(_TransformerStep, ABC):
+class _HasHyperparamsSpace(ABC):
+    def __init__(self, hyperparams_space: HyperparameterSpace = None):
+        if hyperparams_space is None:
+            hyperparams_space = dict()
+
+        self.hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space)
+        self.hyperparams_space = self.hyperparams_space.to_flat()
+
+    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'TransformerStep':
+        """
+        Set step hyperparameters space.
+
+        Example :
+
+        .. code-block:: python
+
+            step.set_hyperparams_space(HyperparameterSpace({
+                'hp': RandInt(0, 10)
+            }))
+
+        :param hyperparams_space: hyperparameters space
+        :return: self
+
+        .. seealso::
+            :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
+            :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
+        """
+        self.invalidate()
+        self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
+        return self
+
+    def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'TransformerStep':
+        """
+        Update the step hyperparameter spaces without removing the already-set hyperparameters.
+        This can be useful to add more hyperparameter spaces to the existing ones without flushing the ones that were already set.
+
+        Example :
+
+        .. code-block:: python
+
+            step.set_hyperparams_space(HyperparameterSpace({
+                'learning_rate': LogNormal(0.5, 0.5)
+                'weight_decay': LogNormal(0.001, 0.0005)
+            }))
+
+            step.update_hyperparams_space(HyperparameterSpace({
+                'learning_rate': LogNormal(0.5, 0.1)
+            }))
+
+            assert step.get_hyperparams_space()['learning_rate'] == LogNormal(0.5, 0.1)
+            assert step.get_hyperparams_space()['weight_decay'] == LogNormal(0.001, 0.0005)
+
+        :param hyperparams_space: hyperparameters space
+        :return: self
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
+        """
+        self.hyperparams_space.update(hyperparams_space)
+        self.hyperparams_space = HyperparameterSamples(self.hyperparams_space).to_flat()
+        return self
+
+    def get_hyperparams_space(self) -> HyperparameterSpace:
+        """
+        Get step hyperparameters space.
+
+        Example :
+
+        .. code-block:: python
+
+            step.get_hyperparams_space()
+
+        :return: step hyperparams space
+
+        .. seealso::
+            :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
+            :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
+        """
+        return self.hyperparams_space
+
+
+class _HasHyperparams(ABC):
+    def __init__(self, hyperparams: HyperparameterSamples = None):
+        if hyperparams is None:
+            hyperparams = dict()
+
+        self.hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams)
+        self.hyperparams = self.hyperparams.to_flat()
+
+    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'TransformerStep':
+        """
+        Set the step hyperparameters.
+
+        Example :
+
+        .. code-block:: python
+
+            step.set_hyperparams(HyperparameterSamples({
+                'learning_rate': 0.10
+            }))
+
+        :param hyperparams: hyperparameters
+        :return: self
+
+        .. seealso::
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+        """
+        self.invalidate()
+        self.hyperparams = HyperparameterSamples(hyperparams).to_flat()
+        return self
+
+    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> 'TransformerStep':
+        """
+        Update the step hyperparameters without removing the already-set hyperparameters.
+        This can be useful to add more hyperparameters to the existing ones without flushing the ones that were already set.
+
+        Example :
+
+        .. code-block:: python
+
+            step.set_hyperparams(HyperparameterSamples({
+                'learning_rate': 0.10
+                'weight_decay': 0.001
+            }))
+
+            step.update_hyperparams(HyperparameterSamples({
+                'learning_rate': 0.01
+            }))
+
+            assert step.get_hyperparams()['learning_rate'] == 0.01
+            assert step.get_hyperparams()['weight_decay'] == 0.001
+
+        :param hyperparams: hyperparameters
+        :return: self
+
+        .. seealso::
+            :func:`~BaseStep.update_hyperparams`,
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+        """
+        self.hyperparams.update(hyperparams)
+        self.hyperparams = HyperparameterSamples(self.hyperparams).to_flat()
+        return self
+
+    def get_hyperparams(self) -> HyperparameterSamples:
+        """
+        Get step hyperparameters as :class:`~neuraxle.hyperparams.space.HyperparameterSamples`.
+
+        :return: step hyperparameters
+
+        .. seealso::
+            * :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+        """
+        return self.hyperparams
+
+    def set_params(self, **params) -> 'TransformerStep':
+        """
+        Set step hyperparameters with a dictionary.
+
+        Example :
+
+        .. code-block:: python
+
+            s.set_params(learning_rate=0.1)
+            hyperparams = s.get_params()
+            assert hyperparams == {"learning_rate": 0.1}
+
+        :param **params: arbitrary number of arguments for hyperparameters
+
+        .. seealso::
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+        """
+        return self.set_hyperparams(HyperparameterSamples(params))
+
+    def get_params(self) -> dict:
+        """
+        Get step hyperparameters as a flat primitive dict.
+
+        Example :
+
+        .. code-block:: python
+
+            s.set_params(learning_rate=0.1)
+            hyperparams = s.get_params()
+            assert hyperparams == {"learning_rate": 0.1}
+
+        :return: hyperparameters
+
+        .. seealso::
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+        """
+        return self.get_hyperparams().to_flat_as_ordered_dict_primitive()
+
+
+class _HasSavers(ABC):
+    def __init__(self, savers: List[BaseSaver] = None):
+        if savers is None:
+            savers = []
+        self.savers: List[BaseSaver] = savers
+
+    def get_savers(self) -> List[BaseSaver]:
+        """
+        Get the step savers of a pipeline step.
+
+        :return: step savers
+
+        .. seealso::
+            :class:`BaseSaver`
+        """
+        return self.savers
+
+    def set_savers(self, savers: List[BaseSaver]) -> 'TransformerStep':
+        """
+        Set the step savers of a pipeline step.
+
+        :return: self
+
+        .. seealso::
+            :class:`BaseSaver`
+        """
+        self.savers: List[BaseSaver] = savers
+        return self
+
+    def should_save(self) -> bool:
+        """
+        Returns true if the step should be saved.
+        If the step has been initialized and invalidated, then it must be saved.
+
+        A step is invalidated when any of the following things happen :
+            * a mutation has been performed on the step : func:`~.mutate`
+            * an hyperparameter has changed func:`~.set_hyperparams`
+            * an hyperparameter space has changed func:`~.set_hyperparams_space`
+            * a call to the fit method func:`~.handle_fit`
+            * a call to the fit_transform method func:`~.handle_fit_transform`
+            * the step name has changed func:`~neuraxle.base.BaseStep.set_name`
+
+        :return: if the step should be saved
+        """
+        return self.is_invalidated and self.is_initialized
+
+    def save(self, context: ExecutionContext, full_dump=False) -> 'TransformerStep':
+        """
+        Save step using the execution context to create the directory to save the step into.
+        The saving happens by looping through all of the step savers in the reversed order.
+
+        Some savers just save parts of objects, some save it all or what remains.
+        The :class:`ExecutionContext`.stripped_saver has to be called last because it needs a
+        stripped version of the step.
+
+        :param context: context to save from
+        :param full_dump: save full pipeline dump to be able to load everything without source code (false by default).
+        :return: self
+
+        .. seealso::
+            :class:`ExecutionContext`,
+            :class:`BaseSaver`
+        """
+        context = context.push(self)
+        self.is_invalidated = False
+
+        def _initialize_if_needed(step):
+            if not step.is_initialized:
+                step.setup()
+            return step
+
+        def _invalidate(step):
+            step.invalidate()
+
+        if full_dump:
+            # initialize and invalidate steps to make sure that all steps will be saved
+            self.apply_method(_initialize_if_needed)
+            self.apply_method(_invalidate)
+
+        context.mkdir()
+        stripped_step = copy(self)
+
+        # A final "visitor" saver will save anything that
+        # wasn't saved customly after stripping the rest.
+        savers_with_provided_default_stripped_saver = [context.stripped_saver] + self.savers
+
+        for saver in reversed(savers_with_provided_default_stripped_saver):
+            # Each saver strips the step a bit more if needs be.
+            stripped_step = saver.save_step(stripped_step, context)
+
+        return stripped_step
+
+    def load(self, context: ExecutionContext, full_dump=False) -> 'TransformerStep':
+        """
+        Load step using the execution context to create the directory of the saved step.
+        Warning:
+
+        :param context: execution context to load step from
+        :param full_dump: save full dump bool
+        :return: loaded step
+
+        .. warning::
+            Please do not override this method because on loading it is an identity
+            step that will load whatever step you coded.
+
+        .. seealso::
+            :class:`ExecutionContext`,
+            :class:`BaseSaver`
+        """
+        context = context.push(self)
+
+        savers = [context.stripped_saver] + self.savers
+        return self._load_step(context, savers)
+
+    def _load_step(self, context, savers):
+        # A final "visitor" saver might reload anything that wasn't saved customly after stripping the rest.
+        loaded_self = self
+        for saver in savers:
+            # Each saver unstrips the step a bit more if needed
+            if saver.can_load(loaded_self, context):
+                loaded_self = saver.load_step(loaded_self, context)
+            else:
+                warnings.warn(
+                    'Cannot Load Step {0} ({1}:{2}) With Step Saver {3}.'.format(context.get_path(), self.name,
+                                                                                 self.__class__.__name__,
+                                                                                 saver.__class__.__name__))
+                break
+        return loaded_self
+
+
+class _HasHashers(ABC):
+    def __init__(self, hashers: List[BaseHasher] = None):
+        if hashers is None:
+            hashers = [HashlibMd5Hasher()]
+
+        self.hashers: List[BaseHasher] = hashers
+
+    def summary_hash(self, data_container: DataContainer) -> str:
+        """
+        Hash data inputs, current ids, and hyperparameters together using self.hashers.
+        This is used to create unique ids for the data checkpoints.
+
+        :param data_container: data container
+        :return: hashed current ids
+
+        .. seealso::
+            :class:`~neuraxle.checkpoints.Checkpoint`
+        """
+        if data_container.summary_id is None:
+            data_container.set_summary_id(data_container.hash_summary())
+
+        summary_id = data_container.summary_id
+        for h in self.hashers:
+            summary_id = h.single_hash(
+                summary_id,
+                self.hyperparams
+            )
+
+        return summary_id
+
+    def hash(self, data_container: DataContainer) -> List[str]:
+        """
+        Hash data inputs, current ids, and hyperparameters together using self.hashers.
+        This is used to create unique ids for the data checkpoints.
+
+        :param data_container: data container
+        :return: hashed current ids
+
+        .. seealso::
+            :class:`~neuraxle.checkpoints.Checkpoint`
+        """
+        current_ids = data_container.current_ids
+        for h in self.hashers:
+            current_ids = h.hash(current_ids, self.hyperparams, data_container.data_inputs)
+
+        return current_ids
+
+    def hash_data_container(self, data_container):
+        """
+        Hash data container using self.hashers.
+
+        #. Hash current ids with hyperparams.
+        #. Hash summary id with hyperparams.
+
+        :param data_container: the data container to transform
+        :return: transformed data container
+        """
+        current_ids = self.hash(data_container)
+        data_container.set_current_ids(current_ids)
+
+        summary_id = self.summary_hash(data_container)
+        data_container.set_summary_id(summary_id)
+
+        return data_container
+
+
+class _HasMutations(ABC):
+    def __init__(self):
+        self.pending_mutate: ('TransformerStep', str, str) = (None, None, None)
+
+    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
+        """
+        Replace the "method_to_assign_to" method by the "new_method" method, IF the present object has no pending calls to
+        ``.will_mutate_to()`` waiting to be applied. If there is a pending call, the pending call will override the
+        methods specified in the present call. If the change fails (such as if the new_method doesn't exist), then
+        a warning is printed (optional). By default, there is no pending ``will_mutate_to`` call.
+
+        This could for example be useful within a pipeline to apply ``inverse_transform`` to every pipeline steps, or
+        to assign ``predict_probas`` to ``predict``, or to assign "inverse_transform" to "transform" to a reversed pipeline.
+
+        :param new_method: the method to replace transform with, if there is no pending ``will_mutate_to`` call.
+        :param method_to_assign_to: the method to which the new method will be assigned to, if there is no pending ``will_mutate_to`` call.
+        :param warn: (verbose) wheter or not to warn about the inexistence of the method.
+        :return: self, a copy of self, or even perhaps a new or different BaseStep object.
+        """
+        self.invalidate()
+        pending_new_base_step, pending_new_method, pending_method_to_assign_to = self.pending_mutate
+
+        # Use everything that is pending if they are not none (ternaries).
+        new_base_step = pending_new_base_step if pending_new_base_step is not None else copy(self)
+        new_method = pending_new_method if pending_new_method is not None else new_method
+        method_to_assign_to = pending_method_to_assign_to if pending_method_to_assign_to is not None else method_to_assign_to
+
+        # We set "new_method" in place of "method_to_affect" to a copy of self:
+        try:
+            # 1. get new method's reference
+            new_method = getattr(new_base_step, new_method)
+
+            # 2. delete old method
+            try:
+                delattr(new_base_step, method_to_assign_to)
+            except AttributeError as e:
+                pass
+
+            # 3. assign new method to old method
+            setattr(new_base_step, method_to_assign_to, new_method)
+            self.invalidate()
+
+        except AttributeError as e:
+            if warn:
+                import warnings
+                warnings.warn(e)
+
+        return new_base_step
+
+    def will_mutate_to(
+            self, new_base_step: 'TransformerStep' = None, new_method: str = None, method_to_assign_to: str = None
+    ) -> 'TransformerStep':
+        """
+        This will change the behavior of ``self.mutate(<...>)`` such that when mutating, it will return the
+        presently provided new_base_step BaseStep (can be left to None for self), and the ``.mutate`` method
+        will also apply the ``new_method`` and the  ``method_to_affect``, if they are not None, and after changing
+        the object to new_base_step.
+
+        This can be useful if your pipeline requires unsupervised pretraining. For example:
+
+        .. code-block:: python
+
+            X_pretrain = ...
+            X_train = ...
+
+            p = Pipeline(
+                SomePreprocessing(),
+                SomePretrainingStep().will_mutate_to(new_base_step=SomeStepThatWillUseThePretrainingStep),
+                Identity().will_mutate_to(new_base_step=ClassifierThatWillBeUsedOnlyAfterThePretraining)
+            )
+            # Pre-train the pipeline
+            p = p.fit(X_pretrain, y=None)
+
+            # This will leave `SomePreprocessing()` untouched and will affect the two other steps.
+            p = p.mutate(new_method="transform", method_to_affect="transform")
+
+            # Pre-train the pipeline
+            p = p.fit(X_train, y_train)  # Then fit the classifier and other new things
+
+        :param new_base_step: if it is not None, upon calling ``mutate``, the object it will mutate to will be this provided new_base_step.
+        :param method_to_assign_to: if it is not None, upon calling ``mutate``, the method_to_affect will be the one that is used on the provided new_base_step.
+        :param new_method: if it is not None, upon calling ``mutate``, the new_method will be the one that is used on the provided new_base_step.
+        :return: self
+        """
+        self.invalidate()
+
+        if new_method is None or method_to_assign_to is None:
+            new_method = method_to_assign_to = "transform"  # No changes will be applied (transform will stay transform).
+
+        self.pending_mutate = (new_base_step, new_method, method_to_assign_to)
+
+        return self
+
+
+class TransformerStep(_HasHyperparamsSpace, _HasHyperparams, _HasSavers, _TransformerStep, ABC):
     """
     Base class for a pipeline step.
 
@@ -1040,75 +1524,21 @@ class BaseStep(_TransformerStep, ABC):
             hashers: List[BaseHasher] = None
     ):
         _TransformerStep.__init__(self)
+        _HasHyperparams.__init__(self, hyperparams=hyperparams)
+        _HasHyperparamsSpace.__init__(self, hyperparams_space=hyperparams_space)
+        _HasSavers.__init__(self, savers=savers)
+        _HasHashers.__init__(self, hashers=hashers)
+        _HasMutations.__init__(self)
 
-        if hyperparams is None:
-            hyperparams = dict()
-        if hyperparams_space is None:
-            hyperparams_space = dict()
         if name is None:
             name = self.__class__.__name__
-        if savers is None:
-            savers = []
-        if hashers is None:
-            hashers = [HashlibMd5Hasher()]
-
-        self.hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams)
-        self.hyperparams = self.hyperparams.to_flat()
-
-        self.hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space)
-        self.hyperparams_space = self.hyperparams_space.to_flat()
-
         self.name: str = name
-
-        self.savers: List[BaseSaver] = savers  # TODO: doc. First is the most stripped.
-        self.hashers: List[BaseHasher] = hashers
-
-        self.pending_mutate: ('BaseStep', str, str) = (None, None, None)
-        self.is_initialized = False
         self.invalidate()
+
+        self.is_initialized = False
         self.is_train: bool = True
 
-    def summary_hash(self, data_container: DataContainer) -> str:
-        """
-        Hash data inputs, current ids, and hyperparameters together using self.hashers.
-        This is used to create unique ids for the data checkpoints.
-
-        :param data_container: data container
-        :return: hashed current ids
-
-        .. seealso::
-            :class:`~neuraxle.checkpoints.Checkpoint`
-        """
-        if data_container.summary_id is None:
-            data_container.set_summary_id(data_container.hash_summary())
-
-        summary_id = data_container.summary_id
-        for h in self.hashers:
-            summary_id = h.single_hash(
-                summary_id,
-                self.hyperparams
-            )
-
-        return summary_id
-
-    def hash(self, data_container: DataContainer) -> List[str]:
-        """
-        Hash data inputs, current ids, and hyperparameters together using self.hashers.
-        This is used to create unique ids for the data checkpoints.
-
-        :param data_container: data container
-        :return: hashed current ids
-
-        .. seealso::
-            :class:`~neuraxle.checkpoints.Checkpoint`
-        """
-        current_ids = data_container.current_ids
-        for h in self.hashers:
-            current_ids = h.hash(current_ids, self.hyperparams, data_container.data_inputs)
-
-        return current_ids
-
-    def setup(self) -> 'BaseStep':
+    def setup(self) -> 'TransformerStep':
         """
         Initialize the step before it runs. Only from here and not before that heavy things should be created
         (e.g.: things inside GPU), and NOT in the constructor.
@@ -1120,7 +1550,7 @@ class BaseStep(_TransformerStep, ABC):
         self.is_initialized = True
         return self
 
-    def invalidate(self) -> 'BaseStep':
+    def invalidate(self) -> 'TransformerStep':
         """
         Invalidate step.
 
@@ -1129,7 +1559,7 @@ class BaseStep(_TransformerStep, ABC):
         self.is_invalidated = True
         return self
 
-    def teardown(self) -> 'BaseStep':
+    def teardown(self) -> 'TransformerStep':
         """
         Teardown step after program execution. Inverse of setup, and it should clear memory.
         Override this method if you need to clear memory.
@@ -1177,205 +1607,6 @@ class BaseStep(_TransformerStep, ABC):
         """
         return self.name
 
-    def get_savers(self) -> List[BaseSaver]:
-        """
-        Get the step savers of a pipeline step.
-
-        :return: step savers
-
-        .. seealso::
-            :class:`BaseSaver`
-        """
-        return self.savers
-
-    def set_savers(self, savers: List[BaseSaver]) -> 'BaseStep':
-        """
-        Set the step savers of a pipeline step.
-
-        :return: self
-
-        .. seealso::
-            :class:`BaseSaver`
-        """
-        self.savers: List[BaseSaver] = savers
-        return self
-
-    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
-        """
-        Set the step hyperparameters.
-
-        Example :
-
-        .. code-block:: python
-
-            step.set_hyperparams(HyperparameterSamples({
-                'learning_rate': 0.10
-            }))
-
-        :param hyperparams: hyperparameters
-        :return: self
-
-        .. seealso::
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
-        """
-        self.invalidate()
-        self.hyperparams = HyperparameterSamples(hyperparams).to_flat()
-        return self
-
-    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseStep':
-        """
-        Update the step hyperparameters without removing the already-set hyperparameters.
-        This can be useful to add more hyperparameters to the existing ones without flushing the ones that were already set.
-
-        Example :
-
-        .. code-block:: python
-
-            step.set_hyperparams(HyperparameterSamples({
-                'learning_rate': 0.10
-                'weight_decay': 0.001
-            }))
-
-            step.update_hyperparams(HyperparameterSamples({
-                'learning_rate': 0.01
-            }))
-
-            assert step.get_hyperparams()['learning_rate'] == 0.01
-            assert step.get_hyperparams()['weight_decay'] == 0.001
-
-        :param hyperparams: hyperparameters
-        :return: self
-
-        .. seealso::
-            :func:`~BaseStep.update_hyperparams`,
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
-        """
-        self.hyperparams.update(hyperparams)
-        self.hyperparams = HyperparameterSamples(self.hyperparams).to_flat()
-        return self
-
-    def get_hyperparams(self) -> HyperparameterSamples:
-        """
-        Get step hyperparameters as :class:`~neuraxle.hyperparams.space.HyperparameterSamples`.
-
-        :return: step hyperparameters
-
-        .. seealso::
-            * :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
-        """
-        return self.hyperparams
-
-    def set_params(self, **params) -> 'BaseStep':
-        """
-        Set step hyperparameters with a dictionary.
-
-        Example :
-
-        .. code-block:: python
-
-            s.set_params(learning_rate=0.1)
-            hyperparams = s.get_params()
-            assert hyperparams == {"learning_rate": 0.1}
-
-        :param **params: arbitrary number of arguments for hyperparameters
-
-        .. seealso::
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
-        """
-        return self.set_hyperparams(HyperparameterSamples(params))
-
-    def get_params(self) -> dict:
-        """
-        Get step hyperparameters as a flat primitive dict.
-
-        Example :
-
-        .. code-block:: python
-
-            s.set_params(learning_rate=0.1)
-            hyperparams = s.get_params()
-            assert hyperparams == {"learning_rate": 0.1}
-
-        :return: hyperparameters
-
-        .. seealso::
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
-        """
-        return self.get_hyperparams().to_flat_as_ordered_dict_primitive()
-
-    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
-        """
-        Set step hyperparameters space.
-
-        Example :
-
-        .. code-block:: python
-
-            step.set_hyperparams_space(HyperparameterSpace({
-                'hp': RandInt(0, 10)
-            }))
-
-        :param hyperparams_space: hyperparameters space
-        :return: self
-
-        .. seealso::
-            :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
-            :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
-        """
-        self.invalidate()
-        self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
-        return self
-
-    def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
-        """
-        Update the step hyperparameter spaces without removing the already-set hyperparameters.
-        This can be useful to add more hyperparameter spaces to the existing ones without flushing the ones that were already set.
-
-        Example :
-
-        .. code-block:: python
-
-            step.set_hyperparams_space(HyperparameterSpace({
-                'learning_rate': LogNormal(0.5, 0.5)
-                'weight_decay': LogNormal(0.001, 0.0005)
-            }))
-
-            step.update_hyperparams_space(HyperparameterSpace({
-                'learning_rate': LogNormal(0.5, 0.1)
-            }))
-
-            assert step.get_hyperparams_space()['learning_rate'] == LogNormal(0.5, 0.1)
-            assert step.get_hyperparams_space()['weight_decay'] == LogNormal(0.001, 0.0005)
-
-        :param hyperparams_space: hyperparameters space
-        :return: self
-
-        .. seealso::
-            :func:`~BaseStep.update_hyperparams`,
-            :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
-        """
-        self.hyperparams_space.update(hyperparams_space)
-        self.hyperparams_space = HyperparameterSamples(self.hyperparams_space).to_flat()
-        return self
-
-    def get_hyperparams_space(self) -> HyperparameterSpace:
-        """
-        Get step hyperparameters space.
-
-        Example :
-
-        .. code-block:: python
-
-            step.get_hyperparams_space()
-
-        :return: step hyperparams space
-
-        .. seealso::
-            :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
-            :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
-        """
-        return self.hyperparams_space
-
     def apply_method(self, method: Callable, step_name=None, *kargs, **kwargs) -> Dict:
         """
         Apply a method to a step and its children.
@@ -1422,213 +1653,6 @@ class BaseStep(_TransformerStep, ABC):
             return self
         return None
 
-    def hash_data_container(self, data_container):
-        """
-        Hash data container using self.hashers.
-
-        #. Hash current ids with hyperparams.
-        #. Hash summary id with hyperparams.
-
-        :param data_container: the data container to transform
-        :return: transformed data container
-        """
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
-
-        summary_id = self.summary_hash(data_container)
-        data_container.set_summary_id(summary_id)
-
-        return data_container
-
-    def should_save(self) -> bool:
-        """
-        Returns true if the step should be saved.
-        If the step has been initialized and invalidated, then it must be saved.
-
-        A step is invalidated when any of the following things happen :
-            * a mutation has been performed on the step : func:`~.mutate`
-            * an hyperparameter has changed func:`~.set_hyperparams`
-            * an hyperparameter space has changed func:`~.set_hyperparams_space`
-            * a call to the fit method func:`~.handle_fit`
-            * a call to the fit_transform method func:`~.handle_fit_transform`
-            * the step name has changed func:`~neuraxle.base.BaseStep.set_name`
-
-        :return: if the step should be saved
-        """
-        return self.is_invalidated and self.is_initialized
-
-    def save(self, context: ExecutionContext, full_dump=False) -> 'BaseStep':
-        """
-        Save step using the execution context to create the directory to save the step into.
-        The saving happens by looping through all of the step savers in the reversed order.
-
-        Some savers just save parts of objects, some save it all or what remains.
-        The :class:`ExecutionContext`.stripped_saver has to be called last because it needs a
-        stripped version of the step.
-
-        :param context: context to save from
-        :param full_dump: save full pipeline dump to be able to load everything without source code (false by default).
-        :return: self
-
-        .. seealso::
-            :class:`ExecutionContext`,
-            :class:`BaseSaver`
-        """
-        context = context.push(self)
-        self.is_invalidated = False
-
-        def _initialize_if_needed(step):
-            if not step.is_initialized:
-                step.setup()
-            return step
-
-        def _invalidate(step):
-            step.invalidate()
-
-        if full_dump:
-            # initialize and invalidate steps to make sure that all steps will be saved
-            self.apply_method(_initialize_if_needed)
-            self.apply_method(_invalidate)
-
-        context.mkdir()
-        stripped_step = copy(self)
-
-        # A final "visitor" saver will save anything that
-        # wasn't saved customly after stripping the rest.
-        savers_with_provided_default_stripped_saver = [context.stripped_saver] + self.savers
-
-        for saver in reversed(savers_with_provided_default_stripped_saver):
-            # Each saver strips the step a bit more if needs be.
-            stripped_step = saver.save_step(stripped_step, context)
-
-        return stripped_step
-
-    def load(self, context: ExecutionContext, full_dump=False) -> 'BaseStep':
-        """
-        Load step using the execution context to create the directory of the saved step.
-        Warning:
-
-        :param context: execution context to load step from
-        :param full_dump: save full dump bool
-        :return: loaded step
-
-        .. warning::
-            Please do not override this method because on loading it is an identity
-            step that will load whatever step you coded.
-
-        .. seealso::
-            :class:`ExecutionContext`,
-            :class:`BaseSaver`
-        """
-        context = context.push(self)
-
-        savers = [context.stripped_saver] + self.savers
-        return self._load_step(context, savers)
-
-    def _load_step(self, context, savers):
-        # A final "visitor" saver might reload anything that wasn't saved customly after stripping the rest.
-        loaded_self = self
-        for saver in savers:
-            # Each saver unstrips the step a bit more if needed
-            if saver.can_load(loaded_self, context):
-                loaded_self = saver.load_step(loaded_self, context)
-            else:
-                warnings.warn(
-                    'Cannot Load Step {0} ({1}:{2}) With Step Saver {3}.'.format(context.get_path(), self.name,
-                                                                                 self.__class__.__name__,
-                                                                                 saver.__class__.__name__))
-                break
-        return loaded_self
-
-    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
-        """
-        Replace the "method_to_assign_to" method by the "new_method" method, IF the present object has no pending calls to
-        ``.will_mutate_to()`` waiting to be applied. If there is a pending call, the pending call will override the
-        methods specified in the present call. If the change fails (such as if the new_method doesn't exist), then
-        a warning is printed (optional). By default, there is no pending ``will_mutate_to`` call.
-
-        This could for example be useful within a pipeline to apply ``inverse_transform`` to every pipeline steps, or
-        to assign ``predict_probas`` to ``predict``, or to assign "inverse_transform" to "transform" to a reversed pipeline.
-
-        :param new_method: the method to replace transform with, if there is no pending ``will_mutate_to`` call.
-        :param method_to_assign_to: the method to which the new method will be assigned to, if there is no pending ``will_mutate_to`` call.
-        :param warn: (verbose) wheter or not to warn about the inexistence of the method.
-        :return: self, a copy of self, or even perhaps a new or different BaseStep object.
-        """
-        self.invalidate()
-        pending_new_base_step, pending_new_method, pending_method_to_assign_to = self.pending_mutate
-
-        # Use everything that is pending if they are not none (ternaries).
-        new_base_step = pending_new_base_step if pending_new_base_step is not None else copy(self)
-        new_method = pending_new_method if pending_new_method is not None else new_method
-        method_to_assign_to = pending_method_to_assign_to if pending_method_to_assign_to is not None else method_to_assign_to
-
-        # We set "new_method" in place of "method_to_affect" to a copy of self:
-        try:
-            # 1. get new method's reference
-            new_method = getattr(new_base_step, new_method)
-
-            # 2. delete old method
-            try:
-                delattr(new_base_step, method_to_assign_to)
-            except AttributeError as e:
-                pass
-
-            # 3. assign new method to old method
-            setattr(new_base_step, method_to_assign_to, new_method)
-            self.invalidate()
-
-        except AttributeError as e:
-            if warn:
-                import warnings
-                warnings.warn(e)
-
-        return new_base_step
-
-    def will_mutate_to(
-            self, new_base_step: 'BaseStep' = None, new_method: str = None, method_to_assign_to: str = None
-    ) -> 'BaseStep':
-        """
-        This will change the behavior of ``self.mutate(<...>)`` such that when mutating, it will return the
-        presently provided new_base_step BaseStep (can be left to None for self), and the ``.mutate`` method
-        will also apply the ``new_method`` and the  ``method_to_affect``, if they are not None, and after changing
-        the object to new_base_step.
-
-        This can be useful if your pipeline requires unsupervised pretraining. For example:
-
-        .. code-block:: python
-
-            X_pretrain = ...
-            X_train = ...
-
-            p = Pipeline(
-                SomePreprocessing(),
-                SomePretrainingStep().will_mutate_to(new_base_step=SomeStepThatWillUseThePretrainingStep),
-                Identity().will_mutate_to(new_base_step=ClassifierThatWillBeUsedOnlyAfterThePretraining)
-            )
-            # Pre-train the pipeline
-            p = p.fit(X_pretrain, y=None)
-
-            # This will leave `SomePreprocessing()` untouched and will affect the two other steps.
-            p = p.mutate(new_method="transform", method_to_affect="transform")
-
-            # Pre-train the pipeline
-            p = p.fit(X_train, y_train)  # Then fit the classifier and other new things
-
-        :param new_base_step: if it is not None, upon calling ``mutate``, the object it will mutate to will be this provided new_base_step.
-        :param method_to_assign_to: if it is not None, upon calling ``mutate``, the method_to_affect will be the one that is used on the provided new_base_step.
-        :param new_method: if it is not None, upon calling ``mutate``, the new_method will be the one that is used on the provided new_base_step.
-        :return: self
-        """
-        self.invalidate()
-
-        if new_method is None or method_to_assign_to is None:
-            new_method = method_to_assign_to = "transform"  # No changes will be applied (transform will stay transform).
-
-        self.pending_mutate = (new_base_step, new_method, method_to_assign_to)
-
-        return self
-
     def tosklearn(self):
         class NeuraxleToSKLearnPipelineWrapper(BaseEstimator):
             def __init__(self, neuraxle_step):
@@ -1648,31 +1672,10 @@ class BaseStep(_TransformerStep, ABC):
 
             def fit(self, **args) -> BaseEstimator:
                 self.p = self.p.fit(**args)
-                return self
-
-            def transform(self, **args):
-                return self.p.transform(**args)
-
-            def fit_transform(self, **args) -> Any:
-                self.p, out = self.p.fit_transform(**args)
-                # Careful: 1 return value.
-                return out
-
-            def inverse_transform(self, **args):
-                return self.p.reverse().transform(**args)
-
-            def predict(self, **args):
-                return self.p.transform(**args)
-
-            def __repr__(self):
-                return self.__class__.__name__ + "(" + self.p.__repr__() + ")"
-
-            def __str__(self):
-                return self.__repr__()
 
         return NeuraxleToSKLearnPipelineWrapper(self)
 
-    def reverse(self) -> 'BaseStep':
+    def reverse(self) -> 'TransformerStep':
         """
         The object will mutate itself such that the ``.transform`` method (and of all its underlying objects
         if applicable) be replaced by the ``.inverse_transform`` method.
@@ -1685,7 +1688,7 @@ class BaseStep(_TransformerStep, ABC):
         """
         return self.mutate(new_method="inverse_transform", method_to_assign_to="transform")
 
-    def __reversed__(self) -> 'BaseStep':
+    def __reversed__(self) -> 'TransformerStep':
         """
         The object will mutate itself such that the ``.transform`` method (and of all its underlying objects
         if applicable) be replaced by the ``.inverse_transform`` method.
@@ -1707,7 +1710,7 @@ class BaseStep(_TransformerStep, ABC):
         return self.__repr__()
 
 
-def _sklearn_to_neuraxle_step(step) -> BaseStep:
+def _sklearn_to_neuraxle_step(step) -> TransformerStep:
     if isinstance(step, BaseEstimator):
         import neuraxle.steps.sklearn
         step = neuraxle.steps.sklearn.SKLearnWrapper(step)
@@ -1715,7 +1718,15 @@ def _sklearn_to_neuraxle_step(step) -> BaseStep:
     return step
 
 
-class MetaStepMixin(_FittableStep):
+class BaseStep(_FittableStep, TransformerStep, ABC):
+    pass
+
+
+class MetaStepMixin(BaseStep):
+    pass
+
+
+class MetaStep(BaseStep):
     """
     A class to represent a step that wraps another step. It can be used for many things.
 
@@ -1768,12 +1779,24 @@ class MetaStepMixin(_FittableStep):
     """
 
     def __init__(
-            self,
-            wrapped: BaseStep = None
+        self,
+        wrapped: TransformerStep = None,
+        hyperparams: HyperparameterSamples = None,
+        hyperparams_space: HyperparameterSpace = None,
+        name: str = None,
+        savers: List[BaseSaver] = None,
+        hashers: List[BaseHasher] = None
     ):
-        _FittableStep.__init__(self)
+        BaseStep.__init__(
+            self,
+            hyperparams=hyperparams,
+            hyperparams_space=hyperparams_space,
+            name=name,
+            savers=savers,
+            hashers=hashers
+        )
 
-        self.wrapped: BaseStep = _sklearn_to_neuraxle_step(wrapped)
+        self.wrapped: TransformerStep = _sklearn_to_neuraxle_step(wrapped)
         self._ensure_proper_mixin_init_order()
 
     def _ensure_proper_mixin_init_order(self):
@@ -1786,7 +1809,7 @@ class MetaStepMixin(_FittableStep):
         else:
             self.savers.append(MetaStepJoblibStepSaver())
 
-    def set_step(self, step: BaseStep) -> BaseStep:
+    def set_step(self, step: TransformerStep) -> BaseStep:
         """
         Set wrapped step to the given step.
 
@@ -1794,7 +1817,7 @@ class MetaStepMixin(_FittableStep):
         :return: self
         """
         self.invalidate()
-        self.wrapped: BaseStep = _sklearn_to_neuraxle_step(step)
+        self.wrapped: TransformerStep = _sklearn_to_neuraxle_step(step)
         return self
 
     def setup(self) -> BaseStep:
@@ -1803,7 +1826,7 @@ class MetaStepMixin(_FittableStep):
 
         :return: self
         """
-        BaseStep.setup(self)
+        super().setup()
         self.wrapped.setup()
         self.is_initialized = True
         return self
@@ -1814,7 +1837,7 @@ class MetaStepMixin(_FittableStep):
 
         :return: self
         """
-        BaseStep.teardown(self)
+        super().teardown()
         self.wrapped.teardown()
         self.is_initialized = False
         return self
@@ -1921,7 +1944,7 @@ class MetaStepMixin(_FittableStep):
             self.wrapped.name: self.wrapped.get_hyperparams().to_flat_as_dict_primitive()
         }).to_flat()
 
-    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
+    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'TransformerStep':
         """
         Set meta step and wrapped step hyperparams space using the given hyperparams space.
 
@@ -1992,35 +2015,35 @@ class MetaStepMixin(_FittableStep):
     def get_best_model(self) -> BaseStep:
         return self.best_model
 
-    def handle_fit_transform(self, data_container, context):
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
         previous_summary_id = data_container.summary_id
-        new_self, data_container = _FittableStep.handle_fit_transform(self, data_container, context)
+        new_self, data_container = super().handle_fit_transform(data_container, context)
         data_container.set_summary_id(previous_summary_id)
         data_container.set_summary_id(self.summary_hash(data_container))
 
         return new_self, data_container
 
-    def handle_transform(self, data_container, context):
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
         previous_summary_id = data_container.summary_id
-        data_container = _TransformerStep.handle_transform(self, data_container, context)
+        data_container = super().handle_transform(data_container, context)
         data_container.set_summary_id(previous_summary_id)
         data_container.set_summary_id(self.summary_hash(data_container))
 
         return data_container
 
-    def _fit_transform_data_container(self, data_container, context):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
         return self, data_container
 
-    def _fit_data_container(self, data_container, context):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
         self.wrapped = self.wrapped.handle_fit(data_container, context)
         return self
 
-    def _transform_data_container(self, data_container, context):
+    def _transform_data_container(self, data_container: ExecutionContext, context: ExecutionContext):
         data_container = self.wrapped.handle_transform(data_container, context)
         return data_container
 
-    def _inverse_transform_data_container(self, data_container, context):
+    def _inverse_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         data_container = self.wrapped.handle_inverse_transform(data_container, context)
         return data_container
 
@@ -2106,7 +2129,7 @@ class MetaStepMixin(_FittableStep):
             return self.wrapped
         return self.wrapped.get_step_by_name(name)
 
-    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
+    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'TransformerStep':
         """
         Mutate self, and self.wrapped. Please refer to :func:`~neuraxle.base.BaseStep.mutate` for more information.
 
@@ -2121,8 +2144,8 @@ class MetaStepMixin(_FittableStep):
         return new_self
 
     def will_mutate_to(
-            self, new_base_step: 'BaseStep' = None, new_method: str = None, method_to_assign_to: str = None
-    ) -> 'BaseStep':
+            self, new_base_step: 'TransformerStep' = None, new_method: str = None, method_to_assign_to: str = None
+    ) -> 'TransformerStep':
         """
         Add pending mutate self, self.wrapped. Please refer to :func:`~neuraxle.base.BaseStep.will_mutate_to` for more information.
 
@@ -2149,7 +2172,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
     def __init__(self):
         JoblibStepSaver.__init__(self)
 
-    def save_step(self, step: 'MetaStepMixin', context: ExecutionContext) -> MetaStepMixin:
+    def save_step(self, step: 'MetaStep', context: ExecutionContext) -> MetaStep:
         """
         Save MetaStepMixin.
 
@@ -2178,7 +2201,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
 
         return step
 
-    def load_step(self, step: 'MetaStepMixin', context: ExecutionContext) -> 'MetaStepMixin':
+    def load_step(self, step: 'MetaStep', context: ExecutionContext) -> 'MetaStep':
         """
         Load MetaStepMixin.
 
@@ -2386,7 +2409,7 @@ class TruncableSteps(BaseStep, ABC):
         self.steps_as_tuple: NamedTupleList = self._patch_missing_names(steps_as_tuple)
         self._refresh_steps()
 
-    def setup(self) -> 'BaseStep':
+    def setup(self) -> 'TransformerStep':
         """
         Initialize step before it runs.
 
@@ -2399,7 +2422,7 @@ class TruncableSteps(BaseStep, ABC):
 
         return self
 
-    def teardown(self) -> 'BaseStep':
+    def teardown(self) -> 'TransformerStep':
         """
         Teardown step after program execution.
         Teardowns all of the sub steps as well.
@@ -2758,7 +2781,7 @@ class TruncableSteps(BaseStep, ABC):
                 return True
         return False
 
-    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
+    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'TransformerStep':
         """
         Call mutate on every steps the the present truncable step contains.
 
@@ -2933,7 +2956,7 @@ class TruncableSteps(BaseStep, ABC):
         """
         return self.steps.values()
 
-    def append(self, item: Tuple[str, 'BaseStep']) -> 'TruncableSteps':
+    def append(self, item: Tuple[str, 'TransformerStep']) -> 'TruncableSteps':
         """
         Add an item to steps as tuple.
 
@@ -2944,7 +2967,7 @@ class TruncableSteps(BaseStep, ABC):
         self._refresh_steps()
         return self
 
-    def pop(self) -> 'BaseStep':
+    def pop(self) -> 'TransformerStep':
         """
         Pop the last step.
 
@@ -2952,7 +2975,7 @@ class TruncableSteps(BaseStep, ABC):
         """
         return self.popitem()[-1]
 
-    def popitem(self, key=None) -> Tuple[str, 'BaseStep']:
+    def popitem(self, key=None) -> Tuple[str, 'TransformerStep']:
         """
         Pop the last step, or the step with the given key
 
@@ -2968,7 +2991,7 @@ class TruncableSteps(BaseStep, ABC):
             self.steps_as_tuple = list(self.steps.items())
         return item
 
-    def popfront(self) -> 'BaseStep':
+    def popfront(self) -> 'TransformerStep':
         """
         Pop the first step.
 
@@ -2976,7 +2999,7 @@ class TruncableSteps(BaseStep, ABC):
         """
         return self.popfrontitem()[-1]
 
-    def popfrontitem(self) -> Tuple[str, 'BaseStep']:
+    def popfrontitem(self) -> Tuple[str, 'TransformerStep']:
         """
         Pop the first step.
 
@@ -3045,7 +3068,7 @@ class TruncableSteps(BaseStep, ABC):
         """
         return isinstance(self[-1], step_type)
 
-    def set_train(self, is_train: bool = True) -> 'BaseStep':
+    def set_train(self, is_train: bool = True) -> 'TransformerStep':
         """
         Set pipeline step mode to train or test.
 
@@ -3134,7 +3157,7 @@ class Identity(NonTransformableMixin, BaseStep):
         BaseStep.__init__(self, name=name, savers=savers)
 
 
-class TransformHandlerOnlyMixin():
+class TransformHandlerOnlyMixin:
     """
     A pipeline step that only requires the implementation of _transform_data_container.
 
@@ -3181,7 +3204,7 @@ class HandleOnlyMixin:
     @abstractmethod
     def _fit_data_container(
             self, data_container: DataContainer, context: ExecutionContext
-    ) -> ('BaseStep', DataContainer):
+    ) -> ('TransformerStep', DataContainer):
         raise NotImplementedError('Must implement _fit_data_container in {0}'.format(self.name))
 
     @abstractmethod
@@ -3191,7 +3214,7 @@ class HandleOnlyMixin:
     @abstractmethod
     def _fit_transform_data_container(
             self, data_container: DataContainer, context: ExecutionContext
-    ) -> ('BaseStep', DataContainer):
+    ) -> ('TransformerStep', DataContainer):
         raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
 
     def transform(self, data_inputs) -> 'HandleOnlyMixin':

@@ -30,7 +30,7 @@ from copy import copy
 from typing import Any, Tuple, List
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, ExecutionContext, ExecutionMode, \
-    NonTransformableMixin, MetaStepMixin, _FittableStep, HandleOnlyMixin, ForceHandleOnlyMixin, _CustomHandlerMethods, \
+    NonTransformableMixin, MetaStep, _FittableStep, HandleOnlyMixin, ForceHandleOnlyMixin, _CustomHandlerMethods, \
     ForceHandleMixin
 from neuraxle.checkpoints import Checkpoint
 from neuraxle.data_container import DataContainer, ListDataContainer
@@ -251,7 +251,7 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         self._assign_loaded_pipeline_into_self(loaded_pipeline)
 
         step = self[new_starting_step_index]
-        if isinstance(step, Checkpoint) or (isinstance(step, MetaStepMixin) and isinstance(step.wrapped, Checkpoint)):
+        if isinstance(step, Checkpoint) or (isinstance(step, MetaStep) and isinstance(step.wrapped, Checkpoint)):
             starting_step_data_container = step.resume(starting_step_data_container, context)
 
         return self[new_starting_step_index:], starting_step_data_container

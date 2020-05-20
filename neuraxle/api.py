@@ -21,7 +21,7 @@ Neuraxle's high-level API classes. Useful to make complex Deep Learning pipeline
 """
 from typing import Dict, Callable, Union
 
-from neuraxle.base import BaseStep, NamedTupleList, EvaluableStepMixin, ForceHandleMixin, MetaStepMixin
+from neuraxle.base import BaseStep, NamedTupleList, EvaluableStepMixin, ForceHandleMixin, MetaStep
 from neuraxle.metaopt.random import ValidationSplitWrapper
 from neuraxle.metrics import MetricsWrapper
 from neuraxle.pipeline import MiniBatchSequentialPipeline
@@ -32,7 +32,7 @@ EPOCH_METRICS_STEP_NAME = 'epoch_metrics'
 BATCH_METRICS_STEP_NAME = 'batch_metrics'
 
 
-class DeepLearningPipeline(EvaluableStepMixin, ForceHandleMixin, MetaStepMixin, BaseStep):
+class DeepLearningPipeline(EvaluableStepMixin, ForceHandleMixin, MetaStep):
     """
     Adds an epoch loop, a validation split, and mini batching to a pipeline.
     It also tracks batch metrics, and epoch metrics.
@@ -115,8 +115,8 @@ class DeepLearningPipeline(EvaluableStepMixin, ForceHandleMixin, MetaStepMixin, 
         self.print_batch_metrics = print_batch_metrics
         self.print_epoch_metrics = print_epoch_metrics
 
-        wrapped = pipeline
-        wrapped = self._create_mini_batch_pipeline(wrapped)
+        wrapped: BaseStep = pipeline
+        wrapped: Union[BaseStep, MiniBatchSequentialPipeline] = self._create_mini_batch_pipeline(wrapped)
 
         if shuffle_in_each_epoch_at_train:
             wrapped = TrainShuffled(wrapped=wrapped, seed=seed)
@@ -124,8 +124,7 @@ class DeepLearningPipeline(EvaluableStepMixin, ForceHandleMixin, MetaStepMixin, 
         wrapped = self._create_validation_split(wrapped)
         wrapped = self._create_epoch_repeater(wrapped)
 
-        BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, wrapped)
+        MetaStep.__init__(self, wrapped)
         EvaluableStepMixin.__init__(self)
         ForceHandleMixin.__init__(self, cache_folder)
 

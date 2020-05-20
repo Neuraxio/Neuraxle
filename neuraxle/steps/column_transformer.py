@@ -28,12 +28,12 @@ from typing import List, Tuple, Union
 
 import numpy as np
 
-from neuraxle.base import BaseStep, MetaStepMixin
+from neuraxle.base import BaseStep, MetaStep, TransformerStep
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEachDataInput
 from neuraxle.union import FeatureUnion
 
-ColumnSelectionType = Union[Tuple[int, BaseStep], Tuple[List[int], BaseStep], Tuple[slice, BaseStep]]
+ColumnSelectionType = Union[Tuple[int, TransformerStep], Tuple[List[int], TransformerStep], Tuple[slice, TransformerStep]]
 ColumnChooserTupleList = List[ColumnSelectionType]
 
 
@@ -77,7 +77,7 @@ class ColumnSelector2D(BaseStep):
             ))
 
 
-class ColumnsSelectorND(MetaStepMixin, BaseStep):
+class ColumnsSelectorND(MetaStep, BaseStep):
     """
     ColumnSelectorND wraps a ColumnSelector2D by as many ForEachDataInput step
     as needed to select the last dimension.
@@ -90,7 +90,7 @@ class ColumnsSelectorND(MetaStepMixin, BaseStep):
         for _ in range(min(0, n_dimension - 2)):
             col_selector = ForEachDataInput(col_selector)
 
-        MetaStepMixin.__init__(self, col_selector)
+        MetaStep.__init__(self, col_selector)
         self.n_dimension = n_dimension
 
 

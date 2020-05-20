@@ -1,13 +1,13 @@
 from neuraxle.pipeline import Pipeline
 
-from neuraxle.base import MetaStepMixin, BaseStep, NonTransformableMixin
+from neuraxle.base import MetaStep, BaseStep, NonTransformableMixin
 from neuraxle.union import Identity
 
 
-class SomeMetaStep(MetaStepMixin, BaseStep):
+class SomeMetaStep(MetaStep, BaseStep):
     def __init__(self, wrapped: BaseStep):
         BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, wrapped)
+        MetaStep.__init__(self, wrapped)
 
     def transform(self, data_inputs):
         self.wrapped.transform(data_inputs)

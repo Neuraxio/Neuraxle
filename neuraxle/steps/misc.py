@@ -30,7 +30,7 @@ from abc import ABC
 VALUE_CACHING = 'value_caching'
 from typing import List, Any
 
-from neuraxle.base import BaseStep, NonTransformableMixin, ExecutionContext, MetaStepMixin, \
+from neuraxle.base import BaseStep, NonTransformableMixin, ExecutionContext, MetaStep, \
     HandleOnlyMixin, _FittableStep
 from neuraxle.data_container import DataContainer
 
@@ -196,7 +196,7 @@ class FitTransformCallbackStep(_FittableStep, BaseStep):
         return cleared_callbacks
 
 
-class CallbackWrapper(HandleOnlyMixin, MetaStepMixin, BaseStep):
+class CallbackWrapper(HandleOnlyMixin, MetaStep, BaseStep):
     """
     A step that calls a callback function for each of his methods : transform, fit, fit_transform, and even inverse_transform.
     To be used with :class:`TapeCallbackFunction`.
@@ -225,7 +225,7 @@ class CallbackWrapper(HandleOnlyMixin, MetaStepMixin, BaseStep):
             hyperparams=None
     ):
         BaseStep.__init__(self, hyperparams)
-        MetaStepMixin.__init__(self, wrapped)
+        MetaStep.__init__(self, wrapped)
 
         self.inverse_transform_callback_function = inverse_transform_callback_function
         self.more_arguments = more_arguments
