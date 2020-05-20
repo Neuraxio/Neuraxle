@@ -52,6 +52,10 @@ class ObservableQueueMixin:
         self.observers = []
         self._ensure_proper_mixin_init_order()
 
+    def teardown(self):
+        self.queue = None
+        return self
+
     def _ensure_proper_mixin_init_order(self):
         if not hasattr(self, 'savers'):
             warnings.warn(
@@ -192,6 +196,15 @@ class QueueWorker(ObservableQueueMixin, MetaStepMixin, BaseStep):
             p.start()
             self.workers.append(p)
 
+    def teardown(self):
+        """
+        Stop all processes on teardown.
+
+        :return: teardowned self
+        """
+        self.stop()
+        return self
+
     def stop(self):
         """
         Stop all of the workers.
@@ -307,8 +320,6 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             use_savers=False,
             cache_folder=None
     ):
-        CustomPipelineMixin.__init__(self)
-
         if data_joiner is None:
             data_joiner = NumpyConcatenateOuterBatch()
         self.data_joiner = data_joiner
@@ -394,6 +405,17 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             raise Exception('Invalid Queued Pipeline Steps Shape.')
 
         return name, n_workers, additional_arguments, max_queue_size, actual_step
+
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+        """
+        Setup streaming pipeline before any handler methods.
+
+        :param data_container: data container
+        :param context: execution context
+        :return:
+        """
+        self.setup()
+        return data_container, context
 
     def setup(self) -> 'BaseStep':
         """
@@ -614,6 +636,18 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
         self.result = {}
         Joiner.__init__(self, batch_size=batch_size)
         ObservableQueueMixin.__init__(self, Queue())
+
+    def teardown(self) -> 'BaseStep':
+        """
+        Properly clean queue, summary ids, and results during teardown.
+
+        :return: teardowned self
+        """
+        ObservableQueueMixin.teardown(self)
+        Joiner.teardown(self)
+        self.summary_ids = []
+        self.result = {}
+        return self
 
     def set_n_batches(self, n_batches):
         self.n_batches_left_to_do = n_batches

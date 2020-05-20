@@ -494,7 +494,6 @@ class _TransformerStep:
         :param context: execution context
         :return: (data container, execution context)
         """
-        self.setup()
         return data_container, context
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
