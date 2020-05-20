@@ -442,7 +442,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         all_steps_are_not_fittable = True
 
         for _, step in self[:-1]:
-            if not isinstance(step.get_step(), _FittableStep):
+            if isinstance(step.get_step(), _FittableStep):
                 all_steps_are_not_fittable = False
 
         if all_steps_are_not_fittable:
