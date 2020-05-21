@@ -92,7 +92,7 @@ class SKLearnWrapper(BaseStep):
             **hyperparams.with_separator(RecursiveDict.DEFAULT_SEPARATOR).to_flat_as_dict_primitive()
         )
 
-        return self
+        return self.hyperparams.to_flat()
 
     def _get_hyperparams(self):
         if self.return_all_sklearn_default_params_on_get:

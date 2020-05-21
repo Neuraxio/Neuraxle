@@ -8,7 +8,7 @@ from neuraxle.steps.output_handlers import OutputTransformerWrapper
 def test_apply_on_pipeline_with_positional_argument_should_call_method_on_each_steps():
     pipeline = Pipeline([MultiplyByN(1), MultiplyByN(1)])
 
-    pipeline.apply('set_hyperparams', hyperparams=HyperparameterSamples({
+    pipeline.apply('_set_hyperparams', hyperparams=HyperparameterSamples({
         'multiply_by': 2,
         'MultiplyByN__multiply_by': 3,
         'MultiplyByN1__multiply_by': 4
@@ -23,7 +23,7 @@ def test_apply_method_on_pipeline_should_call_method_on_each_steps():
     pipeline = Pipeline([MultiplyByN(1), MultiplyByN(1)])
 
     pipeline.apply(
-        lambda step: step.set_hyperparams(HyperparameterSamples({'multiply_by': 2}))
+        lambda step: step._set_hyperparams(HyperparameterSamples({'multiply_by': 2}))
     )
 
     assert pipeline.get_hyperparams()['multiply_by'] == 2
@@ -34,7 +34,7 @@ def test_apply_method_on_pipeline_should_call_method_on_each_steps():
 def test_apply_on_pipeline_with_meta_step_and_positional_argument():
     pipeline = Pipeline([OutputTransformerWrapper(MultiplyByN(1)), MultiplyByN(1)])
 
-    pipeline.apply('set_hyperparams', hyperparams=HyperparameterSamples({
+    pipeline.apply('_set_hyperparams', hyperparams=HyperparameterSamples({
         'multiply_by': 2,
         'OutputTransformerWrapper__multiply_by': 3,
         'OutputTransformerWrapper__MultiplyByN__multiply_by': 4,
@@ -51,7 +51,7 @@ def test_apply_method_on_pipeline_with_meta_step_should_call_method_on_each_step
     pipeline = Pipeline([OutputTransformerWrapper(MultiplyByN(1)), MultiplyByN(1)])
 
     pipeline.apply(
-        lambda step: step.set_hyperparams(HyperparameterSamples({'multiply_by': 2}))
+        lambda step: step._set_hyperparams(HyperparameterSamples({'multiply_by': 2}))
     )
 
     assert pipeline.get_hyperparams()['multiply_by'] == 2
@@ -70,7 +70,7 @@ def test_has_children_mixin_apply_should_apply_method_to_direct_childrends():
         ]),
     ])
 
-    p.apply('set_hyperparams', ra=None, hyperparams=HyperparameterSamples({
+    p.apply('_set_hyperparams', ra=None, hyperparams=HyperparameterSamples({
         'a__hp': 0,
         'b__hp': 1,
         'Pipeline__hp': 2
@@ -91,7 +91,7 @@ def test_has_children_mixin_apply_should_apply_method_to_recursive_childrends():
         ]),
     ])
 
-    p.apply('set_hyperparams', ra=None, hyperparams=HyperparameterSamples({
+    p.apply('_set_hyperparams', ra=None, hyperparams=HyperparameterSamples({
         'Pipeline__c__hp': 3,
         'Pipeline__d__hp': 4
     }))
@@ -106,7 +106,7 @@ def test_has_children_mixin_apply_should_return_recursive_dict_to_direct_childre
         ('b', Identity().set_hyperparams(HyperparameterSamples({'hp': 1})))
     ])
 
-    results = p.apply('get_hyperparams', ra=None)
+    results = p.apply('_get_hyperparams', ra=None)
 
     assert results.to_flat_as_dict_primitive()['a__hp'] == 0
     assert results.to_flat_as_dict_primitive()['b__hp'] == 1
@@ -120,7 +120,7 @@ def test_has_children_mixin_apply_should_return_recursive_dict_to_recursive_chil
         ]).set_hyperparams(HyperparameterSamples({'hp': 2})),
     ])
 
-    results = p.apply('get_hyperparams', ra=None)
+    results = p.apply('_get_hyperparams', ra=None)
     results = results.to_flat_as_dict_primitive()
 
     assert results['Pipeline__hp'] == 2

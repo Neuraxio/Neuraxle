@@ -735,7 +735,7 @@ class BaseStep(ABC):
         self.is_initialized = False
         return self
 
-    def set_train(self, is_train: bool = True):
+    def set_train(self, is_train: bool = True) -> 'BaseStep':
         """
         This method overrides the method of BaseStep to also consider the wrapped step as well as self.
         Set pipeline step mode to train or test.
@@ -753,9 +753,9 @@ class BaseStep(ABC):
         self.apply(method='_set_train', is_train=is_train)
         return self
 
-    def _set_train(self, is_train):
+    def _set_train(self, is_train) -> RecursiveDict:
         self.is_train = is_train
-        return self
+        return RecursiveDict()
 
     def set_name(self, name: str):
         """
@@ -831,11 +831,11 @@ class BaseStep(ABC):
         self.apply(method='_set_hyperparams', hyperparams=HyperparameterSamples(hyperparams).to_flat())
         return self
 
-    def _set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]):
+    def _set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]) -> HyperparameterSamples:
         self._invalidate()
         hyperparams = HyperparameterSamples(hyperparams).to_flat()
         self.hyperparams = hyperparams if len(hyperparams) > 0 else self.hyperparams
-        return self
+        return self.hyperparams
 
     def update_hyperparams(self, hyperparams: Union[Dict, HyperparameterSamples]) -> 'BaseStep':
         """
@@ -873,8 +873,9 @@ class BaseStep(ABC):
         self.apply(method='_update_hyperparams', hyperparams=HyperparameterSamples(hyperparams).to_flat())
         return self
 
-    def _update_hyperparams(self, hyperparams: Union[Dict, HyperparameterSamples]):
+    def _update_hyperparams(self, hyperparams: Union[Dict, HyperparameterSamples]) -> HyperparameterSamples:
         self.hyperparams.update(HyperparameterSamples(hyperparams).to_flat())
+        return self.hyperparams
 
     def get_hyperparams(self) -> HyperparameterSamples:
         """
@@ -894,7 +895,7 @@ class BaseStep(ABC):
         results: HyperparameterSamples = self.apply(method='_get_hyperparams')
         return results.to_flat()
 
-    def _get_hyperparams(self):
+    def _get_hyperparams(self) -> HyperparameterSamples:
         return HyperparameterSamples(self.hyperparams.to_flat_as_dict_primitive())
 
     def set_params(self, **params) -> 'BaseStep':
@@ -923,8 +924,9 @@ class BaseStep(ABC):
         self.apply(method='_set_params', params=HyperparameterSamples(params).to_flat())
         return self
 
-    def _set_params(self, params: dict):
-        return self.set_hyperparams(HyperparameterSamples(params))
+    def _set_params(self, params: dict) -> HyperparameterSamples:
+        self.set_hyperparams(HyperparameterSamples(params))
+        return self.hyperparams
 
     def get_params(self) -> HyperparameterSamples:
         """
@@ -952,8 +954,8 @@ class BaseStep(ABC):
         results: HyperparameterSamples = self.apply(method='_get_params')
         return results
 
-    def _get_params(self):
-        return self.get_hyperparams().to_flat_as_ordered_dict_primitive()
+    def _get_params(self) -> HyperparameterSamples:
+        return self.get_hyperparams().to_flat()
 
     def set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> 'BaseStep':
         """
@@ -999,16 +1001,15 @@ class BaseStep(ABC):
             :func:`_HasChildrenMixin._apply`,
             :func:`_HasChildrenMixin._get_params`
         """
-        self.apply(method='_set_hyperparams_space', hyperparams_space=HyperparameterSpace(
-            hyperparams_space).to_flat())
+        self.apply(method='_set_hyperparams_space', hyperparams_space=HyperparameterSpace(hyperparams_space).to_flat())
         return self
 
-    def _set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]):
+    def _set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> HyperparameterSpace:
         self._invalidate()
         hyperparams_space = HyperparameterSamples(hyperparams_space).to_flat()
         self.hyperparams_space = HyperparameterSpace(hyperparams_space) if len(
             hyperparams_space) > 0 else self.hyperparams_space
-        return self
+        return self.hyperparams_space
 
     def update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> 'BaseStep':
         """
@@ -1044,11 +1045,11 @@ class BaseStep(ABC):
             hyperparams_space).to_flat())
         return self
 
-    def _update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]):
+    def _update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> HyperparameterSpace:
         self._invalidate()
         hyperparams_space = HyperparameterSamples(hyperparams_space).to_flat()
         self.hyperparams_space.update(HyperparameterSpace(hyperparams_space).to_flat())
-        return self
+        return self.hyperparams_space
 
     def get_hyperparams_space(self) -> HyperparameterSpace:
         """
@@ -1072,7 +1073,7 @@ class BaseStep(ABC):
         results: HyperparameterSpace = self.apply(method='_get_hyperparams_space')
         return results.to_flat()
 
-    def _get_hyperparams_space(self):
+    def _get_hyperparams_space(self) -> HyperparameterSpace:
         return HyperparameterSpace(self.hyperparams_space.to_flat_as_dict_primitive())
 
     def handle_inverse_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -1119,16 +1120,26 @@ class BaseStep(ABC):
 
         kargs = ra.kargs
 
+        def _return_empty(*args, **kwargs):
+            return RecursiveDict()
+
+        _method = _return_empty
         if isinstance(method, str) and hasattr(self, method) and callable(getattr(self, method)):
-            method = getattr(self, method)
-        else:
+            _method = getattr(self, method)
+
+        if not isinstance(method, str):
+            _method = method
             kargs = [self] + list(kargs)
 
         try:
-            return method(*kargs, **ra.kwargs)
+            results = _method(*kargs, **ra.kwargs)
+            if not isinstance(results, RecursiveDict):
+                raise ValueError('Method {} must return a RecursiveDict because it is applied recursively.'.format(method))
+            return results
         except Exception as err:
             print('{}: Failed to apply method {}.'.format(self.name, method))
             print(traceback.format_stack())
+            raise err
 
     def get_step_by_name(self, name):
         if self.name == name:
@@ -1472,10 +1483,11 @@ class BaseStep(ABC):
         def _initialize_if_needed(step):
             if not step.is_initialized:
                 step.setup()
-            return step
+            return RecursiveDict()
 
         def _invalidate(step):
             step._invalidate()
+            return RecursiveDict()
 
         if full_dump:
             # initialize and invalidate steps to make sure that all steps will be saved
@@ -1754,26 +1766,14 @@ class _HasChildrenMixin:
     def _apply_self(self, method: Union[str, Callable], ra: _RecursiveArguments):
         terminal_ra: _RecursiveArguments = ra[None]
         self_results: RecursiveDict = BaseStep.apply(self, method=method, ra=terminal_ra)
-        self_results: RecursiveDict = self._purge_apply_results(self_results)
         return self_results
 
     def _apply_childrens(self, results: RecursiveDict, method: Union[str, Callable], ra: _RecursiveArguments) -> RecursiveDict:
         for children in self.get_children():
             children_results = children.apply(method=method, ra=ra[children.get_name()])
-
-            children_results = self._purge_apply_results(children_results)
-            results[children.get_name()] = children_results
+            results[children.get_name()] = RecursiveDict(children_results)
 
         return results
-
-    def _purge_apply_results(self, results) -> RecursiveDict:
-        if isinstance(results, RecursiveDict):
-            return results
-
-        if isinstance(results, dict) and not isinstance(results, RecursiveDict):
-            return RecursiveDict(**results)
-
-        return RecursiveDict()
 
     @abstractmethod
     def get_children(self) -> List[BaseStep]:

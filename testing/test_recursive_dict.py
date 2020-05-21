@@ -1,5 +1,6 @@
 import pytest
 
+from neuraxle.base import Identity
 from neuraxle.hyperparams.space import RecursiveDict, HyperparameterSamples
 
 POINT_SEPARATOR = '.'

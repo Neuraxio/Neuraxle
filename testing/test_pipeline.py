@@ -157,9 +157,9 @@ def test_pipeline_set_one_hyperparam_level_two_flat():
     print(p.get_hyperparams())
 
     assert p["b"]["a"].hyperparams["learning_rate"] == 7
-    assert p["b"]["c"].hyperparams == dict()
-    assert p["b"].hyperparams == dict()
-    assert p["c"].hyperparams == dict()
+    assert p["b"]["c"].hyperparams.to_flat_as_dict_primitive() == dict()
+    assert p["b"].hyperparams.to_flat_as_dict_primitive() == {'a__learning_rate': 7}
+    assert p["c"].hyperparams.to_flat_as_dict_primitive() == dict()
 
 
 def test_pipeline_set_one_hyperparam_level_two_dict():
@@ -248,7 +248,10 @@ def test_pipeline_update_hyperparam_level_two_flat():
     assert p["b"]["a"].hyperparams["learning_rate"] == 0.01
     assert p["b"]["a"].hyperparams["other_hp"] == 8
     assert p["b"]["c"].hyperparams == dict()
-    assert p["b"].hyperparams == dict()
+    assert p["b"].hyperparams.to_flat_as_dict_primitive() == {
+        'a__learning_rate': 0.01,
+        'a__other_hp': 8
+    }
     assert p["c"].hyperparams == dict()
 
 
