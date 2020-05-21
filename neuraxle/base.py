@@ -1673,6 +1673,9 @@ class TransformerStep(_HasMutations, _HasHyperparamsSpace, _HasHyperparams, _Has
             def fit(self, **args) -> BaseEstimator:
                 self.p = self.p.fit(**args)
 
+            def transform(self, **args) -> BaseEstimator:
+                return self.p.transform(**args)
+
         return NeuraxleToSKLearnPipelineWrapper(self)
 
     def reverse(self) -> 'TransformerStep':
@@ -2226,6 +2229,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
 
 
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
+
 
 class NonFittableMixin:
     """
