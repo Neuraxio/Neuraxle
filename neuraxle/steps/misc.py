@@ -27,6 +27,8 @@ You can find here misc. pipeline steps, for example, callbacks useful for debugg
 import time
 from abc import ABC
 
+from neuraxle.hyperparams.space import RecursiveDict
+
 VALUE_CACHING = 'value_caching'
 from typing import List, Any
 
@@ -195,7 +197,7 @@ class FitTransformCallbackStep(BaseStep):
         self.fit_callback_function.data = []
         self.fit_callback_function.name_tape = []
 
-        return cleared_callbacks
+        return RecursiveDict(cleared_callbacks)
 
 
 class CallbackWrapper(HandleOnlyMixin, MetaStep, BaseStep):

@@ -90,7 +90,8 @@ def test_when_no_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
 def test_when_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
     tape = TapeCallbackFunction()
     pickle_checkpoint_step = DefaultCheckpoint()
-    pipeline = create_pipeline(tmpdir, pickle_checkpoint_step, tape, HyperparameterSamples({"a__learning_rate": 1}))
+    pipeline = create_pipeline(tmpdir, pickle_checkpoint_step, tape,
+                               HyperparameterSamples({"a__learning_rate": 1}))
 
     pipeline, actual_data_inputs = pipeline.fit_transform(data_inputs, expected_outputs)
 

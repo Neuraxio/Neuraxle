@@ -23,7 +23,7 @@ import numpy as np
 import pytest
 
 from neuraxle.hyperparams.distributions import RandInt, LogUniform
-from neuraxle.hyperparams.space import nested_dict_to_flat, HyperparameterSpace
+from neuraxle.hyperparams.space import HyperparameterSpace, RecursiveDict
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction
 from neuraxle.steps.numpy import NumpyTranspose
@@ -117,9 +117,9 @@ def test_pipeline_set_one_hyperparam_level_one_flat():
         "a__learning_rate": 7
     })
 
-    assert p["a"].hyperparams["learning_rate"] == 7
-    assert p["b"].hyperparams == dict()
-    assert p["c"].hyperparams == dict()
+    assert p["a"].hyperparams.to_flat_as_dict_primitive()["learning_rate"] == 7
+    assert p["b"].hyperparams.to_flat_as_dict_primitive() == dict()
+    assert p["c"].hyperparams.to_flat_as_dict_primitive() == dict()
 
 
 def test_pipeline_set_one_hyperparam_level_one_dict():
@@ -157,9 +157,9 @@ def test_pipeline_set_one_hyperparam_level_two_flat():
     print(p.get_hyperparams())
 
     assert p["b"]["a"].hyperparams["learning_rate"] == 7
-    assert p["b"]["c"].hyperparams == dict()
-    assert p["b"].hyperparams == dict()
-    assert p["c"].hyperparams == dict()
+    assert p["b"]["c"].hyperparams.to_flat_as_dict_primitive() == dict()
+    assert p["b"].hyperparams.to_flat_as_dict_primitive() == {'a__learning_rate': 7}
+    assert p["c"].hyperparams.to_flat_as_dict_primitive() == dict()
 
 
 def test_pipeline_set_one_hyperparam_level_two_dict():
@@ -183,10 +183,10 @@ def test_pipeline_set_one_hyperparam_level_two_dict():
     })
     print(p.get_hyperparams())
 
-    assert p["b"]["a"].hyperparams["learning_rate"] == 7
-    assert p["b"]["c"].hyperparams == dict()
-    assert p["b"].hyperparams["learning_rate"] == 9
-    assert p["c"].hyperparams == dict()
+    assert p["b"]["a"].get_hyperparams()["learning_rate"] == 7
+    assert p["b"]["c"].get_hyperparams() == dict()
+    assert p["b"].get_hyperparams()["learning_rate"] == 9
+    assert p["c"].get_hyperparams() == dict()
 
 
 def test_pipeline_update_hyperparam_level_one_flat():
@@ -248,7 +248,10 @@ def test_pipeline_update_hyperparam_level_two_flat():
     assert p["b"]["a"].hyperparams["learning_rate"] == 0.01
     assert p["b"]["a"].hyperparams["other_hp"] == 8
     assert p["b"]["c"].hyperparams == dict()
-    assert p["b"].hyperparams == dict()
+    assert p["b"].hyperparams.to_flat_as_dict_primitive() == {
+        'a__learning_rate': 0.01,
+        'a__other_hp': 8
+    }
     assert p["c"].hyperparams == dict()
 
 
@@ -297,7 +300,7 @@ def test_pipeline_tosklearn():
             "b__learning_rate": 9
         }
     })
-    assert the_step.get_hyperparams()["learning_rate"] == 7
+    assert p.get_hyperparams()['b__a__z__learning_rate'] == 7
 
     p = p.tosklearn()
     p = sklearn.pipeline.Pipeline([('sk', p)])
@@ -311,12 +314,12 @@ def test_pipeline_tosklearn():
     z_ = a_["z"]
     assert z_.get_params()["learning_rate"] == 11
 
-    p.set_params(**nested_dict_to_flat({
+    p.set_params(**RecursiveDict({
         "sk__b": {
             "a__z__learning_rate": 12,
             "b__learning_rate": 9
         }
-    }))
+    }).to_flat())
     # p.set_params(**{"sk__b__a__z__learning_rate": 12})
     assert p.named_steps["sk"].p["b"].wrapped_sklearn_predictor.named_steps["a"]["z"].get_params()[
                "learning_rate"] == 12

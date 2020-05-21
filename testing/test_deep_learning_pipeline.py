@@ -37,13 +37,13 @@ def test_deep_learning_pipeline():
     # When
     p, outputs = p.fit_transform(data_inputs, expected_outputs)
 
-    metrics = p.apply('get_metrics')
+    metrics = p.apply('get_metrics').to_flat_as_dict_primitive()
 
     # Then
-    batch_mse_train = metrics['DeepLearningPipeline__EpochRepeater__validation_split_wrapper__epoch_metrics']['train']['mse']
-    epoch_mse_train = metrics['DeepLearningPipeline__EpochRepeater__validation_split_wrapper__epoch_metrics__TrainShuffled__MiniBatchSequentialPipeline__batch_metrics']['train']['mse']
+    batch_mse_train = metrics['EpochRepeater__validation_split_wrapper__epoch_metrics__train__mse']
+    epoch_mse_train = metrics['EpochRepeater__validation_split_wrapper__epoch_metrics__TrainShuffled__MiniBatchSequentialPipeline__batch_metrics__train__mse']
 
-    epoch_mse_validation = metrics['DeepLearningPipeline__EpochRepeater__validation_split_wrapper__epoch_metrics']['validation']['mse']
+    epoch_mse_validation = metrics['EpochRepeater__validation_split_wrapper__epoch_metrics__validation__mse']
 
     assert len(epoch_mse_train) == N_EPOCHS
     assert len(epoch_mse_validation) == N_EPOCHS
