@@ -34,6 +34,7 @@ from sklearn.metrics import r2_score
 from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, HandleOnlyMixin, ForceHandleOnlyMixin, \
     EvaluableStepMixin
 from neuraxle.data_container import DataContainer
+from neuraxle.hyperparams.space import RecursiveDict
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnCustomAxis
 
@@ -327,11 +328,13 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
         self.metrics_enabled = False
         if self.wrapped is not None:
             self.wrapped.apply('disable_metrics')
+        return RecursiveDict()
 
     def enable_metrics(self):
         self.metrics_enabled = True
         if self.wrapped is not None:
             self.wrapped.apply('enable_metrics')
+        return RecursiveDict()
 
     def _get_index_split(self, data_inputs):
         return math.floor(len(data_inputs) * (1 - self.test_size))

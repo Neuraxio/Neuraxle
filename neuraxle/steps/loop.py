@@ -23,12 +23,12 @@ Pipeline Steps For Looping
 
 """
 import copy
-from typing import List
+from typing import List, Callable, Dict, Iterable, Union
 
 import numpy as np
 
 from neuraxle.base import MetaStepMixin, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, \
-    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList
+    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, _HasChildrenMixin
 from neuraxle.data_container import ListDataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
@@ -157,38 +157,16 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         self.steps_as_tuple: List[NamedTupleList] = []
         self.copy_op = copy_op
 
-    def set_train(self, is_train: bool = True):
-        MetaStepMixin.set_train(self, is_train)
-        [step.set_train(is_train) for _, step in self]
-        return self
-
-    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
-        MetaStepMixin.set_hyperparams(self, hyperparams)
-        self.steps_as_tuple = [(name, step.set_hyperparams(self.wrapped.get_hyperparams())) for name, step in self]
-        return self
-
-    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
+    def get_children(self) -> List[BaseStep]:
         """
-        Update the step hyperparameters without removing the already-set hyperparameters.
-        Please refer to :func:`~BaseStep.update_hyperparams`.
+        Get the list of all the children for that step.
 
-        :param hyperparams: hyperparams to update
-        :type hyperparams: HyperparameterSamples
-        :return: self
-        :rtype: BaseStep
-
-        .. seealso::
-            :func:`~BaseStep.update_hyperparams`,
-            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+        :return: list of children
         """
-        MetaStepMixin.update_hyperparams(self, hyperparams)
-        self.steps_as_tuple = [(name, step.set_hyperparams(self.wrapped.get_hyperparams())) for name, step in self.steps_as_tuple]
-        return self
-
-    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseStep':
-        MetaStepMixin.set_hyperparams_space(self, hyperparams_space)
-        self.steps_as_tuple = [(name, step.set_hyperparams_space(self.wrapped.get_hyperparams_space())) for name, step in self]
-        return self
+        children: List[BaseStep] = MetaStepMixin.get_children(self)
+        cloned_children = [step for _, step in self.steps_as_tuple]
+        children.extend(cloned_children)
+        return children
 
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         data_container, context = BaseStep._will_process(self, data_container, context)
@@ -202,10 +180,9 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         # One copy of step per data input:
         steps = [self.copy_op(self.wrapped).set_name('{}[{}]'.format(self.wrapped.name, i)) for i in range(len(data_container))]
         self.steps_as_tuple = [(step.name, step) for step in steps]
-        self.invalidate()
+        self._invalidate()
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         fitted_steps_data_containers = []
         for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
             fitted_step_data_container = self[i].handle_fit_transform(
@@ -284,6 +261,14 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         :return: iter(self.steps_as_tuple)
         """
         return iter(self.steps_as_tuple)
+
+    def __len__(self):
+        """
+        Get number of steps cloned for each data input.
+
+        :return: len(self.steps_as_tuple)
+        """
+        return len(self.steps_as_tuple)
 
 
 class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStepMixin, BaseStep):

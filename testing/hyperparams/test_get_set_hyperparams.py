@@ -1,6 +1,7 @@
 from neuraxle.base import MetaStepMixin, BaseStep, NonFittableMixin, NonTransformableMixin
 from neuraxle.hyperparams.distributions import RandInt, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
+from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from testing.test_pipeline import SomeStep
 
@@ -23,7 +24,11 @@ HYPE_SAMPLE = HyperparameterSamples({
 
 
 class SomeMetaStepMixin(NonTransformableMixin, NonFittableMixin, MetaStepMixin, BaseStep):
-    pass
+    def __init__(self, wrapped: BaseStep):
+        BaseStep.__init__(self)
+        NonTransformableMixin.__init__(self)
+        NonFittableMixin.__init__(self)
+        MetaStepMixin.__init__(self, wrapped)
 
 
 class SomeStepInverseTransform(SomeStep):
@@ -36,10 +41,10 @@ class SomeStepInverseTransform(SomeStep):
 
 def test_step_cloner_should_get_hyperparams():
     p = StepClonerForEachDataInput(SomeStep())
-    p.set_hyperparams(HyperparameterSamples({
+    p.set_hyperparams({
         META_STEP_HP: META_STEP_HP_VALUE,
         SOME_STEP_HP: SOME_STEP_HP_VALUE
-    }))
+    })
 
     hyperparams = p.get_hyperparams()
 
@@ -50,10 +55,10 @@ def test_step_cloner_should_get_hyperparams():
 def test_step_cloner_should_set_hyperparams():
     p = StepClonerForEachDataInput(SomeStep())
 
-    p.set_hyperparams(HyperparameterSamples({
+    p.set_hyperparams({
         META_STEP_HP: META_STEP_HP_VALUE,
         SOME_STEP_HP: SOME_STEP_HP_VALUE
-    }))
+    })
 
     assert isinstance(p.hyperparams, HyperparameterSamples)
     assert p.hyperparams[META_STEP_HP] == META_STEP_HP_VALUE
@@ -62,14 +67,14 @@ def test_step_cloner_should_set_hyperparams():
 
 def test_step_cloner_update_hyperparams_should_update_step_cloner_hyperparams():
     p = StepClonerForEachDataInput(SomeStep())
-    p.set_hyperparams(HyperparameterSamples({
+    p.set_hyperparams({
         META_STEP_HP: META_STEP_HP_VALUE,
         SOME_STEP_HP: SOME_STEP_HP_VALUE
-    }))
+    })
 
-    p.update_hyperparams(HyperparameterSamples({
+    p.update_hyperparams({
         META_STEP_HP: META_STEP_HP_VALUE + 1,
-    }))
+    })
 
     assert isinstance(p.hyperparams, HyperparameterSamples)
     assert p.hyperparams[META_STEP_HP] == META_STEP_HP_VALUE + 1
@@ -78,14 +83,14 @@ def test_step_cloner_update_hyperparams_should_update_step_cloner_hyperparams():
 
 def test_step_cloner_update_hyperparams_should_update_wrapped_step_hyperparams():
     p = StepClonerForEachDataInput(SomeStep())
-    p.set_hyperparams(HyperparameterSamples({
+    p.set_hyperparams({
         META_STEP_HP: META_STEP_HP_VALUE,
         SOME_STEP_HP: SOME_STEP_HP_VALUE
-    }))
+    })
 
-    p.update_hyperparams(HyperparameterSamples({
-        SOME_STEP_HP: SOME_STEP_HP_VALUE + 1,
-    }))
+    p.update_hyperparams({
+        SOME_STEP_HP: SOME_STEP_HP_VALUE + 1
+    })
 
     assert isinstance(p.hyperparams, HyperparameterSamples)
     assert p.hyperparams[META_STEP_HP] == META_STEP_HP_VALUE
@@ -95,15 +100,15 @@ def test_step_cloner_update_hyperparams_should_update_wrapped_step_hyperparams()
 def test_step_cloner_update_hyperparams_space_should_update_step_cloner_hyperparams():
     p = StepClonerForEachDataInput(SomeStep())
 
-    p.set_hyperparams_space(HyperparameterSpace({
+    p.set_hyperparams_space({
         META_STEP_HP: RAND_INT_META_STEP,
         SOME_STEP_HP: RAND_INT_SOME_STEP
-    }))
+    })
 
     update_meta_step_hp_space = RandInt(0, 40)
-    p.update_hyperparams_space(HyperparameterSpace({
+    p.update_hyperparams_space({
         META_STEP_HP: update_meta_step_hp_space
-    }))
+    })
 
     assert isinstance(p.hyperparams_space, HyperparameterSpace)
     assert p.hyperparams_space[META_STEP_HP] == update_meta_step_hp_space
@@ -118,9 +123,9 @@ def test_step_cloner_update_hyperparams_space_should_update_wrapped_step_hyperpa
     }))
 
     updated_some_step_hp_space = RandInt(0, 400)
-    p.update_hyperparams_space(HyperparameterSpace({
+    p.update_hyperparams_space({
         SOME_STEP_HP: updated_some_step_hp_space
-    }))
+    })
 
     assert isinstance(p.hyperparams, HyperparameterSamples)
     assert p.hyperparams_space[META_STEP_HP] == RAND_INT_META_STEP
@@ -130,10 +135,10 @@ def test_step_cloner_update_hyperparams_space_should_update_wrapped_step_hyperpa
 def test_step_cloner_should_set_steps_hyperparams():
     p = StepClonerForEachDataInput(SomeStep())
 
-    p.set_hyperparams(HyperparameterSamples({
+    p.set_hyperparams({
         META_STEP_HP: META_STEP_HP_VALUE,
         SOME_STEP_HP: SOME_STEP_HP_VALUE
-    }))
+    })
 
     assert isinstance(p.hyperparams, HyperparameterSamples)
     assert isinstance(p.get_step().hyperparams, HyperparameterSamples)
@@ -143,10 +148,10 @@ def test_step_cloner_should_set_steps_hyperparams():
 def test_step_cloner_should_set_steps_hyperparams_space():
     p = StepClonerForEachDataInput(SomeStep())
 
-    p.set_hyperparams_space(HyperparameterSpace({
+    p.set_hyperparams_space({
         META_STEP_HP: RAND_INT_STEP_CLONER,
         SOME_STEP_HP: RAND_INT_SOME_STEP
-    }))
+    })
 
     assert isinstance(p.get_step().hyperparams_space, HyperparameterSpace)
     assert p.get_step().hyperparams_space[SOME_STEP_HP_KEY] == RAND_INT_SOME_STEP
@@ -155,10 +160,10 @@ def test_step_cloner_should_set_steps_hyperparams_space():
 def test_step_cloner_should_set_hyperparams_space():
     p = StepClonerForEachDataInput(SomeStep())
 
-    p.set_hyperparams_space(HyperparameterSpace({
+    p.set_hyperparams_space({
         META_STEP_HP: RAND_INT_STEP_CLONER,
         SOME_STEP_HP: RAND_INT_SOME_STEP
-    }))
+    })
 
     assert isinstance(p.hyperparams_space, HyperparameterSpace)
     assert p.hyperparams_space[META_STEP_HP] == RAND_INT_STEP_CLONER
@@ -181,12 +186,125 @@ def test_step_cloner_should_get_hyperparams_space():
 RAND_INT_META_STEP = RandInt(0, 10)
 
 
+def test_pipeline_should_set_hyperparams():
+    p = Pipeline([
+        SomeStep().set_name('step_1'),
+        SomeStep().set_name('step_2')
+    ])
+
+    p.set_hyperparams({
+        'hp': 1,
+        'step_1__hp': 2,
+        'step_2__hp': 3
+    })
+
+    assert isinstance(p.hyperparams, HyperparameterSamples)
+    assert p.hyperparams['hp'] == 1
+    assert p[0].hyperparams['hp'] == 2
+    assert p[1].hyperparams['hp'] == 3
+
+
+def test_pipeline_should_get_hyperparams():
+    p = Pipeline([
+        SomeStep().set_name('step_1'),
+        SomeStep().set_name('step_2')
+    ])
+    p.set_hyperparams({
+        'hp': 1,
+        'step_1__hp': 2,
+        'step_2__hp': 3
+    })
+
+    hyperparams = p.get_hyperparams()
+
+    assert isinstance(hyperparams, HyperparameterSamples)
+    assert hyperparams['hp'] == 1
+    assert hyperparams['step_1__hp'] == 2
+    assert hyperparams['step_2__hp'] == 3
+
+
+def test_pipeline_should_get_hyperparams_space():
+    p = Pipeline([
+        SomeStep().set_name('step_1'),
+        SomeStep().set_name('step_2')
+    ])
+    p.set_hyperparams_space({
+        'hp': RandInt(1, 2),
+        'step_1__hp': RandInt(2, 3),
+        'step_2__hp': RandInt(3, 4)
+    })
+
+    hyperparams_space = p.get_hyperparams_space()
+
+    assert isinstance(hyperparams_space, HyperparameterSpace)
+
+    assert hyperparams_space['hp'].min_included == 1
+    assert hyperparams_space['hp'].max_included == 2
+
+    assert hyperparams_space['step_1__hp'].min_included == 2
+    assert hyperparams_space['step_1__hp'].max_included == 3
+
+    assert hyperparams_space['step_2__hp'].min_included == 3
+    assert hyperparams_space['step_2__hp'].max_included == 4
+
+
+def test_pipeline_should_update_hyperparams():
+    p = Pipeline([
+        SomeStep().set_name('step_1'),
+        SomeStep().set_name('step_2')
+    ])
+
+    p.set_hyperparams({
+        'hp': 1,
+        'step_1__hp': 2,
+        'step_2__hp': 3
+    })
+
+    p.update_hyperparams({
+        'hp': 4,
+        'step_2__hp': 6
+    })
+
+    assert isinstance(p.hyperparams, HyperparameterSamples)
+    assert p.hyperparams['hp'] == 4
+    assert p[0].hyperparams['hp'] == 2
+    assert p[1].hyperparams['hp'] == 6
+
+
+def test_pipeline_should_update_hyperparams_space():
+    p = Pipeline([
+        SomeStep().set_name('step_1'),
+        SomeStep().set_name('step_2')
+    ])
+
+    p.set_hyperparams_space({
+        'hp': RandInt(1, 2),
+        'step_1__hp': RandInt(2, 3),
+        'step_2__hp': RandInt(3, 4)
+    })
+    p.update_hyperparams_space({
+        'hp': RandInt(4, 6),
+        'step_2__hp': RandInt(6, 8)
+    })
+
+    assert isinstance(p.hyperparams_space, HyperparameterSpace)
+
+    assert p.hyperparams_space['hp'].min_included == 4
+    assert p.hyperparams_space['hp'].max_included == 6
+
+    assert p[0].hyperparams_space['hp'].min_included == 2
+    assert p[0].hyperparams_space['hp'].max_included == 3
+
+    assert p[1].hyperparams_space['hp'].min_included == 6
+    assert p[1].hyperparams_space['hp'].max_included == 8
+
+
 def test_meta_step_mixin_should_get_hyperparams():
     p = SomeMetaStepMixin(SomeStep())
-    p.set_hyperparams(HyperparameterSamples({
+    p.set_hyperparams({
         META_STEP_HP: META_STEP_HP_VALUE,
         SOME_STEP_HP: SOME_STEP_HP_VALUE
-    }))
+    })
 
     hyperparams = p.get_hyperparams()
 
@@ -197,10 +315,10 @@ def test_meta_step_mixin_should_get_hyperparams():
 def test_meta_step_mixin_should_set_hyperparams():
     p = SomeMetaStepMixin(SomeStep())
 
-    p.set_hyperparams(HyperparameterSamples({
+    p.set_hyperparams({
         META_STEP_HP: META_STEP_HP_VALUE,
         SOME_STEP_HP: SOME_STEP_HP_VALUE
-    }))
+    })
 
     assert isinstance(p.hyperparams, HyperparameterSamples)
     assert p.hyperparams[META_STEP_HP] == META_STEP_HP_VALUE
@@ -209,14 +327,14 @@ def test_meta_step_mixin_should_set_hyperparams():
 
 def test_meta_step_mixin_update_hyperparams_should_update_meta_step_hyperparams():
     p = SomeMetaStepMixin(SomeStep())
-    p.set_hyperparams(HyperparameterSamples({
+    p.set_hyperparams({
         META_STEP_HP: META_STEP_HP_VALUE,
         SOME_STEP_HP: SOME_STEP_HP_VALUE
-    }))
+    })
 
-    p.update_hyperparams(HyperparameterSamples({
+    p.update_hyperparams({
         META_STEP_HP: META_STEP_HP_VALUE + 1
-    }))
+    })
 
     assert p.hyperparams[META_STEP_HP] == META_STEP_HP_VALUE + 1
     assert p.get_step().get_hyperparams()['somestep_hyperparam'] == SOME_STEP_HP_VALUE
@@ -224,14 +342,14 @@ def test_meta_step_mixin_update_hyperparams_should_update_meta_step_hyperparams(
 
 def test_meta_step_mixin_update_hyperparams_should_update_wrapped_step_hyperparams():
     p = SomeMetaStepMixin(SomeStep())
-    p.set_hyperparams(HyperparameterSamples({
+    p.set_hyperparams({
         META_STEP_HP: META_STEP_HP_VALUE,
         SOME_STEP_HP: SOME_STEP_HP_VALUE
-    }))
+    })
 
-    p.update_hyperparams(HyperparameterSamples({
+    p.update_hyperparams({
         SOME_STEP_HP: SOME_STEP_HP_VALUE + 1
-    }))
+    })
 
     assert p.hyperparams[META_STEP_HP] == META_STEP_HP_VALUE
     assert p.get_step().get_hyperparams()['somestep_hyperparam'] == SOME_STEP_HP_VALUE + 1
@@ -245,9 +363,9 @@ def test_meta_step_mixin_update_hyperparams_space_should_update_meta_step_hyperp
     }))
 
     update_meta_step_hp_space = RandInt(0, 100)
-    p.update_hyperparams_space(HyperparameterSpace({
+    p.update_hyperparams_space({
         META_STEP_HP: update_meta_step_hp_space
-    }))
+    })
 
     assert p.hyperparams_space[META_STEP_HP] == update_meta_step_hp_space
     assert p.wrapped.get_hyperparams_space()['somestep_hyperparam'] == RAND_INT_SOME_STEP
@@ -255,15 +373,15 @@ def test_meta_step_mixin_update_hyperparams_space_should_update_meta_step_hyperp
 
 def test_meta_step_mixin_update_hyperparams_space_should_update_wrapped_step_hyperparams():
     p = SomeMetaStepMixin(SomeStep())
-    p.set_hyperparams_space(HyperparameterSpace({
+    p.set_hyperparams_space({
         META_STEP_HP: RAND_INT_META_STEP,
         SOME_STEP_HP: RAND_INT_SOME_STEP
-    }))
+    })
 
     updated_some_step_hp_space = RandInt(0, 100)
-    p.update_hyperparams_space(HyperparameterSpace({
+    p.update_hyperparams_space({
         SOME_STEP_HP: updated_some_step_hp_space
-    }))
+    })
 
     assert p.hyperparams_space[META_STEP_HP] == RAND_INT_META_STEP
     assert p.wrapped.get_hyperparams_space()['somestep_hyperparam'] == updated_some_step_hp_space
@@ -271,10 +389,10 @@ def test_meta_step_mixin_update_hyperparams_space_should_update_wrapped_step_hyp
 
 def test_meta_step_mixin_should_set_hyperparams_space():
     p = SomeMetaStepMixin(SomeStep())
-    p.set_hyperparams_space(HyperparameterSpace({
+    p.set_hyperparams_space({
         META_STEP_HP: RAND_INT_META_STEP,
         SOME_STEP_HP: RAND_INT_SOME_STEP
-    }))
+    })
 
     assert p.hyperparams_space[META_STEP_HP] == RAND_INT_META_STEP
     assert p.get_step().hyperparams_space[SOME_STEP_HP_KEY] == RAND_INT_SOME_STEP
@@ -282,10 +400,10 @@ def test_meta_step_mixin_should_set_hyperparams_space():
 
 def test_meta_step_mixin_should_get_hyperparams_space():
     p = SomeMetaStepMixin(SomeStep())
-    p.set_hyperparams_space(HyperparameterSpace({
+    p.set_hyperparams_space({
         META_STEP_HP: RAND_INT_META_STEP,
         SOME_STEP_HP: RAND_INT_SOME_STEP
-    }))
+    })
 
     hyperparams_space = p.get_hyperparams_space()
 

@@ -24,14 +24,14 @@ Those steps works with scikit-learn (sklearn) transformers and estimators.
 
 """
 import inspect
-from typing import Any
+from typing import Any, List
 
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import Ridge
 
-from neuraxle.base import BaseStep
+from neuraxle.base import BaseStep, _HasChildrenMixin
 from neuraxle.hyperparams.distributions import LogUniform, Boolean
-from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
+from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.union import ModelStacking
 
@@ -78,16 +78,27 @@ class SKLearnWrapper(BaseStep):
             return self.wrapped_sklearn_predictor.predict(data_inputs)
         return self.wrapped_sklearn_predictor.transform(data_inputs)
 
-    def set_hyperparams(self, flat_hyperparams: HyperparameterSamples) -> BaseStep:
-        BaseStep.set_hyperparams(self, flat_hyperparams)
-        self.wrapped_sklearn_predictor.set_params(**HyperparameterSamples(flat_hyperparams).to_flat_as_dict_primitive())
-        return self
+    def _set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
+        """
+        Set hyperparams for base step, and the wrapped sklearn_predictor.
 
-    def get_hyperparams(self):
+        :param hyperparams:
+        :return: self
+        """
+        # flatten the step hyperparams, and set the wrapped sklearn predictor params
+        hyperparams = HyperparameterSamples(hyperparams)
+        BaseStep._set_hyperparams(self, hyperparams.to_flat())
+        self.wrapped_sklearn_predictor.set_params(
+            **hyperparams.with_separator(RecursiveDict.DEFAULT_SEPARATOR).to_flat_as_dict_primitive()
+        )
+
+        return self.hyperparams.to_flat()
+
+    def _get_hyperparams(self):
         if self.return_all_sklearn_default_params_on_get:
             return HyperparameterSamples(self.wrapped_sklearn_predictor.get_params()).to_flat()
         else:
-            return BaseStep.get_hyperparams(self)
+            return BaseStep._get_hyperparams(self)
 
     def get_wrapped_sklearn_predictor(self):
         return self.wrapped_sklearn_predictor
