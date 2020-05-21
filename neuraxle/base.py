@@ -1778,7 +1778,7 @@ class _HasChildrenMixin:
     @abstractmethod
     def get_children(self) -> List[BaseStep]:
         """
-        Get the list of all the children for that step.
+        Get the list of all the childs for that step.
 
         :return:
         """
