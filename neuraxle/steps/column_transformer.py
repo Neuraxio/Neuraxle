@@ -37,7 +37,7 @@ ColumnSelectionType = Union[Tuple[int, TransformerStep], Tuple[List[int], Transf
 ColumnChooserTupleList = List[ColumnSelectionType]
 
 
-class ColumnSelector2D(BaseStep):
+class ColumnSelector2D(TransformerStep):
     """
     A ColumnSelector2D selects column in a sequence.
     """
@@ -77,16 +77,15 @@ class ColumnSelector2D(BaseStep):
             ))
 
 
-class ColumnsSelectorND(MetaStep, BaseStep):
+class ColumnsSelectorND(MetaStep):
     """
     ColumnSelectorND wraps a ColumnSelector2D by as many ForEachDataInput step
     as needed to select the last dimension.
     """
 
     def __init__(self, columns_selection, n_dimension=3):
-        BaseStep.__init__(self)
 
-        col_selector = ColumnSelector2D(columns_selection=columns_selection)
+        col_selector: ColumnSelector2D = ColumnSelector2D(columns_selection=columns_selection)
         for _ in range(min(0, n_dimension - 2)):
             col_selector = ForEachDataInput(col_selector)
 
@@ -125,7 +124,7 @@ class ColumnTransformer(FeatureUnion):
             for name, step in column_chooser_steps_as_tuple
         ]
 
-        FeatureUnion.__init__(self, [
+        super().__init__([
             (string_indices, Pipeline([
                 ColumnsSelectorND(indices, n_dimension=n_dimension),
                 step

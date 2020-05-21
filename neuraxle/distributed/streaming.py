@@ -373,7 +373,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :return: return name, n_workers, max_queue_size, actual_step
         :rtype: tuple(str, int, int, BaseStep)
         """
-        if isinstance(step, BaseStep):
+        if isinstance(step, TransformerStep):
             actual_step = step
             name = step.name
             max_queue_size = self.max_queue_size

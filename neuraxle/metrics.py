@@ -25,7 +25,7 @@ from neuraxle.base import MetaStep, BaseStep, ExecutionContext, _FittableStep
 from neuraxle.data_container import DataContainer
 
 
-class MetricsWrapper(MetaStep, BaseStep):
+class MetricsWrapper(MetaStep):
     """
     Add metrics calculation to a step. Calculates metrics after each fit, fit_transform, or even transform if there is an expected outputs.
 
@@ -58,8 +58,7 @@ class MetricsWrapper(MetaStep, BaseStep):
             print_metrics=False,
             print_fun=print
     ):
-        BaseStep.__init__(self, name=name)
-        MetaStep.__init__(self, wrapped)
+        MetaStep.__init__(self, wrapped, name=name)
 
         self.metrics: Dict = metrics
         self._initialize_metrics(metrics)

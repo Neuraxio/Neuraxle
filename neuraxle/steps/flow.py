@@ -387,7 +387,7 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
     """
 
     def __init__(self, steps):
-        FeatureUnion.__init__(self, steps, joiner=NumpyConcatenateOnCustomAxisIfNotEmpty(axis=-1))
+        FeatureUnion.__init__(self, steps_as_tuple=steps, joiner=NumpyConcatenateOnCustomAxisIfNotEmpty(axis=-1))
         self.set_hyperparams(HyperparameterSamples({}))
         self._make_all_steps_optional()
 
@@ -537,7 +537,7 @@ class ExpandDim(ResumableStepMixin, MetaStep):
         return False
 
 
-class ReversiblePreprocessingWrapper(HandleOnlyMixin, _FittableStep, TruncableSteps):
+class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
     """
     TruncableSteps with a preprocessing step(1), and a postprocessing step(2)
     that inverse transforms with the preprocessing step at the end (1, 2, reversed(1)).
@@ -562,7 +562,6 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, _FittableStep, TruncableSt
             ("preprocessing_step", preprocessing_step),
             ("postprocessing_step", postprocessing_step)
         ])
-        _FittableStep.__init__(self)
         HandleOnlyMixin.__init__(self)
 
     def _fit_data_container(self, data_container: DataContainer,

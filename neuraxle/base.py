@@ -1451,7 +1451,7 @@ class _HasMutations(ABC):
         return self
 
 
-class TransformerStep(_HasHyperparamsSpace, _HasHyperparams, _HasSavers, _TransformerStep, ABC):
+class TransformerStep(_HasMutations, _HasHyperparamsSpace, _HasHyperparams, _HasHashers, _HasSavers, _TransformerStep, ABC):
     """
     Base class for a pipeline step.
 
@@ -1787,8 +1787,7 @@ class MetaStep(BaseStep):
         savers: List[BaseSaver] = None,
         hashers: List[BaseHasher] = None
     ):
-        BaseStep.__init__(
-            self,
+        super().__init__(
             hyperparams=hyperparams,
             hyperparams_space=hyperparams_space,
             name=name,
@@ -2138,7 +2137,7 @@ class MetaStep(BaseStep):
         :param warn: (verbose) wheter or not to warn about the inexistence of the method.
         :return: self, a copy of self, or even perhaps a new or different BaseStep object.
         """
-        new_self = BaseStep.mutate(self, new_method, method_to_assign_to, warn)
+        new_self = super().mutate(new_method, method_to_assign_to, warn)
         self.wrapped = self.wrapped.mutate(new_method, method_to_assign_to, warn)
 
         return new_self
@@ -2154,7 +2153,7 @@ class MetaStep(BaseStep):
         :param new_method: if it is not None, upon calling ``mutate``, the new_method will be the one that is used on the provided new_base_step.
         :return: self
         """
-        new_self = BaseStep.will_mutate_to(self, new_base_step, new_method, method_to_assign_to)
+        new_self = super().will_mutate_to(new_base_step, new_method, method_to_assign_to)
         return new_self
 
     def __repr__(self):
@@ -2227,6 +2226,38 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
 
 
 NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
+
+class NonFittableMixin:
+    """
+    A pipeline step that requires no fitting: fitting just returns self when called to do no action.
+    Note: fit methods are not implemented
+    """
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+        data_container, context = self._will_process(data_container, context)
+        data_container, context = self._will_transform_data_container(data_container, context)
+
+        data_container = self._transform_data_container(data_container, context)
+
+        data_container = self._did_transform(data_container, context)
+        data_container = self._did_process(data_container, context)
+
+        return self, data_container
+
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        return self
+
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        return self, self._transform_data_container(data_container, context)
+
+    def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
+        """
+        Don't fit.
+        :param data_inputs: the data that would normally be fitted on.
+        :param expected_outputs: the data that would normally be fitted on.
+        :return: self
+        """
+        return self
 
 
 class NonTransformableMixin:
@@ -2359,7 +2390,7 @@ class TruncableSteps(BaseStep, ABC):
             hyperparams: HyperparameterSamples = dict(),
             hyperparams_space: HyperparameterSpace = dict()
     ):
-        BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
+        super().__init__(hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         self.set_steps(steps_as_tuple)
 
         self.set_savers([TruncableJoblibStepSaver()] + self.savers)
@@ -2446,7 +2477,7 @@ class TruncableSteps(BaseStep, ABC):
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
         """
-        results = BaseStep.apply(self, method_name, step_name=step_name, *kargs, **kwargs)
+        results = super().apply(method_name, step_name=step_name, *kargs, **kwargs)
 
         if step_name is not None:
             step_name = "{}__{}".format(step_name, self.name)
@@ -2469,7 +2500,7 @@ class TruncableSteps(BaseStep, ABC):
         :param kwargs: any additional positional arguments to be passed to the method
         :return: accumulated results
         """
-        results = BaseStep.apply_method(self, method=method, step_name=step_name, *kargs, **kwargs)
+        results = super().apply_method(method=method, step_name=step_name, *kargs, **kwargs)
 
         if step_name is not None:
             step_name = "{}__{}".format(step_name, self.name)
@@ -2773,7 +2804,7 @@ class TruncableSteps(BaseStep, ABC):
         .. seealso::
             :class:`TruncableJoblibStepSaver`
         """
-        if BaseStep.should_save(self):
+        if super().should_save():
             return True
 
         for _, step in self.items():
@@ -3135,7 +3166,7 @@ class ResumableStepMixin:
         return self.__repr__()
 
 
-class Identity(NonTransformableMixin, BaseStep):
+class Identity(NonTransformableMixin, TransformerStep):
     """
     A pipeline step that has no effect at all but to return the same data without changes.
 
@@ -3153,8 +3184,8 @@ class Identity(NonTransformableMixin, BaseStep):
     def __init__(self, savers=None, name=None):
         if savers is None:
             savers = [JoblibStepSaver()]
+        TransformerStep.__init__(self, name=name, savers=savers)
         NonTransformableMixin.__init__(self)
-        BaseStep.__init__(self, name=name, savers=savers)
 
 
 class TransformHandlerOnlyMixin:

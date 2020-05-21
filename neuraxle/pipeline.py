@@ -31,17 +31,16 @@ from typing import Any, Tuple, List
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, ExecutionContext, ExecutionMode, \
     NonTransformableMixin, MetaStep, _FittableStep, HandleOnlyMixin, ForceHandleOnlyMixin, _CustomHandlerMethods, \
-    ForceHandleMixin
+    ForceHandleMixin, Identity
 from neuraxle.checkpoints import Checkpoint
 from neuraxle.data_container import DataContainer, ListDataContainer
 
 DEFAULT_CACHE_FOLDER = 'cache'
 
 
-class BasePipeline(_FittableStep, TruncableSteps, ABC):
+class BasePipeline(TruncableSteps, ABC):
     def __init__(self, steps: NamedTupleList):
         TruncableSteps.__init__(self, steps_as_tuple=steps)
-        _FittableStep.__init__(self)
 
     @abstractmethod
     def fit(self, data_inputs, expected_outputs=None) -> 'BasePipeline':
@@ -391,7 +390,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         :class:`~neuraxle.base.ExecutionContext`
     """
     def __init__(self, steps: NamedTupleList, batch_size=None, cache_folder=None):
-        Pipeline.__init__(self, steps, cache_folder=cache_folder)
+        Pipeline.__init__(self, steps=steps, cache_folder=cache_folder)
         ForceHandleMixin.__init__(self)
         self.__validate_barriers_batch_size(batch_size)
         self.__patch_missing_barrier(batch_size)
@@ -527,7 +526,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         return sub_pipelines
 
 
-class Barrier(NonTransformableMixin, BaseStep, ABC):
+class Barrier(Identity, ABC):
     """
     A Barrier step to be used in a minibatch sequential pipeline. It forces all the
     data inputs to get to the barrier in a sub pipeline before going through to the next sub-pipeline.

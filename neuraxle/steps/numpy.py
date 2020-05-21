@@ -26,20 +26,19 @@ Those steps works with NumPy (np) arrays.
 
 import numpy as np
 
-from neuraxle.base import BaseStep, DataContainer, ExecutionContext, ForceHandleOnlyMixin, \
-    ForceHandleMixin
+from neuraxle.base import DataContainer, ExecutionContext, ForceHandleMixin, TransformerStep
 from neuraxle.hyperparams.space import HyperparameterSamples
 
 
-class NumpyFlattenDatum(BaseStep):
+class NumpyFlattenDatum(TransformerStep):
     def __init__(self):
-        BaseStep.__init__(self)
+        TransformerStep.__init__(self)
 
     def transform(self, data_inputs):
         return data_inputs.reshape(data_inputs.shape[0], -1)
 
 
-class NumpyConcatenateOnCustomAxis(BaseStep):
+class NumpyConcatenateOnCustomAxis(TransformerStep):
     """
     Numpy concetenation step where the concatenation is performed along the specified custom axis.
     """
@@ -51,7 +50,7 @@ class NumpyConcatenateOnCustomAxis(BaseStep):
         :return: NumpyConcatenateOnCustomAxis instance.
         """
         self.axis = axis
-        BaseStep.__init__(self)
+        TransformerStep.__init__(self)
 
     def _transform_data_container(self, data_container, context):
         """
@@ -107,9 +106,9 @@ class NumpyConcatenateOuterBatch(NumpyConcatenateOnCustomAxis):
         NumpyConcatenateOnCustomAxis.__init__(self, axis=0)
 
 
-class NumpyTranspose(BaseStep):
+class NumpyTranspose(TransformerStep):
     def __init__(self):
-        BaseStep.__init__(self)
+        super().__init__()
 
     def _transform_data_container(self, data_container, context):
         """
@@ -136,11 +135,11 @@ class NumpyTranspose(BaseStep):
         return np.array(data_inputs).transpose()
 
 
-class NumpyShapePrinter(BaseStep):
+class NumpyShapePrinter(TransformerStep):
 
     def __init__(self, custom_message: str = ""):
+        super().__init__()
         self.custom_message = custom_message
-        BaseStep.__init__(self)
 
     def transform(self, data_inputs):
         self._print(data_inputs)
@@ -157,7 +156,7 @@ class NumpyShapePrinter(BaseStep):
         print(self.__class__.__name__ + " (one):", data_input.shape, self.custom_message)
 
 
-class MultiplyByN(BaseStep):
+class MultiplyByN(TransformerStep):
     """
     Step to multiply a numpy array.
     Accepts an integer for the number to multiply by.
@@ -177,12 +176,7 @@ class MultiplyByN(BaseStep):
     """
 
     def __init__(self, multiply_by=1):
-        BaseStep.__init__(
-            self,
-            hyperparams=HyperparameterSamples({
-                'multiply_by': multiply_by
-            })
-        )
+        super().__init__(hyperparams=HyperparameterSamples({ 'multiply_by': multiply_by }))
 
     def transform(self, data_inputs):
         if not isinstance(data_inputs, np.ndarray):
@@ -197,7 +191,7 @@ class MultiplyByN(BaseStep):
         return data_inputs / self.hyperparams['multiply_by']
 
 
-class AddN(BaseStep):
+class AddN(TransformerStep):
     """
     Step to add a scalar to a numpy array.
     Accepts an integer for the number to add to every data inputs.
@@ -217,12 +211,7 @@ class AddN(BaseStep):
     """
 
     def __init__(self, add=1):
-        BaseStep.__init__(
-            self,
-            hyperparams=HyperparameterSamples({
-                'add': add
-            })
-        )
+        super().__init__(hyperparams=HyperparameterSamples({ 'add': add }))
 
     def transform(self, data_inputs):
         if not isinstance(data_inputs, np.ndarray):
@@ -237,7 +226,7 @@ class AddN(BaseStep):
         return data_inputs - self.hyperparams['add']
 
 
-class Sum(BaseStep):
+class Sum(TransformerStep):
     """
     Step sum numpy array using np.sum.
 
@@ -257,7 +246,7 @@ class Sum(BaseStep):
     """
 
     def __init__(self, axis):
-        BaseStep.__init__(self)
+        TransformerStep.__init__(self)
         self.axis = axis
 
     def transform(self, data_inputs):
@@ -268,7 +257,7 @@ class Sum(BaseStep):
         return data_inputs
 
 
-class OneHotEncoder(BaseStep):
+class OneHotEncoder(TransformerStep):
     """
     Step to one hot a set of columns.
     Accepts Integer Columns and converts it ot a one_hot.
@@ -331,7 +320,7 @@ class OneHotEncoder(BaseStep):
         return outputs_.squeeze()
 
 
-class ToNumpy(ForceHandleMixin, BaseStep):
+class ToNumpy(ForceHandleMixin, TransformerStep):
     """
     Convert data inputs, and expected outputs to a numpy array.
     """
@@ -340,7 +329,7 @@ class ToNumpy(ForceHandleMixin, BaseStep):
         return data_container.to_numpy(), context
 
 
-class NumpyReshape(BaseStep):
+class NumpyReshape(TransformerStep):
     """
     Reshape numpy array in data inputs.
 
@@ -356,7 +345,7 @@ class NumpyReshape(BaseStep):
     """
 
     def __init__(self, new_shape):
-        BaseStep.__init__(self)
+        super().__init__()
         self.new_shape = new_shape
 
     def transform(self, data_inputs):

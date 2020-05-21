@@ -36,11 +36,11 @@ BaseStep class.
 """
 import numpy as np
 
-from neuraxle.base import NonTransformableMixin, Identity, BaseStep
+from neuraxle.base import NonTransformableMixin, Identity, BaseStep, NonFittableMixin
 from neuraxle.pipeline import Pipeline
 
 
-class NonFittableStep(BaseStep):
+class NonFittableStep(NonFittableMixin, BaseStep):
     """
     Fit method is automatically implemented as changing nothing.
     Please make your steps inherit from NonFittableMixin, when they don't need any fitting.
