@@ -27,7 +27,7 @@ E.g.: for use with RandomizedSearchCV.
 from neuraxle.base import MetaStep, BaseStep
 
 
-class MetaSKLearnWrapper(MetaStep, BaseStep):
+class MetaSKLearnWrapper(MetaStep):
 
     def __init__(self, wrapped):
         """
@@ -36,7 +36,6 @@ class MetaSKLearnWrapper(MetaStep, BaseStep):
         
         :param wrapped: a scikit-learn object of type "MetaEstimatorMixin". 
         """
-        BaseStep.__init__(self)
         MetaStep.__init__(self)
 
         self.wrapped_sklearn_metaestimator = wrapped  # TODO: use self.set_step of the MetaStepMixin instead?

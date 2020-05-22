@@ -23,7 +23,7 @@ HYPE_SAMPLE = HyperparameterSamples({
 })
 
 
-class SomeMetaStep(NonTransformableMixin, MetaStep, BaseStep):
+class SomeMetaStep(NonTransformableMixin, MetaStep):
     pass
 
 class SomeStepInverseTransform(SomeStep):

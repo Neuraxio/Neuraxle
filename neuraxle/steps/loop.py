@@ -29,7 +29,7 @@ from typing import Tuple
 import numpy as np
 
 from neuraxle.base import MetaStep, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, \
-    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, TransformerStep
+    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, TransformerStep, MetaStepMixin
 from neuraxle.data_container import ListDataContainer
 
 
@@ -142,7 +142,7 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
 
 class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
     def __init__(self, wrapped: TransformerStep, copy_op=copy.deepcopy, cache_folder_when_no_handle=None):
-        MetaStep.__init__(self, wrapped)
+        MetaStep.__init__(self, wrapped=wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
         self.savers.append(TruncableJoblibStepSaver())
 

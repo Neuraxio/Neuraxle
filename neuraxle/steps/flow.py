@@ -36,7 +36,7 @@ import numpy as np
 OPTIONAL_ENABLED_HYPERPARAM = 'enabled'
 
 
-class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStep, BaseStep):
+class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStep):
     """
     A wrapper to run wrapped step only in test mode, or only in train mode.
 
@@ -61,8 +61,7 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStep, BaseStep):
     """
 
     def __init__(self, wrapped: BaseStep, is_train_only=True, cache_folder_when_no_handle=None):
-        BaseStep.__init__(self)
-        MetaStep.__init__(self, wrapped)
+        MetaStep.__init__(self, wrapped=wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
 
         self.is_train_only = is_train_only
@@ -149,7 +148,7 @@ class TestOnlyWrapper(TrainOrTestOnlyWrapper):
         TrainOrTestOnlyWrapper.__init__(self, wrapped=wrapped, is_train_only=False)
 
 
-class Optional(ForceHandleOnlyMixin, MetaStep, BaseStep):
+class Optional(ForceHandleOnlyMixin, MetaStep):
     """
     A wrapper to nullify a step : nullify its hyperparams, and also nullify all of his behavior.
 
@@ -174,14 +173,14 @@ class Optional(ForceHandleOnlyMixin, MetaStep, BaseStep):
             OPTIONAL_ENABLED_HYPERPARAM: Boolean()
         }) if use_hyperparameter_space else {}
 
-        BaseStep.__init__(
+        MetaStep.__init__(
             self,
             hyperparams=HyperparameterSamples({
                 OPTIONAL_ENABLED_HYPERPARAM: enabled
             }),
-            hyperparams_space=hyperparameter_space
+            hyperparams_space=hyperparameter_space,
+            wrapped=wrapped
         )
-        MetaStep.__init__(self, wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
 
         if nullified_return_value is None:

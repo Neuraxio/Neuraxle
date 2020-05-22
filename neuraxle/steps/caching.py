@@ -36,7 +36,7 @@ from neuraxle.data_container import DataContainer
 from neuraxle.pipeline import DEFAULT_CACHE_FOLDER
 
 
-class ValueCachingWrapper(MetaStep, BaseStep):
+class ValueCachingWrapper(MetaStep):
     """
     Value caching wrapper wraps a step to cache the values.
     """
@@ -47,7 +47,6 @@ class ValueCachingWrapper(MetaStep, BaseStep):
             cache_folder: str = DEFAULT_CACHE_FOLDER,
             value_hasher: 'BaseValueHasher' = None,
     ):
-        BaseStep.__init__(self)
         MetaStep.__init__(self, wrapped)
         self.value_hasher = value_hasher
 

@@ -200,7 +200,7 @@ class FitTransformCallbackStep(BaseStep):
         return RecursiveDict(cleared_callbacks)
 
 
-class CallbackWrapper(HandleOnlyMixin, MetaStep, BaseStep):
+class CallbackWrapper(HandleOnlyMixin, MetaStep):
     """
     A step that calls a callback function for each of his methods : transform, fit, fit_transform, and even inverse_transform.
     To be used with :class:`TapeCallbackFunction`.
@@ -228,8 +228,7 @@ class CallbackWrapper(HandleOnlyMixin, MetaStep, BaseStep):
             more_arguments: List = tuple(),
             hyperparams=None
     ):
-        BaseStep.__init__(self, hyperparams)
-        MetaStep.__init__(self, wrapped)
+        MetaStep.__init__(self, wrapped=wrapped, hyperparams=hyperparams)
 
         self.inverse_transform_callback_function = inverse_transform_callback_function
         self.more_arguments = more_arguments

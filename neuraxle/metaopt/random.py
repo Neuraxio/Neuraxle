@@ -41,7 +41,7 @@ from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnC
 VALIDATION_SUB_DATA_CONTAINER_NAME = 'validation'
 
 
-class BaseValidation(MetaStep, BaseStep, ABC):
+class BaseValidation(MetaStep, ABC):
     """
     Base class For validation wrappers.
     It has a scoring function to calculate the score for the validation split.

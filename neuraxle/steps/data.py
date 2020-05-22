@@ -78,7 +78,7 @@ class DataShuffler(InputAndOutputTransformerMixin, TransformerStep):
         return list(data_inputs_shuffled), list(expected_outputs_shuffled)
 
 
-class EpochRepeater(ForceHandleOnlyMixin, MetaStep, BaseStep):
+class EpochRepeater(ForceHandleOnlyMixin, MetaStep):
     """
     Repeat wrapped step fit, or transform for the number of epochs passed in the constructor.
 

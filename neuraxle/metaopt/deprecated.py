@@ -323,7 +323,7 @@ class BaseHyperparameterOptimizer(ABC):
         raise NotImplementedError()
 
 
-class AutoMLAlgorithm(ForceHandleOnlyMixin, MetaStep, BaseStep):
+class AutoMLAlgorithm(ForceHandleOnlyMixin, MetaStep):
     """
     Pipeline step that executes Automatic Machine Learning strategy.
     It uses an hyperparameter optimizer of type :class:`BaseHyperparameterOptimizer` to find the next best hyperparams.
@@ -347,7 +347,6 @@ class AutoMLAlgorithm(ForceHandleOnlyMixin, MetaStep, BaseStep):
             higher_score_is_better=True,
             cache_folder_when_no_handle=None
     ):
-        BaseStep.__init__(self)
         MetaStep.__init__(self, None)
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
         self.higher_score_is_better = higher_score_is_better
@@ -427,7 +426,7 @@ class Trial:
         return s
 
 
-class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStep, BaseStep):
+class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStep):
     """
     A step to execute any Automatic Machine Learning Algorithms.
 
@@ -473,7 +472,6 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStep, BaseStep):
             raise ValueError(
                 'AutoML algorithm needs evaluable steps that implement the function get_score. Please use a validation technique, or implement EvaluableStepMixin.')
 
-        BaseStep.__init__(self)
         MetaStep.__init__(self, auto_ml_algorithm.set_step(wrapped))
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
 

@@ -587,8 +587,15 @@ class _TransformerStep:
             print(traceback.format_stack())
             raise err
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
-        pass
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
+            DataContainer, ExecutionContext):
+        """
+        Apply side effects before any step method.
+        :param data_container: data container
+        :param context: execution context
+        :return: (data container, execution context)
+        """
+        return data_container, context
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -665,6 +672,40 @@ class _TransformerStep:
         """
         data_container = self.hash_data_container(data_container)
         return data_container
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'TransformerStep':
+        """
+        Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
+        The default behavior is to rehash current ids with the step hyperparameters.
+        :param data_container: the data container to transform
+        :param context: execution context
+        :return: tuple(fitted pipeline, data_container)
+        .. seealso::
+            :class:`~neuraxle.data_container.DataContainer`,
+            :class:`~neuraxle.pipeline.Pipeline`
+        """
+        self._did_process(data_container, context)
+        return self
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> ('TransformerStep', DataContainer):
+        """
+        Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.fit_transform`.
+        The default behavior is to rehash current ids with the step hyperparameters.
+        :param data_container: the data container to transform
+        :param context: execution context
+        :return: tuple(fitted pipeline, data_container)
+        """
+        return self, self.handle_transform(data_container, context)
+
+    def fit_transform(self, data_inputs, expected_outputs=None):
+        """
+        Fit transform given data inputs. By default, a step only transforms in the fit transform method.
+        To add fitting to your step, see class:`_FittableStep` for more info.
+        :param data_inputs: data inputs
+        :param expected_outputs: expected outputs to fit on
+        :return: transformed data inputs
+        """
+        return self, self.transform(data_inputs)
 
     def handle_predict(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -746,7 +787,6 @@ class _TransformerStep:
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
 
-
 class _FittableStep:
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
@@ -786,6 +826,15 @@ class _FittableStep:
         :return: (fitted self, data container)
         """
         return self.fit(data_container.data_inputs, data_container.expected_outputs)
+
+    def _did_fit(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Apply side effects before fit is called.
+        :param data_container: data container
+        :param context: execution context
+        :return: (data container, execution context)
+        """
+        return data_container
 
     @abstractmethod
     def fit(self, data_inputs, expected_outputs) -> '_FittableStep':
@@ -886,8 +935,6 @@ class _FittableStep:
         :return: (fitted self, data container)
         """
         return data_container
-
-
 
 
 class _CustomHandlerMethods:
@@ -1648,7 +1695,7 @@ class TransformerStep(_HasMutations, _HasHyperparamsSpace, _HasHyperparams, _Has
         if name is None:
             name = self.__class__.__name__
         self.name: str = name
-        self.invalidate()
+        self._invalidate()
 
         self.is_initialized = False
         self.is_train: bool = True
@@ -1934,7 +1981,7 @@ class MetaStepMixin(_HasChildrenMixin):
         :param step: new wrapped step
         :return: self
         """
-        self.invalidate()
+        self._invalidate()
         self.wrapped: TransformerStep = _sklearn_to_neuraxle_step(step)
         return self
 
@@ -2094,7 +2141,8 @@ class MetaStep(MetaStepMixin, BaseStep):
             savers: List[BaseSaver] = None,
             hashers: List[BaseHasher] = None
     ):
-        super().__init__(
+        BaseStep.__init__(
+            self,
             hyperparams=hyperparams,
             hyperparams_space=hyperparams_space,
             name=name,
@@ -2334,10 +2382,9 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
             hyperparams: HyperparameterSamples = dict(),
             hyperparams_space: HyperparameterSpace = dict()
     ):
-        BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
-        _HasChildrenMixin.__init__(self)
         self.set_steps(steps_as_tuple)
-
+        _HasChildrenMixin.__init__(self)
+        BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         self.set_savers([TruncableJoblibStepSaver()] + self.savers)
 
     def are_steps_before_index_the_same(self, other: 'TruncableSteps', index: int) -> bool:
