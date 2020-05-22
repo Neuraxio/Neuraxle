@@ -78,16 +78,22 @@ class Trial:
         self.start_time: datetime.datetime = start_time
         self.end_time: datetime.datetime = end_time
 
-    def new_validation_split(self, pipeline: BaseStep) -> 'TrialSplit':
+    def new_validation_split(self, pipeline: BaseStep, delete_pipeline_on_completion: bool = True) -> 'TrialSplit':
         """
         Create a new trial split.
         A trial has one split when the validation splitter function is validation split.
         A trial has one or many split when the validation splitter function is kfold_cross_validation_split.
 
+        :param delete_pipeline_on_completion: bool to delete pipeline on completion or not
         :type pipeline: pipeline to execute
         :return: one trial split
         """
-        trial_split: TrialSplit = TrialSplit(split_number=len(self.validation_splits), main_metric_name=self.main_metric_name, pipeline=pipeline)
+        trial_split: TrialSplit = TrialSplit(
+            split_number=len(self.validation_splits),
+            main_metric_name=self.main_metric_name,
+            pipeline=pipeline,
+            delete_pipeline_on_completion=delete_pipeline_on_completion
+        )
         self.validation_splits.append(trial_split)
 
         return trial_split
@@ -181,6 +187,15 @@ class Trial:
 
         return self
 
+    def get_trained_pipeline(self, split_number: int = 0):
+        """
+        Get trained pipeline inside the validation splits.
+
+        :param split_number: split number to get trained pipeline from
+        :return:
+        """
+        return self.validation_splits[split_number].get_pipeline()
+
     def _get_trial_hash(self, hp_dict: Dict):
         """
         Hash hyperparams with md5 to create a trial hash.
@@ -267,6 +282,7 @@ class TrialSplit:
             start_time: datetime.datetime = None,
             end_time: datetime.datetime = None,
             pipeline: BaseStep = None,
+            delete_pipeline_on_completion: bool = True
     ):
         if status is None:
             status = TRIAL_STATUS.PLANNED
@@ -282,6 +298,7 @@ class TrialSplit:
         self.start_time: datetime.datetime = start_time
         self.pipeline: BaseStep = pipeline
         self.main_metric_name: str = main_metric_name
+        self.delete_pipeline_on_completion = delete_pipeline_on_completion
 
     def fit_trial_split(self, train_data_container: DataContainer, context: ExecutionContext) -> 'TrialSplit':
         """
@@ -366,6 +383,14 @@ class TrialSplit:
         :return:
         """
         return self.metrics_results[self.main_metric_name]['validation_values'][-1]
+
+    def get_pipeline(self):
+        """
+        Return the trained pipeline
+
+        :return:
+        """
+        return self.pipeline
 
     def is_higher_score_better(self) -> bool:
         """
@@ -483,7 +508,8 @@ class TrialSplit:
         :return:
         """
         self.end_time = datetime.datetime.now()
-        del self.pipeline
+        if self.delete_pipeline_on_completion:
+            del self.pipeline
         if exc_type is not None:
             self.set_failed(exc_val)
             raise exc_val
