@@ -84,7 +84,7 @@ class Trial:
         A trial has one split when the validation splitter function is validation split.
         A trial has one or many split when the validation splitter function is kfold_cross_validation_split.
 
-        :param should_delete_pipeline_on_completion: bool to delete pipeline on completion or not
+        :param delete_pipeline_on_completion: bool to delete pipeline on completion or not
         :type pipeline: pipeline to execute
         :return: one trial split
         """
@@ -92,7 +92,7 @@ class Trial:
             split_number=len(self.validation_splits),
             main_metric_name=self.main_metric_name,
             pipeline=pipeline,
-            should_delete_pipeline_on_completion=should_delete_pipeline_on_completion
+            delete_pipeline_on_completion=delete_pipeline_on_completion
         )
         self.validation_splits.append(trial_split)
 
@@ -298,7 +298,7 @@ class TrialSplit:
         self.start_time: datetime.datetime = start_time
         self.pipeline: BaseStep = pipeline
         self.main_metric_name: str = main_metric_name
-        self.should_delete_pipeline_on_completion = should_delete_pipeline_on_completion
+        self.delete_pipeline_on_completion = delete_pipeline_on_completion
 
     def fit_trial_split(self, train_data_container: DataContainer, context: ExecutionContext) -> 'TrialSplit':
         """
@@ -508,7 +508,7 @@ class TrialSplit:
         :return:
         """
         self.end_time = datetime.datetime.now()
-        if self.should_delete_pipeline_on_completion:
+        if self.delete_pipeline_on_completion:
             del self.pipeline
         if exc_type is not None:
             self.set_failed(exc_val)

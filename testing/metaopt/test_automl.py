@@ -289,5 +289,5 @@ def test_trainer_train():
     outputs = trained_pipeline.transform(data_inputs)
     mse = mean_squared_error(expected_outputs, outputs)
 
-    assert mse < 1000
+    assert mse < 1
 

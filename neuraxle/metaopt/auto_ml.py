@@ -485,7 +485,7 @@ Refer to `execute_trial` for full flexibility
             context=ExecutionContext(),
             validation_splits=validation_splits,
             n_trial=1,
-            should_delete_pipeline_on_completion=False
+            delete_pipeline_on_completion=False
         )
 
         return repo_trial
@@ -498,7 +498,7 @@ Refer to `execute_trial` for full flexibility
             context: ExecutionContext,
             validation_splits: List[Tuple[DataContainer, DataContainer]],
             n_trial: int,
-            should_delete_pipeline_on_completion: bool = True
+            delete_pipeline_on_completion: bool = True
     ):
         """
         Train pipeline using the validation splitter.
@@ -510,7 +510,7 @@ Refer to `execute_trial` for full flexibility
         :param validation_splits: validation splits
         :param context: execution context
         :param n_trial: total number of trials that will be executed
-        :param should_delete_pipeline_on_completion: bool to delete pipeline on completion or not
+        :param delete_pipeline_on_completion: bool to delete pipeline on completion or not
         :return: executed trial split
         """
         for training_data_container, validation_data_container in validation_splits:
@@ -520,7 +520,7 @@ Refer to `execute_trial` for full flexibility
 
             repo_trial_split: TrialSplit = repo_trial.new_validation_split(
                 pipeline=p,
-                should_delete_pipeline_on_completion=should_delete_pipeline_on_completion
+                delete_pipeline_on_completion=delete_pipeline_on_completion
             )
 
             with repo_trial_split:
