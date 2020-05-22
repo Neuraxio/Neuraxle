@@ -460,6 +460,8 @@ class Trainer:
         """
         Train pipeline using the validation splitter.
         Track training, and validation metrics for each epoch.
+        Note: the present method is just a shortcut to using the `execute_trial` method with less boilerplate code needed. 
+Refer to `execute_trial` for full flexibility
 
         :param pipeline: pipeline to train on
         :param data_inputs: data inputs
