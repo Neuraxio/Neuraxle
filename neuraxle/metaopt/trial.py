@@ -78,7 +78,7 @@ class Trial:
         self.start_time: datetime.datetime = start_time
         self.end_time: datetime.datetime = end_time
 
-    def new_validation_split(self, pipeline: BaseStep, should_delete_pipeline_on_completion: bool = True) -> 'TrialSplit':
+    def new_validation_split(self, pipeline: BaseStep, delete_pipeline_on_completion: bool = True) -> 'TrialSplit':
         """
         Create a new trial split.
         A trial has one split when the validation splitter function is validation split.
