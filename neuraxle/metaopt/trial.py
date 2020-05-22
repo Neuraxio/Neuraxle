@@ -282,7 +282,7 @@ class TrialSplit:
             start_time: datetime.datetime = None,
             end_time: datetime.datetime = None,
             pipeline: BaseStep = None,
-            should_delete_pipeline_on_completion: bool = True
+            delete_pipeline_on_completion: bool = True
     ):
         if status is None:
             status = TRIAL_STATUS.PLANNED
