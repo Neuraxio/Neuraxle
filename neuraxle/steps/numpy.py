@@ -26,19 +26,19 @@ Those steps works with NumPy (np) arrays.
 
 import numpy as np
 
-from neuraxle.base import DataContainer, ExecutionContext, ForceHandleMixin, TransformerStep
+from neuraxle.base import DataContainer, ExecutionContext, ForceHandleMixin, BaseTransformer
 from neuraxle.hyperparams.space import HyperparameterSamples
 
 
-class NumpyFlattenDatum(TransformerStep):
+class NumpyFlattenDatum(BaseTransformer):
     def __init__(self):
-        TransformerStep.__init__(self)
+        BaseTransformer.__init__(self)
 
     def transform(self, data_inputs):
         return data_inputs.reshape(data_inputs.shape[0], -1)
 
 
-class NumpyConcatenateOnCustomAxis(TransformerStep):
+class NumpyConcatenateOnCustomAxis(BaseTransformer):
     """
     Numpy concetenation step where the concatenation is performed along the specified custom axis.
     """
@@ -50,7 +50,7 @@ class NumpyConcatenateOnCustomAxis(TransformerStep):
         :return: NumpyConcatenateOnCustomAxis instance.
         """
         self.axis = axis
-        TransformerStep.__init__(self)
+        BaseTransformer.__init__(self)
 
     def _transform_data_container(self, data_container, context):
         """
@@ -106,7 +106,7 @@ class NumpyConcatenateOuterBatch(NumpyConcatenateOnCustomAxis):
         NumpyConcatenateOnCustomAxis.__init__(self, axis=0)
 
 
-class NumpyTranspose(TransformerStep):
+class NumpyTranspose(BaseTransformer):
     def __init__(self):
         super().__init__()
 
@@ -135,7 +135,7 @@ class NumpyTranspose(TransformerStep):
         return np.array(data_inputs).transpose()
 
 
-class NumpyShapePrinter(TransformerStep):
+class NumpyShapePrinter(BaseTransformer):
 
     def __init__(self, custom_message: str = ""):
         super().__init__()
@@ -156,7 +156,7 @@ class NumpyShapePrinter(TransformerStep):
         print(self.__class__.__name__ + " (one):", data_input.shape, self.custom_message)
 
 
-class MultiplyByN(TransformerStep):
+class MultiplyByN(BaseTransformer):
     """
     Step to multiply a numpy array.
     Accepts an integer for the number to multiply by.
@@ -191,7 +191,7 @@ class MultiplyByN(TransformerStep):
         return data_inputs / self.hyperparams['multiply_by']
 
 
-class AddN(TransformerStep):
+class AddN(BaseTransformer):
     """
     Step to add a scalar to a numpy array.
     Accepts an integer for the number to add to every data inputs.
@@ -226,7 +226,7 @@ class AddN(TransformerStep):
         return data_inputs - self.hyperparams['add']
 
 
-class Sum(TransformerStep):
+class Sum(BaseTransformer):
     """
     Step sum numpy array using np.sum.
 
@@ -246,7 +246,7 @@ class Sum(TransformerStep):
     """
 
     def __init__(self, axis):
-        TransformerStep.__init__(self)
+        BaseTransformer.__init__(self)
         self.axis = axis
 
     def transform(self, data_inputs):
@@ -257,7 +257,7 @@ class Sum(TransformerStep):
         return data_inputs
 
 
-class OneHotEncoder(TransformerStep):
+class OneHotEncoder(BaseTransformer):
     """
     Step to one hot a set of columns.
     Accepts Integer Columns and converts it ot a one_hot.
@@ -320,7 +320,7 @@ class OneHotEncoder(TransformerStep):
         return outputs_.squeeze()
 
 
-class ToNumpy(ForceHandleMixin, TransformerStep):
+class ToNumpy(ForceHandleMixin, BaseTransformer):
     """
     Convert data inputs, and expected outputs to a numpy array.
     """
@@ -329,7 +329,7 @@ class ToNumpy(ForceHandleMixin, TransformerStep):
         return data_container.to_numpy(), context
 
 
-class NumpyReshape(TransformerStep):
+class NumpyReshape(BaseTransformer):
     """
     Reshape numpy array in data inputs.
 

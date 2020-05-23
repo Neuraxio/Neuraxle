@@ -29,7 +29,7 @@ from typing import Tuple
 import numpy as np
 
 from neuraxle.base import MetaStep, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, \
-    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, TransformerStep, MetaStepMixin
+    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, BaseTransformer, MetaStepMixin
 from neuraxle.data_container import ListDataContainer
 
 
@@ -49,7 +49,7 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def __init__(self, wrapped: TransformerStep, cache_folder_when_no_handle=None):
+    def __init__(self, wrapped: BaseTransformer, cache_folder_when_no_handle=None):
         MetaStep.__init__(self, wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
 
@@ -141,7 +141,7 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
 
 
 class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
-    def __init__(self, wrapped: TransformerStep, copy_op=copy.deepcopy, cache_folder_when_no_handle=None):
+    def __init__(self, wrapped: BaseTransformer, copy_op=copy.deepcopy, cache_folder_when_no_handle=None):
         MetaStep.__init__(self, wrapped=wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
         self.savers.append(TruncableJoblibStepSaver())
@@ -280,7 +280,7 @@ class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStep):
 
     def __init__(
             self,
-            wrapped: TransformerStep,
+            wrapped: BaseTransformer,
             then_unflatten: bool = True
     ):
         MetaStep.__init__(self, wrapped)
@@ -292,14 +292,15 @@ class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStep):
         self.len_di = []
         self.len_eo = []
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('TransformerStep', DataContainer):
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseTransformer', DataContainer):
         """
         Flatten data container before any processing is done on the wrapped step.
 
         :param data_container: data container to flatten
         :param context: execution context
         :return: (data container, execution context)
-        :rtype: ('TransformerStep', DataContainer)
+        :rtype: ('BaseTransformer', DataContainer)
         """
         data_container, context = super()._will_process(data_container, context)
 

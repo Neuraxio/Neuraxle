@@ -33,7 +33,7 @@ VALUE_CACHING = 'value_caching'
 from typing import List, Any
 
 from neuraxle.base import BaseStep, NonTransformableMixin, ExecutionContext, MetaStep, \
-    HandleOnlyMixin, _FittableStep, TransformerStep
+    HandleOnlyMixin, _FittableStep, BaseTransformer
 from neuraxle.data_container import DataContainer
 
 
@@ -396,9 +396,9 @@ class HandleCallbackStep(HandleOnlyMixin, BaseStep):
         return processed_outputs
 
 
-class Sleep(TransformerStep):
+class Sleep(BaseTransformer):
     def __init__(self, sleep_time=0.1, hyperparams=None, hyperparams_space=None):
-        TransformerStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
+        BaseTransformer.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         self.sleep_time = sleep_time
 
     def transform(self, data_inputs):

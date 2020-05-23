@@ -28,7 +28,7 @@ from threading import Thread
 from typing import Tuple, List, Union, Iterable
 
 from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStep, BaseSaver, _FittableStep, \
-    TransformerStep
+    BaseTransformer
 from neuraxle.data_container import DataContainer, ListDataContainer
 from neuraxle.pipeline import Pipeline, MiniBatchSequentialPipeline, Joiner
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
@@ -123,15 +123,15 @@ class ObservableQueueStepSaver(BaseSaver):
         :class:`SequentialQueuedPipeline`
     """
 
-    def save_step(self, step: TransformerStep, context: 'ExecutionContext') -> TransformerStep:
+    def save_step(self, step: BaseTransformer, context: 'ExecutionContext') -> BaseTransformer:
         step.queue = None
         step.observers = []
         return step
 
-    def can_load(self, step: TransformerStep, context: 'ExecutionContext') -> bool:
+    def can_load(self, step: BaseTransformer, context: 'ExecutionContext') -> bool:
         return True
 
-    def load_step(self, step: 'TransformerStep', context: 'ExecutionContext') -> 'TransformerStep':
+    def load_step(self, step: 'BaseTransformer', context: 'ExecutionContext') -> 'BaseTransformer':
         step.queue = Queue()
         return step
 
@@ -152,7 +152,7 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
 
     def __init__(
             self,
-            wrapped: TransformerStep,
+            wrapped: BaseTransformer,
             max_queue_size: int,
             n_workers: int,
             use_threading: bool,
@@ -249,13 +249,13 @@ def worker_function(queue_worker: QueueWorker, context: ExecutionContext, use_sa
 
 
 QueuedPipelineStepsTuple = Union[
-    TransformerStep,  # step
-    Tuple[int, TransformerStep],  # (n_workers, step)
-    Tuple[str, TransformerStep],  # (step_name, step)
-    Tuple[str, int, TransformerStep],  # (step_name, n_workers, step)
-    Tuple[str, int, int, TransformerStep],  # (step_name, n_workers, max_queue_size, step)
-    Tuple[str, int, List[Tuple], TransformerStep],  # (step_name, n_workers, additional_worker_arguments, step)
-    Tuple[str, int, List[Tuple], TransformerStep]  # (step_name, n_workers, additional_worker_arguments, step)
+    BaseTransformer,  # step
+    Tuple[int, BaseTransformer],  # (n_workers, step)
+    Tuple[str, BaseTransformer],  # (step_name, step)
+    Tuple[str, int, BaseTransformer],  # (step_name, n_workers, step)
+    Tuple[str, int, int, BaseTransformer],  # (step_name, n_workers, max_queue_size, step)
+    Tuple[str, int, List[Tuple], BaseTransformer],  # (step_name, n_workers, additional_worker_arguments, step)
+    Tuple[str, int, List[Tuple], BaseTransformer]  # (step_name, n_workers, additional_worker_arguments, step)
 ]
 
 
@@ -373,7 +373,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :return: return name, n_workers, max_queue_size, actual_step
         :rtype: tuple(str, int, int, BaseStep)
         """
-        if isinstance(step, TransformerStep):
+        if isinstance(step, BaseTransformer):
             actual_step = step
             name = step.name
             max_queue_size = self.max_queue_size
@@ -417,7 +417,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         self.setup()
         return data_container, context
 
-    def setup(self) -> 'TransformerStep':
+    def setup(self) -> 'BaseTransformer':
         """
         Connect the queued workers together so that the data can correctly flow through the pipeline.
 
@@ -637,7 +637,7 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
         Joiner.__init__(self, batch_size=batch_size)
         ObservableQueueMixin.__init__(self, Queue())
 
-    def teardown(self) -> 'TransformerStep':
+    def teardown(self) -> 'BaseTransformer':
         """
         Properly clean queue, summary ids, and results during teardown.
 

@@ -28,16 +28,16 @@ from typing import List, Tuple, Union
 
 import numpy as np
 
-from neuraxle.base import BaseStep, MetaStep, TransformerStep
+from neuraxle.base import BaseStep, MetaStep, BaseTransformer
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEachDataInput
 from neuraxle.union import FeatureUnion
 
-ColumnSelectionType = Union[Tuple[int, TransformerStep], Tuple[List[int], TransformerStep], Tuple[slice, TransformerStep]]
+ColumnSelectionType = Union[Tuple[int, BaseTransformer], Tuple[List[int], BaseTransformer], Tuple[slice, BaseTransformer]]
 ColumnChooserTupleList = List[ColumnSelectionType]
 
 
-class ColumnSelector2D(TransformerStep):
+class ColumnSelector2D(BaseTransformer):
     """
     A ColumnSelector2D selects column in a sequence.
     """

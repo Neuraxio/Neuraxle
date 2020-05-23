@@ -1,4 +1,4 @@
-from neuraxle.base import BaseStep, TruncableSteps, MetaStep, TransformerStep
+from neuraxle.base import BaseStep, TruncableSteps, MetaStep, BaseTransformer
 from neuraxle.hyperparams.distributions import LogUniform, Quantized, RandInt, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
@@ -30,7 +30,7 @@ AN_INPUT = "I am an input"
 AN_EXPECTED_OUTPUT = "I am an expected output"
 
 
-class SomeStep(TransformerStep):
+class SomeStep(BaseTransformer):
     def __init__(self, hyperparams_space: HyperparameterSpace = None, output=AN_EXPECTED_OUTPUT):
         super().__init__(hyperparams=None, hyperparams_space=hyperparams_space)
         self.output = output

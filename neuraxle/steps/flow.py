@@ -26,7 +26,7 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
 from typing import Union
 
 from neuraxle.base import BaseStep, MetaStep, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin, \
-    HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin, _FittableStep, TransformerStep
+    HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin, _FittableStep, BaseTransformer
 from neuraxle.data_container import ExpandedDataContainer
 from neuraxle.hyperparams.distributions import Boolean, Choice
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
@@ -167,7 +167,7 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
         :class:`~neuraxle.base.BaseStep`
     """
 
-    def __init__(self, wrapped: TransformerStep, enabled: bool = True, nullified_return_value=None,
+    def __init__(self, wrapped: BaseTransformer, enabled: bool = True, nullified_return_value=None,
                  cache_folder_when_no_handle=None, use_hyperparameter_space=True, nullify_hyperparams=True):
         hyperparameter_space = HyperparameterSpace({
             OPTIONAL_ENABLED_HYPERPARAM: Boolean()
@@ -400,7 +400,7 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
         self._refresh_steps()
 
 
-class NumpyConcatenateOnCustomAxisIfNotEmpty(TransformerStep):
+class NumpyConcatenateOnCustomAxisIfNotEmpty(BaseTransformer):
     """
     Numpy concetenation step where the concatenation is performed along the specified custom axis.
     """
@@ -412,7 +412,7 @@ class NumpyConcatenateOnCustomAxisIfNotEmpty(TransformerStep):
         :return: NumpyConcatenateOnCustomAxis instance.
         """
         self.axis = axis
-        TransformerStep.__init__(self)
+        BaseTransformer.__init__(self)
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
@@ -441,7 +441,7 @@ class NumpyConcatenateOnCustomAxisIfNotEmpty(TransformerStep):
         return np.concatenate(data_inputs, axis=self.axis)
 
 
-class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, TransformerStep):
+class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseTransformer):
     """
     A step that selects non empty data inputs.
 
@@ -451,7 +451,7 @@ class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, TransformerStep):
     """
 
     def __init__(self):
-        TransformerStep.__init__(self)
+        BaseTransformer.__init__(self)
         TransformHandlerOnlyMixin.__init__(self)
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
@@ -492,7 +492,7 @@ class ExpandDim(ResumableStepMixin, MetaStep):
         :class:`~neuraxle.data_container.ExpandedDataContainer`
     """
 
-    def __init__(self, wrapped: TransformerStep):
+    def __init__(self, wrapped: BaseTransformer):
         MetaStep.__init__(self, wrapped)
         ResumableStepMixin.__init__(self)
 

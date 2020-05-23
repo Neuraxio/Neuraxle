@@ -22,7 +22,7 @@ You can find here steps that take action on data.
 import random
 from typing import Iterable
 
-from neuraxle.base import BaseStep, MetaStep, ExecutionContext, ForceHandleOnlyMixin, TransformerStep
+from neuraxle.base import BaseStep, MetaStep, ExecutionContext, ForceHandleOnlyMixin, BaseTransformer
 from neuraxle.base import NonTransformableMixin
 from neuraxle.data_container import DataContainer, _inner_concatenate_np_array
 from neuraxle.pipeline import Pipeline
@@ -30,7 +30,7 @@ from neuraxle.steps.flow import TrainOnlyWrapper
 from neuraxle.steps.output_handlers import InputAndOutputTransformerMixin
 
 
-class DataShuffler(InputAndOutputTransformerMixin, TransformerStep):
+class DataShuffler(InputAndOutputTransformerMixin, BaseTransformer):
     """
     Data Shuffling step that shuffles data inputs, and expected_outputs at the same time.
 
@@ -52,7 +52,7 @@ class DataShuffler(InputAndOutputTransformerMixin, TransformerStep):
     """
 
     def __init__(self, seed=None, increment_seed_after_each_fit=True):
-        TransformerStep.__init__(self)
+        BaseTransformer.__init__(self)
         InputAndOutputTransformerMixin.__init__(self)
         if seed is None:
             seed = 42
@@ -196,7 +196,7 @@ class TrainShuffled(Pipeline):
         ])
 
 
-class InnerConcatenateDataContainer(ForceHandleOnlyMixin, TransformerStep):
+class InnerConcatenateDataContainer(ForceHandleOnlyMixin, BaseTransformer):
     """
     Concatenate inner features of sub data containers along `axis=-1`..
 
@@ -228,12 +228,13 @@ class InnerConcatenateDataContainer(ForceHandleOnlyMixin, TransformerStep):
     """
 
     def __init__(self, sub_data_container_names=None):
-        TransformerStep.__init__(self)
+        BaseTransformer.__init__(self)
         ForceHandleOnlyMixin.__init__(self)
 
         self.data_sources = sub_data_container_names
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('TransformerStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseTransformer', DataContainer):
         """
         Merge sub data containers into the current data container.
 
@@ -242,7 +243,7 @@ class InnerConcatenateDataContainer(ForceHandleOnlyMixin, TransformerStep):
         :param context: execution context
         :type context: ExecutionContext
         :return: base step, data container
-        :rtype: Tuple[TransformerStep, DataContainer]
+        :rtype: Tuple[BaseTransformer, DataContainer]
         """
         return self, self._concatenate_sub_data_containers(data_container)
 
@@ -302,7 +303,7 @@ class InnerConcatenateDataContainer(ForceHandleOnlyMixin, TransformerStep):
         return data_container
 
 
-class ZipBatchDataContainer(ForceHandleOnlyMixin, TransformerStep):
+class ZipBatchDataContainer(ForceHandleOnlyMixin, BaseTransformer):
     """
     Concatenate outer batch of sub data containers along `axis=0`..
 
@@ -334,7 +335,7 @@ class ZipBatchDataContainer(ForceHandleOnlyMixin, TransformerStep):
     """
 
     def __init__(self, sub_data_container_names=None):
-        TransformerStep.__init__(self)
+        BaseTransformer.__init__(self)
         ForceHandleOnlyMixin.__init__(self)
 
         self.data_sources = sub_data_container_names
