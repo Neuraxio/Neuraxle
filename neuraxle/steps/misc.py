@@ -33,7 +33,7 @@ VALUE_CACHING = 'value_caching'
 from typing import List, Any
 
 from neuraxle.base import BaseStep, NonTransformableMixin, ExecutionContext, MetaStep, \
-    HandleOnlyMixin, _FittableStep, BaseTransformer
+    HandleOnlyMixin, _FittableStep, BaseTransformer, ForceHandleOnlyMixin
 from neuraxle.data_container import DataContainer
 
 
@@ -363,15 +363,15 @@ class TapeCallbackFunction:
         return self.name_tape
 
 
-class HandleCallbackStep(HandleOnlyMixin, BaseStep):
+class HandleCallbackStep(ForceHandleOnlyMixin, BaseStep):
     def __init__(
             self,
             handle_fit_callback,
             handle_transform_callback,
             handle_fit_transform_callback
     ):
-        HandleOnlyMixin.__init__(self)
         BaseStep.__init__(self)
+        ForceHandleOnlyMixin.__init__(self)
 
         self.handle_fit_callback = handle_fit_callback
         self.handle_fit_transform_callback = handle_fit_transform_callback
@@ -388,12 +388,6 @@ class HandleCallbackStep(HandleOnlyMixin, BaseStep):
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         self.handle_fit_transform_callback((data_container, context))
         return self, data_container
-
-    def fit(self, data_inputs, expected_outputs) -> '_FittableStep':
-        return self
-
-    def inverse_transform(self, processed_outputs):
-        return processed_outputs
 
 
 class Sleep(BaseTransformer):

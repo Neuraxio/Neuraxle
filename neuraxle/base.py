@@ -501,11 +501,11 @@ class _RecursiveArguments:
         :func:`~neuraxle.base.BaseStep.invalidate`
     """
 
-    def __init__(self, ra=None, *kargs, **kwargs):
+    def __init__(self, ra=None, *args, **kwargs):
         if ra is not None:
-            kargs = ra.kargs
+            args = ra.args
             kwargs = ra.kwargs
-        self.kargs = kargs
+        self.args = args
         self.kwargs = kwargs
 
     def __getitem__(self, child_step_name: str):
@@ -519,7 +519,7 @@ class _RecursiveArguments:
         if child_step_name is None:
             arguments = list()
             keyword_arguments = dict()
-            for arg in self.kargs:
+            for arg in self.args:
                 if isinstance(arg, RecursiveDict):
                     arguments.append(arg[child_step_name])
                 else:
@@ -533,7 +533,7 @@ class _RecursiveArguments:
         else:
             arguments = list()
             keyword_arguments = dict()
-            for arg in self.kargs:
+            for arg in self.args:
                 if isinstance(arg, RecursiveDict):
                     arguments.append(arg[child_step_name])
                 else:
@@ -603,7 +603,7 @@ class _HasRecursiveMethods:
         if ra is None:
             ra = _RecursiveArguments(*args, **kwargs)
 
-        kargs = ra.kargs
+        kargs = ra.args
 
         def _return_empty(*args, **kwargs):
             return RecursiveDict()
@@ -1153,7 +1153,10 @@ class _HasHyperparamsSpace(ABC):
 
     def __init__(self, hyperparams_space: HyperparameterSpace = None):
         if hyperparams_space is None:
-            hyperparams_space = dict()
+            if hasattr(self, "HYPERPARAMS_SPACE"):
+                hyperparams_space = self.HYPERPARAMS_SPACE
+            else:
+                hyperparams_space = dict()
 
         self.hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space)
         self.hyperparams_space = self.hyperparams_space.to_flat()
@@ -1288,7 +1291,10 @@ class _HasHyperparams(ABC):
 
     def __init__(self, hyperparams: HyperparameterSamples = None):
         if hyperparams is None:
-            hyperparams = dict()
+            if hasattr(self, "HYPERPARAMS"):
+                hyperparams = self.HYPERPARAMS
+            else:
+                hyperparams = dict()
 
         self.hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams)
         self.hyperparams = self.hyperparams.to_flat()
@@ -3294,9 +3300,12 @@ class ForceHandleMixin:
         return context, data_container
 
 
+
+
 class ForceHandleOnlyMixin(ForceHandleMixin, HandleOnlyMixin):
     """
     A step that automatically calls handle methods in the transform, fit, and fit_transform methods.
+
     It also requires the implementation of handler methods :
         - _transform_data_container
         - _fit_transform_data_container
@@ -3314,6 +3323,42 @@ class ForceHandleOnlyMixin(ForceHandleMixin, HandleOnlyMixin):
     def __init__(self, cache_folder=None):
         HandleOnlyMixin.__init__(self)
         ForceHandleMixin.__init__(self, cache_folder)
+
+
+class DefaultHandlerMethodMixin(ForceHandleOnlyMixin):
+    """
+    A step that has a default implementation for all handler methods.
+
+    It is useful for steps that only the following methods :
+        - :func:`~neuraxle.base._FittableStep.will_fit`
+        - :func:`~neuraxle.base._TransformerStep.will_transform`
+        - :func:`~neuraxle.base._FittableStep.will_fit_transform`
+        - :func:`~neuraxle.base._TransformerStep.will_process`
+        - :func:`~neuraxle.base._TransformerStep.did_process`
+        - :func:`~neuraxle.base._FittableStep.did_fit`
+        - :func:`~neuraxle.base._TransformerStep.did_transform`
+        - :func:`~neuraxle.base._FittableStep.did_fit_transform`
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`HandleOnlyMixin`,
+        :class:`TransformHandlerOnlyMixin`,
+        :class:`NonTransformableMixin`,
+        :class:`NonFittableMixin`,
+        :class:`ForceHandleMixin`,
+        :class:`HandleOnlyMixin`,
+        :class:`ForceHandleOnlyMixin`
+    """
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
+            ('BaseTransformer', DataContainer):
+        return self
+
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        return data_container
+
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
+            ('BaseTransformer', DataContainer):
+        return self, data_container
 
 
 class EvaluableStepMixin:

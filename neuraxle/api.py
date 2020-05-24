@@ -116,7 +116,7 @@ class DeepLearningPipeline(EvaluableStepMixin, ForceHandleMixin, MetaStep):
         self.print_epoch_metrics = print_epoch_metrics
 
         wrapped: BaseStep = pipeline
-        wrapped: Union[BaseStep, MiniBatchSequentialPipeline] = self._create_mini_batch_pipeline(wrapped)
+        wrapped: MiniBatchSequentialPipeline = self._create_mini_batch_pipeline(wrapped)
 
         if shuffle_in_each_epoch_at_train:
             wrapped = TrainShuffled(wrapped=wrapped, seed=seed)
