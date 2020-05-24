@@ -1019,6 +1019,7 @@ class _FittableStep:
 class _CustomHandlerMethods:
     """
     A class to represent a step that needs to add special behavior on top of the normal handler methods.
+    It allows the step to apply side effects before calling the real handler method.
 
     Apply additional behavior (mini-batching, parallel processing, etc.) before calling the internal handler methods :
         - :func:`~neuraxle.base._FittableStep._fit_data_container`
@@ -1036,6 +1037,7 @@ class _CustomHandlerMethods:
         """
         Handle fit with a custom handler method for fitting the data container.
         The custom method to override is fit_data_container.
+        The custom method fit_data_container replaces _fit_data_container.
 
         :param data_container: the data container to transform
         :param context: execution context
@@ -1061,6 +1063,7 @@ class _CustomHandlerMethods:
         """
         Handle fit_transform with a custom handler method for fitting, and transforming the data container.
         The custom method to override is fit_transform_data_container.
+        The custom method fit_transform_data_container replaces _fit_transform_data_container.
 
         :param data_container: the data container to transform
         :param context: execution context
@@ -1085,6 +1088,7 @@ class _CustomHandlerMethods:
         """
         Handle transform with a custom handler method for transforming the data container.
         The custom method to override is transform_data_container.
+        The custom method transform_data_container replaces _transform_data_container.
 
         :param data_container: the data container to transform
         :param context: execution context
