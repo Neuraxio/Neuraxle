@@ -3329,7 +3329,7 @@ class ForceHandleOnlyMixin(ForceHandleMixin, HandleOnlyMixin):
         ForceHandleMixin.__init__(self, cache_folder)
 
 
-class DefaultHandlerMethodMixin(ForceHandleOnlyMixin):
+class IdentityHandlerMethodsMixin(ForceHandleOnlyMixin):
     """
     A step that has a default implementation for all handler methods.
 
