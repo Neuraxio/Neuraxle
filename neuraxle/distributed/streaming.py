@@ -28,7 +28,7 @@ from threading import Thread
 from typing import Tuple, List, Union, Iterable
 
 from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStep, BaseSaver, _FittableStep, \
-    BaseTransformer
+    BaseTransformer, NonFittableMixin
 from neuraxle.data_container import DataContainer, ListDataContainer
 from neuraxle.pipeline import Pipeline, MiniBatchSequentialPipeline, Joiner
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
@@ -442,7 +442,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         all_steps_are_not_fittable = True
 
         for _, step in self[:-1]:
-            if isinstance(step.get_step(), _FittableStep):
+            if isinstance(step.get_step(), _FittableStep) and not isinstance(step.get_step(), NonFittableMixin):
                 all_steps_are_not_fittable = False
 
         if all_steps_are_not_fittable:
