@@ -386,8 +386,10 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
         :class:`Optional`
     """
 
-    def __init__(self, steps):
-        FeatureUnion.__init__(self, steps, joiner=NumpyConcatenateOnCustomAxisIfNotEmpty(axis=-1))
+    def __init__(self, steps, joiner: NonFittableMixin = None):
+        if joiner is None:
+            joiner = NumpyConcatenateOnCustomAxisIfNotEmpty(axis=-1)
+        FeatureUnion.__init__(self, steps, joiner=joiner)
         self.set_hyperparams(HyperparameterSamples({}))
         self._make_all_steps_optional()
 

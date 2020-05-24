@@ -26,8 +26,7 @@ Those steps works with NumPy (np) arrays.
 
 import numpy as np
 
-from neuraxle.base import NonFittableMixin, BaseStep, DataContainer, ExecutionContext, ForceHandleOnlyMixin, \
-    ForceHandleMixin
+from neuraxle.base import NonFittableMixin, BaseStep, DataContainer, ExecutionContext, ForceHandleMixin
 from neuraxle.hyperparams.space import HyperparameterSamples
 
 
@@ -384,6 +383,7 @@ class NumpyRavel(NonFittableMixin, BaseStep):
         :class:`~neuraxle.base.BaseStep`,
         :class:`~neuraxle.base.NonFittableMixin`
     """
+
     def transform(self, data_inputs):
         """
         Flatten numpy array using ̀np.ravel <https://numpy.org/doc/stable/reference/generated/numpy.ravel.html>`_
@@ -406,6 +406,7 @@ class NumpyFFT(NonFittableMixin, BaseStep):
         :class:`~neuraxle.base.BaseStep`,
         :class:`~neuraxle.base.NonFittableMixin`
     """
+
     def __init__(self, axis=None):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
@@ -432,6 +433,7 @@ class NumpyAbs(NonFittableMixin, BaseStep):
         :class:`~neuraxle.base.BaseStep`,
         :class:`~neuraxle.base.NonFittableMixin`
     """
+
     def transform(self, data_inputs):
         """
         Will featurize data with a absolute value transformation.
@@ -450,6 +452,7 @@ class NumpyMean(NonFittableMixin, BaseStep):
         :class:`~neuraxle.base.BaseStep`,
         :class:`~neuraxle.base.NonFittableMixin`
     """
+
     def __init__(self, axis=None):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
@@ -476,6 +479,7 @@ class NumpyMedian(NonFittableMixin, BaseStep):
         :class:`~neuraxle.base.BaseStep`,
         :class:`~neuraxle.base.NonFittableMixin`
     """
+
     def __init__(self, axis=None):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
@@ -502,6 +506,7 @@ class NumpyMin(NonFittableMixin, BaseStep):
         :class:`~neuraxle.base.BaseStep`,
         :class:`~neuraxle.base.NonFittableMixin`
     """
+
     def __init__(self, axis=None):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
@@ -528,6 +533,7 @@ class NumpyMax(NonFittableMixin, BaseStep):
         :class:`~neuraxle.base.BaseStep`,
         :class:`~neuraxle.base.NonFittableMixin`
     """
+
     def __init__(self, axis=None):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
@@ -546,26 +552,3 @@ class NumpyMax(NonFittableMixin, BaseStep):
         return np.max(data_inputs, axis=self.axis)
 
 
-class FFTPeakBinWithValue(NonFittableMixin, BaseStep):
-    """
-    Compute peak fft bins (int), and their magnitudes' value (float), to concatenate them.
-
-    .. seealso::
-        :class:`~neuraxle.base.BaseStep`,
-        :class:`~neuraxle.base.NonFittableMixin`
-    """
-    def transform(self, data_inputs):
-        """
-        Will compute peak fft bins (int), and their magnitudes' value (float), to concatenate them.
-
-        :param data_inputs: real magnitudes of an fft. It could be of shape [batch_size, bins, features].
-        :return: Two arrays without bins concatenated on feature axis. Shape: [batch_size, 2 * features]
-        """
-        time_bins_axis = -2
-        peak_bin = np.argmax(data_inputs, axis=time_bins_axis)
-        peak_bin_val = np.max(data_inputs, axis=time_bins_axis)
-
-        # Notice that here another FeatureUnion could have been used with a joiner:
-        transformed = np.concatenate([peak_bin, peak_bin_val], axis=-1)
-
-        return transformed

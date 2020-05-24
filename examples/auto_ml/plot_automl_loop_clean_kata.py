@@ -21,28 +21,26 @@ This example has been taken from the following repository : https://github.com/N
     See the License for the specific language governing permissions and
     limitations under the License.
 
-..
-    Thanks to Umaneo Technologies Inc. for their contributions to this Machine Learning
-    project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
-
 """
+import shutil
+
+from sklearn.datasets import make_classification
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import RidgeClassifier, LogisticRegression
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier
 
 from neuraxle.hyperparams.distributions import Choice, RandInt, Boolean, LogUniform
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import AutoML, RandomSearchHyperparameterSelectionStrategy, ValidationSplitter, \
-    InMemoryHyperparamsRepository
+    HyperparamsJSONRepository
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import ChooseOneStepOf
-from neuraxle.steps.numpy import NumpyFFT, NumpyAbs, NumpyFlattenDatum, \
-    NumpyConcatenateInnerFeatures, NumpyMean, NumpyMedian, NumpyMin, NumpyMax, NumpyRavel, FFTPeakBinWithValue
+from neuraxle.steps.numpy import NumpyRavel
 from neuraxle.steps.output_handlers import OutputTransformerWrapper
 from neuraxle.steps.sklearn import SKLearnWrapper
-from neuraxle.union import FeatureUnion
 
 
 def main():
@@ -100,29 +98,13 @@ def main():
     # See also ChooseOneStepOf documentation : https://www.neuraxle.org/stable/api/neuraxle.steps.flow.html#neuraxle.steps.flow.ChooseOneStepOf
 
     pipeline = Pipeline([
-        FeatureUnion([
-            Pipeline([
-                NumpyFFT(),
-                NumpyAbs(),
-                FeatureUnion([
-                    NumpyFlattenDatum(),  # Reshape from 3D to flat 2D: flattening data except on batch size
-                    FFTPeakBinWithValue()  # Extract 2D features from the 3D FFT bins
-                ], joiner=NumpyConcatenateInnerFeatures())
-            ]),
-            NumpyMean(),
-            NumpyMedian(),
-            NumpyMin(),
-            NumpyMax()
-        ], joiner=NumpyConcatenateInnerFeatures()),
-        # Shape: [batch_size, remade_features]
         ChooseOneStepOf([
             decision_tree_classifier,
             extra_tree_classifier,
             ridge_classifier,
             logistic_regression,
             random_forest_classifier
-        ]),
-        # Shape: [batch_size]
+        ])
     ])
 
     # Create the AutoML loop object.
@@ -132,16 +114,16 @@ def main():
         pipeline=pipeline,
         hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
         validation_splitter=ValidationSplitter(test_size=0.20),
-        scoring_callback=ScoringCallback(accuracy_score, higher_score_is_better=False),
+        scoring_callback=ScoringCallback(accuracy_score, higher_score_is_better=True),
         n_trials=7,
         epochs=1,
-        hyperparams_repository=InMemoryHyperparamsRepository(cache_folder='cache'),
+        hyperparams_repository=HyperparamsJSONRepository(cache_folder='cache'),
         refit_trial=True,
     )
 
     # Load data, and launch AutoML loop !
 
-    X_train, y_train, X_test, y_test = load_all_data()
+    X_train, y_train, X_test, y_test = generate_classification_data()
     auto_ml = auto_ml.fit(X_train, y_train)
 
     # Get the model from the best trial, and make predictions using predict.
@@ -153,7 +135,29 @@ def main():
     accuracy = accuracy_score(y_true=y_test, y_pred=y_pred)
     print("Test accuracy score:", accuracy)
 
+    shutil.rmtree('cache')
 
-def load_all_data():
-    # see this repository if you want to execute this example : https://github.com/Neuraxio/Kata-Clean-Machine-Learning-From-Dirty-Code
-    pass
+
+def generate_classification_data():
+    data_inputs, expected_outputs = make_classification(
+        n_samples=10000,
+        n_repeated=0,
+        n_classes=3,
+        n_features=4,
+        n_clusters_per_class=1,
+        class_sep=1.5,
+        flip_y=0,
+        weights=[0.5, 0.5, 0.5]
+    )
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        data_inputs,
+        expected_outputs,
+        test_size=0.20
+    )
+
+    return X_train, y_train, X_test, y_test
+
+
+if __name__ == '__main__':
+    main()
