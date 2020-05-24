@@ -23,12 +23,11 @@ from neuraxle.base import NonFittableMixin, BaseStep
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import ChooseOneOrManyStepsOf
 from neuraxle.steps.numpy import NumpyFFT, NumpyAbs, NumpyFlattenDatum, NumpyConcatenateInnerFeatures, NumpyMean, \
-    NumpyMedian, NumpyMin, NumpyMax
+    NumpyMedian, NumpyMin, NumpyMax, NumpyArgMax
 from neuraxle.union import FeatureUnion
-import numpy as np
 
 
-class FFTPeakBinWithValue(NonFittableMixin, BaseStep):
+class FFTPeakBinWithValue(FeatureUnion):
     """
     Compute peak fft bins (int), and their magnitudes' value (float), to concatenate them.
 
@@ -36,22 +35,11 @@ class FFTPeakBinWithValue(NonFittableMixin, BaseStep):
         :class:`~neuraxle.base.BaseStep`,
         :class:`~neuraxle.base.NonFittableMixin`
     """
-
-    def transform(self, data_inputs):
-        """
-        Will compute peak fft bins (int), and their magnitudes' value (float), to concatenate them.
-
-        :param data_inputs: real magnitudes of an fft. It could be of shape [batch_size, bins, features].
-        :return: Two arrays without bins concatenated on feature axis. Shape: [batch_size, 2 * features]
-        """
-        time_bins_axis = -2
-        peak_bin = np.argmax(data_inputs, axis=time_bins_axis)
-        peak_bin_val = np.max(data_inputs, axis=time_bins_axis)
-
-        # Notice that here another FeatureUnion could have been used with a joiner:
-        transformed = np.concatenate([peak_bin, peak_bin_val], axis=-1)
-
-        return transformed
+    def __init__(self):
+        super().__init__([
+            NumpyArgMax(axis=-2),
+            NumpyMax(axis=-2)
+        ], joiner=NumpyConcatenateInnerFeatures())
 
 
 class Cheap3DTo2DTransformer(ChooseOneOrManyStepsOf):

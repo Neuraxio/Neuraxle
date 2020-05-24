@@ -552,3 +552,30 @@ class NumpyMax(NonFittableMixin, BaseStep):
         return np.max(data_inputs, axis=self.axis)
 
 
+class NumpyArgMax(NonFittableMixin, BaseStep):
+    """
+    Compute `np.max <https://numpy.org/doc/1.18/reference/generated/numpy.ndarray.argmax.html>̀_ at the given axis.
+
+    .. seealso::
+        :class:`~neuraxle.base.BaseStep`,
+        :class:`~neuraxle.base.NonFittableMixin`
+    """
+
+    def __init__(self, axis=None):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+
+        if axis is None:
+            axis = -2
+        self.axis = axis
+
+    def transform(self, data_inputs):
+        """
+        Will featurize data with a max.
+
+        :param data_inputs: 3D time series of shape [batch_size, time_steps, sensors]
+        :return: max value for the given axis
+        """
+        return np.argmax(data_inputs, axis=self.axis)
+
+
