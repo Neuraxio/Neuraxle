@@ -7,8 +7,8 @@ from neuraxle.steps.numpy import MultiplyByN
 
 def test_optional_should_disable_wrapped_step_when_disabled():
     p = Optional(MultiplyByN(2), nullified_return_value=[]).set_hyperparams(HyperparameterSamples({
-            'enabled': False
-        }))
+        'enabled': False
+    }))
     data_inputs = np.array(list(range(10)))
 
     outputs = p.transform(data_inputs)
@@ -18,8 +18,8 @@ def test_optional_should_disable_wrapped_step_when_disabled():
 
 def test_optional_should_enable_wrapped_step_when_enabled():
     p = Optional(MultiplyByN(2), nullified_return_value=[]).set_hyperparams(HyperparameterSamples({
-            'enabled': True
-        }))
+        'enabled': True
+    }))
     data_inputs = np.array(list(range(10)))
 
     outputs = p.transform(data_inputs)

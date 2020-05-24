@@ -78,7 +78,7 @@ def test_feature_union_should_apply_to_self_and_sub_steps():
         ], joiner=NumpyTranspose())
     ])
 
-    p.apply('set_hyperparams', hyperparams=HyperparameterSamples({'applied': True}))
+    p.apply(lambda step: step._set_hyperparams(HyperparameterSamples({'applied': True})))
 
     assert p.hyperparams['applied']
     assert p['FeatureUnion'].hyperparams['applied']
