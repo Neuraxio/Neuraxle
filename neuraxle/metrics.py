@@ -21,12 +21,12 @@ The neuraxle classes to track metrics results.
 """
 from typing import Dict
 
-from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext
+from neuraxle.base import MetaStep, BaseStep, ExecutionContext, _FittableStep
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import RecursiveDict
 
 
-class MetricsWrapper(MetaStepMixin, BaseStep):
+class MetricsWrapper(MetaStep):
     """
     Add metrics calculation to a step. Calculates metrics after each fit, fit_transform, or even transform if there is an expected outputs.
 
@@ -59,8 +59,7 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
             print_metrics=False,
             print_fun=print
     ):
-        BaseStep.__init__(self, name=name)
-        MetaStepMixin.__init__(self, wrapped)
+        MetaStep.__init__(self, wrapped, name=name)
 
         self.metrics: Dict = metrics
         self._initialize_metrics(metrics)

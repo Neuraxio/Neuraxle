@@ -2,22 +2,21 @@ from typing import Tuple, Any
 
 from py._path.local import LocalPath
 
-from neuraxle.base import BaseStep, NonFittableMixin, ExecutionContext, ExecutionMode
+from neuraxle.base import BaseStep, ExecutionContext, ExecutionMode, BaseTransformer
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.output_handlers import InputAndOutputTransformerMixin
 
 
-class MultiplyBy2OutputTransformer(NonFittableMixin, InputAndOutputTransformerMixin, BaseStep):
+class MultiplyBy2OutputTransformer(InputAndOutputTransformerMixin, BaseTransformer):
     def __init__(
             self,
             hyperparams: HyperparameterSamples = None,
             hyperparams_space: HyperparameterSpace = None,
             name: str = None
     ):
-        NonFittableMixin.__init__(self)
-        BaseStep.__init__(self, hyperparams, hyperparams_space, name)
+        BaseTransformer.__init__(self, hyperparams, hyperparams_space, name)
         InputAndOutputTransformerMixin.__init__(self)
 
     def transform(self, data_inputs) -> Tuple[Any, Any]:

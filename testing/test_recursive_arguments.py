@@ -12,7 +12,7 @@ def test_recursive_arguments_should_get_root_level():
 
     root_ra = ra[None]
 
-    root_ra.kargs == []
+    root_ra.args == []
     root_ra.kwargs == {'hyperparams': HyperparameterSamples({
         'hp0': 0,
         'hp1': 1
@@ -30,7 +30,7 @@ def test_recursive_arguments_should_get_recursive_levels():
 
     ra = ra['stepb']
 
-    ra.kargs == []
+    ra.args == []
     ra.kwargs == {'hyperparams': HyperparameterSamples({
         'stepb__hp3': 2,
         'stepb__stepd__hp4': 4
@@ -45,7 +45,7 @@ def test_recursive_arguments_should_have_copy_constructor():
         }))
     )
 
-    ra.kargs == []
+    ra.args == []
     ra.kwargs == {'hyperparams': HyperparameterSamples({
         'hp0': 0,
         'hp1': 1,

@@ -27,8 +27,8 @@ import numpy as np
 
 from sklearn.metrics import r2_score
 
-from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, ForceHandleOnlyMixin, \
-    EvaluableStepMixin
+from neuraxle.base import MetaStep, BaseStep, ExecutionContext, ForceHandleOnlyMixin, \
+    EvaluableStepMixin, _FittableStep
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
@@ -323,7 +323,7 @@ class BaseHyperparameterOptimizer(ABC):
         raise NotImplementedError()
 
 
-class AutoMLAlgorithm(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
+class AutoMLAlgorithm(ForceHandleOnlyMixin, MetaStep):
     """
     Pipeline step that executes Automatic Machine Learning strategy.
     It uses an hyperparameter optimizer of type :class:`BaseHyperparameterOptimizer` to find the next best hyperparams.
@@ -347,8 +347,7 @@ class AutoMLAlgorithm(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             higher_score_is_better=True,
             cache_folder_when_no_handle=None
     ):
-        BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, None)
+        MetaStep.__init__(self, None)
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
         self.higher_score_is_better = higher_score_is_better
         self.hyperparameter_optimizer = hyperparameter_optimizer
@@ -427,7 +426,7 @@ class Trial:
         return s
 
 
-class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
+class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStep):
     """
     A step to execute any Automatic Machine Learning Algorithms.
 
@@ -473,8 +472,7 @@ class AutoMLSequentialWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
             raise ValueError(
                 'AutoML algorithm needs evaluable steps that implement the function get_score. Please use a validation technique, or implement EvaluableStepMixin.')
 
-        BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, auto_ml_algorithm.set_step(wrapped))
+        MetaStep.__init__(self, auto_ml_algorithm.set_step(wrapped))
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
 
         if hyperparams_repository is None:

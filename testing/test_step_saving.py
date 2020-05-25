@@ -4,7 +4,7 @@ import numpy as np
 from joblib import dump
 from py._path.local import LocalPath
 
-from neuraxle.base import BaseStep, TruncableJoblibStepSaver, NonFittableMixin
+from neuraxle.base import BaseStep, TruncableJoblibStepSaver
 from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import ResumablePipeline

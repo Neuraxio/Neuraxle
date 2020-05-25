@@ -61,8 +61,8 @@ def test_resumable_pipeline_with_checkpoint_fit_transform_should_resume_saved_ch
 
     pipeline, outputs = test_case.pipeline.fit_transform([0, 1], [1, 2])
 
-    assert test_case.tape_transform_step1.data == []
-    assert test_case.tape_fit_step1.data == []
+    assert test_case.tape_transform_step1.data == [[0, 1]]
+    assert test_case.tape_fit_step1.data == [([0, 1], [1, 2])]
     assert test_case.tape_fit_step2.data == [([0, 1], [1, 2])]
     assert test_case.tape_transform_step2.data == [[0, 1]]
 
@@ -73,7 +73,7 @@ def test_resumable_pipeline_with_checkpoint_transform_should_resume_saved_checkp
 
     outputs = test_case.pipeline.transform([0, 1])
 
-    assert test_case.tape_transform_step1.data == []
+    assert test_case.tape_transform_step1.data == [[0, 1]]
     assert test_case.tape_fit_step2.data == []
     assert test_case.tape_transform_step2.data == [[0, 1]]
 
@@ -84,8 +84,8 @@ def test_resumable_pipeline_with_checkpoint_fit_should_resume_saved_checkpoints(
 
     pipeline = test_case.pipeline.fit([0, 1], [1, 2])
 
-    assert test_case.tape_fit_step1.data == []
-    assert test_case.tape_transform_step1.data == []
+    assert test_case.tape_fit_step1.data == [([0, 1], [1, 2])]
+    assert test_case.tape_transform_step1.data == [[0, 1]]
     assert test_case.tape_transform_step2.data == []
     assert test_case.tape_fit_step2.data == [([0, 1], [1, 2])]
 
