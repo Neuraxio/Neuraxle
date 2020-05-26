@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 
-from neuraxle.base import Identity, ExecutionContext, JoblibStepSaver, FullDumpLoader
+from neuraxle.base import Identity, ExecutionContext
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCallbackStep, TapeCallbackFunction
 from neuraxle.steps.output_handlers import OutputTransformerWrapper

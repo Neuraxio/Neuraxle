@@ -118,15 +118,15 @@ class ObservableQueueStepSaver(BaseSaver):
         :class:`SequentialQueuedPipeline`
     """
 
-    def save_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
+    def save_step(self, step: 'BaseStep', context: 'ExecutionContext', summary_id=None) -> 'BaseStep':
         step.queue = None
         step.observers = []
         return step
 
-    def can_load(self, step: 'BaseStep', context: 'ExecutionContext'):
+    def can_load(self, step: 'BaseStep', context: 'ExecutionContext', summary_id=None):
         return True
 
-    def load_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
+    def load_step(self, step: 'BaseStep', context: 'ExecutionContext', summary_id=None) -> 'BaseStep':
         step.queue = Queue()
         return step
 

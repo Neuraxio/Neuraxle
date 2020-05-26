@@ -1,10 +1,8 @@
 import os
 
 import numpy as np
-from joblib import dump
 from py._path.local import LocalPath
 
-from neuraxle.base import TruncableJoblibStepSaver
 from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.pipeline import ResumablePipeline
 from neuraxle.steps.numpy import MultiplyByN
@@ -20,7 +18,7 @@ SAVED_CHECKPOINT_SUMMARY_ID = 'd39753d1aafe7ea43b8a153288f020e1'
 EXPECTED_OUTPUTS = [0, 48, 96, 144, 192, 240, 288, 336, 384, 432]
 
 
-def test_resumable_pipeline_fit_transform_should_save_all_fitted_pipeline_steps(tmpdir: LocalPath):
+def test_resumable_pipeline_fit_transform_should_save_all_invalidated_pipeline_steps(tmpdir: LocalPath):
     p = ResumablePipeline([
         (SOME_STEP_1, MultiplyByN(multiply_by=2)),
         (PIPELINE_2, ResumablePipeline([
@@ -46,7 +44,7 @@ def test_resumable_pipeline_fit_transform_should_save_all_fitted_pipeline_steps(
         assert not os.path.exists(p)
 
 
-def test_resumable_pipeline_transform_should_not_save_steps(tmpdir: LocalPath):
+def test_resumable_pipeline_transform_should_not_save_non_invalidated_steps(tmpdir: LocalPath):
     p = ResumablePipeline([
         (SOME_STEP_1, MultiplyByN(multiply_by=2)),
         (PIPELINE_2, ResumablePipeline([
@@ -105,6 +103,9 @@ def test_resumable_pipeline_fit_transform_should_load_all_pipeline_steps(tmpdir:
             (SOME_STEP_3, MultiplyByN(multiply_by=6))
         ]))
     ], cache_folder=tmpdir)
+    pipeline_to_save[SOME_STEP_1].saved = True
+    pipeline_to_save[PIPELINE_2][SOME_STEP_2].saved = True
+
     pipeline_to_save.fit_transform(
         data_inputs=np.array(range(10)),
         expected_outputs=np.array(range(10))
@@ -123,79 +124,8 @@ def test_resumable_pipeline_fit_transform_should_load_all_pipeline_steps(tmpdir:
 
     # Then
     assert np.array_equal(outputs, EXPECTED_OUTPUTS)
-
-
-def test_resumable_pipeline_transform_should_load_all_pipeline_steps(tmpdir: LocalPath):
-    # Given
-    p = given_saved_pipeline(tmpdir)
-
-    # When
-    outputs = p.transform(
-        np.array(range(10))
-    )
-
-    # Then
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
-
-
-def test_resumable_pipeline_fit_should_load_all_pipeline_steps(tmpdir: LocalPath):
-    # Given
-    p = given_saved_pipeline(tmpdir)
-
-    # When
-    p = p.fit(
-        np.array(range(10)),
-        np.array(range(10))
-    )
-
-    # Then
-    assert p[SOME_STEP_1].hyperparams['multiply_by'] == 2
-    assert p[PIPELINE_2][SOME_STEP_2].hyperparams['multiply_by'] == 4
-    assert p[PIPELINE_2][SOME_STEP_3].hyperparams['multiply_by'] == 6
-
-
-def given_saved_pipeline(tmpdir: LocalPath):
-    step_savers = [(SOME_STEP_1, []), (PIPELINE_2, [TruncableJoblibStepSaver()])]
-    path = create_root_path(tmpdir)
-    root = ResumablePipeline([], cache_folder=tmpdir)
-    root.sub_steps_savers = step_savers
-    root.name = ROOT
-    dump(root, path)
-
-    pipeline_2 = ResumablePipeline([], cache_folder=tmpdir)
-    pipeline_2.name = 'pipeline2'
-    pipeline_2.sub_steps_savers = [
-        (SOME_STEP_2, []),
-        (CHECKPOINT, []),
-        (SOME_STEP_3, []),
-    ]
-    dump(pipeline_2, create_pipeline2_path(tmpdir, create_dir=True))
-
-    given_saved_some_step(multiply_by=2, name=SOME_STEP_1, path=create_some_step1_path(tmpdir))
-    given_saved_some_step(multiply_by=4, name=SOME_STEP_2, path=create_some_step2_path(tmpdir))
-    given_saved_some_step(multiply_by=6, name=SOME_STEP_3, path=create_some_step3_path(tmpdir))
-
-    checkpoint = DefaultCheckpoint()
-    checkpoint.name = CHECKPOINT
-    dump(checkpoint, create_some_checkpoint_path(tmpdir))
-
-    p = ResumablePipeline([
-        (SOME_STEP_1, MultiplyByN(multiply_by=1)),
-        (PIPELINE_2, ResumablePipeline([
-            (SOME_STEP_2, MultiplyByN(multiply_by=1)),
-            (CHECKPOINT, DefaultCheckpoint()),
-            (SOME_STEP_3, MultiplyByN(multiply_by=1))
-        ]))
-    ], cache_folder=tmpdir)
-    p.name = ROOT
-
-    return p
-
-
-def given_saved_some_step(multiply_by, name, path):
-    some_step1 = MultiplyByN(multiply_by=multiply_by)
-    some_step1.name = name
-    dump(some_step1, path)
+    assert pipeline[PIPELINE_2][SOME_STEP_2].saved
+    assert pipeline[SOME_STEP_1].saved
 
 
 def create_some_step3_path(tmpdir, summary_id=SAVED_CHECKPOINT_SUMMARY_ID, create_dir=True):

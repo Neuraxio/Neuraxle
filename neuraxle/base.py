@@ -3047,4 +3047,4 @@ class FullDumpLoader(Identity):
         loaded_self = context.stripped_saver.load_step(self, context)
 
         context.pop()
-        return loaded_self.load(context, full_dump)
+        return loaded_self.load(context=context, full_dump=full_dump)
