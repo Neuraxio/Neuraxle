@@ -259,7 +259,10 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
 
         loading_context = context.copy()
         loading_context.pop()
-        loaded_pipeline = self.load(loading_context)
+        loaded_pipeline = self.load(
+            context=loading_context,
+            summary_id=starting_step_data_container.summary_id
+        )
 
         if not self.are_steps_before_index_the_same(loaded_pipeline, new_starting_step_index):
             return self.steps_as_tuple, data_container

@@ -159,35 +159,37 @@ class BaseSaver(ABC):
     """
 
     @abstractmethod
-    def save_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
+    def save_step(self, step: 'BaseStep', context: 'ExecutionContext', summary_id: str = None) -> 'BaseStep':
         """
         Save step with execution context.
 
         :param step: step to save
         :param context: execution context
-        :param save_savers:
+        :param summary_id: summary id to append to the saved step name
         :return:
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def can_load(self, step: 'BaseStep', context: 'ExecutionContext'):
+    def can_load(self, step: 'BaseStep', context: 'ExecutionContext', summary_id: str = None):
         """
         Returns true if we can load the given step with the given execution context.
 
         :param step: step to load
         :param context: execution context to load from
+        :param summary_id: saved step summary id
         :return:
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def load_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
+    def load_step(self, step: 'BaseStep', context: 'ExecutionContext', summary_id: str = None) -> 'BaseStep':
         """
         Load step with execution context.
 
         :param step: step to load
         :param context: execution context to load from
+        :param summary_id: saved step summary id
         :return: loaded base step
         """
         raise NotImplementedError()
@@ -210,7 +212,7 @@ class JoblibStepSaver(BaseSaver):
         :class:`~neuraxle.base.ExecutionContext`
     """
 
-    def can_load(self, step: 'BaseStep', context: 'ExecutionContext') -> bool:
+    def can_load(self, step: 'BaseStep', context: 'ExecutionContext', summary_id=None) -> bool:
         """
         Returns true if the given step has been saved with the given execution context.
 
@@ -219,10 +221,10 @@ class JoblibStepSaver(BaseSaver):
         :return: if we can load the step with the given context
         """
         return os.path.exists(
-            self._create_step_path(context, step)
+            self._create_step_path(context=context, step=step, summary_id=summary_id)
         )
 
-    def _create_step_path(self, context, step):
+    def _create_step_path(self, context, step, summary_id=None):
         """
         Create step path for the given context.
 
@@ -230,14 +232,17 @@ class JoblibStepSaver(BaseSaver):
         :param step: step to save, or load
         :return: path
         """
+        if summary_id is not None:
+            return os.path.join(context.get_path(), '{0}_{1}.joblib'.format(step.name, summary_id))
         return os.path.join(context.get_path(), '{0}.joblib'.format(step.name))
 
-    def save_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
+    def save_step(self, step: 'BaseStep', context: 'ExecutionContext', summary_id=None) -> 'BaseStep':
         """
         Saved step stripped out of things that would make it unserializable.
 
         :param step: stripped step to save
         :param context: execution context to save from
+        :param summary_id:
         :return:
         """
         context.mkdir()
@@ -247,15 +252,16 @@ class JoblibStepSaver(BaseSaver):
 
         return step
 
-    def load_step(self, step: 'BaseStep', context: 'ExecutionContext') -> 'BaseStep':
+    def load_step(self, step: 'BaseStep', context: 'ExecutionContext', summary_id=None) -> 'BaseStep':
         """
         Load stripped step.
 
         :param step: stripped step to load
         :param context: execution context to load from
+        :param summary_id:
         :return:
         """
-        loaded_step = load(self._create_step_path(context, step))
+        loaded_step = load(self._create_step_path(context=context, step=step, summary_id=summary_id))
 
         # we need to keep the current steps in memory because they have been deleted before saving...
         # the steps that have not been saved yet need to be in memory while loading a truncable steps...
@@ -313,11 +319,12 @@ class ExecutionContext:
     def get_execution_mode(self) -> ExecutionMode:
         return self.execution_mode
 
-    def save(self, full_dump=False):
+    def save(self, summary_id=None, full_dump=False):
         """
         Save all unsaved steps in the parents of the execution context using :func:`~neuraxle.base.BaseStep.save`.
         This method is called from a step checkpointer inside a :class:`Checkpoint`.
 
+        :param summary_id: summary id hash to append to the saved step names (useful with checkpoints)
         :param full_dump: save full pipeline dump to be able to load everything without source code (false by default).
         :return:
 
@@ -333,7 +340,7 @@ class ExecutionContext:
 
             self.pop()
             if should_save_last_step:
-                last_step.save(self, full_dump)
+                last_step.save(self, summary_id=summary_id, full_dump=full_dump)
 
     def save_last(self):
         """
@@ -500,6 +507,7 @@ class _RecursiveArguments:
         :func:`~neuraxle.base.BaseStep.update_hyperparams_space`,
         :func:`~neuraxle.base.BaseStep.invalidate`
     """
+
     def __init__(self, ra=None, *kargs, **kwargs):
         if ra is not None:
             kargs = ra.kargs
@@ -1095,7 +1103,8 @@ class BaseStep(ABC):
 
         return data_container
 
-    def _inverse_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _inverse_transform_data_container(self, data_container: DataContainer,
+                                          context: ExecutionContext) -> DataContainer:
         processed_outputs = self.inverse_transform(data_container.data_inputs)
         data_container.set_data_inputs(processed_outputs)
 
@@ -1134,7 +1143,8 @@ class BaseStep(ABC):
         try:
             results = _method(*kargs, **ra.kwargs)
             if not isinstance(results, RecursiveDict):
-                raise ValueError('Method {} must return a RecursiveDict because it is applied recursively.'.format(method))
+                raise ValueError(
+                    'Method {} must return a RecursiveDict because it is applied recursively.'.format(method))
             return results
         except Exception as err:
             print('{}: Failed to apply method {}.'.format(self.name, method))
@@ -1460,7 +1470,7 @@ class BaseStep(ABC):
         """
         return self.is_invalidated and self.is_initialized
 
-    def save(self, context: ExecutionContext, full_dump=False) -> 'BaseStep':
+    def save(self, context: ExecutionContext, summary_id=None, full_dump=False) -> 'BaseStep':
         """
         Save step using the execution context to create the directory to save the step into.
         The saving happens by looping through all of the step savers in the reversed order.
@@ -1469,6 +1479,7 @@ class BaseStep(ABC):
         The :class:`ExecutionContext`.stripped_saver has to be called last because it needs a
         stripped version of the step.
 
+        :param summary_id: summary id hash to append to the saved step names (useful with checkpoints)
         :param context: context to save from
         :param full_dump: save full pipeline dump to be able to load everything without source code (false by default).
         :return: self
@@ -1503,16 +1514,17 @@ class BaseStep(ABC):
 
         for saver in reversed(savers_with_provided_default_stripped_saver):
             # Each saver strips the step a bit more if needs be.
-            stripped_step = saver.save_step(stripped_step, context)
+            stripped_step = saver.save_step(step=stripped_step, summary_id=summary_id, context=context)
 
         return stripped_step
 
-    def load(self, context: ExecutionContext, full_dump=False) -> 'BaseStep':
+    def load(self, context: ExecutionContext, summary_id=None, full_dump=False) -> 'BaseStep':
         """
         Load step using the execution context to create the directory of the saved step.
         Warning:
 
         :param context: execution context to load step from
+        :param summary_id: summary id
         :param full_dump: save full dump bool
         :return: loaded step
 
@@ -1527,15 +1539,15 @@ class BaseStep(ABC):
         context = context.push(self)
 
         savers = [context.stripped_saver] + self.savers
-        return self._load_step(context, savers)
+        return self._load_step(context=context, savers=savers, summary_id=summary_id)
 
-    def _load_step(self, context, savers):
+    def _load_step(self, context: ExecutionContext, savers: List[BaseSaver], summary_id: str = None):
         # A final "visitor" saver might reload anything that wasn't saved customly after stripping the rest.
         loaded_self = self
         for saver in savers:
             # Each saver unstrips the step a bit more if needed
-            if saver.can_load(loaded_self, context):
-                loaded_self = saver.load_step(loaded_self, context)
+            if saver.can_load(step=loaded_self, context=context, summary_id=summary_id):
+                loaded_self = saver.load_step(step=loaded_self, context=context, summary_id=summary_id)
             else:
                 warnings.warn(
                     'Cannot Load Step {0} ({1}:{2}) With Step Saver {3}.'.format(context.get_path(), self.name,
@@ -1748,6 +1760,7 @@ class _HasChildrenMixin:
         :class:`~neuraxle.base.TruncableSteps`,
         :class:`~neuraxle.base.TruncableSteps`
     """
+
     def apply(self, method: Union[str, Callable], ra: _RecursiveArguments = None, *args, **kwargs) -> RecursiveDict:
         """
         Apply method to root, and children steps.
@@ -1768,7 +1781,8 @@ class _HasChildrenMixin:
         self_results: RecursiveDict = BaseStep.apply(self, method=method, ra=terminal_ra)
         return self_results
 
-    def _apply_childrens(self, results: RecursiveDict, method: Union[str, Callable], ra: _RecursiveArguments) -> RecursiveDict:
+    def _apply_childrens(self, results: RecursiveDict, method: Union[str, Callable],
+                         ra: _RecursiveArguments) -> RecursiveDict:
         for children in self.get_children():
             children_results = children.apply(method=method, ra=ra[children.get_name()])
             results[children.get_name()] = RecursiveDict(children_results)
@@ -2037,7 +2051,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
     def __init__(self):
         JoblibStepSaver.__init__(self)
 
-    def save_step(self, step: 'MetaStepMixin', context: ExecutionContext) -> MetaStepMixin:
+    def save_step(self, step: 'MetaStepMixin', context: ExecutionContext, summary_id=None) -> MetaStepMixin:
         """
         Save MetaStepMixin.
 
@@ -2047,6 +2061,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
 
         :param step: meta step to save
         :param context: execution context
+        :param summary_id: execution context
         :return:
         """
         # First, save the wrapped step savers
@@ -2057,7 +2072,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
             wrapped_step_savers.append(None)
 
         # Second, save the wrapped step
-        step.wrapped.save(context)
+        step.wrapped.save(context=context, summary_id=summary_id)
 
         step.wrapped_step_name_and_savers = (step.wrapped.name, wrapped_step_savers)
 
@@ -2066,13 +2081,14 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
 
         return step
 
-    def load_step(self, step: 'MetaStepMixin', context: ExecutionContext) -> 'MetaStepMixin':
+    def load_step(self, step: 'MetaStepMixin', context: ExecutionContext, summary_id=None) -> 'MetaStepMixin':
         """
         Load MetaStepMixin.
 
         #. Loop through all of the sub steps savers, and only load the sub steps that have been saved.
         #. Refresh steps
 
+        :param summary_id:
         :param step: step to load
         :param context: execution context
         :return: loaded truncable steps
@@ -2085,7 +2101,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
         else:
             # load each sub step with their savers
             sub_step_to_load = Identity(name=step_name, savers=savers)
-            sub_step = sub_step_to_load.load(context)
+            sub_step = sub_step_to_load.load(context=context, summary_id=summary_id)
             step.wrapped = sub_step
 
         return step
@@ -2182,7 +2198,7 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
     def __init__(self):
         JoblibStepSaver.__init__(self)
 
-    def save_step(self, step: 'TruncableSteps', context: ExecutionContext):
+    def save_step(self, step: 'TruncableSteps', context: ExecutionContext, summary_id: str = None):
         """
         #. Loop through all the steps, and save the ones that need to be saved.
         #. Add a new property called sub step savers inside truncable steps to be able to load sub steps when loading.
@@ -2190,6 +2206,7 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
 
         :param step: step to save
         :param context: execution context
+        :param summary_id:
         :return:
         """
 
@@ -2198,7 +2215,7 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         for i, (_, sub_step) in enumerate(step):
             if sub_step.should_save():
                 sub_steps_savers.append((step[i].name, step[i].get_savers()))
-                sub_step.save(context)
+                sub_step.save(context=context, summary_id=summary_id)
             else:
                 sub_steps_savers.append((step[i].name, None))
 
@@ -2211,13 +2228,14 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
 
         return step
 
-    def load_step(self, step: 'TruncableSteps', context: ExecutionContext) -> 'TruncableSteps':
+    def load_step(self, step: 'TruncableSteps', context: ExecutionContext, summary_id: str = None) -> 'TruncableSteps':
         """
         #. Loop through all of the sub steps savers, and only load the sub steps that have been saved.
         #. Refresh steps
 
         :param step: step to load
         :param context: execution context
+        :param summary_id:
         :return: loaded truncable steps
         """
         step.steps_as_tuple = []
@@ -2229,7 +2247,7 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
             else:
                 # Load each sub step with their savers
                 sub_step_to_load = Identity(name=step_name, savers=savers)
-                sub_step = sub_step_to_load.load(context)
+                sub_step = sub_step_to_load.load(context=context, summary_id=summary_id)
                 step.steps_as_tuple.append((step_name, sub_step))
 
         operation = getattr(step, '_refresh_steps', None)

@@ -144,7 +144,6 @@ class StepSavingCheckpointer(BaseCheckpointer):
         BaseCheckpointer.__init__(self, execution_mode=execution_mode)
 
     def read_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        # violating ISP for guillaume
         return data_container
 
     def save_checkpoint(
@@ -153,13 +152,11 @@ class StepSavingCheckpointer(BaseCheckpointer):
             context: ExecutionContext
     ) -> DataContainer:
         if self.is_for_execution_mode(context.get_execution_mode()):
-            # TODO: save the context by execution mode AND data container ids / summary
-            context.copy().save()
+            context.copy().save(summary_id=data_container.summary_id)
 
         return data_container
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
-        # TODO: change this when we support multiple execution modes and data container ids / summary
         return True
 
 
