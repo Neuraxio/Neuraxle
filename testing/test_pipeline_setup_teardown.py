@@ -54,6 +54,7 @@ def test_transform_should_not_setup_pipeline_and_steps():
     p = SomePipeline([
         step_setup
     ])
+    assert not p.is_initialized
 
     p.transform([1])
 

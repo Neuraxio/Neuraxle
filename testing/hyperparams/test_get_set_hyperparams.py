@@ -1,4 +1,4 @@
-from neuraxle.base import MetaStepMixin, BaseStep, NonFittableMixin, NonTransformableMixin
+from neuraxle.base import MetaStep, BaseStep, NonTransformableMixin
 from neuraxle.hyperparams.distributions import RandInt, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 from neuraxle.pipeline import Pipeline
@@ -23,13 +23,8 @@ HYPE_SAMPLE = HyperparameterSamples({
 })
 
 
-class SomeMetaStepMixin(NonTransformableMixin, NonFittableMixin, MetaStepMixin, BaseStep):
-    def __init__(self, wrapped: BaseStep):
-        BaseStep.__init__(self)
-        NonTransformableMixin.__init__(self)
-        NonFittableMixin.__init__(self)
-        MetaStepMixin.__init__(self, wrapped)
-
+class SomeMetaStep(NonTransformableMixin, MetaStep):
+    pass
 
 class SomeStepInverseTransform(SomeStep):
     def fit_transform(self, data_inputs, expected_outputs=None):
@@ -300,11 +295,11 @@ def test_pipeline_should_update_hyperparams_space():
 
 
 def test_meta_step_mixin_should_get_hyperparams():
-    p = SomeMetaStepMixin(SomeStep())
-    p.set_hyperparams({
+    p = SomeMetaStep(SomeStep())
+    p.set_hyperparams(HyperparameterSamples({
         META_STEP_HP: META_STEP_HP_VALUE,
         SOME_STEP_HP: SOME_STEP_HP_VALUE
-    })
+    }))
 
     hyperparams = p.get_hyperparams()
 
@@ -313,7 +308,7 @@ def test_meta_step_mixin_should_get_hyperparams():
 
 
 def test_meta_step_mixin_should_set_hyperparams():
-    p = SomeMetaStepMixin(SomeStep())
+    p = SomeMetaStep(SomeStep())
 
     p.set_hyperparams({
         META_STEP_HP: META_STEP_HP_VALUE,
@@ -326,11 +321,11 @@ def test_meta_step_mixin_should_set_hyperparams():
 
 
 def test_meta_step_mixin_update_hyperparams_should_update_meta_step_hyperparams():
-    p = SomeMetaStepMixin(SomeStep())
-    p.set_hyperparams({
+    p = SomeMetaStep(SomeStep())
+    p.set_hyperparams(HyperparameterSamples({
         META_STEP_HP: META_STEP_HP_VALUE,
         SOME_STEP_HP: SOME_STEP_HP_VALUE
-    })
+    }))
 
     p.update_hyperparams({
         META_STEP_HP: META_STEP_HP_VALUE + 1
@@ -341,11 +336,11 @@ def test_meta_step_mixin_update_hyperparams_should_update_meta_step_hyperparams(
 
 
 def test_meta_step_mixin_update_hyperparams_should_update_wrapped_step_hyperparams():
-    p = SomeMetaStepMixin(SomeStep())
-    p.set_hyperparams({
+    p = SomeMetaStep(SomeStep())
+    p.set_hyperparams(HyperparameterSamples({
         META_STEP_HP: META_STEP_HP_VALUE,
         SOME_STEP_HP: SOME_STEP_HP_VALUE
-    })
+    }))
 
     p.update_hyperparams({
         SOME_STEP_HP: SOME_STEP_HP_VALUE + 1
@@ -356,7 +351,7 @@ def test_meta_step_mixin_update_hyperparams_should_update_wrapped_step_hyperpara
 
 
 def test_meta_step_mixin_update_hyperparams_space_should_update_meta_step_hyperparams():
-    p = SomeMetaStepMixin(SomeStep())
+    p = SomeMetaStep(SomeStep())
     p.set_hyperparams_space(HyperparameterSpace({
         META_STEP_HP: RAND_INT_META_STEP,
         SOME_STEP_HP: RAND_INT_SOME_STEP
@@ -372,7 +367,7 @@ def test_meta_step_mixin_update_hyperparams_space_should_update_meta_step_hyperp
 
 
 def test_meta_step_mixin_update_hyperparams_space_should_update_wrapped_step_hyperparams():
-    p = SomeMetaStepMixin(SomeStep())
+    p = SomeMetaStep(SomeStep())
     p.set_hyperparams_space({
         META_STEP_HP: RAND_INT_META_STEP,
         SOME_STEP_HP: RAND_INT_SOME_STEP
@@ -388,7 +383,7 @@ def test_meta_step_mixin_update_hyperparams_space_should_update_wrapped_step_hyp
 
 
 def test_meta_step_mixin_should_set_hyperparams_space():
-    p = SomeMetaStepMixin(SomeStep())
+    p = SomeMetaStep(SomeStep())
     p.set_hyperparams_space({
         META_STEP_HP: RAND_INT_META_STEP,
         SOME_STEP_HP: RAND_INT_SOME_STEP
@@ -399,11 +394,11 @@ def test_meta_step_mixin_should_set_hyperparams_space():
 
 
 def test_meta_step_mixin_should_get_hyperparams_space():
-    p = SomeMetaStepMixin(SomeStep())
-    p.set_hyperparams_space({
+    p = SomeMetaStep(SomeStep())
+    p.set_hyperparams_space(HyperparameterSpace({
         META_STEP_HP: RAND_INT_META_STEP,
         SOME_STEP_HP: RAND_INT_SOME_STEP
-    })
+    }))
 
     hyperparams_space = p.get_hyperparams_space()
 

@@ -25,8 +25,8 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
 """
 from typing import Union
 
-from neuraxle.base import BaseStep, MetaStepMixin, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin, \
-    HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin, NonFittableMixin
+from neuraxle.base import BaseStep, MetaStep, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin, \
+    HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin, _FittableStep, BaseTransformer
 from neuraxle.data_container import ExpandedDataContainer
 from neuraxle.hyperparams.distributions import Boolean, Choice
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
@@ -36,7 +36,7 @@ import numpy as np
 OPTIONAL_ENABLED_HYPERPARAM = 'enabled'
 
 
-class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
+class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStep):
     """
     A wrapper to run wrapped step only in test mode, or only in train mode.
 
@@ -61,8 +61,7 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
     """
 
     def __init__(self, wrapped: BaseStep, is_train_only=True, cache_folder_when_no_handle=None):
-        BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, wrapped)
+        MetaStep.__init__(self, wrapped=wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
 
         self.is_train_only = is_train_only
@@ -149,7 +148,7 @@ class TestOnlyWrapper(TrainOrTestOnlyWrapper):
         TrainOrTestOnlyWrapper.__init__(self, wrapped=wrapped, is_train_only=False)
 
 
-class Optional(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
+class Optional(ForceHandleOnlyMixin, MetaStep):
     """
     A wrapper to nullify a step : nullify its hyperparams, and also nullify all of his behavior.
 
@@ -168,20 +167,20 @@ class Optional(ForceHandleOnlyMixin, MetaStepMixin, BaseStep):
         :class:`~neuraxle.base.BaseStep`
     """
 
-    def __init__(self, wrapped: BaseStep, enabled: bool = True, nullified_return_value=None,
+    def __init__(self, wrapped: BaseTransformer, enabled: bool = True, nullified_return_value=None,
                  cache_folder_when_no_handle=None, use_hyperparameter_space=True, nullify_hyperparams=True):
         hyperparameter_space = HyperparameterSpace({
             OPTIONAL_ENABLED_HYPERPARAM: Boolean()
         }) if use_hyperparameter_space else {}
 
-        BaseStep.__init__(
+        MetaStep.__init__(
             self,
             hyperparams=HyperparameterSamples({
                 OPTIONAL_ENABLED_HYPERPARAM: enabled
             }),
-            hyperparams_space=hyperparameter_space
+            hyperparams_space=hyperparameter_space,
+            wrapped=wrapped
         )
-        MetaStepMixin.__init__(self, wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
 
         if nullified_return_value is None:
@@ -387,7 +386,7 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
     """
 
     def __init__(self, steps):
-        FeatureUnion.__init__(self, steps, joiner=NumpyConcatenateOnCustomAxisIfNotEmpty(axis=-1))
+        FeatureUnion.__init__(self, steps_as_tuple=steps, joiner=NumpyConcatenateOnCustomAxisIfNotEmpty(axis=-1))
         self.set_hyperparams(HyperparameterSamples({}))
         self._make_all_steps_optional()
 
@@ -401,7 +400,7 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
         self._refresh_steps()
 
 
-class NumpyConcatenateOnCustomAxisIfNotEmpty(NonFittableMixin, BaseStep):
+class NumpyConcatenateOnCustomAxisIfNotEmpty(BaseTransformer):
     """
     Numpy concetenation step where the concatenation is performed along the specified custom axis.
     """
@@ -413,10 +412,9 @@ class NumpyConcatenateOnCustomAxisIfNotEmpty(NonFittableMixin, BaseStep):
         :return: NumpyConcatenateOnCustomAxis instance.
         """
         self.axis = axis
-        BaseStep.__init__(self)
-        NonFittableMixin.__init__(self)
+        BaseTransformer.__init__(self)
 
-    def _transform_data_container(self, data_container, context):
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
         Handle transform.
 
@@ -443,7 +441,7 @@ class NumpyConcatenateOnCustomAxisIfNotEmpty(NonFittableMixin, BaseStep):
         return np.concatenate(data_inputs, axis=self.axis)
 
 
-class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseStep):
+class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseTransformer):
     """
     A step that selects non empty data inputs.
 
@@ -453,10 +451,10 @@ class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseStep):
     """
 
     def __init__(self):
-        BaseStep.__init__(self)
+        BaseTransformer.__init__(self)
         TransformHandlerOnlyMixin.__init__(self)
 
-    def _transform_data_container(self, data_container, context):
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         """
         Handle transform.
 
@@ -475,11 +473,7 @@ class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseStep):
         return data_container
 
 
-class ExpandDim(
-    ResumableStepMixin,
-    MetaStepMixin,
-    BaseStep
-):
+class ExpandDim(ResumableStepMixin, MetaStep):
     """
     Similar to numpys expand_dim function, ExpandDim step expands the dimension of all the data inside the data container.
     ExpandDim sends the expanded data container to the wrapped step.
@@ -498,17 +492,16 @@ class ExpandDim(
         :class:`~neuraxle.data_container.ExpandedDataContainer`
     """
 
-    def __init__(self, wrapped: BaseStep):
-        BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, wrapped)
+    def __init__(self, wrapped: BaseTransformer):
+        MetaStep.__init__(self, wrapped)
         ResumableStepMixin.__init__(self)
 
     def _will_process(self, data_container, context):
         data_container, context = BaseStep._will_process(self, data_container, context)
         return ExpandedDataContainer.create_from(data_container), context
 
-    def _did_process(self, data_container, context):
-        data_container = BaseStep._did_process(self, data_container, context)
+    def _did_process(self, data_container: DataContainer, context: ExecutionContext):
+        data_container = super()._did_process(data_container, context)
         return data_container.reduce_dim()
 
     def resume(self, data_container: DataContainer, context: ExecutionContext):
@@ -564,11 +557,11 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
     """
 
     def __init__(self, preprocessing_step, postprocessing_step):
-        HandleOnlyMixin.__init__(self)
         TruncableSteps.__init__(self, [
             ("preprocessing_step", preprocessing_step),
             ("postprocessing_step", postprocessing_step)
         ])
+        HandleOnlyMixin.__init__(self)
 
     def _fit_data_container(self, data_container: DataContainer,
                             context: ExecutionContext) -> 'ReversiblePreprocessingWrapper':

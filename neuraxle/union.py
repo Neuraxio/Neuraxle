@@ -27,7 +27,7 @@ This module contains steps to perform various feature unions and model stacking,
 from joblib import Parallel, delayed
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, Identity, ExecutionContext, DataContainer, \
-    NonFittableMixin, ForceHandleOnlyMixin
+    ForceHandleOnlyMixin, BaseTransformer
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
@@ -58,7 +58,7 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
     def __init__(
             self,
             steps_as_tuple: NamedTupleList,
-            joiner: NonFittableMixin = None,
+            joiner: BaseTransformer = None,
             n_jobs: int = None,
             backend: str = "threading",
             cache_folder_when_no_handle: str = None
@@ -74,9 +74,9 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
             joiner = NumpyConcatenateInnerFeatures()
         steps_as_tuple.append(('joiner', joiner))
         TruncableSteps.__init__(self, steps_as_tuple)
+        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
         self.n_jobs = n_jobs
         self.backend = backend
-        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
 
     def _fit_data_container(self, data_container, context):
         """
@@ -183,7 +183,7 @@ class AddFeatures(FeatureUnion):
         :param steps_as_tuple: The steps to be sent to the ``FeatureUnion``. ``Identity()`` is prepended.
         :param kwargs: Other arguments to send to ``FeatureUnion``.
         """
-        FeatureUnion.__init__(self, [Identity()] + steps_as_tuple, **kwargs)
+        super().__init__(steps_as_tuple=[Identity()] + steps_as_tuple, **kwargs)
 
 
 class ModelStacking(FeatureUnion):
@@ -242,7 +242,7 @@ class ModelStacking(FeatureUnion):
         :param judge: a BaseStep that will learn to judge the best answer and who to trust out of every parallel steps.
         :param kwargs: Other arguments to send to ``FeatureUnion``.
         """
-        FeatureUnion.__init__(self, steps_as_tuple, **kwargs)
+        super().__init__(steps_as_tuple=steps_as_tuple, **kwargs)
         self.judge: BaseStep = judge  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
 
     def _did_fit_transform(self, data_container, context) -> ('BaseStep', DataContainer):

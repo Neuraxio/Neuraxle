@@ -37,7 +37,7 @@ from typing import Callable, List, Union, Tuple
 
 import numpy as np
 
-from neuraxle.base import BaseStep, ExecutionContext, ForceHandleOnlyMixin
+from neuraxle.base import BaseStep, ExecutionContext, ForceHandleOnlyMixin, ForceHandleMixin, _FittableStep
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.callbacks import BaseCallback, CallbackList, ScoringCallback
@@ -616,7 +616,7 @@ Refer to `execute_trial` for full flexibility
         return self.callbacks[0].name
 
 
-class AutoML(ForceHandleOnlyMixin, BaseStep):
+class AutoML(ForceHandleMixin, BaseStep):
     """
     A step to execute any Automatic Machine Learning Algorithms.
 
@@ -670,7 +670,7 @@ class AutoML(ForceHandleOnlyMixin, BaseStep):
             cache_folder_when_no_handle=None
     ):
         BaseStep.__init__(self)
-        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
+        ForceHandleMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
 
         self.validation_splitter: BaseValidationSplitter = validation_splitter
 
