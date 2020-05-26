@@ -281,8 +281,7 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         self.hyperparams = loaded_self.hyperparams
         self.hyperparams_space = loaded_self.hyperparams_space
 
-    def _get_starting_step_info(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
-        int, DataContainer]:
+    def _get_starting_step_info(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[int, DataContainer]:
         """
         Find the index of the latest step that can be resumed
 
@@ -295,9 +294,11 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         index_latest_checkpoint = 0
 
         for index, (step_name, step) in enumerate(self.items()):
-            if hasattr(step, 'should_resume') and step.should_resume(current_data_container.copy(), starting_step_context):
-                index_latest_checkpoint = index
-                starting_step_data_container = copy(current_data_container)
+            if hasattr(step, 'should_resume'):
+                resumable_data_container = step.get_resumable_data_container(current_data_container.copy(), context)
+                if step.should_resume(resumable_data_container, starting_step_context):
+                    index_latest_checkpoint = index
+                    starting_step_data_container = resumable_data_container
 
             current_data_container = step.hash_data_container(current_data_container)
 
@@ -317,6 +318,13 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
                 return True
 
         return False
+
+    def get_resumable_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        for index, (step_name, step) in enumerate(reversed(self.items())):
+            if hasattr(step, 'should_resume') and step.should_resume(data_container, context):
+                [step_before.hash_data_container(data_container) for _, step_before in self[:index]]
+                return data_container
+        return data_container
 
 
 class CustomPipelineMixin:

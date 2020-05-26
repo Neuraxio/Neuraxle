@@ -120,7 +120,15 @@ class BaseCheckpointer(NonFittableMixin, NonTransformableMixin, BaseStep):
         raise NotImplementedError()
 
 
-class StepSavingCheckpointer(BaseCheckpointer):
+class NonReadableCheckpointMixin:
+    def read_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        return data_container
+
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
+        return True
+
+
+class StepSavingCheckpointer(NonReadableCheckpointMixin, BaseCheckpointer):
     """
     StepCheckpointer is used by the Checkpoint step to save the fitted steps contained in the context of type ExecutionContext.
 
@@ -137,14 +145,9 @@ class StepSavingCheckpointer(BaseCheckpointer):
         :class:`BaseCheckpointer`
     """
 
-    def __init__(
-            self,
-            execution_mode: ExecutionMode = ExecutionMode.FIT_OR_FIT_TRANSFORM,
-    ):
+    def __init__(self, execution_mode: ExecutionMode = ExecutionMode.FIT_OR_FIT_TRANSFORM):
         BaseCheckpointer.__init__(self, execution_mode=execution_mode)
-
-    def read_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        return data_container
+        NonReadableCheckpointMixin.__init__(self)
 
     def save_checkpoint(
             self,
@@ -155,9 +158,6 @@ class StepSavingCheckpointer(BaseCheckpointer):
             context.copy().save(summary_id=data_container.summary_id)
 
         return data_container
-
-    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
-        return True
 
 
 class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, BaseStep):
@@ -194,10 +194,7 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :class:`~neuraxle.base.NonTransformableMixin`
     """
 
-    def __init__(
-            self,
-            all_checkpointers: List[BaseCheckpointer] = None,
-    ):
+    def __init__(self, all_checkpointers: List[BaseCheckpointer] = None):
         BaseStep.__init__(self)
         self.all_checkpointers = all_checkpointers
 

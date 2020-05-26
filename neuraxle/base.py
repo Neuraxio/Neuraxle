@@ -221,20 +221,8 @@ class JoblibStepSaver(BaseSaver):
         :return: if we can load the step with the given context
         """
         return os.path.exists(
-            self._create_step_path(context=context, step=step, summary_id=summary_id)
+            _create_step_path(context=context, step_name=step.name, summary_id=summary_id)
         )
-
-    def _create_step_path(self, context, step, summary_id=None):
-        """
-        Create step path for the given context.
-
-        :param context: execution context
-        :param step: step to save, or load
-        :return: path
-        """
-        if summary_id is not None:
-            return os.path.join(context.get_path(), '{0}_{1}.joblib'.format(step.name, summary_id))
-        return os.path.join(context.get_path(), '{0}.joblib'.format(step.name))
 
     def save_step(self, step: 'BaseStep', context: 'ExecutionContext', summary_id=None) -> 'BaseStep':
         """
@@ -247,7 +235,7 @@ class JoblibStepSaver(BaseSaver):
         """
         context.mkdir()
 
-        path = self._create_step_path(context, step)
+        path = _create_step_path(step_name=step.name, context=context, summary_id=summary_id)
         dump(step, path)
 
         return step
@@ -261,7 +249,8 @@ class JoblibStepSaver(BaseSaver):
         :param summary_id:
         :return:
         """
-        loaded_step = load(self._create_step_path(context=context, step=step, summary_id=summary_id))
+        step_path = _create_step_path(context=context, step_name=step.name, summary_id=summary_id)
+        loaded_step = load(step_path)
 
         # we need to keep the current steps in memory because they have been deleted before saving...
         # the steps that have not been saved yet need to be in memory while loading a truncable steps...
@@ -269,6 +258,19 @@ class JoblibStepSaver(BaseSaver):
             loaded_step.steps = step.steps
 
         return loaded_step
+
+
+def _create_step_path(context, step_name, summary_id=None):
+    """
+    Create step path for the given context.
+
+    :param context: execution context
+    :param step_name: step to save, or load
+    :return: path
+    """
+    if summary_id is not None:
+        return os.path.join(context.get_path(), '{0}_{1}.joblib'.format(step_name, summary_id))
+    return os.path.join(context.get_path(), '{0}.joblib'.format(step_name))
 
 
 class ExecutionMode(Enum):
@@ -2790,6 +2792,9 @@ class ResumableStepMixin:
     @abstractmethod
     def resume(self, data_container: DataContainer, context: ExecutionContext):
         raise NotImplementedError()
+
+    def get_resumable_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        return data_container
 
     def __str__(self):
         return self.__repr__()
