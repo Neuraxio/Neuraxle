@@ -31,16 +31,17 @@ from typing import List, Callable, Tuple
 import numpy as np
 from sklearn.metrics import r2_score
 
-from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext, HandleOnlyMixin, ForceHandleOnlyMixin, \
-    EvaluableStepMixin
+from neuraxle.base import MetaStep, BaseStep, ExecutionContext, HandleOnlyMixin, ForceHandleOnlyMixin, \
+    EvaluableStepMixin, _FittableStep
 from neuraxle.data_container import DataContainer
+from neuraxle.hyperparams.space import RecursiveDict
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnCustomAxis
 
 VALIDATION_SUB_DATA_CONTAINER_NAME = 'validation'
 
 
-class BaseValidation(MetaStepMixin, BaseStep, ABC):
+class BaseValidation(MetaStep, ABC):
     """
     Base class For validation wrappers.
     It has a scoring function to calculate the score for the validation split.
@@ -62,7 +63,7 @@ class BaseValidation(MetaStepMixin, BaseStep, ABC):
         :type scoring_function: Callable
         """
         BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, wrapped)
+        MetaStep.__init__(self, wrapped)
         self.scoring_function = scoring_function
 
     @abstractmethod
@@ -327,11 +328,13 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
         self.metrics_enabled = False
         if self.wrapped is not None:
             self.wrapped.apply('disable_metrics')
+        return RecursiveDict()
 
     def enable_metrics(self):
         self.metrics_enabled = True
         if self.wrapped is not None:
             self.wrapped.apply('enable_metrics')
+        return RecursiveDict()
 
     def _get_index_split(self, data_inputs):
         return math.floor(len(data_inputs) * (1 - self.test_size))

@@ -21,11 +21,12 @@ The neuraxle classes to track metrics results.
 """
 from typing import Dict
 
-from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext
+from neuraxle.base import MetaStep, BaseStep, ExecutionContext, _FittableStep
 from neuraxle.data_container import DataContainer
+from neuraxle.hyperparams.space import RecursiveDict
 
 
-class MetricsWrapper(MetaStepMixin, BaseStep):
+class MetricsWrapper(MetaStep):
     """
     Add metrics calculation to a step. Calculates metrics after each fit, fit_transform, or even transform if there is an expected outputs.
 
@@ -58,8 +59,7 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
             print_metrics=False,
             print_fun=print
     ):
-        BaseStep.__init__(self, name=name)
-        MetaStepMixin.__init__(self, wrapped)
+        MetaStep.__init__(self, wrapped, name=name)
 
         self.metrics: Dict = metrics
         self._initialize_metrics(metrics)
@@ -141,25 +141,26 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
         if self.print_metrics:
             self.print_fun(result)
 
-    def get_metrics(self) -> Dict:
+    def get_metrics(self) -> RecursiveDict:
         """
         Get all metrics results using the transformed data container, and the metrics function dict.
         To be used with :func:`neuraxle.base.BaseStep.apply` method.
 
         :return: dict with the step name as key, and all of the training, and validation metrics as values
         """
-        return {
+        return RecursiveDict({
             'train': self.metrics_results_train,
             'validation': self.metrics_results_validation
-        }
+        })
 
-    def toggle_metrics(self):
+    def toggle_metrics(self) -> RecursiveDict:
         """
         Toggle metrics wrapper on and off to temporarily disable metrics if needed..
 
         :return:
         """
         self.enabled = not self.enabled
+        return RecursiveDict({self.name: self.enabled})
 
     def disable_metrics(self):
         """
@@ -168,6 +169,7 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
         :return:
         """
         self.enabled = False
+        return RecursiveDict({self.name: self.enabled})
 
     def enable_metrics(self):
         """
@@ -176,3 +178,4 @@ class MetricsWrapper(MetaStepMixin, BaseStep):
         :return:
         """
         self.enabled = True
+        return RecursiveDict({self.name: self.enabled})
