@@ -27,9 +27,10 @@ from multiprocessing.context import Process
 from threading import Thread
 from typing import Tuple, List, Union, Iterable
 
-from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStepMixin, NonFittableMixin, BaseSaver
+from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStep, BaseSaver, _FittableStep, \
+    BaseTransformer, NonFittableMixin
 from neuraxle.data_container import DataContainer, ListDataContainer
-from neuraxle.pipeline import Pipeline, CustomPipelineMixin, MiniBatchSequentialPipeline, Joiner
+from neuraxle.pipeline import Pipeline, MiniBatchSequentialPipeline, Joiner
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
 
@@ -51,6 +52,10 @@ class ObservableQueueMixin:
         self.queue = queue
         self.observers = []
         self._ensure_proper_mixin_init_order()
+
+    def teardown(self):
+        self.queue = None
+        return self
 
     def _ensure_proper_mixin_init_order(self):
         if not hasattr(self, 'savers'):
@@ -118,20 +123,20 @@ class ObservableQueueStepSaver(BaseSaver):
         :class:`SequentialQueuedPipeline`
     """
 
-    def save_step(self, step: 'BaseStep', context: 'ExecutionContext', summary_id=None) -> 'BaseStep':
+    def save_step(self, step: 'BaseStep', context: 'ExecutionContext', summary_id=None) -> 'BaseTransformer':
         step.queue = None
         step.observers = []
         return step
 
-    def can_load(self, step: 'BaseStep', context: 'ExecutionContext', summary_id=None):
+    def can_load(self, step: 'BaseStep', context: 'ExecutionContext', summary_id=None) -> bool:
         return True
 
-    def load_step(self, step: 'BaseStep', context: 'ExecutionContext', summary_id=None) -> 'BaseStep':
+    def load_step(self, step: 'BaseStep', context: 'ExecutionContext', summary_id=None) -> 'BaseTransformer':
         step.queue = Queue()
         return step
 
 
-class QueueWorker(ObservableQueueMixin, MetaStepMixin, BaseStep):
+class QueueWorker(ObservableQueueMixin, MetaStep):
     """
     Start multiple Process or Thread that process items from the queue of batches to process.
     It is both an observable, and observer.
@@ -147,7 +152,7 @@ class QueueWorker(ObservableQueueMixin, MetaStepMixin, BaseStep):
 
     def __init__(
             self,
-            wrapped: BaseStep,
+            wrapped: BaseTransformer,
             max_queue_size: int,
             n_workers: int,
             use_threading: bool,
@@ -157,8 +162,7 @@ class QueueWorker(ObservableQueueMixin, MetaStepMixin, BaseStep):
         if not additional_worker_arguments:
             additional_worker_arguments = [[] for _ in range(n_workers)]
 
-        BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, wrapped)
+        MetaStep.__init__(self, wrapped)
         ObservableQueueMixin.__init__(self, Queue(maxsize=max_queue_size))
 
         self.use_threading: bool = use_threading
@@ -191,6 +195,15 @@ class QueueWorker(ObservableQueueMixin, MetaStepMixin, BaseStep):
             p.daemon = True
             p.start()
             self.workers.append(p)
+
+    def teardown(self):
+        """
+        Stop all processes on teardown.
+
+        :return: teardowned self
+        """
+        self.stop()
+        return self
 
     def stop(self):
         """
@@ -236,13 +249,13 @@ def worker_function(queue_worker: QueueWorker, context: ExecutionContext, use_sa
 
 
 QueuedPipelineStepsTuple = Union[
-    BaseStep,  # step
-    Tuple[int, BaseStep],  # (n_workers, step)
-    Tuple[str, BaseStep],  # (step_name, step)
-    Tuple[str, int, BaseStep],  # (step_name, n_workers, step)
-    Tuple[str, int, int, BaseStep],  # (step_name, n_workers, max_queue_size, step)
-    Tuple[str, int, List[Tuple], BaseStep],  # (step_name, n_workers, additional_worker_arguments, step)
-    Tuple[str, int, List[Tuple], BaseStep]  # (step_name, n_workers, additional_worker_arguments, step)
+    BaseTransformer,  # step
+    Tuple[int, BaseTransformer],  # (n_workers, step)
+    Tuple[str, BaseTransformer],  # (step_name, step)
+    Tuple[str, int, BaseTransformer],  # (step_name, n_workers, step)
+    Tuple[str, int, int, BaseTransformer],  # (step_name, n_workers, max_queue_size, step)
+    Tuple[str, int, List[Tuple], BaseTransformer],  # (step_name, n_workers, additional_worker_arguments, step)
+    Tuple[str, int, List[Tuple], BaseTransformer]  # (step_name, n_workers, additional_worker_arguments, step)
 ]
 
 
@@ -307,9 +320,6 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             use_savers=False,
             cache_folder=None
     ):
-        NonFittableMixin.__init__(self)
-        CustomPipelineMixin.__init__(self)
-
         if data_joiner is None:
             data_joiner = NumpyConcatenateOuterBatch()
         self.data_joiner = data_joiner
@@ -363,7 +373,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :return: return name, n_workers, max_queue_size, actual_step
         :rtype: tuple(str, int, int, BaseStep)
         """
-        if isinstance(step, BaseStep):
+        if isinstance(step, BaseTransformer):
             actual_step = step
             name = step.name
             max_queue_size = self.max_queue_size
@@ -396,7 +406,18 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
         return name, n_workers, additional_arguments, max_queue_size, actual_step
 
-    def setup(self) -> 'BaseStep':
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+        """
+        Setup streaming pipeline before any handler methods.
+
+        :param data_container: data container
+        :param context: execution context
+        :return:
+        """
+        self.setup()
+        return data_container, context
+
+    def setup(self) -> 'BaseTransformer':
         """
         Connect the queued workers together so that the data can correctly flow through the pipeline.
 
@@ -405,7 +426,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         """
         if not self.is_initialized:
             self.connect_queued_pipeline()
-        self.is_initialized = True
+        super().setup()
         return self
 
     def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
@@ -421,7 +442,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         all_steps_are_not_fittable = True
 
         for _, step in self[:-1]:
-            if not isinstance(step.get_step(), NonFittableMixin):
+            if isinstance(step.get_step(), _FittableStep) and not isinstance(step.get_step(), NonFittableMixin):
                 all_steps_are_not_fittable = False
 
         if all_steps_are_not_fittable:
@@ -615,6 +636,18 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
         self.result = {}
         Joiner.__init__(self, batch_size=batch_size)
         ObservableQueueMixin.__init__(self, Queue())
+
+    def teardown(self) -> 'BaseTransformer':
+        """
+        Properly clean queue, summary ids, and results during teardown.
+
+        :return: teardowned self
+        """
+        ObservableQueueMixin.teardown(self)
+        Joiner.teardown(self)
+        self.summary_ids = []
+        self.result = {}
+        return self
 
     def set_n_batches(self, n_batches):
         self.n_batches_left_to_do = n_batches

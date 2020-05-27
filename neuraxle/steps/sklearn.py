@@ -24,12 +24,12 @@ Those steps works with scikit-learn (sklearn) transformers and estimators.
 
 """
 import inspect
-from typing import Any, List
+from typing import Any
 
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import Ridge
 
-from neuraxle.base import BaseStep, _HasChildrenMixin
+from neuraxle.base import BaseStep
 from neuraxle.hyperparams.distributions import LogUniform, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
 from neuraxle.steps.numpy import NumpyTranspose

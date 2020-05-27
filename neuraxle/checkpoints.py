@@ -31,7 +31,8 @@ from enum import Enum
 from typing import List, Tuple, Any
 
 from neuraxle.base import ResumableStepMixin, BaseStep, ExecutionContext, \
-    ExecutionMode, NonTransformableMixin, NonFittableMixin, Identity
+    ExecutionMode, NonTransformableMixin, Identity, _FittableStep, HandleOnlyMixin, ForceHandleOnlyMixin, \
+    IdentityHandlerMethodsMixin
 from neuraxle.data_container import DataContainer, ListDataContainer
 
 
@@ -40,7 +41,7 @@ class DataCheckpointType(Enum):
     EXPECTED_OUTPUT = 'eo'
 
 
-class BaseCheckpointer(NonFittableMixin, NonTransformableMixin, BaseStep):
+class BaseCheckpointer(NonTransformableMixin, BaseStep):
     """
     Base class to implement a step checkpoint or data container checkpoint.
 
@@ -160,7 +161,7 @@ class StepSavingCheckpointer(NonReadableCheckpointMixin, BaseCheckpointer):
         return data_container
 
 
-class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, BaseStep):
+class Checkpoint(IdentityHandlerMethodsMixin, ResumableStepMixin, BaseStep):
     """
     Resumable Checkpoint Step to load, and save both data checkpoints, and step checkpoints.
     Checkpoint uses a list of step checkpointers(List[StepCheckpointer]), and data checkpointers(List[BaseCheckpointer]).
@@ -190,44 +191,25 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :class:`~neuraxle.base.BaseStep`,
         :func:`neuraxle.pipeline.ResumablePipeline._load_checkpoint`,
         :class:`~neuraxle.base.ResumableStepMixin`,
-        :class:`~neuraxle.base.NonFittableMixin`,
-        :class:`~neuraxle.base.NonTransformableMixin`
+        :class:`~neuraxle.base.ForceHandleOnlyMixin`
     """
 
     def __init__(self, all_checkpointers: List[BaseCheckpointer] = None):
         BaseStep.__init__(self)
+        ResumableStepMixin.__init__(self)
+        IdentityHandlerMethodsMixin.__init__(self)
         self.all_checkpointers = all_checkpointers
 
-    def _fit_data_container(self, data_container, context) -> 'Checkpoint':
+    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
-        Saves step, and data checkpointers for the FIT execution mode.
+        Saves step, and data checkpointers after fit, fit_transform, or transform.
 
         :param data_container: data container for creating the data checkpoint
         :param context: context for creating the step checkpoint
         :return: saved data container
         """
         self.save_checkpoint(data_container, context)
-        return self
-
-    def _transform_data_container(self, data_container, context):
-        """
-        Saves step, and data checkpointers for the TRANSORM execution mode.
-
-        :param data_container: data container for creating the data checkpoint
-        :param context: context for creating the step checkpoint
-        :return: saved data container
-        """
-        return self.save_checkpoint(data_container, context)
-
-    def _fit_transform_data_container(self, data_container, context) -> Tuple['Checkpoint', DataContainer]:
-        """
-        Saves step, and data checkpointers for the FIT_TRANSORM execution mode.
-
-        :param data_container: data container for creating the data checkpoint
-        :param context: context for creating the step checkpoint
-        :return: saved data container
-        """
-        return self, self.save_checkpoint(data_container, context)
+        return data_container
 
     def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext):
         """
