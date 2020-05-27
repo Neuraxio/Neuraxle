@@ -270,7 +270,12 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         self._assign_loaded_pipeline_into_self(loaded_pipeline)
 
         step = self[new_starting_step_index]
-        if isinstance(step, Checkpoint) or (isinstance(step, MetaStepMixin) and isinstance(step.wrapped, Checkpoint)):
+
+        if isinstance(step, ResumablePipeline):
+            starting_step_data_container = data_container
+            for step_name, step in self[:new_starting_step_index]:
+                starting_step_data_container = step.hash_data_container(starting_step_data_container)
+        elif hasattr(step, 'should_resume'):
             starting_step_data_container = step.resume(starting_step_data_container, context)
 
         return self[new_starting_step_index:], starting_step_data_container
@@ -320,10 +325,12 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         return False
 
     def get_resumable_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        resumable_context = context.push(self)
         for index, (step_name, step) in enumerate(reversed(self.items())):
-            if hasattr(step, 'should_resume') and step.should_resume(data_container, context):
-                [step_before.hash_data_container(data_container) for _, step_before in self[:index]]
-                return data_container
+            resumable_data_container = data_container.copy()
+            [step_before.hash_data_container(resumable_data_container) for _, step_before in self[:index]]
+            if hasattr(step, 'should_resume') and step.should_resume(resumable_data_container, resumable_context):
+                return resumable_data_container
         return data_container
 
 

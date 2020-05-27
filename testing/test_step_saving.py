@@ -120,7 +120,10 @@ def test_resumable_pipeline_fit_transform_should_load_all_pipeline_steps(tmpdir:
     ], cache_folder=tmpdir)
 
     # When
-    pipeline, outputs = pipeline.fit_transform(data_inputs=np.array(range(10)), expected_outputs=np.array(range(10)))
+    pipeline, outputs = pipeline.fit_transform(
+        data_inputs=np.array(range(10)),
+        expected_outputs=np.array(range(10))
+    )
 
     # Then
     assert np.array_equal(outputs, EXPECTED_OUTPUTS)
