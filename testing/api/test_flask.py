@@ -22,7 +22,7 @@ Tests for Flask.
 import numpy as np
 
 from neuraxle.rest.flask import JSONDataResponseEncoder, JSONDataBodyDecoder, FlaskRestApiWrapper
-from neuraxle.base import BaseStep, NonFittableMixin
+from neuraxle.base import BaseStep, BaseTransformer
 
 
 def setup_api():
@@ -52,7 +52,7 @@ def setup_api():
                 'predictions': np.array(data_inputs).tolist()
             }
 
-    class Multiplier(NonFittableMixin, BaseStep):
+    class Multiplier(BaseTransformer):
         def transform(self, data_inputs):
             return 2 * data_inputs
 
