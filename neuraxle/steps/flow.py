@@ -25,7 +25,7 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
 """
 from typing import Union
 
-from neuraxle.base import BaseStep, MetaStep, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin, \
+from neuraxle.base import BaseStep, MetaStep, DataContainer, ExecutionContext, TruncableSteps, _ResumableStep, \
     HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin, _FittableStep, BaseTransformer
 from neuraxle.data_container import ExpandedDataContainer
 from neuraxle.hyperparams.distributions import Boolean, Choice
@@ -473,7 +473,7 @@ class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseTransformer):
         return data_container
 
 
-class ExpandDim(ResumableStepMixin, MetaStep):
+class ExpandDim(_ResumableStep, MetaStep):
     """
     Similar to numpys expand_dim function, ExpandDim step expands the dimension of all the data inside the data container.
     ExpandDim sends the expanded data container to the wrapped step.
@@ -494,7 +494,7 @@ class ExpandDim(ResumableStepMixin, MetaStep):
 
     def __init__(self, wrapped: BaseTransformer):
         MetaStep.__init__(self, wrapped)
-        ResumableStepMixin.__init__(self)
+        _ResumableStep.__init__(self)
 
     def _will_process(self, data_container, context):
         data_container, context = BaseStep._will_process(self, data_container, context)
@@ -506,9 +506,6 @@ class ExpandDim(ResumableStepMixin, MetaStep):
 
     def resume(self, data_container: DataContainer, context: ExecutionContext):
         context = context.push(self)
-        if not isinstance(self.wrapped, ResumableStepMixin):
-            raise Exception('cannot resume steps that don\' inherit from ResumableStepMixin')
-
         old_current_ids = data_container.current_ids
 
         data_container = self.wrapped.resume(data_container, context)
@@ -529,8 +526,7 @@ class ExpandDim(ResumableStepMixin, MetaStep):
         context = context.push(self)
         expanded_data_container = ExpandedDataContainer.create_from(data_container)
 
-        if isinstance(self.wrapped, ResumableStepMixin) and \
-                self.wrapped.should_resume(expanded_data_container, context):
+        if self.wrapped.should_resume(expanded_data_container, context):
             return True
 
         return False

@@ -30,7 +30,7 @@ from abc import abstractmethod, ABC
 from enum import Enum
 from typing import List, Tuple, Any
 
-from neuraxle.base import ResumableStepMixin, BaseStep, ExecutionContext, \
+from neuraxle.base import _ResumableStep, BaseStep, ExecutionContext, \
     ExecutionMode, NonTransformableMixin, Identity, _FittableStep, HandleOnlyMixin, ForceHandleOnlyMixin, \
     IdentityHandlerMethodsMixin
 from neuraxle.data_container import DataContainer, ListDataContainer
@@ -161,7 +161,7 @@ class StepSavingCheckpointer(NonReadableCheckpointMixin, BaseCheckpointer):
         return data_container
 
 
-class Checkpoint(IdentityHandlerMethodsMixin, ResumableStepMixin, BaseStep):
+class Checkpoint(IdentityHandlerMethodsMixin, _ResumableStep, BaseStep):
     """
     Resumable Checkpoint Step to load, and save both data checkpoints, and step checkpoints.
     Checkpoint uses a list of step checkpointers(List[StepCheckpointer]), and data checkpointers(List[BaseCheckpointer]).
@@ -196,7 +196,7 @@ class Checkpoint(IdentityHandlerMethodsMixin, ResumableStepMixin, BaseStep):
 
     def __init__(self, all_checkpointers: List[BaseCheckpointer] = None):
         BaseStep.__init__(self)
-        ResumableStepMixin.__init__(self)
+        _ResumableStep.__init__(self)
         IdentityHandlerMethodsMixin.__init__(self)
         self.all_checkpointers = all_checkpointers
 
@@ -674,7 +674,7 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         :return: data container checkpoint
         :rtype: neuraxle.data_container.DataContainer
         """
-        if not self.summary_checkpointer.checkpoint_exists(context.get_path(), data_container):
+        if not self.summary_checkpointer.checkpoint_exists(checkpoint_path=context.get_path(), data_container=data_container):
             return False
 
         current_ids = self.summary_checkpointer.read_summary(

@@ -28,12 +28,12 @@ from typing import Tuple
 
 import numpy as np
 
-from neuraxle.base import MetaStep, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, \
+from neuraxle.base import MetaStep, BaseStep, DataContainer, ExecutionContext, _ResumableStep, \
     ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, BaseTransformer, MetaStepMixin
 from neuraxle.data_container import ListDataContainer
 
 
-class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
+class ForEachDataInput(ForceHandleOnlyMixin, _ResumableStep, MetaStep):
     """
     Truncable step that fits/transforms each step for each of the data inputs, and expected outputs.
 
@@ -135,7 +135,7 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
         context: ExecutionContext = context.push(self)
 
-        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context):
+        if self.wrapped.should_resume(data_container, context):
             return True
         return False
 
@@ -261,7 +261,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         return len(self.steps_as_tuple)
 
 
-class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStep):
+class FlattenForEach(ForceHandleMixin, _ResumableStep, MetaStep):
     """
     Step that reduces a dimension instead of manually looping on it.
 
@@ -284,7 +284,7 @@ class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStep):
             then_unflatten: bool = True
     ):
         MetaStep.__init__(self, wrapped)
-        ResumableStepMixin.__init__(self)
+        _ResumableStep.__init__(self)
         ForceHandleMixin.__init__(self)
 
         self.then_unflatten = then_unflatten
@@ -381,6 +381,6 @@ class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStep):
     def should_resume(self, data_container: DataContainer, context: ExecutionContext):
         context = context.push(self)
 
-        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context):
+        if self.wrapped.should_resume(data_container, context):
             return True
         return False

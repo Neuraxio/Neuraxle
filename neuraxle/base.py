@@ -165,7 +165,7 @@ class BaseSaver(ABC):
 
         :param step: step to save
         :param context: execution context
-        :param summary_id: summary id to append to the saved step name
+        :param summary_id: summary id to save step for
         :return:
         """
         raise NotImplementedError()
@@ -177,7 +177,7 @@ class BaseSaver(ABC):
 
         :param step: step to load
         :param context: execution context to load from
-        :param summary_id: saved step summary id
+        :param summary_id: summary id to load step for
         :return:
         """
         raise NotImplementedError()
@@ -189,7 +189,7 @@ class BaseSaver(ABC):
 
         :param step: step to load
         :param context: execution context to load from
-        :param summary_id: saved step summary id
+        :param summary_id: summary id to load step for
         :return: loaded base step
         """
         raise NotImplementedError()
@@ -221,9 +221,11 @@ class JoblibStepSaver(BaseSaver):
         :param summary_id: summary id for saved step
         :return: if we can load the step with the given context
         """
-        return os.path.exists(
-            _create_step_path(context=context, step_name=step.name, summary_id=summary_id)
-        )
+        return os.path.exists(_create_step_path(
+            context=context,
+            step_name=step.name,
+            summary_id=summary_id
+        ))
 
     def save_step(self, step: 'BaseStep', context: 'ExecutionContext', summary_id=None) -> 'BaseTransformer':
         """
@@ -267,11 +269,14 @@ def _create_step_path(context, step_name, summary_id=None):
 
     :param context: execution context
     :param step_name: step to save, or load
+    :param summary_id: summary id to save step for
     :return: path
     """
+    summary_suffix = ''
     if summary_id is not None:
-        return os.path.join(context.get_path(), '{0}_{1}.joblib'.format(step_name, summary_id))
-    return os.path.join(context.get_path(), '{0}.joblib'.format(step_name))
+        summary_suffix = '_{}'.format(summary_id)
+
+    return os.path.join(context.get_path(), '{0}{1}.joblib'.format(step_name, summary_suffix))
 
 
 class ExecutionMode(Enum):
@@ -1810,7 +1815,39 @@ class _HasMutations(ABC):
         return self
 
 
+class _NonResumableStep:
+    """
+    Mixin to represent a step that is not resumable.
+
+    .. seealso::
+        :class:`_ResumableStep`,
+        :class:`BaseTransformer`
+    """
+
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
+        """
+        Return False because the step is not resumable.
+
+        :param data_container: data container to resume from
+        :param context: execution context to resume from
+        :return: if we can resume
+        """
+        return False
+
+    def resume(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Return the same data container because the step is not resumable.
+
+        :param data_container: data container to resume from
+        :param context: execution context to resume from
+        :return: non resumed data container
+        """
+        return data_container
+
+
+
 class BaseTransformer(
+    _NonResumableStep,
     _HasMutations,
     _HasHyperparamsSpace,
     _HasHyperparams,
@@ -2314,13 +2351,13 @@ class MetaStepMixin(_HasChildrenMixin):
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext):
         context = context.push(self)
-        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context):
+        if isinstance(self.wrapped, _ResumableStep) and self.wrapped.should_resume(data_container, context):
             return True
         return False
 
     def resume(self, data_container: DataContainer, context: ExecutionContext):
         context = context.push(self)
-        if not isinstance(self.wrapped, ResumableStepMixin):
+        if not isinstance(self.wrapped, _ResumableStep):
             raise Exception('cannot resume steps that don\' inherit from ResumableStepMixin')
 
         data_container = self.wrapped.resume(data_container, context)
@@ -2636,6 +2673,20 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         _HasChildrenMixin.__init__(self)
         BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         self.set_savers([TruncableJoblibStepSaver()] + self.savers)
+
+    def hash_data_container_before_index(self, data_container: DataContainer, index: int):
+        """
+        Hash data container with all steps that are before the given index.
+
+        :param data_container: data container to hash
+        :param index: index limit for hashing
+        :return: hashed data container
+        """
+        [
+            step_before.hash_data_container(data_container=data_container)
+            for _, step_before in self[:index]
+        ]
+        return data_container
 
     def are_steps_before_index_the_same(self, other: 'TruncableSteps', index: int) -> bool:
         """
@@ -3125,9 +3176,16 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         return self.__repr__()
 
 
-class ResumableStepMixin:
+class _ResumableStep:
     """
-    Mixin to add resumable function to a step, or a class that can be resumed, for example a checkpoint on disk.
+    Mixin to represent a step that is not resumable, for example a checkpoint on disk.
+
+    .. seealso::
+        :class:`_NonResumableStep`,
+        :class:`BaseTransformer`,
+        :class:`neuraxle.checkpoints.Checkpoint`,
+        :class:`neuraxle.pipeline.ResumablePipeline`,
+        :class:`neuraxle.pipeline.MetaStepMixin`
     """
 
     @abstractmethod
@@ -3145,9 +3203,6 @@ class ResumableStepMixin:
     @abstractmethod
     def resume(self, data_container: DataContainer, context: ExecutionContext):
         raise NotImplementedError()
-
-    def get_resumable_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        return data_container
 
     def __str__(self):
         return self.__repr__()

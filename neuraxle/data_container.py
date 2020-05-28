@@ -308,6 +308,9 @@ class DataContainer:
     def __len__(self):
         return len(self.data_inputs)
 
+    def __eq__(self, other: 'DataContainer'):
+        return self.summary_id == other.summary_id
+
 
 class ExpandedDataContainer(DataContainer):
     """

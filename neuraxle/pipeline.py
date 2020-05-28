@@ -29,9 +29,9 @@ from abc import ABC, abstractmethod
 from copy import copy
 from typing import Any, Tuple, List
 
-from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, ExecutionContext, ExecutionMode, \
+from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, _ResumableStep, ExecutionContext, ExecutionMode, \
     NonTransformableMixin, MetaStep, _FittableStep, HandleOnlyMixin, ForceHandleOnlyMixin, _CustomHandlerMethods, \
-    ForceHandleMixin, Identity
+    ForceHandleMixin, Identity, BaseTransformer
 from neuraxle.checkpoints import Checkpoint
 from neuraxle.data_container import DataContainer, ListDataContainer
 
@@ -218,7 +218,7 @@ class Pipeline(BasePipeline):
         shutil.rmtree(self.cache_folder)
 
 
-class ResumablePipeline(ResumableStepMixin, Pipeline):
+class ResumablePipeline(_ResumableStep, Pipeline):
     """
     Fits and transform steps after latest checkpoint
     """
@@ -253,12 +253,7 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         self._assign_loaded_pipeline_into_self(loaded_pipeline)
 
         step = self[new_starting_step_index]
-        if isinstance(step, ResumablePipeline):
-            starting_step_data_container = data_container
-            for step_name, step in self[:new_starting_step_index]:
-                starting_step_data_container = step.hash_data_container(starting_step_data_container)
-        elif hasattr(step, 'should_resume'):
-            starting_step_data_container = step.resume(starting_step_data_container, context)
+        starting_step_data_container = step.resume(data_container=starting_step_data_container, context=context)
 
         return self[new_starting_step_index:], starting_step_data_container
 
@@ -276,44 +271,47 @@ class ResumablePipeline(ResumableStepMixin, Pipeline):
         :return: index of the latest resumable step, data container at starting step
         """
         starting_step_data_container = copy(data_container)
-        starting_step_context = copy(context)
         current_data_container = copy(data_container)
         index_latest_checkpoint = 0
 
         for index, (step_name, step) in enumerate(self.items()):
-            if hasattr(step, 'should_resume'):
-                resumable_data_container = step.get_resumable_data_container(current_data_container.copy(), context)
-                if step.should_resume(resumable_data_container, starting_step_context):
-                    index_latest_checkpoint = index
-                    starting_step_data_container = resumable_data_container
+            resumable_data_container = self.resume(data_container=current_data_container.copy(), context=context)
+            if step.should_resume(data_container=resumable_data_container, context=context):
+                index_latest_checkpoint = index
+                starting_step_data_container = resumable_data_container
 
-            current_data_container = step.hash_data_container(current_data_container)
+            current_data_container = step.hash_data_container(data_container=current_data_container)
 
         return index_latest_checkpoint, starting_step_data_container
+
+    def resume(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Resume the data container prior to the last step before the parent steps.
+
+        :param data_container: data container hashed with steps prior to self
+        :param context: execution context
+        :return: data container hashed with all parent steps
+        """
+        for index, (step_name, step) in enumerate(reversed(self.items())):
+            resumable_data_container = self.hash_data_container_before_index(data_container=data_container.copy(), index=index)
+
+            if step.should_resume(resumable_data_container, context):
+                return resumable_data_container
+        return data_container
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
         """
         Return True if the pipeline has a saved checkpoint that it can resume from
-
         :param context: execution context
         :param data_container: the data container to resume
         :return: bool
         """
         context = context.push(self)
         for index, (step_name, step) in enumerate(reversed(self.items())):
-            if hasattr(step, 'should_resume') and step.should_resume(data_container, context):
+            if step.should_resume(data_container, context):
                 return True
 
         return False
-
-    def get_resumable_data_container(self, data_container: DataContainer, context: ExecutionContext):
-        resumable_context = context.push(self)
-        for index, (step_name, step) in enumerate(reversed(self.items())):
-            resumable_data_container = data_container.copy()
-            [step_before.hash_data_container(resumable_data_container) for _, step_before in self[:index]]
-            if hasattr(step, 'should_resume') and step.should_resume(resumable_data_container, resumable_context):
-                return resumable_data_container
-        return data_container
 
 
 class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipeline):
