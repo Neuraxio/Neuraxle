@@ -31,7 +31,7 @@ class SomeStep(ForceHandleMixin, Identity):
         service.service_method(data_container.data_inputs)
         return data_container
 
-def test_should_assert_services_before_processing():
+def test_add_service_assertions():
     with pytest.raises(Exception) as exception:
         Identity().add_service_assertions(BaseService)
 
