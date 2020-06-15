@@ -34,7 +34,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from enum import Enum
-from typing import List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Dict, Tuple
+from typing import List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Dict, Tuple, Type, Set
 
 from joblib import dump, load
 from sklearn.base import BaseEstimator
@@ -295,7 +295,8 @@ class ExecutionContext:
             root: str = DEFAULT_CACHE_FOLDER,
             execution_mode: ExecutionMode = None,
             stripped_saver: BaseSaver = None,
-            parents=None
+            parents: List['BaseStep'] = None,
+            services: Dict[Type, object] = None
     ):
         if execution_mode is None:
             execution_mode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM
@@ -309,6 +310,49 @@ class ExecutionContext:
         if parents is None:
             parents = []
         self.parents: List[BaseStep] = parents
+
+        if services is None:
+            services: Dict[Type, object] = dict()
+        self.services: Dict[Type, object] = services
+
+    def set_services(self, services: Dict[Type, object]) -> 'ExecutionContext':
+        """
+        Register abstract class type instances.
+
+        :param services:  instance
+        :return: self
+        """
+        self.services: Dict[Type, object] = services
+        return self
+
+    def register_service(self, service_abstract_class_type: Type, service_instance: object) -> 'ExecutionContext':
+        """
+        Register base class instance inside the services.
+
+        :param service_abstract_class_type: base type
+        :param service_instance:  instance
+        :return: self
+        """
+        self.services[service_abstract_class_type] = service_instance
+        return self
+
+    def get_service(self, service_abstract_class_type: Type) -> object:
+        """
+        Get the registered instance for the given abstract class type.
+
+        :param service_abstract_class_type: base type
+        :return: self
+        """
+        return self.services[service_abstract_class_type]
+
+    def has_service(self, service_abstract_class_type: Type) -> bool:
+        """
+        Return a bool indicating if the service has been registered.
+
+        :param service_abstract_class_type: base type
+        :return: if the service registered or not
+        """
+        return service_abstract_class_type in self.services
 
     def get_execution_mode(self) -> ExecutionMode:
         return self.execution_mode
@@ -382,10 +426,20 @@ class ExecutionContext:
         :param step: step to add to the execution context
         :return: self
         """
-        return ExecutionContext(root=self.root, execution_mode=self.execution_mode, parents=self.parents + [step])
+        return ExecutionContext(
+            root=self.root,
+            execution_mode=self.execution_mode,
+            parents=self.parents + [step],
+            services=self.services
+        )
 
     def copy(self):
-        return ExecutionContext(root=self.root, execution_mode=self.execution_mode, parents=copy(self.parents))
+        return ExecutionContext(
+            root=self.root,
+            execution_mode=self.execution_mode,
+            parents=copy(self.parents),
+            services=self.services
+        )
 
     def peek(self) -> 'BaseTransformer':
         """
@@ -1797,8 +1851,88 @@ class _HasMutations(ABC):
 
         return self
 
+class _HasDependencies:
+    """
+    An internal class to represent a step that has dependencies.
+    A step with dependencies can inject services in the execution context.
+    It can also assert that all of the necessary dependencies have already been injected in the execution context.
+    For example, you might want to have access to a repository inside a step.
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`ExecutionContext`,
+        :class:`BaseTransformer`
+    """
+    def __init__(self, services: Dict[Type, object] = None, services_assertions: List[Type] = None):
+        if services is None:
+            services: Dict[Type, object] = dict()
+
+        if services_assertions is None:
+            services_assertions: List[Type] = list()
+
+        self.services: Dict[Type, object] = services
+        self.service_assertions: List[Type] = services_assertions
+
+    def register_service(self, service_abstract_class_type: Type, service_instance: object) -> '_HasDependencies':
+        """
+        Register service to be injected before processing this step.
+
+        :param service_abstract_class_type: base type
+        :param service_instance:  instance
+        :return: self
+        """
+        self.services[service_abstract_class_type] = service_instance
+        return self
+
+    def set_services(self, services: Dict[Type, object]) -> '_HasDependencies':
+        """
+        Set all services to be injected before processing this step.
+        
+        :param services: dict of all the services to inject
+        :return: self
+        """
+        self.services: Dict[Type, object] = services
+        return self
+
+    def add_service_assertions(self, *service_assertions) -> '_HasDependencies':
+        """
+        Set all service assertions to be made before processing the step.
+
+        :param service_assertions: base types that need to be available in the execution context
+        :return: self
+        """
+        for dependency in service_assertions:
+            if dependency not in self.services:
+                execption_message = '{} dependency missing in the ExecutionContext. Please register the service {} inside the ExecutionContext.\n'
+                step_method_message = 'You can do so by calling register_service, or set_services on any step.\n'
+                execution_context_methods_messsage = 'There is also the option to register all services inside the ExecutionContext'
+                raise Exception((
+                        execption_message + step_method_message + execution_context_methods_messsage).format(
+                    dependency,
+                    dependency
+                ))
+        return self
+
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+        """
+        Inject services in the execution context.
+        Assert that all of the necessary dependencies are available in the execution context.
+
+        :param data_container: data container to process
+        :param context: execution context containing the services
+        :return: data container, execution context
+        """
+        for base_type, dependency in self.services.items():
+            context.register_service(base_type, dependency)
+
+        for dependency_assertion in self.service_assertions:
+            assert context.has_service(service_abstract_class_type=dependency_assertion)
+
+        return super()._will_process(data_container, context)
+
 
 class BaseTransformer(
+    _HasDependencies,
     _HasMutations,
     _HasHyperparamsSpace,
     _HasHyperparams,
@@ -1847,6 +1981,7 @@ class BaseTransformer(
         :class:`~neuraxle.base._HasSavers`,
         :class:`~neuraxle.base._HasMutations`,
         :class:`~neuraxle.base._HasRecursiveMethods`,
+        :class:`~neuraxle.base._HasDependencies`,
         :class:`~neuraxle.base.NonFittableMixin`,
         :class:`~neuraxle.base.NonTransformableMixin`
     """
@@ -1866,6 +2001,7 @@ class BaseTransformer(
         _HasSavers.__init__(self, savers=savers)
         _HasHashers.__init__(self, hashers=hashers)
         _HasMutations.__init__(self)
+        _HasDependencies.__init__(self)
 
         if name is None:
             name = self.__class__.__name__
