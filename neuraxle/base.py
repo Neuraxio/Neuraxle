@@ -34,7 +34,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from enum import Enum
-from typing import List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Dict, Tuple, Type, Set
+from typing import List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Dict, Tuple, Type
 
 from joblib import dump, load
 from sklearn.base import BaseEstimator
@@ -315,7 +315,7 @@ class ExecutionContext:
             services: Dict[Type, object] = dict()
         self.services: Dict[Type, object] = services
 
-    def set_services(self, services: Dict[Type, object]) -> 'ExecutionContext':
+    def set_service_locator(self, services: Dict[Type, object]) -> 'ExecutionContext':
         """
         Register abstract class type instances.
 
@@ -1854,16 +1854,27 @@ class _HasMutations(ABC):
 
 class _HasContext:
     """
-    An internal class to represent a step that has dependencies.
-    A step with dependencies can inject services in the execution context.
-    It can also assert that all of the necessary dependencies have already been injected in the execution context.
-    For example, you might want to have access to a repository inside a step.
+    An internal class to represent a step that has a context.
+    A step with a context forces the pipeline to use that context through handler methods.
+    This is useful for dependency injection because you can register services inside the :class:`ExecutionContext`.
+    This is also useful for setting the proper path in the :class:`ExecutionContext`.
+
+    .. code-block:: python
+
+        context = ExecutionContext(root=tmpdir)
+        context.set_service_locator(ServiceLocator().services) # where services is of type Dict[Type, object]
+
+        p = Pipeline([
+            SomeStep().with_assertion_has_services(BaseService)
+        ]).with_context(context)
+
 
     .. seealso::
         :class:`BaseStep`,
         :class:`ExecutionContext`,
         :class:`BaseTransformer`
     """
+
     def __init__(
             self,
             services_assertions: List[Type] = None,
@@ -1883,7 +1894,7 @@ class _HasContext:
 
         self.expected_root_path = assert_non_default_path
 
-    def with_context(self, context: ExecutionContext, with_root_path_assertion: bool=True) -> '_HasContext':
+    def with_context(self, context: ExecutionContext, with_root_path_assertion: bool = True) -> '_HasContext':
         """
         Set all service assertions to be made before processing the step.
 
@@ -1901,8 +1912,16 @@ class _HasContext:
         return self
 
     def _assert_context_is_only_set_in_root(self, context: ExecutionContext) -> 'RecursiveDict':
+        """
+        Assert that this is the only :class:`ExecutionContext` injected in the pipeline.
+
+        :param context: current execution context
+        :return: recursive dict
+        """
         if len(context) > 0 and self.context is not None:
-            raise AssertionError('step.with_context should only be called on root steps. Cannot force context in {}. Please call with_context on the root step.'.format(self.get_name()))
+            raise AssertionError(
+                'step.with_context should only be called on root steps. Cannot force context in {}. Please call with_context on the root step.'.format(
+                    self.get_name()))
 
         context.push(self)
         return RecursiveDict()
@@ -1925,8 +1944,9 @@ class _HasContext:
 
     def _set_expected_root_path(self, expected_root_path: str) -> RecursiveDict:
         """
-        Set all service assertions to be made before processing the step.
-        :return: self
+        Set the path to be expected in the root of the :class:`ExecutionContext`.
+
+        :return: recursive dict
         """
         self.expected_root_path: str = expected_root_path
         return RecursiveDict()
@@ -1944,6 +1964,7 @@ class _HasContext:
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
         """
         Assert that all of the necessary dependencies are available in the execution context.
+        Assert that the :class:`ExecutionContext` root path is as expected.
 
         :param data_container: data container to process
         :param context: execution context containing the services
@@ -1958,11 +1979,14 @@ class _HasContext:
         return super()._will_process(data_container, context)
 
     def _assert_expected_root_path(self, context):
-        if context.root != self.expected_root_path:
-            raise AssertionError(
-                'Invalid execution context path found in step {}. Please ensure the root path is not changed during the execution of the pipeline.'.format(
-                    self.get_name()))
+        """
+        Assert that the root path of the :class:`ExecutionContext` is as expected.
 
+        :param context: execution context
+        :return:
+        """
+        if context.root != self.expected_root_path:
+            raise AssertionError('Invalid execution context path found in step {}. Please ensure the root path is not changed during the execution of the pipeline.'.format(self.get_name()))
 
 
 class BaseTransformer(
@@ -2581,6 +2605,7 @@ class WithContext(MetaStepMixin, BaseStep):
         assert context.root != DEFAULT_CACHE_FOLDER
         return self
 
+
 class WithContextStepSaver(JoblibStepSaver):
     """
     Custom saver for step with dependencies.
@@ -2593,7 +2618,6 @@ class WithContextStepSaver(JoblibStepSaver):
     def load_step(self, step: 'MetaStep', context: ExecutionContext) -> _HasContext:
         step.context = None
         return step
-
 
 
 class MetaStepJoblibStepSaver(JoblibStepSaver):
@@ -3513,8 +3537,6 @@ class ForceHandleMixin:
         return context, data_container
 
 
-
-
 class ForceHandleOnlyMixin(ForceHandleMixin, HandleOnlyMixin):
     """
     A step that automatically calls handle methods in the transform, fit, and fit_transform methods.
@@ -3562,6 +3584,7 @@ class IdentityHandlerMethodsMixin(ForceHandleOnlyMixin):
         :class:`HandleOnlyMixin`,
         :class:`ForceHandleOnlyMixin`
     """
+
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
             ('BaseTransformer', DataContainer):
         return self
