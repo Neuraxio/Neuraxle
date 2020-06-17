@@ -58,8 +58,7 @@ def test_with_context_should_add_expected_root_path_and_assert_it_is_as_expected
         step = Pipeline([
             SomeStepThatChangesTheRootOfTheExecutionContext()
         ]).with_context(ExecutionContext(root=tmpdir))
-
-    step.transform(list(range(10)))
+        step.transform(list(range(10)))
 
 
 def test_with_context_should_inject_dependencies_properly(tmpdir):

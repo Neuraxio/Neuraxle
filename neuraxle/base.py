@@ -346,6 +346,14 @@ class ExecutionContext:
         """
         return self.services[service_abstract_class_type]
 
+    def get_services(self) -> object:
+        """
+        Get the registered instances in the services.
+
+        :return: self
+        """
+        return self.services
+
     def has_service(self, service_abstract_class_type: Type) -> bool:
         """
         Return a bool indicating if the service has been registered.
@@ -1887,6 +1895,12 @@ class _HasContext:
 
         self.service_assertions: List[Type] = services_assertions
         self.context = context
+
+        if not hasattr(self, 'savers'):
+            self.savers = [_WithContextStepSaver()]
+        else:
+            self.savers.append(_WithContextStepSaver())
+
         self.expected_root_path = assert_non_default_path
 
     def with_context(self, context: ExecutionContext, with_root_path_assertion: bool = True) -> '_HasContext':
@@ -1970,6 +1984,9 @@ class _HasContext:
 
         if self.expected_root_path:
             self._assert_expected_root_path(context)
+
+        if len(self.service_assertions) > 0:
+            self._assert_has_services(context)
 
         return super()._will_process(data_container, context)
 
@@ -2574,6 +2591,62 @@ class MetaStep(MetaStepMixin, BaseStep):
             hashers=hashers
         )
         MetaStepMixin.__init__(self, wrapped=wrapped)
+
+
+class _WithContextStepSaver(BaseSaver):
+    """
+    Custom saver for steps that have an :class:`ExecutionContext`.
+    Loading will inject the saved dependencies inside the :class`ExecutionContext`.
+
+    .. seealso::
+        :class:`_HasContext`,
+        :class:`BaseSaver`,
+        :class:`ExecutionContext`
+    """
+    def load_step(self, step: '_HasContext', context: ExecutionContext) -> _HasContext:
+        """
+        Load a step with a context by setting the right parents in the saved step context.
+
+        :param step: step with context
+        :param context: execution context to load from
+        :return: loaded step with context
+        """
+        if step.context is not None:
+            context.set_service_locator(step.context.get_services())
+            step_context: ExecutionContext = self._sanitize_context_for_step_with_context(context)
+            step.with_context(step_context)
+
+        return step
+
+    def _sanitize_context_for_step_with_context(self, context) -> ExecutionContext:
+        """
+        Remove step with context from parents because _HasContext._will_process happens before super._will_process.
+        This is needed because _HasContext needs to pass the right context to its base class.
+
+        :param context: step loading context
+        :return: step context
+        """
+        step_context: ExecutionContext = context.copy()
+        step_context.pop()
+
+        return step_context
+
+    def save_step(self, step: '_HasContext', context: ExecutionContext) -> _HasContext:
+        """
+        If needed, remove parents of a step with context before saving.
+
+        :param step: step with context
+        :param context: execution context to load from
+        :return: saved step with context
+        """
+        if step.context is not None:
+            step.context.parents = []
+
+        return step
+
+    def can_load(self, step: '_HasContext', context: 'ExecutionContext'):
+        return True
+
 
 
 class MetaStepJoblibStepSaver(JoblibStepSaver):
