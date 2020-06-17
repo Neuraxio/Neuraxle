@@ -148,6 +148,7 @@ class HashlibMd5Hasher(BaseHasher):
         return new_current_ids
 
 
+
 class BaseSaver(ABC):
     """
     Any saver must inherit from this one. Some savers just save parts of objects, some save it all or what remains.
@@ -1886,12 +1887,6 @@ class _HasContext:
 
         self.service_assertions: List[Type] = services_assertions
         self.context = context
-
-        if not hasattr(self, 'savers'):
-            self.savers = [WithContextStepSaver()]
-        else:
-            self.savers.append(WithContextStepSaver())
-
         self.expected_root_path = assert_non_default_path
 
     def with_context(self, context: ExecutionContext, with_root_path_assertion: bool = True) -> '_HasContext':
@@ -2579,45 +2574,6 @@ class MetaStep(MetaStepMixin, BaseStep):
             hashers=hashers
         )
         MetaStepMixin.__init__(self, wrapped=wrapped)
-
-
-class WithContext(MetaStepMixin, BaseStep):
-    def __init__(self, p: BaseStep, context: ExecutionContext):
-        BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, wrapped=p)
-        self.apply(
-            method='assert_has_services',
-            context=context
-        )
-
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
-        """
-        Inject services in the execution context.
-        Assert that all of the necessary dependencies are available in the execution context.
-
-        :param data_container: data container to process
-        :param context: execution context containing the services
-        :return: data container, execution context
-        """
-        return super()._will_process(data_container, context)
-
-    def with_root_path_assertion(self, context: ExecutionContext) -> 'WithContext':
-        assert context.root != DEFAULT_CACHE_FOLDER
-        return self
-
-
-class WithContextStepSaver(JoblibStepSaver):
-    """
-    Custom saver for step with dependencies.
-    """
-
-    def save_step(self, step: 'MetaStep', context: ExecutionContext) -> _HasContext:
-        del step.context
-        return step
-
-    def load_step(self, step: 'MetaStep', context: ExecutionContext) -> _HasContext:
-        step.context = None
-        return step
 
 
 class MetaStepJoblibStepSaver(JoblibStepSaver):

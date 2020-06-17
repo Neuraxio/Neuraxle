@@ -74,3 +74,17 @@ def test_with_context_should_inject_dependencies_properly(tmpdir):
     step.transform(data_inputs)
 
     assert service.data == data_inputs
+
+
+def test_step_with_context_should_be_saveable(tmpdir):
+    context = ExecutionContext(root=tmpdir)
+    service = SomeService()
+    context.set_service_locator({BaseService: service})
+    p = Pipeline([
+        SomeStep().with_assertion_has_services(BaseService)
+    ]).with_context(context)
+
+    p.save(context, full_dump=True)
+
+    p: Pipeline = p.load(context, full_dump=True)
+    assert isinstance(p, Pipeline)
