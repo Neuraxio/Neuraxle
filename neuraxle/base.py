@@ -1937,7 +1937,7 @@ class _HasContext:
 
     def _assert_has_services(self, context: ExecutionContext) -> RecursiveDict:
         """
-        Assert that all the necessary services all available in the execution context.
+        Assert that all the necessary services are provided in the execution context.
 
         :param context: execution context
         :return: self
