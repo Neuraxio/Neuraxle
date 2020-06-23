@@ -1982,11 +1982,8 @@ class _HasContext:
         if self.context is not None:
             context = self.context
 
-        if self.expected_root_path:
-            self._assert_expected_root_path(context)
-
-        if len(self.service_assertions) > 0:
-            self._assert_has_services(context)
+    if len(context) == 0: 
+        self.invariant()  # Call invariants recursively at the first and only first `_will_process` of the whole `p`.
 
         return super()._will_process(data_container, context)
 
