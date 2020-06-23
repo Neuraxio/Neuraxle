@@ -1929,7 +1929,7 @@ class _HasContext:
         """
         if len(context) > 0 and self.context is not None:
             raise AssertionError(
-                'step.with_context should only be called on root steps. Cannot force context in {}. Please call with_context on the root step.'.format(
+                'BaseStep.with_context should only be called on root steps. Cannot force context in {}. Please call with_context on the root step.'.format(
                     self.get_name()))
 
         context.push(self)
