@@ -1860,149 +1860,49 @@ class _HasMutations(ABC):
 
         return self
 
-
-class _HasContext:
+class _HasServiceAssertions:
     """
-    An internal class to represent a step that has a context.
-    A step with a context forces the pipeline to use that context through handler methods.
-    This is useful for dependency injection because you can register services inside the :class:`ExecutionContext`.
-    This is also useful for setting the proper path in the :class:`ExecutionContext`.
-
-    .. code-block:: python
-
-        context = ExecutionContext(root=tmpdir)
-        context.set_service_locator(ServiceLocator().services) # where services is of type Dict[Type, object]
-
-        p = Pipeline([
-            SomeStep().with_assertion_has_services(BaseService)
-        ]).with_context(context)
-
+    Step with has service assertions to ensure that the context has registered all the necessary services.
 
     .. seealso::
-        :class:`BaseStep`,
-        :class:`ExecutionContext`,
-        :class:`BaseTransformer`
+        :class:`~neuraxle.base.BaseTransformer`,
+        :class:`~neuraxle.base._TransformerStep`,
     """
+    def __init__(self, has_service_assertions: List[Type] = None):
+        if has_service_assertions is None:
+            has_service_assertions = []
 
-    def __init__(
-            self,
-            services_assertions: List[Type] = None,
-            context: ExecutionContext = None,
-            assert_non_default_path: bool = False
-    ):
-        if services_assertions is None:
-            services_assertions: List[Type] = list()
+        self.has_service_assertions: List[Type] = has_service_assertions
 
-        self.service_assertions: List[Type] = services_assertions
-        self.context = context
-
-        if not hasattr(self, 'savers'):
-            self.savers = [_WithContextStepSaver()]
-        else:
-            self.savers.append(_WithContextStepSaver())
-
-        self.expected_root_path = assert_non_default_path
-
-    def with_context(self, context: ExecutionContext, with_root_path_assertion: bool = True) -> '_HasContext':
+    def assert_has_services(self, *service_assertions) -> '_HasServiceAssertions':
         """
         Set all service assertions to be made before processing the step.
-
-        :param with_root_path_assertion:
-        :param context: base types that need to be available in the execution context
+        :param service_assertions: base types that need to be available in the execution context
         :return: self
         """
-        self.context: ExecutionContext = context
-        self.apply('_assert_context_is_only_set_in_root', context=context)
-        self.apply('_assert_has_services', context=context)
-
-        if with_root_path_assertion:
-            self.apply('_set_expected_root_path', expected_root_path=context.root)
-
+        self.has_service_assertions: List[Type] = service_assertions
         return self
-
-    def _assert_context_is_only_set_in_root(self, context: ExecutionContext) -> 'RecursiveDict':
-        """
-        Assert that this is the only :class:`ExecutionContext` injected in the pipeline.
-
-        :param context: current execution context
-        :return: recursive dict
-        """
-        if len(context) > 0 and self.context is not None:
-            raise AssertionError(
-                'step.with_context should only be called on root steps. Cannot force context in {}. Please call with_context on the root step.'.format(
-                    self.get_name()))
-
-        context.push(self)
-        return RecursiveDict()
 
     def _assert_has_services(self, context: ExecutionContext) -> RecursiveDict:
         """
-        Assert that all the necessary services all available in the execution context.
+        Assert that all the necessary services are provided in the execution context.
 
         :param context: execution context
         :return: self
         """
-        for dependency_assertion in self.service_assertions:
-            exception_message: str = '{} dependency missing in the ExecutionContext. Please register the service {} inside the ExecutionContext.\n'
-            step_method_message: str = 'You can do so by calling register_service, or set_services on any step.\n'
-            execution_context_methods_messsage: str = 'There is also the option to register all services inside the ExecutionContext'
-            if not context.has_service(service_abstract_class_type=dependency_assertion):
+        for has_service_assertion in self.has_service_assertions:
+            if not context.has_service(service_abstract_class_type=has_service_assertion):
+                exception_message: str = '{} dependency missing in the ExecutionContext. Please register the service {} inside the ExecutionContext.\n'
+                step_method_message: str = 'You can do so by calling register_service, or set_services on any step.\n'
+                execution_context_methods_messsage: str = 'There is also the option to register all services inside the ExecutionContext'
                 raise AssertionError(exception_message + step_method_message + execution_context_methods_messsage)
 
         return RecursiveDict()
 
-    def _set_expected_root_path(self, expected_root_path: str) -> RecursiveDict:
-        """
-        Set the path to be expected in the root of the :class:`ExecutionContext`.
-
-        :return: recursive dict
-        """
-        self.expected_root_path: str = expected_root_path
-        return RecursiveDict()
-
-    def with_assertion_has_services(self, *service_assertions) -> '_HasContext':
-        """
-        Set all service assertions to be made before processing the step.
-
-        :param service_assertions: base types that need to be available in the execution context
-        :return: self
-        """
-        self.service_assertions: List[Type] = service_assertions
-        return self
-
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
-        """
-        Assert that all of the necessary dependencies are available in the execution context.
-        Assert that the :class:`ExecutionContext` root path is as expected.
-
-        :param data_container: data container to process
-        :param context: execution context containing the services
-        :return: data container, execution context
-        """
-        if self.context is not None:
-            context = self.context
-
-        if self.expected_root_path:
-            self._assert_expected_root_path(context)
-
-        if len(self.service_assertions) > 0:
-            self._assert_has_services(context)
-
-        return super()._will_process(data_container, context)
-
-    def _assert_expected_root_path(self, context):
-        """
-        Assert that the root path of the :class:`ExecutionContext` is as expected.
-
-        :param context: execution context
-        :return:
-        """
-        if context.root != self.expected_root_path:
-            raise AssertionError('Invalid execution context path found in step {}. Please ensure the root path is not changed during the execution of the pipeline.'.format(self.get_name()))
 
 
 class BaseTransformer(
-    _HasContext,
+    _HasServiceAssertions,
     _HasMutations,
     _HasHyperparamsSpace,
     _HasHyperparams,
@@ -2071,7 +1971,7 @@ class BaseTransformer(
         _HasSavers.__init__(self, savers=savers)
         _HasHashers.__init__(self, hashers=hashers)
         _HasMutations.__init__(self)
-        _HasContext.__init__(self)
+        _HasServiceAssertions.__init__(self)
 
         if name is None:
             name = self.__class__.__name__
@@ -2592,60 +2492,149 @@ class MetaStep(MetaStepMixin, BaseStep):
         )
         MetaStepMixin.__init__(self, wrapped=wrapped)
 
-
-class _WithContextStepSaver(BaseSaver):
+class WithContext(MetaStep):
     """
-    Custom saver for steps that have an :class:`ExecutionContext`.
-    Loading will inject the saved dependencies inside the :class`ExecutionContext`.
+    An internal class to represent a step that has a context.
+    A step with a context forces the pipeline to use that context through handler methods.
+    This is useful for dependency injection because you can register services inside the :class:`ExecutionContext`.
+    This is also useful for setting the proper path in the :class:`ExecutionContext`.
+
+    .. code-block:: python
+
+        context = ExecutionContext(root=tmpdir)
+        context.set_service_locator(ServiceLocator().services) # where services is of type Dict[Type, object]
+
+        p = Pipeline([
+            SomeStep().with_assertion_has_services(BaseService)
+        ]).with_context(context)
+
 
     .. seealso::
-        :class:`_HasContext`,
-        :class:`BaseSaver`,
-        :class:`ExecutionContext`
+        :class:`BaseStep`,
+        :class:`ExecutionContext`,
+        :class:`BaseTransformer`
     """
-    def load_step(self, step: '_HasContext', context: ExecutionContext) -> _HasContext:
+
+    def __init__(
+            self,
+            wrapped: 'BaseStep',
+            context: ExecutionContext,
+            has_service_assertions: List[Type] = None,
+            assert_root_path_is: str = None
+    ):
+        if has_service_assertions is None:
+            has_service_assertions: List[Type] = list()
+
+        self.has_service_assertions: List[Type] = has_service_assertions
+        self.context: ExecutionContext = context
+
+        if assert_root_path_is is None:
+            assert_root_path_is: str = context.root
+
+        MetaStep.__init__(self, wrapped=wrapped)
+
+    def _initialize_context(self, context: ExecutionContext, assert_root_path_is: str = None) -> 'WithContext':
         """
-        Load a step with a context by setting the right parents in the saved step context.
+        Set all service assertions to be made before processing the step.
 
-        :param step: step with context
-        :param context: execution context to load from
-        :return: loaded step with context
+        :param assert_root_path_is:
+        :param context: base types that need to be available in the execution context
+        :return: self
         """
-        if step.context is not None:
-            context.set_service_locator(step.context.get_services())
-            step_context: ExecutionContext = self._sanitize_context_for_step_with_context(context)
-            step.with_context(step_context)
+        self.context: ExecutionContext = context
+        if self.assert_root_path_is is None:
+            self.assert_root_path_is: str = context.root
 
-        return step
+        self.apply('_assert_context_is_only_set_in_root', context=context)
+        self.apply('_assert_has_services', context=context)
 
-    def _sanitize_context_for_step_with_context(self, context) -> ExecutionContext:
+        if assert_root_path_is is not None:
+            self.apply('_set_expected_root_path', expected_root_path=assert_root_path_is)
+
+        return self
+
+    def _assert_context_is_only_set_in_root(self, context: ExecutionContext) -> 'RecursiveDict':
         """
-        Remove step with context from parents because _HasContext._will_process happens before super._will_process.
-        This is needed because _HasContext needs to pass the right context to its base class.
+        Assert that this is the only :class:`ExecutionContext` injected in the pipeline.
 
-        :param context: step loading context
-        :return: step context
+        :param context: current execution context
+        :return: recursive dict
         """
-        step_context: ExecutionContext = context.copy()
-        step_context.pop()
+        if len(context) > 0 and self.context is not None:
+            step_path = os.path.join(context.get_path(), self.get_name())
+            raise AssertionError(
+                'step.with_context should only be called on root steps. Cannot force context in {}. Please call with_context on the root step.'. \
+                    format(step_path)
+            )
 
-        return step_context
+        context.push(self)
+        return RecursiveDict()
 
-    def save_step(self, step: '_HasContext', context: ExecutionContext) -> _HasContext:
+    def _assert_has_services(self, context: ExecutionContext) -> RecursiveDict:
         """
-        If needed, remove parents of a step with context before saving.
+        Assert that all the necessary services all available in the execution context.
 
-        :param step: step with context
-        :param context: execution context to load from
-        :return: saved step with context
+        :param context: execution context
+        :return: self
         """
-        if step.context is not None:
-            step.context.parents = []
 
-        return step
+        for assert_has_service in self.has_service_assertions:
+            if not context.has_service(service_abstract_class_type=assert_has_service):
+                exception_message: str = '{} dependency missing in the ExecutionContext. Please register the service {} inside the ExecutionContext.\n'
+                step_method_message: str = 'You can do so by calling register_service, or set_services on any step.\n'
+                execution_context_methods_messsage: str = 'There is also the option to register all services inside the ExecutionContext'
+                raise AssertionError(exception_message + step_method_message + execution_context_methods_messsage)
 
-    def can_load(self, step: '_HasContext', context: 'ExecutionContext'):
-        return True
+        return RecursiveDict()
+
+    def _set_expected_root_path(self, expected_root_path: str) -> RecursiveDict:
+        """
+        Set the path to be expected in the root of the :class:`ExecutionContext`.
+
+        :return: recursive dict
+        """
+        self.expected_root_path: str = expected_root_path
+        return RecursiveDict()
+
+    def assert_has_services(self, *service_assertions) -> '_HasContext':
+        """
+        Set all service assertions to be made before processing the step.
+
+        :param service_assertions: base types that need to be available in the execution context
+        :return: self
+        """
+        self.has_service_assertions: List[Type] = service_assertions
+        return self
+
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+        """
+        Assert that all of the necessary dependencies are available in the execution context.
+        Assert that the :class:`ExecutionContext` root path is as expected.
+
+        :param data_container: data container to process
+        :param context: execution context containing the services
+        :return: data container, execution context
+        """
+        if self.context is not None:
+            context = self.context
+
+        if self.expected_root_path:
+            self._assert_expected_root_path(context)
+
+        if len(self.has_service_assertions) > 0:
+            self._assert_has_services(context)
+
+        return super()._will_process(data_container, context)
+
+    def _assert_expected_root_path(self, context):
+        """
+        Assert that the root path of the :class:`ExecutionContext` is as expected.
+
+        :param context: execution context
+        :return:
+        """
+        if context.root != self.expected_root_path:
+            raise AssertionError('Invalid execution context path found in step {}. Please ensure the root path is not changed during the execution of the pipeline.'.format(self.get_name()))
 
 
 
