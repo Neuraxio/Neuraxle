@@ -1900,7 +1900,6 @@ class _HasServiceAssertions:
         return RecursiveDict()
 
 
-
 class BaseTransformer(
     _HasServiceAssertions,
     _HasMutations,
