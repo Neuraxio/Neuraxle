@@ -1,9 +1,12 @@
 from abc import ABC, abstractmethod
 
+import pytest
+
 from neuraxle.base import Identity, ExecutionContext, ForceHandleMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.higher_order_steps import WithContext
 from neuraxle.pipeline import Pipeline
+import numpy as np
 
 
 class BaseService(ABC):
@@ -46,9 +49,9 @@ class SomeStep(ForceHandleMixin, Identity):
         service.service_method(data_container.data_inputs)
         return data_container
 
-def test_step_with_context_should_be_saveable(tmpdir):
-    context = ExecutionContext(root=tmpdir)
 
+def test_step_with_context_should_only_save_wrapaped_step(tmpdir):
+    context = ExecutionContext(root=tmpdir)
     service = SomeService()
     context.set_service_locator({BaseService: service})
     p = WithContext(Pipeline([
@@ -60,11 +63,30 @@ def test_step_with_context_should_be_saveable(tmpdir):
     p: Pipeline = ExecutionContext(root=tmpdir).load('Pipeline')
     assert isinstance(p, Pipeline)
 
+
 def test_with_context_should_inject_dependencies_properly(tmpdir):
-    pass
+    data_inputs = np.array([0, 1, 2, 3])
+    context = ExecutionContext(root=tmpdir)
+    service = SomeService()
+    context.set_service_locator({BaseService: service})
+    p = WithContext(Pipeline([
+        SomeStep().assert_has_services(BaseService)
+    ]), context=context)
 
-def test_add_service_assertions_should_fail_when_services_are_missing():
-    pass
+    p.transform(data_inputs=data_inputs)
 
-def test_with_context_should_add_expected_root_path_and_assert_it_is_as_expected(tmpdir):
-    pass
+    assert np.array_equal(service.data, data_inputs)
+
+
+def test_add_service_assertions_should_fail_when_services_are_missing(tmpdir):
+    with pytest.raises(AssertionError) as exception_info:
+        context = ExecutionContext(root=tmpdir)
+        p = WithContext(Pipeline([
+            SomeStep().assert_has_services(BaseService)
+        ]), context=context)
+        data_inputs = np.array([0, 1, 2, 3])
+
+        p.transform(data_inputs=data_inputs)
+
+    assert 'BaseService dependency missing' in exception_info.value.args[0]
+

@@ -1892,7 +1892,10 @@ class _HasServiceAssertions:
         """
         for has_service_assertion in self.has_service_assertions:
             if not context.has_service(service_abstract_class_type=has_service_assertion):
-                exception_message: str = '{} dependency missing in the ExecutionContext. Please register the service {} inside the ExecutionContext.\n'
+                exception_message: str = '{} dependency missing in the ExecutionContext. Please register the service {} inside the ExecutionContext.\n'.format(
+                    has_service_assertion.__name__,
+                    has_service_assertion.__name__
+                )
                 step_method_message: str = 'You can do so by calling register_service, or set_services on any step.\n'
                 execution_context_methods_messsage: str = 'There is also the option to register all services inside the ExecutionContext'
                 raise AssertionError(exception_message + step_method_message + execution_context_methods_messsage)

@@ -1,7 +1,7 @@
 """
 Neuraxle's Higher Order Steps
 ===============================================================================================================
-A higher-order step is just a function that takes an existing step and returns another step that wraps it.
+A higher-order step is a function that takes an existing step and returns another step that wraps it.
 An higher-order step is never be saved because it is note serializable.
 It is useful for applying side effects that are outside of the scope of the pipeline execution.
 
@@ -23,31 +23,38 @@ It is useful for applying side effects that are outside of the scope of the pipe
 """
 from abc import ABC
 
-from neuraxle.base import BaseTransformer, ExecutionContext, MetaStep
+from neuraxle.base import BaseTransformer, ExecutionContext, MetaStep, ForceHandleMixin
 from neuraxle.data_container import DataContainer
 
 
-class BaseHigherOrderStep(MetaStep, ABC):
+class BaseHigherOrderStep(ForceHandleMixin, MetaStep, ABC):
     """
     Base class to represent an higher order step.
     A higher-order step is just a function that takes an existing step and returns another step that wraps it.
 
-
     An higher order step:
         - cannot be saved
-        - cannot not modify the data container
+        - cannot modify the data container
         - cannot push himself in the execution context
 
     .. seealso::
         :class:`~neuraxle.base.MetaStep`
     """
     def __init__(self, step: BaseTransformer):
-        super().__init__(wrapped=step)
+        MetaStep.__init__(self, wrapped=step)
+        ForceHandleMixin.__init__(self)
 
     def save(self, context: ExecutionContext, full_dump=False):
+        """
+        Don't save the higher order step. Save the wrapped step only.
+
+        :param context: context to save.
+        :param full_dump: save full dump or not
+        :return: saved wrapped step
+        """
         if len(context) > 0 and isinstance(context.parents[-1], BaseHigherOrderStep):
             context.pop()
-        return self.wrapped.save(context, full_dump=False)
+        return self.wrapped.save(context, full_dump=full_dump)
 
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
         return data_container, context
@@ -55,8 +62,8 @@ class BaseHigherOrderStep(MetaStep, ABC):
     def _will_fit(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
         return data_container, context
 
-    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        return data_container
+    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+        return data_container, context
 
     def _will_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
         return data_container, context
@@ -94,20 +101,17 @@ def WithContext(step: BaseTransformer, context: ExecutionContext):
         :class:`BaseTransformer`
     """
     class StepWithContext(BaseHigherOrderStep):
+        def __init__(self, wrapped: BaseTransformer):
+            super().__init__(step=wrapped)
+            self.apply('_assert_has_services', context=context)
+
         def _will_process(self, data_container: DataContainer, _: ExecutionContext) -> (DataContainer, ExecutionContext):
             """
-            Assert that all of the necessary dependencies are available in the execution context.
+            Inject the given context before processing the wrapped step.
 
             :param data_container: data container to process
             :return: data container, execution context
             """
-            self.invariant()
             return data_container, context
 
-        def invariant(self):
-            self.apply("_invariant")
-
-        def _invariant(self):
-            self.apply('_assert_has_services', context=context)
-
-    return StepWithContext(step=step)
+    return StepWithContext(wrapped=step)
