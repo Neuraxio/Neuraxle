@@ -4,7 +4,6 @@ import pytest
 
 from neuraxle.base import Identity, ExecutionContext, ForceHandleMixin
 from neuraxle.data_container import DataContainer
-from neuraxle.higher_order_steps import WithContext
 from neuraxle.pipeline import Pipeline
 import numpy as np
 
@@ -50,13 +49,13 @@ class SomeStep(ForceHandleMixin, Identity):
         return data_container
 
 
-def test_step_with_context_should_only_save_wrapaped_step(tmpdir):
+def test_step_with_context_should_only_save_wrapped_step(tmpdir):
     context = ExecutionContext(root=tmpdir)
     service = SomeService()
     context.set_service_locator({BaseService: service})
-    p = WithContext(Pipeline([
+    p = Pipeline([
         SomeStep().assert_has_services(BaseService)
-    ]), context=context)
+    ]).with_context(context=context)
 
     p.save(context, full_dump=True)
 
@@ -69,9 +68,9 @@ def test_with_context_should_inject_dependencies_properly(tmpdir):
     context = ExecutionContext(root=tmpdir)
     service = SomeService()
     context.set_service_locator({BaseService: service})
-    p = WithContext(Pipeline([
+    p = Pipeline([
         SomeStep().assert_has_services(BaseService)
-    ]), context=context)
+    ]).with_context(context=context)
 
     p.transform(data_inputs=data_inputs)
 
@@ -81,9 +80,9 @@ def test_with_context_should_inject_dependencies_properly(tmpdir):
 def test_add_service_assertions_should_fail_when_services_are_missing(tmpdir):
     with pytest.raises(AssertionError) as exception_info:
         context = ExecutionContext(root=tmpdir)
-        p = WithContext(Pipeline([
+        p = Pipeline([
             SomeStep().assert_has_services(BaseService)
-        ]), context=context)
+        ]).with_context(context=context)
         data_inputs = np.array([0, 1, 2, 3])
 
         p.transform(data_inputs=data_inputs)

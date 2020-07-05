@@ -148,7 +148,6 @@ class HashlibMd5Hasher(BaseHasher):
         return new_current_ids
 
 
-
 class BaseSaver(ABC):
     """
     Any saver must inherit from this one. Some savers just save parts of objects, some save it all or what remains.
@@ -1860,21 +1859,105 @@ class _HasMutations(ABC):
 
         return self
 
-class _HasServiceAssertions:
+
+class _WithContextStepSaver(BaseSaver):
     """
-    Step with has service assertions to ensure that the context has registered all the necessary services.
+    Custom saver for steps that have an :class:`ExecutionContext`.
+    Loading will inject the saved dependencies inside the :class`ExecutionContext`.
+    .. seealso::
+        :class:`_HasContext`,
+        :class:`BaseSaver`,
+        :class:`ExecutionContext`
+    """
+
+    def load_step(self, step: 'StepWithContext', context: ExecutionContext) -> 'StepWithContext':
+        """
+        Load a step with a context by setting the context as the loading context.
+
+        :param step: step with context
+        :param context: execution context to load from
+        :return: loaded step with context
+        """
+        step.context = context
+        step.apply('_assert_has_services', context=context)
+        return step
+
+    def save_step(self, step: 'StepWithContext', context: ExecutionContext) -> 'StepWithContext':
+        """
+        If needed, remove parents of a step with context before saving.
+
+        :param step: step with context
+        :param context: execution context to load from
+        :return: saved step with context
+        """
+        del step.context
+        return step
+
+    def can_load(self, step: 'StepWithContext', context: 'ExecutionContext'):
+        return True
+
+
+class StepWithContext(ForceHandleMixin, MetaStepMixin):
+    def __init__(self, wrapped: 'BaseTransformer', context: ExecutionContext):
+        MetaStepMixin.__init__(self, wrapped=wrapped, savers=[_WithContextStepSaver()])
+        self.apply('_assert_has_services', context=context)
+        self.context = context
+        ForceHandleMixin.__init__(self)
+
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+        """
+        Inject the given context before processing the wrapped step.
+
+        :param data_container: data container to process
+        :return: data container, execution context
+        """
+        if len(context) > 0:
+            raise AssertionError('WithContext should be at the root of the pipeline.')
+
+        return data_container, self.context
+
+
+class _HasContext:
+    """
+    Step with "has service assertions" to ensure that the context has registered all the necessary services.
 
     .. seealso::
         :class:`~neuraxle.base.BaseTransformer`,
         :class:`~neuraxle.base._TransformerStep`,
     """
+
     def __init__(self, has_service_assertions: List[Type] = None):
         if has_service_assertions is None:
             has_service_assertions = []
 
         self.has_service_assertions: List[Type] = has_service_assertions
 
-    def assert_has_services(self, *service_assertions) -> '_HasServiceAssertions':
+    def with_context(self, context: ExecutionContext):
+        """
+        An higher order step to inject a context inside a step.
+        A step with a context forces the pipeline to use that context through handler methods.
+        This is useful for dependency injection because you can register services inside the :class:`ExecutionContext`.
+        It also ensures that the context has registered all the necessary services.
+
+        .. code-block:: python
+
+            context = ExecutionContext(root=tmpdir)
+            context.set_service_locator(ServiceLocator().services) # where services is of type Dict[Type, object]
+
+            p = WithContext(Pipeline([
+                SomeStep().with_assertion_has_services(BaseService)
+            ]), context)
+
+
+        .. seealso::
+            :class:`BaseStep`,
+            :class:`ExecutionContext`,
+            :class:`BaseTransformer`
+        """
+
+        return StepWithContext(wrapped=self, context=context)
+
+    def assert_has_services(self, *service_assertions) -> '_HasContext':
         """
         Set all service assertions to be made before processing the step.
         :param service_assertions: base types that need to be available in the execution context
@@ -1904,7 +1987,7 @@ class _HasServiceAssertions:
 
 
 class BaseTransformer(
-    _HasServiceAssertions,
+    _HasContext,
     _HasMutations,
     _HasHyperparamsSpace,
     _HasHyperparams,
@@ -1973,7 +2056,7 @@ class BaseTransformer(
         _HasSavers.__init__(self, savers=savers)
         _HasHashers.__init__(self, hashers=hashers)
         _HasMutations.__init__(self)
-        _HasServiceAssertions.__init__(self)
+        _HasContext.__init__(self)
 
         if name is None:
             name = self.__class__.__name__
@@ -2302,19 +2385,22 @@ class MetaStepMixin(_HasChildrenMixin):
         :class:`~neuraxle.steps.loop.StepClonerForEachDataInput`
     """
 
-    def __init__(self, wrapped: BaseTransformer = None):
-        self.wrapped: BaseTransformer = _sklearn_to_neuraxle_step(wrapped)
-        self._ensure_proper_mixin_init_order()
+    def __init__(self, wrapped: BaseTransformer = None, savers: List[BaseSaver] = None):
+        if savers is None:
+            savers = []
 
-    def _ensure_proper_mixin_init_order(self):
+        self.wrapped: BaseTransformer = _sklearn_to_neuraxle_step(wrapped)
+        self._ensure_proper_mixin_init_order(savers)
+
+    def _ensure_proper_mixin_init_order(self, savers: List[BaseSaver]):
         if not hasattr(self, 'savers'):
             warnings.warn(
                 'Please initialize Mixins in the good order. MetaStepMixin should be initialized after '
                 'BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers. Saving might fail.'.format(
                     self.wrapped.name))
-            self.savers = [MetaStepJoblibStepSaver()]
+            self.savers = savers.append(MetaStepJoblibStepSaver())
         else:
-            self.savers.append(MetaStepJoblibStepSaver())
+            self.savers.extend(savers.append(MetaStepJoblibStepSaver()))
 
     def set_step(self, step: BaseTransformer) -> BaseStep:
         """
