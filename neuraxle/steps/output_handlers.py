@@ -57,7 +57,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
             ),
             context
         )
-        data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
+        self._set_expected_outputs(data_container, new_expected_outputs_data_container)
 
         return data_container
 
@@ -103,7 +103,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
             ),
             context
         )
-        data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
+        self._set_expected_outputs(data_container, new_expected_outputs_data_container)
 
         return self, data_container
 
@@ -126,10 +126,16 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
             context.push(self.wrapped)
         )
 
-        data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
+        self._set_expected_outputs(data_container, new_expected_outputs_data_container)
 
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+        return data_container
+
+    def _set_expected_outputs(self, data_container, new_expected_outputs_data_container) -> DataContainer:
+        if len(data_container.data_inputs) != len(data_container.expected_outputs):
+            raise AssertionError('OutputTransformerWrapper: Found different len for data inputs, and expected outputs. Please return the same the same amount of data inputs, and expected outputs.')
+
+        data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
+        data_container.set_current_ids(new_expected_outputs_data_container.current_ids)
 
         return data_container
 
@@ -272,8 +278,7 @@ class InputAndOutputTransformerMixin:
         di_eo = (data_container.data_inputs, data_container.expected_outputs)
         new_data_inputs, new_expected_outputs = self.transform(di_eo)
 
-        data_container.set_data_inputs(new_data_inputs)
-        data_container.set_expected_outputs(new_expected_outputs)
+        self._set_data_inputs_and_expected_outputs(data_container, new_data_inputs, new_expected_outputs)
 
         return data_container
 
@@ -298,10 +303,19 @@ class InputAndOutputTransformerMixin:
         :param data_container:
         :return:
         """
-        new_self, (new_data_inputs, new_expected_outputs) = \
-            self.fit_transform((data_container.data_inputs, data_container.expected_outputs), None)
+        new_self, (new_data_inputs, new_expected_outputs) = self.fit_transform((data_container.data_inputs, data_container.expected_outputs), None)
 
+        self._set_data_inputs_and_expected_outputs(data_container, new_data_inputs, new_expected_outputs)
+
+        return new_self, data_container
+
+    def _set_data_inputs_and_expected_outputs(self, data_container, new_data_inputs, new_expected_outputs):
         data_container.set_data_inputs(new_data_inputs)
         data_container.set_expected_outputs(new_expected_outputs)
 
-        return new_self, data_container
+        if len(new_data_inputs) != len(new_expected_outputs):
+            raise AssertionError('InputAndOutputTransformerMixin: Found different len for data inputs, and expected outputs. Please return the same the same amount of data inputs, and expected outputs.')
+
+        if len(data_container.current_ids) != len(new_data_inputs):
+            raise AssertionError('InputAndOutputTransformerMixin: Caching broken because there is a different len of current ids, and data inputs. Please use InputAndOutputTransformerWrapper if you plan to change the len of the data inputs.')
+
