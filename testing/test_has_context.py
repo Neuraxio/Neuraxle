@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 
 import pytest
@@ -59,7 +60,7 @@ def test_step_with_context_should_only_save_wrapped_step(tmpdir):
 
     p.save(context, full_dump=True)
 
-    p: Pipeline = ExecutionContext(root=tmpdir).load('Pipeline')
+    p: Pipeline = ExecutionContext(root=tmpdir).load(os.path.join('StepWithContext', 'Pipeline'))
     assert isinstance(p, Pipeline)
 
 
