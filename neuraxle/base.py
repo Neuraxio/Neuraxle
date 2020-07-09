@@ -148,6 +148,43 @@ class HashlibMd5Hasher(BaseHasher):
         return new_current_ids
 
 
+class HashlibMd5ValueHasher(HashlibMd5Hasher):
+    def hash(self, current_ids, hyperparameters, data_inputs: Any = None) -> List[str]:
+        """
+        Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together
+        using  `hashlib.md5 <https://docs.python.org/3/library/hashlib.html>`_
+
+        :param current_ids: current hashed ids (can be None if this function has not been called yet)
+        :param hyperparameters: step hyperparameters to hash with current ids
+        :param data_inputs: data inputs to hash current ids for
+        :return: the new hashed current ids
+        """
+        if len(current_ids) != len(data_inputs):
+            current_ids: List[str] = [str(i) for i in range(len(data_inputs))]
+
+        if current_ids is None:
+            if isinstance(data_inputs, Iterable):
+                current_ids = [str(i) for i in range(len(data_inputs))]
+            else:
+                current_ids = [str(0)]
+
+        if len(hyperparameters) == 0:
+            return current_ids
+
+        hyperperams_dict = hyperparameters.to_flat_as_dict_primitive()
+        current_hyperparameters_hash = hashlib.md5(str.encode(str(hyperperams_dict))).hexdigest()
+
+        new_current_ids = []
+        for current_id, di in zip(current_ids, data_inputs):
+            m = hashlib.md5()
+            m.update(str.encode(current_id))
+            m.update(str.encode(str(di)))
+            m.update(str.encode(current_hyperparameters_hash))
+            new_current_ids.append(m.hexdigest())
+
+        return new_current_ids
+
+
 class BaseSaver(ABC):
     """
     Any saver must inherit from this one. Some savers just save parts of objects, some save it all or what remains.
