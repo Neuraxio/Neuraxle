@@ -1901,9 +1901,38 @@ class _HasMutations(ABC):
 
 
 
-class _HasContext:
+class _CouldHaveContext:
     """
-    Step with "has service assertions" to ensure that the context has registered all the necessary services.
+    Step that can have a context.
+    It has "has service assertions" to ensure that the context has registered all the necessary services.
+
+    A context can be injected with the with_context method:
+
+    .. code-block:: python
+
+        context = ExecutionContext(root=tmpdir)
+        service = SomeService()
+        context.set_service_locator({BaseService: service})
+
+        p = Pipeline([
+            SomeStep().assert_has_services(BaseService)
+        ]).with_context(context=context)
+
+
+    Context services can be used inside any step with handler methods:
+
+    .. code-block:: python
+
+        class SomeStep(ForceHandleMixin, Identity):
+            def __init__(self):
+                Identity.__init__(self)
+                ForceHandleMixin.__init__(self)
+
+            def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+                service: BaseService = context.get_service(BaseService)
+                service.service_method(data_container.data_inputs)
+                return data_container
+
 
     .. seealso::
         :class:`~neuraxle.base.BaseTransformer`,
@@ -1940,7 +1969,7 @@ class _HasContext:
         """
         return StepWithContext(wrapped=self, context=context)
 
-    def assert_has_services(self, *service_assertions) -> '_HasContext':
+    def assert_has_services(self, *service_assertions) -> '_CouldHaveContext':
         """
         Set all service assertions to be made before processing the step.
         :param service_assertions: base types that need to be available in the execution context
@@ -1970,7 +1999,7 @@ class _HasContext:
 
 
 class BaseTransformer(
-    _HasContext,
+    _CouldHaveContext,
     _HasMutations,
     _HasHyperparamsSpace,
     _HasHyperparams,
@@ -2039,7 +2068,7 @@ class BaseTransformer(
         _HasSavers.__init__(self, savers=savers)
         _HasHashers.__init__(self, hashers=hashers)
         _HasMutations.__init__(self)
-        _HasContext.__init__(self)
+        _CouldHaveContext.__init__(self)
 
         if name is None:
             name = self.__class__.__name__
