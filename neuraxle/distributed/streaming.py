@@ -51,13 +51,13 @@ class ObservableQueueMixin:
     def __init__(self, queue):
         self.queue = queue
         self.observers = []
-        self._ensure_proper_mixin_init_order()
+        self._add_observable_queue_step_saver()
 
     def teardown(self):
         self.queue = None
         return self
 
-    def _ensure_proper_mixin_init_order(self):
+    def _add_observable_queue_step_saver(self):
         if not hasattr(self, 'savers'):
             warnings.warn(
                 'Please initialize Mixins in the good order. ObservableQueueMixin should be initialized after '
