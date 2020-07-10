@@ -3663,10 +3663,9 @@ class _WithContextStepSaver(BaseSaver):
     def can_load(self, step: 'StepWithContext', context: 'ExecutionContext'):
         return True
 
-class StepWithContext(ForceHandleMixin, MetaStepMixin, BaseTransformer):
+class StepWithContext(ForceHandleMixin, MetaStep):
     def __init__(self, wrapped: 'BaseTransformer', context: ExecutionContext):
-        BaseTransformer.__init__(self, savers=[_WithContextStepSaver()])
-        MetaStepMixin.__init__(self, wrapped=wrapped)
+        MetaStep.__init__(self, wrapped=wrapped, savers=[_WithContextStepSaver()])
         self.apply('_assert_has_services', context=context)
         self.context = context
         ForceHandleMixin.__init__(self)
