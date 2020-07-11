@@ -36,26 +36,22 @@ BaseStep class.
 """
 import numpy as np
 
-from neuraxle.base import NonTransformableMixin, NonFittableMixin, Identity, BaseStep
+from neuraxle.base import NonTransformableMixin, Identity, BaseStep, NonFittableMixin
 from neuraxle.pipeline import Pipeline
 
 
 class NonFittableStep(NonFittableMixin, BaseStep):
     """
     Fit method is automatically implemented as changing nothing.
-    Please make your steps inherit from NonFittableMixin, when they don't need any transformations.
+    Please make your steps inherit from NonFittableMixin, when they don't need any fitting.
     Also, make sure that BaseStep is the last step you inherit from.
+    Note that we could also define the inverse_transform method in the present object.
     """
 
     def transform(self, data_inputs):
         # insert your transform code here
         print("NonFittableStep: I transformed.")
-        return self, data_inputs
-
-    def inverse_transform(self, processed_outputs):
-        # insert your inverse transform code here
-        print("NonFittableStep: I inverse transformed.")
-        return processed_outputs
+        return data_inputs
 
 
 class NonTransformableStep(NonTransformableMixin, BaseStep):
@@ -78,9 +74,18 @@ def main():
         Identity()  # Note: Identity does nothing: it inherits from both NonFittableMixin and NonTransformableMixin.
     ])
 
-    p = p.fit(np.array([0, 1]), np.array([0, 1]))
+    some_data = np.array([0, 1])
+    p = p.fit(some_data)
+    # Out:
+    #     NonFittableStep: I transformed.
+    #     NonTransformableStep: I fitted.
 
-    out = p.transform(np.array([0, 1]))
+    out = p.transform(some_data)
+    # Out:
+    #     NonFittableStep: I transformed.
+
+    assert np.array_equal(out, some_data)
+    # Data is unchanged as we've done nothing in the only transform.
 
 
 if __name__ == "__main__":

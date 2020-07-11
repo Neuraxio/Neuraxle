@@ -28,11 +28,11 @@ from abc import ABC, abstractmethod
 import numpy as np
 from flask import Response
 
-from neuraxle.base import BaseStep, NonFittableMixin
+from neuraxle.base import BaseStep
 from neuraxle.pipeline import Pipeline
 
 
-class JSONDataBodyDecoder(NonFittableMixin, BaseStep, ABC):
+class JSONDataBodyDecoder(BaseStep, ABC):
     """
     Class to be used within a FlaskRESTApiWrapper to convert input json to actual data (e.g.: arrays)
     """
@@ -51,7 +51,7 @@ class JSONDataBodyDecoder(NonFittableMixin, BaseStep, ABC):
         raise NotImplementedError("TODO: inherit from the `JSONDataBodyDecoder` class and implement this method.")
 
 
-class JSONDataResponseEncoder(NonFittableMixin, BaseStep, ABC):
+class JSONDataResponseEncoder(BaseStep, ABC):
     """
     Base class to be used within a FlaskRESTApiWrapper to convert prediction output to json response.
     """

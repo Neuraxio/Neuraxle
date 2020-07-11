@@ -4,7 +4,7 @@ import numpy as np
 from joblib import dump
 from py._path.local import LocalPath
 
-from neuraxle.base import BaseStep, TruncableJoblibStepSaver, NonFittableMixin
+from neuraxle.base import BaseStep, TruncableJoblibStepSaver
 from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import ResumablePipeline
@@ -178,7 +178,7 @@ def test_resumable_pipeline_fit_should_load_all_pipeline_steps(tmpdir: LocalPath
     assert p[PIPELINE_2][SOME_STEP_3].hyperparams['multiply_by'] == 6
 
 
-def given_saved_pipeline(tmpdir):
+def given_saved_pipeline(tmpdir: LocalPath):
     step_savers = [(SOME_STEP_1, []), (PIPELINE_2, [TruncableJoblibStepSaver()])]
     path = create_root_path(tmpdir, True)
     root = ResumablePipeline([], cache_folder=tmpdir)

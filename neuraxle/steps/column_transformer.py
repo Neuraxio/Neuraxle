@@ -28,16 +28,16 @@ from typing import List, Tuple, Union
 
 import numpy as np
 
-from neuraxle.base import BaseStep, NonFittableMixin, MetaStepMixin
+from neuraxle.base import BaseStep, MetaStep, BaseTransformer
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEachDataInput
 from neuraxle.union import FeatureUnion
 
-ColumnSelectionType = Union[Tuple[int, BaseStep], Tuple[List[int], BaseStep], Tuple[slice, BaseStep]]
+ColumnSelectionType = Union[Tuple[int, BaseTransformer], Tuple[List[int], BaseTransformer], Tuple[slice, BaseTransformer]]
 ColumnChooserTupleList = List[ColumnSelectionType]
 
 
-class ColumnSelector2D(NonFittableMixin, BaseStep):
+class ColumnSelector2D(BaseTransformer):
     """
     A ColumnSelector2D selects column in a sequence.
     """
@@ -77,20 +77,19 @@ class ColumnSelector2D(NonFittableMixin, BaseStep):
             ))
 
 
-class ColumnsSelectorND(MetaStepMixin, BaseStep):
+class ColumnsSelectorND(MetaStep):
     """
     ColumnSelectorND wraps a ColumnSelector2D by as many ForEachDataInput step
     as needed to select the last dimension.
     """
 
     def __init__(self, columns_selection, n_dimension=3):
-        BaseStep.__init__(self)
 
-        col_selector = ColumnSelector2D(columns_selection=columns_selection)
+        col_selector: ColumnSelector2D = ColumnSelector2D(columns_selection=columns_selection)
         for _ in range(min(0, n_dimension - 2)):
             col_selector = ForEachDataInput(col_selector)
 
-        MetaStepMixin.__init__(self, col_selector)
+        MetaStep.__init__(self, col_selector)
         self.n_dimension = n_dimension
 
 
@@ -115,7 +114,7 @@ class ColumnTransformer(FeatureUnion):
         ])
 
     .. seealso::
-        :class:`FeatureUnion`,
+        :class:`~neuraxle.union.FeatureUnion`,
     """
 
     def __init__(self, column_chooser_steps_as_tuple: ColumnChooserTupleList, n_dimension: int = 3):
@@ -125,7 +124,7 @@ class ColumnTransformer(FeatureUnion):
             for name, step in column_chooser_steps_as_tuple
         ]
 
-        FeatureUnion.__init__(self, [
+        super().__init__([
             (string_indices, Pipeline([
                 ColumnsSelectorND(indices, n_dimension=n_dimension),
                 step

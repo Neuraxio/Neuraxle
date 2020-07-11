@@ -1,4 +1,4 @@
-from neuraxle.base import BaseStep, TruncableSteps, NonFittableMixin, MetaStepMixin
+from neuraxle.base import BaseStep, TruncableSteps, MetaStep, BaseTransformer
 from neuraxle.hyperparams.distributions import LogUniform, Quantized, RandInt, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 
@@ -30,10 +30,9 @@ AN_INPUT = "I am an input"
 AN_EXPECTED_OUTPUT = "I am an expected output"
 
 
-class SomeStep(NonFittableMixin, BaseStep):
+class SomeStep(BaseTransformer):
     def __init__(self, hyperparams_space: HyperparameterSpace = None, output=AN_EXPECTED_OUTPUT):
-        BaseStep.__init__(self, hyperparams=None, hyperparams_space=hyperparams_space)
-        NonFittableMixin.__init__(self)
+        super().__init__(hyperparams=None, hyperparams_space=hyperparams_space)
         self.output = output
 
     def transform(self, data_inputs):
@@ -42,11 +41,11 @@ class SomeStep(NonFittableMixin, BaseStep):
 
 class SomeStepWithHyperparams(BaseStep):
     def __init__(self):
-        BaseStep.__init__(self,
-                          hyperparams=HYPERPARAMETERS,
-                          hyperparams_space=HYPERPARAMETERS_SPACE,
-                          name="MockStep"
-                          )
+        super().__init__(
+            hyperparams=HYPERPARAMETERS,
+            hyperparams_space=HYPERPARAMETERS_SPACE,
+            name="MockStep"
+        )
 
     def transform(self, data_inputs):
         pass
@@ -55,10 +54,9 @@ class SomeStepWithHyperparams(BaseStep):
         pass
 
 
-class SomeMetaStepWithHyperparams(MetaStepMixin):
+class SomeMetaStepWithHyperparams(MetaStep):
     def __init__(self):
-        BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, SomeStepWithHyperparams())
+        MetaStep.__init__(self, wrapped=SomeStepWithHyperparams())
 
     def transform(self, data_inputs):
         pass
@@ -82,12 +80,6 @@ class SomeTruncableStep(TruncableSteps):
         pass
 
 
-class SomeSplitStep(NonFittableMixin, BaseStep):
-    def fit(self, data_inputs, expected_outputs=None) -> 'NonFittableMixin':
-        pass
-
-    def fit_transform(self, data_inputs, expected_outputs=None):
-        pass
-
+class SomeSplitStep(BaseStep):
     def transform(self, data_inputs):
         pass

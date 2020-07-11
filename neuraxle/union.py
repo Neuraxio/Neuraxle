@@ -27,17 +27,38 @@ This module contains steps to perform various feature unions and model stacking,
 from joblib import Parallel, delayed
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, Identity, ExecutionContext, DataContainer, \
-    NonFittableMixin, ForceHandleOnlyMixin
+    ForceHandleOnlyMixin, BaseTransformer
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
 class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
-    """Parallelize the union of many pipeline steps."""
+    """
+    Parallelize the union of many pipeline steps.
+
+
+    .. code-block:: python
+
+        p = Pipeline([
+            FeatureUnion([
+                Mean(),
+                Std(),
+            ], joiner=NumpyConcatenateInnerFeatures())
+        ])
+
+        data_inputs = np.random.randint((1, 20))
+
+    .. seealso::
+        :class:`ModelStacking`,
+        :class:`AddFeatures`,
+        :class:`~neuraxle.base.ForceHandleOnlyMixin`,
+        :class:`~neuraxle.base.TruncableSteps`,
+        :class:`~neuraxle.base.BaseStep`
+    """
 
     def __init__(
             self,
             steps_as_tuple: NamedTupleList,
-            joiner: NonFittableMixin = NumpyConcatenateInnerFeatures(),
+            joiner: BaseTransformer = None,
             n_jobs: int = None,
             backend: str = "threading",
             cache_folder_when_no_handle: str = None
@@ -45,15 +66,17 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
         """
         Create a feature union.
         :param steps_as_tuple: the NamedTupleList of steps to process in parallel and to join.
-        :param joiner: What will be used to join the features. For example, ``NumpyConcatenateInnerFeatures()``.
+        :param joiner: What will be used to join the features. ``NumpyConcatenateInnerFeatures()`` is used by default.
         :param n_jobs: The number of jobs for the parallelized ``joblib.Parallel`` loop in fit and in transform.
         :param backend: The type of parallelization to do with ``joblib.Parallel``. Possible values: "loky", "multiprocessing", "threading", "dask" if you use dask, and more.
         """
+        if joiner is None:
+            joiner = NumpyConcatenateInnerFeatures()
         steps_as_tuple.append(('joiner', joiner))
         TruncableSteps.__init__(self, steps_as_tuple)
+        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
         self.n_jobs = n_jobs
         self.backend = backend
-        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
 
     def _fit_data_container(self, data_container, context):
         """
@@ -132,7 +155,26 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
 
 
 class AddFeatures(FeatureUnion):
-    """Parallelize the union of many pipeline steps AND concatenate the new features to the received inputs using Identity."""
+    """
+    Parallelize the union of many pipeline steps AND concatenate the new features to the received inputs using Identity.
+
+    .. code-block:: python
+
+        pipeline = Pipeline([
+            AddFeatures([
+                PCA(n_components=2),
+                FastICA(n_components=2),
+            ])
+        ])
+
+
+    .. seealso::
+        :class:`FeatureUnion`,
+        :class:`ModelStacking`,
+        :class:`~neuraxle.base.ForceHandleOnlyMixin`,
+        :class:`~neuraxle.base.TruncableSteps`,
+        :class:`~neuraxle.base.BaseStep`
+    """
 
     def __init__(self, steps_as_tuple: NamedTupleList, **kwargs):
         """
@@ -141,11 +183,51 @@ class AddFeatures(FeatureUnion):
         :param steps_as_tuple: The steps to be sent to the ``FeatureUnion``. ``Identity()`` is prepended.
         :param kwargs: Other arguments to send to ``FeatureUnion``.
         """
-        FeatureUnion.__init__(self, [Identity()] + steps_as_tuple, **kwargs)
+        super().__init__(steps_as_tuple=[Identity()] + steps_as_tuple, **kwargs)
 
 
 class ModelStacking(FeatureUnion):
-    """Performs a ``FeatureUnion`` of steps, and then send the joined result to the above judge step."""
+    """
+    Performs a ``FeatureUnion`` of steps, and then send the joined result to the above judge step.
+
+    Usage example:
+
+    .. code-block:: python
+
+        model_stacking = Pipeline([
+            ModelStacking([
+                SKLearnWrapper(
+                    GradientBoostingRegressor(),
+                    HyperparameterSpace({
+                        "n_estimators": RandInt(50, 600), "max_depth": RandInt(1, 10),
+                        "learning_rate": LogUniform(0.07, 0.7)
+                    })
+                ),
+                SKLearnWrapper(
+                    KMeans(),
+                    HyperparameterSpace({
+                        "n_clusters": RandInt(5, 10)
+                    })
+                ),
+            ],
+                joiner=NumpyTranspose(),
+                judge=SKLearnWrapper(
+                    Ridge(),
+                    HyperparameterSpace({
+                        "alpha": LogUniform(0.7, 1.4),
+                        "fit_intercept": Boolean()
+                    })
+                ),
+            )
+        ])
+
+    .. seealso::
+        :class:`FeatureUnion`,
+        :class:`AddFeatures`,
+        :class:`~neuraxle.base.ForceHandleOnlyMixin`,
+        :class:`~neuraxle.base.TruncableSteps`,
+        :class:`~neuraxle.base.BaseStep`
+    """
 
     def __init__(
             self,
@@ -160,7 +242,7 @@ class ModelStacking(FeatureUnion):
         :param judge: a BaseStep that will learn to judge the best answer and who to trust out of every parallel steps.
         :param kwargs: Other arguments to send to ``FeatureUnion``.
         """
-        FeatureUnion.__init__(self, steps_as_tuple, **kwargs)
+        super().__init__(steps_as_tuple=steps_as_tuple, **kwargs)
         self.judge: BaseStep = judge  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
 
     def _did_fit_transform(self, data_container, context) -> ('BaseStep', DataContainer):

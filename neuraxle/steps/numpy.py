@@ -26,21 +26,19 @@ Those steps works with NumPy (np) arrays.
 
 import numpy as np
 
-from neuraxle.base import NonFittableMixin, BaseStep, DataContainer, ExecutionContext, ForceHandleOnlyMixin, \
-    ForceHandleMixin
+from neuraxle.base import DataContainer, ExecutionContext, ForceHandleMixin, BaseTransformer
 from neuraxle.hyperparams.space import HyperparameterSamples
 
 
-class NumpyFlattenDatum(NonFittableMixin, BaseStep):
+class NumpyFlattenDatum(BaseTransformer):
     def __init__(self):
-        BaseStep.__init__(self)
-        NonFittableMixin.__init__(self)
+        BaseTransformer.__init__(self)
 
     def transform(self, data_inputs):
         return data_inputs.reshape(data_inputs.shape[0], -1)
 
 
-class NumpyConcatenateOnCustomAxis(NonFittableMixin, BaseStep):
+class NumpyConcatenateOnCustomAxis(BaseTransformer):
     """
     Numpy concetenation step where the concatenation is performed along the specified custom axis.
     """
@@ -52,8 +50,7 @@ class NumpyConcatenateOnCustomAxis(NonFittableMixin, BaseStep):
         :return: NumpyConcatenateOnCustomAxis instance.
         """
         self.axis = axis
-        BaseStep.__init__(self)
-        NonFittableMixin.__init__(self)
+        BaseTransformer.__init__(self)
 
     def _transform_data_container(self, data_container, context):
         """
@@ -109,10 +106,9 @@ class NumpyConcatenateOuterBatch(NumpyConcatenateOnCustomAxis):
         NumpyConcatenateOnCustomAxis.__init__(self, axis=0)
 
 
-class NumpyTranspose(NonFittableMixin, BaseStep):
+class NumpyTranspose(BaseTransformer):
     def __init__(self):
-        BaseStep.__init__(self)
-        NonFittableMixin.__init__(self)
+        super().__init__()
 
     def _transform_data_container(self, data_container, context):
         """
@@ -139,12 +135,11 @@ class NumpyTranspose(NonFittableMixin, BaseStep):
         return np.array(data_inputs).transpose()
 
 
-class NumpyShapePrinter(NonFittableMixin, BaseStep):
+class NumpyShapePrinter(BaseTransformer):
 
     def __init__(self, custom_message: str = ""):
+        super().__init__()
         self.custom_message = custom_message
-        BaseStep.__init__(self)
-        NonFittableMixin.__init__(self)
 
     def transform(self, data_inputs):
         self._print(data_inputs)
@@ -161,7 +156,7 @@ class NumpyShapePrinter(NonFittableMixin, BaseStep):
         print(self.__class__.__name__ + " (one):", data_input.shape, self.custom_message)
 
 
-class MultiplyByN(NonFittableMixin, BaseStep):
+class MultiplyByN(BaseTransformer):
     """
     Step to multiply a numpy array.
     Accepts an integer for the number to multiply by.
@@ -177,18 +172,11 @@ class MultiplyByN(NonFittableMixin, BaseStep):
         # outputs => np.array([3])
 
     .. seealso::
-        :class:`NonFittableMixin`,
-        :class:`BaseStep`
+        :class:`~neuraxle.base.BaseStep`
     """
 
     def __init__(self, multiply_by=1):
-        NonFittableMixin.__init__(self)
-        BaseStep.__init__(
-            self,
-            hyperparams=HyperparameterSamples({
-                'multiply_by': multiply_by
-            })
-        )
+        super().__init__(hyperparams=HyperparameterSamples({ 'multiply_by': multiply_by }))
 
     def transform(self, data_inputs):
         if not isinstance(data_inputs, np.ndarray):
@@ -203,7 +191,7 @@ class MultiplyByN(NonFittableMixin, BaseStep):
         return data_inputs / self.hyperparams['multiply_by']
 
 
-class AddN(NonFittableMixin, BaseStep):
+class AddN(BaseTransformer):
     """
     Step to add a scalar to a numpy array.
     Accepts an integer for the number to add to every data inputs.
@@ -219,18 +207,11 @@ class AddN(NonFittableMixin, BaseStep):
         # outputs => np.array([2])
 
     .. seealso::
-        :class:`NonFittableMixin`,
-        :class:`BaseStep`
+        :class:`~neuraxle.base.BaseStep`
     """
 
     def __init__(self, add=1):
-        NonFittableMixin.__init__(self)
-        BaseStep.__init__(
-            self,
-            hyperparams=HyperparameterSamples({
-                'add': add
-            })
-        )
+        super().__init__(hyperparams=HyperparameterSamples({ 'add': add }))
 
     def transform(self, data_inputs):
         if not isinstance(data_inputs, np.ndarray):
@@ -245,7 +226,7 @@ class AddN(NonFittableMixin, BaseStep):
         return data_inputs - self.hyperparams['add']
 
 
-class Sum(NonFittableMixin, BaseStep):
+class Sum(BaseTransformer):
     """
     Step sum numpy array using np.sum.
 
@@ -261,13 +242,11 @@ class Sum(NonFittableMixin, BaseStep):
         # outputs => 6)
 
     .. seealso::
-        :class:`NonFittableMixin`,
         :class:`BaseStep`
     """
 
     def __init__(self, axis):
-        NonFittableMixin.__init__(self)
-        BaseStep.__init__(self)
+        BaseTransformer.__init__(self)
         self.axis = axis
 
     def transform(self, data_inputs):
@@ -278,7 +257,7 @@ class Sum(NonFittableMixin, BaseStep):
         return data_inputs
 
 
-class OneHotEncoder(NonFittableMixin, BaseStep):
+class OneHotEncoder(BaseTransformer):
     """
     Step to one hot a set of columns.
     Accepts Integer Columns and converts it ot a one_hot.
@@ -341,9 +320,33 @@ class OneHotEncoder(NonFittableMixin, BaseStep):
         return outputs_.squeeze()
 
 
-class ToNumpy(ForceHandleMixin, BaseStep):
+class ToNumpy(ForceHandleMixin, BaseTransformer):
     """
     Convert data inputs, and expected outputs to a numpy array.
     """
+
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
         return data_container.to_numpy(), context
+
+
+class NumpyReshape(BaseTransformer):
+    """
+    Reshape numpy array in data inputs.
+
+    .. code-block:: python
+
+       import numpy as np
+       a = np.array([1,0,3])
+       outputs = NumpyReshape(shape=(-1,1)).transform(a)
+       assert np.array_equal(outputs, np.array([[1],[0],[3]]))
+
+    .. seealso::
+        :class:`BaseStep`
+    """
+
+    def __init__(self, new_shape):
+        super().__init__()
+        self.new_shape = new_shape
+
+    def transform(self, data_inputs):
+        return np.reshape(data_inputs, newshape=self.new_shape)

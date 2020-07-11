@@ -31,7 +31,8 @@ from enum import Enum
 from typing import List, Tuple, Any
 
 from neuraxle.base import ResumableStepMixin, BaseStep, ExecutionContext, \
-    ExecutionMode, NonTransformableMixin, NonFittableMixin, Identity
+    ExecutionMode, NonTransformableMixin, Identity, _FittableStep, HandleOnlyMixin, ForceHandleOnlyMixin, \
+    IdentityHandlerMethodsMixin
 from neuraxle.data_container import DataContainer, ListDataContainer
 
 
@@ -40,7 +41,7 @@ class DataCheckpointType(Enum):
     EXPECTED_OUTPUT = 'eo'
 
 
-class BaseCheckpointer(NonFittableMixin, NonTransformableMixin, BaseStep):
+class BaseCheckpointer(NonTransformableMixin, BaseStep):
     """
     Base class to implement a step checkpoint or data container checkpoint.
 
@@ -49,7 +50,7 @@ class BaseCheckpointer(NonFittableMixin, NonTransformableMixin, BaseStep):
     BaseCheckpointer has an execution mode so there could be different checkpoints for each execution mode (fit, fit_transform or transform).
 
     .. seealso::
-        * :class:`Checkpoint`
+        :class:`Checkpoint`
     """
 
     def __init__(
@@ -97,11 +98,8 @@ class BaseCheckpointer(NonFittableMixin, NonTransformableMixin, BaseStep):
         Returns the data container checkpoint, or latest data container.
 
         :param data_container: data container to save data container or fitted steps
-        :type data_container: neuraxle.data_container.DataContainer
         :param context: context to save data container or fitted steps
-        :type context: ExecutionContext
         :return: saved data container
-        :rtype: neuraxle.data_container.DataContainer
         """
         raise NotImplementedError()
 
@@ -113,11 +111,8 @@ class BaseCheckpointer(NonFittableMixin, NonTransformableMixin, BaseStep):
         and expected outputs for each current id in the given data container.
 
         :param data_container: data container containing the current_ids to read checkpoint for
-        :type data_container: neuraxle.data_container.DataContainer
         :param context: context to read checkpoint for
-        :type context: ExecutionContext
         :return: the data container checkpoint
-        :rtype: neuraxle.data_container.DataContainer
         """
         raise NotImplementedError()
 
@@ -138,6 +133,9 @@ class StepSavingCheckpointer(BaseCheckpointer):
         # is equivalent to :
         StepCheckpointer()
 
+
+    .. seealso::
+        :class:`BaseCheckpointer`
     """
 
     def __init__(
@@ -157,7 +155,7 @@ class StepSavingCheckpointer(BaseCheckpointer):
     ) -> DataContainer:
         if self.is_for_execution_mode(context.get_execution_mode()):
             # TODO: save the context by execution mode AND data container ids / summary
-            context.copy().save_all_unsaved()
+            context.copy().save()
 
         return data_container
 
@@ -166,7 +164,7 @@ class StepSavingCheckpointer(BaseCheckpointer):
         return True
 
 
-class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, BaseStep):
+class Checkpoint(IdentityHandlerMethodsMixin, ResumableStepMixin, BaseStep):
     """
     Resumable Checkpoint Step to load, and save both data checkpoints, and step checkpoints.
     Checkpoint uses a list of step checkpointers(List[StepCheckpointer]), and data checkpointers(List[BaseCheckpointer]).
@@ -193,11 +191,10 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         )
 
     .. seealso::
-        * :class:`BaseStep`
-        * :func:`ResumablePipeline._load_checkpoint`
-        * :class:`ResumableStepMixin`
-        * :class:`NonFittableMixin`
-        * :class:`NonTransformableMixin`
+        :class:`~neuraxle.base.BaseStep`,
+        :func:`neuraxle.pipeline.ResumablePipeline._load_checkpoint`,
+        :class:`~neuraxle.base.ResumableStepMixin`,
+        :class:`~neuraxle.base.ForceHandleOnlyMixin`
     """
 
     def __init__(
@@ -205,41 +202,20 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
             all_checkpointers: List[BaseCheckpointer] = None,
     ):
         BaseStep.__init__(self)
+        ResumableStepMixin.__init__(self)
+        IdentityHandlerMethodsMixin.__init__(self)
         self.all_checkpointers = all_checkpointers
 
-    def _fit_data_container(self, data_container, context) -> 'Checkpoint':
+    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
-        Saves step, and data checkpointers for the FIT execution mode.
+        Saves step, and data checkpointers after fit, fit_transform, or transform.
 
         :param data_container: data container for creating the data checkpoint
         :param context: context for creating the step checkpoint
         :return: saved data container
-        :rtype: neuraxle.data_container.DataContainer
         """
         self.save_checkpoint(data_container, context)
-        return self
-
-    def _transform_data_container(self, data_container, context):
-        """
-        Saves step, and data checkpointers for the TRANSORM execution mode.
-
-        :param data_container: data container for creating the data checkpoint
-        :param context: context for creating the step checkpoint
-        :return: saved data container
-        :rtype: neuraxle.data_container.DataContainer
-        """
-        return self.save_checkpoint(data_container, context)
-
-    def _fit_transform_data_container(self, data_container, context) -> Tuple['Checkpoint', DataContainer]:
-        """
-        Saves step, and data checkpointers for the FIT_TRANSORM execution mode.
-
-        :param data_container: data container for creating the data checkpoint
-        :param context: context for creating the step checkpoint
-        :return: saved data container
-        :rtype: neuraxle.data_container.DataContainer
-        """
-        return self, self.save_checkpoint(data_container, context)
+        return data_container
 
     def save_checkpoint(self, data_container: DataContainer, context: ExecutionContext):
         """
@@ -248,12 +224,21 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :param data_container: data container for creating the data checkpoint
         :param context: context for creating the step checkpoint
         :return: saved data container
-        :rtype: neuraxle.data_container.DataContainer
         """
         for checkpointer in self.all_checkpointers:
             checkpointer.save_checkpoint(data_container, context)
 
         return data_container
+
+    def resume(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Same as read_checkpoint.
+
+        :param data_container: data container to load checkpoint from
+        :param context: execution mode to load checkpoint from
+        :return: loaded data container checkpoint
+        """
+        return self.read_checkpoint(data_container, context)
 
     def read_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -262,7 +247,6 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :param data_container: data container to load checkpoint from
         :param context: execution mode to load checkpoint from
         :return: loaded data container checkpoint
-        :rtype: neuraxle.data_container.DataContainer
         """
         context = context.push(self)
         for checkpointer in self.all_checkpointers:
@@ -278,7 +262,6 @@ class Checkpoint(NonFittableMixin, NonTransformableMixin, ResumableStepMixin, Ba
         :param context: execution context
         :param data_container: data to resume
         :return: if we can resume the checkpoint
-        :rtype: bool
         """
         context = context.push(self)
         for checkpointer in self.all_checkpointers:
@@ -310,9 +293,9 @@ class BaseSummaryCheckpointer(ABC):
         )
 
     .. seealso::
-        * :class:`BaseMiniDataCheckpointer`
-        * :class:`MiniDataCheckpointerWrapper`
-        * :class:`PickleMiniDataCheckpointer`
+        :class:`BaseMiniDataCheckpointer`,
+        :class:`MiniDataCheckpointerWrapper`,
+        :class:`PickleMiniDataCheckpointer`
     """
 
     @abstractmethod
@@ -321,37 +304,29 @@ class BaseSummaryCheckpointer(ABC):
         Save data checkpoint with the given current_id, and data.
 
         :param checkpoint_path: checkpoint path for saving
-        :type checkpoint_path: str
-        :param current_id: current id to checkpoint
-        :type current_id: str
-        :param data: data to checkpoint
-        :type data: Any
+        :param data_container: data container
         :return:
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def read_summary(self, checkpoint_path, data_container: DataContainer) -> List[str]:
+    def read_summary(self, checkpoint_path: str, data_container: DataContainer) -> List[str]:
         """
         Read data checkpoint with the given current_id, and data.
 
+        :param data_container: data container
         :param checkpoint_path: checkpoint path to read
-        :type checkpoint_path: str
-        :param current_id: current id to read checkpoint for
-        :type current_id: str
         :return:
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def checkpoint_exists(self, checkpoint_path, data_container: DataContainer) -> bool:
+    def checkpoint_exists(self, checkpoint_path: str, data_container: DataContainer) -> bool:
         """
         Returns if checkpoint exists with the given path, and current id.
 
+        :param data_container: data container
         :param checkpoint_path: checkpoint path to read
-        :type checkpoint_path: str
-        :param current_id: current id to read checkpoint for
-        :type current_id: str
         :return:
         """
         raise NotImplementedError()
@@ -378,13 +353,13 @@ class BaseMiniDataCheckpointer(ABC):
         )
 
     .. seealso::
-        * :class:`BaseMiniDataCheckpointer`
-        * :class:`MiniDataCheckpointerWrapper`
-        * :class:`PickleMiniDataCheckpointer`
+        :class:`BaseMiniDataCheckpointer`,
+        :class:`MiniDataCheckpointerWrapper`,
+        :class:`PickleMiniDataCheckpointer`
     """
 
     @abstractmethod
-    def save_checkpoint(self, checkpoint_path, current_id, data):
+    def save_checkpoint(self, checkpoint_path: str, current_id: str, data):
         """
         Save data checkpoint with the given current_id, and data.
 
@@ -399,7 +374,7 @@ class BaseMiniDataCheckpointer(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def read_checkpoint(self, checkpoint_path, current_id) -> Tuple:
+    def read_checkpoint(self, checkpoint_path: str, current_id) -> Tuple:
         """
         Read data checkpoint with the given current_id, and data.
 
@@ -412,7 +387,7 @@ class BaseMiniDataCheckpointer(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def checkpoint_exists(self, checkpoint_path, current_id) -> bool:
+    def checkpoint_exists(self, checkpoint_path: str, current_id) -> bool:
         """
         Returns if checkpoint exists with the given path, and current id.
 
@@ -429,13 +404,13 @@ class NullMiniDataCheckpointer(BaseMiniDataCheckpointer):
     def set_checkpoint_type(self, checkpoint_type: DataCheckpointType):
         pass
 
-    def save_checkpoint(self, checkpoint_path, current_id, data):
+    def save_checkpoint(self, checkpoint_path: str, current_id: str, data):
         pass
 
-    def read_checkpoint(self, checkpoint_path, current_id) -> Tuple:
+    def read_checkpoint(self, checkpoint_path: str, current_id: str) -> Tuple:
         return None
 
-    def checkpoint_exists(self, checkpoint_path, current_id) -> bool:
+    def checkpoint_exists(self, checkpoint_path: str, current_id: str) -> bool:
         return True
 
 
@@ -445,20 +420,18 @@ class TextFileSummaryCheckpointer(BaseSummaryCheckpointer):
     A summary checkpoint file is a txt file that contains the list of all of the current ids of the checkpoint.
 
     .. seealso::
-        * :class:`BaseSummaryCheckpointer`
-        * :class:`BaseMiniDataCheckpointer`
-        * :class:`MiniDataCheckpointerWrapper`
-        * :class:`PickleMiniDataCheckpointer`
+        :class:`BaseSummaryCheckpointer`,
+        :class:`BaseMiniDataCheckpointer`,
+        :class:`MiniDataCheckpointerWrapper`,
+        :class:`PickleMiniDataCheckpointer`
     """
 
-    def save_summary(self, checkpoint_path, data_container: DataContainer):
+    def save_summary(self, checkpoint_path: str, data_container: DataContainer):
         """
         Save summary checkpoint file.
 
         :param checkpoint_path: checkpoint path for saving
-        :type checkpoint_path: str
         :param data_container: checkpoint data container
-        :type data_container: DataContainer
         :return:
         """
         with open(os.path.join(checkpoint_path, '{0}.txt'.format(data_container.summary_id)), 'w+') as file:
@@ -466,29 +439,24 @@ class TextFileSummaryCheckpointer(BaseSummaryCheckpointer):
             lines[-1] = str(data_container.current_ids[-1])
             file.writelines(lines)
 
-    def read_summary(self, checkpoint_path, data_container: DataContainer) -> List[str]:
+    def read_summary(self, checkpoint_path: str, data_container: DataContainer) -> List[str]:
         """
         Read current ids inside a summary checkpoint file.
 
         :param checkpoint_path: checkpoint path for saving
-        :type checkpoint_path: str
         :param data_container: checkpoint data container
-        :type data_container: DataContainer
         :return: checkpoint current ids
-        :rtype: List[str]
         """
         with open(os.path.join(checkpoint_path, '{0}.txt'.format(data_container.summary_id)), 'r') as file:
             current_ids = file.readlines()
         return [cuid.strip() for cuid in current_ids]
 
-    def checkpoint_exists(self, checkpoint_path, data_container: DataContainer) -> bool:
+    def checkpoint_exists(self, checkpoint_path: str, data_container: DataContainer) -> bool:
         """
         Returns true if the checkpoint summary file exists.
 
         :param checkpoint_path: checkpoint path for saving
-        :type checkpoint_path: str
         :param data_container: checkpoint data container
-        :type data_container: DataContainer
         :return:
         """
         return os.path.exists(
@@ -747,8 +715,8 @@ class DefaultCheckpoint(Checkpoint):
     :class:`Checkpoint` with pickle mini data checkpointers wrapped in a :class:`MiniDataCheckpointerWrapper`, and the default step saving checkpointer.
 
     .. seealso::
-        * :class:`Checkpoint`
-        * :class:`MiniDataCheckpointerWrapper`
+        :class:`Checkpoint`,
+        :class:`MiniDataCheckpointerWrapper`
     """
 
     def __init__(self):
