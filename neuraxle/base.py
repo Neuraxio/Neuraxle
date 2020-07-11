@@ -1849,7 +1849,7 @@ class _HasMutations(ABC):
         except AttributeError as e:
             if warn:
                 import warnings
-                warnings.warn(e)
+                warnings.warn(repr(e))
 
         return new_base_step
 
