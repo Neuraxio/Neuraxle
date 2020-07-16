@@ -42,7 +42,7 @@ class SKLearnWrapper(BaseStep):
             wrapped_sklearn_predictor,
             hyperparams_space: HyperparameterSpace = None,
             return_all_sklearn_default_params_on_get: bool = False,
-            partial_fit: bool = False
+            use_partial_fit: bool = False
     ):
         if not isinstance(wrapped_sklearn_predictor, BaseEstimator):
             raise ValueError("The wrapped_sklearn_predictor must be an instance of scikit-learn's BaseEstimator.")
@@ -51,7 +51,7 @@ class SKLearnWrapper(BaseStep):
         BaseStep.__init__(self, hyperparams=params, hyperparams_space=hyperparams_space)
         self.return_all_sklearn_default_params_on_get = return_all_sklearn_default_params_on_get
         self.name += "_" + wrapped_sklearn_predictor.__class__.__name__
-        self.partial_fit: bool = partial_fit
+        self.partial_fit: bool = use_partial_fit
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
 
