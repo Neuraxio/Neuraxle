@@ -2085,6 +2085,7 @@ class BaseTransformer(
 
         The setup method is called for each step before any fit, or fit_transform.
 
+        :param context: execution context
         :return: self
         """
         self.is_initialized = True
@@ -2430,6 +2431,7 @@ class MetaStepMixin(_HasChildrenMixin):
         """
         Initialize step before it runs. Also initialize the wrapped step.
 
+        :param context: execution context
         :return: self
         """
         super().setup(context=context)
@@ -2877,6 +2879,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         """
         Initialize step before it runs.
 
+        :param context: execution context
         :return: self
         """
         if self.is_initialized:

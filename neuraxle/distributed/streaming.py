@@ -421,6 +421,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         """
         Connect the queued workers together so that the data can correctly flow through the pipeline.
 
+        :param context: execution context
         :return: step
         :rtype: BaseStep
         """
