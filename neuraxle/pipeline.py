@@ -144,14 +144,14 @@ class Pipeline(BasePipeline):
         :return: tuple(pipeline, data_container)
         """
         steps_left_to_do, data_container = self._load_checkpoint(data_container, context)
-        self.setup()
+        self.setup(context=context)
 
         index_last_step = len(steps_left_to_do) - 1
 
         new_steps_as_tuple: NamedTupleList = []
 
         for index, (step_name, step) in enumerate(steps_left_to_do):
-            step.setup()
+            step.setup(context=context)
 
             if index != index_last_step:
                 step, data_container = step.handle_fit_transform(data_container, context)
@@ -174,12 +174,12 @@ class Pipeline(BasePipeline):
         :return: tuple(pipeline, data_container)
         """
         steps_left_to_do, data_container = self._load_checkpoint(data_container, context)
-        self.setup()
+        self.setup(context=context)
 
         new_steps_as_tuple: NamedTupleList = []
 
         for step_name, step in steps_left_to_do:
-            step.setup()
+            step.setup(context=context)
             step, data_container = step.handle_fit_transform(data_container, context)
             new_steps_as_tuple.append((step_name, step))
 
@@ -399,7 +399,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         index_start = 0
 
         for sub_pipeline in sub_pipelines:
-            sub_pipeline.setup()
+            sub_pipeline.setup(context=context)
 
             barrier = sub_pipeline[-1]
             sub_pipeline, data_container = barrier.join_fit_transform(
@@ -430,7 +430,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         index_start = 0
 
         for sub_pipeline in sub_pipelines:
-            sub_pipeline.setup()
+            sub_pipeline.setup(context=context)
 
             barrier = sub_pipeline[-1]
             sub_pipeline, data_container = barrier.join_fit_transform(

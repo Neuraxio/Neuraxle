@@ -1651,7 +1651,7 @@ class _HasSavers(ABC):
 
         def _initialize_if_needed(step):
             if not step.is_initialized:
-                step.setup()
+                step.setup(context=context)
             return RecursiveDict()
 
         def _invalidate(step):
@@ -2078,7 +2078,7 @@ class BaseTransformer(
         self.is_initialized = False
         self.is_train: bool = True
 
-    def setup(self) -> 'BaseTransformer':
+    def setup(self, context: ExecutionContext) -> 'BaseTransformer':
         """
         Initialize the step before it runs. Only from here and not before that heavy things should be created
         (e.g.: things inside GPU), and NOT in the constructor.
@@ -2426,14 +2426,14 @@ class MetaStepMixin(_HasChildrenMixin):
         self.wrapped: BaseTransformer = _sklearn_to_neuraxle_step(step)
         return self
 
-    def setup(self) -> BaseStep:
+    def setup(self, context: ExecutionContext) -> BaseStep:
         """
         Initialize step before it runs. Also initialize the wrapped step.
 
         :return: self
         """
-        super().setup()
-        self.wrapped.setup()
+        super().setup(context=context)
+        self.wrapped.setup(context=context)
         self.is_initialized = True
         return self
 
@@ -2873,7 +2873,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         self.steps_as_tuple: NamedTupleList = self._patch_missing_names(steps_as_tuple)
         self._refresh_steps()
 
-    def setup(self) -> 'BaseTransformer':
+    def setup(self, context: ExecutionContext) -> 'BaseTransformer':
         """
         Initialize step before it runs.
 
