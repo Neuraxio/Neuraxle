@@ -2078,7 +2078,7 @@ class BaseTransformer(
         self.is_initialized = False
         self.is_train: bool = True
 
-    def setup(self, context: ExecutionContext) -> 'BaseTransformer':
+    def setup(self, context: ExecutionContext = None) -> 'BaseTransformer':
         """
         Initialize the step before it runs. Only from here and not before that heavy things should be created
         (e.g.: things inside GPU), and NOT in the constructor.
@@ -2427,7 +2427,7 @@ class MetaStepMixin(_HasChildrenMixin):
         self.wrapped: BaseTransformer = _sklearn_to_neuraxle_step(step)
         return self
 
-    def setup(self, context: ExecutionContext) -> BaseStep:
+    def setup(self, context: ExecutionContext = None) -> BaseStep:
         """
         Initialize step before it runs. Also initialize the wrapped step.
 
@@ -2875,7 +2875,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         self.steps_as_tuple: NamedTupleList = self._patch_missing_names(steps_as_tuple)
         self._refresh_steps()
 
-    def setup(self, context: ExecutionContext) -> 'BaseTransformer':
+    def setup(self, context: ExecutionContext = None) -> 'BaseTransformer':
         """
         Initialize step before it runs.
 

@@ -417,7 +417,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         self.setup(context=context)
         return data_container, context
 
-    def setup(self, context: ExecutionContext) -> 'BaseTransformer':
+    def setup(self, context: ExecutionContext = None) -> 'BaseTransformer':
         """
         Connect the queued workers together so that the data can correctly flow through the pipeline.
 
