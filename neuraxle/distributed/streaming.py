@@ -414,19 +414,20 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :param context: execution context
         :return:
         """
-        self.setup()
+        self.setup(context=context)
         return data_container, context
 
-    def setup(self) -> 'BaseTransformer':
+    def setup(self, context: ExecutionContext = None) -> 'BaseTransformer':
         """
         Connect the queued workers together so that the data can correctly flow through the pipeline.
 
+        :param context: execution context
         :return: step
         :rtype: BaseStep
         """
         if not self.is_initialized:
             self.connect_queued_pipeline()
-        super().setup()
+        super().setup(context=context)
         return self
 
     def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
