@@ -32,8 +32,8 @@ from neuraxle.hyperparams.space import RecursiveDict
 VALUE_CACHING = 'value_caching'
 from typing import List, Any
 
-from neuraxle.base import BaseStep, NonFittableMixin, NonTransformableMixin, ExecutionContext, MetaStepMixin, \
-    HandleOnlyMixin
+from neuraxle.base import BaseStep, NonTransformableMixin, ExecutionContext, MetaStep, \
+    HandleOnlyMixin, _FittableStep, BaseTransformer, ForceHandleOnlyMixin
 from neuraxle.data_container import DataContainer
 
 
@@ -76,8 +76,17 @@ class BaseCallbackStep(BaseStep, ABC):
         """
         self.callback_function(data, *self.more_arguments)
 
+    def fit(self, data_inputs, expected_outputs = None):
+        return self
 
-class FitCallbackStep(NonTransformableMixin, BaseCallbackStep):
+    def transform(self, data_inputs):
+        return data_inputs
+
+    def inverse_transform(self, processed_outputs):
+        return processed_outputs
+
+
+class FitCallbackStep(BaseCallbackStep):
     """Call a callback method on fit."""
 
     def fit(self, data_inputs, expected_outputs=None) -> 'FitCallbackStep':
@@ -94,7 +103,7 @@ class FitCallbackStep(NonTransformableMixin, BaseCallbackStep):
         return self
 
 
-class TransformCallbackStep(NonFittableMixin, BaseCallbackStep):
+class TransformCallbackStep(BaseCallbackStep):
     """Call a callback method on transform and inverse transform."""
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
@@ -135,6 +144,7 @@ class FitTransformCallbackStep(BaseStep):
                  transform_function=None,
                  hyperparams=None):
         BaseStep.__init__(self, hyperparams)
+
         if transform_callback_function is None:
             transform_callback_function = TapeCallbackFunction()
         if fit_callback_function is None:
@@ -175,10 +185,10 @@ class FitTransformCallbackStep(BaseStep):
 
     def clear_callbacks(self):
         cleared_callbacks = {
-           self.name: {
-               'transform': self.transform_callback_function.data,
-               'fit': self.fit_callback_function.data
-           }
+            self.name: {
+                'transform': self.transform_callback_function.data,
+                'fit': self.fit_callback_function.data
+            }
         }
 
         self.transform_callback_function.data = []
@@ -190,7 +200,7 @@ class FitTransformCallbackStep(BaseStep):
         return RecursiveDict(cleared_callbacks)
 
 
-class CallbackWrapper(HandleOnlyMixin, MetaStepMixin, BaseStep):
+class CallbackWrapper(HandleOnlyMixin, MetaStep):
     """
     A step that calls a callback function for each of his methods : transform, fit, fit_transform, and even inverse_transform.
     To be used with :class:`TapeCallbackFunction`.
@@ -208,6 +218,7 @@ class CallbackWrapper(HandleOnlyMixin, MetaStepMixin, BaseStep):
         :class:`~neuraxle.base.MetaStepMixin`,
         :class:`~neuraxle.base.BaseStep`
     """
+
     def __init__(
             self,
             wrapped,
@@ -217,8 +228,7 @@ class CallbackWrapper(HandleOnlyMixin, MetaStepMixin, BaseStep):
             more_arguments: List = tuple(),
             hyperparams=None
     ):
-        BaseStep.__init__(self, hyperparams)
-        MetaStepMixin.__init__(self, wrapped)
+        MetaStep.__init__(self, wrapped=wrapped, hyperparams=hyperparams)
 
         self.inverse_transform_callback_function = inverse_transform_callback_function
         self.more_arguments = more_arguments
@@ -353,15 +363,16 @@ class TapeCallbackFunction:
         return self.name_tape
 
 
-class HandleCallbackStep(HandleOnlyMixin, BaseStep):
+class HandleCallbackStep(ForceHandleOnlyMixin, BaseStep):
     def __init__(
             self,
             handle_fit_callback,
             handle_transform_callback,
             handle_fit_transform_callback
     ):
-        HandleOnlyMixin.__init__(self)
         BaseStep.__init__(self)
+        ForceHandleOnlyMixin.__init__(self)
+
         self.handle_fit_callback = handle_fit_callback
         self.handle_fit_transform_callback = handle_fit_transform_callback
         self.handle_transform_callback = handle_transform_callback
@@ -379,9 +390,9 @@ class HandleCallbackStep(HandleOnlyMixin, BaseStep):
         return self, data_container
 
 
-class Sleep(NonFittableMixin, BaseStep):
+class Sleep(BaseTransformer):
     def __init__(self, sleep_time=0.1, hyperparams=None, hyperparams_space=None):
-        BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
+        BaseTransformer.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         self.sleep_time = sleep_time
 
     def transform(self, data_inputs):

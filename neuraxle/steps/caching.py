@@ -31,12 +31,12 @@ from typing import Iterable, Any
 
 import joblib
 
-from neuraxle.base import MetaStepMixin, BaseStep, ExecutionContext
+from neuraxle.base import MetaStep, BaseStep, ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.pipeline import DEFAULT_CACHE_FOLDER
 
 
-class ValueCachingWrapper(MetaStepMixin, BaseStep):
+class ValueCachingWrapper(MetaStep):
     """
     Value caching wrapper wraps a step to cache the values.
     """
@@ -47,8 +47,7 @@ class ValueCachingWrapper(MetaStepMixin, BaseStep):
             cache_folder: str = DEFAULT_CACHE_FOLDER,
             value_hasher: 'BaseValueHasher' = None,
     ):
-        BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, wrapped)
+        MetaStep.__init__(self, wrapped)
         self.value_hasher = value_hasher
 
         if self.value_hasher is None:
