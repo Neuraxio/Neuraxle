@@ -19,7 +19,6 @@ You can find here steps that featurize your data.
     limitations under the License.
 
 """
-from neuraxle.base import NonFittableMixin, BaseStep
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import ChooseOneOrManyStepsOf
 from neuraxle.steps.numpy import NumpyFFT, NumpyAbs, NumpyFlattenDatum, NumpyConcatenateInnerFeatures, NumpyMean, \
@@ -34,7 +33,9 @@ class FFTPeakBinWithValue(FeatureUnion):
 
     .. seealso::
         :class:`~neuraxle.base.BaseStep`,
-        :class:`~neuraxle.base.NonFittableMixin`
+        :class:`~neuraxle.base.NonFittableMixin`,
+        :class:`~neuraxle.steps.numpy.NumpyFFT`,
+        :class:`Cheap3DTo2DTransformer`
     """
     def __init__(self):
         super().__init__([
@@ -61,15 +62,15 @@ class Cheap3DTo2DTransformer(ChooseOneOrManyStepsOf):
 
     .. seealso::
         :class:`~neuraxle.steps.flow.ChooseOneOrManyStepsOf`,
-        :class:`NumpyFFT`,
-        :class:`NumpyAbs`,
-        :class:`NumpyFlattenDatum`,
+        :class:`~neuraxle.steps.numpy.NumpyFFT`,
+        :class:`~neuraxle.steps.numpy.NumpyAbs`,
+        :class:`~neuraxle.steps.numpy.NumpyFlattenDatum`,
         :class:`FFTPeakBinWithValue`,
-        :class:`NumpyConcatenateInnerFeatures`,
-        :class:`NumpyMean`,
-        :class:`NumpyMedian`,
-        :class:`NumpyMin`,
-        :class:`NumpyMax`
+        :class:`~neuraxle.steps.numpy.NumpyConcatenateInnerFeatures`,
+        :class:`~neuraxle.steps.numpy.NumpyMean`,
+        :class:`~neuraxle.steps.numpy.NumpyMedian`,
+        :class:`~neuraxle.steps.numpy.NumpyMin`,
+        :class:`~neuraxle.steps.numpy.NumpyMax`
     """
 
     def __init__(self):
