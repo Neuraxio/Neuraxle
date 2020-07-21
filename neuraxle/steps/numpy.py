@@ -27,6 +27,7 @@ Those steps works with NumPy (np) arrays.
 import numpy as np
 
 from neuraxle.base import DataContainer, ExecutionContext, ForceHandleMixin, BaseTransformer
+from neuraxle.base import NonFittableMixin, BaseStep
 from neuraxle.hyperparams.space import HyperparameterSamples
 
 
@@ -325,7 +326,8 @@ class ToNumpy(ForceHandleMixin, BaseTransformer):
     Convert data inputs, and expected outputs to a numpy array.
     """
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
+            DataContainer, ExecutionContext):
         return data_container.to_numpy(), context
 
 
@@ -350,3 +352,209 @@ class NumpyReshape(BaseTransformer):
 
     def transform(self, data_inputs):
         return np.reshape(data_inputs, newshape=self.new_shape)
+
+
+class NumpyRavel(NonFittableMixin, BaseStep):
+    """
+    Return a contiguous flattened array using `np.ravel <https://numpy.org/doc/stable/reference/generated/numpy.ravel.html>̀_
+
+    .. seealso::
+        :class:`~neuraxle.base.BaseStep`,
+        :class:`~neuraxle.base.NonFittableMixin`
+    """
+
+    def transform(self, data_inputs):
+        """
+        Flatten numpy array using ̀np.ravel <https://numpy.org/doc/stable/reference/generated/numpy.ravel.html>`_
+
+        :param data_inputs:
+        :return:
+        """
+        if data_inputs is None:
+            return data_inputs
+
+        data_inputs = data_inputs if isinstance(data_inputs, np.ndarray) else np.array(data_inputs)
+        return data_inputs.ravel()
+
+
+class NumpyFFT(NonFittableMixin, BaseStep):
+    """
+    Compute time series FFT using `np.fft.rfft <https://numpy.org/doc/stable/reference/generated/numpy.fft.rfft.html>`_
+
+    .. seealso::
+        :class:`~neuraxle.base.BaseStep`,
+        :class:`~neuraxle.base.NonFittableMixin`
+    """
+
+    def __init__(self, axis=None):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+        if axis is None:
+            axis = -2
+        self.axis = axis
+
+    def transform(self, data_inputs):
+        """
+        Will featurize time series data with FFT using `np.fft.rfft <>̀_
+
+
+        :param data_inputs: time series data of 3D shape: [batch_size, time_steps, sensors_readings]
+        :return: featurized data is of 2D shape: [batch_size, n_features]
+        """
+        return np.fft.rfft(data_inputs, axis=self.axis)
+
+
+class NumpyAbs(NonFittableMixin, BaseStep):
+    """
+    Compute `np.abs <https://numpy.org/doc/stable/reference/generated/numpy.absolute.html>`_.
+
+    .. seealso::
+        :class:`~neuraxle.base.BaseStep`,
+        :class:`~neuraxle.base.NonFittableMixin`
+    """
+
+    def transform(self, data_inputs):
+        """
+        Will featurize data with a absolute value transformation.
+
+        :param data_inputs: data inputs
+        :return: absolute data inputs
+        """
+        return np.abs(data_inputs)
+
+
+class NumpyMean(NonFittableMixin, BaseStep):
+    """
+    Compute `np.mean <https://numpy.org/devdocs/reference/generated/numpy.mean.html>`_ at the given axis.
+
+    .. seealso::
+        :class:`~neuraxle.base.BaseStep`,
+        :class:`~neuraxle.base.NonFittableMixin`
+    """
+
+    def __init__(self, axis=None):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+
+        if axis is None:
+            axis = -2
+        self.axis = axis
+
+    def transform(self, data_inputs):
+        """
+        Will featurize data with a mean.
+
+        :param data_inputs: data inputs
+        :return: data inputs mean for the given axis
+        """
+        return np.mean(data_inputs, axis=self.axis)
+
+
+class NumpyMedian(NonFittableMixin, BaseStep):
+    """
+    Compute `np.median <https://numpy.org/doc/1.18/reference/generated/numpy.median.html>`_ at the given axis.
+
+    .. seealso::
+        :class:`~neuraxle.base.BaseStep`,
+        :class:`~neuraxle.base.NonFittableMixin`
+    """
+
+    def __init__(self, axis=None):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+
+        if axis is None:
+            axis = -2
+        self.axis = axis
+
+    def transform(self, data_inputs):
+        """
+        Will featurize data with a median.
+
+        :param data_inputs: data inputs
+        :return: data inputs median for the given axis
+        """
+        return np.median(data_inputs, axis=self.axis)
+
+
+class NumpyMin(NonFittableMixin, BaseStep):
+    """
+    Compute `np.min <https://numpy.org/doc/1.18/reference/generated/numpy.minimum.html>`_ at the given axis.
+
+    .. seealso::
+        :class:`~neuraxle.base.BaseStep`,
+        :class:`~neuraxle.base.NonFittableMixin`
+    """
+
+    def __init__(self, axis=None):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+
+        if axis is None:
+            axis = -2
+        self.axis = axis
+
+    def transform(self, data_inputs):
+        """
+        Will featurize data with a min.
+
+        :param data_inputs: data inputs
+        :return: min value for the given axis
+        """
+        return np.min(data_inputs, axis=self.axis)
+
+
+class NumpyMax(NonFittableMixin, BaseStep):
+    """
+    Compute `np.max <https://numpy.org/doc/1.18/reference/generated/numpy.ndarray.max.html>̀_ at the given axis.
+
+    .. seealso::
+        :class:`~neuraxle.base.BaseStep`,
+        :class:`~neuraxle.base.NonFittableMixin`
+    """
+
+    def __init__(self, axis=None):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+
+        if axis is None:
+            axis = -2
+        self.axis = axis
+
+    def transform(self, data_inputs):
+        """
+        Will featurize data with a max.
+
+        :param data_inputs: 3D time series of shape [batch_size, time_steps, sensors]
+        :return: max value for the given axis
+        """
+        return np.max(data_inputs, axis=self.axis)
+
+
+class NumpyArgMax(NonFittableMixin, BaseStep):
+    """
+    Compute `np.max <https://numpy.org/doc/1.18/reference/generated/numpy.ndarray.argmax.html>̀_ at the given axis.
+
+    .. seealso::
+        :class:`~neuraxle.base.BaseStep`,
+        :class:`~neuraxle.base.NonFittableMixin`
+    """
+
+    def __init__(self, axis=None):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+
+        if axis is None:
+            axis = -2
+        self.axis = axis
+
+    def transform(self, data_inputs):
+        """
+        Will featurize data with a max.
+
+        :param data_inputs: 3D time series of shape [batch_size, time_steps, sensors]
+        :return: max value for the given axis
+        """
+        return np.argmax(data_inputs, axis=self.axis)
+
+
