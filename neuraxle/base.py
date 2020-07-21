@@ -39,6 +39,7 @@ from typing import List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, 
 from joblib import dump, load
 from sklearn.base import BaseEstimator
 
+from build.lib.neuraxle.base import _TransformerStep
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
 
@@ -870,6 +871,16 @@ class _TransformerStep(ABC):
         """
         return self, self.transform(data_inputs)
 
+    def fit(self, data_inputs, expected_outputs) -> _TransformerStep:
+        """
+        Fit given data inputs. By default, a step only transforms in the fit transform method.
+        To add fitting to your step, see class:`_FittableStep` for more info.
+        :param data_inputs: data inputs
+        :param expected_outputs: expected outputs to fit on
+        :return: transformed data inputs
+        """
+        return self
+
     def handle_predict(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Handle_transform in test mode.
@@ -949,6 +960,7 @@ class _TransformerStep(ABC):
         :return: inverse transformed processed outputs
         """
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
+
 
 
 class _FittableStep:
