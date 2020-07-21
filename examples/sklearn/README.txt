@@ -1,4 +1,4 @@
-.. _realworld_examples:
+.. _real_world_examples:
 
 Neuraxle hyperparameter examples
 -------------------------------------

@@ -25,13 +25,14 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
 """
 from typing import Union
 
+import numpy as np
+
 from neuraxle.base import BaseStep, MetaStep, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin, \
-    HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin, _FittableStep, BaseTransformer
+    HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin, BaseTransformer, NonFittableMixin
 from neuraxle.data_container import ExpandedDataContainer
 from neuraxle.hyperparams.distributions import Boolean, Choice
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.union import FeatureUnion
-import numpy as np
 
 OPTIONAL_ENABLED_HYPERPARAM = 'enabled'
 
@@ -348,8 +349,11 @@ class ChooseOneStepOf(FeatureUnion):
         """
         step_names = list(self.keys())
         for step_name in step_names[:-1]:
-            self[step_name] = Optional(self[step_name].set_name('Optional({})'.format(step_name)),
-                                       use_hyperparameter_space=False, nullify_hyperparams=False)
+            self[step_name] = Optional(
+                self[step_name].set_name('Optional({})'.format(step_name)),
+                use_hyperparameter_space=False,
+                nullify_hyperparams=False
+            )
 
         self._refresh_steps()
 
@@ -385,8 +389,10 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
         :class:`Optional`
     """
 
-    def __init__(self, steps):
-        FeatureUnion.__init__(self, steps_as_tuple=steps, joiner=NumpyConcatenateOnCustomAxisIfNotEmpty(axis=-1))
+    def __init__(self, steps, joiner: NonFittableMixin = None):
+        if joiner is None:
+            joiner = NumpyConcatenateOnCustomAxisIfNotEmpty(axis=-1)
+        FeatureUnion.__init__(self, steps_as_tuple=steps, joiner=joiner)
         self.set_hyperparams(HyperparameterSamples({}))
         self._make_all_steps_optional()
 
