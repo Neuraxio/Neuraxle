@@ -34,7 +34,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from enum import Enum
-from typing import List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Dict, Tuple
+from typing import List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Dict, Tuple, Type
 
 from joblib import dump, load
 from sklearn.base import BaseEstimator
@@ -142,6 +142,43 @@ class HashlibMd5Hasher(BaseHasher):
         for current_id in current_ids:
             m = hashlib.md5()
             m.update(str.encode(current_id))
+            m.update(str.encode(current_hyperparameters_hash))
+            new_current_ids.append(m.hexdigest())
+
+        return new_current_ids
+
+
+class HashlibMd5ValueHasher(HashlibMd5Hasher):
+    def hash(self, current_ids, hyperparameters, data_inputs: Any = None) -> List[str]:
+        """
+        Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together
+        using  `hashlib.md5 <https://docs.python.org/3/library/hashlib.html>`_
+
+        :param current_ids: current hashed ids (can be None if this function has not been called yet)
+        :param hyperparameters: step hyperparameters to hash with current ids
+        :param data_inputs: data inputs to hash current ids for
+        :return: the new hashed current ids
+        """
+        if len(current_ids) != len(data_inputs):
+            current_ids: List[str] = [str(i) for i in range(len(data_inputs))]
+
+        if current_ids is None:
+            if isinstance(data_inputs, Iterable):
+                current_ids = [str(i) for i in range(len(data_inputs))]
+            else:
+                current_ids = [str(0)]
+
+        if len(hyperparameters) == 0:
+            return current_ids
+
+        hyperperams_dict = hyperparameters.to_flat_as_dict_primitive()
+        current_hyperparameters_hash = hashlib.md5(str.encode(str(hyperperams_dict))).hexdigest()
+
+        new_current_ids = []
+        for current_id, di in zip(current_ids, data_inputs):
+            m = hashlib.md5()
+            m.update(str.encode(current_id))
+            m.update(str.encode(str(di)))
             m.update(str.encode(current_hyperparameters_hash))
             new_current_ids.append(m.hexdigest())
 
@@ -295,7 +332,8 @@ class ExecutionContext:
             root: str = DEFAULT_CACHE_FOLDER,
             execution_mode: ExecutionMode = None,
             stripped_saver: BaseSaver = None,
-            parents=None
+            parents: List['BaseStep'] = None,
+            services: Dict[Type, object] = None
     ):
         if execution_mode is None:
             execution_mode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM
@@ -309,6 +347,57 @@ class ExecutionContext:
         if parents is None:
             parents = []
         self.parents: List[BaseStep] = parents
+
+        if services is None:
+            services: Dict[Type, object] = dict()
+        self.services: Dict[Type, object] = services
+
+    def set_service_locator(self, services: Dict[Type, object]) -> 'ExecutionContext':
+        """
+        Register abstract class type instances.
+
+        :param services:  instance
+        :return: self
+        """
+        self.services: Dict[Type, object] = services
+        return self
+
+    def register_service(self, service_abstract_class_type: Type, service_instance: object) -> 'ExecutionContext':
+        """
+        Register base class instance inside the services.
+
+        :param service_abstract_class_type: base type
+        :param service_instance:  instance
+        :return: self
+        """
+        self.services[service_abstract_class_type] = service_instance
+        return self
+
+    def get_service(self, service_abstract_class_type: Type) -> object:
+        """
+        Get the registered instance for the given abstract class type.
+
+        :param service_abstract_class_type: base type
+        :return: self
+        """
+        return self.services[service_abstract_class_type]
+
+    def get_services(self) -> object:
+        """
+        Get the registered instances in the services.
+
+        :return: self
+        """
+        return self.services
+
+    def has_service(self, service_abstract_class_type: Type) -> bool:
+        """
+        Return a bool indicating if the service has been registered.
+
+        :param service_abstract_class_type: base type
+        :return: if the service registered or not
+        """
+        return service_abstract_class_type in self.services
 
     def get_execution_mode(self) -> ExecutionMode:
         return self.execution_mode
@@ -382,10 +471,20 @@ class ExecutionContext:
         :param step: step to add to the execution context
         :return: self
         """
-        return ExecutionContext(root=self.root, execution_mode=self.execution_mode, parents=self.parents + [step])
+        return ExecutionContext(
+            root=self.root,
+            execution_mode=self.execution_mode,
+            parents=self.parents + [step],
+            services=self.services
+        )
 
     def copy(self):
-        return ExecutionContext(root=self.root, execution_mode=self.execution_mode, parents=copy(self.parents))
+        return ExecutionContext(
+            root=self.root,
+            execution_mode=self.execution_mode,
+            parents=copy(self.parents),
+            services=self.services
+        )
 
     def peek(self) -> 'BaseTransformer':
         """
@@ -1552,7 +1651,7 @@ class _HasSavers(ABC):
 
         def _initialize_if_needed(step):
             if not step.is_initialized:
-                step.setup()
+                step.setup(context=context)
             return RecursiveDict()
 
         def _invalidate(step):
@@ -1750,7 +1849,7 @@ class _HasMutations(ABC):
         except AttributeError as e:
             if warn:
                 import warnings
-                warnings.warn(e)
+                warnings.warn(repr(e))
 
         return new_base_step
 
@@ -1798,7 +1897,109 @@ class _HasMutations(ABC):
         return self
 
 
+
+
+
+
+class _CouldHaveContext:
+    """
+    Step that can have a context.
+    It has "has service assertions" to ensure that the context has registered all the necessary services.
+
+    A context can be injected with the with_context method:
+
+    .. code-block:: python
+
+        context = ExecutionContext(root=tmpdir)
+        service = SomeService()
+        context.set_service_locator({BaseService: service})
+
+        p = Pipeline([
+            SomeStep().assert_has_services(BaseService)
+        ]).with_context(context=context)
+
+
+    Context services can be used inside any step with handler methods:
+
+    .. code-block:: python
+
+        class SomeStep(ForceHandleMixin, Identity):
+            def __init__(self):
+                Identity.__init__(self)
+                ForceHandleMixin.__init__(self)
+
+            def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+                service: BaseService = context.get_service(BaseService)
+                service.service_method(data_container.data_inputs)
+                return data_container
+
+
+    .. seealso::
+        :class:`~neuraxle.base.BaseTransformer`,
+        :class:`~neuraxle.base._TransformerStep`,
+    """
+
+    def __init__(self, has_service_assertions: List[Type] = None):
+        if has_service_assertions is None:
+            has_service_assertions = []
+
+        self.has_service_assertions: List[Type] = has_service_assertions
+
+    def with_context(self, context: ExecutionContext):
+        """
+        An higher order step to inject a context inside a step.
+        A step with a context forces the pipeline to use that context through handler methods.
+        This is useful for dependency injection because you can register services inside the :class:`ExecutionContext`.
+        It also ensures that the context has registered all the necessary services.
+
+        .. code-block:: python
+
+            context = ExecutionContext(root=tmpdir)
+            context.set_service_locator(ServiceLocator().services) # where services is of type Dict[Type, object]
+
+            p = WithContext(Pipeline([
+                SomeStep().with_assertion_has_services(BaseService)
+            ]), context)
+
+
+        .. seealso::
+            :class:`BaseStep`,
+            :class:`ExecutionContext`,
+            :class:`BaseTransformer`
+        """
+        return StepWithContext(wrapped=self, context=context)
+
+    def assert_has_services(self, *service_assertions) -> '_CouldHaveContext':
+        """
+        Set all service assertions to be made before processing the step.
+        :param service_assertions: base types that need to be available in the execution context
+        :return: self
+        """
+        self.has_service_assertions: List[Type] = service_assertions
+        return self
+
+    def _assert_has_services(self, context: ExecutionContext) -> RecursiveDict:
+        """
+        Assert that all the necessary services are provided in the execution context.
+
+        :param context: execution context
+        :return: self
+        """
+        for has_service_assertion in self.has_service_assertions:
+            if not context.has_service(service_abstract_class_type=has_service_assertion):
+                exception_message: str = '{} dependency missing in the ExecutionContext. Please register the service {} inside the ExecutionContext.\n'.format(
+                    has_service_assertion.__name__,
+                    has_service_assertion.__name__
+                )
+                step_method_message: str = 'You can do so by calling register_service, or set_services on any step.\n'
+                execution_context_methods_messsage: str = 'There is also the option to register all services inside the ExecutionContext'
+                raise AssertionError(exception_message + step_method_message + execution_context_methods_messsage)
+
+        return RecursiveDict()
+
+
 class BaseTransformer(
+    _CouldHaveContext,
     _HasMutations,
     _HasHyperparamsSpace,
     _HasHyperparams,
@@ -1847,6 +2048,7 @@ class BaseTransformer(
         :class:`~neuraxle.base._HasSavers`,
         :class:`~neuraxle.base._HasMutations`,
         :class:`~neuraxle.base._HasRecursiveMethods`,
+        :class:`~neuraxle.base._HasDependencies`,
         :class:`~neuraxle.base.NonFittableMixin`,
         :class:`~neuraxle.base.NonTransformableMixin`
     """
@@ -1866,6 +2068,7 @@ class BaseTransformer(
         _HasSavers.__init__(self, savers=savers)
         _HasHashers.__init__(self, hashers=hashers)
         _HasMutations.__init__(self)
+        _CouldHaveContext.__init__(self)
 
         if name is None:
             name = self.__class__.__name__
@@ -1875,13 +2078,14 @@ class BaseTransformer(
         self.is_initialized = False
         self.is_train: bool = True
 
-    def setup(self) -> 'BaseTransformer':
+    def setup(self, context: ExecutionContext = None) -> 'BaseTransformer':
         """
         Initialize the step before it runs. Only from here and not before that heavy things should be created
         (e.g.: things inside GPU), and NOT in the constructor.
 
         The setup method is called for each step before any fit, or fit_transform.
 
+        :param context: execution context
         :return: self
         """
         self.is_initialized = True
@@ -2194,19 +2398,23 @@ class MetaStepMixin(_HasChildrenMixin):
         :class:`~neuraxle.steps.loop.StepClonerForEachDataInput`
     """
 
-    def __init__(self, wrapped: BaseTransformer = None):
-        self.wrapped: BaseTransformer = _sklearn_to_neuraxle_step(wrapped)
-        self._ensure_proper_mixin_init_order()
+    def __init__(self, wrapped: BaseTransformer = None, savers: List[BaseSaver] = None):
+        if savers is None:
+            savers = []
 
-    def _ensure_proper_mixin_init_order(self):
+        self.wrapped: BaseTransformer = _sklearn_to_neuraxle_step(wrapped)
+        self._ensure_proper_mixin_init_order(savers)
+
+    def _ensure_proper_mixin_init_order(self, savers: List[BaseSaver]):
+        savers.append(MetaStepJoblibStepSaver())
         if not hasattr(self, 'savers'):
             warnings.warn(
                 'Please initialize Mixins in the good order. MetaStepMixin should be initialized after '
                 'BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers. Saving might fail.'.format(
                     self.wrapped.name))
-            self.savers = [MetaStepJoblibStepSaver()]
+            self.savers = savers
         else:
-            self.savers.append(MetaStepJoblibStepSaver())
+            self.savers.extend(savers)
 
     def set_step(self, step: BaseTransformer) -> BaseStep:
         """
@@ -2219,14 +2427,15 @@ class MetaStepMixin(_HasChildrenMixin):
         self.wrapped: BaseTransformer = _sklearn_to_neuraxle_step(step)
         return self
 
-    def setup(self) -> BaseStep:
+    def setup(self, context: ExecutionContext = None) -> BaseStep:
         """
         Initialize step before it runs. Also initialize the wrapped step.
 
+        :param context: execution context
         :return: self
         """
-        super().setup()
-        self.wrapped.setup()
+        super().setup(context=context)
+        self.wrapped.setup(context=context)
         self.is_initialized = True
         return self
 
@@ -2666,10 +2875,11 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         self.steps_as_tuple: NamedTupleList = self._patch_missing_names(steps_as_tuple)
         self._refresh_steps()
 
-    def setup(self) -> 'BaseTransformer':
+    def setup(self, context: ExecutionContext = None) -> 'BaseTransformer':
         """
         Initialize step before it runs.
 
+        :param context: execution context
         :return: self
         """
         if self.is_initialized:
@@ -3304,8 +3514,6 @@ class ForceHandleMixin:
         return context, data_container
 
 
-
-
 class ForceHandleOnlyMixin(ForceHandleMixin, HandleOnlyMixin):
     """
     A step that automatically calls handle methods in the transform, fit, and fit_transform methods.
@@ -3353,6 +3561,7 @@ class IdentityHandlerMethodsMixin(ForceHandleOnlyMixin):
         :class:`HandleOnlyMixin`,
         :class:`ForceHandleOnlyMixin`
     """
+
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
             ('BaseTransformer', DataContainer):
         return self
@@ -3419,3 +3628,59 @@ class FullDumpLoader(Identity):
 
         context.pop()
         return loaded_self.load(context, full_dump)
+
+
+class _WithContextStepSaver(BaseSaver):
+    """
+    Custom saver for steps that have an :class:`ExecutionContext`.
+    Loading will inject the saved dependencies inside the :class`ExecutionContext`.
+    .. seealso::
+        :class:`_HasContext`,
+        :class:`BaseSaver`,
+        :class:`ExecutionContext`
+    """
+
+    def load_step(self, step: 'StepWithContext', context: ExecutionContext) -> 'StepWithContext':
+        """
+        Load a step with a context by setting the context as the loading context.
+
+        :param step: step with context
+        :param context: execution context to load from
+        :return: loaded step with context
+        """
+        step.context = context
+        step.apply('_assert_has_services', context=context)
+        return step
+
+    def save_step(self, step: 'StepWithContext', context: ExecutionContext) -> 'StepWithContext':
+        """
+        If needed, remove parents of a step with context before saving.
+
+        :param step: step with context
+        :param context: execution context to load from
+        :return: saved step with context
+        """
+        del step.context
+        return step
+
+    def can_load(self, step: 'StepWithContext', context: 'ExecutionContext'):
+        return True
+
+class StepWithContext(ForceHandleMixin, MetaStep):
+    def __init__(self, wrapped: 'BaseTransformer', context: ExecutionContext):
+        MetaStep.__init__(self, wrapped=wrapped, savers=[_WithContextStepSaver()])
+        self.apply('_assert_has_services', context=context)
+        self.context = context
+        ForceHandleMixin.__init__(self)
+
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+        """
+        Inject the given context before processing the wrapped step.
+
+        :param data_container: data container to process
+        :return: data container, execution context
+        """
+        if len(context) > 0:
+            raise AssertionError('WithContext should be at the root of the pipeline.')
+
+        return data_container, self.context

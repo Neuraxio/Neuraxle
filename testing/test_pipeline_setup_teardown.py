@@ -33,7 +33,7 @@ class SomeStepSetup(SomeStep):
         SomeStep.__init__(self)
         self.called_with = None
 
-    def setup(self) -> 'BaseStep':
+    def setup(self, context: ExecutionContext = None) -> 'BaseStep':
         self.is_initialized = True
         return self
 
