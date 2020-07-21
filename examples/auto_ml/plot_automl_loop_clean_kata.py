@@ -4,7 +4,8 @@ Usage of AutoML loop, and hyperparams with sklearn models.
 
 This demonstrates how you can build an AutoML loop that finds the best possible sklearn classifier.
 It also shows you how to add hyperparams to sklearn steps using SKLearnWrapper.
-This example has been taken from the following repository : https://github.com/Neuraxio/Kata-Clean-Machine-Learning-From-Dirty-Code
+This example has been derived and simplified from the following repository: https://github.com/Neuraxio/Kata-Clean-Machine-Learning-From-Dirty-Code
+Here, 2D data is fitted, whereas in the original example 3D (sequential / time series) data is preprocessed and then fitted with the same models. 
 
 ..
     Copyright 2019, Neuraxio Inc.
