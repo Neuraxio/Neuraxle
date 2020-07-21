@@ -39,7 +39,6 @@ from typing import List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, 
 from joblib import dump, load
 from sklearn.base import BaseEstimator
 
-from build.lib.neuraxle.base import _TransformerStep
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
 
@@ -871,7 +870,7 @@ class _TransformerStep(ABC):
         """
         return self, self.transform(data_inputs)
 
-    def fit(self, data_inputs, expected_outputs) -> _TransformerStep:
+    def fit(self, data_inputs, expected_outputs) -> '_TransformerStep':
         """
         Fit given data inputs. By default, a step only transforms in the fit transform method.
         To add fitting to your step, see class:`_FittableStep` for more info.
@@ -2837,9 +2836,10 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
             hyperparams: HyperparameterSamples = dict(),
             hyperparams_space: HyperparameterSpace = dict()
     ):
-        self.set_steps(steps_as_tuple)
-        _HasChildrenMixin.__init__(self)
         BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
+        _HasChildrenMixin.__init__(self)
+
+        self.set_steps(steps_as_tuple)
         self.set_savers([TruncableJoblibStepSaver()] + self.savers)
 
     def are_steps_before_index_the_same(self, other: 'TruncableSteps', index: int) -> bool:
