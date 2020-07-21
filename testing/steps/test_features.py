@@ -81,7 +81,7 @@ def test_fft_peak_bin_with_values():
 def test_cheap_3D_to_2D_transformer(hyperparams: HyperparameterSamples, expected_feature_count: int):
     step = Cheap3DTo2DTransformer()
     step.set_hyperparams(hyperparams=hyperparams)
-    data_inputs = np.random.random((4, 5, 2))
+    data_inputs = np.random.random((7, 5, 2))
 
     outputs = step.transform(data_inputs)
 
