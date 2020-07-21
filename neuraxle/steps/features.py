@@ -44,7 +44,7 @@ class FFTPeakBinWithValue(FeatureUnion):
 
 class Cheap3DTo2DTransformer(ChooseOneOrManyStepsOf):
     """
-    Prebuild class to featurize 3D data for classification.
+    Prebuild class to featurize 3D data into 2D data for simple classification or regression, for instance.
 
     You can enable, or disable features using hyperparams :
 
