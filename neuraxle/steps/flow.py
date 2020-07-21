@@ -576,9 +576,9 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
         :rtype: (ReversiblePreprocessingWrapper, DataContainer)
         """
         self["preprocessing_step"], data_container = \
-            self["preprocessing_step"].handle_fit_transform(data_container, context.push(self["preprocessing_step"]))
+            self["preprocessing_step"].handle_fit_transform(data_container, context)
         self["postprocessing_step"] = \
-            self["postprocessing_step"].handle_fit(data_container, context.push(self["postprocessing_step"]))
+            self["postprocessing_step"].handle_fit(data_container, context)
 
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
