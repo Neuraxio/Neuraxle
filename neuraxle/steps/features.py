@@ -1,5 +1,5 @@
 """
-Feature Steps
+Featurization Steps
 ==========================================================
 You can find here steps that featurize your data.
 
