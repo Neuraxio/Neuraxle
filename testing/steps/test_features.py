@@ -85,4 +85,4 @@ def test_cheap_3D_to_2D_transformer(hyperparams: HyperparameterSamples, expected
 
     outputs = step.transform(data_inputs)
 
-    assert outputs.shape == (4, expected_feature_count)
+    assert outputs.shape == (5-1, expected_feature_count)
