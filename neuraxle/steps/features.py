@@ -30,6 +30,7 @@ from neuraxle.union import FeatureUnion
 class FFTPeakBinWithValue(FeatureUnion):
     """
     Compute peak fft bins (int), and their magnitudes' value (float), to concatenate them.
+    This is intended to be used only after a NumpyFFT absolute step.
 
     .. seealso::
         :class:`~neuraxle.base.BaseStep`,
