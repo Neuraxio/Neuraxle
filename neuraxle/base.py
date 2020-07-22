@@ -48,7 +48,7 @@ DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
 class BaseHasher(ABC):
     """
     Base class to hash hyperparamters, and data input ids together.
-    The :class:`DataContainer` class uses the hashed values for its current ids.
+    The :class:`~neuraxle.data_container.DataContainer` class uses the hashed values for its current ids.
     :class:`BaseStep` uses many :class:`BaseHasher` objects
     to hash hyperparameters, and data inputs ids together after each transform.
 
@@ -72,7 +72,7 @@ class BaseHasher(ABC):
     @abstractmethod
     def hash(self, current_ids: List[str], hyperparameters: HyperparameterSamples, data_inputs: Iterable) -> List[str]:
         """
-        Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together.
+        Hash :class:`~neuraxle.data_container.DataContainer`.current_ids, data inputs, and hyperparameters together.
 
         :param current_ids: current hashed ids (can be None if this function has not been called yet)
         :param hyperparameters: step hyperparameters to hash with current ids
@@ -87,7 +87,7 @@ class HashlibMd5Hasher(BaseHasher):
     Class to hash hyperparamters, and data input ids together using md5 algorithm from hashlib :
     `<https://docs.python.org/3/library/hashlib.html>`_
 
-    The :class:`DataContainer` class uses the hashed values for its current ids.
+    The :class:`~neuraxle.data_container.DataContainer` class uses the hashed values for its current ids.
     :class:`BaseStep` uses many :class:`BaseHasher` objects
     to hash hyperparameters, and data inputs ids together after each transform.
 
@@ -118,7 +118,7 @@ class HashlibMd5Hasher(BaseHasher):
 
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None) -> List[str]:
         """
-        Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together
+        Hash :class:`~neuraxle.data_container.DataContainer`.current_ids, data inputs, and hyperparameters together
         using  `hashlib.md5 <https://docs.python.org/3/library/hashlib.html>`_
 
         :param current_ids: current hashed ids (can be None if this function has not been called yet)
@@ -151,7 +151,7 @@ class HashlibMd5Hasher(BaseHasher):
 class HashlibMd5ValueHasher(HashlibMd5Hasher):
     def hash(self, current_ids, hyperparameters, data_inputs: Any = None) -> List[str]:
         """
-        Hash :class:`DataContainer`.current_ids, data inputs, and hyperparameters together
+        Hash :class:`~neuraxle.data_container.DataContainer`.current_ids, data inputs, and hyperparameters together
         using  `hashlib.md5 <https://docs.python.org/3/library/hashlib.html>`_
 
         :param current_ids: current hashed ids (can be None if this function has not been called yet)
@@ -191,8 +191,8 @@ class BaseSaver(ABC):
     Each :class`BaseStep` can potentially have multiple savers to make serialization possible.
 
     .. seealso::
-        :func:`~neuraxle.base.BaseStep.save`,
-        :func:`~neuraxle.base.BaseStep.load`
+        :func:`~neuraxle.base._HasSavers.save`,
+        :func:`~neuraxle.base._HasSavers.load`
     """
 
     @abstractmethod
@@ -317,8 +317,8 @@ class ExecutionContext:
     First item in execution context parents is root, second is nested, and so on. This is like a stack.
 
     The execution context is used for fitted step saving, and caching :
-        * :func:`~neuraxle.base.BaseStep.save`
-        * :func:`~neuraxle.base.BaseStep.load`
+        * :func:`~neuraxle.base._HasSavers.save`
+        * :func:`~neuraxle.base._HasSavers.load`
         * :func:`~neuraxle.steps.caching.ValueCachingWrapper.handle_transform`
         * :func:`~neuraxle.steps.caching.ValueCachingWrapper.handle_fit_transform`
 
@@ -404,7 +404,7 @@ class ExecutionContext:
 
     def save(self, full_dump=False):
         """
-        Save all unsaved steps in the parents of the execution context using :func:`~neuraxle.base.BaseStep.save`.
+        Save all unsaved steps in the parents of the execution context using :func:`~neuraxle.base._HasSavers.save`.
         This method is called from a step checkpointer inside a :class:`Checkpoint`.
 
         :param full_dump: save full pipeline dump to be able to load everything without source code (false by default).
@@ -412,7 +412,7 @@ class ExecutionContext:
 
         .. seealso::
             :class:`BaseStep`,
-            :func:`~neuraxle.base.BaseStep.save`
+            :func:`~neuraxle.base._HasSavers.save`
         """
         while not self.empty():
             should_save_last_step = self.should_save_last_step()
@@ -591,13 +591,13 @@ class _RecursiveArguments:
 
     .. seealso::
         :class:`_HasChildrenMixin`,
-        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
-        :func:`~neuraxle.base.BaseStep.get_hyperparams_space`,
-        :func:`~neuraxle.base.BaseStep.get_hyperparams`,
-        :func:`~neuraxle.base.BaseStep.set_hyperparams`,
-        :func:`~neuraxle.base.BaseStep.update_hyperparams`,
-        :func:`~neuraxle.base.BaseStep.update_hyperparams_space`,
-        :func:`~neuraxle.base.BaseStep.invalidate`
+        :func:`~neuraxle.base._HasHyperparamsSpace.set_hyperparams_space`,
+        :func:`~neuraxle.base._HasHyperparamsSpace.get_hyperparams_space`,
+        :func:`~neuraxle.base._HasHyperparams.get_hyperparams`,
+        :func:`~neuraxle.base._HasHyperparams.set_hyperparams`,
+        :func:`~neuraxle.base._HasHyperparams.update_hyperparams`,
+        :func:`~neuraxle.base._HasHyperparamsSpace.update_hyperparams_space`,
+        :func:`~neuraxle.base.BaseTransformer.invalidate`
     """
 
     def __init__(self, ra=None, *args, **kwargs):
@@ -653,7 +653,9 @@ class _HasRecursiveMethods:
     An internal class to represent a step that has recursive methods.
     The apply :func:`apply` function is used to apply a method to a step and its children.
 
+
     Example usage :
+
 
     .. code-block:: python
 
@@ -695,6 +697,7 @@ class _HasRecursiveMethods:
         :param args: any additional arguments to be passed to the method
         :param kwargs: any additional positional arguments to be passed to the method
         :return: method outputs, or None if no method has been applied
+
         .. seealso::
             :class:`_RecursiveArguments`,
             :class:`_HasChildrenMixin`
@@ -760,7 +763,7 @@ class _TransformerStep(ABC):
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
-        Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.transform`.
+        Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base._TransformerStep.transform`.
         The default behavior is to rehash current ids with the step hyperparameters.
 
         :param data_container: the data container to transform
@@ -837,11 +840,13 @@ class _TransformerStep(ABC):
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseTransformer':
         """
-        Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
+        Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base._FittableStep.fit`.
         The default behavior is to rehash current ids with the step hyperparameters.
+
         :param data_container: the data container to transform
         :param context: execution context
         :return: tuple(fitted pipeline, data_container)
+
         .. seealso::
             :class:`~neuraxle.data_container.DataContainer`,
             :class:`~neuraxle.pipeline.Pipeline`
@@ -852,8 +857,9 @@ class _TransformerStep(ABC):
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> \
             ('BaseTransformer', DataContainer):
         """
-        Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.fit_transform`.
+        Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base._FittableStep.fit_transform`.
         The default behavior is to rehash current ids with the step hyperparameters.
+
         :param data_container: the data container to transform
         :param context: execution context
         :return: tuple(fitted pipeline, data_container)
@@ -864,6 +870,7 @@ class _TransformerStep(ABC):
         """
         Fit transform given data inputs. By default, a step only transforms in the fit transform method.
         To add fitting to your step, see class:`_FittableStep` for more info.
+
         :param data_inputs: data inputs
         :param expected_outputs: expected outputs to fit on
         :return: transformed data inputs
@@ -888,7 +895,7 @@ class _TransformerStep(ABC):
 
     def predict(self, data_input):
         """
-        Predict the expected output in test mode using func:`~.transform`, but by setting self to test mode first and then reverting the mode.
+        Predict the expected output in test mode using func:`~neuraxle.base._TransformerStep.transform`, but by setting self to test mode first and then reverting the mode.
 
         :param data_input: data input to predict
         :return: prediction
@@ -903,7 +910,7 @@ class _TransformerStep(ABC):
 
     def handle_inverse_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
-        Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.inverse_transform`.
+        Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base._TransformerStep.inverse_transform`.
         The default behavior is to rehash current ids with the step hyperparameters.
 
         :param data_container: the data container to inverse transform
@@ -931,19 +938,17 @@ class _TransformerStep(ABC):
         """
         Inverse Transform the given transformed data inputs.
 
-        :func:`~neuraxle.base.BaseStep.mutate` or :func:`~neuraxle.base.BaseStep.reverse` can be called to change the default transform behavior :
+        :func:`~neuraxle.base.BaseStep.mutate` or :func:`~neuraxle.base.BaseTransformer.reverse` can be called to change the default transform behavior :
+
 
         .. code-block:: python
 
             p = Pipeline([MultiplyBy()])
-
             _in = np.array([1, 2])
-
             _out = p.transform(_in)
-
             _regenerated_in = reversed(p).transform(_out)
-
             assert np.array_equal(_regenerated_in, _in)
+
 
         :param processed_outputs: processed data inputs
         :return: inverse transformed processed outputs
@@ -964,7 +969,7 @@ class _FittableStep:
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
-        Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base.BaseStep.fit`.
+        Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base._FittableStep.fit`.
         The default behavior is to rehash current ids with the step hyperparameters.
 
         :param data_container: the data container to transform
@@ -984,6 +989,7 @@ class _FittableStep:
     def _will_fit(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
         """
         Before fit is called, apply side effects on the step, the data container, or the execution context.
+
         :param data_container: data container
         :param context: execution context
         :return: (data container, execution context)
@@ -1004,6 +1010,7 @@ class _FittableStep:
     def _did_fit(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Apply side effects before fit is called.
+
         :param data_container: data container
         :param context: execution context
         :return: (data container, execution context)
@@ -1046,7 +1053,7 @@ class _FittableStep:
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> \
             ('BaseStep', DataContainer):
         """
-        Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base.BaseStep.fit_transform`.
+        Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base._FittableStep.fit_transform`.
         The default behavior is to rehash current ids with the step hyperparameters.
 
         :param data_container: the data container to transform
@@ -1162,7 +1169,7 @@ class _CustomHandlerMethods:
         """
         Handle fit_transform with a custom handler method for fitting, and transforming the data container.
         The custom method to override is fit_transform_data_container.
-        The custom method fit_transform_data_container replaces _fit_transform_data_container.
+        The custom method fit_transform_data_container replaces :func:`~neuraxle.base._FittableStep._fit_transform_data_container`.
 
         :param data_container: the data container to transform
         :param context: execution context
@@ -1187,7 +1194,7 @@ class _CustomHandlerMethods:
         """
         Handle transform with a custom handler method for transforming the data container.
         The custom method to override is transform_data_container.
-        The custom method transform_data_container replaces _transform_data_container.
+        The custom method transform_data_container replaces :func:`~neuraxle.base._TransformerStep._transform_data_container`.
 
         :param data_container: the data container to transform
         :param context: execution context
@@ -1276,6 +1283,7 @@ class _HasHyperparamsSpace(ABC):
                 'hp': RandInt(0, 10)
             }))
 
+
         :param hyperparams_space: hyperparameters space
         :return: self
 
@@ -1320,6 +1328,7 @@ class _HasHyperparamsSpace(ABC):
 
             assert step.get_hyperparams_space()['learning_rate'] == LogNormal(0.5, 0.1)
             assert step.get_hyperparams_space()['weight_decay'] == LogNormal(0.001, 0.0005)
+
 
         :param hyperparams_space: hyperparameters space
         :return: self
@@ -1373,6 +1382,7 @@ class _HasHyperparams(ABC):
     Every step has hyperparemeters, and hyperparameters spaces that can be set before the learning process begins.
     Hyperparameters can not only be passed in the constructor, but also be set by the pipeline that contains all of the steps :
 
+
     .. code-block:: python
 
         pipeline = Pipeline([
@@ -1414,11 +1424,12 @@ class _HasHyperparams(ABC):
                 'learning_rate': 0.10
             }))
 
+
         :param hyperparams: hyperparameters
         :return: self
 
         .. note::
-        This is a recursive method that will call :func:`BaseStep._set_hyperparams` in the end.
+        This is a recursive method that will call :func:`~neuraxle.base._HasHyperparams._set_hyperparams` in the end.
         .. seealso::
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
             :class:̀_HasChildrenMixin`,
@@ -1480,7 +1491,7 @@ class _HasHyperparams(ABC):
         :return: step hyperparameters
 
         .. note::
-        This is a recursive method that will call :func:`BaseStep._get_hyperparams` in the end.
+        This is a recursive method that will call :func:`~neuraxle.base._HasHyperparams._get_hyperparams` in the end.
         .. seealso::
             * :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
             :class:̀_HasChildrenMixin`,
@@ -1509,13 +1520,13 @@ class _HasHyperparams(ABC):
         :param **params: arbitrary number of arguments for hyperparameters
 
         .. note::
-            This is a recursive method that will call :func:`BaseStep._set_params` in the end.
+            This is a recursive method that will call :func:`~neuraxle.base._HasHyperparams._set_params` in the end.
         .. seealso::
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
             :class:̀_HasChildrenMixin`,
-            :func:`BaseStep.apply`,
-            :func:`_HasChildrenMixin._apply`,
-            :func:`_HasChildrenMixin._set_params`
+            :func:`~neuraxle.base._HasRecursiveMethods.apply`,
+            :func:`~neuraxle.base._HasChildrenMixin._apply`,
+            :func:`~neuraxle.base._HasChildrenMixin._set_params`
         """
         self.apply(method='_set_params', params=HyperparameterSamples(params).to_flat())
         return self
@@ -1541,9 +1552,9 @@ class _HasHyperparams(ABC):
         .. seealso::
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
             :class:̀_HasChildrenMixin`,
-            :func:`BaseStep.apply`,
-            :func:`_HasChildrenMixin._apply`,
-            :func:`_HasChildrenMixin._get_params`
+            :func:`~neuraxle.base._HasRecursiveMethods.apply`,
+            :func:`~neuraxle.base._HasChildrenMixin.apply`,
+            :func:`~neuraxle.base._HasHyperparams._get_params`
         """
         results: HyperparameterSamples = self.apply(method='_get_params')
         return results
@@ -1558,7 +1569,7 @@ class _HasSavers(ABC):
     A step with savers is saved using its list of savers.
     Each saver saves some parts of the step.
 
-    A pipeline can save the step that need to be saved (see :func:`~.save`) can be saved :
+    A pipeline can save the step that need to be saved (see :func:`~neuraxle.base._HasSavers.save`) can be saved :
 
     .. code-block:: python
 
@@ -1567,6 +1578,7 @@ class _HasSavers(ABC):
         ])
         step.save()
         step = step.load()
+
 
     Or, it can also save a full dump that can be reloaded without any source code :
 
@@ -1618,11 +1630,12 @@ class _HasSavers(ABC):
         If the step has been initialized and invalidated, then it must be saved.
 
         A step is invalidated when any of the following things happen :
+
             * a mutation has been performed on the step :func:`~.mutate`
-            * an hyperparameter has changed func:`~.set_hyperparams`
-            * an hyperparameter space has changed func:`~.set_hyperparams_space`
-            * a call to the fit method func:`~.handle_fit`
-            * a call to the fit_transform method func:`~.handle_fit_transform`
+            * an hyperparameter has changed func:`~neuraxle.base._HasHyperparams.set_hyperparams`
+            * an hyperparameter space has changed func:`~neuraxle.base._HasHyperparamsSpace.set_hyperparams_space`
+            * a call to the fit method func:`~neuraxle.base._FittableStep.handle_fit`
+            * a call to the fit_transform method func:`~neuraxle.base._FittableStep.handle_fit_transform`
             * the step name has changed func:`~neuraxle.base.BaseStep.set_name`
 
         :return: if the step should be saved
@@ -1972,6 +1985,7 @@ class _CouldHaveContext:
     def assert_has_services(self, *service_assertions) -> '_CouldHaveContext':
         """
         Set all service assertions to be made before processing the step.
+
         :param service_assertions: base types that need to be available in the execution context
         :return: self
         """
@@ -2013,7 +2027,7 @@ class BaseTransformer(
     Base class for a pipeline step that can only be transformed.
 
     Every step can be saved using its savers of type :class:`BaseSaver` (see :class:`~neuraxle.base._HasHashers` for more info).
-    Most step hash data inputs with hyperparams after every transformations to update the current ids inside the :class:`DataContainer` (see :class:`~neuraxle.base._HasHashers` for more info).
+    Most step hash data inputs with hyperparams after every transformations to update the current ids inside the :class:`~neuraxle.data_container.DataContainer` (see :class:`~neuraxle.base._HasHashers` for more info).
     Every step has hyperparemeters, and hyperparameters spaces that can be set before the learning process begins (see :class:`_HasHyperparams`, and :class:`_HasHyperparamsSpace` for more info).
 
     Example usage :
@@ -2096,19 +2110,19 @@ class BaseTransformer(
         Invalidate a step, and all of its children. Invalidating a step makes it eligible to be saved again.
 
         A step is invalidated when any of the following things happen :
-            * a mutation has been performed on the step : func:`~.mutate`
-            * an hyperparameter has changed func:`~.set_hyperparams`
-            * an hyperparameter space has changed func:`~.set_hyperparams_space`
-            * a call to the fit method func:`~.handle_fit`
-            * a call to the fit_transform method func:`~.handle_fit_transform`
+            * a mutation has been performed on the step: func:`~neuraxle.base._HasMutations.mutate`
+            * an hyperparameter has changed func: `~neuraxle.base._HasHyperparams.set_hyperparams`
+            * an hyperparameter space has changed func: `~neuraxle.base._HasHyperparamsSpace.set_hyperparams_space`
+            * a call to the fit method func:`~neuraxle.base._FittableStep.handle_fit`
+            * a call to the fit_transform method func:`~neuraxle.base._FittableStep.handle_fit_transform`
             * the step name has changed func:`~neuraxle.base.BaseStep.set_name`
 
         :return: self
         .. note::
             This is a recursive method used in :class:̀_HasChildrenMixin`.
         .. seealso::
-            :func:`BaseStep.apply`,
-            :func:`_HasChildrenMixin._apply`
+            :func:`~neuraxle.base._HasRecursiveMethods.apply`,
+            :func:`~neuraxle.base._HasChildrenMixin._apply`
         """
         self.apply(method='_invalidate')
         return self
@@ -2135,9 +2149,9 @@ class BaseTransformer(
         .. note::
             This is a recursive method used in :class:̀_HasChildrenMixin`.
         .. seealso::
-            :func:`BaseStep.apply`,
-            :func:`_HasChildrenMixin._apply`,
-            :func:`_HasChildrenMixin._set_train`
+            :func:`~neuraxle.base._HasRecursiveMethods.apply`,
+            :func:`~neuraxle.base._HasChildrenMixin._apply`
+            :func:`~neuraxle.base.BaseTransformer._set_train`
         """
         self.apply(method='_set_train', is_train=is_train)
         return self
@@ -2204,7 +2218,7 @@ class BaseTransformer(
 
         :return: a copy of self, reversed. Each contained object will also have been reversed if self is a pipeline.
         .. seealso::
-            :func:`~neuraxle.base.BaseStep.inverse_transform`
+            :func:`~neuraxle.base._TransformerStep.inverse_transform`
         """
         return self.mutate(new_method="inverse_transform", method_to_assign_to="transform")
 
@@ -2349,7 +2363,6 @@ class _HasChildrenMixin:
 class MetaStepMixin(_HasChildrenMixin):
     """
     A class to represent a step that wraps another step. It can be used for many things.
-
     For example, :class:`~neuraxle.steps.loop.ForEachDataInput` adds a loop before any calls to the wrapped step :
 
     .. code-block:: python
@@ -2543,7 +2556,7 @@ class MetaStepMixin(_HasChildrenMixin):
 
     def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseTransformer':
         """
-        Mutate self, and self.wrapped. Please refer to :func:`~neuraxle.base.BaseStep.mutate` for more information.
+        Mutate self, and self.wrapped. Please refer to :func:`~neuraxle.base._HasMutations.mutate` for more information.
 
         :param new_method: the method to replace transform with, if there is no pending ``will_mutate_to`` call.
         :param method_to_assign_to: the method to which the new method will be assigned to, if there is no pending ``will_mutate_to`` call.
@@ -2558,7 +2571,7 @@ class MetaStepMixin(_HasChildrenMixin):
     def will_mutate_to(self, new_base_step: 'BaseTransformer' = None, new_method: str = None,
                        method_to_assign_to: str = None) -> 'BaseTransformer':
         """
-        Add pending mutate self, self.wrapped. Please refer to :func:`~neuraxle.base.BaseStep.will_mutate_to` for more information.
+        Add pending mutate self, self.wrapped. Please refer to :func:`~neuraxle.base._HasMutations.will_mutate_to` for more information.
 
         :param new_base_step: if it is not None, upon calling ``mutate``, the object it will mutate to will be this provided new_base_step.
         :param method_to_assign_to: if it is not None, upon calling ``mutate``, the method_to_affect will be the one that is used on the provided new_base_step.
@@ -3092,11 +3105,9 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
             p[0:2] # returns a TruncableSteps containing the first, and second SomeStep()
             p['2'] # returns the second SomeStep()
 
+
         :param key: slice, index, or step name
-
         :return: truncated self
-
-
         .. seealso::
             :class:`~neuraxle.data_container.DataContainer`,
             `Getting model attributes from scikit-learn pipeline on stackoverflow <https://stackoverflow.com/questions/28822756/getting-model-attributes-from-scikit-learn-pipeline/58359509#58359509>`_
@@ -3460,7 +3471,7 @@ class ForceHandleMixin:
 
     def transform(self, data_inputs) -> Iterable:
         """
-        Using :func:`~neuraxle.base.BaseStep.handle_transform`, transform data inputs.
+        Using :func:`~neuraxle.base._TransformerStep.handle_transform`, transform data inputs.
 
         :param data_inputs: data inputs
         :return: outputs
@@ -3475,7 +3486,7 @@ class ForceHandleMixin:
 
     def fit(self, data_inputs, expected_outputs=None) -> 'HandleOnlyMixin':
         """
-        Using :func:`~neuraxle.base.BaseStep.handle_fit`, fit step with the given data inputs, and expected outputs.
+        Using :func:`~neuraxle.base._FittableStep.handle_fit`, fit step with the given data inputs, and expected outputs.
 
         :param data_inputs: data inputs
         :return: fitted self
@@ -3488,7 +3499,7 @@ class ForceHandleMixin:
     def fit_transform(self, data_inputs, expected_outputs=None) -> \
             Tuple['HandleOnlyMixin', Iterable]:
         """
-        Using :func:`~neuraxle.base.BaseStep.handle_fit_transform`, fit and transform step with the given data inputs, and expected outputs.
+        Using :func:`~neuraxle.base._FittableStep.handle_fit_transform`, fit and transform step with the given data inputs, and expected outputs.
 
         :param data_inputs: data inputs
         :return: fitted self, outputs
@@ -3590,7 +3601,7 @@ class EvaluableStepMixin:
 class FullDumpLoader(Identity):
     """
     Identity step that can load the full dump of a pipeline step.
-    Used by :func:`~neuraxle.base.BaseStep.load`.
+    Used by :func:`~neuraxle.base._HasSavers.load`.
 
     Usage example:
 
@@ -3634,6 +3645,7 @@ class _WithContextStepSaver(BaseSaver):
     """
     Custom saver for steps that have an :class:`ExecutionContext`.
     Loading will inject the saved dependencies inside the :class`ExecutionContext`.
+
     .. seealso::
         :class:`_HasContext`,
         :class:`BaseSaver`,
