@@ -484,10 +484,10 @@ We thank these organisations for generously supporting the project:
 
 .. raw:: html
 
-    <img src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/La-Cite-LP.png" width="260">
+    <img src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/La-Cite-LP.png" width="260px">
 
 -  Kimoby: https://www.kimoby.com/
 
 .. raw:: html
 
-    <img src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/kimoby.png" width="150px">
+    <img src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/kimoby.png" width="200px">
