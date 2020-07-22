@@ -466,7 +466,7 @@ We thank these organisations for generously supporting the project:
 
 .. raw:: html
 
-    <img src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/neuraxio.png" width="140px">
+    <img src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/neuraxio.png" width="150px">
 
 -  Umanéo Technologies Inc.: https://www.umaneo.com/
 
@@ -478,7 +478,7 @@ We thank these organisations for generously supporting the project:
 
 .. raw:: html
 
-    <img src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/solution_nexam_io.png" width="180px">
+    <img src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/solution_nexam_io.jpg" width="180px">
 
 -  La Cité, LP: https://www.lacitelp.com/
 
@@ -490,4 +490,4 @@ We thank these organisations for generously supporting the project:
 
 .. raw:: html
 
-    <img src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/kimoby.png" width="260">
+    <img src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/kimoby.png" width="150px">
