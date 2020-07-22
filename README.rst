@@ -23,8 +23,6 @@ Neuraxle Pipelines
     :target: https://pypi.org/project/neuraxle/
 
 
-.. image:: https://www.neuraxio.com/en/blog/assets/pipeline_1_small.jpg
-
 Neuraxle is a Machine Learning (ML) library for building neat pipelines,
 providing the right abstractions to both ease research, development, and
 deployment of your ML applications.
@@ -466,28 +464,30 @@ We thank these organisations for generously supporting the project:
 
 -  Neuraxio Inc.: https://github.com/Neuraxio
 
-
 .. raw:: html
 
-    <img src="https://www.neuraxio.com/images/neuraxio_logo_transparent.png" width="140px">
-
+    <img src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/neuraxio.png" width="140px">
 
 -  Umanéo Technologies Inc.: https://www.umaneo.com/
 
 .. raw:: html
 
-    <img src="https://uploads-ssl.webflow.com/5be35e61c9728278fc5f4150/5c6dabf76fc786262e6654a0_signature-courriel-logo-umaneo.png" width="200px">
+    <img src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/umaneo.png" width="200px">
 
-
--  Solution Nexam Inc.: https://www.nexam.io/
-
-.. raw:: html
-
-    <img src="https://www.neuraxio.com/images/solution_nexam_io.jpg" width="180px">
-
-
--  La Cité, LP: http://www.lacitelp.com/
+-  Solution Nexam Inc.: https://nexam.io/
 
 .. raw:: html
 
-    <img src="https://www.neuraxio.com/images/La-Cite-LP.png" width="260">
+    <img src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/solution_nexam_io.png" width="180px">
+
+-  La Cité, LP: https://www.lacitelp.com/
+
+.. raw:: html
+
+    <img src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/La-Cite-LP.png" width="260">
+
+-  Kimoby: https://www.kimoby.com/
+
+.. raw:: html
+
+    <img src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/kimoby.png" width="260">
