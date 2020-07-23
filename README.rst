@@ -171,7 +171,7 @@ Deep Learning Pipeline Training and Evaluation
 Here we train and evaluate with a train-validation split. Note that
 automatic hyperparameter tuning would require only a few more lines
 of code: see our
-`hyperparameter tuning example <https://www.neuraxle.org/stable/examples/boston_housing_meta_optimization.html#sphx-glr-examples-boston-housing-meta-optimization-py>`__.
+`hyperparameter tuning example <https://www.neuraxle.org/stable/examples/sklearn/plot_boston_housing_meta_optimization.html#sphx-glr-examples-sklearn-plot-boston-housing-meta-optimization-py>`__.
 
 .. code:: python
 
