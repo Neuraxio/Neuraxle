@@ -26,7 +26,7 @@ def test_load_full_dump_from_pipeline_name(tmpdir):
 
     # When
     pipeline, outputs = pipeline.fit_transform(DATA_INPUTS, EXPECTED_OUTPUTS)
-    pipeline.save(ExecutionContext(tmpdir), full_dump=True)
+    pipeline.save(full_dump=True, context=ExecutionContext(tmpdir))
 
     # Then
     loaded_pipeline = ExecutionContext(tmpdir).load(PIPELINE_NAME)
@@ -54,7 +54,7 @@ def test_load_full_dump_from_path(tmpdir):
 
     # When
     pipeline, outputs = pipeline.fit_transform(DATA_INPUTS, EXPECTED_OUTPUTS)
-    pipeline.save(ExecutionContext(tmpdir), full_dump=True)
+    pipeline.save(full_dump=True, context=ExecutionContext(tmpdir))
 
     # Then
     loaded_pipeline = ExecutionContext(tmpdir).load(os.path.join(PIPELINE_NAME, 'step_b'))

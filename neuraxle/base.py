@@ -239,6 +239,7 @@ class JoblibStepSaver(BaseSaver):
         context.mkdir()
 
         path = _create_step_path(step_name=step.name, context=context, summary_id=summary_id)
+        print('save_step', step.name, path)
         dump(step, path)
 
         return step
@@ -253,6 +254,7 @@ class JoblibStepSaver(BaseSaver):
         :return:
         """
         step_path = _create_step_path(context=context, step_name=step.name, summary_id=summary_id)
+        print('load_step', step.name, summary_id)
         loaded_step = load(step_path)
 
         # we need to keep the current steps in memory because they have been deleted before saving...
@@ -327,7 +329,7 @@ class ExecutionContext:
     def get_execution_mode(self) -> ExecutionMode:
         return self.execution_mode
 
-    def save(self, summary_id=None, full_dump=False):
+    def save(self, full_dump=False, summary_id=None):
         """
         Save all unsaved steps in the parents of the execution context using :func:`~neuraxle.base.BaseStep.save`.
         This method is called from a step checkpointer inside a :class:`Checkpoint`.
@@ -1815,6 +1817,38 @@ class _HasMutations(ABC):
         return self
 
 
+class _ResumableStep:
+    """
+    Mixin to represent a step that is resumable, for example a checkpoint on disk.
+
+    .. seealso::
+        :class:`_NonResumableStep`,
+        :class:`BaseTransformer`,
+        :class:`neuraxle.checkpoints.Checkpoint`,
+        :class:`neuraxle.pipeline.ResumablePipeline`,
+        :class:`neuraxle.pipeline.MetaStepMixin`
+    """
+
+    @abstractmethod
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
+        """
+        Returns True if a step can be resumed with the given the data container, and execution context.
+        See Checkpoint class documentation for more details on how a resumable checkpoint works.
+
+        :param data_container: data container to resume from
+        :param context: execution context to resume from
+        :return: if we can resume
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def resume(self, data_container: DataContainer, context: ExecutionContext):
+        raise NotImplementedError()
+
+    def __str__(self):
+        return self.__repr__()
+
+
 class _NonResumableStep:
     """
     Mixin to represent a step that is not resumable.
@@ -1843,7 +1877,6 @@ class _NonResumableStep:
         :return: non resumed data container
         """
         return data_container
-
 
 
 class BaseTransformer(
@@ -2143,7 +2176,7 @@ class BaseStep(_FittableStep, BaseTransformer, ABC):
     pass
 
 
-class _HasChildrenMixin:
+class _HasChildrenMixin(_ResumableStep):
     """
     Mixin to add behavior to the steps that have children (sub steps).
 
@@ -2152,6 +2185,70 @@ class _HasChildrenMixin:
         :class:`~neuraxle.base.TruncableSteps`,
         :class:`~neuraxle.base.TruncableSteps`
     """
+
+    def should_resume(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Return True if the pipeline has a saved checkpoint that it can resume from.
+
+        :param context: execution context
+        :param data_container: the data container to resume
+        :return: bool
+        """
+        context: ExecutionContext = context.push(self)
+        children = self.get_children()
+        for index, step in enumerate(reversed(children)):
+            _, resumable_data_container = self.get_resumable_data_container_for_children(children, data_container, index)
+            if isinstance(step, _ResumableStep) and step.should_resume(resumable_data_container, context):
+                return True
+
+        return False
+
+    def resume(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Resume the data container prior to the last step before the parent steps.
+
+        :param data_container: data container hashed with steps prior to self
+        :param context: execution context
+        :return: data container hashed with all parent steps
+        """
+        _, data_container = self.resume_children(data_container, context.push(self))
+        return data_container
+
+    def resume_children(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[int, DataContainer]:
+        """
+        Resume the data container prior to the last step before the parent steps.
+
+        :param data_container: data container hashed with steps prior to self
+        :param context: execution context
+        :return: data container hashed with all parent steps
+        """
+        children = self.get_children()
+        for index, step in enumerate(reversed(children)):
+            index_children, resumable_data_container = self.get_resumable_data_container_for_children(children, data_container, index)
+
+            if step.should_resume(resumable_data_container, context):
+                return index_children, step.resume(resumable_data_container, context)
+
+        return 0, data_container
+
+    def get_resumable_data_container_for_children(self, children, data_container, index) -> Tuple[int, DataContainer]:
+        index_children = len(children) - index - 1
+        return index_children, self.hash_data_container_before_children_at_index(
+            data_container=data_container.copy(),
+            index=index_children
+        )
+
+    def hash_data_container_before_children_at_index(self, data_container: DataContainer, index: int):
+        """
+        Hash data container with all steps that are before the given index.
+
+        :param data_container: data container to hash
+        :param index: index limit for hashing
+        :return: hashed data container
+        """
+        for children_before in self.get_children()[:index]:
+            data_container = children_before.hash_data_container(data_container=data_container)
+        return data_container
 
     def apply(self, method: Union[str, Callable], ra: _RecursiveArguments = None, *args, **kwargs) -> RecursiveDict:
         """
@@ -2244,6 +2341,7 @@ class MetaStepMixin(_HasChildrenMixin):
     """
 
     def __init__(self, wrapped: BaseTransformer = None):
+        _HasChildrenMixin.__init__(self)
         self.wrapped: BaseTransformer = _sklearn_to_neuraxle_step(wrapped)
         self._ensure_proper_mixin_init_order()
 
@@ -2348,21 +2446,6 @@ class MetaStepMixin(_HasChildrenMixin):
     def inverse_transform(self, data_inputs):
         data_inputs = self.wrapped.inverse_transform(data_inputs)
         return data_inputs
-
-    def should_resume(self, data_container: DataContainer, context: ExecutionContext):
-        context = context.push(self)
-        if isinstance(self.wrapped, _ResumableStep) and self.wrapped.should_resume(data_container, context):
-            return True
-        return False
-
-    def resume(self, data_container: DataContainer, context: ExecutionContext):
-        context = context.push(self)
-        if not isinstance(self.wrapped, _ResumableStep):
-            raise Exception('cannot resume steps that don\' inherit from ResumableStepMixin')
-
-        data_container = self.wrapped.resume(data_container, context)
-        data_container = self._did_process(data_container, context)
-        return data_container
 
     def get_children(self) -> List[BaseStep]:
         """
@@ -2674,7 +2757,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         self.set_savers([TruncableJoblibStepSaver()] + self.savers)
 
-    def hash_data_container_before_index(self, data_container: DataContainer, index: int):
+    def hash_data_container_before_children_at_index(self, data_container: DataContainer, index: int):
         """
         Hash data container with all steps that are before the given index.
 
@@ -3171,38 +3254,6 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
                  + "\n)"
 
         return output
-
-    def __str__(self):
-        return self.__repr__()
-
-
-class _ResumableStep:
-    """
-    Mixin to represent a step that is not resumable, for example a checkpoint on disk.
-
-    .. seealso::
-        :class:`_NonResumableStep`,
-        :class:`BaseTransformer`,
-        :class:`neuraxle.checkpoints.Checkpoint`,
-        :class:`neuraxle.pipeline.ResumablePipeline`,
-        :class:`neuraxle.pipeline.MetaStepMixin`
-    """
-
-    @abstractmethod
-    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
-        """
-        Returns True if a step can be resumed with the given the data container, and execution context.
-        See Checkpoint class documentation for more details on how a resumable checkpoint works.
-
-        :param data_container: data container to resume from
-        :param context: execution context to resume from
-        :return: if we can resume
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def resume(self, data_container: DataContainer, context: ExecutionContext):
-        raise NotImplementedError()
 
     def __str__(self):
         return self.__repr__()

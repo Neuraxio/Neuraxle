@@ -128,7 +128,7 @@ class HyperparamsRepository(ABC):
         """
         hyperparams = step.get_hyperparams().to_flat_as_dict_primitive()
         trial_hash = self._get_trial_hash(hyperparams)
-        step.set_name(trial_hash).save(ExecutionContext(self.best_retrained_model_folder), full_dump=True)
+        step.set_name(trial_hash).save(full_dump=True, context=ExecutionContext(self.best_retrained_model_folder))
 
         return step
 

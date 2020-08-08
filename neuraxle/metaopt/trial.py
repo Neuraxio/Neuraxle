@@ -104,7 +104,7 @@ class Trial:
         """
         hyperparams = self.hyperparams.to_flat_as_dict_primitive()
         trial_hash = self._get_trial_hash(hyperparams)
-        self.pipeline.set_name(trial_hash).save(ExecutionContext(self.cache_folder), full_dump=True)
+        self.pipeline.set_name(trial_hash).save(full_dump=True, summary_id=ExecutionContext(self.cache_folder))
 
     def set_main_metric_name(self, name: str) -> 'Trial':
         """

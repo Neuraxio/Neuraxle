@@ -33,7 +33,7 @@ from neuraxle.base import MetaStep, BaseStep, DataContainer, ExecutionContext, _
 from neuraxle.data_container import ListDataContainer
 
 
-class ForEachDataInput(ForceHandleOnlyMixin, _ResumableStep, MetaStep):
+class ForEachDataInput(ForceHandleOnlyMixin, MetaStep):
     """
     Truncable step that fits/transforms each step for each of the data inputs, and expected outputs.
 
@@ -131,13 +131,6 @@ class ForEachDataInput(ForceHandleOnlyMixin, _ResumableStep, MetaStep):
         output_data_container.summary_id = data_container.summary_id
 
         return output_data_container
-
-    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
-        context: ExecutionContext = context.push(self)
-
-        if self.wrapped.should_resume(data_container, context):
-            return True
-        return False
 
 
 class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
@@ -261,7 +254,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         return len(self.steps_as_tuple)
 
 
-class FlattenForEach(ForceHandleMixin, _ResumableStep, MetaStep):
+class FlattenForEach(ForceHandleMixin, MetaStep):
     """
     Step that reduces a dimension instead of manually looping on it.
 
@@ -284,7 +277,6 @@ class FlattenForEach(ForceHandleMixin, _ResumableStep, MetaStep):
             then_unflatten: bool = True
     ):
         MetaStep.__init__(self, wrapped)
-        _ResumableStep.__init__(self)
         ForceHandleMixin.__init__(self)
 
         self.then_unflatten = then_unflatten
@@ -378,9 +370,3 @@ class FlattenForEach(ForceHandleMixin, _ResumableStep, MetaStep):
 
         return reaugmented_list
 
-    def should_resume(self, data_container: DataContainer, context: ExecutionContext):
-        context = context.push(self)
-
-        if self.wrapped.should_resume(data_container, context):
-            return True
-        return False

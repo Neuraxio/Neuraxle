@@ -442,7 +442,7 @@ class ListDataContainer(DataContainer):
         else:
             sub_data_containers = original_data_container.sub_data_containers
 
-        return ListDataContainer([], [], [], sub_data_containers=sub_data_containers)
+        return ListDataContainer(data_inputs=[], current_ids=[], summary_id=None, sub_data_containers=sub_data_containers)
 
     def append(self, current_id: str, data_input: Any, expected_output: Any):
         """

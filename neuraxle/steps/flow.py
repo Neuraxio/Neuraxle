@@ -473,7 +473,7 @@ class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseTransformer):
         return data_container
 
 
-class ExpandDim(_ResumableStep, MetaStep):
+class ExpandDim(MetaStep):
     """
     Similar to numpys expand_dim function, ExpandDim step expands the dimension of all the data inside the data container.
     ExpandDim sends the expanded data container to the wrapped step.
@@ -494,7 +494,6 @@ class ExpandDim(_ResumableStep, MetaStep):
 
     def __init__(self, wrapped: BaseTransformer):
         MetaStep.__init__(self, wrapped)
-        _ResumableStep.__init__(self)
 
     def _will_process(self, data_container, context):
         data_container, context = BaseStep._will_process(self, data_container, context)

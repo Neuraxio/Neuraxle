@@ -156,6 +156,7 @@ class StepSavingCheckpointer(NonReadableCheckpointMixin, BaseCheckpointer):
             context: ExecutionContext
     ) -> DataContainer:
         if self.is_for_execution_mode(context.get_execution_mode()):
+            print('saving context', data_container.summary_id)
             context.copy().save(summary_id=data_container.summary_id)
 
         return data_container
@@ -196,7 +197,6 @@ class Checkpoint(IdentityHandlerMethodsMixin, _ResumableStep, BaseStep):
 
     def __init__(self, all_checkpointers: List[BaseCheckpointer] = None):
         BaseStep.__init__(self)
-        _ResumableStep.__init__(self)
         IdentityHandlerMethodsMixin.__init__(self)
         self.all_checkpointers = all_checkpointers
 
@@ -224,16 +224,6 @@ class Checkpoint(IdentityHandlerMethodsMixin, _ResumableStep, BaseStep):
 
         return data_container
 
-    def resume(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        """
-        Same as read_checkpoint.
-
-        :param data_container: data container to load checkpoint from
-        :param context: execution mode to load checkpoint from
-        :return: loaded data container checkpoint
-        """
-        return self.read_checkpoint(data_container, context)
-
     def read_checkpoint(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Read data checkpoint for the current execution mode using self.data_checkpointers.
@@ -248,6 +238,16 @@ class Checkpoint(IdentityHandlerMethodsMixin, _ResumableStep, BaseStep):
                 data_container = checkpointer.read_checkpoint(data_container, context)
 
         return data_container
+
+    def resume(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Same as read_checkpoint.
+
+        :param data_container: data container to load checkpoint from
+        :param context: execution mode to load checkpoint from
+        :return: loaded data container checkpoint
+        """
+        return self.read_checkpoint(data_container, context)
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
         """
@@ -637,7 +637,7 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
         :return: data container checkpoint
         :rtype: neuraxle.data_container.DataContainer
         """
-        data_container_checkpoint = ListDataContainer.empty(original_data_container=data_container)
+        data_container_checkpoint = ListDataContainer.empty()
 
         current_ids = self.summary_checkpointer.read_summary(
             checkpoint_path=context.get_path(),
@@ -661,6 +661,7 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
                 expected_output
             )
 
+        data_container_checkpoint.set_summary_id(data_container.summary_id)
         return data_container_checkpoint
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:

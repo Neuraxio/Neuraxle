@@ -4,7 +4,7 @@ import numpy as np
 from py._path.local import LocalPath
 
 from neuraxle.checkpoints import DefaultCheckpoint
-from neuraxle.pipeline import ResumablePipeline
+from neuraxle.pipeline import ResumablePipeline, Pipeline
 from neuraxle.steps.numpy import MultiplyByN
 
 OUTPUT = "OUTPUT"
