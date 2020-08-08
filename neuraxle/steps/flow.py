@@ -1,6 +1,6 @@
 """
 Neuraxle's Flow Steps
-====================================
+==========================================
 Pipeline wrapper steps that only implement the handle methods, and don't apply any transformation to the data.
 
 ..
@@ -25,13 +25,14 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
 """
 from typing import Union
 
-from neuraxle.base import BaseStep, MetaStep, DataContainer, ExecutionContext, TruncableSteps, _ResumableStep, \
-    HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin, _FittableStep, BaseTransformer
+import numpy as np
+
+from neuraxle.base import BaseStep, MetaStep, DataContainer, ExecutionContext, TruncableSteps, HandleOnlyMixin, \
+    TransformHandlerOnlyMixin, ForceHandleOnlyMixin, BaseTransformer, NonFittableMixin
 from neuraxle.data_container import ExpandedDataContainer
 from neuraxle.hyperparams.distributions import Boolean, Choice
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.union import FeatureUnion
-import numpy as np
 
 OPTIONAL_ENABLED_HYPERPARAM = 'enabled'
 
@@ -348,8 +349,11 @@ class ChooseOneStepOf(FeatureUnion):
         """
         step_names = list(self.keys())
         for step_name in step_names[:-1]:
-            self[step_name] = Optional(self[step_name].set_name('Optional({})'.format(step_name)),
-                                       use_hyperparameter_space=False, nullify_hyperparams=False)
+            self[step_name] = Optional(
+                self[step_name].set_name('Optional({})'.format(step_name)),
+                use_hyperparameter_space=False,
+                nullify_hyperparams=False
+            )
 
         self._refresh_steps()
 
@@ -385,8 +389,10 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
         :class:`Optional`
     """
 
-    def __init__(self, steps):
-        FeatureUnion.__init__(self, steps_as_tuple=steps, joiner=NumpyConcatenateOnCustomAxisIfNotEmpty(axis=-1))
+    def __init__(self, steps, joiner: NonFittableMixin = None):
+        if joiner is None:
+            joiner = NumpyConcatenateOnCustomAxisIfNotEmpty(axis=-1)
+        FeatureUnion.__init__(self, steps_as_tuple=steps, joiner=joiner)
         self.set_hyperparams(HyperparameterSamples({}))
         self._make_all_steps_optional()
 
@@ -571,9 +577,9 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
         :rtype: (ReversiblePreprocessingWrapper, DataContainer)
         """
         self["preprocessing_step"], data_container = \
-            self["preprocessing_step"].handle_fit_transform(data_container, context.push(self["preprocessing_step"]))
+            self["preprocessing_step"].handle_fit_transform(data_container, context)
         self["postprocessing_step"] = \
-            self["postprocessing_step"].handle_fit(data_container, context.push(self["postprocessing_step"]))
+            self["postprocessing_step"].handle_fit(data_container, context)
 
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
