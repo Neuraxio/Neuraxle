@@ -84,8 +84,8 @@ def test_boolean_distribution_with_proba():
     assert abs(hd.pdf(-0.1) - 0.) < 1e-6
     assert abs(hd.pdf(1.1) - 0.) < 1e-6
 
-    assert abs(hd.cdf(False) - (1-proba_is_true)) < 1e-6
-    assert abs(hd.cdf(0.) - (1-proba_is_true)) < 1e-6
+    assert abs(hd.cdf(False) - (1 - proba_is_true)) < 1e-6
+    assert abs(hd.cdf(0.) - (1 - proba_is_true)) < 1e-6
     assert abs(hd.cdf(True) - 1.) < 1e-6
     assert abs(hd.cdf(1.) - 1.) < 1e-6
     assert abs(hd.cdf(-0.1) - 0.) < 1e-6
@@ -94,8 +94,8 @@ def test_boolean_distribution_with_proba():
     assert hd.min() == 0
     assert hd.max() == 1
     assert abs(hd.mean() - proba_is_true) < 1e-6
-    assert abs(hd.std() - math.sqrt(proba_is_true * (1-proba_is_true))) < 1e-6
-    assert abs(hd.var() - proba_is_true * (1-proba_is_true)) < 1e-6
+    assert abs(hd.std() - math.sqrt(proba_is_true * (1 - proba_is_true))) < 1e-6
+    assert abs(hd.var() - proba_is_true * (1 - proba_is_true)) < 1e-6
     # Verify that hd mean and variance also correspond to mean and variance of sampling.
     assert abs(hd.mean() - np.mean(samples)) < 1e-2
     assert abs(hd.var() - np.var(samples)) < 1e-2
@@ -191,6 +191,7 @@ def test_choice_and_priority_choice_with_probas(ctor):
     # Verify that hd mean and variance also correspond to mean and variance of sampling.
     assert abs((hd.mean() - np.mean(samples_index)) / hd.mean()) < 1e-1
     assert abs((hd.var() - np.var(samples_index)) / hd.var()) < 1e-1
+
 
 def test_quantized_uniform():
     low = -10
@@ -293,6 +294,7 @@ def test_uniform():
     # Verify that hd mean and variance also correspond to mean and variance of sampling.
     assert abs(hd.mean() - np.mean(samples)) < 1e-1
     assert abs((hd.var() - np.var(samples)) / hd.var()) < 1e-1
+
 
 def test_loguniform():
     min_included = 0.001
@@ -653,6 +655,7 @@ def test_gaussian_distribution_mixture_quantized():
     assert abs(hd.mean() - np.mean(samples)) < 1e-1
     assert abs((hd.var() - np.var(samples)) / hd.var()) < 1e-1
 
+
 @pytest.mark.parametrize("hd", [
     FixedHyperparameter(0),
     Boolean(),
@@ -721,5 +724,3 @@ def test_priority_choice_threshold_narrowing():
     assert isinstance(hd, PriorityChoice)
     assert len(hd) == 4
     assert hd.get_current_narrowing_value() == 1.0
-
-

@@ -9,6 +9,12 @@ from scipy.stats import rv_continuous, norm, rv_discrete, rv_histogram, truncnor
 
 from neuraxle.hyperparams.distributions import HyperparameterDistribution, WrappedHyperparameterDistributions
 
+def scipy_method(func):
+    def wrapper(*args, **kwargs):
+        self_in_args = args[0]
+        self_in_args._override_scipy_methods()
+        return func(*args, **kwargs)
+    return wrapper
 
 class ScipyDistributionWrapper(HyperparameterDistribution):
     """
@@ -28,20 +34,26 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
     """
 
     def __init__(self, scipy_distribution, null_default_value, is_continuous, **scipy_distribution_arguments):
-        self.sk_learn_distribution = scipy_distribution
+        self.scipy_distribution = scipy_distribution
         self.scipy_distribution_arguments = scipy_distribution_arguments
         self.is_continuous = is_continuous
         HyperparameterDistribution.__init__(self, null_default_value=null_default_value)
 
+    def _override_scipy_methods(self):
+        return
+
+    @scipy_method
     def rvs(self, *args, **kwargs) -> float:
-        return self.sk_learn_distribution.rvs(*args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.rvs(*args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def pdf(self, x, *args, **kwargs) -> float:
-        if hasattr(self.sk_learn_distribution, 'pdf'):
-            return self.sk_learn_distribution.pdf(x, *args, **kwargs, **self.scipy_distribution_arguments)
+        if hasattr(self.scipy_distribution, 'pdf'):
+            return self.scipy_distribution.pdf(x, *args, **kwargs, **self.scipy_distribution_arguments)
         else:
-            return self.sk_learn_distribution.pmf(x, *args, **kwargs, **self.scipy_distribution_arguments)
+            return self.scipy_distribution.pmf(x, *args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def cdf(self, x, *args, **kwargs) -> float:
         """
         Cumulative distribution function of the given x.
@@ -51,16 +63,18 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param kwargs:
         :return:
         """
-        return self.sk_learn_distribution.cdf(x, *args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.cdf(x, *args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def entropy(self, *args, **kwargs):
         """
         Differential entropy of the RV.
         
         :return: 
         """
-        return self.sk_learn_distribution.entropy(*args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.entropy(*args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def expect(self, *args, **kwargs):
         """
         Calculate expected value of a function with respect to the distribution by numerical integration.
@@ -69,8 +83,9 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param kwargs:
         :return:
         """
-        return self.sk_learn_distribution.expect(*args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.expect(*args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def fit(self, data, *args, **kwargs):
         """
         Return MLEs for shape( if applicable), location, and scale parameters from data.
@@ -80,8 +95,9 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param kwargs:
         :return:
         """
-        return self.sk_learn_distribution.fit(data, *args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.fit(data, *args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def fit_loc_scale(self, data, *args):
         """
         Estimate loc and scale parameters from data using 1 st and 2 nd moments. 
@@ -89,16 +105,18 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param data: 
         :return: 
         """
-        return self.sk_learn_distribution.fit_loc_scale(data, *args, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.fit_loc_scale(data, *args, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def freeze(self, *args, **kwargs):
         """
         Freeze the distribution for the given arguments.
 
         :return:
         """
-        return self.sk_learn_distribution.freeze(*args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.freeze(*args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def interval(self, alpha, *args, **kwargs):
         """
         Confidence interval with equal areas around the median.
@@ -106,8 +124,9 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param alpha:
         :return:
         """
-        return self.sk_learn_distribution.interval(alpha, *args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.interval(alpha, *args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def isf(self, q, *args, **kwargs):
         """
         Inverse survival function(inverse of sf) at q of the given RV.
@@ -115,8 +134,9 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param q:
         :return:
         """
-        return self.sk_learn_distribution.isf(q, *args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.isf(q, *args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def logcdf(self, x, *args, **kwargs):
         """
         Log of the cumulative distribution function at x of the given RV.
@@ -126,8 +146,9 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param kwargs:
         :return:
         """
-        return self.sk_learn_distribution.logcdf(x, *args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.logcdf(x, *args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def logpdf(self, x, *args, **kwargs):
         """
         Log of the probability density function at x of the given RV.
@@ -137,8 +158,9 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param kwargs:
         :return:
         """
-        return self.sk_learn_distribution.logpdf(x, *args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.logpdf(x, *args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def logsf(self, x, *args, **kwargs):
         """
         Log of the survival function of the given RV.
@@ -146,30 +168,35 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param x:
         :return:
         """
-        return self.sk_learn_distribution.logsf(x, *args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.logsf(x, *args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def min(self):
-        return self.sk_learn_distribution.min()
+        return self.scipy_distribution.min()
 
+    @scipy_method
     def max(self):
-        return self.sk_learn_distribution.max()
+        return self.scipy_distribution.max()
 
+    @scipy_method
     def mean(self, *args, **kwargs):
         """
         Mean of the distribution.
 
         :return:
         """
-        return self.sk_learn_distribution.mean(*args, **kwargs)
+        return self.scipy_distribution.mean(*args, **kwargs)
 
+    @scipy_method
     def median(self, *args, **kwargs):
         """
         Median of the distribution.
 
         :return:
         """
-        return self.sk_learn_distribution.median(*args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.median(*args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def moment(self, n, *args, **kwargs):
         """
         n-th order non-central moment of distribution.
@@ -177,8 +204,9 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param n:
         :return:
         """
-        return self.sk_learn_distribution.moment(n, *args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.moment(n, *args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def nnlf(self, theta, x):
         """
         Return negative loglikelihood function.
@@ -187,8 +215,9 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param x:
         :return:
         """
-        return self.sk_learn_distribution.nnlf(theta, x)
+        return self.scipy_distribution.nnlf(theta, x)
 
+    @scipy_method
     def ppf(self, q, *args, **kwargs):
         """
         Percent point function(inverse of cdf) at q of the given RV.
@@ -196,8 +225,9 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param q:
         :return:
         """
-        return self.sk_learn_distribution.ppf(q, *args, **kwargs)
+        return self.scipy_distribution.ppf(q, *args, **kwargs)
 
+    @scipy_method
     def sf(self, x, *args, **kwargs):
         """
         Survival function(1 - cdf) at x of the given RV.
@@ -205,16 +235,18 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param x:
         :return:
         """
-        return self.sk_learn_distribution.sf(x, *args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.sf(x, *args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def stats(self, *args, **kwargs):
         """
         Some statistics of the given RV.
 
         :return:
         """
-        return self.sk_learn_distribution.stats(*args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.stats(*args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def std(self, *args, **kwargs):
         """
         Standard deviation of the distribution.
@@ -223,8 +255,9 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param kwargs:
         :return:
         """
-        return self.sk_learn_distribution.std(*args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.std(*args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def support(self, *args, **kwargs):
         """
         Return the support of the distribution.
@@ -233,18 +266,19 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         :param kwargs:
         :return:
         """
-        return self.sk_learn_distribution.support(*args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.support(*args, **kwargs, **self.scipy_distribution_arguments)
 
+    @scipy_method
     def var(self, *args, **kwargs):
         """
         Variance of the distribution.
 
         :return:
         """
-        return self.sk_learn_distribution.var(*args, **kwargs, **self.scipy_distribution_arguments)
+        return self.scipy_distribution.var(*args, **kwargs, **self.scipy_distribution_arguments)
 
     def to_sk_learn(self):
-        return self.sk_learn_distribution
+        return self.scipy_distribution
 
 
 class BaseDiscreteDistribution(ScipyDistributionWrapper):
@@ -255,21 +289,25 @@ class BaseDiscreteDistribution(ScipyDistributionWrapper):
             b=max_included,
             **kwargs
         )
-        scipy_dist_obj._pmf = self.pmf
+        scipy_dist_obj._pmf = self._pmf
         super().__init__(
             scipy_distribution=scipy_dist_obj,
             null_default_value=null_default_value,
             is_continuous=False
         )
 
+    def _override_scipy_methods(self):
+        self.scipy_distribution._pmf = self._pmf
+
     @abstractmethod
-    def pmf(self, x, *args):
+    def _pmf(self, x, *args):
         pass
 
 
 class Distribution(rv_continuous):
     def _pdf(self, x):
         return 0.0
+
 
 class BaseContinuousDistribution(ScipyDistributionWrapper):
     def __init__(self, name, min_included, max_included, null_default_value, **kwargs):
@@ -279,7 +317,7 @@ class BaseContinuousDistribution(ScipyDistributionWrapper):
             b=max_included,
             **kwargs
         )
-        scipy_distribution._pdf = self.pdf
+        scipy_distribution._pdf = self._pdf
 
         super().__init__(
             scipy_distribution=scipy_distribution,
@@ -287,9 +325,13 @@ class BaseContinuousDistribution(ScipyDistributionWrapper):
             is_continuous=True
         )
 
+    def _override_scipy_methods(self):
+        self.scipy_distribution._pdf = self._pdf
+
     @abstractmethod
-    def pdf(self, x, *args):
+    def _pdf(self, x, *args):
         pass
+
 
 
 class RandInt(ScipyDistributionWrapper):
@@ -320,7 +362,6 @@ class RandInt(ScipyDistributionWrapper):
 
     def max(self):
         return self.max_included
-
 
 
 class Uniform(BaseContinuousDistribution):
@@ -362,14 +403,13 @@ class Uniform(BaseContinuousDistribution):
             null_default_value=null_default_value
         )
 
-    def pdf(self, x):
+    def _pdf(self, x):
         """
         Calculate the Uniform probability distribution value at position `x`.
 
         :param x: value where the probability distribution function is evaluated.
         :return: value of the probability distribution function.
         """
-
         if self.min_included == self.max_included and (x == self.min_included):
             return 1.
 
@@ -421,7 +461,7 @@ class LogUniform(BaseContinuousDistribution):
             max_included=self.log2_max_included
         )
 
-    def pdf(self, x) -> float:
+    def _pdf(self, x) -> float:
         """
         Calculate the logUniform probability distribution value at position `x`.
 
@@ -488,7 +528,7 @@ class Normal(BaseContinuousDistribution):
         self.mean = mean
         self.std = std
 
-    def pdf(self, x) -> float:
+    def _pdf(self, x) -> float:
         """
         Calculate the Normal probability distribution value at position `x`.
         :param x: value where the probability distribution function is evaluated.
@@ -571,7 +611,7 @@ class LogNormal(BaseContinuousDistribution):
             null_default_value=null_default_value
         )
 
-    def pdf(self, x):
+    def _pdf(self, x):
         if x <= 0:
             return 0.
 
@@ -626,7 +666,7 @@ class Gaussian(BaseContinuousDistribution):
             null_default_value=null_default_value
         )
 
-    def pdf(self, x):
+    def _pdf(self, x):
         return math.exp(-x ** 2 / 2.) / np.sqrt(2.0 * np.pi)
 
 
@@ -673,7 +713,7 @@ class Poisson(BaseDiscreteDistribution):
         )
         self.mu = mu
 
-    def pmf(self, x):
+    def _pmf(self, x):
         return math.exp(-self.mu) * self.mu ** x / factorial(x)
 
 
@@ -773,7 +813,7 @@ class Boolean(BaseDiscreteDistribution):
             null_default_value=null_default_value
         )
 
-    def pmf(self, x):
+    def _pmf(self, x):
         """
         Calculate the boolean probability mass function value at position `x`.
         :param x: value where the probability mass function is evaluated.
@@ -835,7 +875,7 @@ class Choice(BaseDiscreteDistribution):
                 'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
 
         super().__init__(
-            name='choise',
+            name='choice',
             min_included=0,
             max_included=len(choice_list) - 1,
             null_default_value=null_default_value
@@ -848,7 +888,53 @@ class Choice(BaseDiscreteDistribution):
         return self.choice_list[int(sample_choice_index)]
 
     def pdf(self, x, *args, **kwargs):
-        return self.sk_learn_distribution.pmf(self.choice_list.index(x), *args, **kwargs, **self.scipy_distribution_arguments)
+        choice_index = [str(choice) for choice in self.choice_list].index(str(x))
+        return self.scipy_distribution.pmf(choice_index, *args, **kwargs, **self.scipy_distribution_arguments)
+
+    def cdf(self, x, *args, **kwargs):
+        try:
+            index = [str(choice) for choice in self.choice_list].index(str(x))
+        except ValueError:
+            raise ValueError(
+                "Item not found in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
+        except (NotImplementedError, NotImplemented):
+            raise ValueError("A correct method for __eq__ should be defined for all item in the list.")
+        except AttributeError:
+            raise ValueError("choice_list param should be a list.")
+        else:
+            probas = np.array(self.probas)
+            return np.sum(probas[0:index + 1])
+
+    def mean(self):
+        """
+        Calculate mean value (also called esperance) of the random variable.
+        :return: mean value of the random variable.
+        """
+        choice_index = np.arange(0, len(self), 1)
+        probas = np.array(self.probas)
+        mean = np.sum(choice_index * probas)
+        return mean
+
+    def var(self):
+        """
+        Calculate variance value of the random variable.
+        :return: variance value of the random variable.
+        """
+        choice_index = np.arange(0, len(self), 1)
+        probas = np.array(self.probas)
+        mean = np.sum(choice_index * probas)
+        second_moment = np.sum(choice_index ** 2 * probas)
+        var = second_moment - mean ** 2
+        return var
+
+    def min(self):
+        return 0
+
+    def max(self):
+        return len(self.choice_list) - 1
+
+    def std(self):
+        return np.std([i for i, _ in enumerate(self.choice_list)])
 
     def pmf(self, x):
         """
@@ -857,14 +943,25 @@ class Choice(BaseDiscreteDistribution):
         :param x: value where the probability mass function is evaluated.
         :return: value of the probability mass function.
         """
-        if len(self.choice_list) -1 >= x[-1] >= 0:
+        if len(self.choice_list) - 1 >= x[-1] >= 0:
+            return sum([self.probas[int(i)] for i in x])
+        else:
+            return 0.
+
+    def _pmf(self, x):
+        """
+        Calculate the choice probability mass function value at position `x`.
+
+        :param x: value where the probability mass function is evaluated.
+        :return: value of the probability mass function.
+        """
+        if len(self.choice_list) - 1 >= x[-1] >= 0:
             return sum([self.probas[int(i)] for i in x])
         else:
             return 0.
 
     def __len__(self):
         return len(self.choice_list)
-
 
 
 class Quantized(WrappedHyperparameterDistributions, BaseContinuousDistribution):
@@ -900,7 +997,7 @@ class Quantized(WrappedHyperparameterDistributions, BaseContinuousDistribution):
             is_continuous=True
         )
 
-    def pdf(self, x):
+    def _pdf(self, x):
         """
         Calculate the Quantized probability mass function value at position `x` of a continuous distribution.
         :param x: value where the probability mass function is evaluated.

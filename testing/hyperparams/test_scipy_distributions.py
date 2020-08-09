@@ -1,6 +1,6 @@
 import math
 import os
-from typing import Counter
+from collections import Counter
 
 import joblib
 import pytest
@@ -42,12 +42,16 @@ def test_wrapped_sk_learn_distributions_should_be_able_to_use_sklearn_methods():
 
 
 def test_histogram():
-    data = norm.rvs(size=10000, loc=0, scale=1.5, random_state=123)
     hist_dist = Histogram(
-        histogram=np.histogram(data, bins=100),
+        histogram=np.histogram(norm.rvs(size=10000, loc=0, scale=1.5, random_state=123), bins=100),
         null_default_value=0.0
     )
 
+    _test_histogram(hist_dist)
+
+
+def _test_histogram(hist_dist):
+    data = norm.rvs(size=10000, loc=0, scale=1.5, random_state=123)
     assert min(data) <= hist_dist.rvs() <= max(data)
     assert 1.0 > hist_dist.pdf(x=1.0) > 0.0
     assert hist_dist.pdf(x=np.max(data)) == 0.0
@@ -64,6 +68,10 @@ def test_continuous_gaussian():
         null_default_value=0.0
     )
 
+    _test_gaussian(gaussian_distribution)
+
+
+def _test_gaussian(gaussian_distribution):
     assert 0.0 <= gaussian_distribution.rvs() <= 10.0
     assert gaussian_distribution.pdf(10) < 0.001
     assert gaussian_distribution.pdf(0) < 0.42
@@ -79,6 +87,10 @@ def test_discrete_poison():
         mu=5.0
     )
 
+    _test_discrete_poisson(poisson_distribution)
+
+
+def _test_discrete_poisson(poisson_distribution):
     rvs = [poisson_distribution.rvs() for i in range(10)]
     assert not all(x == rvs[0] for x in rvs)
     assert 0.0 <= poisson_distribution.rvs() <= 10.0
@@ -91,27 +103,27 @@ def test_discrete_poison():
 def test_randint():
     hd = RandInt(min_included=-10, max_included=10, null_default_value=0)
 
-    samples = hd.rvs(size=100)
+    _test_randint(hd)
 
+
+def _test_randint(hd):
+    samples = hd.rvs(size=100)
     samples_mean = np.abs(np.mean(samples))
     assert -5.0 < samples_mean < 5.0
     assert min(samples) >= -10.0
     assert max(samples) <= 10.0
-
     assert hd.pdf(-11) == 0.
     assert abs(hd.pdf(-10) - 1 / (10 + 10 + 1)) == 0.0023809523809523864
     assert abs(hd.pdf(0) - 1 / (10 + 10 + 1)) == 0.0023809523809523864
     assert hd.pdf(5) == 0.05
     assert abs(hd.pdf(10) - 1 / (10 + 10 + 1)) == 0.047619047619047616
     assert hd.pdf(11) == 0.
-
     assert hd.cdf(-10.1) == 0.
     assert abs(hd.cdf(-10) - 1 / (10 + 10 + 1)) == 0.0023809523809523864
     assert abs(hd.cdf(0) - (0 + 10 + 1) / (10 + 10 + 1)) == 0.02619047619047621
     assert abs(hd.cdf(5) - (5 + 10 + 1) / (10 + 10 + 1)) == 0.03809523809523818
     assert abs(hd.cdf(10) - 1.) < 1e-6
     assert hd.cdf(10.1) == 1.
-
     assert hd.min() == -10
     assert hd.mean() == 0
     assert hd.median() == 0
@@ -119,22 +131,15 @@ def test_randint():
     assert hd.max() == 10
 
 
-def test_uniform(tmpdir):
+def test_uniform():
     hd = Uniform(min_included=-10, max_included=10)
-    _test_uniform(hd)
-
-    hd = Uniform(min_included=-10, max_included=10)
-    _test_uniform(hd)
-
-    joblib.dump(hd, os.path.join(str(tmpdir), 'uniform.joblib'))
-    hd = joblib.load(os.path.join(str(tmpdir), 'uniform.joblib'))
-
     _test_uniform(hd)
 
 
 def _test_uniform(hd):
     samples = hd.rvs(size=100)
     samples_mean = np.abs(np.mean(samples))
+
     assert samples_mean < 4.0
     assert min(samples) >= -10.0
     assert max(samples) <= 10.0
@@ -149,8 +154,11 @@ def _test_uniform(hd):
 def test_loguniform():
     hd = LogUniform(min_included=0.001, max_included=10)
 
-    samples = hd.rvs(size=100)
+    _test_loguniform(hd)
 
+
+def _test_loguniform(hd):
+    samples = hd.rvs(size=100)
     samples_mean = np.abs(np.mean(samples))
     assert samples_mean < 1.15  # if it was just uniform, this assert would break.
     assert min(samples) >= 0.001
@@ -172,8 +180,11 @@ def test_normal():
         null_default_value=0.0
     )
 
-    samples = hd.rvs(size=100)
+    _test_normal(hd)
 
+
+def _test_normal(hd):
+    samples = hd.rvs(size=100)
     samples_mean = np.abs(np.mean(samples))
     assert 0.6 > samples_mean > 0.4
     samples_std = np.std(samples)
@@ -195,8 +206,11 @@ def test_lognormal():
         null_default_value=-1.0
     )
 
-    samples = hd.rvs(size=100)
+    _test_lognormal(hd)
 
+
+def _test_lognormal(hd):
+    samples = hd.rvs(size=100)
     samples_median = np.median(samples)
     assert -5 < samples_median < 5
     samples_std = np.std(samples)
@@ -207,6 +221,7 @@ def test_lognormal():
     assert hd.cdf(0.) == 0.
     assert hd.cdf(1.) == 0.49999999998280026
     assert abs(hd.cdf(5.) - 0.8771717397015799) == 0.12282826029842009
+
 
 @pytest.mark.parametrize("ctor", [Choice])
 def test_choice_and_priority_choice(ctor):
@@ -244,7 +259,7 @@ def test_choice_and_priority_choice(ctor):
         assert hd.cdf(3) == 0.
 
     assert hd.min() == 0
-    assert hd.max() == len(choice_list)
+    assert hd.max() == len(choice_list) - 1
     assert abs(hd.mean() - (len(choice_list) - 1) / 2) < 1e-6
     assert abs(hd.var() - (len(choice_list) ** 2 - 1) / 12) < 1e-6
     assert abs(hd.std() - math.sqrt((len(choice_list) ** 2 - 1) / 12)) < 1e-6
@@ -253,3 +268,20 @@ def test_choice_and_priority_choice(ctor):
     # Verify that hd mean and variance also correspond to mean and variance of sampling.
     assert abs((hd.mean() - np.mean(samples_index)) / hd.mean()) < 1e-1
     assert abs((hd.var() - np.var(samples_index)) / hd.var()) < 1e-1
+
+@pytest.mark.parametrize("hd, test_method", [
+    (RandInt(min_included=-10, max_included=10, null_default_value=0), _test_randint),
+    (LogNormal(hard_clip_min=-5, hard_clip_max=5, log2_space_mean=0.0, log2_space_std=2.0, null_default_value=-1.0), _test_lognormal),
+    (Normal(hard_clip_min=0.0, hard_clip_max=1.0, mean=0.5, std=0.2, null_default_value=0.0), _test_normal),
+    (LogUniform(min_included=0.001, max_included=10), _test_loguniform),
+    (Uniform(min_included=-10, max_included=10), _test_uniform),
+    (Poisson(min_included=0.0, max_included=10.0, null_default_value=0.0, mu=5.0), _test_discrete_poisson),
+    (Gaussian(min_included=0, max_included=10, null_default_value=0.0), _test_gaussian),
+    (Histogram(histogram=np.histogram(norm.rvs(size=10000, loc=0, scale=1.5, random_state=123), bins=100), null_default_value=0.0), _test_histogram)
+])
+def test_after_serialization(hd, test_method, tmpdir):
+    joblib.dump(hd, os.path.join(str(tmpdir), '{}.joblib'.format(hd.__class__)))
+    hd_loaded = joblib.load(os.path.join(str(tmpdir), '{}.joblib'.format(hd.__class__)))
+
+    assert hd == hd_loaded
+    test_method(hd_loaded)
