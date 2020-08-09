@@ -24,9 +24,7 @@ from pprint import pprint
 import pytest
 
 from neuraxle.hyperparams.distributions import *
-from neuraxle.hyperparams.scipy_distributions import LogNormal
-from neuraxle.hyperparams.space import flat_to_nested_dict, nested_dict_to_flat, HyperparameterSpace, \
-    HyperparameterSamples
+from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
 
 hyperparams_flat_and_dict_pairs = [
     # Pair 1:
@@ -56,14 +54,14 @@ hyperparams_flat_and_dict_pairs = [
 
 @pytest.mark.parametrize("flat,expected_dic", hyperparams_flat_and_dict_pairs)
 def test_flat_to_dict_hyperparams(flat: dict, expected_dic: dict):
-    dic = flat_to_nested_dict(flat)
+    dic = RecursiveDict(flat).to_nested_dict_as_dict_primitive()
 
     assert dict(dic) == dict(expected_dic)
 
 
 @pytest.mark.parametrize("expected_flat,dic", hyperparams_flat_and_dict_pairs)
 def test_dict_to_flat_hyperparams(expected_flat: dict, dic: dict):
-    flat = nested_dict_to_flat(dic)
+    flat = RecursiveDict(dic).to_flat_as_dict_primitive()
 
     pprint(dict(flat))
     pprint(expected_flat)

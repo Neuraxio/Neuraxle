@@ -68,73 +68,61 @@ from scipy.stats import rv_continuous, rv_discrete, rv_histogram
 
 from neuraxle.hyperparams.distributions import HyperparameterDistribution
 
-PARAMS_SPLIT_SEQ = "__"
 
-
-def nested_dict_to_flat(nested_hyperparams, dict_ctor=OrderedDict):
+class RecursiveDict(OrderedDict):
     """
-    Convert a nested hyperparameter dictionary to a flat one.
-
-    :param nested_hyperparams: a nested hyperparameter dictionary.
-    :param dict_ctor: ``OrderedDict`` by default. Will use this as a class to create the new returned dict.
-    :return: a flat hyperparameter dictionary.
-    """
-    ret = dict_ctor()
-    for k, v in nested_hyperparams.items():
-        if isinstance(v, dict) or isinstance(v, OrderedDict) or isinstance(v, dict_ctor):
-            _ret = nested_dict_to_flat(v)
-            for key, val in _ret.items():
-                ret[k + PARAMS_SPLIT_SEQ + key] = val
-        else:
-            ret[k] = v
-    return ret
-
-
-def flat_to_nested_dict(flat_hyperparams, dict_ctor=OrderedDict):
-    """
-    Convert a flat hyperparameter dictionary to a nested one.
-
-    :param flat_hyperparams: a flat hyperparameter dictionary.
-    :param dict_ctor: ``OrderedDict`` by default. Will use this as a class to create the new returned dict.
-    :return: a nested hyperparameter dictionary.
-    """
-    pre_ret = dict_ctor()
-    ret = dict_ctor()
-    for k, v in flat_hyperparams.items():
-        k, _, key = k.partition(PARAMS_SPLIT_SEQ)
-        if len(key) > 0:
-            if k not in pre_ret.keys():
-                pre_ret[k] = dict_ctor()
-            pre_ret[k][key] = v
-        else:
-            ret[k] = v
-    for k, v in pre_ret.items():
-        ret[k] = flat_to_nested_dict(v)
-    return ret
-
-
-class HyperparameterSamples(OrderedDict):
-    """Wraps an hyperparameter nested dict or flat dict, and offer a few more functions.
+    Wraps an hyperparameter nested dict or flat dict, and offer a few more functions.
 
     This can be set on a Pipeline with the method ``set_hyperparams``.
 
-    HyperparameterSamples are often the result of calling ``.rvs()`` on an HyperparameterSpace."""
+    HyperparameterSamples are often the result of calling ``.rvs()`` on an HyperparameterSpace.
+    """
+    DEFAULT_SEPARATOR = '__'
 
-    def to_flat(self) -> 'HyperparameterSamples':
+    def __init__(self, *args, separator=None, **kwds):
+        if len(args) == 1 and isinstance(args[0], RecursiveDict) and len(kwds) == 0:
+            super().__init__(args[0].items())
+            separator = args[0].separator
+        else:
+            super().__init__(*args, **kwds)
+
+        if separator is None:
+            separator = self.DEFAULT_SEPARATOR
+
+        self.separator = separator
+
+    def __getitem__(self, item: str = None):
+        item_values = type(self)()
+
+        for name, values in self.items():
+            if item is None and not self.separator in name:
+                item_values[name] = values
+
+            if self.separator in name:
+                name_split = name.split(self.separator)
+                if str(name_split[0]) == item:
+                    item_values[self.separator.join(name_split[1:])] = values
+
+            if item == name:
+                item_values = values
+
+        return item_values
+
+    def to_flat(self) -> 'RecursiveDict':
         """
         Will create an equivalent flat HyperparameterSamples.
 
         :return: an HyperparameterSamples like self, flattened.
         """
-        return nested_dict_to_flat(self, dict_ctor=HyperparameterSamples)
+        return self.nested_dict_to_flat(dict_ctor=type(self))
 
-    def to_nested_dict(self) -> 'HyperparameterSamples':
+    def to_nested_dict(self) -> 'RecursiveDict':
         """
         Will create an equivalent nested dict HyperparameterSamples.
 
         :return: an HyperparameterSamples like self, as a nested dict.
         """
-        return flat_to_nested_dict(self, dict_ctor=HyperparameterSamples)
+        return self.flat_to_nested_dict(dict_ctor=type(self))
 
     def to_flat_as_dict_primitive(self) -> dict:
         """
@@ -142,7 +130,7 @@ class HyperparameterSamples(OrderedDict):
 
         :return: an HyperparameterSpace like self, flattened.
         """
-        return nested_dict_to_flat(self, dict_ctor=dict)
+        return self.nested_dict_to_flat(dict_ctor=dict)
 
     def to_nested_dict_as_dict_primitive(self) -> dict:
         """
@@ -150,7 +138,7 @@ class HyperparameterSamples(OrderedDict):
 
         :return: a nested primitive dict type of self.
         """
-        return flat_to_nested_dict(self, dict_ctor=dict)
+        return self.flat_to_nested_dict(dict_ctor=dict)
 
     def to_flat_as_ordered_dict_primitive(self) -> OrderedDict:
         """
@@ -158,7 +146,7 @@ class HyperparameterSamples(OrderedDict):
 
         :return: an HyperparameterSpace like self, flattened.
         """
-        return nested_dict_to_flat(self, dict_ctor=OrderedDict)
+        return self.nested_dict_to_flat(dict_ctor=OrderedDict)
 
     def to_nested_dict_as_ordered_dict_primitive(self) -> OrderedDict:
         """
@@ -166,16 +154,101 @@ class HyperparameterSamples(OrderedDict):
 
         :return: a nested primitive dict type of self.
         """
-        return flat_to_nested_dict(self, dict_ctor=OrderedDict)
+        return self.flat_to_nested_dict(dict_ctor=OrderedDict)
+
+    def nested_dict_to_flat(self, dict_ctor):
+        """
+        Convert a nested hyperparameter dictionary to a flat one.
+
+        :param dict_ctor: ``OrderedDict`` by default. Will use this as a class to create the new returned dict.
+        :return: a flat hyperparameter dictionary.
+        """
+        if isinstance(dict_ctor, RecursiveDict):
+            ret = dict_ctor(self.separator)
+        else:
+            ret = dict_ctor()
+
+        for k, v in self.items():
+            if isinstance(v, dict) or isinstance(v, OrderedDict) or isinstance(v, dict_ctor):
+                nested_dict = v
+                if not isinstance(v, RecursiveDict):
+                    nested_dict = RecursiveDict(v, separator=self.separator)
+                _ret = nested_dict.nested_dict_to_flat(dict_ctor=type(nested_dict))
+                for key, val in _ret.items():
+                    ret[k + nested_dict.separator + key] = val
+            else:
+                ret[k] = v
+        return ret
+
+    def flat_to_nested_dict(self, dict_ctor=dict):
+        """
+        Convert a flat hyperparameter dictionary to a nested one.
+
+        :param dict_ctor: ``OrderedDict`` by default. Will use this as a class to create the new returned dict.
+        :return: a nested hyperparameter dictionary.
+        """
+        if isinstance(dict_ctor, RecursiveDict):
+            pre_ret = dict_ctor(self.separator)
+            ret = dict_ctor(self.separator)
+        else:
+            pre_ret = dict_ctor()
+            ret = dict_ctor()
+
+        for k, v in self.items():
+            k, _, key = k.partition(self.separator)
+            if len(key) > 0:
+                if k not in pre_ret.keys():
+                    pre_ret[k] = dict_ctor()
+                pre_ret[k][key] = v
+            else:
+                ret[k] = v
+        for k, v in pre_ret.items():
+            flat_dict = v
+            if not isinstance(v, RecursiveDict):
+                flat_dict = RecursiveDict(v, separator=self.separator)
+            ret[k] = flat_dict.flat_to_nested_dict(dict_ctor=dict_ctor)
+        return ret
+
+    def with_separator(self, separator):
+        """
+        Create a new recursive dict that uses the given separator at each level.
+
+        :param separator:
+        :return:
+        """
+        return type(self)(
+            separator=separator,
+            **{
+                key.replace(self.separator, separator): value if not isinstance(value, RecursiveDict) \
+                    else value.with_separator(separator) for key, value in self.items()
+            })
 
 
-class HyperparameterSpace(HyperparameterSamples):
-    """Wraps an hyperparameter nested dict or flat dict, and offer a few more functions to process
+class HyperparameterSamples(RecursiveDict):
+    """
+    Wraps an hyperparameter nested dict or flat dict, and offer a few more functions.
+
+    This can be set on a Pipeline with the method ``set_hyperparams``.
+
+    HyperparameterSamples are often the result of calling ``.rvs()`` on an HyperparameterSpace.
+    """
+
+    def __init__(self, *args, separator=None, **kwds):
+        super().__init__(*args, separator=separator, **kwds)
+
+
+class HyperparameterSpace(RecursiveDict):
+    """
+    Wraps an hyperparameter nested dict or flat dict, and offer a few more functions to process
     all contained HyperparameterDistribution.
 
     This can be set on a Pipeline with the method ``set_hyperparams_space``.
 
-    Calling ``.rvs()`` on an ``HyperparameterSpace`` results in ``HyperparameterSamples``."""
+    Calling ``.rvs()`` on an ``HyperparameterSpace`` results in ``HyperparameterSamples``.
+    """
+
+    def __init__(self, *args, separator=None, **kwds):
+        super().__init__(*args, separator=separator, **kwds)
 
     def rvs(self) -> 'HyperparameterSamples':
         """
@@ -236,7 +309,7 @@ class HyperparameterSpace(HyperparameterSamples):
 
         :return: an HyperparameterSpace like self, flattened.
         """
-        return nested_dict_to_flat(self, dict_ctor=HyperparameterSpace)
+        return self.nested_dict_to_flat(dict_ctor=HyperparameterSpace)
 
     def to_nested_dict(self) -> 'HyperparameterSpace':
         """
@@ -244,6 +317,4 @@ class HyperparameterSpace(HyperparameterSamples):
 
         :return: an HyperparameterSpace like self, as a nested dict.
         """
-        return flat_to_nested_dict(self, dict_ctor=HyperparameterSpace)
-
-
+        return self.flat_to_nested_dict(dict_ctor=HyperparameterSpace)

@@ -33,7 +33,7 @@ class SomeStepSetup(SomeStep):
         SomeStep.__init__(self)
         self.called_with = None
 
-    def setup(self) -> 'BaseStep':
+    def setup(self, context: ExecutionContext = None) -> 'BaseStep':
         self.is_initialized = True
         return self
 
@@ -54,6 +54,7 @@ def test_transform_should_not_setup_pipeline_and_steps():
     p = SomePipeline([
         step_setup
     ])
+    assert not p.is_initialized
 
     p.transform([1])
 

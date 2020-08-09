@@ -1,17 +1,21 @@
 import numpy as np
+from sklearn.preprocessing import StandardScaler
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error
+from sklearn.svm import LinearSVC
 
 from neuraxle.data_container import DataContainer
-from neuraxle.hyperparams.distributions import FixedHyperparameter
+from neuraxle.hyperparams.distributions import FixedHyperparameter, RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, RandomSearchHyperparameterSelectionStrategy, \
     HyperparamsJSONRepository, \
-    ValidationSplitter, KFoldCrossValidationSplitter
+    ValidationSplitter, KFoldCrossValidationSplitter, Trainer
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
+from neuraxle.metaopt.trial import Trial
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCallbackStep
 from neuraxle.steps.numpy import MultiplyByN, NumpyReshape
+from neuraxle.steps.sklearn import SKLearnWrapper
 
 
 def test_automl_early_stopping_callback(tmpdir):
@@ -95,7 +99,8 @@ def test_validation_splitter_should_split_data_properly():
     splitter = ValidationSplitter(test_size=0.2)
 
     # When
-    validation_splits = splitter.split_data_container(DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs))
+    validation_splits = splitter.split_data_container(
+        DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs))
     train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 
     train_di = train_di[0]
@@ -123,7 +128,8 @@ def test_kfold_cross_validation_should_split_data_properly():
     splitter = KFoldCrossValidationSplitter(k_fold=4)
 
     # When
-    validation_splits = splitter.split_data_container(DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs))
+    validation_splits = splitter.split_data_container(
+        DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs))
     train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 
     # Then
@@ -226,3 +232,62 @@ def extract_validation_split_data(validation_splits):
         validation_di.append(validation_dc.data_inputs)
         validation_eo.append(validation_dc.expected_outputs)
     return train_di, train_eo, validation_di, validation_eo
+
+
+def test_automl_should_shallow_copy_data_before_each_epoch():
+    # see issue #332 https://github.com/Neuraxio/Neuraxle/issues/332
+    data_inputs = np.random.randint(0, 100, (100, 3))
+    expected_outputs = np.random.randint(0, 3, 100)
+
+    from sklearn.preprocessing import StandardScaler
+    p = Pipeline([
+        SKLearnWrapper(StandardScaler()),
+        SKLearnWrapper(LinearSVC(), HyperparameterSpace({'C': RandInt(0, 10000)})),
+    ])
+
+    auto_ml = AutoML(
+        p,
+        validation_splitter=ValidationSplitter(0.20),
+        refit_trial=True,
+        n_trials=10,
+        epochs=10,
+        cache_folder_when_no_handle='cache',
+        scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
+        callbacks=[MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)],
+        hyperparams_repository=InMemoryHyperparamsRepository(
+            cache_folder='cache')
+    )
+
+    random_search = auto_ml.fit(data_inputs, expected_outputs)
+
+    best_model = random_search.get_best_model()
+
+    assert isinstance(best_model, Pipeline)
+
+
+def test_trainer_train():
+    data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expected_outputs = data_inputs * 4
+    p = Pipeline([
+        MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
+            'multiply_by': FixedHyperparameter(2)
+        })),
+        NumpyReshape(new_shape=(-1, 1)),
+        linear_model.LinearRegression()
+    ])
+
+    trainer: Trainer = Trainer(
+        epochs=10,
+        scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
+        validation_splitter=ValidationSplitter(test_size=0.20)
+    )
+
+    repo_trial: Trial = trainer.train(pipeline=p, data_inputs=data_inputs, expected_outputs=expected_outputs)
+
+    trained_pipeline = repo_trial.get_trained_pipeline(split_number=0)
+
+    outputs = trained_pipeline.transform(data_inputs)
+    mse = mean_squared_error(expected_outputs, outputs)
+
+    assert mse < 1
+

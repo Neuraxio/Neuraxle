@@ -24,7 +24,6 @@ from collections import Counter
 import pytest
 
 from neuraxle.hyperparams.distributions import *
-from neuraxle.hyperparams.scipy_distributions import LogNormal, Histogram
 
 NUM_TRIALS = 50000
 
@@ -665,7 +664,6 @@ def test_gaussian_distribution_mixture_quantized():
     LogUniform(0.001, 10),
     Normal(0.0, 1.0),
     LogNormal(0.0, 2.0),
-    Histogram(histogram=np.histogram(norm.rvs(size=100000, loc=0, scale=1.5, random_state=123), bins=100))
 ])
 def test_can_restore_each_distributions(hd):
     print(hd.__dict__)

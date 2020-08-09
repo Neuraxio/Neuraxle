@@ -36,7 +36,7 @@ BaseStep class.
 """
 import numpy as np
 
-from neuraxle.base import NonTransformableMixin, NonFittableMixin, Identity, BaseStep
+from neuraxle.base import NonTransformableMixin, Identity, BaseStep, NonFittableMixin
 from neuraxle.pipeline import Pipeline
 
 

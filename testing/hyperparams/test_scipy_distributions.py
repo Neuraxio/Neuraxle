@@ -25,15 +25,15 @@ def test_wrapped_sk_learn_distributions_should_be_able_to_use_sklearn_methods():
     assert wrapped_sklearn_distribution.sf(5) == 0.5000002866515718
     assert wrapped_sklearn_distribution.logsf(5) == -0.693146607256966
     assert np.all(wrapped_sklearn_distribution.ppf([0.0, 0.01, 0.05, 0.1, 1 - 0.10, 1 - 0.05, 1 - 0.01, 1.0], 10))
-    assert wrapped_sklearn_distribution.isf(q=0.5) == 8.798228093189323
-    assert wrapped_sklearn_distribution.moment(2) == 50.50000000091249
+    assert wrapped_sklearn_distribution.isf(q=0.5) == 8.590676159074153
+    assert wrapped_sklearn_distribution.moment(2) == 50.50000000091251
     assert wrapped_sklearn_distribution.stats()[0]
     assert wrapped_sklearn_distribution.stats()[1]
     assert np.array_equal(wrapped_sklearn_distribution.entropy(), np.array(0.7094692666023363))
     assert wrapped_sklearn_distribution.median()
     assert wrapped_sklearn_distribution.mean() == 5.398942280397029
-    assert wrapped_sklearn_distribution.std() == 4.620759921685374
-    assert wrapped_sklearn_distribution.var() == 21.35142225385382
+    assert np.isclose(wrapped_sklearn_distribution.std(), 4.620759921685375)
+    assert np.isclose(wrapped_sklearn_distribution.var(), 21.351422253853833)
     assert wrapped_sklearn_distribution.expect() == 0.39894228040143276
     interval = wrapped_sklearn_distribution.interval(alpha=[0.25, 0.50])
     assert np.all(interval[0])

@@ -45,16 +45,16 @@ def main():
         ])
     ])
 
-    p.set_hyperparams_space(HyperparameterSpace({
+    p.set_hyperparams_space({
         'step1__multiply_by': RandInt(42, 50),
         'step2__multiply_by': RandInt(-10, 0),
         'Pipeline__PCA__n_components': RandInt(2, 3)
-    }))
+    })
 
     samples = p.get_hyperparams_space().rvs()
     p.set_hyperparams(samples)
 
-    samples = p.get_hyperparams()
+    samples = p.get_hyperparams().to_flat_as_dict_primitive()
     assert 42 <= samples['step1__multiply_by'] <= 50
     assert -10 <= samples['step2__multiply_by'] <= 0
     assert samples['Pipeline__PCA__n_components'] in [2, 3]

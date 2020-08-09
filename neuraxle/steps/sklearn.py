@@ -31,7 +31,7 @@ from sklearn.linear_model import Ridge
 
 from neuraxle.base import BaseStep
 from neuraxle.hyperparams.distributions import LogUniform, Boolean
-from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
+from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.union import ModelStacking
 
@@ -41,7 +41,8 @@ class SKLearnWrapper(BaseStep):
             self,
             wrapped_sklearn_predictor,
             hyperparams_space: HyperparameterSpace = None,
-            return_all_sklearn_default_params_on_get=False
+            return_all_sklearn_default_params_on_get: bool = False,
+            use_partial_fit: bool = False
     ):
         if not isinstance(wrapped_sklearn_predictor, BaseEstimator):
             raise ValueError("The wrapped_sklearn_predictor must be an instance of scikit-learn's BaseEstimator.")
@@ -50,14 +51,15 @@ class SKLearnWrapper(BaseStep):
         BaseStep.__init__(self, hyperparams=params, hyperparams_space=hyperparams_space)
         self.return_all_sklearn_default_params_on_get = return_all_sklearn_default_params_on_get
         self.name += "_" + wrapped_sklearn_predictor.__class__.__name__
+        self.partial_fit: bool = use_partial_fit
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
 
         if hasattr(self.wrapped_sklearn_predictor, 'fit_transform'):
             if expected_outputs is None or len(inspect.getfullargspec(self.wrapped_sklearn_predictor.fit).args) < 3:
-                out = self.wrapped_sklearn_predictor.fit_transform(data_inputs)
+                out = self._sklearn_fit_transform_without_expected_outputs(data_inputs)
             else:
-                out = self.wrapped_sklearn_predictor.fit_transform(data_inputs, expected_outputs)
+                out = self._sklearn_fit_transform_with_expected_outputs(data_inputs, expected_outputs)
             return self, out
 
         self.fit(data_inputs, expected_outputs)
@@ -66,28 +68,67 @@ class SKLearnWrapper(BaseStep):
             return self, self.wrapped_sklearn_predictor.predict(data_inputs)
         return self, self.wrapped_sklearn_predictor.transform(data_inputs)
 
+    def _sklearn_fit_transform_with_expected_outputs(self, data_inputs, expected_outputs):
+        if self.partial_fit:
+            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.partial_fit(data_inputs, expected_outputs)
+            out = self.wrapped_sklearn_predictor.transform(data_inputs)
+        else:
+            out = self.wrapped_sklearn_predictor.fit_transform(data_inputs, expected_outputs)
+        return out
+
+    def _sklearn_fit_transform_without_expected_outputs(self, data_inputs):
+        if self.partial_fit:
+            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.partial_fit(data_inputs)
+            out = self.wrapped_sklearn_predictor.transform(data_inputs)
+        else:
+            out = self.wrapped_sklearn_predictor.fit_transform(data_inputs)
+        return out
+
     def fit(self, data_inputs, expected_outputs=None) -> 'SKLearnWrapper':
         if expected_outputs is None or len(inspect.getfullargspec(self.wrapped_sklearn_predictor.fit).args) < 3:
-            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs)
+            self._sklearn_fit_without_expected_outputs(data_inputs)
+        else:
+            self._sklearn_fit_with_expected_outputs(data_inputs, expected_outputs)
+        return self
+
+    def _sklearn_fit_with_expected_outputs(self, data_inputs, expected_outputs):
+        if self.partial_fit:
+            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.partial_fit(data_inputs, expected_outputs)
         else:
             self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs, expected_outputs)
-        return self
+
+    def _sklearn_fit_without_expected_outputs(self, data_inputs):
+        if self.partial_fit:
+            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.partial_fit(data_inputs)
+        else:
+            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs)
 
     def transform(self, data_inputs):
         if hasattr(self.wrapped_sklearn_predictor, 'predict'):
             return self.wrapped_sklearn_predictor.predict(data_inputs)
         return self.wrapped_sklearn_predictor.transform(data_inputs)
 
-    def set_hyperparams(self, flat_hyperparams: HyperparameterSamples) -> BaseStep:
-        BaseStep.set_hyperparams(self, flat_hyperparams)
-        self.wrapped_sklearn_predictor.set_params(**HyperparameterSamples(flat_hyperparams).to_flat_as_dict_primitive())
-        return self
+    def _set_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
+        """
+        Set hyperparams for base step, and the wrapped sklearn_predictor.
 
-    def get_hyperparams(self):
+        :param hyperparams:
+        :return: self
+        """
+        # flatten the step hyperparams, and set the wrapped sklearn predictor params
+        hyperparams = HyperparameterSamples(hyperparams)
+        BaseStep._set_hyperparams(self, hyperparams.to_flat())
+        self.wrapped_sklearn_predictor.set_params(
+            **hyperparams.with_separator(RecursiveDict.DEFAULT_SEPARATOR).to_flat_as_dict_primitive()
+        )
+
+        return self.hyperparams.to_flat()
+
+    def _get_hyperparams(self):
         if self.return_all_sklearn_default_params_on_get:
             return HyperparameterSamples(self.wrapped_sklearn_predictor.get_params()).to_flat()
         else:
-            return BaseStep.get_hyperparams(self)
+            return BaseStep._get_hyperparams(self)
 
     def get_wrapped_sklearn_predictor(self):
         return self.wrapped_sklearn_predictor
