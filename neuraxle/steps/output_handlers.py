@@ -220,7 +220,10 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
             context
         )
 
-        return self, data_container
+        data_container.set_data_inputs((data_container.data_inputs, data_container.expected_outputs))
+        data_container.set_expected_outputs(expected_outputs=None)
+
+        return self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
         """
@@ -265,7 +268,7 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
-        return data_container
+        return output_data_container
 
 
 class InputAndOutputTransformerMixin(_DidProcessInputOutputHandlerMixin):
@@ -286,7 +289,7 @@ class InputAndOutputTransformerMixin(_DidProcessInputOutputHandlerMixin):
         data_container.set_data_inputs((new_data_inputs, new_expected_outputs))
         return data_container
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         Handle transform by fitting the step,
         and updating the data inputs, and expected outputs inside the data container.
@@ -296,7 +299,9 @@ class InputAndOutputTransformerMixin(_DidProcessInputOutputHandlerMixin):
         :return:
         """
         new_self = self.fit((data_container.data_inputs, data_container.expected_outputs), None)
-        return new_self, data_container
+        data_container.set_data_inputs((data_container.data_inputs, data_container.expected_outputs))
+        data_container.set_expected_outputs(expected_outputs=None)
+        return new_self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
