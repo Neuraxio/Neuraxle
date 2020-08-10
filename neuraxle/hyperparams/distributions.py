@@ -1131,6 +1131,7 @@ class LogUniform(HyperparameterDistribution):
             return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
         return LogUniform(2 ** new_min_included, 2 ** new_max_included, 2 ** self.null_default_value).was_narrowed_from(
             kept_space_ratio, self)
+
     def min(self):
         """
         Calculate minimum value that can be sampled in the LogUniform distribution.
@@ -1411,6 +1412,8 @@ class LogNormal(HyperparameterDistribution):
         self.log2_space_mean = log2_space_mean
         self.log2_space_std = log2_space_std
         self.hard_clip_min = hard_clip_min
+        if self.hard_clip_min is not None and self.hard_clip_min <= 0:
+            self.hard_clip_min = None
         self.hard_clip_max = hard_clip_max
 
     def rvs(self) -> float:
@@ -1860,4 +1863,3 @@ def get_index_in_list_with_bool(choice_list: List[Any], value: Any) -> int:
             return index
 
     raise ValueError("{} is not in list".format(value))
- 
