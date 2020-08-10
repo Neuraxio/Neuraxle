@@ -1131,7 +1131,6 @@ class LogUniform(HyperparameterDistribution):
             return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
         return LogUniform(2 ** new_min_included, 2 ** new_max_included, 2 ** self.null_default_value).was_narrowed_from(
             kept_space_ratio, self)
-
     def min(self):
         """
         Calculate minimum value that can be sampled in the LogUniform distribution.
