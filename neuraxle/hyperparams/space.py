@@ -64,8 +64,6 @@ ready to be sent to an instance of the pipeline to try and score it, for example
 
 from collections import OrderedDict
 
-from scipy.stats import rv_continuous, rv_discrete, rv_histogram
-
 from neuraxle.hyperparams.distributions import HyperparameterDistribution
 
 
@@ -272,12 +270,14 @@ class HyperparameterSpace(RecursiveDict):
         return HyperparameterSamples(new_items)
 
     def narrow_space_from_best_guess(
-            self, best_guesses: 'HyperparameterSpace', kept_space_ratio: float = 0.5
+            self,
+            best_guesses: 'HyperparameterSpace',
+            kept_space_ratio: float = 0.5
     ) -> 'HyperparameterSpace':
         """
         Takes samples estimated to be the best ones of the space as of yet, and restrict the whole space towards that.
 
-        :param best_guess: sampled HyperparameterSpace (the result of rvs on each parameter, but still stored as a HyperparameterSpace).
+        :param best_guesses: sampled HyperparameterSpace (the result of rvs on each parameter, but still stored as a HyperparameterSpace).
         :param kept_space_ratio: what proportion of the space is kept. Should be between 0.0 and 1.0. Default is 0.5.
         :return: a new HyperparameterSpace containing the narrowed HyperparameterDistribution objects.
         """

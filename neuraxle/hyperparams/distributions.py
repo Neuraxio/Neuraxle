@@ -1632,12 +1632,15 @@ class DistributionMixture(HyperparameterDistribution):
         self.distribution_amplitudes = distribution_amplitudes
 
     @staticmethod
-    def build_gaussian_mixture(distribution_amplitudes: Union[List[float], Tuple[float, ...]],
-                               means: Union[List[float], Tuple[float, ...]],
-                               stds: Union[List[float], Tuple[float, ...]],
-                               distributions_mins: Union[List[float], Tuple[float, ...]],
-                               distributions_max: Union[List[float], Tuple[float, ...]], use_logs: bool = False,
-                               use_quantized_distributions: bool = False):
+    def build_gaussian_mixture(
+            distribution_amplitudes: Union[np.ndarray, List[float], Tuple[float, ...]],
+            means: Union[List[float], Tuple[float, ...]],
+            stds: Union[List[float], Tuple[float, ...]],
+            distributions_mins: Union[List[float], Tuple[float, ...]],
+            distributions_max: Union[List[float], Tuple[float, ...]],
+            use_logs: bool = False,
+            use_quantized_distributions: bool = False
+    ):
         """
         Create a gaussian mixture.
 
@@ -1649,11 +1652,13 @@ class DistributionMixture(HyperparameterDistribution):
         :param distributions_mins: list of minimum value that will clip each gaussian. If it is -Inf or None, it will not be clipped.
         :param distributions_max: list of maximal value that will clip each gaussian. If it is +Inf or None, it will not be clipped.
         :param distributions_max: bool weither to use a quantized version or not.
+        :param use_logs: use logs boolean
+        :param use_quantized_distributions: use quantized distributions boolean
 
         :return DistributionMixture instance
         """
 
-        distribution_class = Normal
+        distribution_class: HyperparameterDistribution = Normal
 
         if use_logs:
             distribution_class = LogNormal
@@ -1782,8 +1787,13 @@ class DistributionMixture(HyperparameterDistribution):
         return max([distribution.max() for distribution in self.distributions])
 
 
-def _calculate_sum(eval_func, limits: List[float], value_step: float = 1., tol: float = 1e-10,
-                   number_value_before_stop=5):
+def _calculate_sum(
+        eval_func,
+        limits: List[float],
+        value_step: float = 1.,
+        tol: float = 1e-10,
+        number_value_before_stop: int=5
+):
     method, starting_value, stop_value = _get_sum_starting_info(limits)
 
     current_x = starting_value

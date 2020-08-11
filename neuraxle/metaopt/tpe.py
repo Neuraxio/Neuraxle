@@ -7,11 +7,11 @@ from collections import Counter
 
 import numpy as np
 
-from neuraxle.hyperparams.distributions import DistributionMixture, Choice, Quantized, LogNormal, LogUniform, RandInt, \
-    PriorityChoice, Boolean
-from neuraxle.hyperparams.space import HyperparameterSamples
+from neuraxle.hyperparams.distributions import DistributionMixture, Boolean, PriorityChoice
+from neuraxle.hyperparams.scipy_distributions import Choice, RandInt, LogNormal, LogUniform, Quantized
+from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.auto_ml import BaseHyperparameterSelectionStrategy, RandomSearchHyperparameterSelectionStrategy, \
-    TRIAL_STATUS
+    TRIAL_STATUS, AutoMLContainer
 from neuraxle.metaopt.trial import Trials
 
 _INDEPENDANT_DISCRET_DISTRIBUTION = (Boolean, Choice, PriorityChoice, RandInt)
@@ -20,24 +20,27 @@ _QUANTIZED_DISTRIBUTION = (Quantized,)
 
 
 class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelectionStrategy):
-
-    def __init__(self, number_of_initial_random_step: int = 40, quantile_threshold: float = 0.3,
-                 number_good_trials_max_cap: int = 25,
-                 number_possible_hyperparams_candidates=100,
-                 prior_weight: float = 0.,
-                 use_linear_forgetting_weights: bool = False,
-                 number_recent_trial_at_full_weights=25):
+    def __init__(
+            self,
+            number_of_initial_random_step: int = 40,
+            quantile_threshold: float = 0.3,
+            number_good_trials_max_cap: int = 25,
+            number_possible_hyperparams_candidates: int=100,
+            prior_weight: float = 0.,
+            use_linear_forgetting_weights: bool = False,
+            number_recent_trial_at_full_weights: int = 25
+    ):
         super().__init__()
-        self.initial_auto_ml_algo = RandomSearchHyperparameterSelectionStrategy()
-        self.number_of_initial_random_step = number_of_initial_random_step
-        self.quantile_threshold = quantile_threshold
-        self.number_good_trials_max_cap = number_good_trials_max_cap
-        self.number_possible_hyperparams_candidates = number_possible_hyperparams_candidates
-        self.prior_weight = prior_weight
-        self.use_linear_forgetting_weights = use_linear_forgetting_weights
-        self.number_recent_trial_at_full_weights = number_recent_trial_at_full_weights
+        self.initial_auto_ml_algo: RandomSearchHyperparameterSelectionStrategy = RandomSearchHyperparameterSelectionStrategy()
+        self.number_of_initial_random_step: int = number_of_initial_random_step
+        self.quantile_threshold: float = quantile_threshold
+        self.number_good_trials_max_cap: int = number_good_trials_max_cap
+        self.number_possible_hyperparams_candidates: int = number_possible_hyperparams_candidates
+        self.prior_weight: float = prior_weight
+        self.use_linear_forgetting_weights: bool = use_linear_forgetting_weights
+        self.number_recent_trial_at_full_weights: int = number_recent_trial_at_full_weights
 
-    def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, auto_ml_container: AutoMLContainer) -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials.
 
@@ -47,14 +50,14 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
         :rtype: HyperparameterSamples
         """
         # Flatten hyperparameter space
-        flat_hyperparameter_space = auto_ml_container.hyperparameter_space.to_flat()
+        flat_hyperparameter_space: HyperparameterSpace = auto_ml_container.hyperparameter_space.to_flat()
 
         if auto_ml_container.trial_number < self.number_of_initial_random_step:
             # Perform random search
             return self.initial_auto_ml_algo.find_next_best_hyperparams(auto_ml_container)
 
         # Keep only success trials
-        success_trials = auto_ml_container.trials.filter(TRIAL_STATUS.SUCCESS)
+        success_trials: Trials = auto_ml_container.trials.filter(TRIAL_STATUS.SUCCESS)
 
         # Split trials into good and bad using quantile threshold.
         good_trials, bad_trials = self._split_trials(success_trials)
@@ -105,9 +108,11 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
     def _split_trials(self, success_trials: Trials):
         # Split trials into good and bad using quantile threshold.
         # TODO: maybe better place in the Trials class.
-        # TODO: manage higher_score_is_better.
         trials_scores = np.array([trial.get_validation_score() for trial in success_trials])
+
         trial_sorted_indexes = np.argsort(trials_scores)
+        if not success_trials.is_higher_score_better():
+            trial_sorted_indexes = reversed(trial_sorted_indexes)
 
         # In hyperopt they use this to split, where default_gamma_cap = 25. They clip the max of item they use in the good item.
         # default_gamma_cap is link to the number of recent_trial_at_full_weight also.
@@ -126,7 +131,7 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
                 bad_trials.append(trial)
         return good_trials, bad_trials
 
-    def _create_posterior(self, flat_hyperparameter_space, trials):
+    def _create_posterior(self, flat_hyperparameter_space: HyperparameterSpace, trials: Trials):
         # Create a list of all hyperparams and their trials.
 
         # Loop through all hyperparams
@@ -145,6 +150,7 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
                 posterior_distribution = self._create_gaussian_mixture(hyperparam_distribution, distribution_trials)
 
             posterior_distributions[hyperparam_key] = posterior_distribution
+
         return posterior_distributions
 
     def _reweights_categorical(self, hyperparam_distribution, distribution_trials):
@@ -204,10 +210,15 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
             distribution_trials)
 
         # Create appropriate gaussian mixture that wrapped all hyperparams.
-        gmm = DistributionMixture.build_gaussian_mixture(distribution_amplitudes, means=means, stds=stds,
-                                                         distributions_mins=distributions_mins,
-                                                         distributions_max=distributions_max, use_logs=use_logs,
-                                                         use_quantized_distributions=use_quantized_distributions)
+        gmm = DistributionMixture.build_gaussian_mixture(
+            distribution_amplitudes=distribution_amplitudes,
+            means=means,
+            stds=stds,
+            distributions_mins=distributions_mins,
+            distributions_max=distributions_max,
+            use_logs=use_logs,
+            use_quantized_distributions=use_quantized_distributions
+        )
 
         return gmm
 
