@@ -4,17 +4,18 @@ Tree parzen estimator
 Code for tree parzen estimator auto ml.
 """
 from collections import Counter
+from typing import List, Any
 
 import numpy as np
 
-from neuraxle.hyperparams.distributions import DistributionMixture, Boolean, PriorityChoice
-from neuraxle.hyperparams.scipy_distributions import Choice, RandInt, LogNormal, LogUniform, Quantized
+from neuraxle.hyperparams.distributions import DistributionMixture, PriorityChoice, DiscreteHyperparameterDistribution, \
+    HyperparameterDistribution
+from neuraxle.hyperparams.scipy_distributions import Choice, LogNormal, LogUniform, Quantized
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.auto_ml import BaseHyperparameterSelectionStrategy, RandomSearchHyperparameterSelectionStrategy, \
     TRIAL_STATUS, AutoMLContainer
 from neuraxle.metaopt.trial import Trials
 
-_INDEPENDANT_DISCRET_DISTRIBUTION = (Boolean, Choice, PriorityChoice, RandInt)
 _LOG_DISTRIBUTION = (LogNormal, LogUniform)
 _QUANTIZED_DISTRIBUTION = (Quantized,)
 
@@ -60,7 +61,10 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
         success_trials: Trials = auto_ml_container.trials.filter(TRIAL_STATUS.SUCCESS)
 
         # Split trials into good and bad using quantile threshold.
-        good_trials, bad_trials = self._split_trials(success_trials)
+        good_trials, bad_trials = success_trials.split_good_and_bad_trials(
+            quantile_threshold=self.quantile_threshold,
+            number_of_good_trials_max_cap=self.number_good_trials_max_cap
+        )
 
         # Create gaussian mixture of good and gaussian mixture of bads.
         good_posteriors = self._create_posterior(flat_hyperparameter_space, good_trials)
@@ -105,63 +109,38 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
             best_hyperparams.append((hyperparam_key, best_new_hyperparam_value))
         return HyperparameterSamples(best_hyperparams)
 
-    def _split_trials(self, success_trials: Trials):
-        # Split trials into good and bad using quantile threshold.
-        # TODO: maybe better place in the Trials class.
-        trials_scores = np.array([trial.get_validation_score() for trial in success_trials])
-
-        trial_sorted_indexes = np.argsort(trials_scores)
-        if not success_trials.is_higher_score_better():
-            trial_sorted_indexes = reversed(trial_sorted_indexes)
-
-        # In hyperopt they use this to split, where default_gamma_cap = 25. They clip the max of item they use in the good item.
-        # default_gamma_cap is link to the number of recent_trial_at_full_weight also.
-        # n_below = min(int(np.ceil(gamma * np.sqrt(len(l_vals)))), gamma_cap)
-        n_good = int(min(np.ceil(self.quantile_threshold * len(trials_scores)), self.number_good_trials_max_cap))
-
-        good_trials_indexes = trial_sorted_indexes[:n_good]
-        bad_trials_indexes = trial_sorted_indexes[n_good:]
-
-        good_trials = []
-        bad_trials = []
-        for trial_index, trial in enumerate(success_trials):
-            if trial_index in good_trials_indexes:
-                good_trials.append(trial)
-            if bad_trials_indexes in bad_trials_indexes:
-                bad_trials.append(trial)
-        return good_trials, bad_trials
-
-    def _create_posterior(self, flat_hyperparameter_space: HyperparameterSpace, trials: Trials):
+    def _create_posterior(self, flat_hyperparameter_space: HyperparameterSpace, trials: Trials) -> HyperparameterSpace:
         # Create a list of all hyperparams and their trials.
 
         # Loop through all hyperparams
-        posterior_distributions = {}
+        posterior_distributions: HyperparameterSpace = HyperparameterSpace()
         for (hyperparam_key, hyperparam_distribution) in flat_hyperparameter_space.items():
 
-            # Get distribution_trials
-            distribution_trials = [trial.hyperparams.to_flat_as_dict_primitive()[hyperparam_key] for trial in trials]
+            # Get trial hyperparams
+            trial_hyperparams: List[HyperparameterSamples] = [
+                trial.hyperparams.to_flat_as_dict_primitive()[hyperparam_key] for trial in trials
+            ]
 
-            if isinstance(hyperparam_distribution, _INDEPENDANT_DISCRET_DISTRIBUTION):
-                # If hyperparams is a discret distribution
-                posterior_distribution = self._reweights_categorical(hyperparam_distribution, distribution_trials)
-
+            if hyperparam_distribution.is_discrete():
+                posterior_distribution = self._reweights_categorical(
+                    discrete_distribution=hyperparam_distribution,
+                    trial_hyperparameters=trial_hyperparams
+                )
             else:
-                # If hyperparams is a continuous distribution
-                posterior_distribution = self._create_gaussian_mixture(hyperparam_distribution, distribution_trials)
+                posterior_distribution = self._create_gaussian_mixture(
+                    continuous_distribution=hyperparam_distribution,
+                    trial_hyperparameters=trial_hyperparams
+                )
 
-            posterior_distributions[hyperparam_key] = posterior_distribution
+            posterior_distributions.update({hyperparam_key: posterior_distribution})
 
         return posterior_distributions
 
-    def _reweights_categorical(self, hyperparam_distribution, distribution_trials):
-
-        # For discret categorical distribution
+    def _reweights_categorical(self, discrete_distribution: DiscreteHyperparameterDistribution, trial_hyperparameters):
+        # For discrete categorical distribution
         # We need to reweights probability depending on trial counts.
-        # TODO: add a probas method to access all probas.
-        probas = hyperparam_distribution.probas()
-
-        # TODO: add a values method to acess all values.
-        values = hyperparam_distribution.values()
+        probas: List[float] = discrete_distribution.probabilities()
+        values: List[Any] = discrete_distribution.values()
 
         number_probas = len(probas)
 
@@ -170,7 +149,7 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
         reweighted_probas = number_probas * probas
 
         # Count number of occurence for each values.
-        count_trials = Counter(distribution_trials)
+        count_trials = Counter(trial_hyperparameters)
         values_keys = list(count_trials.keys())
         counts = list(count_trials.values())
 
@@ -185,29 +164,32 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
         reweighted_probas = np.array(reweighted_probas)
         reweighted_probas = reweighted_probas / np.sum(reweighted_probas)
 
-        if isinstance(hyperparam_distribution, PriorityChoice):
+        if isinstance(discrete_distribution, PriorityChoice):
             return PriorityChoice(values, probas=reweighted_probas)
 
         return Choice(values, probas=reweighted_probas)
 
-    def _create_gaussian_mixture(self, hyperparam_distribution, distribution_trials):
-
+    def _create_gaussian_mixture(
+            self,
+            continuous_distribution: HyperparameterDistribution,
+            trial_hyperparameters: List[HyperparameterSamples]
+    ):
         # TODO: see how to manage distribution mixture here.
 
         use_logs = False
-        if isinstance(hyperparam_distribution, _LOG_DISTRIBUTION):
+        if isinstance(continuous_distribution, _LOG_DISTRIBUTION):
             use_logs = True
 
         use_quantized_distributions = False
-        if isinstance(hyperparam_distribution, Quantized):
+        if isinstance(continuous_distribution, Quantized):
             use_quantized_distributions = True
-            if isinstance(hyperparam_distribution.hd, _LOG_DISTRIBUTION):
+            if isinstance(continuous_distribution.hd, _LOG_DISTRIBUTION):
                 use_logs = True
 
         # Find means, std, amplitudes, min and max.
         distribution_amplitudes, means, stds, distributions_mins, distributions_max = self._adaptive_parzen_normal(
-            hyperparam_distribution,
-            distribution_trials)
+            continuous_distribution,
+            trial_hyperparameters)
 
         # Create appropriate gaussian mixture that wrapped all hyperparams.
         gmm = DistributionMixture.build_gaussian_mixture(

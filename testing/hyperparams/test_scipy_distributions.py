@@ -4,6 +4,7 @@ from collections import Counter
 
 import joblib
 import pytest
+from neuraxle.hyperparams.distributions import PriorityChoice
 from scipy.stats import norm
 
 from neuraxle.hyperparams.scipy_distributions import Gaussian, Histogram, Poisson, RandInt, Uniform, LogUniform, Normal, \
@@ -285,3 +286,16 @@ def test_after_serialization(hd, test_method, tmpdir):
 
     assert hd == hd_loaded
     test_method(hd_loaded)
+
+
+@pytest.mark.parametrize("hd", [
+    Poisson(min_included=0.0, max_included=10.0, null_default_value=0.0, mu=5.0),
+    Choice(choice_list=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+    PriorityChoice(choice_list=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+])
+def test_discrete_probabilities(hd):
+    probas = hd.probabilities()
+
+    sum_probas = sum(probas)
+    assert sum_probas > 0.98
+    assert len(probas) == 11

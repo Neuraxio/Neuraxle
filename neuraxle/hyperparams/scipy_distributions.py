@@ -1,5 +1,5 @@
 import math
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from typing import Optional, List, Any
 
 import numpy as np
@@ -7,7 +7,9 @@ from scipy.integrate import quad
 from scipy.special import factorial
 from scipy.stats import rv_continuous, norm, rv_discrete, rv_histogram, truncnorm, randint
 
-from neuraxle.hyperparams.distributions import HyperparameterDistribution, WrappedHyperparameterDistributions
+from neuraxle.hyperparams.distributions import HyperparameterDistribution, WrappedHyperparameterDistributions, \
+    DiscreteHyperparameterDistribution
+
 
 def scipy_method(func):
     def wrapper(*args, **kwargs):
@@ -16,7 +18,7 @@ def scipy_method(func):
         return func(*args, **kwargs)
     return wrapper
 
-class ScipyDistributionWrapper(HyperparameterDistribution):
+class ScipyDistributionWrapper(ABC):
     """
     Base class for a distribution that wraps a scipy distribution.
 
@@ -37,7 +39,6 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         self.scipy_distribution = scipy_distribution
         self.scipy_distribution_arguments = scipy_distribution_arguments
         self.is_continuous = is_continuous
-        HyperparameterDistribution.__init__(self, null_default_value=null_default_value)
 
     def _override_scipy_methods(self):
         return
@@ -172,11 +173,11 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
 
     @scipy_method
     def min(self):
-        return self.scipy_distribution.min()
+        return self.scipy_distribution.a
 
     @scipy_method
     def max(self):
-        return self.scipy_distribution.max()
+        return self.scipy_distribution.b
 
     @scipy_method
     def mean(self, *args, **kwargs):
@@ -281,7 +282,30 @@ class ScipyDistributionWrapper(HyperparameterDistribution):
         return self.scipy_distribution
 
 
-class BaseDiscreteDistribution(ScipyDistributionWrapper):
+class ScipyContinuousDistributionWrapper(ScipyDistributionWrapper, HyperparameterDistribution):
+    def __init__(self, scipy_distribution, null_default_value, **kwargs):
+        ScipyDistributionWrapper.__init__(
+            self,
+            scipy_distribution=scipy_distribution,
+            null_default_value=null_default_value,
+            is_continuous=True,
+            scipy_distribution_arguments=kwargs
+        )
+        HyperparameterDistribution.__init__(self, null_default_value=null_default_value)
+
+class ScipyDiscreteDistributionWrapper(ScipyDistributionWrapper, DiscreteHyperparameterDistribution):
+    def __init__(self, scipy_distribution, null_default_value, **kwargs):
+        ScipyDistributionWrapper.__init__(
+            self,
+            scipy_distribution=scipy_distribution,
+            null_default_value=null_default_value,
+            is_continuous=False,
+            scipy_distribution_arguments=kwargs
+        )
+        DiscreteHyperparameterDistribution.__init__(self, null_default_value=null_default_value)
+
+
+class BaseCustomDiscreteScipyDistribution(ScipyDiscreteDistributionWrapper):
     def __init__(self, name, min_included, max_included, null_default_value, **kwargs):
         scipy_dist_obj = rv_discrete(
             name=name,
@@ -290,7 +314,8 @@ class BaseDiscreteDistribution(ScipyDistributionWrapper):
             **kwargs
         )
         scipy_dist_obj._pmf = self._pmf
-        super().__init__(
+        ScipyDistributionWrapper.__init__(
+            self,
             scipy_distribution=scipy_dist_obj,
             null_default_value=null_default_value,
             is_continuous=False
@@ -309,7 +334,7 @@ class Distribution(rv_continuous):
         return 0.0
 
 
-class BaseContinuousDistribution(ScipyDistributionWrapper):
+class BaseCustomContinuousScipyDistribution(ScipyContinuousDistributionWrapper):
     def __init__(self, name, min_included, max_included, null_default_value, **kwargs):
         scipy_distribution = Distribution(
             name=name,
@@ -334,7 +359,7 @@ class BaseContinuousDistribution(ScipyDistributionWrapper):
 
 
 
-class RandInt(ScipyDistributionWrapper):
+class RandInt(ScipyDiscreteDistributionWrapper):
     """
     Rand int scipy distribution. Check out `scipy.stats.randint for more info <https://docs.scipy.org/doc/scipy-0.15.1/reference/generated/scipy.stats.randint.html>`_
     """
@@ -347,7 +372,6 @@ class RandInt(ScipyDistributionWrapper):
         super().__init__(
             scipy_distribution=randint,
             null_default_value=null_default_value,
-            is_continuous=False,
             **kwargs,
         )
 
@@ -364,7 +388,7 @@ class RandInt(ScipyDistributionWrapper):
         return self.max_included
 
 
-class Uniform(BaseContinuousDistribution):
+class Uniform(BaseCustomContinuousScipyDistribution):
     """
     Get a uniform distribution.
 
@@ -420,7 +444,7 @@ class Uniform(BaseContinuousDistribution):
         return 0.
 
 
-class LogUniform(BaseContinuousDistribution):
+class LogUniform(BaseCustomContinuousScipyDistribution):
     """
     Get a LogUniform distribution.
 
@@ -477,7 +501,7 @@ class LogUniform(BaseContinuousDistribution):
         return 0.
 
 
-class Normal(BaseContinuousDistribution):
+class Normal(BaseCustomContinuousScipyDistribution):
     """
     LogNormal distribution that wraps a `continuous scipy distribution <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
 
@@ -556,7 +580,7 @@ class Normal(BaseContinuousDistribution):
         return norm.pdf(x, loc=self.mean, scale=self.std)
 
 
-class LogNormal(BaseContinuousDistribution):
+class LogNormal(BaseCustomContinuousScipyDistribution):
     """
     Get a normal distribution.
 
@@ -623,7 +647,7 @@ class LogNormal(BaseContinuousDistribution):
         return pdf_x / (cdf_max - cdf_min)
 
 
-class Gaussian(BaseContinuousDistribution):
+class Gaussian(BaseCustomContinuousScipyDistribution):
     """
     Gaussian distribution that inherits from `scipy.stats.rv_continuous <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
 
@@ -658,7 +682,7 @@ class Gaussian(BaseContinuousDistribution):
         self.max_included = max_included
         self.min_included = min_included
 
-        BaseContinuousDistribution.__init__(
+        BaseCustomContinuousScipyDistribution.__init__(
             self,
             name='gaussian',
             min_included=min_included,
@@ -670,7 +694,7 @@ class Gaussian(BaseContinuousDistribution):
         return math.exp(-x ** 2 / 2.) / np.sqrt(2.0 * np.pi)
 
 
-class Poisson(BaseDiscreteDistribution):
+class Poisson(BaseCustomDiscreteScipyDistribution):
     """
     Poisson distribution that inherits from `scipy.stats.rv_discrete <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_histogram.html#scipy.stats.rv_histogram>`_
 
@@ -759,7 +783,7 @@ class Histogram(ScipyDistributionWrapper):
         )
 
 
-class FixedHyperparameter(BaseDiscreteDistribution):
+class FixedHyperparameter(BaseCustomDiscreteScipyDistribution):
     """This is an hyperparameter that won't change again, but that is still expressed as a distribution."""
 
     def __init__(self, value, null_default_value=None):
@@ -783,7 +807,7 @@ class FixedHyperparameter(BaseDiscreteDistribution):
         return 0.
 
 
-class Boolean(BaseDiscreteDistribution):
+class Boolean(BaseCustomDiscreteScipyDistribution):
     """Get a random boolean hyperparameter."""
 
     def __init__(self, proba_is_true: Optional[float] = None, null_default_value=False):
@@ -841,7 +865,7 @@ def get_index_in_list_with_bool(choice_list: List[Any], value: Any) -> int:
     raise ValueError("{} is not in list".format(value))
 
 
-class Choice(BaseDiscreteDistribution):
+class Choice(BaseCustomDiscreteScipyDistribution):
     """Get a random value from a choice list of possible value for this hyperparameter.
 
     When narrowed, the choice will only collapse to a single element when narrowed enough.
@@ -880,6 +904,12 @@ class Choice(BaseDiscreteDistribution):
             max_included=len(choice_list) - 1,
             null_default_value=null_default_value
         )
+
+    def probabilities(self):
+        return self.probas
+
+    def values(self):
+        return self.choice_list
 
     def rvs(self, *args, **kwargs):
         sample_choice_index = super().rvs(*args, **kwargs)
@@ -964,7 +994,7 @@ class Choice(BaseDiscreteDistribution):
         return len(self.choice_list)
 
 
-class Quantized(WrappedHyperparameterDistributions, BaseContinuousDistribution):
+class Quantized(WrappedHyperparameterDistributions, BaseCustomContinuousScipyDistribution):
     """A quantized wrapper for another distribution: will round() the rvs number."""
 
     def __init__(self, hd: HyperparameterDistribution = None, hds: List[HyperparameterDistribution] = None,
@@ -988,7 +1018,7 @@ class Quantized(WrappedHyperparameterDistributions, BaseContinuousDistribution):
         else:
             max_included = round(hd_max)
 
-        BaseContinuousDistribution.__init__(
+        BaseCustomContinuousScipyDistribution.__init__(
             self,
             name='quantized',
             min_included=min_included,
