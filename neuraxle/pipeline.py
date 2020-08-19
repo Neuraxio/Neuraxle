@@ -319,6 +319,32 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         pipeline = MiniBatchSequentialPipeline(sub_pipelines)
 
 
+    You can also have incomplete batches with default values :
+
+        p = MiniBatchSequentialPipeline([
+            MultiplyByN(2),
+            MultiplyByN(2)
+            Joiner(
+                batch_size=30,
+                include_incomplete_pass=True,
+                default_value=-10
+            )
+        ])
+        # or
+        p = MiniBatchSequentialPipeline([
+            MultiplyByN(2),
+            MultiplyByN(2)
+        ], include_incomplete_pass=True, default_value=-10)
+
+        di = np.array(list(range(20)))
+        outputs = p.transform(di)
+
+        assert np.array_equal(outputs, np.concatenate((
+            di * 4, # multiplied data inputs
+            np.array([-10] * 10) * 4)) # multiplied default values
+        )
+
+
     .. seealso::
         :class:`Pipeline`,
         :class:`Barrier`,
@@ -326,11 +352,16 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         :class:`~neuraxle.data_container.DataContainer`,
         :class:`~neuraxle.base.ExecutionContext`
     """
-    def __init__(self, steps: NamedTupleList, batch_size=None, cache_folder=None):
+    def __init__(self, steps: NamedTupleList, batch_size=None, cache_folder=None, include_incomplete_pass: bool = True, default_value: Any = None):
         Pipeline.__init__(self, steps=steps, cache_folder=cache_folder)
         ForceHandleMixin.__init__(self)
         self.__validate_barriers_batch_size(batch_size)
-        self.__patch_missing_barrier(batch_size)
+        self.__patch_missing_barrier(
+            batch_size=batch_size,
+            include_incomplete_pass=include_incomplete_pass,
+            default_value=default_value
+        )
+
         self.__patch_barriers_batch_size(batch_size)
 
     def __validate_barriers_batch_size(self, batch_size):
@@ -355,7 +386,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
                         'Replacing {}[{}].batch_size by {}.batch_size.'.format(self.name, step.name, self.name))
                 step.batch_size = batch_size
 
-    def __patch_missing_barrier(self, batch_size):
+    def __patch_missing_barrier(self, batch_size: int, include_incomplete_pass: bool = True, default_value: Any = None):
         has_barrier = False
 
         for _, step in self:
@@ -363,7 +394,13 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
                 has_barrier = True
 
         if not has_barrier:
-            self.steps_as_tuple.append(('Joiner', Joiner(batch_size)))
+            joiner: Joiner = Joiner(
+                batch_size=batch_size,
+                include_incomplete_pass=include_incomplete_pass,
+                default_value=default_value
+            )
+
+            self.steps_as_tuple.append(('Joiner', joiner))
 
         self._refresh_steps()
 
@@ -517,9 +554,11 @@ class Joiner(Barrier):
     A Special Barrier step that joins the transformed mini batches together with list.extend method.
     """
 
-    def __init__(self, batch_size):
+    def __init__(self, batch_size: int, include_incomplete_pass: bool = True, default_value: Any = None):
         Barrier.__init__(self)
-        self.batch_size = batch_size
+        self.batch_size: int = batch_size
+        self.include_incomplete_pass: bool = include_incomplete_pass
+        self.default_value: Any = default_value
 
     def join_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -536,7 +575,9 @@ class Joiner(Barrier):
 
         data_container_batches = data_container.convolved_1d(
             stride=self.batch_size,
-            kernel_size=self.batch_size
+            kernel_size=self.batch_size,
+            include_incomplete_pass=self.include_incomplete_pass,
+            default_value=self.default_value
         )
 
         output_data_container = ListDataContainer.empty()

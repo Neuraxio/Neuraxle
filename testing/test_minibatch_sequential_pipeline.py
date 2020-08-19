@@ -96,3 +96,27 @@ def test_mini_batch_sequential_pipeline_should_fit_transform_steps_sequentially_
     assert tape4_fit.data == [([0, 8, 16, 24, 32, 40, 48, 56, 64, 72], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
                               ([80, 88, 96, 104, 112, 120, 128, 136, 144, 152], [10, 11, 12, 13, 14, 15, 16, 17, 18, 19])]
     assert tape4.name_tape == ["4", "4"]
+
+
+def test_mini_batch_sequential_pipeline_should_transform_steps_sequentially_with_incomplete_batch_and_default_value():
+    # Given
+    tape1 = TapeCallbackFunction()
+    tape2 = TapeCallbackFunction()
+    p = MiniBatchSequentialPipeline([
+        MultiplyBy2TransformCallbackStep(tape1, ["1"]),
+        MultiplyBy2TransformCallbackStep(tape2, ["2"]),
+        Joiner(
+            batch_size=30,
+            include_incomplete_pass=True,
+            default_value=-10
+        )
+    ])
+
+    # When
+    di = np.array(list(range(20)))
+    outputs = p.transform(di)
+
+    # Then
+    assert np.array_equal(outputs, np.concatenate((di * 4, np.array([-10] * 10) * 4)))
+    assert np.array_equal(tape1.data[0], np.concatenate((di, np.array([-10] * 10))))
+    assert np.array_equal(tape2.data[0], np.concatenate((di * 2, np.array([-10] * 10) * 2)))

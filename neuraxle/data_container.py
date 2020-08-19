@@ -142,24 +142,40 @@ class DataContainer:
             m.update(str.encode(str(current_id)))
         return m.hexdigest()
 
-    def convolved_1d(self, stride, kernel_size) -> Iterable['DataContainer']:
+    def convolved_1d(self, stride, kernel_size, include_incomplete_pass: bool = True, default_value: Any = None) -> Iterable['DataContainer']:
         """
         Returns an iterator that iterates through batches of the DataContainer.
 
         :param stride: step size for the convolution operation
         :param kernel_size:
-        :return: an iterator of DataContainer
+        :param include_incomplete_pass: suppose you have a kernel_size of 7 and an iterable length of 3. If
+            include_incomplete_pass is set to True, then you'll have 1 item returned in the loop, otherwise, 0 item.
+        :param default_value: default fill value for padding and values outside iteration range.
+        :param include_incomplete_pass:
         :rtype: Iterable[DataContainer]
 
         .. seealso::
             `<https://github.com/guillaume-chevalier/python-conv-lib>`_
         """
-        conv_current_ids = convolved_1d(stride=stride, iterable=self.current_ids, kernel_size=kernel_size,
-                                        include_incomplete_pass=True)
-        conv_data_inputs = convolved_1d(stride=stride, iterable=self.data_inputs, kernel_size=kernel_size,
-                                        include_incomplete_pass=True)
-        conv_expected_outputs = convolved_1d(stride=stride, iterable=self.expected_outputs, kernel_size=kernel_size,
-                                             include_incomplete_pass=True)
+        conv_current_ids = convolved_1d(
+            stride=stride,
+            iterable=self.current_ids,
+            kernel_size=kernel_size,
+            include_incomplete_pass=include_incomplete_pass
+        )
+        conv_data_inputs = convolved_1d(
+            stride=stride,
+            iterable=self.data_inputs,
+            kernel_size=kernel_size,
+            default_value=default_value,
+            include_incomplete_pass=include_incomplete_pass
+        )
+        conv_expected_outputs = convolved_1d(
+            stride=stride,
+            iterable=self.expected_outputs,
+            kernel_size=kernel_size,
+            include_incomplete_pass=include_incomplete_pass
+        )
 
         for current_ids, data_inputs, expected_outputs in zip(conv_current_ids, conv_data_inputs,
                                                               conv_expected_outputs):

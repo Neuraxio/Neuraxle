@@ -108,7 +108,7 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
 
         :return: self, transformed_data_container
         """
-        output_data_container: DataContainer = ListDataContainer.empty(original_data_container=data_container)
+        output_data_container: ListDataContainer = ListDataContainer.empty(original_data_container=data_container)
 
         for current_id, di, eo in data_container:
             self.wrapped, output = self.wrapped.handle_fit_transform(
