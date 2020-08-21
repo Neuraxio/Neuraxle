@@ -1751,6 +1751,10 @@ class _HasHashers(ABC):
 
         self.hashers: List[BaseHasher] = hashers
 
+    def set_hashers(self, hashers: List[BaseHasher]) -> '_HasHashers':
+        self.hashers: List[BaseHasher] = hashers
+        return self
+
     def summary_hash(self, data_container: DataContainer) -> str:
         """
         Hash data inputs, current ids, and hyperparameters together using self.hashers.
