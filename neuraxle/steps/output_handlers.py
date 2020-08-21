@@ -150,7 +150,7 @@ class _DidProcessInputOutputHandlerMixin:
         di, eo = data_container.data_inputs
         if len(di) != len(eo):
             raise AssertionError(
-                '{}: Found different len for data inputs, and expected outputs. Please return the same the same amount of data inputs, and expected outputs.'.format(
+                '{}: Found different len for data inputs, and expected outputs. Please return the same the same amount of data inputs, and expected outputs, or otherwise create your own handler methods to do more funky things.'.format(
                     self.name))
 
         data_container.set_data_inputs(data_inputs=di)
