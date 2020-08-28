@@ -456,6 +456,8 @@ Thanks to everyone who contributed to the project:
 -  Jérôme Blanchet: https://github.com/JeromeBlanchet
 -  Michaël Lévesque-Dion: https://github.com/mlevesquedion
 -  Philippe Racicot: https://github.com/Vaunorage
+-  Neurodata: https://github.com/NeuroData-ltd
+-  Klaimohelmi: https://github.com/Klaimohelmi
 
 Supported By
 ~~~~~~~~~~~~
