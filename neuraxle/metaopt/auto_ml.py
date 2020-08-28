@@ -37,7 +37,7 @@ from typing import Callable, List, Union, Tuple
 
 import numpy as np
 
-from neuraxle.base import BaseStep, ExecutionContext, ForceHandleOnlyMixin, ForceHandleMixin, _FittableStep
+from neuraxle.base import BaseStep, ExecutionContext, ForceHandleMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.callbacks import BaseCallback, CallbackList, ScoringCallback
@@ -327,7 +327,10 @@ class HyperparamsJSONRepository(HyperparamsRepository):
                     continue
 
             if status is None or trial_json['status'] == status.value:
-                trials.append(Trial.from_json(trial_json=trial_json))
+                trials.append(Trial.from_json(
+                    hyperparams_repository=self,
+                    trial_json=trial_json
+                ))
 
         return trials
 

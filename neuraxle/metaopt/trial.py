@@ -27,11 +27,21 @@ import traceback
 from enum import Enum
 from typing import Dict, List
 
+from neuraxle.metaopt.auto_ml import HyperparamsRepository
+
 from neuraxle.base import BaseStep, ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
 
 TRIAL_DATETIME_STR_FORMAT = '%m/%d/%Y, %H:%M:%S'
+
+def update_trial(func):
+    def wrapper(*args, **kwargs):
+        self_in_args = args[0]
+        output = func(*args, **kwargs)
+        self_in_args.update()
+        return output
+    return wrapper
 
 
 class Trial:
@@ -53,6 +63,7 @@ class Trial:
             self,
             hyperparams: HyperparameterSamples,
             main_metric_name: str,
+            hyperparams_repository: HyperparamsRepository,
             status: 'TRIAL_STATUS' = None,
             pipeline: BaseStep = None,
             validation_splits: List['TrialSplit'] = None,
@@ -67,7 +78,8 @@ class Trial:
         if validation_splits is None:
             validation_splits = []
 
-        self.main_metric_name = main_metric_name
+        self.hyperparams_repository: HyperparamsRepository = hyperparams_repository
+        self.main_metric_name: str = main_metric_name
         self.status: TRIAL_STATUS = status
         self.hyperparams: HyperparameterSamples = hyperparams
         self.pipeline: BaseStep = pipeline
@@ -77,6 +89,15 @@ class Trial:
         self.error: str = error
         self.start_time: datetime.datetime = start_time
         self.end_time: datetime.datetime = end_time
+
+    def update(self) -> 'Trial':
+        """
+        Update trial with the hyperparams repository.
+
+        :return:
+        """
+        self.hyperparams_repository.save_trial(self)
+        return self
 
     def new_validation_split(self, pipeline: BaseStep, delete_pipeline_on_completion: bool = True) -> 'TrialSplit':
         """
@@ -89,6 +110,7 @@ class Trial:
         :return: one trial split
         """
         trial_split: TrialSplit = TrialSplit(
+            trial=self,
             split_number=len(self.validation_splits),
             main_metric_name=self.main_metric_name,
             pipeline=pipeline,
@@ -96,6 +118,7 @@ class Trial:
         )
         self.validation_splits.append(trial_split)
 
+        self.update()
         return trial_split
 
     def save_model(self):
@@ -157,6 +180,7 @@ class Trial:
         :return: self
         """
         self.status = TRIAL_STATUS.SUCCESS
+        self.update()
 
         return self
 
@@ -174,6 +198,8 @@ class Trial:
         else:
             self.status = TRIAL_STATUS.FAILED
 
+        self.update()
+
     def set_failed(self, error: Exception) -> 'Trial':
         """
         Set failed trial with exception.
@@ -184,6 +210,8 @@ class Trial:
         self.status = TRIAL_STATUS.FAILED
         self.error = str(error)
         self.error_traceback = traceback.format_exc()
+
+        self.update()
 
         return self
 
@@ -219,20 +247,26 @@ class Trial:
         }
 
     @staticmethod
-    def from_json(trial_json: Dict) -> 'Trial':
-        return Trial(
+    def from_json(hyperparams_repository: HyperparamsRepository, trial_json: Dict) -> 'Trial':
+        trial: Trial = Trial(
             main_metric_name=trial_json['main_metric_name'],
             status=TRIAL_STATUS(trial_json['status']),
             hyperparams=HyperparameterSamples(trial_json['hyperparams']),
-            validation_splits=[
-                TrialSplit.from_json(validation_split_json)
-                for validation_split_json in trial_json['validation_splits']
-            ],
+            hyperparams_repository=hyperparams_repository,
             error=trial_json['error'],
             error_traceback=trial_json['error_traceback'],
             start_time=datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT),
             end_time=datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT)
         )
+
+        trial.validation_splits = [
+            TrialSplit.from_json(
+                trial=trial,
+                trial_split_json=validation_split_json
+            ) for validation_split_json in trial_json['validation_splits']
+        ]
+
+        return trial
 
     def __enter__(self):
         """
@@ -240,6 +274,7 @@ class Trial:
         """
         self.start_time = datetime.datetime.now()
         self.status = TRIAL_STATUS.STARTED
+        self.update()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -255,7 +290,10 @@ class Trial:
         del self.pipeline
         if exc_type is not None:
             self.set_failed(exc_val)
+            self.update()
             raise exc_val
+
+        self.update()
         return self
 
 
@@ -273,7 +311,8 @@ class TrialSplit:
 
     def __init__(
             self,
-            split_number,
+            trial: Trial,
+            split_number: int,
             main_metric_name: str,
             status: 'TRIAL_STATUS' = None,
             error: Exception = None,
@@ -287,6 +326,7 @@ class TrialSplit:
         if status is None:
             status = TRIAL_STATUS.PLANNED
 
+        self.trial: Trial = trial
         self.split_number: int = split_number
         self.status: TRIAL_STATUS = status
         self.error: Exception = error
@@ -299,6 +339,15 @@ class TrialSplit:
         self.pipeline: BaseStep = pipeline
         self.main_metric_name: str = main_metric_name
         self.delete_pipeline_on_completion = delete_pipeline_on_completion
+
+    def update(self) -> 'TrialSplit':
+        """
+        Update parent trial.
+
+        :return: self
+        """
+        self.trial.update()
+        return self
 
     def fit_trial_split(self, train_data_container: DataContainer, context: ExecutionContext) -> 'TrialSplit':
         """
@@ -349,6 +398,7 @@ class TrialSplit:
             }
 
         self.metrics_results[name]['train_values'].append(score)
+        self.update()
 
     def add_metric_results_validation(self, name: str, score: float, higher_score_is_better: bool):
         """
@@ -367,6 +417,7 @@ class TrialSplit:
             }
 
         self.metrics_results[name]['validation_values'].append(score)
+        self.update()
 
     def get_validation_scores(self):
         """
@@ -445,22 +496,24 @@ class TrialSplit:
         }
 
     @staticmethod
-    def from_json(trial_json: Dict) -> 'TrialSplit':
+    def from_json(trial: 'Trial', trial_split_json: Dict) -> 'TrialSplit':
         """
         Create a trial split object from json.
 
-        :param trial_json: trial json
+        :param trial: parent trial
+        :param trial_split_json: trial json
         :return:
         """
         return TrialSplit(
-            status=TRIAL_STATUS(trial_json['status']),
-            error=trial_json['error'],
-            error_traceback=trial_json['error_traceback'],
-            metrics_results=trial_json['metric_results'],
-            start_time=datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT),
-            end_time=datetime.datetime.strptime(trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT),
-            split_number=trial_json['split_number'],
-            main_metric_name=trial_json['main_metric_name']
+            trial=trial,
+            status=TRIAL_STATUS(trial_split_json['status']),
+            error=trial_split_json['error'],
+            error_traceback=trial_split_json['error_traceback'],
+            metrics_results=trial_split_json['metric_results'],
+            start_time=datetime.datetime.strptime(trial_split_json['start_time'], TRIAL_DATETIME_STR_FORMAT),
+            end_time=datetime.datetime.strptime(trial_split_json['end_time'], TRIAL_DATETIME_STR_FORMAT),
+            split_number=trial_split_json['split_number'],
+            main_metric_name=trial_split_json['main_metric_name']
         )
 
     def set_success(self) -> 'TrialSplit':
@@ -470,6 +523,7 @@ class TrialSplit:
         :return: self
         """
         self.status = TRIAL_STATUS.SUCCESS
+        self.update()
         return self
 
     def is_success(self):
@@ -488,6 +542,7 @@ class TrialSplit:
         self.status = TRIAL_STATUS.FAILED
         self.error = str(error)
         self.error_traceback = traceback.format_exc()
+        self.update()
         return self
 
     def __enter__(self):
@@ -496,6 +551,7 @@ class TrialSplit:
         """
         self.start_time = datetime.datetime.now()
         self.status = TRIAL_STATUS.STARTED
+        self.update()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -514,6 +570,7 @@ class TrialSplit:
             self.set_failed(exc_val)
             raise exc_val
 
+        self.update()
         return self
 
     def __str__(self):
