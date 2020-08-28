@@ -61,6 +61,8 @@ class HyperparamsRepository(ABC):
     """
 
     def __init__(self, hyperparameter_selection_strategy=None, cache_folder=None, best_retrained_model_folder=None):
+        if cache_folder is None:
+            cache_folder = 'trials'
         if best_retrained_model_folder is None:
             best_retrained_model_folder = os.path.join(cache_folder, 'best')
         self.best_retrained_model_folder = best_retrained_model_folder
@@ -222,7 +224,11 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         hyperparams = self.hyperparameter_selection_strategy.find_next_best_hyperparams(auto_ml_container)
         self.print_func('new trial:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
-        return Trial(hyperparams=hyperparams, main_metric_name=auto_ml_container.main_scoring_metric_name)
+        return Trial(
+            save_trial_function=self.save_trial,
+            hyperparams=hyperparams,
+            main_metric_name=auto_ml_container.main_scoring_metric_name
+        )
 
 
 class HyperparamsJSONRepository(HyperparamsRepository):
@@ -294,8 +300,12 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :return:
         """
         hyperparams = self.hyperparameter_selection_strategy.find_next_best_hyperparams(auto_ml_container)
-        trial = Trial(hyperparams, cache_folder=self.cache_folder,
-                      main_metric_name=auto_ml_container.main_scoring_metric_name)
+        trial = Trial(
+            hyperparams=hyperparams,
+            save_trial_function=self.save_trial,
+            cache_folder=self.cache_folder,
+            main_metric_name=auto_ml_container.main_scoring_metric_name
+        )
         self._create_trial_json(trial=trial)
 
         return trial
@@ -328,7 +338,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
             if status is None or trial_json['status'] == status.value:
                 trials.append(Trial.from_json(
-                    hyperparams_repository=self,
+                    update_trial_function=self.save_trial,
                     trial_json=trial_json
                 ))
 
@@ -444,7 +454,8 @@ class Trainer:
             scoring_callback: ScoringCallback,
             validation_splitter: 'BaseValidationSplitter',
             callbacks: List[BaseCallback] = None,
-            print_func: Callable = None
+            print_func: Callable = None,
+            hyperparams_repository: HyperparamsRepository = None
     ):
         self.epochs: int = epochs
         self.validation_split_function = validation_splitter
@@ -456,6 +467,10 @@ class Trainer:
 
         if print_func is None:
             print_func = print
+
+        if hyperparams_repository is None:
+            hyperparams_repository = InMemoryHyperparamsRepository()
+        self.hyperparams_repository: HyperparamsRepository = hyperparams_repository
 
         self.print_func = print_func
 
@@ -478,7 +493,8 @@ Refer to `execute_trial` for full flexibility
         repo_trial: Trial = Trial(
             pipeline=pipeline,
             hyperparams=pipeline.get_hyperparams(),
-            main_metric_name=self.get_main_metric_name()
+            main_metric_name=self.get_main_metric_name(),
+            save_trial_function=self.hyperparams_repository.save_trial
         )
 
         self.execute_trial(
@@ -706,7 +722,8 @@ class AutoML(ForceHandleMixin, BaseStep):
             scoring_callback=scoring_callback,
             callbacks=callbacks,
             print_func=self.print_func,
-            validation_splitter=validation_splitter
+            validation_splitter=validation_splitter,
+            hyperparams_repository=hyperparams_repository
         )
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':

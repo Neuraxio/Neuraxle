@@ -1,5 +1,7 @@
 import datetime
 
+from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository
+
 from neuraxle.base import Identity
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.metaopt.trial import Trial, TRIAL_STATUS, TRIAL_DATETIME_STR_FORMAT, Trials
@@ -19,7 +21,12 @@ MAIN_METRIC_NAME = 'mse'
 
 def test_trial_should_create_new_split():
     hp = HyperparameterSamples({'a': 2})
-    trial = Trial(hyperparams=hp, main_metric_name=MAIN_METRIC_NAME)
+    repo = InMemoryHyperparamsRepository()
+    trial = Trial(
+        save_trial_function=repo.save_trial,
+        hyperparams=hp,
+        main_metric_name=MAIN_METRIC_NAME
+    )
 
     with trial.new_validation_split(Identity()) as trial_split:
         trial_split.set_success()
@@ -32,7 +39,8 @@ def test_trial_should_create_new_split():
 
 def test_trial_split_is_new_best_score_should_return_true_with_one_score():
     hp = HyperparameterSamples({'a': 2})
-    trial = Trial(hyperparams=hp, main_metric_name=MAIN_METRIC_NAME)
+    repo = InMemoryHyperparamsRepository()
+    trial = Trial(save_trial_function=repo.save_trial, hyperparams=hp, main_metric_name=MAIN_METRIC_NAME)
 
     with trial.new_validation_split(Identity()) as trial_split:
         trial_split.add_metric_results_train(name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
@@ -44,7 +52,8 @@ def test_trial_split_is_new_best_score_should_return_true_with_one_score():
 
 def test_trial_split_is_new_best_score_should_return_false_with_not_a_new_best_score():
     hp = HyperparameterSamples({'a': 2})
-    trial = Trial(hyperparams=hp, main_metric_name=MAIN_METRIC_NAME)
+    repo = InMemoryHyperparamsRepository()
+    trial = Trial(save_trial_function=repo.save_trial, hyperparams=hp, main_metric_name=MAIN_METRIC_NAME)
 
     with trial.new_validation_split(Identity()) as trial_split:
         trial_split.add_metric_results_train(name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
@@ -60,7 +69,8 @@ def test_trial_split_is_new_best_score_should_return_false_with_not_a_new_best_s
 
 def test_trial_split_is_new_best_score_should_return_true_with_a_new_best_score_after_multiple_scores():
     hp = HyperparameterSamples({'a': 2})
-    trial = Trial(hyperparams=hp, main_metric_name=MAIN_METRIC_NAME)
+    repo = InMemoryHyperparamsRepository()
+    trial = Trial(save_trial_function=repo.save_trial, hyperparams=hp, main_metric_name=MAIN_METRIC_NAME)
 
     with trial.new_validation_split(Identity()) as trial_split:
         trial_split.add_metric_results_train(name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
@@ -80,7 +90,12 @@ def test_trial_split_is_new_best_score_should_return_true_with_a_new_best_score_
 
 def test_success_trial_split_to_json():
     hp = HyperparameterSamples({'a': 2})
-    trial = Trial(hyperparams=hp, main_metric_name=MAIN_METRIC_NAME)
+    repo = InMemoryHyperparamsRepository()
+    trial = Trial(
+        save_trial_function=repo.save_trial,
+        hyperparams=hp,
+        main_metric_name=MAIN_METRIC_NAME
+    )
 
     with trial:
         trial_split = given_success_trial_validation_split(trial)
@@ -105,7 +120,12 @@ def then_success_trial_split_json_is_valid(trial_json):
 
 def test_success_trial_to_json():
     hp = HyperparameterSamples({'a': 2})
-    trial = Trial(hyperparams=hp, main_metric_name='mse')
+    repo = InMemoryHyperparamsRepository()
+    trial = Trial(
+        save_trial_function=repo.save_trial,
+        hyperparams=hp,
+        main_metric_name='mse'
+    )
 
     with trial:
         given_success_trial_validation_split(trial)
@@ -127,7 +147,8 @@ def test_success_trial_to_json():
 
 def test_success_trial_get_validation_score():
     hp = HyperparameterSamples({'a': 2})
-    trial = Trial(hyperparams=hp, main_metric_name='mse')
+    repo = InMemoryHyperparamsRepository()
+    trial = Trial(save_trial_function=repo.save_trial, hyperparams=hp, main_metric_name='mse')
 
     with trial:
         given_success_trial_validation_split(trial, best_score=0.3)
@@ -139,7 +160,8 @@ def test_success_trial_get_validation_score():
 
 def test_success_trial_multiple_splits_should_average_the_scores():
     hp = HyperparameterSamples({'a': 2})
-    trial = Trial(hyperparams=hp, main_metric_name='mse')
+    repo = InMemoryHyperparamsRepository()
+    trial = Trial(save_trial_function=repo.save_trial, hyperparams=hp, main_metric_name='mse')
 
     with trial:
         given_success_trial_validation_split(trial, best_score=0.3)
@@ -152,7 +174,8 @@ def test_success_trial_multiple_splits_should_average_the_scores():
 
 def test_trial_with_failed_split_should_only_average_successful_splits():
     hp = HyperparameterSamples({'a': 2})
-    trial = Trial(hyperparams=hp, main_metric_name='mse')
+    repo = InMemoryHyperparamsRepository()
+    trial = Trial(save_trial_function=repo.save_trial, hyperparams=hp, main_metric_name='mse')
 
     with trial:
         given_success_trial_validation_split(trial, best_score=0.3)
@@ -186,7 +209,8 @@ def given_success_trial_validation_split(trial, best_score=0.4):
 
 def test_failure_trial_split_to_json():
     hp = HyperparameterSamples({'a': 2})
-    trial = Trial(hyperparams=hp, main_metric_name='mse')
+    repo = InMemoryHyperparamsRepository()
+    trial = Trial(save_trial_function=repo.save_trial, hyperparams=hp, main_metric_name='mse')
     with trial:
         trial_split = given_failed_trial_split(trial)
 
@@ -211,7 +235,8 @@ def then_failed_validation_split_json_is_valid(trial_json, trial_split):
 
 def test_failure_trial_to_json():
     hp = HyperparameterSamples({'a': 2})
-    trial = Trial(hyperparams=hp, main_metric_name='mse')
+    repo = InMemoryHyperparamsRepository()
+    trial = Trial(save_trial_function=repo.save_trial, hyperparams=hp, main_metric_name='mse')
 
     with trial:
         trial_split = given_failed_trial_split(trial)
@@ -252,13 +277,14 @@ def given_failed_trial_split(trial):
 
 def test_trials_get_best_hyperparams_should_return_hyperparams_of_best_trial():
     # Given
+    repo = InMemoryHyperparamsRepository()
     hp_trial_1 = HyperparameterSamples({'a': 2})
-    trial_1 = Trial(hyperparams=hp_trial_1, main_metric_name=MAIN_METRIC_NAME)
+    trial_1 = Trial(save_trial_function=repo.save_trial, hyperparams=hp_trial_1, main_metric_name=MAIN_METRIC_NAME)
     with trial_1:
         given_success_trial_validation_split(trial_1, best_score=0.2)
 
     hp_trial_2 = HyperparameterSamples({'b': 3})
-    trial_2 = Trial(hyperparams=hp_trial_2, main_metric_name=MAIN_METRIC_NAME)
+    trial_2 = Trial(save_trial_function=repo.save_trial, hyperparams=hp_trial_2, main_metric_name=MAIN_METRIC_NAME)
     with trial_2:
         given_success_trial_validation_split(trial_2, best_score=0.1)
 
