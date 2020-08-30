@@ -33,6 +33,10 @@ from conv import convolved_1d
 NamedDataContainerTuple = Tuple[str, 'DataContainer']
 
 
+class AbsentValuesNullObject:
+    pass
+
+
 class DataContainer:
     """
     DataContainer class to store data inputs, expected outputs, and ids together.
@@ -52,12 +56,12 @@ class DataContainer:
     """
 
     def __init__(
-            self,
-            data_inputs: Any,
-            current_ids=None,
-            summary_id=None,
-            expected_outputs: Any = None,
-            sub_data_containers: List['NamedDataContainerTuple'] = None
+        self,
+        data_inputs: Any,
+        current_ids=None,
+        summary_id=None,
+        expected_outputs: Any = None,
+        sub_data_containers: List['NamedDataContainerTuple'] = None
     ):
         self.summary_id = summary_id
         self.data_inputs = data_inputs
@@ -142,7 +146,14 @@ class DataContainer:
             m.update(str.encode(str(current_id)))
         return m.hexdigest()
 
-    def convolved_1d(self, stride, kernel_size, include_incomplete_pass: bool = True, default_value: Any = None) -> Iterable['DataContainer']:
+    def convolved_1d(
+        self,
+        stride: int,
+        kernel_size: int,
+        include_incomplete_pass: bool = True,
+        default_value: Union[Any, AbsentValuesNullObject] = None,
+        default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = None
+    ) -> Iterable['DataContainer']:
         """
         Returns an iterator that iterates through batches of the DataContainer.
 
@@ -150,19 +161,26 @@ class DataContainer:
         :param kernel_size:
         :param include_incomplete_pass: suppose you have a kernel_size of 7 and an iterable length of 3. If
             include_incomplete_pass is set to True, then you'll have 1 item returned in the loop, otherwise, 0 item.
-        :param default_value: default fill value for padding and values outside iteration range.
+        :param default_value: default fill value for padding and values outside iteration range,
+                                or absent value null object to trim the absent values from the batch
+        :param default_value_expected_outputs: expected outputs default fill value for padding and values outside iteration range,
+                                or absent value null object to trim the absent values from the batch
         :param include_incomplete_pass:
         :rtype: Iterable[DataContainer]
 
         .. seealso::
             `<https://github.com/guillaume-chevalier/python-conv-lib>`_
         """
+        if default_value_expected_outputs is None:
+            default_value_expected_outputs = default_value
+
         conv_current_ids = convolved_1d(
             stride=stride,
             iterable=self.current_ids,
             kernel_size=kernel_size,
             include_incomplete_pass=include_incomplete_pass
         )
+
         conv_data_inputs = convolved_1d(
             stride=stride,
             iterable=self.data_inputs,
@@ -170,15 +188,20 @@ class DataContainer:
             default_value=default_value,
             include_incomplete_pass=include_incomplete_pass
         )
+
         conv_expected_outputs = convolved_1d(
             stride=stride,
             iterable=self.expected_outputs,
             kernel_size=kernel_size,
+            default_value=default_value_expected_outputs,
             include_incomplete_pass=include_incomplete_pass
         )
 
-        for current_ids, data_inputs, expected_outputs in zip(conv_current_ids, conv_data_inputs,
-                                                              conv_expected_outputs):
+        for current_ids, data_inputs, expected_outputs in zip(
+            conv_current_ids,
+            conv_data_inputs,
+            conv_expected_outputs
+        ):
             for i, (ci, di, eo) in enumerate(zip(current_ids, data_inputs, expected_outputs)):
                 if di is None:
                     current_ids = current_ids[:i]
@@ -186,13 +209,31 @@ class DataContainer:
                     expected_outputs = expected_outputs[:i]
                     break
 
-            yield DataContainer(
+            data_container = DataContainer(
                 data_inputs=data_inputs,
                 current_ids=current_ids,
                 summary_id=self.summary_id,
                 expected_outputs=expected_outputs,
                 sub_data_containers=self.sub_data_containers
             )
+
+            if isinstance(default_value, AbsentValuesNullObject):
+                data_container.trim(from_current_id=None)
+
+            yield data_container
+
+    def trim(self, from_current_id: Any) -> 'DataContainer':
+        """
+        Trim data container values starting from the given current id.
+
+        :param from_current_id: first current id to start trimming from
+        """
+        index_start_default_values = -1 if from_current_id not in self.current_ids else self.current_ids.index(from_current_id)
+        data_inputs = self.data_inputs[:index_start_default_values]
+        expected_outputs = self.expected_outputs[:index_start_default_values]
+        current_ids = self.current_ids[:index_start_default_values]
+
+        return DataContainer(current_ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     def get_n_batches(self, batch_size: int) -> int:
         return math.ceil(len(self.data_inputs) / batch_size)
@@ -444,7 +485,8 @@ class ListDataContainer(DataContainer):
         :class:`DataContainer`
     """
 
-    def __init__(self, data_inputs: Any, current_ids=None, summary_id=None, expected_outputs: Any = None, sub_data_containers=None):
+    def __init__(self, data_inputs: Any, current_ids=None, summary_id=None, expected_outputs: Any = None,
+                 sub_data_containers=None):
         DataContainer.__init__(self, data_inputs, current_ids, summary_id, expected_outputs, sub_data_containers)
         self.tolistshallow()
 
