@@ -41,11 +41,12 @@ from neuraxle.base import BaseStep, ExecutionContext, ForceHandleMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.callbacks import BaseCallback, CallbackList, ScoringCallback
+from neuraxle.metaopt.observable import _Observable, _Observer
 from neuraxle.metaopt.random import BaseCrossValidationWrapper
 from neuraxle.metaopt.trial import Trial, TrialSplit, TRIAL_STATUS, Trials
 
 
-class HyperparamsRepository(ABC):
+class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], ABC):
     """
     Hyperparams repository that saves hyperparams, and scores for every AutoML trial.
 
@@ -61,6 +62,7 @@ class HyperparamsRepository(ABC):
     """
 
     def __init__(self, hyperparameter_selection_strategy=None, cache_folder=None, best_retrained_model_folder=None):
+        super().__init__()
         if cache_folder is None:
             cache_folder = 'trials'
         if best_retrained_model_folder is None:
@@ -89,10 +91,20 @@ class HyperparamsRepository(ABC):
         """
         pass
 
-    @abstractmethod
     def save_trial(self, trial: 'Trial'):
         """
-        Save trial.
+        Save trial, and notify trial observers.
+
+        :param trial: trial to save.
+        :return:
+        """
+        self._save_trial(trial)
+        self.on_next(value=(self, trial)) # notify a tuple of (repo, trial) to observers
+
+    @abstractmethod
+    def _save_trial(self, trial: 'Trial'):
+        """
+        save trial.
 
         :param trial: trial to save.
         :return:
@@ -204,7 +216,7 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         """
         return self.trials.filter(status)
 
-    def save_trial(self, trial: 'Trial'):
+    def _save_trial(self, trial: 'Trial'):
         """
         Save trial.
 
@@ -270,7 +282,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
             best_retrained_model_folder=best_retrained_model_folder
         )
 
-    def save_trial(self, trial: 'Trial'):
+    def _save_trial(self, trial: 'Trial'):
         """
         Save trial json.
 
@@ -401,6 +413,19 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :return:
         """
         return os.path.join(self.cache_folder, "NEW_" + current_hyperparameters_hash) + '.json'
+
+    def subscribe_to_cache_folder_changes(self, refresh_interval_in_seconds: int, observer: _Observer[HyperparamsRepository, Trial]):
+        """
+        Every refresh_interval_in_seconds
+
+        :param refresh_interval_in_seconds: number of seconds to wait before sending updates to the observers
+        :param observer:
+        :return:
+        """
+        self._observers.add(observer)
+        # TODO: start a process that notifies observers anytime a the file of a trial changes
+        # possibly use this ? https://github.com/samuelcolvin/watchgod
+        # note: this is how you notify observers self.on_next((self, updated_trial))
 
 
 class BaseHyperparameterSelectionStrategy(ABC):
