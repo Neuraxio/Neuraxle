@@ -23,7 +23,9 @@ Code Machine Learning Pipelines - The Right Way.
     :target: https://pypi.org/project/neuraxle/
 
 .. image:: assets/images/neuraxle_logo.png
-    :width: 100px
+    :width: 250px
+    :max-width: 250px
+    :text-align: center
     :alt: Neuraxle Logo
     :align: center
 
