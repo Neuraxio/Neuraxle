@@ -144,7 +144,7 @@ Why Neuraxle ?
 Most research projects don't ever get to production. However, you want
 your project to be production-ready and already adaptable (clean) by the
 time you finish it. You also want things to be simple so that you can
-get started quickly. Read more about why we built Neuraxle here: :ref:`Why Neuraxle`.
+get started quickly. Read more about `the why of Neuraxle here. <https://github.com/Neuraxio/Neuraxle/blob/master/Why%20Neuraxle.rst>`_
 
 ---------
 Community
