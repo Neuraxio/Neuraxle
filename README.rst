@@ -22,17 +22,10 @@ Code Machine Learning Pipelines - The Right Way.
 .. image:: https://img.shields.io/github/v/release/neuraxio/neuraxle?   :alt: GitHub release (latest by date)
     :target: https://pypi.org/project/neuraxle/
 
-.. raw:: html
-
-    <style type="text/css">
-        .align-center {
-            margin-left: auto;
-            margin-right: auto;
-            display: block;
-        }
-    </style>
-
-    <img class="align-center" alt="neuraxle logo" src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/neuraxle_logo.png" width="250px">
+.. image:: assets/neuraxle_logo.png
+    :width: 250px
+    :alt: Neuraxle Logo
+    :align: center
 
 Neuraxle is a Machine Learning (ML) library for building machine learning pipelines.
 
