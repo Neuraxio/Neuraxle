@@ -179,7 +179,18 @@ class HyperparameterDistribution(metaclass=ABCMeta):
     def __eq__(self, other):
         return self.first_id == other.first_id
 
+class ContinuousHyperparameterDistrbution(HyperparameterDistribution):
+    """
+    TODO docstring
+    TODO replace inheritance
+    """
+    def __init__(self, null_default_value):
+        super().__init__(null_default_value, is_continuous=True)
+
 class DiscreteHyperparameterDistribution(HyperparameterDistribution):
+    """
+    TODO docstring
+    """
     def __init__(self, null_default_value):
         super().__init__(null_default_value, is_continuous=False)
 

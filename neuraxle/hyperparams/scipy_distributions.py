@@ -283,7 +283,7 @@ class ScipyDistributionWrapper(ABC):
 
 
 class ScipyContinuousDistributionWrapper(ScipyDistributionWrapper, HyperparameterDistribution):
-    def __init__(self, scipy_distribution, null_default_value, **kwargs):
+    def __init__(self, scipy_distribution, null_default_value=None, **kwargs):
         ScipyDistributionWrapper.__init__(
             self,
             scipy_distribution=scipy_distribution,
@@ -294,7 +294,7 @@ class ScipyContinuousDistributionWrapper(ScipyDistributionWrapper, Hyperparamete
         HyperparameterDistribution.__init__(self, null_default_value=null_default_value)
 
 class ScipyDiscreteDistributionWrapper(ScipyDistributionWrapper, DiscreteHyperparameterDistribution):
-    def __init__(self, scipy_distribution, null_default_value, **kwargs):
+    def __init__(self, scipy_distribution, null_default_value=None, **kwargs):
         ScipyDistributionWrapper.__init__(
             self,
             scipy_distribution=scipy_distribution,

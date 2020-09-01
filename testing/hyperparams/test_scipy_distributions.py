@@ -4,12 +4,18 @@ from collections import Counter
 
 import joblib
 import pytest
-from neuraxle.hyperparams.distributions import PriorityChoice
-from scipy.stats import norm
+
+from neuraxle.base import Identity
+from neuraxle.hyperparams.distributions import PriorityChoice, DiscreteHyperparameterDistribution, \
+    ContinuousHyperparameterDistrbution
+from scipy.stats import norm, randint, rv_discrete, poisson, gamma
 
 from neuraxle.hyperparams.scipy_distributions import Gaussian, Histogram, Poisson, RandInt, Uniform, LogUniform, Normal, \
-    LogNormal, Choice, get_index_in_list_with_bool
+    LogNormal, Choice, get_index_in_list_with_bool, BaseCustomDiscreteScipyDistribution, \
+    BaseCustomContinuousScipyDistribution, ScipyDiscreteDistributionWrapper, ScipyContinuousDistributionWrapper
 import numpy as np
+
+from neuraxle.hyperparams.space import HyperparameterSpace
 
 NUM_TRIALS = 100
 
@@ -299,3 +305,28 @@ def test_discrete_probabilities(hd):
     sum_probas = sum(probas)
     assert sum_probas > 0.98
     assert len(probas) == 11
+
+def test_can_set_scipy_distribution():
+    p = Identity().set_hyperparams_space(HyperparameterSpace({
+        'rand_int_scipy': randint(low=2, high=5),  # scipy
+        'rand_int_neuraxle': RandInt(2, 5),  # neuraxle
+        'gamma_scipy': gamma(0.2),  # scipy
+    }))
+
+    assert isinstance(p.get_hyperparams_space()['rand_int_scipy'], ScipyDiscreteDistributionWrapper)
+    assert isinstance(p.get_hyperparams_space()['gamma_scipy'], ScipyContinuousDistributionWrapper)
+
+def test_can_update_scipy_distribution():
+    p = Identity().set_hyperparams_space(HyperparameterSpace({
+        'rand_int_neuraxle': RandInt(2, 5)  # neuraxle
+    }))
+
+    p.update_hyperparams_space(HyperparameterSpace({
+        'rand_int_scipy': randint(low=2, high=5),  # scipy
+        'gamma_scipy': gamma(0.2),  # scipy
+    }))
+
+    assert isinstance(p.get_hyperparams_space()['rand_int_scipy'], ScipyDiscreteDistributionWrapper)
+    assert isinstance(p.get_hyperparams_space()['gamma_scipy'], ScipyContinuousDistributionWrapper)
+    randint_sample = p.get_hyperparams_space()['rand_int_scipy'].rvs()
+    gamma_sample = p.get_hyperparams_space()['gamme_scipy'].rvs()

@@ -91,10 +91,19 @@ setup(
     test_suite="testing",
     setup_requires=["pytest-runner"],
     install_requires=[
-        'numpy', 'scipy', 'matplotlib', 'scikit-learn>=0.20.3', 'joblib>=0.13.2',
-        'Flask>=1.1.1', 'Flask-RESTful>=0.3.7', 'conv==0.2'
+        'numpy',
+        'scipy>=1.4.1',
+        'matplotlib',
+        'joblib>=0.13.2',
+        'Flask>=1.1.1',
+        'Flask-RESTful>=0.3.7',
+        'conv==0.2'
     ],
-    tests_require=["pytest", "pytest-cov"],
+    tests_require=[
+        "pytest",
+        "pytest-cov",
+        "scikit-learn>=0.20.3"
+    ],
     include_package_data=True,
     license='Apache 2.0',
     keywords='pipeline pipelines data science machine learning deep learning'
