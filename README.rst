@@ -22,7 +22,7 @@ Code Machine Learning Pipelines - The Right Way.
 .. image:: https://img.shields.io/github/v/release/neuraxio/neuraxle?   :alt: GitHub release (latest by date)
     :target: https://pypi.org/project/neuraxle/
 
-.. image:: assets/neuraxle_logo.png
+.. image:: assets/images/neuraxle_logo.png
     :width: 250px
     :alt: Neuraxle Logo
     :align: center
