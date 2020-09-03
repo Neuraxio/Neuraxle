@@ -64,7 +64,12 @@ ready to be sent to an instance of the pipeline to try and score it, for example
 
 from collections import OrderedDict
 
+from scipy.stats import rv_continuous, rv_discrete
+from scipy.stats._distn_infrastructure import rv_generic
+
 from neuraxle.hyperparams.distributions import HyperparameterDistribution
+from neuraxle.hyperparams.scipy_distributions import ScipyDiscreteDistributionWrapper, \
+    ScipyContinuousDistributionWrapper
 
 
 class RecursiveDict(OrderedDict):
@@ -78,6 +83,8 @@ class RecursiveDict(OrderedDict):
     DEFAULT_SEPARATOR = '__'
 
     def __init__(self, *args, separator=None, **kwds):
+        args = self._patch_args(*args)
+
         if len(args) == 1 and isinstance(args[0], RecursiveDict) and len(kwds) == 0:
             super().__init__(args[0].items())
             separator = args[0].separator
@@ -88,6 +95,29 @@ class RecursiveDict(OrderedDict):
             separator = self.DEFAULT_SEPARATOR
 
         self.separator = separator
+
+    def _patch_args(self, *args):
+        patched_args = []
+        for arg in args:
+            if isinstance(arg, RecursiveDict):
+                patched_arg = RecursiveDict(**{
+                    name: self._patch_arg(value)
+                    for name, value in args[0].items()
+                }, separator=arg.separator)
+            else:
+                patched_arg = arg
+            patched_args.append(patched_arg)
+
+        return patched_args
+
+    def _patch_arg(self, arg):
+        if hasattr(arg, 'dist') and isinstance(arg.dist, rv_generic):
+            if isinstance(arg.dist, rv_discrete):
+                return ScipyDiscreteDistributionWrapper(arg)
+            if isinstance(arg.dist, rv_continuous):
+                return ScipyContinuousDistributionWrapper(arg)
+        else:
+            return arg
 
     def __getitem__(self, item: str = None):
         item_values = type(self)()
@@ -270,12 +300,14 @@ class HyperparameterSpace(RecursiveDict):
         return HyperparameterSamples(new_items)
 
     def narrow_space_from_best_guess(
-            self, best_guesses: 'HyperparameterSpace', kept_space_ratio: float = 0.5
+        self,
+        best_guesses: 'HyperparameterSpace',
+        kept_space_ratio: float = 0.5
     ) -> 'HyperparameterSpace':
         """
         Takes samples estimated to be the best ones of the space as of yet, and restrict the whole space towards that.
 
-        :param best_guess: sampled HyperparameterSpace (the result of rvs on each parameter, but still stored as a HyperparameterSpace).
+        :param best_guesses: sampled HyperparameterSpace (the result of rvs on each parameter, but still stored as a HyperparameterSpace).
         :param kept_space_ratio: what proportion of the space is kept. Should be between 0.0 and 1.0. Default is 0.5.
         :return: a new HyperparameterSpace containing the narrowed HyperparameterDistribution objects.
         """
@@ -300,3 +332,19 @@ class HyperparameterSpace(RecursiveDict):
                 v = v.unnarrow()
             new_items.append((k, v))
         return HyperparameterSpace(new_items)
+
+    def to_flat(self) -> 'HyperparameterSpace':
+        """
+        Will create an equivalent flat HyperparameterSpace.
+
+        :return: an HyperparameterSpace like self, flattened.
+        """
+        return self.nested_dict_to_flat(dict_ctor=HyperparameterSpace)
+
+    def to_nested_dict(self) -> 'HyperparameterSpace':
+        """
+        Will create an equivalent nested dict HyperparameterSpace.
+
+        :return: an HyperparameterSpace like self, as a nested dict.
+        """
+        return self.flat_to_nested_dict(dict_ctor=HyperparameterSpace)
