@@ -114,7 +114,15 @@ You can also use AutoML algorithms to find the best hyperparams:
 
     auto_ml = AutoML(
         pipeline=pipeline,
-        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        hyperparams_optimizer=TreeParzenEstimatorHyperparameterSelectionStrategy(
+            number_of_initial_random_step=10,
+            quantile_threshold=0.3,
+            number_good_trials_max_cap=25,
+            number_possible_hyperparams_candidates=100,
+            prior_weight=0.,
+            use_linear_forgetting_weights=False,
+            number_recent_trial_at_full_weights=25
+        ),
         validation_splitter=ValidationSplitter(test_size=0.20),
         scoring_callback=ScoringCallback(accuracy_score, higher_score_is_better=True),
         callbacks[
