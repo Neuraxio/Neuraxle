@@ -24,8 +24,10 @@ You can find here output handlers steps that changes especially the data outputs
 
 """
 import copy
+from abc import ABC
+from typing import List
 
-from neuraxle.base import ExecutionContext, BaseStep, MetaStep, ForceHandleOnlyMixin
+from neuraxle.base import ExecutionContext, BaseStep, MetaStep, ForceHandleOnlyMixin, BaseHasher
 from neuraxle.data_container import DataContainer
 
 
@@ -62,7 +64,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         return data_container
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    BaseStep, DataContainer):
+            BaseStep, DataContainer):
         """
         Handle fit by passing expected outputs to the wrapped step fit method.
 
@@ -84,7 +86,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         return self, data_container
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    BaseStep, DataContainer):
+            BaseStep, DataContainer):
         """
         Handle fit transform by passing expected outputs to the wrapped step fit method.
         Update the expected outputs with the outputs.
@@ -132,7 +134,10 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
 
     def _set_expected_outputs(self, data_container, new_expected_outputs_data_container) -> DataContainer:
         if len(data_container.data_inputs) != len(data_container.expected_outputs):
-            raise AssertionError('OutputTransformerWrapper: Found different len for data inputs, and expected outputs. Please return the same the same amount of data inputs, and expected outputs.')
+            raise AssertionError(
+                'OutputTransformerWrapper: Found different len for data inputs, and expected outputs. '
+                'Please return the same the same amount of data inputs, and expected outputs, '
+                'or otherwise create your own handler methods to do more funky things.')
 
         data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
         data_container.set_current_ids(new_expected_outputs_data_container.current_ids)
@@ -140,7 +145,28 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         return data_container
 
 
-class InputAndOutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
+class _DidProcessInputOutputHandlerMixin:
+    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        di, eo = data_container.data_inputs
+        if len(di) != len(eo):
+            raise AssertionError(
+                '{}: Found different len for data inputs, and expected outputs. Please return the same the same amount of data inputs, and expected outputs, or otherwise create your own handler methods to do more funky things.'.format(
+                    self.name))
+
+        data_container.set_data_inputs(data_inputs=di)
+        data_container.set_expected_outputs(expected_outputs=eo)
+
+        data_container = super()._did_process(data_container, context)
+
+        if len(data_container.current_ids) != len(data_container.data_inputs):
+            raise AssertionError(
+                '{}: Caching broken because there is a different len of current ids, and data inputs. Please use InputAndOutputTransformerWrapper if you plan to change the len of the data inputs.'.format(
+                    self.name))
+
+        return data_container
+
+
+class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, ForceHandleOnlyMixin, MetaStep):
     """
     Wrapper step to transform both data inputs, and expected output at the same.
     It sends the data_inputs, and the expected_outputs to the wrapped step so that it can transform them.
@@ -150,9 +176,10 @@ class InputAndOutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         :class:`~neuraxle.base.ForceHandleOnlyMixin`
     """
 
-    def __init__(self, wrapped, cache_folder_when_no_handle=None):
-        MetaStep.__init__(self, wrapped)
+    def __init__(self, wrapped, hashers: List[BaseHasher] = None, cache_folder_when_no_handle=None):
+        MetaStep.__init__(self, wrapped, hashers=hashers)
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
+        _DidProcessInputOutputHandlerMixin.__init__(self)
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -173,11 +200,10 @@ class InputAndOutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
             context
         )
 
-        self._set_data_inputs_and_expected_outputs(data_container, output_data_container)
+        return output_data_container
 
-        return data_container
-
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+            BaseStep, DataContainer):
         """
         Handle fit by passing the data inputs, and the expected outputs to the wrapped step fit method.
 
@@ -196,7 +222,10 @@ class InputAndOutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
             context
         )
 
-        return self, data_container
+        data_container.set_data_inputs((data_container.data_inputs, data_container.expected_outputs))
+        data_container.set_expected_outputs(expected_outputs=None)
+
+        return self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
         """
@@ -217,9 +246,7 @@ class InputAndOutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
             ),
             context
         )
-        self._set_data_inputs_and_expected_outputs(data_container, output_data_container)
-
-        return self, data_container
+        return self, output_data_container
 
     def handle_inverse_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -240,29 +267,13 @@ class InputAndOutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
             context.push(self.wrapped)
         )
 
-        self._set_data_inputs_and_expected_outputs(data_container, output_data_container)
-
         current_ids = self.hash(data_container)
         data_container.set_current_ids(current_ids)
 
-        return data_container
-
-    def _set_data_inputs_and_expected_outputs(self, data_container, output_data_container) -> DataContainer:
-        data_inputs, expected_outputs = output_data_container.data_inputs
-        if len(data_inputs) != len(expected_outputs):
-            raise AssertionError('InputAndOutputTransformerWrapper: Found different len for data inputs, and expected outputs. Please return the same the same amount of data inputs, and expected outputs.')
-
-        if len(output_data_container.current_ids) != len(data_inputs):
-            raise AssertionError('InputAndOutputTransformerWrapper: Caching broken because there is a different len of current ids, and data inputs.'
-                                 'Please resample the current ids using handler methods, or create new ones by setting the wrapped step saver to HashlibMd5ValueHasher using the BaseStep.set_savers method.')
-
-        data_container.set_data_inputs(data_inputs)
-        data_container.set_expected_outputs(expected_outputs)
-
-        return data_container
+        return output_data_container
 
 
-class InputAndOutputTransformerMixin:
+class InputAndOutputTransformerMixin(_DidProcessInputOutputHandlerMixin):
     """
     Base output transformer step that can modify data inputs, and expected_outputs at the same time.
     """
@@ -277,12 +288,10 @@ class InputAndOutputTransformerMixin:
         """
         di_eo = (data_container.data_inputs, data_container.expected_outputs)
         new_data_inputs, new_expected_outputs = self.transform(di_eo)
-
-        self._set_data_inputs_and_expected_outputs(data_container, new_data_inputs, new_expected_outputs)
-
+        data_container.set_data_inputs((new_data_inputs, new_expected_outputs))
         return data_container
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
         Handle transform by fitting the step,
         and updating the data inputs, and expected outputs inside the data container.
@@ -292,7 +301,9 @@ class InputAndOutputTransformerMixin:
         :return:
         """
         new_self = self.fit((data_container.data_inputs, data_container.expected_outputs), None)
-        return new_self, data_container
+        data_container.set_data_inputs((data_container.data_inputs, data_container.expected_outputs))
+        data_container.set_expected_outputs(expected_outputs=None)
+        return new_self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         """
@@ -303,19 +314,7 @@ class InputAndOutputTransformerMixin:
         :param data_container:
         :return:
         """
-        new_self, (new_data_inputs, new_expected_outputs) = self.fit_transform((data_container.data_inputs, data_container.expected_outputs), None)
-
-        self._set_data_inputs_and_expected_outputs(data_container, new_data_inputs, new_expected_outputs)
-
+        new_self, (new_data_inputs, new_expected_outputs) = self.fit_transform(
+            (data_container.data_inputs, data_container.expected_outputs), None)
+        data_container.set_data_inputs((new_data_inputs, new_expected_outputs))
         return new_self, data_container
-
-    def _set_data_inputs_and_expected_outputs(self, data_container, new_data_inputs, new_expected_outputs):
-        data_container.set_data_inputs(new_data_inputs)
-        data_container.set_expected_outputs(new_expected_outputs)
-
-        if len(new_data_inputs) != len(new_expected_outputs):
-            raise AssertionError('InputAndOutputTransformerMixin: Found different len for data inputs, and expected outputs. Please return the same the same amount of data inputs, and expected outputs.')
-
-        if len(data_container.current_ids) != len(new_data_inputs):
-            raise AssertionError('InputAndOutputTransformerMixin: Caching broken because there is a different len of current ids, and data inputs. Please use InputAndOutputTransformerWrapper if you plan to change the len of the data inputs.')
-

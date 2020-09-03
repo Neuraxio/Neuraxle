@@ -1710,15 +1710,20 @@ class _HasSavers(ABC):
     def _load_step(self, context, savers):
         # A final "visitor" saver might reload anything that wasn't saved customly after stripping the rest.
         loaded_self = self
+        has_been_loaded_by_a_saver: bool = False
         for saver in savers:
             # Each saver unstrips the step a bit more if needed
             if saver.can_load(loaded_self, context):
                 loaded_self = saver.load_step(loaded_self, context)
+                has_been_loaded_by_a_saver = True
             else:
-                warnings.warn(
-                    'Cannot Load Step {0} ({1}:{2}) With Step Saver {3}.'.format(context.get_path(), self.name,
-                                                                                 self.__class__.__name__,
-                                                                                 saver.__class__.__name__))
+                has_been_loaded_by_a_saver and warnings.warn(
+                    'Cannot Load Step {0} ({1}:{2}) With Step Saver {3}.'.format(
+                        context.get_path(),
+                        self.name,
+                        self.__class__.__name__,
+                        saver.__class__.__name__)
+                )
                 break
         return loaded_self
 
@@ -1741,6 +1746,10 @@ class _HasHashers(ABC):
             hashers = [HashlibMd5Hasher()]
 
         self.hashers: List[BaseHasher] = hashers
+
+    def set_hashers(self, hashers: List[BaseHasher]) -> '_HasHashers':
+        self.hashers: List[BaseHasher] = hashers
+        return self
 
     def summary_hash(self, data_container: DataContainer) -> str:
         """
