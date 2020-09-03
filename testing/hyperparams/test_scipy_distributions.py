@@ -3,18 +3,14 @@ import os
 from collections import Counter
 
 import joblib
+import numpy as np
 import pytest
+from scipy.stats import norm, randint, gamma
 
 from neuraxle.base import Identity
-from neuraxle.hyperparams.distributions import PriorityChoice, DiscreteHyperparameterDistribution, \
-    ContinuousHyperparameterDistrbution
-from scipy.stats import norm, randint, rv_discrete, poisson, gamma
-
+from neuraxle.hyperparams.distributions import PriorityChoice
 from neuraxle.hyperparams.scipy_distributions import Gaussian, Histogram, Poisson, RandInt, Uniform, LogUniform, Normal, \
-    LogNormal, Choice, get_index_in_list_with_bool, BaseCustomDiscreteScipyDistribution, \
-    BaseCustomContinuousScipyDistribution, ScipyDiscreteDistributionWrapper, ScipyContinuousDistributionWrapper
-import numpy as np
-
+    LogNormal, Choice, get_index_in_list_with_bool, ScipyDiscreteDistributionWrapper, ScipyContinuousDistributionWrapper
 from neuraxle.hyperparams.space import HyperparameterSpace
 
 NUM_TRIALS = 100
@@ -290,7 +286,7 @@ def test_after_serialization(hd, test_method, tmpdir):
     joblib.dump(hd, os.path.join(str(tmpdir), '{}.joblib'.format(hd.__class__)))
     hd_loaded = joblib.load(os.path.join(str(tmpdir), '{}.joblib'.format(hd.__class__)))
 
-    assert hd == hd_loaded
+    assert hd.__class__ == hd_loaded.__class__
     test_method(hd_loaded)
 
 
@@ -315,6 +311,10 @@ def test_can_set_scipy_distribution():
 
     assert isinstance(p.get_hyperparams_space()['rand_int_scipy'], ScipyDiscreteDistributionWrapper)
     assert isinstance(p.get_hyperparams_space()['gamma_scipy'], ScipyContinuousDistributionWrapper)
+    randint_sample = p.get_hyperparams_space()['rand_int_scipy'].rvs()
+    gamma_sample = p.get_hyperparams_space()['gamma_scipy'].rvs()
+    assert 5 >= randint_sample >= 2
+    assert isinstance(gamma_sample, float)
 
 def test_can_update_scipy_distribution():
     p = Identity().set_hyperparams_space(HyperparameterSpace({
@@ -329,4 +329,6 @@ def test_can_update_scipy_distribution():
     assert isinstance(p.get_hyperparams_space()['rand_int_scipy'], ScipyDiscreteDistributionWrapper)
     assert isinstance(p.get_hyperparams_space()['gamma_scipy'], ScipyContinuousDistributionWrapper)
     randint_sample = p.get_hyperparams_space()['rand_int_scipy'].rvs()
-    gamma_sample = p.get_hyperparams_space()['gamme_scipy'].rvs()
+    gamma_sample = p.get_hyperparams_space()['gamma_scipy'].rvs()
+    assert 5 >= randint_sample >= 2
+    assert isinstance(gamma_sample, float)

@@ -8,7 +8,7 @@ from scipy.special import factorial
 from scipy.stats import rv_continuous, norm, rv_discrete, rv_histogram, truncnorm, randint
 
 from neuraxle.hyperparams.distributions import HyperparameterDistribution, WrappedHyperparameterDistributions, \
-    DiscreteHyperparameterDistribution
+    DiscreteHyperparameterDistribution, ContinuousHyperparameterDistrbution
 
 
 def scipy_method(func):
@@ -35,17 +35,20 @@ class ScipyDistributionWrapper(ABC):
         :class:`HyperparameterDistribution`
     """
 
-    def __init__(self, scipy_distribution, null_default_value, is_continuous, **scipy_distribution_arguments):
+    def __init__(self, scipy_distribution, **scipy_distribution_arguments):
         self.scipy_distribution = scipy_distribution
         self.scipy_distribution_arguments = scipy_distribution_arguments
-        self.is_continuous = is_continuous
 
     def _override_scipy_methods(self):
         return
 
     @scipy_method
     def rvs(self, *args, **kwargs) -> float:
-        return self.scipy_distribution.rvs(*args, **kwargs, **self.scipy_distribution_arguments)
+        if kwargs is None:
+            kwargs = dict()
+        kwargs = dict(kwargs)
+        kwargs.update(**self.scipy_distribution_arguments)
+        return self.scipy_distribution.rvs(*args, **kwargs)
 
     @scipy_method
     def pdf(self, x, *args, **kwargs) -> float:
@@ -287,20 +290,16 @@ class ScipyContinuousDistributionWrapper(ScipyDistributionWrapper, Hyperparamete
         ScipyDistributionWrapper.__init__(
             self,
             scipy_distribution=scipy_distribution,
-            null_default_value=null_default_value,
-            is_continuous=True,
-            scipy_distribution_arguments=kwargs
+            **kwargs
         )
-        HyperparameterDistribution.__init__(self, null_default_value=null_default_value)
+        ContinuousHyperparameterDistrbution.__init__(self, null_default_value=null_default_value)
 
 class ScipyDiscreteDistributionWrapper(ScipyDistributionWrapper, DiscreteHyperparameterDistribution):
     def __init__(self, scipy_distribution, null_default_value=None, **kwargs):
         ScipyDistributionWrapper.__init__(
             self,
             scipy_distribution=scipy_distribution,
-            null_default_value=null_default_value,
-            is_continuous=False,
-            scipy_distribution_arguments=kwargs
+            **kwargs
         )
         DiscreteHyperparameterDistribution.__init__(self, null_default_value=null_default_value)
 
@@ -314,11 +313,10 @@ class BaseCustomDiscreteScipyDistribution(ScipyDiscreteDistributionWrapper):
             **kwargs
         )
         scipy_dist_obj._pmf = self._pmf
-        ScipyDistributionWrapper.__init__(
+        ScipyDiscreteDistributionWrapper.__init__(
             self,
             scipy_distribution=scipy_dist_obj,
-            null_default_value=null_default_value,
-            is_continuous=False
+            null_default_value=null_default_value
         )
 
     def _override_scipy_methods(self):
@@ -344,10 +342,10 @@ class BaseCustomContinuousScipyDistribution(ScipyContinuousDistributionWrapper):
         )
         scipy_distribution._pdf = self._pdf
 
-        super().__init__(
+        ScipyContinuousDistributionWrapper.__init__(
+            self,
             scipy_distribution=scipy_distribution,
-            null_default_value=null_default_value,
-            is_continuous=True
+            null_default_value=null_default_value
         )
 
     def _override_scipy_methods(self):
@@ -364,14 +362,13 @@ class RandInt(ScipyDiscreteDistributionWrapper):
     Rand int scipy distribution. Check out `scipy.stats.randint for more info <https://docs.scipy.org/doc/scipy-0.15.1/reference/generated/scipy.stats.randint.html>`_
     """
 
-    def __init__(self, min_included: int, max_included: int, null_default_value: float = None, **kwargs):
+    def __init__(self, min_included: int, max_included: int, **kwargs):
         self.min_included = min_included
         self.max_included = max_included
         kwargs.update(low=min_included, high=max_included)
 
         super().__init__(
             scipy_distribution=randint,
-            null_default_value=null_default_value,
             **kwargs,
         )
 
@@ -777,10 +774,9 @@ class Histogram(ScipyDistributionWrapper):
     def __init__(self, histogram: np.histogram, null_default_value: float = None, **kwargs):
         ScipyDistributionWrapper.__init__(
             self,
-            scipy_distribution=rv_histogram(histogram=histogram, **kwargs),
-            null_default_value=null_default_value,
-            is_continuous=True
+            scipy_distribution=rv_histogram(histogram=histogram, **kwargs)
         )
+        ContinuousHyperparameterDistrbution.__init__(self, null_default_value=null_default_value)
 
 
 class FixedHyperparameter(BaseCustomDiscreteScipyDistribution):

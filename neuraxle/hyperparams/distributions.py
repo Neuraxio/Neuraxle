@@ -184,15 +184,15 @@ class ContinuousHyperparameterDistrbution(HyperparameterDistribution):
     TODO docstring
     TODO replace inheritance
     """
-    def __init__(self, null_default_value):
-        super().__init__(null_default_value, is_continuous=True)
+    def __init__(self, null_default_value=None):
+        HyperparameterDistribution.__init__(self, null_default_value=null_default_value, is_continuous=True)
 
 class DiscreteHyperparameterDistribution(HyperparameterDistribution):
     """
     TODO docstring
     """
-    def __init__(self, null_default_value):
-        super().__init__(null_default_value, is_continuous=False)
+    def __init__(self, null_default_value=None):
+        HyperparameterDistribution.__init__(self, null_default_value=null_default_value, is_continuous=False)
 
     def probabilities(self) -> List[float]:
         return [self.pdf(i) for i in self.values()]

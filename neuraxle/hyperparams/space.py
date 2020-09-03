@@ -83,7 +83,7 @@ class RecursiveDict(OrderedDict):
     DEFAULT_SEPARATOR = '__'
 
     def __init__(self, *args, separator=None, **kwds):
-        args = self._patch_scipy_args(*args)
+        args = self._patch_args(*args)
 
         if len(args) == 1 and isinstance(args[0], RecursiveDict) and len(kwds) == 0:
             super().__init__(args[0].items())
@@ -96,21 +96,21 @@ class RecursiveDict(OrderedDict):
 
         self.separator = separator
 
-    def _patch_scipy_args(self, *args):
+    def _patch_args(self, *args):
         patched_args = []
         for arg in args:
-            if isinstance(arg, dict):
-                patched_arg = {
-                    name: self._patch_scipy_arg(value)
+            if isinstance(arg, RecursiveDict):
+                patched_arg = RecursiveDict(**{
+                    name: self._patch_arg(value)
                     for name, value in args[0].items()
-                }
+                }, separator=arg.separator)
             else:
                 patched_arg = arg
             patched_args.append(patched_arg)
 
         return patched_args
 
-    def _patch_scipy_arg(self, arg):
+    def _patch_arg(self, arg):
         if hasattr(arg, 'dist') and isinstance(arg.dist, rv_generic):
             if isinstance(arg.dist, rv_discrete):
                 return ScipyDiscreteDistributionWrapper(arg)
