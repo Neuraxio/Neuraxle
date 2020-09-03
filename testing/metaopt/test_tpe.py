@@ -88,7 +88,7 @@ def test_tpe(expected_output_mult, pipeline, tmpdir):
                 number_recent_trial_at_full_weights=25
             ),
             os.path.join(tmpdir, 'tpe', str(i))
-        ) for i in range(2)
+        ) for i in range(4)
     )
 
     random_scores = Parallel(n_jobs=-2)(
@@ -98,7 +98,7 @@ def test_tpe(expected_output_mult, pipeline, tmpdir):
             RandomSearchHyperparameterSelectionStrategy(),
             os.path.join(tmpdir, 'random', str(i))
         )
-        for i in range(2)
+        for i in range(4)
     )
 
     mean_tpe_score = np.array(tpe_scores).flatten().mean(axis=-1)
