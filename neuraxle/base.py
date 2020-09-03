@@ -37,8 +37,6 @@ from enum import Enum
 from typing import List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Dict, Tuple, Type
 
 from joblib import dump, load
-from sklearn.base import BaseEstimator
-
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
 
@@ -1303,9 +1301,7 @@ class _HasHyperparamsSpace(ABC):
 
     def _set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> HyperparameterSpace:
         self._invalidate()
-        hyperparams_space = HyperparameterSamples(hyperparams_space).to_flat()
-        self.hyperparams_space = HyperparameterSpace(hyperparams_space) if len(
-            hyperparams_space) > 0 else self.hyperparams_space
+        self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
         return self.hyperparams_space
 
     def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseTransformer':
@@ -1345,8 +1341,8 @@ class _HasHyperparamsSpace(ABC):
 
     def _update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> HyperparameterSpace:
         self._invalidate()
-        hyperparams_space = HyperparameterSamples(hyperparams_space).to_flat()
-        self.hyperparams_space.update(HyperparameterSpace(hyperparams_space).to_flat())
+        hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
+        self.hyperparams_space.update(hyperparams_space)
         return self.hyperparams_space
 
     def get_hyperparams_space(self) -> HyperparameterSpace:
@@ -2193,31 +2189,6 @@ class BaseTransformer(
         """
         return self.name
 
-    def tosklearn(self):
-        class NeuraxleToSKLearnPipelineWrapper(BaseEstimator):
-            def __init__(self, neuraxle_step):
-                self.p: Union[BaseStep, TruncableSteps] = neuraxle_step
-
-            def set_params(self, **params) -> BaseEstimator:
-                self.p.set_hyperparams(HyperparameterSpace(params))
-                return self
-
-            def get_params(self, deep=True):
-                neuraxle_params = HyperparameterSamples(self.p.get_hyperparams()).to_flat_as_dict_primitive()
-                return neuraxle_params
-
-            def get_params_space(self, deep=True):
-                neuraxle_params = HyperparameterSpace(self.p.get_hyperparams_space()).to_flat_as_dict_primitive()
-                return neuraxle_params
-
-            def fit(self, **args) -> BaseEstimator:
-                self.p = self.p.fit(**args)
-
-            def transform(self, **args) -> BaseEstimator:
-                return self.p.transform(**args)
-
-        return NeuraxleToSKLearnPipelineWrapper(self)
-
     def reverse(self) -> 'BaseTransformer':
         """
         The object will mutate itself such that the ``.transform`` method (and of all its underlying objects
@@ -2253,7 +2224,7 @@ class BaseTransformer(
 
 
 def _sklearn_to_neuraxle_step(step) -> BaseTransformer:
-    if isinstance(step, BaseEstimator):
+    if hasattr(step, '_get_param_names') and hasattr(step, '_more_tags') and hasattr(step, '_check_n_features') and hasattr(step, '_validate_data'):
         import neuraxle.steps.sklearn
         step = neuraxle.steps.sklearn.SKLearnWrapper(step)
         step.set_name(step.get_wrapped_sklearn_predictor().__class__.__name__)

@@ -55,7 +55,7 @@ def test_automl_early_stopping_callback(tmpdir):
 
 def test_automl_with_kfold(tmpdir):
     # Given
-    hp_repository = HyperparamsJSONRepository(cache_folder=str(tmpdir))
+    hp_repository = HyperparamsJSONRepository(cache_folder=str('caching'))
     auto_ml = AutoML(
         pipeline=Pipeline([
             MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({

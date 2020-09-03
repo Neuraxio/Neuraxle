@@ -65,6 +65,7 @@ def test_boolean_distribution():
     assert abs(hd.mean() - np.mean(samples)) < 1e-2
     assert abs(hd.var() - np.var(samples)) < 1e-2
 
+
 def test_boolean_distribution_with_proba():
     proba_is_true = 0.7
     hd = Boolean(proba_is_true=proba_is_true)
@@ -83,8 +84,8 @@ def test_boolean_distribution_with_proba():
     assert abs(hd.pdf(-0.1) - 0.) < 1e-6
     assert abs(hd.pdf(1.1) - 0.) < 1e-6
 
-    assert abs(hd.cdf(False) - (1-proba_is_true)) < 1e-6
-    assert abs(hd.cdf(0.) - (1-proba_is_true)) < 1e-6
+    assert abs(hd.cdf(False) - (1 - proba_is_true)) < 1e-6
+    assert abs(hd.cdf(0.) - (1 - proba_is_true)) < 1e-6
     assert abs(hd.cdf(True) - 1.) < 1e-6
     assert abs(hd.cdf(1.) - 1.) < 1e-6
     assert abs(hd.cdf(-0.1) - 0.) < 1e-6
@@ -93,8 +94,8 @@ def test_boolean_distribution_with_proba():
     assert hd.min() == 0
     assert hd.max() == 1
     assert abs(hd.mean() - proba_is_true) < 1e-6
-    assert abs(hd.std() - math.sqrt(proba_is_true * (1-proba_is_true))) < 1e-6
-    assert abs(hd.var() - proba_is_true * (1-proba_is_true)) < 1e-6
+    assert abs(hd.std() - math.sqrt(proba_is_true * (1 - proba_is_true))) < 1e-6
+    assert abs(hd.var() - proba_is_true * (1 - proba_is_true)) < 1e-6
     # Verify that hd mean and variance also correspond to mean and variance of sampling.
     assert abs(hd.mean() - np.mean(samples)) < 1e-2
     assert abs(hd.var() - np.var(samples)) < 1e-2
@@ -117,6 +118,10 @@ def test_choice_and_priority_choice(ctor):
     assert zNone > NUM_TRIALS * 0.2
     assert zTest > NUM_TRIALS * 0.2
 
+    assert (hd.pdf(0) - 1 / 4) < 1e-6
+    assert (hd.pdf(1) - 1 / 4) < 1e-6
+    assert (hd.pdf(False) - 1 / 4) < 1e-6
+    assert (hd.pdf("Test") - 1 / 4) < 1e-6
     assert abs(hd.pdf(0) - 1 / 4) < 1e-6
     assert abs(hd.pdf(1) - 1 / 4) < 1e-6
     assert abs(hd.pdf(False) - 1 / 4) < 1e-6
@@ -186,6 +191,7 @@ def test_choice_and_priority_choice_with_probas(ctor):
     # Verify that hd mean and variance also correspond to mean and variance of sampling.
     assert abs((hd.mean() - np.mean(samples_index)) / hd.mean()) < 1e-1
     assert abs((hd.var() - np.var(samples_index)) / hd.var()) < 1e-1
+
 
 def test_quantized_uniform():
     low = -10
@@ -660,7 +666,7 @@ def test_gaussian_distribution_mixture_quantized():
     Uniform(-10, 10),
     LogUniform(0.001, 10),
     Normal(0.0, 1.0),
-    LogNormal(0.0, 2.0)
+    LogNormal(0.0, 2.0),
 ])
 def test_can_restore_each_distributions(hd):
     print(hd.__dict__)

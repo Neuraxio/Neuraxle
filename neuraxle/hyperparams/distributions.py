@@ -27,12 +27,12 @@ the distribution.
 """
 
 import copy
+import math
 import random
 import sys
 from abc import abstractmethod, ABCMeta
 from typing import List, Tuple, Union, Any, Optional
 
-import math
 import numpy as np
 from scipy.integrate import quad
 from scipy.stats import norm
@@ -42,12 +42,16 @@ from scipy.stats import truncnorm
 class HyperparameterDistribution(metaclass=ABCMeta):
     """Base class for other hyperparameter distributions."""
 
-    def __init__(self, null_default_value):
+    def __init__(self, null_default_value, is_continuous: bool=True):
         """
         Create a HyperparameterDistribution. This method should still be called with super if it gets overriden.
         """
         self.first_id = id(self)
         self.null_default_value = null_default_value
+        self.is_continuous: bool = is_continuous
+
+    def is_discrete(self) -> bool:
+        return not self.is_continuous
 
     @abstractmethod
     def rvs(self):
@@ -175,6 +179,27 @@ class HyperparameterDistribution(metaclass=ABCMeta):
     def __eq__(self, other):
         return self.first_id == other.first_id
 
+class ContinuousHyperparameterDistrbution(HyperparameterDistribution):
+    """
+    TODO docstring
+    TODO replace inheritance
+    """
+    def __init__(self, null_default_value=None):
+        HyperparameterDistribution.__init__(self, null_default_value=null_default_value, is_continuous=True)
+
+class DiscreteHyperparameterDistribution(HyperparameterDistribution):
+    """
+    TODO docstring
+    """
+    def __init__(self, null_default_value=None):
+        HyperparameterDistribution.__init__(self, null_default_value=null_default_value, is_continuous=False)
+
+    def probabilities(self) -> List[float]:
+        return [self.pdf(i) for i in self.values()]
+
+    def values(self) -> List:
+        return [i for i in range(int(self.min()), int(self.max()) + 1)]
+
 
 class FixedHyperparameter(HyperparameterDistribution):
     """This is an hyperparameter that won't change again, but that is still expressed as a distribution."""
@@ -278,7 +303,7 @@ class FixedHyperparameter(HyperparameterDistribution):
 #
 
 
-class Boolean(HyperparameterDistribution):
+class Boolean(DiscreteHyperparameterDistribution):
     """Get a random boolean hyperparameter."""
 
     def __init__(self,  proba_is_true: Optional[float] = None, null_default_value=False):
@@ -293,7 +318,7 @@ class Boolean(HyperparameterDistribution):
         :param null_default_value: default value for distribution
         :type null_default_value: default choice value. if None, default choice value will be the first choice
         """
-        HyperparameterDistribution.__init__(self, null_default_value)
+        DiscreteHyperparameterDistribution.__init__(self, null_default_value)
 
         if proba_is_true is None:
             proba_is_true = 0.5
@@ -302,6 +327,12 @@ class Boolean(HyperparameterDistribution):
             raise ValueError("Probability must be between 0 and 1 (inclusively).")
 
         self.proba_is_true = proba_is_true
+
+    def probabilities(self) -> List[float]:
+        return [self.proba_is_true, 1 - self.proba_is_true]
+
+    def values(self):
+        return [True, False]
 
     def rvs(self):
         """
@@ -375,7 +406,7 @@ class Boolean(HyperparameterDistribution):
         return self.proba_is_true * (1 - self.proba_is_true)
 
 
-class Choice(HyperparameterDistribution):
+class Choice(DiscreteHyperparameterDistribution):
     """Get a random value from a choice list of possible value for this hyperparameter.
 
     When narrowed, the choice will only collapse to a single element when narrowed enough.
@@ -393,9 +424,9 @@ class Choice(HyperparameterDistribution):
         :type null_default_value: default choice value. if None, default choice value will be the first choice
         """
         if null_default_value is None:
-            HyperparameterDistribution.__init__(self, choice_list[0])
+            DiscreteHyperparameterDistribution.__init__(self, choice_list[0])
         elif null_default_value in choice_list:
-            HyperparameterDistribution.__init__(self, null_default_value)
+            DiscreteHyperparameterDistribution.__init__(self, null_default_value)
         else:
             raise ValueError(
                 'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
@@ -408,6 +439,12 @@ class Choice(HyperparameterDistribution):
         # Normalize probas juste in case sum is not equal to one.
         self.probas = np.array(probas) / np.sum(probas)
 
+    def probabilities(self) -> List[float]:
+        return self.probas
+
+    def values(self) -> List[float]:
+        return self.choice_list
+
     def rvs(self):
         """
         Get one of the items randomly.
@@ -417,6 +454,7 @@ class Choice(HyperparameterDistribution):
         choice_index = np.arange(0, len(self), 1)
         rvs_index = np.random.choice(choice_index, p=self.probas)
         return self.choice_list[rvs_index]
+
 
     def pdf(self, x) -> float:
         """
@@ -527,7 +565,7 @@ class Choice(HyperparameterDistribution):
         return var
 
 
-class PriorityChoice(HyperparameterDistribution):
+class PriorityChoice(DiscreteHyperparameterDistribution):
     """Get a random value from a choice list of possible value for this hyperparameter.
 
     The first parameters are kept until the end when the list is narrowed (it is narrowed progressively),
@@ -545,14 +583,14 @@ class PriorityChoice(HyperparameterDistribution):
         :type null_default_value: default choice value. if None, default choice value will be the first choice
         """
         if null_default_value is None:
-            HyperparameterDistribution.__init__(self, choice_list[0])
+            null_default_value = choice_list[0]
         elif null_default_value in choice_list:
-            HyperparameterDistribution.__init__(self, null_default_value)
+            null_default_value = null_default_value
         else:
             raise ValueError(
                 'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
 
-        HyperparameterDistribution.__init__(self, null_default_value)
+        DiscreteHyperparameterDistribution.__init__(self, null_default_value)
         self.choice_list = choice_list
 
         if probas is None:
@@ -560,6 +598,12 @@ class PriorityChoice(HyperparameterDistribution):
 
         # Normalize probas juste in case sum is not equal to one.
         self.probas = np.array(probas) / np.sum(probas)
+
+    def probabilities(self) -> List[float]:
+        return self.probas
+
+    def values(self) -> List:
+        return self.choice_list
 
     def rvs(self):
         """
@@ -830,7 +874,7 @@ class Quantized(WrappedHyperparameterDistributions):
         return second_moment - first_moment ** 2
 
 
-class RandInt(HyperparameterDistribution):
+class RandInt(DiscreteHyperparameterDistribution):
     """Get a random integer within a range"""
 
     def __init__(self, min_included: int, max_included: int, null_default_value: int = None):
@@ -844,12 +888,19 @@ class RandInt(HyperparameterDistribution):
         :type null_default_value: int
         """
         if null_default_value is None:
-            HyperparameterDistribution.__init__(self, min_included)
+            DiscreteHyperparameterDistribution.__init__(self, min_included)
         else:
-            HyperparameterDistribution.__init__(self, null_default_value)
+            DiscreteHyperparameterDistribution.__init__(self, null_default_value)
 
         self.min_included = min_included
         self.max_included = max_included
+
+    def probabilities(self):
+        values = self.values()
+        return [1 / len(values) for _ in values]
+
+    def values(self):
+        return [i for i in range(self.min_included, self.max_included + 1)]
 
     def rvs(self) -> int:
         """
@@ -901,7 +952,6 @@ class RandInt(HyperparameterDistribution):
             return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
         return RandInt(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio,
                                                                                                       self)
-
     def min(self):
         """
         Calculate minimum value that can be sampled in the randint distribution.
@@ -1017,7 +1067,6 @@ class Uniform(HyperparameterDistribution):
             return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
         return Uniform(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio,
                                                                                                       self)
-
     def min(self):
         """
         Calculate minimum value that can be sampled in the uniform distribution.
@@ -1413,6 +1462,8 @@ class LogNormal(HyperparameterDistribution):
         self.log2_space_mean = log2_space_mean
         self.log2_space_std = log2_space_std
         self.hard_clip_min = hard_clip_min
+        if self.hard_clip_min is not None and self.hard_clip_min <= 0:
+            self.hard_clip_min = None
         self.hard_clip_max = hard_clip_max
 
     def rvs(self) -> float:
@@ -1629,14 +1680,18 @@ class DistributionMixture(HyperparameterDistribution):
         distribution_amplitudes = distribution_amplitudes / np.sum(distribution_amplitudes)
         self.distributions = distributions
         self.distribution_amplitudes = distribution_amplitudes
+        HyperparameterDistribution.__init__(self, null_default_value=None)
 
     @staticmethod
-    def build_gaussian_mixture(distribution_amplitudes: Union[List[float], Tuple[float, ...]],
-                               means: Union[List[float], Tuple[float, ...]],
-                               stds: Union[List[float], Tuple[float, ...]],
-                               distributions_mins: Union[List[float], Tuple[float, ...]],
-                               distributions_max: Union[List[float], Tuple[float, ...]], use_logs: bool = False,
-                               use_quantized_distributions: bool = False):
+    def build_gaussian_mixture(
+            distribution_amplitudes: Union[np.ndarray, List[float], Tuple[float, ...]],
+            means: Union[List[float], Tuple[float, ...]],
+            stds: Union[List[float], Tuple[float, ...]],
+            distributions_mins: Union[List[float], Tuple[float, ...]],
+            distributions_max: Union[List[float], Tuple[float, ...]],
+            use_logs: bool = False,
+            use_quantized_distributions: bool = False
+    ):
         """
         Create a gaussian mixture.
 
@@ -1648,11 +1703,13 @@ class DistributionMixture(HyperparameterDistribution):
         :param distributions_mins: list of minimum value that will clip each gaussian. If it is -Inf or None, it will not be clipped.
         :param distributions_max: list of maximal value that will clip each gaussian. If it is +Inf or None, it will not be clipped.
         :param distributions_max: bool weither to use a quantized version or not.
+        :param use_logs: use logs boolean
+        :param use_quantized_distributions: use quantized distributions boolean
 
         :return DistributionMixture instance
         """
 
-        distribution_class = Normal
+        distribution_class: HyperparameterDistribution = Normal
 
         if use_logs:
             distribution_class = LogNormal
@@ -1781,8 +1838,13 @@ class DistributionMixture(HyperparameterDistribution):
         return max([distribution.max() for distribution in self.distributions])
 
 
-def _calculate_sum(eval_func, limits: List[float], value_step: float = 1., tol: float = 1e-10,
-                   number_value_before_stop=5):
+def _calculate_sum(
+        eval_func,
+        limits: List[float],
+        value_step: float = 1.,
+        tol: float = 1e-10,
+        number_value_before_stop: int=5
+):
     method, starting_value, stop_value = _get_sum_starting_info(limits)
 
     current_x = starting_value
@@ -1862,4 +1924,3 @@ def get_index_in_list_with_bool(choice_list: List[Any], value: Any) -> int:
             return index
 
     raise ValueError("{} is not in list".format(value))
- 
