@@ -69,7 +69,7 @@ For example, you can build a time series processing pipeline as such:
 
 .. code:: python
 
-    Pipeline([
+    p = Pipeline([
         TrainOnly(DataShuffler()),
         WindowTimeSeries(),
         MiniBatchSequentialPipeline([
