@@ -63,7 +63,7 @@ Simply do:
 Examples
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-We have several examples on the `website <https://www.neuraxle.org/stable/examples/index.html>`__.
+We have several `examples on the website <https://www.neuraxle.org/stable/examples/index.html>`__.
 
 For example, you can build a time series processing pipeline as such:
 
@@ -107,8 +107,7 @@ For example, you can build a time series processing pipeline as such:
     # unseen data for making predictions.
     y_test_predicted = p.predict(X_test)
 
-
-You can also use AutoML algorithms to find the best hyperparams:
+You can also tune your hyperparameters using AutoML algorithms such as the TPE:
 
 .. code:: python
 
