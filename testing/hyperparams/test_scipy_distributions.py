@@ -5,7 +5,7 @@ from collections import Counter
 import joblib
 import numpy as np
 import pytest
-from scipy.stats import norm, randint, gamma
+from scipy.stats import norm, randint, gamma, uniform
 
 from neuraxle.base import Identity
 from neuraxle.hyperparams.distributions import PriorityChoice
@@ -28,8 +28,8 @@ def test_wrapped_sk_learn_distributions_should_be_able_to_use_sklearn_methods():
     assert wrapped_sklearn_distribution.sf(5) == 0.5000002866515718
     assert wrapped_sklearn_distribution.logsf(5) == -0.693146607256966
     assert np.all(wrapped_sklearn_distribution.ppf([0.0, 0.01, 0.05, 0.1, 1 - 0.10, 1 - 0.05, 1 - 0.01, 1.0], 10))
-    assert wrapped_sklearn_distribution.isf(q=0.5) == 8.590676159074153
-    assert wrapped_sklearn_distribution.moment(2) == 50.50000000091251
+    assert 8 < wrapped_sklearn_distribution.isf(q=0.5) > 8
+    assert wrapped_sklearn_distribution.moment(2) > 50
     assert wrapped_sklearn_distribution.stats()[0]
     assert wrapped_sklearn_distribution.stats()[1]
     assert np.array_equal(wrapped_sklearn_distribution.entropy(), np.array(0.7094692666023363))
