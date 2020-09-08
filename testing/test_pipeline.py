@@ -276,57 +276,6 @@ def test_pipeline_update_hyperparam_level_two_dict():
     assert p["c"].hyperparams == dict()
 
 
-def test_pipeline_tosklearn():
-    import sklearn.pipeline
-    the_step = SomeStep()
-    step_to_check = the_step.tosklearn()
-
-    p = Pipeline([
-        ("a", SomeStep()),
-        ("b", SKLearnWrapper(sklearn.pipeline.Pipeline([
-            ("a", sklearn.pipeline.Pipeline([
-                ('z', step_to_check)
-            ])),
-            ("b", SomeStep().tosklearn()),
-            ("c", SomeStep().tosklearn())
-        ]), return_all_sklearn_default_params_on_get=True)),
-        ("c", SomeStep())
-    ])
-
-    # assert False
-    p.set_hyperparams({
-        "b": {
-            "a__z__learning_rate": 7,
-            "b__learning_rate": 9
-        }
-    })
-    assert p.get_hyperparams()['b__a__z__learning_rate'] == 7
-
-    p = p.tosklearn()
-    p = sklearn.pipeline.Pipeline([('sk', p)])
-
-    p.set_params(**{"sk__b__a__z__learning_rate": 11})
-
-    sk_ = p.named_steps["sk"]
-    b_ = sk_.p["b"]
-    predictor = b_.wrapped_sklearn_predictor
-    a_ = predictor.named_steps["a"]
-    z_ = a_["z"]
-    assert z_.get_params()["learning_rate"] == 11
-
-    p.set_params(**RecursiveDict({
-        "sk__b": {
-            "a__z__learning_rate": 12,
-            "b__learning_rate": 9
-        }
-    }).to_flat())
-    # p.set_params(**{"sk__b__a__z__learning_rate": 12})
-    assert p.named_steps["sk"].p["b"].wrapped_sklearn_predictor.named_steps["a"]["z"].get_params()[
-               "learning_rate"] == 12
-    print(the_step.get_hyperparams())
-    # assert the_step.get_hyperparams()["learning_rate"] == 12  # TODO: debug why wouldn't this work
-
-
 def test_pipeline_simple_mutate_inverse_transform():
     expected_tape = ["1", "2", "3", "4", "4", "3", "2", "1"]
     tape = TapeCallbackFunction()

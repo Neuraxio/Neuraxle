@@ -24,6 +24,7 @@ def test_in_memory_hyperparams_repository_should_be_observable():
 
     # todo: then observer.events[0] == trial
 
+
 def test_hyperparams_json_repository_should_be_observable_in_memory():
     # todo: make a tests that asserts that an observer can receive updates from the HyperparamsJSONRepository
     # todo: given trial, a repo, and an observer
@@ -35,11 +36,11 @@ def test_hyperparams_json_repository_should_be_observable_in_memory():
     # todo: then observer.events[0] == trial
     pass
 
+
 def test_hyperparams_json_repository_should_be_observable_with_file_system_changes():
     # todo: make a tests that asserts that an observer can receive updates from the HyperparamsJSONRepository
     # todo: given trial, a repo, and an observer
     repo: HyperparamsJSONRepository = HyperparamsJSONRepository()
-
 
     # todo: when repo.subscribe_to_cache_folder_changes(observer)
     # todo: when repo.save_trial(trial)

@@ -27,12 +27,15 @@ import traceback
 from enum import Enum
 from typing import Dict, List, Callable
 
+from typing import Dict, List, Tuple
+import numpy as np
 
 from neuraxle.base import BaseStep, ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
 
 TRIAL_DATETIME_STR_FORMAT = '%m/%d/%Y, %H:%M:%S'
+
 
 class Trial:
     """
@@ -622,6 +625,45 @@ class Trials:
                 best_hyperparams = trial.hyperparams
 
         return best_hyperparams
+
+    def split_good_and_bad_trials(self, quantile_threshold: float, number_of_good_trials_max_cap: int) -> Tuple['Trials', 'Trials']:
+        success_trials: Trials = self.filter(TRIAL_STATUS.SUCCESS)
+
+        # Split trials into good and bad using quantile threshold.
+        trials_scores = np.array([trial.get_validation_score() for trial in success_trials])
+
+        trial_sorted_indexes = np.argsort(trials_scores)
+        if success_trials.is_higher_score_better():
+            trial_sorted_indexes = list(reversed(trial_sorted_indexes))
+
+        # In hyperopt they use this to split, where default_gamma_cap = 25. They clip the max of item they use in the good item.
+        # default_gamma_cap is link to the number of recent_trial_at_full_weight also.
+        # n_below = min(int(np.ceil(gamma * np.sqrt(len(l_vals)))), gamma_cap)
+        n_good = int(min(np.ceil(quantile_threshold * len(trials_scores)), number_of_good_trials_max_cap))
+
+        good_trials_indexes = trial_sorted_indexes[:n_good]
+        bad_trials_indexes = trial_sorted_indexes[n_good:]
+
+        good_trials = []
+        bad_trials = []
+        for trial_index, trial in enumerate(success_trials):
+            if trial_index in good_trials_indexes:
+                good_trials.append(trial)
+            if trial_index in bad_trials_indexes:
+                bad_trials.append(trial)
+
+        return Trials(trials=good_trials), Trials(trials=bad_trials)
+
+    def is_higher_score_better(self) -> bool:
+        """
+        Return true if higher score is better.
+
+        :return
+        """
+        if len(self) == 0:
+            return False
+
+        return self.trials[-1].is_higher_score_better()
 
     def append(self, trial: Trial):
         """

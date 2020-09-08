@@ -27,12 +27,12 @@ the distribution.
 """
 
 import copy
+import math
 import random
 import sys
 from abc import abstractmethod, ABCMeta
 from typing import List, Tuple, Union, Any, Optional
 
-import math
 import numpy as np
 from scipy.integrate import quad
 from scipy.stats import norm
@@ -42,12 +42,16 @@ from scipy.stats import truncnorm
 class HyperparameterDistribution(metaclass=ABCMeta):
     """Base class for other hyperparameter distributions."""
 
-    def __init__(self, null_default_value):
+    def __init__(self, null_default_value, is_continuous: bool=True):
         """
         Create a HyperparameterDistribution. This method should still be called with super if it gets overriden.
         """
         self.first_id = id(self)
         self.null_default_value = null_default_value
+        self.is_continuous: bool = is_continuous
+
+    def is_discrete(self) -> bool:
+        return not self.is_continuous
 
     @abstractmethod
     def rvs(self):
@@ -127,53 +131,29 @@ class HyperparameterDistribution(metaclass=ABCMeta):
         """
         pass
 
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.0) -> 'HyperparameterDistribution':
-        """
-        Takes a value that is estimated to be the best one of the space, and restrict the space near that value.
-        By default, this function will completely replace the returned value by the new guess if not overriden.
-
-        :param best_guess: the value towards which we want to narrow down the space.
-        :param kept_space_ratio: what proportion of the space is kept. Should be between 0.0 and 1.0. Default is to keep only the best_guess (0.0).
-        :return: a new HyperparameterDistribution object that has been narrowed down.
-        """
-        return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-
-    def was_narrowed_from(
-            self, kept_space_ratio: float, original_hp: 'HyperparameterDistribution'
-    ) -> 'HyperparameterDistribution':
-        """
-        Keep track of the original distribution to restore it.
-
-        :param kept_space_ratio: the ratio which made the current object narrower than the ``original_hp``.
-        :param original_hp: The original HyperparameterDistribution, which will be kept in a private variable for an eventual restore.
-        :return: self.
-        """
-        self.kept_space_ratio_trace = (
-                self.get_current_narrowing_value() *
-                kept_space_ratio *
-                original_hp.get_current_narrowing_value()
-        )
-        self.original_hp: HyperparameterDistribution = original_hp.unnarrow()
-        return self
-
-    def get_current_narrowing_value(self):
-        if not hasattr(self, 'kept_space_ratio_trace'):
-            self.kept_space_ratio_trace: float = 1.0
-        return self.kept_space_ratio_trace
-
-    def unnarrow(self) -> 'HyperparameterDistribution':
-        """
-        Return the original distribution before narrowing of the distribution. If the distribution was never narrowed,
-        will return a copy of self.
-
-        :return: the original HyperparameterDistribution before narrowing, or else self if the distribution is virgin.
-        """
-        if not hasattr(self, 'original_hp'):
-            return copy.deepcopy(self)
-        return copy.deepcopy(self.original_hp.unnarrow())
-
     def __eq__(self, other):
         return self.first_id == other.first_id
+
+class ContinuousHyperparameterDistrbution(HyperparameterDistribution):
+    """
+    TODO docstring
+    TODO replace inheritance
+    """
+    def __init__(self, null_default_value=None):
+        HyperparameterDistribution.__init__(self, null_default_value=null_default_value, is_continuous=True)
+
+class DiscreteHyperparameterDistribution(HyperparameterDistribution):
+    """
+    TODO docstring
+    """
+    def __init__(self, null_default_value=None):
+        HyperparameterDistribution.__init__(self, null_default_value=null_default_value, is_continuous=False)
+
+    def probabilities(self) -> List[float]:
+        return [self.pdf(i) for i in self.values()]
+
+    def values(self) -> List:
+        return [i for i in range(int(self.min()), int(self.max()) + 1)]
 
 
 class FixedHyperparameter(HyperparameterDistribution):
@@ -278,7 +258,7 @@ class FixedHyperparameter(HyperparameterDistribution):
 #
 
 
-class Boolean(HyperparameterDistribution):
+class Boolean(DiscreteHyperparameterDistribution):
     """Get a random boolean hyperparameter."""
 
     def __init__(self,  proba_is_true: Optional[float] = None, null_default_value=False):
@@ -293,7 +273,7 @@ class Boolean(HyperparameterDistribution):
         :param null_default_value: default value for distribution
         :type null_default_value: default choice value. if None, default choice value will be the first choice
         """
-        HyperparameterDistribution.__init__(self, null_default_value)
+        DiscreteHyperparameterDistribution.__init__(self, null_default_value)
 
         if proba_is_true is None:
             proba_is_true = 0.5
@@ -302,6 +282,12 @@ class Boolean(HyperparameterDistribution):
             raise ValueError("Probability must be between 0 and 1 (inclusively).")
 
         self.proba_is_true = proba_is_true
+
+    def probabilities(self) -> List[float]:
+        return [self.proba_is_true, 1 - self.proba_is_true]
+
+    def values(self):
+        return [True, False]
 
     def rvs(self):
         """
@@ -375,7 +361,7 @@ class Boolean(HyperparameterDistribution):
         return self.proba_is_true * (1 - self.proba_is_true)
 
 
-class Choice(HyperparameterDistribution):
+class Choice(DiscreteHyperparameterDistribution):
     """Get a random value from a choice list of possible value for this hyperparameter.
 
     When narrowed, the choice will only collapse to a single element when narrowed enough.
@@ -393,9 +379,9 @@ class Choice(HyperparameterDistribution):
         :type null_default_value: default choice value. if None, default choice value will be the first choice
         """
         if null_default_value is None:
-            HyperparameterDistribution.__init__(self, choice_list[0])
+            DiscreteHyperparameterDistribution.__init__(self, choice_list[0])
         elif null_default_value in choice_list:
-            HyperparameterDistribution.__init__(self, null_default_value)
+            DiscreteHyperparameterDistribution.__init__(self, null_default_value)
         else:
             raise ValueError(
                 'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
@@ -408,6 +394,12 @@ class Choice(HyperparameterDistribution):
         # Normalize probas juste in case sum is not equal to one.
         self.probas = np.array(probas) / np.sum(probas)
 
+    def probabilities(self) -> List[float]:
+        return self.probas
+
+    def values(self) -> List[float]:
+        return self.choice_list
+
     def rvs(self):
         """
         Get one of the items randomly.
@@ -417,6 +409,7 @@ class Choice(HyperparameterDistribution):
         choice_index = np.arange(0, len(self), 1)
         rvs_index = np.random.choice(choice_index, p=self.probas)
         return self.choice_list[rvs_index]
+
 
     def pdf(self, x) -> float:
         """
@@ -455,24 +448,6 @@ class Choice(HyperparameterDistribution):
         else:
             probas = np.array(self.probas)
             return np.sum(probas[0:index + 1])
-
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.0) -> HyperparameterDistribution:
-        """
-        Will narrow the space. If the cumulative kept_space_ratio gets to be under or equal to 1/len(choice_list),
-        then the list is crunched to a single item as a FixedHyperparameter to reflect this narrowing.
-        So once a small enough kept_space_ratio is reached, the list becomes a fixed unique item from the best guess.
-        Otherwise, a deepcopy of self is returned.
-
-        :param best_guess: the best item of the list to keep if truly narrowing.
-        :param kept_space_ratio: the ratio of the space to keep.
-        :return: a deepcopy of self, or else a FixedHyperparameter of the best_guess.
-        """
-        new_narrowing = self.get_current_narrowing_value() * kept_space_ratio
-
-        if len(self.choice_list) == 0 or len(self.choice_list) == 1 or new_narrowing <= 1.0 / len(self.choice_list):
-            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-
-        return copy.deepcopy(self).was_narrowed_from(kept_space_ratio, self)
 
     def __len__(self):
         """
@@ -527,7 +502,7 @@ class Choice(HyperparameterDistribution):
         return var
 
 
-class PriorityChoice(HyperparameterDistribution):
+class PriorityChoice(DiscreteHyperparameterDistribution):
     """Get a random value from a choice list of possible value for this hyperparameter.
 
     The first parameters are kept until the end when the list is narrowed (it is narrowed progressively),
@@ -545,14 +520,14 @@ class PriorityChoice(HyperparameterDistribution):
         :type null_default_value: default choice value. if None, default choice value will be the first choice
         """
         if null_default_value is None:
-            HyperparameterDistribution.__init__(self, choice_list[0])
+            null_default_value = choice_list[0]
         elif null_default_value in choice_list:
-            HyperparameterDistribution.__init__(self, null_default_value)
+            null_default_value = null_default_value
         else:
             raise ValueError(
                 'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
 
-        HyperparameterDistribution.__init__(self, null_default_value)
+        DiscreteHyperparameterDistribution.__init__(self, null_default_value)
         self.choice_list = choice_list
 
         if probas is None:
@@ -560,6 +535,12 @@ class PriorityChoice(HyperparameterDistribution):
 
         # Normalize probas juste in case sum is not equal to one.
         self.probas = np.array(probas) / np.sum(probas)
+
+    def probabilities(self) -> List[float]:
+        return self.probas
+
+    def values(self) -> List:
+        return self.choice_list
 
     def rvs(self):
         """
@@ -609,35 +590,6 @@ class PriorityChoice(HyperparameterDistribution):
         else:
             probas = np.array(self.probas)
             return np.sum(probas[0:index + 1])
-
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.0) -> HyperparameterDistribution:
-        """
-        Will narrow the space. If the cumulative kept_space_ratio gets to be under or equal to 1-1/len(choice_list),
-        then the list is crunched to discard the last items to reflect this narrowing.
-        After a few narrowing (or a big one), the list may become a FixedHyperparameter.
-        Otherwise if the list is unchanged, a deepcopy of self is returned.
-
-        :param best_guess: the best item of the list, which will be brought back as the first item.
-        :param kept_space_ratio: the ratio of the space to keep.
-        :return: a deepcopy of self, or a subchoice of self, or else a FixedHyperparameter of the best_guess.
-        """
-        new_size = int(len(self) * kept_space_ratio + sys.float_info.epsilon)
-        if (
-                len(self.choice_list) == 0
-                or len(self.choice_list) == 1
-                or new_size <= 1
-                or kept_space_ratio <= 1.0 / len(self.choice_list)
-        ):
-            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-
-        # Bring best_guess to front
-        idx = self.choice_list.index(best_guess)
-        del self.choice_list[idx]
-        self.choice_list = [best_guess] + self.choice_list
-
-        # Narrowing of the list.
-        maybe_reduced_list = self.choice_list[:new_size]
-        return PriorityChoice(maybe_reduced_list).was_narrowed_from(kept_space_ratio, self)
 
     def __len__(self):
         """
@@ -747,19 +699,6 @@ class Quantized(WrappedHyperparameterDistributions):
         # In order to calculate the cdf for any quantized distribution, we have to take the cdf at x + 0.5.
         return self.hd.cdf(math.floor(x) + 0.5)
 
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> 'Quantized':
-        """
-        Will narrow the underlying distribution and re-wrap it under a Quantized.
-
-        :param best_guess: the value towards which we want to narrow down the space.
-        :param kept_space_ratio: what proportion of the space is kept. Default is to keep half the space (0.5).
-        :return:
-        """
-        return Quantized(
-            self.hd.narrow_space_from_best_guess(best_guess, kept_space_ratio),
-            null_default_value=self.null_default_value
-        ).was_narrowed_from(kept_space_ratio, self)
-
     def min(self):
         """
         Calculate minimum value that can be sampled in the quanitzed version of the distribution.
@@ -830,7 +769,7 @@ class Quantized(WrappedHyperparameterDistributions):
         return second_moment - first_moment ** 2
 
 
-class RandInt(HyperparameterDistribution):
+class RandInt(DiscreteHyperparameterDistribution):
     """Get a random integer within a range"""
 
     def __init__(self, min_included: int, max_included: int, null_default_value: int = None):
@@ -844,12 +783,19 @@ class RandInt(HyperparameterDistribution):
         :type null_default_value: int
         """
         if null_default_value is None:
-            HyperparameterDistribution.__init__(self, min_included)
+            DiscreteHyperparameterDistribution.__init__(self, min_included)
         else:
-            HyperparameterDistribution.__init__(self, null_default_value)
+            DiscreteHyperparameterDistribution.__init__(self, null_default_value)
 
         self.min_included = min_included
         self.max_included = max_included
+
+    def probabilities(self):
+        values = self.values()
+        return [1 / len(values) for _ in values]
+
+    def values(self):
+        return [i for i in range(self.min_included, self.max_included + 1)]
 
     def rvs(self) -> int:
         """
@@ -885,22 +831,6 @@ class RandInt(HyperparameterDistribution):
             return 1.
 
         return (math.floor(x) - self.min_included + 1) / (self.max_included - self.min_included + 1)
-
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
-        """
-        Will narrow the underlying distribution towards the best guess.
-
-        :param best_guess: the value towards which we want to narrow down the space. Should be between 0.0 and 1.0.
-        :param kept_space_ratio: what proportion of the space is kept. Default is to keep half the space (0.5).
-        :return: a new HyperparameterDistribution that has been narrowed down.
-        """
-        lost_space_ratio = 1.0 - kept_space_ratio
-        new_min_included = round(self.min_included * kept_space_ratio + best_guess * lost_space_ratio)
-        new_max_included = round(self.max_included * kept_space_ratio + best_guess * lost_space_ratio)
-        if new_max_included <= new_min_included or kept_space_ratio == 0.0:
-            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return RandInt(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio,
-                                                                                                      self)
 
     def min(self):
         """
@@ -1002,22 +932,6 @@ class Uniform(HyperparameterDistribution):
         # Manage the case where x_value > self.max_included
         return 1.
 
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
-        """
-        Will narrow the underlying distribution towards the best guess.
-
-        :param best_guess: the value towards which we want to narrow down the space. Should be between 0.0 and 1.0.
-        :param kept_space_ratio: what proportion of the space is kept. Default is to keep half the space (0.5).
-        :return: a new HyperparameterDistribution that has been narrowed down.
-        """
-        lost_space_ratio = 1.0 - kept_space_ratio
-        new_min_included = self.min_included * kept_space_ratio + best_guess * lost_space_ratio
-        new_max_included = self.max_included * kept_space_ratio + best_guess * lost_space_ratio
-        if new_max_included <= new_min_included or kept_space_ratio == 0.0:
-            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return Uniform(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio,
-                                                                                                      self)
-
     def min(self):
         """
         Calculate minimum value that can be sampled in the uniform distribution.
@@ -1115,23 +1029,6 @@ class LogUniform(HyperparameterDistribution):
 
         # Manage the case x > 2**self.log2_max_included
         return 1.
-
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
-        """
-        Will narrow, in log space, the distribution towards the new best_guess.
-
-        :param best_guess: the value towards which we want to narrow down the space. Should be between 0.0 and 1.0.
-        :param kept_space_ratio: what proportion of the space is kept. Default is to keep half the space (0.5).
-        :return: a new HyperparameterDistribution that has been narrowed down.
-        """
-        log2_best_guess = math.log2(best_guess)
-        lost_space_ratio = 1.0 - kept_space_ratio
-        new_min_included = self.log2_min_included * kept_space_ratio + log2_best_guess * lost_space_ratio
-        new_max_included = self.log2_max_included * kept_space_ratio + log2_best_guess * lost_space_ratio
-        if new_max_included <= new_min_included or kept_space_ratio == 0.0:
-            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return LogUniform(2 ** new_min_included, 2 ** new_max_included, 2 ** self.null_default_value).was_narrowed_from(
-            kept_space_ratio, self)
 
     def min(self):
         """
@@ -1281,28 +1178,6 @@ class Normal(HyperparameterDistribution):
 
         return norm.cdf(x, loc=self._mean, scale=self._std)
 
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
-        """
-        Will narrow the distribution towards the new best_guess.
-        The mean will move towards the new best guess, and the standard deviation
-        will be multiplied by the kept_space_ratio.
-        The hard clip limit is unchanged.
-
-        :param best_guess: the value towards which we want to narrow down the space's mean. Should be between 0.0 and 1.0.
-        :param kept_space_ratio: what proportion of the space is kept. Default is to keep half the space (0.5).
-        :return: a new HyperparameterDistribution that has been narrowed down.
-        """
-        lost_space_ratio = 1.0 - kept_space_ratio
-        if isinstance(self._mean, tuple):
-            self._mean = self._mean[0]
-        new_mean = self._mean * kept_space_ratio + best_guess * lost_space_ratio
-        new_std = self._std * kept_space_ratio
-        if new_std <= 0.0:
-            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return Normal(
-            new_mean, new_std, self.hard_clip_min, self.hard_clip_max, self.null_default_value
-        ).was_narrowed_from(kept_space_ratio, self)
-
     def min(self):
         """
         Calculate minimum value that can be sampled in the Normal distribution.
@@ -1413,6 +1288,8 @@ class LogNormal(HyperparameterDistribution):
         self.log2_space_mean = log2_space_mean
         self.log2_space_std = log2_space_std
         self.hard_clip_min = hard_clip_min
+        if self.hard_clip_min is not None and self.hard_clip_min <= 0:
+            self.hard_clip_min = None
         self.hard_clip_max = hard_clip_max
 
     def rvs(self) -> float:
@@ -1496,26 +1373,6 @@ class LogNormal(HyperparameterDistribution):
 
         cdf_x = norm.cdf(math.log2(x), loc=self.log2_space_mean, scale=self.log2_space_std)
         return (cdf_x - cdf_min) / (cdf_max - cdf_min)
-
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
-        """
-        Will narrow the distribution towards the new best_guess.
-        The log2_space_mean (log space mean) will move, in log space, towards the new best guess, and the
-        log2_space_std (log space standard deviation) will be multiplied by the kept_space_ratio.
-
-        :param best_guess: the value towards which we want to narrow down the space's mean. Should be between 0.0 and 1.0.
-        :param kept_space_ratio: what proportion of the space is kept. Default is to keep half the space (0.5).
-        :return: a new HyperparameterDistribution that has been narrowed down.
-        """
-        log2_best_guess = math.log2(best_guess)
-        lost_space_ratio = 1.0 - kept_space_ratio
-        new_mean = self.log2_space_mean * kept_space_ratio + log2_best_guess * lost_space_ratio
-        new_std = self.log2_space_std * kept_space_ratio
-        if new_std <= 0.0:
-            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return Normal(
-            new_mean, new_std, self.hard_clip_min, self.hard_clip_max, self.null_default_value
-        ).was_narrowed_from(kept_space_ratio, self)
 
     def min(self):
         """
@@ -1629,14 +1486,18 @@ class DistributionMixture(HyperparameterDistribution):
         distribution_amplitudes = distribution_amplitudes / np.sum(distribution_amplitudes)
         self.distributions = distributions
         self.distribution_amplitudes = distribution_amplitudes
+        HyperparameterDistribution.__init__(self, null_default_value=None)
 
     @staticmethod
-    def build_gaussian_mixture(distribution_amplitudes: Union[List[float], Tuple[float, ...]],
-                               means: Union[List[float], Tuple[float, ...]],
-                               stds: Union[List[float], Tuple[float, ...]],
-                               distributions_mins: Union[List[float], Tuple[float, ...]],
-                               distributions_max: Union[List[float], Tuple[float, ...]], use_logs: bool = False,
-                               use_quantized_distributions: bool = False):
+    def build_gaussian_mixture(
+            distribution_amplitudes: Union[np.ndarray, List[float], Tuple[float, ...]],
+            means: Union[List[float], Tuple[float, ...]],
+            stds: Union[List[float], Tuple[float, ...]],
+            distributions_mins: Union[List[float], Tuple[float, ...]],
+            distributions_max: Union[List[float], Tuple[float, ...]],
+            use_logs: bool = False,
+            use_quantized_distributions: bool = False
+    ):
         """
         Create a gaussian mixture.
 
@@ -1648,11 +1509,13 @@ class DistributionMixture(HyperparameterDistribution):
         :param distributions_mins: list of minimum value that will clip each gaussian. If it is -Inf or None, it will not be clipped.
         :param distributions_max: list of maximal value that will clip each gaussian. If it is +Inf or None, it will not be clipped.
         :param distributions_max: bool weither to use a quantized version or not.
+        :param use_logs: use logs boolean
+        :param use_quantized_distributions: use quantized distributions boolean
 
         :return DistributionMixture instance
         """
 
-        distribution_class = Normal
+        distribution_class: HyperparameterDistribution = Normal
 
         if use_logs:
             distribution_class = LogNormal
@@ -1781,8 +1644,13 @@ class DistributionMixture(HyperparameterDistribution):
         return max([distribution.max() for distribution in self.distributions])
 
 
-def _calculate_sum(eval_func, limits: List[float], value_step: float = 1., tol: float = 1e-10,
-                   number_value_before_stop=5):
+def _calculate_sum(
+        eval_func,
+        limits: List[float],
+        value_step: float = 1.,
+        tol: float = 1e-10,
+        number_value_before_stop: int=5
+):
     method, starting_value, stop_value = _get_sum_starting_info(limits)
 
     current_x = starting_value
@@ -1862,4 +1730,3 @@ def get_index_in_list_with_bool(choice_list: List[Any], value: Any) -> int:
             return index
 
     raise ValueError("{} is not in list".format(value))
- 
