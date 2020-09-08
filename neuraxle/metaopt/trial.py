@@ -261,6 +261,9 @@ class Trial:
 
         return trial
 
+    def __getitem__(self, item) -> 'TrialSplit':
+        return self.validation_splits[item]
+
     def __enter__(self):
         """
         Start trial, and set the trial status to PLANNED.
@@ -332,6 +335,9 @@ class TrialSplit:
         self.pipeline: BaseStep = pipeline
         self.main_metric_name: str = main_metric_name
         self.delete_pipeline_on_completion = delete_pipeline_on_completion
+
+    def get_metric_names(self) -> List[str]:
+        return list(self.metrics_results['train_values'].keys())
 
     def save_parent_trial(self) -> 'TrialSplit':
         """
@@ -687,6 +693,16 @@ class Trials:
                 trials.append(trial)
 
         return trials
+
+    def get_number_of_split(self):
+        if len(self) > 0:
+            return len(self[0].validation_splits)
+        return 0
+
+    def get_metric_names(self) -> List[str]:
+        if len(self) > 0:
+            return self[0].validation_splits[0].get_metric_names()
+        return []
 
     def __getitem__(self, item):
         """

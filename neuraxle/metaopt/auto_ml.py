@@ -801,7 +801,7 @@ class AutoML(ForceHandleMixin, BaseStep):
                 self.print_func(track)
             finally:
                 repo_trial.update_final_trial_status()
-                self.hyperparams_repository.save_trial(repo_trial)
+                self._save_trial(repo_trial, trial_number)
 
         best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
 
@@ -819,6 +819,11 @@ class AutoML(ForceHandleMixin, BaseStep):
             self.hyperparams_repository.save_best_model(p)
 
         return self
+
+    def _save_trial(self, repo_trial, trial_number):
+        self.hyperparams_repository.save_trial(repo_trial)
+        if trial_number == self.n_trial - 1:
+            self.hyperparams_repository.on_complete((self, repo_trial))
 
     def get_best_model(self):
         """

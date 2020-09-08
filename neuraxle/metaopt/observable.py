@@ -39,8 +39,22 @@ class _Observable(Generic[T]):
         for observer in self._observers:
             observer.on_next(value)
 
+    def on_complete(self, value: T):
+        for observer in self._observers:
+            observer.on_complete(value)
+
+    def on_error(self, value: Exception):
+        for observer in self._observers:
+            observer.on_error(value)
+
 
 class _Observer(Generic[T]):
     @abstractmethod
     def on_next(self, value: T):
+        pass
+
+    def on_complete(self, value: T):
+        pass
+
+    def on_error(self, value: Exception):
         pass
