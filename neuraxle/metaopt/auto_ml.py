@@ -414,7 +414,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         """
         return os.path.join(self.cache_folder, "NEW_" + current_hyperparameters_hash) + '.json'
 
-    def subscribe_to_cache_folder_changes(self, refresh_interval_in_seconds: int, observer: _Observer[HyperparamsRepository, Trial]):
+    def subscribe_to_cache_folder_changes(self, refresh_interval_in_seconds: int, observer: _Observer[Tuple[HyperparamsRepository, Trial]]):
         """
         Every refresh_interval_in_seconds
 
