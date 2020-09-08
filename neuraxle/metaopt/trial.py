@@ -25,7 +25,7 @@ import datetime
 import hashlib
 import traceback
 from enum import Enum
-from typing import Dict, List, Callable
+from typing import Dict, List, Callable, Iterable
 
 from typing import Dict, List, Tuple
 import numpy as np
@@ -337,7 +337,7 @@ class TrialSplit:
         self.delete_pipeline_on_completion = delete_pipeline_on_completion
 
     def get_metric_names(self) -> List[str]:
-        return list(self.metrics_results['train_values'].keys())
+        return list(self.metrics_results.keys())
 
     def save_parent_trial(self) -> 'TrialSplit':
         """
@@ -703,6 +703,9 @@ class Trials:
         if len(self) > 0:
             return self[0].validation_splits[0].get_metric_names()
         return []
+
+    def __iter__(self) -> Iterable[Trial]:
+        return iter(self.trials)
 
     def __getitem__(self, item):
         """
