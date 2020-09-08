@@ -33,7 +33,8 @@ from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 
 from neuraxle.metaopt.auto_ml import RandomSearchHyperparameterSelectionStrategy
-from neuraxle.metaopt.trial import TRIAL_STATUS
+from neuraxle.metaopt.observable import _Observable
+from neuraxle.metaopt.trial import TRIAL_STATUS, Trial
 from neuraxle.metaopt.random import BaseCrossValidationWrapper, BaseValidation
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
@@ -65,7 +66,7 @@ class AutoMLContainer:
         self.trial_number = trial_number
 
 
-class HyperparamsRepository(ABC):
+class HyperparamsRepository(_Observable[Trial], ABC):
     """
     Hyperparams repository that saves hyperparams, and scores for every AutoML trial.
 

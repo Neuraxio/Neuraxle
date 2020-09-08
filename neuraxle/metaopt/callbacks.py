@@ -390,9 +390,10 @@ class ScoringCallback(MetricCallback):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def __init__(self, metric_function: Callable, higher_score_is_better: bool):
+    def __init__(self, metric_function: Callable, name='main', higher_score_is_better: bool = True, print_metrics: bool = True):
         super().__init__(
-            name='main',
+            name=name,
             metric_function=metric_function,
-            higher_score_is_better=higher_score_is_better
+            higher_score_is_better=higher_score_is_better,
+            print_metrics=print_metrics
         )
