@@ -16,7 +16,9 @@ def scipy_method(func):
         self_in_args = args[0]
         self_in_args._override_scipy_methods()
         return func(*args, **kwargs)
+
     return wrapper
+
 
 class ScipyDistributionWrapper(ABC):
     """
@@ -294,6 +296,7 @@ class ScipyContinuousDistributionWrapper(ScipyDistributionWrapper, Hyperparamete
         )
         ContinuousHyperparameterDistrbution.__init__(self, null_default_value=null_default_value)
 
+
 class ScipyDiscreteDistributionWrapper(ScipyDistributionWrapper, DiscreteHyperparameterDistribution):
     def __init__(self, scipy_distribution, null_default_value=None, **kwargs):
         ScipyDistributionWrapper.__init__(
@@ -354,7 +357,6 @@ class BaseCustomContinuousScipyDistribution(ScipyContinuousDistributionWrapper):
     @abstractmethod
     def _pdf(self, x, *args):
         pass
-
 
 
 class RandInt(ScipyDiscreteDistributionWrapper):

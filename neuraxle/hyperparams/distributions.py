@@ -131,51 +131,6 @@ class HyperparameterDistribution(metaclass=ABCMeta):
         """
         pass
 
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.0) -> 'HyperparameterDistribution':
-        """
-        Takes a value that is estimated to be the best one of the space, and restrict the space near that value.
-        By default, this function will completely replace the returned value by the new guess if not overriden.
-
-        :param best_guess: the value towards which we want to narrow down the space.
-        :param kept_space_ratio: what proportion of the space is kept. Should be between 0.0 and 1.0. Default is to keep only the best_guess (0.0).
-        :return: a new HyperparameterDistribution object that has been narrowed down.
-        """
-        return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-
-    def was_narrowed_from(
-            self, kept_space_ratio: float, original_hp: 'HyperparameterDistribution'
-    ) -> 'HyperparameterDistribution':
-        """
-        Keep track of the original distribution to restore it.
-
-        :param kept_space_ratio: the ratio which made the current object narrower than the ``original_hp``.
-        :param original_hp: The original HyperparameterDistribution, which will be kept in a private variable for an eventual restore.
-        :return: self.
-        """
-        self.kept_space_ratio_trace = (
-                self.get_current_narrowing_value() *
-                kept_space_ratio *
-                original_hp.get_current_narrowing_value()
-        )
-        self.original_hp: HyperparameterDistribution = original_hp.unnarrow()
-        return self
-
-    def get_current_narrowing_value(self):
-        if not hasattr(self, 'kept_space_ratio_trace'):
-            self.kept_space_ratio_trace: float = 1.0
-        return self.kept_space_ratio_trace
-
-    def unnarrow(self) -> 'HyperparameterDistribution':
-        """
-        Return the original distribution before narrowing of the distribution. If the distribution was never narrowed,
-        will return a copy of self.
-
-        :return: the original HyperparameterDistribution before narrowing, or else self if the distribution is virgin.
-        """
-        if not hasattr(self, 'original_hp'):
-            return copy.deepcopy(self)
-        return copy.deepcopy(self.original_hp.unnarrow())
-
     def __eq__(self, other):
         return self.first_id == other.first_id
 
@@ -494,24 +449,6 @@ class Choice(DiscreteHyperparameterDistribution):
             probas = np.array(self.probas)
             return np.sum(probas[0:index + 1])
 
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.0) -> HyperparameterDistribution:
-        """
-        Will narrow the space. If the cumulative kept_space_ratio gets to be under or equal to 1/len(choice_list),
-        then the list is crunched to a single item as a FixedHyperparameter to reflect this narrowing.
-        So once a small enough kept_space_ratio is reached, the list becomes a fixed unique item from the best guess.
-        Otherwise, a deepcopy of self is returned.
-
-        :param best_guess: the best item of the list to keep if truly narrowing.
-        :param kept_space_ratio: the ratio of the space to keep.
-        :return: a deepcopy of self, or else a FixedHyperparameter of the best_guess.
-        """
-        new_narrowing = self.get_current_narrowing_value() * kept_space_ratio
-
-        if len(self.choice_list) == 0 or len(self.choice_list) == 1 or new_narrowing <= 1.0 / len(self.choice_list):
-            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-
-        return copy.deepcopy(self).was_narrowed_from(kept_space_ratio, self)
-
     def __len__(self):
         """
         Return the number of choices.
@@ -654,35 +591,6 @@ class PriorityChoice(DiscreteHyperparameterDistribution):
             probas = np.array(self.probas)
             return np.sum(probas[0:index + 1])
 
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.0) -> HyperparameterDistribution:
-        """
-        Will narrow the space. If the cumulative kept_space_ratio gets to be under or equal to 1-1/len(choice_list),
-        then the list is crunched to discard the last items to reflect this narrowing.
-        After a few narrowing (or a big one), the list may become a FixedHyperparameter.
-        Otherwise if the list is unchanged, a deepcopy of self is returned.
-
-        :param best_guess: the best item of the list, which will be brought back as the first item.
-        :param kept_space_ratio: the ratio of the space to keep.
-        :return: a deepcopy of self, or a subchoice of self, or else a FixedHyperparameter of the best_guess.
-        """
-        new_size = int(len(self) * kept_space_ratio + sys.float_info.epsilon)
-        if (
-                len(self.choice_list) == 0
-                or len(self.choice_list) == 1
-                or new_size <= 1
-                or kept_space_ratio <= 1.0 / len(self.choice_list)
-        ):
-            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-
-        # Bring best_guess to front
-        idx = self.choice_list.index(best_guess)
-        del self.choice_list[idx]
-        self.choice_list = [best_guess] + self.choice_list
-
-        # Narrowing of the list.
-        maybe_reduced_list = self.choice_list[:new_size]
-        return PriorityChoice(maybe_reduced_list).was_narrowed_from(kept_space_ratio, self)
-
     def __len__(self):
         """
         Return the number of choices.
@@ -790,19 +698,6 @@ class Quantized(WrappedHyperparameterDistributions):
         """
         # In order to calculate the cdf for any quantized distribution, we have to take the cdf at x + 0.5.
         return self.hd.cdf(math.floor(x) + 0.5)
-
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> 'Quantized':
-        """
-        Will narrow the underlying distribution and re-wrap it under a Quantized.
-
-        :param best_guess: the value towards which we want to narrow down the space.
-        :param kept_space_ratio: what proportion of the space is kept. Default is to keep half the space (0.5).
-        :return:
-        """
-        return Quantized(
-            self.hd.narrow_space_from_best_guess(best_guess, kept_space_ratio),
-            null_default_value=self.null_default_value
-        ).was_narrowed_from(kept_space_ratio, self)
 
     def min(self):
         """
@@ -937,21 +832,6 @@ class RandInt(DiscreteHyperparameterDistribution):
 
         return (math.floor(x) - self.min_included + 1) / (self.max_included - self.min_included + 1)
 
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
-        """
-        Will narrow the underlying distribution towards the best guess.
-
-        :param best_guess: the value towards which we want to narrow down the space. Should be between 0.0 and 1.0.
-        :param kept_space_ratio: what proportion of the space is kept. Default is to keep half the space (0.5).
-        :return: a new HyperparameterDistribution that has been narrowed down.
-        """
-        lost_space_ratio = 1.0 - kept_space_ratio
-        new_min_included = round(self.min_included * kept_space_ratio + best_guess * lost_space_ratio)
-        new_max_included = round(self.max_included * kept_space_ratio + best_guess * lost_space_ratio)
-        if new_max_included <= new_min_included or kept_space_ratio == 0.0:
-            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return RandInt(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio,
-                                                                                                      self)
     def min(self):
         """
         Calculate minimum value that can be sampled in the randint distribution.
@@ -1052,21 +932,6 @@ class Uniform(HyperparameterDistribution):
         # Manage the case where x_value > self.max_included
         return 1.
 
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
-        """
-        Will narrow the underlying distribution towards the best guess.
-
-        :param best_guess: the value towards which we want to narrow down the space. Should be between 0.0 and 1.0.
-        :param kept_space_ratio: what proportion of the space is kept. Default is to keep half the space (0.5).
-        :return: a new HyperparameterDistribution that has been narrowed down.
-        """
-        lost_space_ratio = 1.0 - kept_space_ratio
-        new_min_included = self.min_included * kept_space_ratio + best_guess * lost_space_ratio
-        new_max_included = self.max_included * kept_space_ratio + best_guess * lost_space_ratio
-        if new_max_included <= new_min_included or kept_space_ratio == 0.0:
-            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return Uniform(new_min_included, new_max_included, self.null_default_value).was_narrowed_from(kept_space_ratio,
-                                                                                                      self)
     def min(self):
         """
         Calculate minimum value that can be sampled in the uniform distribution.
@@ -1164,23 +1029,6 @@ class LogUniform(HyperparameterDistribution):
 
         # Manage the case x > 2**self.log2_max_included
         return 1.
-
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
-        """
-        Will narrow, in log space, the distribution towards the new best_guess.
-
-        :param best_guess: the value towards which we want to narrow down the space. Should be between 0.0 and 1.0.
-        :param kept_space_ratio: what proportion of the space is kept. Default is to keep half the space (0.5).
-        :return: a new HyperparameterDistribution that has been narrowed down.
-        """
-        log2_best_guess = math.log2(best_guess)
-        lost_space_ratio = 1.0 - kept_space_ratio
-        new_min_included = self.log2_min_included * kept_space_ratio + log2_best_guess * lost_space_ratio
-        new_max_included = self.log2_max_included * kept_space_ratio + log2_best_guess * lost_space_ratio
-        if new_max_included <= new_min_included or kept_space_ratio == 0.0:
-            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return LogUniform(2 ** new_min_included, 2 ** new_max_included, 2 ** self.null_default_value).was_narrowed_from(
-            kept_space_ratio, self)
 
     def min(self):
         """
@@ -1329,28 +1177,6 @@ class Normal(HyperparameterDistribution):
             return truncnorm.cdf(x, a=a, b=b, loc=self._mean, scale=self._std)
 
         return norm.cdf(x, loc=self._mean, scale=self._std)
-
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
-        """
-        Will narrow the distribution towards the new best_guess.
-        The mean will move towards the new best guess, and the standard deviation
-        will be multiplied by the kept_space_ratio.
-        The hard clip limit is unchanged.
-
-        :param best_guess: the value towards which we want to narrow down the space's mean. Should be between 0.0 and 1.0.
-        :param kept_space_ratio: what proportion of the space is kept. Default is to keep half the space (0.5).
-        :return: a new HyperparameterDistribution that has been narrowed down.
-        """
-        lost_space_ratio = 1.0 - kept_space_ratio
-        if isinstance(self._mean, tuple):
-            self._mean = self._mean[0]
-        new_mean = self._mean * kept_space_ratio + best_guess * lost_space_ratio
-        new_std = self._std * kept_space_ratio
-        if new_std <= 0.0:
-            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return Normal(
-            new_mean, new_std, self.hard_clip_min, self.hard_clip_max, self.null_default_value
-        ).was_narrowed_from(kept_space_ratio, self)
 
     def min(self):
         """
@@ -1547,26 +1373,6 @@ class LogNormal(HyperparameterDistribution):
 
         cdf_x = norm.cdf(math.log2(x), loc=self.log2_space_mean, scale=self.log2_space_std)
         return (cdf_x - cdf_min) / (cdf_max - cdf_min)
-
-    def narrow_space_from_best_guess(self, best_guess, kept_space_ratio: float = 0.5) -> HyperparameterDistribution:
-        """
-        Will narrow the distribution towards the new best_guess.
-        The log2_space_mean (log space mean) will move, in log space, towards the new best guess, and the
-        log2_space_std (log space standard deviation) will be multiplied by the kept_space_ratio.
-
-        :param best_guess: the value towards which we want to narrow down the space's mean. Should be between 0.0 and 1.0.
-        :param kept_space_ratio: what proportion of the space is kept. Default is to keep half the space (0.5).
-        :return: a new HyperparameterDistribution that has been narrowed down.
-        """
-        log2_best_guess = math.log2(best_guess)
-        lost_space_ratio = 1.0 - kept_space_ratio
-        new_mean = self.log2_space_mean * kept_space_ratio + log2_best_guess * lost_space_ratio
-        new_std = self.log2_space_std * kept_space_ratio
-        if new_std <= 0.0:
-            return FixedHyperparameter(best_guess, self.null_default_value).was_narrowed_from(kept_space_ratio, self)
-        return Normal(
-            new_mean, new_std, self.hard_clip_min, self.hard_clip_max, self.null_default_value
-        ).was_narrowed_from(kept_space_ratio, self)
 
     def min(self):
         """
