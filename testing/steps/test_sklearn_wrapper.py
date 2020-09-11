@@ -4,6 +4,7 @@ from sklearn.decomposition import PCA
 from sklearn.linear_model import LinearRegression
 
 from neuraxle.base import Identity
+from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.steps.sklearn import SKLearnWrapper
 
 
@@ -43,6 +44,29 @@ def test_sklearn_wrapper_fit_transform_with_transform():
     p, outputs = p.fit_transform(data_inputs, expected_outputs)
 
     assert outputs.shape == (dim1, n_components)
+
+
+def test_sklearn_wrapper_set_hyperparams():
+    p = SKLearnWrapper(PCA())
+    p.set_hyperparams(HyperparameterSamples({
+        'n_components': 2
+    }))
+
+    assert p.wrapped_sklearn_predictor.n_components == 2
+
+
+def test_sklearn_wrapper_update_hyperparams():
+    p = SKLearnWrapper(PCA())
+    p.set_hyperparams(HyperparameterSamples({
+        'n_components': 2,
+        'svd_solver': 'full'
+    }))
+    p.update_hyperparams(HyperparameterSamples({
+        'n_components': 4
+    }))
+
+    assert p.wrapped_sklearn_predictor.n_components == 4
+    assert p.wrapped_sklearn_predictor.svd_solver == 'full'
 
 
 def _create_data_source(shape):

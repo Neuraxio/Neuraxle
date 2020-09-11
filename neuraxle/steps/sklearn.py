@@ -124,6 +124,22 @@ class SKLearnWrapper(BaseStep):
 
         return self.hyperparams.to_flat()
 
+    def _update_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
+        """
+        Update hyperparams for base step, and the wrapped sklearn_predictor.
+
+        :param hyperparams:
+        :return: self
+        """
+        # flatten the step hyperparams, and update the wrapped sklearn predictor params
+        hyperparams = HyperparameterSamples(hyperparams)
+        BaseStep._update_hyperparams(self, hyperparams.to_flat())
+        self.wrapped_sklearn_predictor.set_params(
+            **self.hyperparams.with_separator(RecursiveDict.DEFAULT_SEPARATOR).to_flat_as_dict_primitive()
+        )
+
+        return self.hyperparams.to_flat()
+
     def _get_hyperparams(self):
         if self.return_all_sklearn_default_params_on_get:
             return HyperparameterSamples(self.wrapped_sklearn_predictor.get_params()).to_flat()
