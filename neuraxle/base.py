@@ -2651,7 +2651,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
         return step
 
 
-NamedTupleList = List[Union[Tuple[str, 'BaseStep'], 'BaseStep']]
+NamedTupleList = List[Union[Tuple[str, BaseTransformer], BaseTransformer]]
 
 
 class NonFittableMixin:
