@@ -970,6 +970,13 @@ class BaseValidationSplitter(ABC):
 
     @abstractmethod
     def split(self, data_inputs, expected_outputs=None) -> Tuple[List, List, List, List]:
+        """
+        Train/Test split data inputs and expected outputs.
+
+        :param data_inputs: data inputs
+        :param expected_outputs: expected outputs
+        :return: data_inputs_train, expected_outputs_train, data_inputs_validation, expected_outputs_validation
+        """
         pass
 
 
