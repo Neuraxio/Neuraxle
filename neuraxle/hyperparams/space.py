@@ -120,12 +120,12 @@ class RecursiveDict(OrderedDict):
             return arg
 
     def __getitem__(self, item: str = None):
-        value = self._getitem(item)
+        value = self.get(item)
         if isinstance(value, RecursiveDict) and len(value) == 0:
             raise ValueError('{} not found in {}'.format(item, self.__class__.__name__))
         return value
 
-    def _getitem(self, item):
+    def get(self, item):
         item_values = type(self)()
         for name, values in self.items():
             if item is None and not self.separator in name:
@@ -231,7 +231,7 @@ class RecursiveDict(OrderedDict):
             if len(key) > 0:
                 if k not in pre_ret.keys():
                     pre_ret[k] = dict_ctor()
-                pre_ret._getitem(k)[key] = v
+                pre_ret.get(k)[key] = v
             else:
                 ret[k] = v
         for k, v in pre_ret.items():
