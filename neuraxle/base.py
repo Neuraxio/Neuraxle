@@ -618,12 +618,12 @@ class _RecursiveArguments:
             keyword_arguments = dict()
             for arg in self.args:
                 if isinstance(arg, RecursiveDict):
-                    arguments.append(arg[child_step_name])
+                    arguments.append(arg._getitem(child_step_name))
                 else:
                     arguments.append(arg)
             for key, arg in self.kwargs.items():
                 if isinstance(arg, RecursiveDict):
-                    keyword_arguments[key] = arg[child_step_name]
+                    keyword_arguments[key] = arg._getitem(child_step_name)
                 else:
                     keyword_arguments[key] = arg
             return _RecursiveArguments(*arguments, **keyword_arguments)
@@ -632,12 +632,12 @@ class _RecursiveArguments:
             keyword_arguments = dict()
             for arg in self.args:
                 if isinstance(arg, RecursiveDict):
-                    arguments.append(arg[child_step_name])
+                    arguments.append(arg._getitem(child_step_name))
                 else:
                     arguments.append(arg)
             for key, arg in self.kwargs.items():
                 if isinstance(arg, RecursiveDict):
-                    keyword_arguments[key] = arg[child_step_name]
+                    keyword_arguments[key] = arg._getitem(child_step_name)
                 else:
                     keyword_arguments[key] = arg
             return _RecursiveArguments(*arguments, **keyword_arguments)
