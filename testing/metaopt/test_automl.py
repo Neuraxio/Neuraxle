@@ -4,6 +4,7 @@ from sklearn import linear_model
 from sklearn.metrics import mean_squared_error
 from sklearn.svm import LinearSVC
 
+from neuraxle.base import ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import FixedHyperparameter, RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
@@ -100,7 +101,9 @@ def test_validation_splitter_should_split_data_properly():
 
     # When
     validation_splits = splitter.split_data_container(
-        DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs))
+        data_container=DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs),
+        context=ExecutionContext()
+    )
     train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 
     train_di = train_di[0]
@@ -129,7 +132,9 @@ def test_kfold_cross_validation_should_split_data_properly():
 
     # When
     validation_splits = splitter.split_data_container(
-        DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs))
+        data_container=DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs),
+        context=ExecutionContext()
+    )
     train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 
     # Then
@@ -188,7 +193,7 @@ def test_kfold_cross_validation_should_split_data_properly_bug():
     splitter = KFoldCrossValidationSplitter(k_fold=2)
 
     # When
-    validation_splits = splitter.split_data_container(data_container)
+    validation_splits = splitter.split_data_container(data_container, ExecutionContext())
 
     train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 
