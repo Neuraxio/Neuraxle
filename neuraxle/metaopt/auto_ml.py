@@ -99,7 +99,7 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         :return:
         """
         self._save_trial(trial)
-        self.on_next(value=(self, trial)) # notify a tuple of (repo, trial) to observers
+        self.on_next(value=(self, trial))  # notify a tuple of (repo, trial) to observers
 
     @abstractmethod
     def _save_trial(self, trial: 'Trial'):
@@ -414,7 +414,8 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         """
         return os.path.join(self.cache_folder, "NEW_" + current_hyperparameters_hash) + '.json'
 
-    def subscribe_to_cache_folder_changes(self, refresh_interval_in_seconds: int, observer: _Observer[Tuple[HyperparamsRepository, Trial]]):
+    def subscribe_to_cache_folder_changes(self, refresh_interval_in_seconds: int,
+                                          observer: _Observer[Tuple[HyperparamsRepository, Trial]]):
         """
         Every refresh_interval_in_seconds
 
@@ -499,7 +500,7 @@ class Trainer:
 
         self.print_func = print_func
 
-    def train(self, pipeline: BaseStep, data_inputs, expected_outputs=None) -> Trial:
+    def train(self, pipeline: BaseStep, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Trial:
         """
         Train pipeline using the validation splitter.
         Track training, and validation metrics for each epoch.
@@ -511,8 +512,10 @@ Refer to `execute_trial` for full flexibility
         :param expected_outputs: expected ouptuts to fit on
         :return: executed trial
         """
-        validation_splits: List[Tuple[DataContainer, DataContainer]] = self.validation_split_function.split_data_container(
-            DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs)
+        validation_splits: List[
+            Tuple[DataContainer, DataContainer]] = self.validation_split_function.split_data_container(
+            DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs),
+            context=ExecutionContext()
         )
 
         repo_trial: Trial = Trial(
@@ -762,7 +765,10 @@ class AutoML(ForceHandleMixin, BaseStep):
 
         :return: self
         """
-        validation_splits = self.validation_splitter.split_data_container(data_container)
+        validation_splits = self.validation_splitter.split_data_container(
+            data_container=data_container,
+            context=context
+        )
 
         for trial_number in range(self.n_trial):
             try:
@@ -932,7 +938,7 @@ class RandomSearchHyperparameterSelectionStrategy(BaseHyperparameterSelectionStr
 
 
 class BaseValidationSplitter(ABC):
-    def split_data_container(self, data_container: DataContainer) -> List[Tuple[DataContainer, DataContainer]]:
+    def split_data_container(self, data_container: DataContainer, context: ExecutionContext) -> List[Tuple[DataContainer, DataContainer]]:
         """
         Wrap a validation split function with a split data container function.
         A validation split function takes two arguments:  data inputs, and expected outputs.
@@ -942,7 +948,8 @@ class BaseValidationSplitter(ABC):
         """
         train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = self.split(
             data_inputs=data_container.data_inputs,
-            expected_outputs=data_container.expected_outputs
+            expected_outputs=data_container.expected_outputs,
+            context=context
         )
 
         train_data_container = DataContainer(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
@@ -969,7 +976,15 @@ class BaseValidationSplitter(ABC):
         return splits
 
     @abstractmethod
-    def split(self, data_inputs, expected_outputs=None) -> Tuple[List, List, List, List]:
+    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[List, List, List, List]:
+        """
+        Train/Test split data inputs and expected outputs.
+
+        :param data_inputs: data inputs
+        :param expected_outputs: expected outputs (optional)
+        :param context: execution context (optional)
+        :return: data_inputs_train, expected_outputs_train, data_inputs_validation, expected_outputs_validation
+        """
         pass
 
 
@@ -991,7 +1006,7 @@ class KFoldCrossValidationSplitter(BaseValidationSplitter):
         BaseValidationSplitter.__init__(self)
         self.k_fold = k_fold
 
-    def split(self, data_inputs, expected_outputs=None) -> Tuple[List, List, List, List]:
+    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[List, List, List, List]:
         data_inputs_train, data_inputs_val = kfold_cross_validation_split(
             data_inputs=data_inputs,
             k_fold=self.k_fold
@@ -1045,7 +1060,7 @@ class ValidationSplitter(BaseValidationSplitter):
     def __init__(self, test_size: float):
         self.test_size = test_size
 
-    def split(self, data_inputs, expected_outputs=None) -> Tuple[List, List, List, List]:
+    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[List, List, List, List]:
         train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = validation_split(
             test_size=self.test_size,
             data_inputs=data_inputs,

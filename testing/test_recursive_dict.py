@@ -131,6 +131,12 @@ def test_recursive_dict_copy_constructor_should_set_separator():
     assert r.separator == POINT_SEPARATOR
 
 
+def test_recursive_dict_should_raise_when_item_missing():
+    with pytest.raises(ValueError):
+        r = RecursiveDict()
+        missing = r['missing']
+
+
 def test_hyperparams_copy_constructor():
     dict_values = {
         'hp': 1,

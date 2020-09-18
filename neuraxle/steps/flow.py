@@ -330,7 +330,8 @@ class ChooseOneStepOf(FeatureUnion):
 
     def _update_optional_hyperparams(self):
         step_names = list(self.keys())
-        chosen_step_name = self.hyperparams[CHOICE_HYPERPARAM]
+        chosen_step_name = self.hyperparams[CHOICE_HYPERPARAM] if CHOICE_HYPERPARAM in self.hyperparams else step_names[0]
+
         if chosen_step_name not in step_names:
             raise ValueError('Invalid Chosen Step in {0}'.format(self.name))
         for step_name in step_names[:-1]:
