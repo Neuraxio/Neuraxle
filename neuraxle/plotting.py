@@ -111,6 +111,47 @@ def plot_distribution_space(hyperparameter_space: HyperparameterSpace, num_bins=
 
 
 class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]]):
+    """
+    An observer that receives trial updates and plots metric results.
+    It can plot individual trials on each update, or upon completion.
+    It can also plot all trials in the same plot upon completion.
+
+    Usage Example:
+
+    .. code-block:: python
+
+        hyperparams_repository: HyperparamsJSONRepository = HyperparamsJSONRepository(cache_folder='trials')
+        hyperparams_repository.subscribe(TrialMetricsPlottingObserver(
+            plotting_folder_name: str = 'metric_results',
+            plot_individual_trials_on_complete=False,
+            plot_trial_on_next=True,
+            plot_all_trials_on_complete=False,
+            save_plots=True
+        ))
+
+        auto_ml = AutoML(
+            pipeline,
+            n_trials=n_iter,
+            validation_split_function=validation_splitter(0.2),
+            hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+            scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
+            callbacks=[
+                MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)
+            ],
+            refit_trial=True,
+            cache_folder_when_no_handle=str(tmpdir)
+        )
+
+        auto_ml = auto_ml.fit(data_inputs, expected_outputs)
+
+    .. seealso::
+        :class:`~neuraxle.metaopt._Observer`,
+        :class:`~neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.trial.Trials`,
+        :class:`~neuraxle.metaopt.auto_ml.AutoML`,
+        :class:`HyperparamsRepository`,
+        :class:`HyperparamsJSONRepository`
+    """
     def __init__(
             self,
             plotting_folder_name: str = 'metric_results',
@@ -126,6 +167,12 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
         self.save: bool = save_plots
 
     def on_next(self, value: Tuple[HyperparamsRepository, Trial]):
+        """
+        Plot updated trial metric results.
+
+        :param value: hyperparams_repository, trial
+        :return:
+        """
         repo, trial = value
         if not self.plot_trial_on_next:
             return
@@ -153,6 +200,12 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
                 self._show_or_save_plot(plotting_file)
 
     def on_complete(self, value: Tuple[HyperparamsRepository, Trial]):
+        """
+        Plot trial metric results upon completion.
+
+        :param value: hyperparams_repository, trial
+        :return:
+        """
         repo, trial = value
         trials: Trials = repo.load_all_trials(TRIAL_STATUS.SUCCESS)
         if not self.plot_all_trials_on_complete:
@@ -194,7 +247,11 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
         plt.xlabel('epoch')
         plt.title('Validation {}'.format(metric_name))
         metric_file_name = '{}_{}_validation.png'.format(metric_name, split_number)
-        plotting_file = os.path.join(cache_folder, self.plotting_folder_name, str(split_number), metric_file_name)
+        plotting_folder = os.path.join(cache_folder, self.plotting_folder_name, str(split_number))
+        if not os.path.exists(plotting_folder):
+            os.makedirs(plotting_folder)
+        plotting_file = os.path.join(plotting_folder, metric_file_name)
+
         self._show_or_save_plot(plotting_file)
 
     def _plot_all_trials_training_results_for_metric(self, trials, metric_name, cache_folder, split_number):
@@ -206,7 +263,11 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
         plt.xlabel('epoch')
         plt.title('Train {}'.format(metric_name))
         metric_file_name = '{}_{}_train.png'.format(metric_name, split_number)
-        plotting_file = os.path.join(cache_folder, self.plotting_folder_name, str(split_number), metric_file_name)
+        plotting_folder = os.path.join(cache_folder, self.plotting_folder_name, str(split_number))
+        if not os.path.exists(plotting_folder):
+            os.makedirs(plotting_folder)
+        plotting_file = os.path.join(plotting_folder, metric_file_name)
+
         self._show_or_save_plot(plotting_file)
 
     def _show_or_save_plot(self, plotting_file):
