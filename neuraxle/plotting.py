@@ -194,7 +194,11 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
         plt.xlabel('epoch')
         plt.title('Validation {}'.format(metric_name))
         metric_file_name = '{}_{}_validation.png'.format(metric_name, split_number)
-        plotting_file = os.path.join(cache_folder, self.plotting_folder_name, str(split_number), metric_file_name)
+        plotting_folder = os.path.join(cache_folder, self.plotting_folder_name, str(split_number))
+        if not os.path.exists(plotting_folder):
+            os.makedirs(plotting_folder)
+        plotting_file = os.path.join(plotting_folder, metric_file_name)
+
         self._show_or_save_plot(plotting_file)
 
     def _plot_all_trials_training_results_for_metric(self, trials, metric_name, cache_folder, split_number):
@@ -206,7 +210,11 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
         plt.xlabel('epoch')
         plt.title('Train {}'.format(metric_name))
         metric_file_name = '{}_{}_train.png'.format(metric_name, split_number)
-        plotting_file = os.path.join(cache_folder, self.plotting_folder_name, str(split_number), metric_file_name)
+        plotting_folder = os.path.join(cache_folder, self.plotting_folder_name, str(split_number))
+        if not os.path.exists(plotting_folder):
+            os.makedirs(plotting_folder)
+        plotting_file = os.path.join(plotting_folder, metric_file_name)
+
         self._show_or_save_plot(plotting_file)
 
     def _show_or_save_plot(self, plotting_file):
