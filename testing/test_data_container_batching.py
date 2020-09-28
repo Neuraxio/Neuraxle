@@ -36,7 +36,8 @@ class SomeLazyLoadableCollection:
 
 
 def test_data_container_convolve1d_should_be_lazy_and_use_getitem_when_data_is_lazy_loadable():
-    data_inputs = SomeLazyLoadableCollection([LoadableItem() for _ in range(10)])
+    items = [LoadableItem() for _ in range(10)]
+    data_inputs = SomeLazyLoadableCollection(items)
     expected_outputs = SomeLazyLoadableCollection([LoadableItem() for _ in range(10)])
     data_container = DataContainer(
         data_inputs=data_inputs,
@@ -47,8 +48,9 @@ def test_data_container_convolve1d_should_be_lazy_and_use_getitem_when_data_is_l
     batch_size = 2
     for batch in data_container.batch(batch_size=batch_size):
         assert len(batch) == batch_size
-        assert all(item.is_loaded() for item in data_inputs.inner_list[:i + 1])
-        assert all(not item.is_loaded() for item in data_inputs.inner_list[i + 1:])
+        assert all(item.is_loaded() for item in data_inputs.inner_list[:(i * batch_size)])
+        for y in range((i + 1) * batch_size, len(data_inputs)):
+            assert not items[y].is_loaded()
         i += 1
 
 @pytest.mark.parametrize('batch_size,include_incomplete_pass,default_value,expected_data_containers', [
@@ -81,7 +83,7 @@ def test_data_container_batching(batch_size, include_incomplete_pass, default_va
     data_containers = []
     for dc in data_container.batch(
         batch_size=batch_size,
-        drop_remainder=include_incomplete_pass,
+        include_incomplete_batch=include_incomplete_pass,
         default_value_data_inputs=default_value
     ):
         data_containers.append(dc)

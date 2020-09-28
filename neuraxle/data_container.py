@@ -149,7 +149,7 @@ class DataContainer:
     def batch(
             self,
             batch_size: int,
-            drop_remainder: bool = False,
+            include_incomplete_batch: bool = False,
             default_value_data_inputs=None,
             default_value_expected_outputs=None
     ) -> Iterable['DataContainer']:
@@ -160,20 +160,20 @@ class DataContainer:
         .. code-block:: python
 
             data_container = DataContainer(data_inputs=np.array(list(range(10)))
-            for data_container_batch in data_container.batch(2):
+            for data_container_batch in data_container.batch(batch_size=2):
                 print(data_container_batch.data_inputs)
                 print(data_container_batch.expected_outputs)
             # [array([0, 1]), array([2, 3]), ..., array([8, 9])]
 
             data_container = DataContainer(data_inputs=np.array(list(range(10)))
-            for data_container_batch in data_container.batch(batch_size=3, drop_remainder=True):
+            for data_container_batch in data_container.batch(batch_size=3, include_incomplete_batch=False):
                 print(data_container_batch.data_inputs)
             # [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8])]
 
             data_container = DataContainer(data_inputs=np.array(list(range(10)))
             for data_container_batch in data_container.batch(
                 batch_size=3,
-                drop_remainder=False,
+                include_incomplete_batch=True,
                 default_value_data_inputs=None,
                 default_value_expected_outputs=None
             ):
@@ -183,7 +183,7 @@ class DataContainer:
             data_container = DataContainer(data_inputs=np.array(list(range(10)))
             for data_container_batch in data_container.batch(
                 batch_size=3,
-                drop_remainder=False,
+                include_incomplete_batch=True,
                 default_value_data_inputs=AbsentValuesNullObject()
             ):
                 print(data_container_batch.data_inputs)
@@ -191,7 +191,7 @@ class DataContainer:
 
 
         :param batch_size: number of elements to combine into a single batch
-        :param drop_remainder: (Optional.) A bool representing
+        :param include_incomplete_batch: (Optional.) A bool representing
         whether the last batch should be dropped in the case it has fewer than
         `batch_size` elements; the default behavior is not to drop the smaller
         batch.
@@ -204,16 +204,16 @@ class DataContainer:
         :return: an iterator of DataContainer
         :rtype: Iterable[DataContainer]
         """
-        for i in range(len(self.data_inputs)):
+        for i in range(0, len(self.data_inputs), batch_size):
             data_container = DataContainer(
-                current_ids=self.current_ids[i:i + batch_size + 1],
-                data_inputs=self.data_inputs[i:i + batch_size + 1],
-                expected_outputs=self.expected_outputs[i:i + batch_size + 1]
+                current_ids=self.current_ids[i:i + batch_size],
+                data_inputs=self.data_inputs[i:i + batch_size],
+                expected_outputs=self.expected_outputs[i:i + batch_size]
             )
 
             incomplete_batch = len(data_container.data_inputs) < batch_size
             if incomplete_batch:
-                if drop_remainder:
+                if not include_incomplete_batch:
                     break
 
                 data_container = _pad_or_keep_incomplete_batch(
@@ -629,15 +629,11 @@ def _pad_incomplete_batch(
 
 
 def _pad_data(data: Union[List, np.ndarray], default_value: Any, batch_size: int):
-    if isinstance(data, np.ndarray):
-        data_ = np.repeat(default_value, repeats=batch_size)
-        data_[:data.shape[0]] = data
-        return data_
-    else:
-        data_ = []
-        data_.extend(data)
-        data_.extend([default_value] * (len(data) - batch_size))
-        return data_
+    data_ = []
+    data_.extend(data)
+    padding = [default_value] * (batch_size - len(data))
+    data_.extend(padding)
+    return data_
 
 
 def _inner_concatenate_np_array(np_array, np_array_to_zip):

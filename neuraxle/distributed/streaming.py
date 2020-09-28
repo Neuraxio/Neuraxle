@@ -480,7 +480,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         """
         data_container_batches = data_container.batch(
             batch_size=self.batch_size,
-            drop_remainder=self.include_incomplete_batch,
+            include_incomplete_batch=self.include_incomplete_batch,
             default_value_data_inputs=self.default_value_data_inputs,
             default_value_expected_outputs=self.default_value_expected_outputs
         )
