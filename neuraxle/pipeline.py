@@ -27,13 +27,13 @@ import shutil
 import warnings
 from abc import ABC, abstractmethod
 from copy import copy
-from typing import Any, Tuple, List
+from typing import Any, Tuple, List, Union
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, ExecutionContext, ExecutionMode, \
     NonTransformableMixin, MetaStep, _FittableStep, HandleOnlyMixin, ForceHandleOnlyMixin, _CustomHandlerMethods, \
     ForceHandleMixin, Identity
 from neuraxle.checkpoints import Checkpoint
-from neuraxle.data_container import DataContainer, ListDataContainer
+from neuraxle.data_container import DataContainer, ListDataContainer, AbsentValuesNullObject
 
 DEFAULT_CACHE_FOLDER = 'cache'
 
@@ -515,11 +515,24 @@ class Barrier(Identity, ABC):
 class Joiner(Barrier):
     """
     A Special Barrier step that joins the transformed mini batches together with list.extend method.
+
+    .. seealso::
+        :class:`~neuraxle.data_container.DataContainer`,
+        :func:`~neuraxle.data_container.DataContainer.batch`
     """
 
-    def __init__(self, batch_size):
+    def __init__(
+            self,
+            batch_size: int,
+            include_incomplete_batch: bool=False,
+            default_value_data_inputs=None,
+            default_value_expected_outputs=None
+    ):
         Barrier.__init__(self)
-        self.batch_size = batch_size
+        self.batch_size: int = batch_size
+        self.include_incomplete_batch: bool = include_incomplete_batch
+        self.default_value_data_inputs: Union[Any, AbsentValuesNullObject] = default_value_data_inputs
+        self.default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = default_value_expected_outputs
 
     def join_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -533,21 +546,21 @@ class Joiner(Barrier):
         :rtype: DataContainer
         """
         context = context.push(step)
-
-        data_container_batches = data_container.convolved_1d(
-            stride=self.batch_size,
-            kernel_size=self.batch_size
+        data_container_batches = data_container.batch(
+            batch_size=self.batch_size,
+            drop_remainder=self.include_incomplete_batch,
+            default_value_data_inputs=self.default_value_data_inputs,
+            default_value_expected_outputs=self.default_value_expected_outputs
         )
 
         output_data_container = ListDataContainer.empty()
         for data_container_batch in data_container_batches:
-            output_data_container.concat(
-                step._transform_data_container(data_container_batch, context)
-            )
+            output_data_container.concat(step._transform_data_container(data_container_batch, context))
 
         return output_data_container
 
-    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> Tuple['Any', DataContainer]:
+    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> \
+            Tuple['Any', DataContainer]:
         """
         Concatenate the pipeline fit transform output of each batch of self.batch_size together.
         :param step: pipeline to fit transform on
@@ -559,18 +572,17 @@ class Joiner(Barrier):
         :rtype: Tuple[Any, DataContainer]
         """
         context = context.push(step)
-
-        data_container_batches = data_container.convolved_1d(
-            stride=self.batch_size,
-            kernel_size=self.batch_size
+        data_container_batches = data_container.batch(
+            batch_size=self.batch_size,
+            drop_remainder=self.include_incomplete_batch,
+            default_value_data_inputs=self.default_value_data_inputs,
+            default_value_expected_outputs=self.default_value_expected_outputs
         )
 
         output_data_container = ListDataContainer.empty()
         for data_container_batch in data_container_batches:
             step, data_container_batch = step._fit_transform_data_container(data_container_batch, context)
-            output_data_container.concat(
-                data_container_batch
-            )
+            output_data_container.concat(data_container_batch)
 
         return step, output_data_container
 

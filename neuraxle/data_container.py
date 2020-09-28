@@ -33,6 +33,10 @@ from conv import convolved_1d
 NamedDataContainerTuple = Tuple[str, 'DataContainer']
 
 
+class AbsentValuesNullObject:
+    pass
+
+
 class DataContainer:
     """
     DataContainer class to store data inputs, expected outputs, and ids together.
@@ -141,6 +145,85 @@ class DataContainer:
         for current_id in self.current_ids:
             m.update(str.encode(str(current_id)))
         return m.hexdigest()
+
+    def batch(
+            self,
+            batch_size: int,
+            drop_remainder: bool = False,
+            default_value_data_inputs=None,
+            default_value_expected_outputs=None
+    ) -> Iterable['DataContainer']:
+        """
+        Returns an iterator that iterates through batches of the DataContainer.
+
+
+        .. code-block:: python
+
+            data_container = DataContainer(data_inputs=np.array(list(range(10)))
+            for data_container_batch in data_container.batch(2):
+                print(data_container_batch.data_inputs)
+                print(data_container_batch.expected_outputs)
+            # [array([0, 1]), array([2, 3]), ..., array([8, 9])]
+
+            data_container = DataContainer(data_inputs=np.array(list(range(10)))
+            for data_container_batch in data_container.batch(batch_size=3, drop_remainder=True):
+                print(data_container_batch.data_inputs)
+            # [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8])]
+
+            data_container = DataContainer(data_inputs=np.array(list(range(10)))
+            for data_container_batch in data_container.batch(
+                batch_size=3,
+                drop_remainder=False,
+                default_value_data_inputs=None,
+                default_value_expected_outputs=None
+            ):
+                print(data_container_batch.data_inputs)
+            # [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9, None, None])]
+
+            data_container = DataContainer(data_inputs=np.array(list(range(10)))
+            for data_container_batch in data_container.batch(
+                batch_size=3,
+                drop_remainder=False,
+                default_value_data_inputs=AbsentValuesNullObject()
+            ):
+                print(data_container_batch.data_inputs)
+            # [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9])]
+
+
+        :param batch_size: number of elements to combine into a single batch
+        :param drop_remainder: (Optional.) A bool representing
+        whether the last batch should be dropped in the case it has fewer than
+        `batch_size` elements; the default behavior is not to drop the smaller
+        batch.
+        :param default_value_data_inputs: expected_outputs default fill value
+        for padding and values outside iteration range, or absent value null object
+        to trim absent values from the batch
+        :param default_value_expected_outputs: expected_outputs default fill value
+        for padding and values outside iteration range, or absent value null object
+        to trim absent values from the batch
+        :return: an iterator of DataContainer
+        :rtype: Iterable[DataContainer]
+        """
+        for i in range(len(self.data_inputs)):
+            data_container = DataContainer(
+                current_ids=self.current_ids[i:i + batch_size + 1],
+                data_inputs=self.data_inputs[i:i + batch_size + 1],
+                expected_outputs=self.expected_outputs[i:i + batch_size + 1]
+            )
+
+            incomplete_batch = len(data_container.data_inputs) < batch_size
+            if incomplete_batch:
+                if drop_remainder:
+                    break
+
+                data_container = _pad_or_keep_incomplete_batch(
+                    data_container,
+                    batch_size,
+                    default_value_data_inputs,
+                    default_value_expected_outputs
+                )
+
+            yield data_container
 
     def convolved_1d(self, stride, kernel_size) -> Iterable['DataContainer']:
         """
@@ -428,7 +511,8 @@ class ListDataContainer(DataContainer):
         :class:`DataContainer`
     """
 
-    def __init__(self, data_inputs: Any, current_ids=None, summary_id=None, expected_outputs: Any = None, sub_data_containers=None):
+    def __init__(self, data_inputs: Any, current_ids=None, summary_id=None, expected_outputs: Any = None,
+                 sub_data_containers=None):
         DataContainer.__init__(self, data_inputs, current_ids, summary_id, expected_outputs, sub_data_containers)
         self.tolistshallow()
 
@@ -495,6 +579,65 @@ class ListDataContainer(DataContainer):
         self.expected_outputs.extend(data_container.expected_outputs)
 
         return self
+
+
+def _pad_or_keep_incomplete_batch(
+        data_container,
+        batch_size,
+        default_value_data_inputs,
+        default_value_expected_outputs
+) -> 'DataContainer':
+    keep_incomplete_batch = isinstance(default_value_data_inputs, AbsentValuesNullObject)
+
+    if not keep_incomplete_batch:
+        data_container = _pad_incomplete_batch(
+            data_container,
+            batch_size,
+            default_value_data_inputs,
+            default_value_expected_outputs
+        )
+
+    return data_container
+
+
+def _pad_incomplete_batch(
+        data_container: 'DataContainer',
+        batch_size: int,
+        default_value_data_inputs: Any,
+        default_value_expected_outputs: Any
+) -> 'DataContainer':
+    data_container = DataContainer(
+        summary_id=data_container.summary_id,
+        current_ids=_pad_data(
+            data_container.current_ids,
+            default_value=None,
+            batch_size=batch_size
+        ),
+        data_inputs=_pad_data(
+            data_container.data_inputs,
+            default_value=default_value_data_inputs,
+            batch_size=batch_size
+        ),
+        expected_outputs=_pad_data(
+            data_container.expected_outputs,
+            default_value=default_value_expected_outputs,
+            batch_size=batch_size
+        )
+    )
+
+    return data_container
+
+
+def _pad_data(data: Union[List, np.ndarray], default_value: Any, batch_size: int):
+    if isinstance(data, np.ndarray):
+        data_ = np.repeat(default_value, repeats=batch_size)
+        data_[:data.shape[0]] = data
+        return data_
+    else:
+        data_ = []
+        data_.extend(data)
+        data_.extend([default_value] * (len(data) - batch_size))
+        return data_
 
 
 def _inner_concatenate_np_array(np_array, np_array_to_zip):

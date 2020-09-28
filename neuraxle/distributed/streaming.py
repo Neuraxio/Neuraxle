@@ -25,11 +25,11 @@ from abc import abstractmethod
 from multiprocessing import Queue
 from multiprocessing.context import Process
 from threading import Thread
-from typing import Tuple, List, Union, Iterable
+from typing import Tuple, List, Union, Iterable, Any
 
 from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStep, BaseSaver, _FittableStep, \
     BaseTransformer, NonFittableMixin
-from neuraxle.data_container import DataContainer, ListDataContainer
+from neuraxle.data_container import DataContainer, ListDataContainer, AbsentValuesNullObject
 from neuraxle.pipeline import Pipeline, MiniBatchSequentialPipeline, Joiner
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
@@ -188,7 +188,7 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
         self.workers = []
         for _, worker_arguments in zip(range(self.n_workers), self.additional_worker_arguments):
             if self.use_threading:
-                p = Thread(target=target_function, args=(self, context,  self.use_savers, worker_arguments))
+                p = Thread(target=target_function, args=(self, context, self.use_savers, worker_arguments))
             else:
                 p = Process(target=target_function, args=(self, context, self.use_savers, worker_arguments))
 
@@ -218,7 +218,8 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
         self.observers = []
 
 
-def worker_function(queue_worker: QueueWorker, context: ExecutionContext, use_savers: bool, additional_worker_arguments):
+def worker_function(queue_worker: QueueWorker, context: ExecutionContext, use_savers: bool,
+                    additional_worker_arguments):
     """
     Worker function that transforms the items inside the queue of items to process.
 
@@ -318,7 +319,10 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             data_joiner=None,
             use_threading=False,
             use_savers=False,
-            cache_folder=None
+            include_incomplete_batch: bool = False,
+            default_value_data_inputs: Union[Any, AbsentValuesNullObject] = None,
+            default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = None,
+            cache_folder=None,
     ):
         if data_joiner is None:
             data_joiner = NumpyConcatenateOuterBatch()
@@ -328,9 +332,16 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         self.n_workers_per_step = n_workers_per_step
         self.use_threading = use_threading
         self.use_savers = use_savers
+        self.batch_size: int = batch_size
+        self.include_incomplete_batch: bool = include_incomplete_batch
+        self.default_value_data_inputs: Union[Any, AbsentValuesNullObject] = default_value_data_inputs
+        self.default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = default_value_expected_outputs
 
-        MiniBatchSequentialPipeline.__init__(self, steps=self._initialize_steps_as_tuple(steps),
-                                             cache_folder=cache_folder)
+        MiniBatchSequentialPipeline.__init__(
+            self,
+            steps=self._initialize_steps_as_tuple(steps),
+            cache_folder=cache_folder
+        )
         self._refresh_steps()
 
     def _initialize_steps_as_tuple(self, steps):
@@ -406,7 +417,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
         return name, n_workers, additional_arguments, max_queue_size, actual_step
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
+    DataContainer, ExecutionContext):
         """
         Setup streaming pipeline before any handler methods.
 
@@ -430,7 +442,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         super().setup(context=context)
         return self
 
-    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
+    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'Pipeline', DataContainer):
         """
         Fit transform sequentially if any step is fittable. Otherwise transform in parallel.
 
@@ -465,7 +478,12 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :type context: ExecutionContext
         :return: data container
         """
-        data_container_batches = data_container.convolved_1d(stride=self.batch_size, kernel_size=self.batch_size)
+        data_container_batches = data_container.batch(
+            batch_size=self.batch_size,
+            drop_remainder=self.include_incomplete_batch,
+            default_value_data_inputs=self.default_value_data_inputs,
+            default_value_expected_outputs=self.default_value_expected_outputs
+        )
 
         n_batches = self.get_n_batches(data_container)
         self[-1].set_n_batches(n_batches)
