@@ -569,7 +569,10 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
         :param data_container: data container to transform
         :return: number of batches
         """
-        return data_container.get_n_batches(self.batch_size)
+        return data_container.get_n_batches(
+            batch_size=self.batch_size,
+            include_incomplete_batch=self.include_incomplete_batch
+        )
 
     def connect_queued_pipeline(self):
         """

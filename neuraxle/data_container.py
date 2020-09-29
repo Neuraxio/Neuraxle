@@ -261,8 +261,11 @@ class DataContainer:
                 sub_data_containers=self.sub_data_containers
             )
 
-    def get_n_batches(self, batch_size: int) -> int:
-        return math.ceil(len(self.data_inputs) / batch_size)
+    def get_n_batches(self, batch_size: int, include_incomplete_batch: bool = False) -> int:
+        if include_incomplete_batch:
+            return math.ceil(len(self.data_inputs) / batch_size)
+        else:
+            return math.floor(len(self.data_inputs) / batch_size)
 
     def copy(self):
         return DataContainer(

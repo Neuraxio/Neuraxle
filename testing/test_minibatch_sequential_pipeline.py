@@ -27,7 +27,7 @@ def test_mini_batch_sequential_pipeline_should_transform_steps_sequentially_for_
     ])
 
     # When
-    outputs = p.transform(range(20))
+    outputs = p.transform(list(range(20)))
 
     # Then
     assert outputs == [0, 16, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240, 256, 272, 288, 304]
@@ -72,7 +72,7 @@ def test_mini_batch_sequential_pipeline_should_fit_transform_steps_sequentially_
     ])
 
     # When
-    p, outputs = p.fit_transform(range(20), range(20))
+    p, outputs = p.fit_transform(list(range(20)), list(range(20)))
 
     # Then
     assert outputs == [0, 16, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240, 256, 272, 288, 304]
