@@ -28,7 +28,6 @@ import math
 from typing import Any, Iterable, List, Tuple, Union
 
 import numpy as np
-from conv import convolved_1d
 
 NamedDataContainerTuple = Tuple[str, 'DataContainer']
 
@@ -224,42 +223,6 @@ class DataContainer:
                 )
 
             yield data_container
-
-    def convolved_1d(self, stride, kernel_size) -> Iterable['DataContainer']:
-        """
-        Returns an iterator that iterates through batches of the DataContainer.
-
-        :param stride: step size for the convolution operation
-        :param kernel_size:
-        :return: an iterator of DataContainer
-        :rtype: Iterable[DataContainer]
-
-        .. seealso::
-            `<https://github.com/guillaume-chevalier/python-conv-lib>`_
-        """
-        conv_current_ids = convolved_1d(stride=stride, iterable=self.current_ids, kernel_size=kernel_size,
-                                        include_incomplete_pass=True)
-        conv_data_inputs = convolved_1d(stride=stride, iterable=self.data_inputs, kernel_size=kernel_size,
-                                        include_incomplete_pass=True)
-        conv_expected_outputs = convolved_1d(stride=stride, iterable=self.expected_outputs, kernel_size=kernel_size,
-                                             include_incomplete_pass=True)
-
-        for current_ids, data_inputs, expected_outputs in zip(conv_current_ids, conv_data_inputs,
-                                                              conv_expected_outputs):
-            for i, (ci, di, eo) in enumerate(zip(current_ids, data_inputs, expected_outputs)):
-                if di is None:
-                    current_ids = current_ids[:i]
-                    data_inputs = data_inputs[:i]
-                    expected_outputs = expected_outputs[:i]
-                    break
-
-            yield DataContainer(
-                data_inputs=data_inputs,
-                current_ids=current_ids,
-                summary_id=self.summary_id,
-                expected_outputs=expected_outputs,
-                sub_data_containers=self.sub_data_containers
-            )
 
     def get_n_batches(self, batch_size: int, include_incomplete_batch: bool = False) -> int:
         if include_incomplete_batch:
