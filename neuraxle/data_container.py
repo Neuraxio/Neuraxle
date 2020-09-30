@@ -554,7 +554,7 @@ def _pad_or_keep_incomplete_batch(
         default_value_data_inputs,
         default_value_expected_outputs
 ) -> 'DataContainer':
-    keep_incomplete_batch = isinstance(default_value_data_inputs, AbsentValuesNullObject)
+    should_pad_right = not isinstance(default_value_data_inputs, AbsentValuesNullObject)
 
     if not keep_incomplete_batch:
         data_container = _pad_incomplete_batch(
