@@ -30,7 +30,7 @@ from copy import copy
 from typing import Any, Tuple, List, Union
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableStepMixin, ExecutionContext, ExecutionMode, \
-    NonTransformableMixin, MetaStep, _FittableStep, HandleOnlyMixin, ForceHandleOnlyMixin, _CustomHandlerMethods, \
+    MetaStep, _CustomHandlerMethods, \
     ForceHandleMixin, Identity
 from neuraxle.checkpoints import Checkpoint
 from neuraxle.data_container import DataContainer, ListDataContainer, AbsentValuesNullObject
@@ -326,11 +326,26 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         :class:`~neuraxle.data_container.DataContainer`,
         :class:`~neuraxle.base.ExecutionContext`
     """
-    def __init__(self, steps: NamedTupleList, batch_size=None, cache_folder=None):
+    def __init__(
+            self,
+            steps: NamedTupleList,
+            batch_size=None,
+            include_incomplete_batch: bool = None,
+            default_value_data_inputs = None,
+            default_value_expected_outputs = None,
+            cache_folder=None
+    ):
         Pipeline.__init__(self, steps=steps, cache_folder=cache_folder)
         ForceHandleMixin.__init__(self)
-        self.__validate_barriers_batch_size(batch_size)
-        self.__patch_missing_barrier(batch_size)
+        self.default_value_data_inputs = default_value_data_inputs
+        self.default_value_expected_outputs = default_value_expected_outputs
+        self.__validate_barriers_batch_size(batch_size=batch_size)
+        self.__patch_missing_barrier(
+            batch_size=batch_size,
+            include_incomplete_batch=include_incomplete_batch,
+            default_value_data_inputs=default_value_data_inputs,
+            default_value_expected_outputs=default_value_expected_outputs
+        )
         self.__patch_barriers_batch_size(batch_size)
 
     def __validate_barriers_batch_size(self, batch_size):
@@ -355,15 +370,29 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
                         'Replacing {}[{}].batch_size by {}.batch_size.'.format(self.name, step.name, self.name))
                 step.batch_size = batch_size
 
-    def __patch_missing_barrier(self, batch_size):
-        has_barrier = False
+    def __patch_missing_barrier(
+            self,
+            batch_size: int,
+            include_incomplete_batch: bool,
+            default_value_data_inputs: Union[Any, AbsentValuesNullObject]=None,
+            default_value_expected_outputs: Union[Any, AbsentValuesNullObject]=None
+    ):
+        has_barrier: bool = False
 
         for _, step in self:
             if isinstance(step, Barrier):
                 has_barrier = True
 
         if not has_barrier:
-            self.steps_as_tuple.append(('Joiner', Joiner(batch_size)))
+            self.steps_as_tuple.append((
+                'Joiner',
+                Joiner(
+                    batch_size=batch_size,
+                    include_incomplete_batch=include_incomplete_batch,
+                    default_value_data_inputs=default_value_data_inputs,
+                    default_value_expected_outputs=default_value_expected_outputs
+                )
+            ))
 
         self._refresh_steps()
 
