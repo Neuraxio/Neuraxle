@@ -23,6 +23,7 @@ Classes for containing the data that flows throught the pipeline steps.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
+import copy
 import hashlib
 import math
 from typing import Any, Iterable, List, Tuple, Union
@@ -560,7 +561,7 @@ def _pad_or_keep_incomplete_batch(
 ) -> 'DataContainer':
     should_pad_right = not isinstance(default_value_data_inputs, AbsentValuesNullObject)
 
-    if not keep_incomplete_batch:
+    if not should_pad_right:
         data_container = _pad_incomplete_batch(
             data_container,
             batch_size,
