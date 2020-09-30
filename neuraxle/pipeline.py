@@ -307,19 +307,101 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
 
     .. code-block:: python
 
-        sub_pipelines = [SomeStep()]
-        pipeline = MiniBatchSequentialPipeline(sub_pipelines, batch_size=32)
+        data_inputs = np.array(list(range(10)))
+        pipeline = MiniBatchSequentialPipeline([
+            SomeStep()
+        ], batch_size=2)
+        pipeline.transform(data_inputs)
+        # SomeStep will receive [array([0, 1]), array([2, 3]), ..., array([8, 9])]
+
+        pipeline = MiniBatchSequentialPipeline([
+            SomeStep()
+        ], batch_size=3, include_incomplete_batch=False)
+        pipeline.transform(data_inputs)
+        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8])]
+
+        pipeline = MiniBatchSequentialPipeline(
+            [SomeStep()],
+            batch_size=3,
+            include_incomplete_batch=True,
+            include_incomplete_batch=True,
+            default_value_data_inputs=None,
+            default_value_expected_outputs=None
+        )
+        pipeline.transform(data_inputs)
+        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9, None, None])]
+
+        pipeline = MiniBatchSequentialPipeline(
+            [SomeStep()],
+            batch_size=3,
+            include_incomplete_batch=True,
+            default_value_data_inputs=AbsentValuesNullObject()
+        )
+        pipeline.transform(data_inputs)
+        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9])]
 
 
-    Or manually add a :class`Barrier` step to the mini batch sequential pipeline :
+    Or manually add one or multiple :class`Barrier` steps to the mini batch sequential pipeline :
 
     .. code-block:: python
 
-        sub_pipelines = [SomeStep(), Joiner(32)]
-        pipeline = MiniBatchSequentialPipeline(sub_pipelines)
+        data_inputs = np.array(list(range(10)))
+        pipeline = MiniBatchSequentialPipeline([
+            SomeStep(),
+            Joiner(batch_size=2)
+        ])
+        pipeline.transform(data_inputs)
+        # SomeStep will receive [array([0, 1]), array([2, 3]), ..., array([8, 9])]
 
+        pipeline = MiniBatchSequentialPipeline([
+            SomeStep(),
+            Joiner(batch_size=3, include_incomplete_batch=False)
+        ])
+        pipeline.transform(data_inputs)
+        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8])]
+
+        pipeline = MiniBatchSequentialPipeline([
+            SomeStep(),
+            Joiner(
+                batch_size=3,
+                include_incomplete_batch=True,
+                include_incomplete_batch=True,
+                default_value_data_inputs=None,
+                default_value_expected_outputs=None
+            )
+        ])
+        pipeline.transform(data_inputs)
+        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9, None, None])]
+
+        pipeline = MiniBatchSequentialPipeline([
+            SomeStep(),
+            Joiner(
+                batch_size=3,
+                include_incomplete_batch=True,
+                default_value_data_inputs=AbsentValuesNullObject()
+            )
+        ])
+        pipeline.transform(data_inputs)
+        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9])]
+
+
+    :param steps: pipeline steps
+    :param batch_size: number of elements to combine into a single batch
+    :param include_incomplete_batch: (Optional.) A bool representing
+    whether the last batch should be dropped in the case it has fewer than
+    `batch_size` elements; the default behavior is not to drop the smaller
+    batch.
+    :param default_value_data_inputs: expected_outputs default fill value
+    for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+    to trim absent values from the batch
+    :param default_value_expected_outputs: expected_outputs default fill value
+    for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+    to trim absent values from the batch
+    :param cache_folder: cache_folder if its at the root of the pipeline
 
     .. seealso::
+        :func:`~neuraxle.data_container.DataContainer.minibatches`,
+        :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`,
         :class:`Pipeline`,
         :class:`Barrier`,
         :class:`Joiner`,

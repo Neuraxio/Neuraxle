@@ -53,6 +53,7 @@ class DataContainer:
     .. seealso::
         :class:`~neuraxle.base.BaseHasher`,
         :class: `neuraxle.base.BaseStep`
+        :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
     """
 
     def __init__(
@@ -196,13 +197,16 @@ class DataContainer:
         `batch_size` elements; the default behavior is not to drop the smaller
         batch.
         :param default_value_data_inputs: expected_outputs default fill value
-        for padding and values outside iteration range, or absent value null object
+        for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
         to trim absent values from the batch
         :param default_value_expected_outputs: expected_outputs default fill value
-        for padding and values outside iteration range, or absent value null object
+        for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
         to trim absent values from the batch
         :return: an iterator of DataContainer
         :rtype: Iterable[DataContainer]
+
+        ..seealso
+            :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`,
         """
         for i in range(0, len(self.data_inputs), batch_size):
             data_container = DataContainer(

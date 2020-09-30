@@ -302,6 +302,24 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             ('step_a', 1, [('host', 'host1'), ('host', 'host2')], 10, Identity())
         ], batch_size=10)
 
+    :param steps: pipeline steps
+    :param batch_size: number of elements to combine into a single batch
+    :param n_workers_per_step: number of workers to spawn per step
+    :param max_queue_size: max number of elements inside the processing queue
+    :param data_joiner: transformer step to join streamed batches together at the end of the pipeline
+    :param use_threading: (Optional.) use threading for parallel processing. multiprocessing.context.Process is used by default.
+    :param use_savers: use savers to serialize steps for parallel processing.
+    :param include_incomplete_batch: (Optional.) A bool representing
+    whether the last batch should be dropped in the case it has fewer than
+    `batch_size` elements; the default behavior is not to drop the smaller
+    batch.
+    :param default_value_data_inputs: expected_outputs default fill value
+    for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+    to trim absent values from the batch
+    :param default_value_expected_outputs: expected_outputs default fill value
+    for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+    to trim absent values from the batch
+    :param cache_folder: cache_folder if its at the root of the pipeline
 
     .. seealso::
         :class:`QueueWorker`,
@@ -313,16 +331,16 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
     def __init__(
             self,
             steps: List[QueuedPipelineStepsTuple],
-            batch_size,
-            n_workers_per_step=None,
-            max_queue_size=None,
-            data_joiner=None,
-            use_threading=False,
-            use_savers=False,
+            batch_size: int,
+            n_workers_per_step: int = None,
+            max_queue_size: int = None,
+            data_joiner = None,
+            use_threading: bool = False,
+            use_savers: bool = False,
             include_incomplete_batch: bool = False,
             default_value_data_inputs: Union[Any, AbsentValuesNullObject] = None,
             default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = None,
-            cache_folder=None,
+            cache_folder: str = None,
     ):
         if data_joiner is None:
             data_joiner = NumpyConcatenateOuterBatch()
@@ -554,6 +572,8 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
     Using :class:`QueueWorker`, run all steps sequentially even if they are in separate processes or threads.
 
     .. seealso::
+        :func:`~neuraxle.data_container.DataContainer.minibatches`,
+        :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`,
         :class:`QueueWorker`,
         :class:`BaseQueuedPipeline`,
         :class:`ParallelQueuedPipeline`,
