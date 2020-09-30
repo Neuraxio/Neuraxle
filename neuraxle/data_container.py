@@ -33,6 +33,7 @@ NamedDataContainerTuple = Tuple[str, 'DataContainer']
 
 
 class AbsentValuesNullObject:
+    """This object, when passed to the default_value_data_inputs argument of the DataContainer.batch method, will return the minibatched data containers such that the last batch won't have the full batch_size if it was incomplete with trailing None values at the end."""
     pass
 
 
