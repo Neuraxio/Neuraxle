@@ -21,7 +21,7 @@ def test_queued_pipeline_with_excluded_incomplete_batch():
         MultiplyByN(2),
         MultiplyByN(2),
         MultiplyByN(2)
-    ], batch_size=10, n_workers_per_step=1, max_queue_size=5)
+    ], batch_size=10, include_incomplete_batch=False, n_workers_per_step=1, max_queue_size=5)
 
     outputs = p.transform(list(range(15)))
 

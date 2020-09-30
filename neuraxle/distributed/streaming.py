@@ -478,7 +478,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :type context: ExecutionContext
         :return: data container
         """
-        data_container_batches = data_container.batch(
+        data_container_batches = data_container.minibatches(
             batch_size=self.batch_size,
             include_incomplete_batch=self.include_incomplete_batch,
             default_value_data_inputs=self.default_value_data_inputs,

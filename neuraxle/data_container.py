@@ -146,7 +146,7 @@ class DataContainer:
             m.update(str.encode(str(current_id)))
         return m.hexdigest()
 
-    def batch(
+    def minibatches(
             self,
             batch_size: int,
             include_incomplete_batch: bool = False,
@@ -160,18 +160,18 @@ class DataContainer:
         .. code-block:: python
 
             data_container = DataContainer(data_inputs=np.array(list(range(10)))
-            for data_container_batch in data_container.batch(batch_size=2):
+            for data_container_batch in data_container.minibatches(batch_size=2):
                 print(data_container_batch.data_inputs)
                 print(data_container_batch.expected_outputs)
             # [array([0, 1]), array([2, 3]), ..., array([8, 9])]
 
             data_container = DataContainer(data_inputs=np.array(list(range(10)))
-            for data_container_batch in data_container.batch(batch_size=3, include_incomplete_batch=False):
+            for data_container_batch in data_container.minibatches(batch_size=3, include_incomplete_batch=False):
                 print(data_container_batch.data_inputs)
             # [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8])]
 
             data_container = DataContainer(data_inputs=np.array(list(range(10)))
-            for data_container_batch in data_container.batch(
+            for data_container_batch in data_container.minibatches(
                 batch_size=3,
                 include_incomplete_batch=True,
                 default_value_data_inputs=None,
@@ -181,7 +181,7 @@ class DataContainer:
             # [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9, None, None])]
 
             data_container = DataContainer(data_inputs=np.array(list(range(10)))
-            for data_container_batch in data_container.batch(
+            for data_container_batch in data_container.minibatches(
                 batch_size=3,
                 include_incomplete_batch=True,
                 default_value_data_inputs=AbsentValuesNullObject()

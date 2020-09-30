@@ -575,7 +575,7 @@ class Joiner(Barrier):
         :rtype: DataContainer
         """
         context = context.push(step)
-        data_container_batches = data_container.batch(
+        data_container_batches = data_container.minibatches(
             batch_size=self.batch_size,
             include_incomplete_batch=self.include_incomplete_batch,
             default_value_data_inputs=self.default_value_data_inputs,
@@ -601,7 +601,7 @@ class Joiner(Barrier):
         :rtype: Tuple[Any, DataContainer]
         """
         context = context.push(step)
-        data_container_batches = data_container.batch(
+        data_container_batches = data_container.minibatches(
             batch_size=self.batch_size,
             include_incomplete_batch=self.include_incomplete_batch,
             default_value_data_inputs=self.default_value_data_inputs,

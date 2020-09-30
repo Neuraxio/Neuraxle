@@ -46,7 +46,7 @@ def test_data_container_convolve1d_should_be_lazy_and_use_getitem_when_data_is_l
 
     i = 0
     batch_size = 2
-    for batch in data_container.batch(batch_size=batch_size):
+    for batch in data_container.minibatches(batch_size=batch_size):
         assert len(batch) == batch_size
         assert all(item.is_loaded() for item in data_inputs.inner_list[:(i * batch_size)])
         for y in range((i + 1) * batch_size, len(data_inputs)):
@@ -81,7 +81,7 @@ def test_data_container_batching(batch_size, include_incomplete_pass, default_va
 
     # When
     data_containers = []
-    for dc in data_container.batch(
+    for dc in data_container.minibatches(
         batch_size=batch_size,
         include_incomplete_batch=include_incomplete_pass,
         default_value_data_inputs=default_value
