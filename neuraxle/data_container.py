@@ -155,7 +155,7 @@ class DataContainer:
             default_value_expected_outputs=None
     ) -> Iterable['DataContainer']:
         """
-        Returns an iterator that iterates through batches of the DataContainer.
+        Yields minibatches extracted from looping on the DataContainer's content with a batch_size and a certain behavior for the last batch when the batch_size is uneven with the total size.
 
 
         .. code-block:: python
@@ -558,7 +558,7 @@ def _pad_or_keep_incomplete_batch(
         default_value_data_inputs,
         default_value_expected_outputs
 ) -> 'DataContainer':
-    keep_incomplete_batch = isinstance(default_value_data_inputs, AbsentValuesNullObject)
+    should_pad_right = not isinstance(default_value_data_inputs, AbsentValuesNullObject)
 
     if not keep_incomplete_batch:
         data_container = _pad_incomplete_batch(
@@ -599,10 +599,10 @@ def _pad_incomplete_batch(
     return data_container
 
 
-def _pad_data(data: Union[List, np.ndarray], default_value: Any, batch_size: int):
+def _pad_data(data: Iterable, default_value: Any, batch_size: int):
     data_ = []
     data_.extend(data)
-    padding = [default_value] * (batch_size - len(data))
+    padding = copy.copy([default_value] * (batch_size - len(data)))
     data_.extend(padding)
     return data_
 
