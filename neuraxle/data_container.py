@@ -595,7 +595,7 @@ def _pad_incomplete_batch(
     return data_container
 
 
-def _pad_data(data: Union[List, np.ndarray], default_value: Any, batch_size: int):
+def _pad_data(data: Iterable, default_value: Any, batch_size: int):
     data_ = []
     data_.extend(data)
     padding = copy.copy([default_value] * (batch_size - len(data)))
