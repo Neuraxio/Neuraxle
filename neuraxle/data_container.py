@@ -154,7 +154,7 @@ class DataContainer:
             default_value_expected_outputs=None
     ) -> Iterable['DataContainer']:
         """
-        Returns an iterator that iterates through batches of the DataContainer.
+        Yields minibatches extracted from looping on the DataContainer's content with a batch_size and a certain behavior for the last batch when the batch_size is uneven with the total size.
 
 
         .. code-block:: python
