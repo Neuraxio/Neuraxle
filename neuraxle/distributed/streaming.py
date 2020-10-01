@@ -25,11 +25,11 @@ from abc import abstractmethod
 from multiprocessing import Queue
 from multiprocessing.context import Process
 from threading import Thread
-from typing import Tuple, List, Union, Iterable
+from typing import Tuple, List, Union, Iterable, Any
 
 from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStep, BaseSaver, _FittableStep, \
     BaseTransformer, NonFittableMixin
-from neuraxle.data_container import DataContainer, ListDataContainer
+from neuraxle.data_container import DataContainer, ListDataContainer, AbsentValuesNullObject
 from neuraxle.pipeline import Pipeline, MiniBatchSequentialPipeline, Joiner
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
@@ -188,7 +188,7 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
         self.workers = []
         for _, worker_arguments in zip(range(self.n_workers), self.additional_worker_arguments):
             if self.use_threading:
-                p = Thread(target=target_function, args=(self, context,  self.use_savers, worker_arguments))
+                p = Thread(target=target_function, args=(self, context, self.use_savers, worker_arguments))
             else:
                 p = Process(target=target_function, args=(self, context, self.use_savers, worker_arguments))
 
@@ -218,7 +218,8 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
         self.observers = []
 
 
-def worker_function(queue_worker: QueueWorker, context: ExecutionContext, use_savers: bool, additional_worker_arguments):
+def worker_function(queue_worker: QueueWorker, context: ExecutionContext, use_savers: bool,
+                    additional_worker_arguments):
     """
     Worker function that transforms the items inside the queue of items to process.
 
@@ -241,11 +242,14 @@ def worker_function(queue_worker: QueueWorker, context: ExecutionContext, use_sa
         step.__dict__.update({argument_name: argument_value})
 
     while True:
-        task: QueuedPipelineTask = queue_worker.get()
-        summary_id = task.data_container.summary_id
-        data_container = step.handle_transform(task.data_container, context)
-        data_container = data_container.set_summary_id(summary_id)
-        queue_worker.notify(QueuedPipelineTask(step_name=queue_worker.name, data_container=data_container))
+        try:
+            task: QueuedPipelineTask = queue_worker.get()
+            summary_id = task.data_container.summary_id
+            data_container = step.handle_transform(task.data_container, context)
+            data_container = data_container.set_summary_id(summary_id)
+            queue_worker.notify(QueuedPipelineTask(step_name=queue_worker.name, data_container=data_container))
+        except Exception as err:
+            queue_worker.notify(QueuedPipelineTask(step_name=queue_worker.name, data_container=err))
 
 
 QueuedPipelineStepsTuple = Union[
@@ -301,6 +305,24 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             ('step_a', 1, [('host', 'host1'), ('host', 'host2')], 10, Identity())
         ], batch_size=10)
 
+    :param steps: pipeline steps
+    :param batch_size: number of elements to combine into a single batch
+    :param n_workers_per_step: number of workers to spawn per step
+    :param max_queue_size: max number of elements inside the processing queue
+    :param data_joiner: transformer step to join streamed batches together at the end of the pipeline
+    :param use_threading: (Optional.) use threading for parallel processing. multiprocessing.context.Process is used by default.
+    :param use_savers: use savers to serialize steps for parallel processing.
+    :param include_incomplete_batch: (Optional.) A bool representing
+    whether the last batch should be dropped in the case it has fewer than
+    `batch_size` elements; the default behavior is not to drop the smaller
+    batch.
+    :param default_value_data_inputs: expected_outputs default fill value
+    for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+    to trim absent values from the batch
+    :param default_value_expected_outputs: expected_outputs default fill value
+    for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+    to trim absent values from the batch
+    :param cache_folder: cache_folder if its at the root of the pipeline
 
     .. seealso::
         :class:`QueueWorker`,
@@ -312,13 +334,16 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
     def __init__(
             self,
             steps: List[QueuedPipelineStepsTuple],
-            batch_size,
-            n_workers_per_step=None,
-            max_queue_size=None,
-            data_joiner=None,
-            use_threading=False,
-            use_savers=False,
-            cache_folder=None
+            batch_size: int,
+            n_workers_per_step: int = None,
+            max_queue_size: int = None,
+            data_joiner = None,
+            use_threading: bool = False,
+            use_savers: bool = False,
+            include_incomplete_batch: bool = False,
+            default_value_data_inputs: Union[Any, AbsentValuesNullObject] = None,
+            default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = None,
+            cache_folder: str = None,
     ):
         if data_joiner is None:
             data_joiner = NumpyConcatenateOuterBatch()
@@ -329,8 +354,20 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         self.use_threading = use_threading
         self.use_savers = use_savers
 
-        MiniBatchSequentialPipeline.__init__(self, steps=self._initialize_steps_as_tuple(steps),
-                                             cache_folder=cache_folder)
+        self.batch_size: int = batch_size
+        self.include_incomplete_batch: bool = include_incomplete_batch
+        self.default_value_data_inputs: Union[Any, AbsentValuesNullObject] = default_value_data_inputs
+        self.default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = default_value_expected_outputs
+
+        MiniBatchSequentialPipeline.__init__(
+            self,
+            steps=self._initialize_steps_as_tuple(steps),
+            cache_folder=cache_folder,
+            batch_size=batch_size,
+            include_incomplete_batch=include_incomplete_batch,
+            default_value_data_inputs=default_value_data_inputs,
+            default_value_expected_outputs=default_value_expected_outputs
+        )
         self._refresh_steps()
 
     def _initialize_steps_as_tuple(self, steps):
@@ -406,7 +443,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
         return name, n_workers, additional_arguments, max_queue_size, actual_step
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
+    DataContainer, ExecutionContext):
         """
         Setup streaming pipeline before any handler methods.
 
@@ -430,7 +468,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         super().setup(context=context)
         return self
 
-    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
+    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'Pipeline', DataContainer):
         """
         Fit transform sequentially if any step is fittable. Otherwise transform in parallel.
 
@@ -465,7 +504,12 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :type context: ExecutionContext
         :return: data container
         """
-        data_container_batches = data_container.convolved_1d(stride=self.batch_size, kernel_size=self.batch_size)
+        data_container_batches = data_container.minibatches(
+            batch_size=self.batch_size,
+            include_incomplete_batch=self.include_incomplete_batch,
+            default_value_data_inputs=self.default_value_data_inputs,
+            default_value_expected_outputs=self.default_value_expected_outputs
+        )
 
         n_batches = self.get_n_batches(data_container)
         self[-1].set_n_batches(n_batches)
@@ -536,6 +580,8 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
     Using :class:`QueueWorker`, run all steps sequentially even if they are in separate processes or threads.
 
     .. seealso::
+        :func:`~neuraxle.data_container.DataContainer.minibatches`,
+        :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`,
         :class:`QueueWorker`,
         :class:`BaseQueuedPipeline`,
         :class:`ParallelQueuedPipeline`,
@@ -551,7 +597,10 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
         :param data_container: data container to transform
         :return: number of batches
         """
-        return data_container.get_n_batches(self.batch_size)
+        return data_container.get_n_batches(
+            batch_size=self.batch_size,
+            include_incomplete_batch=self.include_incomplete_batch
+        )
 
     def connect_queued_pipeline(self):
         """
@@ -666,11 +715,16 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
             step_name = task.step_name
 
             if step_name not in self.result:
+                if not isinstance(task.data_container, DataContainer):
+                    summary_id = None
+                else:
+                    summary_id = task.data_container.summary_id
+
                 self.result[step_name] = ListDataContainer(
                     current_ids=[],
                     data_inputs=[],
                     expected_outputs=[],
-                    summary_id=task.data_container.summary_id
+                    summary_id=summary_id
                 )
 
             self.result[step_name].append_data_container_in_data_inputs(task.data_container)
@@ -687,10 +741,18 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
         """
         results = []
         for step_name, data_containers in self.result.items():
+            self._raise_exception_throwned_by_workers_if_needed(data_containers)
             step_results = self._join_step_results(data_containers)
             results.append(step_results)
 
         return results
+
+    def _raise_exception_throwned_by_workers_if_needed(self, data_containers):
+        for dc in data_containers.data_inputs:
+            if isinstance(dc, Exception):
+                # an exception has been throwned by the worker so reraise it here!
+                exception = dc
+                raise exception
 
     def _join_step_results(self, data_containers):
         # reorder results by summary id

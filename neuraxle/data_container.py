@@ -23,14 +23,19 @@ Classes for containing the data that flows throught the pipeline steps.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
+import copy
 import hashlib
 import math
 from typing import Any, Iterable, List, Tuple, Union
 
 import numpy as np
-from conv import convolved_1d
 
 NamedDataContainerTuple = Tuple[str, 'DataContainer']
+
+
+class AbsentValuesNullObject:
+    """This object, when passed to the default_value_data_inputs argument of the DataContainer.batch method, will return the minibatched data containers such that the last batch won't have the full batch_size if it was incomplete with trailing None values at the end."""
+    pass
 
 
 class DataContainer:
@@ -49,6 +54,7 @@ class DataContainer:
     .. seealso::
         :class:`~neuraxle.base.BaseHasher`,
         :class: `neuraxle.base.BaseStep`
+        :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
     """
 
     def __init__(
@@ -142,44 +148,93 @@ class DataContainer:
             m.update(str.encode(str(current_id)))
         return m.hexdigest()
 
-    def convolved_1d(self, stride, kernel_size) -> Iterable['DataContainer']:
+    def minibatches(
+            self,
+            batch_size: int,
+            include_incomplete_batch: bool = False,
+            default_value_data_inputs=None,
+            default_value_expected_outputs=None
+    ) -> Iterable['DataContainer']:
         """
-        Returns an iterator that iterates through batches of the DataContainer.
+        Yields minibatches extracted from looping on the DataContainer's content with a batch_size and a certain behavior for the last batch when the batch_size is uneven with the total size.
 
-        :param stride: step size for the convolution operation
-        :param kernel_size:
+
+        .. code-block:: python
+
+            data_container = DataContainer(data_inputs=np.array(list(range(10)))
+            for data_container_batch in data_container.minibatches(batch_size=2):
+                print(data_container_batch.data_inputs)
+                print(data_container_batch.expected_outputs)
+            # [array([0, 1]), array([2, 3]), ..., array([8, 9])]
+
+            data_container = DataContainer(data_inputs=np.array(list(range(10)))
+            for data_container_batch in data_container.minibatches(batch_size=3, include_incomplete_batch=False):
+                print(data_container_batch.data_inputs)
+            # [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8])]
+
+            data_container = DataContainer(data_inputs=np.array(list(range(10)))
+            for data_container_batch in data_container.minibatches(
+                batch_size=3,
+                include_incomplete_batch=True,
+                default_value_data_inputs=None,
+                default_value_expected_outputs=None
+            ):
+                print(data_container_batch.data_inputs)
+            # [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9, None, None])]
+
+            data_container = DataContainer(data_inputs=np.array(list(range(10)))
+            for data_container_batch in data_container.minibatches(
+                batch_size=3,
+                include_incomplete_batch=True,
+                default_value_data_inputs=AbsentValuesNullObject()
+            ):
+                print(data_container_batch.data_inputs)
+            # [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9])]
+
+
+        :param batch_size: number of elements to combine into a single batch
+        :param include_incomplete_batch: (Optional.) A bool representing
+        whether the last batch should be dropped in the case it has fewer than
+        `batch_size` elements; the default behavior is not to drop the smaller
+        batch.
+        :param default_value_data_inputs: expected_outputs default fill value
+        for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+        to trim absent values from the batch
+        :param default_value_expected_outputs: expected_outputs default fill value
+        for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+        to trim absent values from the batch
         :return: an iterator of DataContainer
         :rtype: Iterable[DataContainer]
 
-        .. seealso::
-            `<https://github.com/guillaume-chevalier/python-conv-lib>`_
+        ..seealso
+            :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`,
         """
-        conv_current_ids = convolved_1d(stride=stride, iterable=self.current_ids, kernel_size=kernel_size,
-                                        include_incomplete_pass=True)
-        conv_data_inputs = convolved_1d(stride=stride, iterable=self.data_inputs, kernel_size=kernel_size,
-                                        include_incomplete_pass=True)
-        conv_expected_outputs = convolved_1d(stride=stride, iterable=self.expected_outputs, kernel_size=kernel_size,
-                                             include_incomplete_pass=True)
-
-        for current_ids, data_inputs, expected_outputs in zip(conv_current_ids, conv_data_inputs,
-                                                              conv_expected_outputs):
-            for i, (ci, di, eo) in enumerate(zip(current_ids, data_inputs, expected_outputs)):
-                if di is None:
-                    current_ids = current_ids[:i]
-                    data_inputs = data_inputs[:i]
-                    expected_outputs = expected_outputs[:i]
-                    break
-
-            yield DataContainer(
-                data_inputs=data_inputs,
-                current_ids=current_ids,
-                summary_id=self.summary_id,
-                expected_outputs=expected_outputs,
-                sub_data_containers=self.sub_data_containers
+        for i in range(0, len(self.data_inputs), batch_size):
+            data_container = DataContainer(
+                current_ids=self.current_ids[i:i + batch_size],
+                data_inputs=self.data_inputs[i:i + batch_size],
+                expected_outputs=self.expected_outputs[i:i + batch_size]
             )
 
-    def get_n_batches(self, batch_size: int) -> int:
-        return math.ceil(len(self.data_inputs) / batch_size)
+            incomplete_batch = len(data_container.data_inputs) < batch_size
+            if incomplete_batch:
+                if not include_incomplete_batch:
+                    break
+
+                data_container = _pad_or_keep_incomplete_batch(
+                    data_container,
+                    batch_size,
+                    default_value_data_inputs,
+                    default_value_expected_outputs
+                )
+
+            yield data_container
+
+    def get_n_batches(self, batch_size: int, include_incomplete_batch: bool = False) -> int:
+        if include_incomplete_batch:
+            return math.ceil(len(self.data_inputs) / batch_size)
+        else:
+            return math.floor(len(self.data_inputs) / batch_size)
 
     def copy(self):
         return DataContainer(
@@ -428,7 +483,8 @@ class ListDataContainer(DataContainer):
         :class:`DataContainer`
     """
 
-    def __init__(self, data_inputs: Any, current_ids=None, summary_id=None, expected_outputs: Any = None, sub_data_containers=None):
+    def __init__(self, data_inputs: Any, current_ids=None, summary_id=None, expected_outputs: Any = None,
+                 sub_data_containers=None):
         DataContainer.__init__(self, data_inputs, current_ids, summary_id, expected_outputs, sub_data_containers)
         self.tolistshallow()
 
@@ -495,6 +551,61 @@ class ListDataContainer(DataContainer):
         self.expected_outputs.extend(data_container.expected_outputs)
 
         return self
+
+
+def _pad_or_keep_incomplete_batch(
+        data_container,
+        batch_size,
+        default_value_data_inputs,
+        default_value_expected_outputs
+) -> 'DataContainer':
+    should_pad_right = not isinstance(default_value_data_inputs, AbsentValuesNullObject)
+
+    if should_pad_right:
+        data_container = _pad_incomplete_batch(
+            data_container,
+            batch_size,
+            default_value_data_inputs,
+            default_value_expected_outputs
+        )
+
+    return data_container
+
+
+def _pad_incomplete_batch(
+        data_container: 'DataContainer',
+        batch_size: int,
+        default_value_data_inputs: Any,
+        default_value_expected_outputs: Any
+) -> 'DataContainer':
+    data_container = DataContainer(
+        summary_id=data_container.summary_id,
+        current_ids=_pad_data(
+            data_container.current_ids,
+            default_value=None,
+            batch_size=batch_size
+        ),
+        data_inputs=_pad_data(
+            data_container.data_inputs,
+            default_value=default_value_data_inputs,
+            batch_size=batch_size
+        ),
+        expected_outputs=_pad_data(
+            data_container.expected_outputs,
+            default_value=default_value_expected_outputs,
+            batch_size=batch_size
+        )
+    )
+
+    return data_container
+
+
+def _pad_data(data: Iterable, default_value: Any, batch_size: int):
+    data_ = []
+    data_.extend(data)
+    padding = copy.copy([default_value] * (batch_size - len(data)))
+    data_.extend(padding)
+    return data_
 
 
 def _inner_concatenate_np_array(np_array, np_array_to_zip):

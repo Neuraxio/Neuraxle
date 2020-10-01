@@ -1,9 +1,10 @@
 import time
 
 import numpy as np
+import pytest
 
 from neuraxle.base import BaseStep, ExecutionContext
-from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer, AbsentValuesNullObject
 from neuraxle.distributed.streaming import SequentialQueuedPipeline, ParallelQueuedFeatureUnion, QueueJoiner
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
@@ -15,17 +16,56 @@ EXPECTED_OUTPUTS = np.array(range(100)) * 2 * 2 * 2 * 2
 EXPECTED_OUTPUTS_PARALLEL = np.array((np.array(range(100)) * 2).tolist() * 4)
 
 
-def test_queued_pipeline_with_step_incomplete_batch():
+def test_queued_pipeline_with_excluded_incomplete_batch():
     p = SequentialQueuedPipeline([
         MultiplyByN(2),
         MultiplyByN(2),
         MultiplyByN(2),
         MultiplyByN(2)
-    ], batch_size=10, n_workers_per_step=1, max_queue_size=5)
+    ], batch_size=10, include_incomplete_batch=False, n_workers_per_step=1, max_queue_size=5)
 
     outputs = p.transform(list(range(15)))
 
-    assert np.array_equal(outputs, np.array(range(15)) * 2 * 2 * 2 * 2)
+    assert np.array_equal(outputs, np.array(list(range(10))) * 2 * 2 * 2 * 2)
+
+
+def test_queued_pipeline_with_included_incomplete_batch():
+    p = SequentialQueuedPipeline(
+        [
+            MultiplyByN(2),
+            MultiplyByN(2),
+            MultiplyByN(2),
+            MultiplyByN(2)
+        ],
+        batch_size=10,
+        include_incomplete_batch=True,
+        default_value_data_inputs=AbsentValuesNullObject(),
+        default_value_expected_outputs=AbsentValuesNullObject(),
+        n_workers_per_step=1,
+        max_queue_size=5
+    )
+
+    outputs = p.transform(list(range(15)))
+
+    assert np.array_equal(outputs, np.array(list(range(15))) * 2 * 2 * 2 * 2)
+
+def test_queued_pipeline_with_included_incomplete_batch_that_raises_an_exception():
+    with pytest.raises(AttributeError):
+        p = SequentialQueuedPipeline(
+            [
+                MultiplyByN(2),
+                MultiplyByN(2),
+                MultiplyByN(2),
+                MultiplyByN(2)
+            ],
+            batch_size=10,
+            include_incomplete_batch=True,
+            default_value_data_inputs=None, # this will raise an exception in the worker
+            default_value_expected_outputs=None, # this will raise an exception in the worker
+            n_workers_per_step=1,
+            max_queue_size=5
+        )
+        p.transform(list(range(15)))
 
 
 def test_queued_pipeline_with_step():
@@ -65,6 +105,7 @@ def test_queued_pipeline_with_n_workers_step():
     outputs = p.transform(list(range(100)))
 
     assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+
 
 def test_queued_pipeline_with_step_name_n_worker_max_queue_size():
     p = SequentialQueuedPipeline([
@@ -116,36 +157,6 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_max_queue_size():
     outputs = p.transform(list(range(100)))
 
     assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
-
-
-def test_parallel_queued_parallelize_correctly():
-    sleep_time = 0.001
-    p = SequentialQueuedPipeline([
-        ('1', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
-        ('2', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
-        ('3', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
-        ('4', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]))
-    ], batch_size=10)
-
-    a = time.time()
-    outputs_streaming = p.transform(list(range(100)))
-    b = time.time()
-    time_queued_pipeline = b - a
-
-    p = Pipeline([
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])
-    ])
-
-    a = time.time()
-    outputs_vanilla = p.transform(list(range(100)))
-    b = time.time()
-    time_vanilla_pipeline = b - a
-
-    assert time_queued_pipeline < time_vanilla_pipeline
-    assert np.array_equal(outputs_streaming, outputs_vanilla)
 
 
 def test_parallel_queued_parallelize_correctly():

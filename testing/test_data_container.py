@@ -33,7 +33,7 @@ def test_data_container_should_iterate_through_batches_using_convolved():
                                    expected_outputs=np.array(list(range(100, 200))))
 
     batches = []
-    for b in data_container.convolved_1d(stride=10, kernel_size=10):
+    for b in data_container.minibatches(batch_size=10):
         batches.append(b)
 
     for i, batch in enumerate(batches):
@@ -68,3 +68,4 @@ def test_list_data_container_concat():
 
     expected_expected_outputs = np.array(list(range(100, 300))).astype(np.int)
     assert np.array_equal(np.array(data_container.expected_outputs).astype(np.int), expected_expected_outputs)
+
