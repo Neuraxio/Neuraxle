@@ -1,6 +1,7 @@
 import time
 
 import numpy as np
+import pytest
 
 from neuraxle.base import BaseStep, ExecutionContext
 from neuraxle.data_container import DataContainer, AbsentValuesNullObject
@@ -39,6 +40,7 @@ def test_queued_pipeline_with_included_incomplete_batch():
         batch_size=10,
         include_incomplete_batch=True,
         default_value_data_inputs=AbsentValuesNullObject(),
+        default_value_expected_outputs=AbsentValuesNullObject(),
         n_workers_per_step=1,
         max_queue_size=5
     )
@@ -46,6 +48,24 @@ def test_queued_pipeline_with_included_incomplete_batch():
     outputs = p.transform(list(range(15)))
 
     assert np.array_equal(outputs, np.array(list(range(15))) * 2 * 2 * 2 * 2)
+
+def test_queued_pipeline_with_included_incomplete_batch_that_raises_an_exception():
+    with pytest.raises(AttributeError):
+        p = SequentialQueuedPipeline(
+            [
+                MultiplyByN(2),
+                MultiplyByN(2),
+                MultiplyByN(2),
+                MultiplyByN(2)
+            ],
+            batch_size=10,
+            include_incomplete_batch=True,
+            default_value_data_inputs=None, # this will raise an exception in the worker
+            default_value_expected_outputs=None, # this will raise an exception in the worker
+            n_workers_per_step=1,
+            max_queue_size=5
+        )
+        p.transform(list(range(15)))
 
 
 def test_queued_pipeline_with_step():

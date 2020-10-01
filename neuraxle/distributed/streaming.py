@@ -242,11 +242,14 @@ def worker_function(queue_worker: QueueWorker, context: ExecutionContext, use_sa
         step.__dict__.update({argument_name: argument_value})
 
     while True:
-        task: QueuedPipelineTask = queue_worker.get()
-        summary_id = task.data_container.summary_id
-        data_container = step.handle_transform(task.data_container, context)
-        data_container = data_container.set_summary_id(summary_id)
-        queue_worker.notify(QueuedPipelineTask(step_name=queue_worker.name, data_container=data_container))
+        try:
+            task: QueuedPipelineTask = queue_worker.get()
+            summary_id = task.data_container.summary_id
+            data_container = step.handle_transform(task.data_container, context)
+            data_container = data_container.set_summary_id(summary_id)
+            queue_worker.notify(QueuedPipelineTask(step_name=queue_worker.name, data_container=data_container))
+        except Exception as err:
+            queue_worker.notify(QueuedPipelineTask(step_name=queue_worker.name, data_container=err))
 
 
 QueuedPipelineStepsTuple = Union[
@@ -350,6 +353,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         self.n_workers_per_step = n_workers_per_step
         self.use_threading = use_threading
         self.use_savers = use_savers
+
         self.batch_size: int = batch_size
         self.include_incomplete_batch: bool = include_incomplete_batch
         self.default_value_data_inputs: Union[Any, AbsentValuesNullObject] = default_value_data_inputs
@@ -358,7 +362,11 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         MiniBatchSequentialPipeline.__init__(
             self,
             steps=self._initialize_steps_as_tuple(steps),
-            cache_folder=cache_folder
+            cache_folder=cache_folder,
+            batch_size=batch_size,
+            include_incomplete_batch=include_incomplete_batch,
+            default_value_data_inputs=default_value_data_inputs,
+            default_value_expected_outputs=default_value_expected_outputs
         )
         self._refresh_steps()
 
@@ -707,11 +715,16 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
             step_name = task.step_name
 
             if step_name not in self.result:
+                if not isinstance(task.data_container, DataContainer):
+                    summary_id = None
+                else:
+                    summary_id = task.data_container.summary_id
+
                 self.result[step_name] = ListDataContainer(
                     current_ids=[],
                     data_inputs=[],
                     expected_outputs=[],
-                    summary_id=task.data_container.summary_id
+                    summary_id=summary_id
                 )
 
             self.result[step_name].append_data_container_in_data_inputs(task.data_container)
@@ -728,10 +741,18 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
         """
         results = []
         for step_name, data_containers in self.result.items():
+            self._raise_exception_throwned_by_workers_if_needed(data_containers)
             step_results = self._join_step_results(data_containers)
             results.append(step_results)
 
         return results
+
+    def _raise_exception_throwned_by_workers_if_needed(self, data_containers):
+        for dc in data_containers.data_inputs:
+            if isinstance(dc, Exception):
+                # an exception has been throwned by the worker so reraise it here!
+                exception = dc
+                raise exception
 
     def _join_step_results(self, data_containers):
         # reorder results by summary id
