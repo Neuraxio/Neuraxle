@@ -47,9 +47,9 @@ setup(
         'License :: OSI Approved :: Apache Software License',
         "Natural Language :: English",
         "Operating System :: OS Independent",
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
         "Topic :: Adaptive Technologies",
         "Topic :: Office/Business",
         "Topic :: Scientific/Engineering",
@@ -93,6 +93,7 @@ setup(
     install_requires=[
         'numpy',
         'scipy>=1.4.1',
+        'scikit-learn>=0.20.3',
         'matplotlib',
         'joblib>=0.13.2',
         'Flask>=1.1.1',
