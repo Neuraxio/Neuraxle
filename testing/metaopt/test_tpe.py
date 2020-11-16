@@ -73,6 +73,9 @@ import os
     ]))
 ])
 def test_tpe(expected_output_mult, pipeline, tmpdir):
+    # set random seed
+    np.random.seed(77)
+
     # Given
     tpe_scores = Parallel(n_jobs=-2)(
         delayed(_test_trial_scores)(
