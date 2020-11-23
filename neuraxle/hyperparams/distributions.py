@@ -802,7 +802,7 @@ class RandInt(DiscreteHyperparameterDistribution):
 
         :return: an integer.
         """
-        return np.random.randint(self.min_included, self.max_included)
+        return np.random.randint(self.min_included, self.max_included+1)
 
     def pdf(self, x) -> float:
         """
@@ -893,7 +893,7 @@ class Uniform(HyperparameterDistribution):
 
         :return: a float.
         """
-        return np.random.uniform() * (self.max_included - self.min_included) + self.min_included
+        return np.random.random() * (self.max_included - self.min_included) + self.min_included
 
     def pdf(self, x):
         """
@@ -995,7 +995,7 @@ class LogUniform(HyperparameterDistribution):
 
         :return: a float.
         """
-        return 2 ** random.uniform(self.log2_min_included, self.log2_max_included)
+        return 2 ** np.random.uniform(self.log2_min_included, self.log2_max_included)
 
     def pdf(self, x) -> float:
         """
