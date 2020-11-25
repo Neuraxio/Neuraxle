@@ -826,6 +826,16 @@ class AutoML(ForceHandleMixin, BaseStep):
 
         return self
 
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
+            ('BaseStep', DataContainer):
+        raise NotImplementedError("AutoML does not implement method _fit_transform_data_container. Use method such as "
+                                  "fit or handle_fit to train models and then use method such as get_best_model to "
+                                  "retrieve the model you wish to use for transform")
+
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        raise NotImplementedError("AutoML does not implement method _transform_data_container. Use method such as "
+                                  "get_best_model to retrieve the model you wish to use for transform")
+
     def _save_trial(self, repo_trial, trial_number):
         self.hyperparams_repository.save_trial(repo_trial)
         if trial_number == self.n_trial - 1:
@@ -938,7 +948,8 @@ class RandomSearchHyperparameterSelectionStrategy(BaseHyperparameterSelectionStr
 
 
 class BaseValidationSplitter(ABC):
-    def split_data_container(self, data_container: DataContainer, context: ExecutionContext) -> List[Tuple[DataContainer, DataContainer]]:
+    def split_data_container(self, data_container: DataContainer, context: ExecutionContext) -> List[
+        Tuple[DataContainer, DataContainer]]:
         """
         Wrap a validation split function with a split data container function.
         A validation split function takes two arguments:  data inputs, and expected outputs.
@@ -976,7 +987,8 @@ class BaseValidationSplitter(ABC):
         return splits
 
     @abstractmethod
-    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[List, List, List, List]:
+    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[
+        List, List, List, List]:
         """
         Train/Test split data inputs and expected outputs.
 
@@ -1006,7 +1018,8 @@ class KFoldCrossValidationSplitter(BaseValidationSplitter):
         BaseValidationSplitter.__init__(self)
         self.k_fold = k_fold
 
-    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[List, List, List, List]:
+    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[
+        List, List, List, List]:
         data_inputs_train, data_inputs_val = kfold_cross_validation_split(
             data_inputs=data_inputs,
             k_fold=self.k_fold
@@ -1060,7 +1073,8 @@ class ValidationSplitter(BaseValidationSplitter):
     def __init__(self, test_size: float):
         self.test_size = test_size
 
-    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[List, List, List, List]:
+    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[
+        List, List, List, List]:
         train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = validation_split(
             test_size=self.test_size,
             data_inputs=data_inputs,
