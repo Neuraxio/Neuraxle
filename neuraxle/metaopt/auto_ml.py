@@ -573,7 +573,7 @@ Refer to `execute_trial` for full flexibility
             with repo_trial_split:
                 trial_split_description = _get_trial_split_description(
                     repo_trial=repo_trial,
-                    repo_trial_split=repo_trial_split,
+                    repo_trial_split_number=repo_trial_split.split_number,
                     validation_splits=validation_splits,
                     trial_number=trial_number,
                     n_trial=n_trial
@@ -714,7 +714,8 @@ class AutoML(ForceHandleMixin, BaseStep):
             callbacks: List[BaseCallback] = None,
             refit_scoring_function: Callable = None,
             print_func: Callable = None,
-            cache_folder_when_no_handle=None
+            cache_folder_when_no_handle=None,
+            raise_all_error_types=False
     ):
         BaseStep.__init__(self)
         ForceHandleMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
@@ -744,6 +745,11 @@ class AutoML(ForceHandleMixin, BaseStep):
         self.refit_scoring_function: Callable = refit_scoring_function
 
         self.refit_trial: bool = refit_trial
+
+        if raise_all_error_types:
+            self.error_types_to_raise = (Exception,)
+        else:
+            self.error_types_to_raise = (SystemError, SystemExit, EOFError, KeyboardInterrupt)
 
         self.trainer = Trainer(
             epochs=epochs,
@@ -780,6 +786,7 @@ class AutoML(ForceHandleMixin, BaseStep):
                 )
 
                 with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
+                    repo_trial_split = None
                     self.print_func('\ntrial {}/{}'.format(trial_number + 1, self.n_trial))
 
                     repo_trial_split = self.trainer.execute_trial(
@@ -790,16 +797,17 @@ class AutoML(ForceHandleMixin, BaseStep):
                         validation_splits=validation_splits,
                         n_trial=self.n_trial
                     )
-            except (SystemError, SystemExit, EOFError, KeyboardInterrupt) as error:
+            except self.error_types_to_raise as error:
                 track = traceback.format_exc()
                 repo_trial.set_failed(error)
                 self.print_func(track)
                 raise error
             except Exception:
                 track = traceback.format_exc()
+                repo_trial_split_number = 0 if repo_trial_split is None else repo_trial_split.split_number + 1
                 self.print_func('failed trial {}'.format(_get_trial_split_description(
                     repo_trial=repo_trial,
-                    repo_trial_split=repo_trial_split,
+                    repo_trial_split_number=repo_trial_split_number,
                     validation_splits=validation_splits,
                     trial_number=trial_number,
                     n_trial=self.n_trial
@@ -873,7 +881,7 @@ class AutoML(ForceHandleMixin, BaseStep):
 
 def _get_trial_split_description(
         repo_trial: Trial,
-        repo_trial_split: TrialSplit,
+        repo_trial_split_number: int,
         validation_splits: List[Tuple[DataContainer, DataContainer]],
         trial_number: int,
         n_trial: int
@@ -881,7 +889,7 @@ def _get_trial_split_description(
     trial_split_description = '{}/{} split {}/{}\nhyperparams: {}\n'.format(
         trial_number + 1,
         n_trial,
-        repo_trial_split.split_number + 1,
+        repo_trial_split_number + 1,
         len(validation_splits),
         json.dumps(repo_trial.hyperparams, sort_keys=True, indent=4)
     )
