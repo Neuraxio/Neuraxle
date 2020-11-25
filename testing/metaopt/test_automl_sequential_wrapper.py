@@ -12,6 +12,8 @@ from neuraxle.steps.numpy import MultiplyByN
 
 
 def test_automl_sequential_wrapper(tmpdir):
+    # Setting seed for reproducibility
+    np.random.seed(68)
     # Given
     data_inputs = np.array(range(100))
     expected_outputs = np.array(range(100, 200))
@@ -44,6 +46,8 @@ def test_automl_sequential_wrapper(tmpdir):
 
 
 def test_automl_sequential_wrapper_with_validation_split_wrapper(tmpdir):
+    # Setting seed for reproducibility
+    np.random.seed(75)
     # Given
     data_inputs = np.array(range(100))
     expected_outputs = np.array(range(100, 200))

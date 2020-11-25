@@ -420,7 +420,7 @@ class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
 
 class AnchoredWalkForwardTimeSeriesCrossValidationWrapper(BaseCrossValidationWrapper):
     """
-    Prform an anchored walk forward cross validation by performing a forward rolling split.
+    Perform an anchored walk forward cross validation by performing a forward rolling split.
     All training splits start at the beginning of the time series, but finish at different time. The finish time
     increase toward the end at each forward split.
 
