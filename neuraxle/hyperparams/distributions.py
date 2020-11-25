@@ -802,7 +802,7 @@ class RandInt(DiscreteHyperparameterDistribution):
 
         :return: an integer.
         """
-        return np.random.randint(self.min_included, self.max_included+1)
+        return np.random.randint(self.min_included, self.max_included + 1)
 
     def pdf(self, x) -> float:
         """
