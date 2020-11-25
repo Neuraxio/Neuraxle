@@ -37,6 +37,7 @@ from enum import Enum
 from typing import List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Dict, Tuple, Type
 
 from joblib import dump, load
+
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
 
@@ -525,7 +526,7 @@ class ExecutionContext:
 
     def empty(self):
         """
-        Return True if the context has parent steps.
+        Return True if the context doesn't have parent steps.
 
         :return: if parents len is 0
         """
@@ -1620,6 +1621,18 @@ class _HasSavers(ABC):
         self.savers: List[BaseSaver] = savers
         return self
 
+    def add_saver(self, saver: BaseSaver) -> 'BaseTransformer':
+        """
+        Add a step saver of a pipeline step.
+
+        :return: self
+
+        .. seealso::
+            :class:`BaseSaver`
+        """
+        self.savers.append(saver)
+        return self
+
     def should_save(self) -> bool:
         """
         Returns true if the step should be saved.
@@ -1913,10 +1926,6 @@ class _HasMutations(ABC):
         self.pending_mutate = (new_base_step, new_method, method_to_assign_to)
 
         return self
-
-
-
-
 
 
 class _CouldHaveContext:
@@ -2224,7 +2233,8 @@ class BaseTransformer(
 
 
 def _sklearn_to_neuraxle_step(step) -> BaseTransformer:
-    if hasattr(step, '_get_param_names') and hasattr(step, '_more_tags') and hasattr(step, '_check_n_features') and hasattr(step, '_validate_data'):
+    if hasattr(step, '_get_param_names') and hasattr(step, '_more_tags') \
+            and hasattr(step, '_check_n_features') and hasattr(step, '_validate_data'):
         import neuraxle.steps.sklearn
         step = neuraxle.steps.sklearn.SKLearnWrapper(step)
         step.set_name(step.get_wrapped_sklearn_predictor().__class__.__name__)
@@ -2292,13 +2302,30 @@ class BaseStep(_FittableStep, BaseTransformer, ABC):
     pass
 
 
-class _HasChildrenMixin:
+class MixinForBaseTransformer:
+    """
+    Any steps/transformers within a pipeline that inherits of this class should implement BaseStep/BaseTransformer and initialize it before any mixin. This class checks that its the case at initialization.
+    """
+
+    def __init__(self):
+        self._ensure_basetransformer_init_called()
+
+    def _ensure_basetransformer_init_called(self):
+        """
+        Assert that BaseStep's init has been called.
+        """
+        assert isinstance(self, BaseTransformer)
+        if not all(map(lambda x: hasattr(self, x), ('name', 'savers', 'is_initialized', 'is_train', 'is_invalidated'))):
+            raise RuntimeError('Please initialize Mixins in the good order. This Mixin should be initialized after '
+                               'BaseTransformer.')
+
+
+class _HasChildrenMixin(MixinForBaseTransformer):
     """
     Mixin to add behavior to the steps that have children (sub steps).
 
     .. seealso::
         :class:`~neuraxle.base.MetaStepMixin`,
-        :class:`~neuraxle.base.TruncableSteps`,
         :class:`~neuraxle.base.TruncableSteps`
     """
 
@@ -2394,20 +2421,10 @@ class MetaStepMixin(_HasChildrenMixin):
     def __init__(self, wrapped: BaseTransformer = None, savers: List[BaseSaver] = None):
         if savers is None:
             savers = []
-
+        MixinForBaseTransformer.__init__(self)
         self.wrapped: BaseTransformer = _sklearn_to_neuraxle_step(wrapped)
-        self._ensure_proper_mixin_init_order(savers)
-
-    def _ensure_proper_mixin_init_order(self, savers: List[BaseSaver]):
         savers.append(MetaStepJoblibStepSaver())
-        if not hasattr(self, 'savers'):
-            warnings.warn(
-                'Please initialize Mixins in the good order. MetaStepMixin should be initialized after '
-                'BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers. Saving might fail.'.format(
-                    self.wrapped.name))
-            self.savers = savers
-        else:
-            self.savers.extend(savers)
+        self.savers.extend(savers)
 
     def set_step(self, step: BaseTransformer) -> BaseStep:
         """
@@ -2688,7 +2705,7 @@ class NonFittableMixin:
         return self
 
 
-class NonTransformableMixin:
+class NonTransformableMixin(MixinForBaseTransformer):
     """
     A pipeline step that has no effect at all but to return the same data without changes.
     Transform method is automatically implemented as changing nothing.
@@ -2708,6 +2725,16 @@ class NonTransformableMixin:
     .. note::
         fit methods are not implemented
     """
+
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Do nothing - return the same data.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: data container
+        """
+        return data_container
 
     def transform(self, data_inputs):
         """
@@ -2819,8 +2846,8 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
             hyperparams_space: HyperparameterSpace = dict()
     ):
         self.set_steps(steps_as_tuple)
-        _HasChildrenMixin.__init__(self)
         BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
+        _HasChildrenMixin.__init__(self)
         self.set_savers([TruncableJoblibStepSaver()] + self.savers)
 
     def are_steps_before_index_the_same(self, other: 'TruncableSteps', index: int) -> bool:
@@ -3310,7 +3337,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         return self.__repr__()
 
 
-class ResumableStepMixin:
+class ResumableStepMixin(MixinForBaseTransformer):
     """
     Mixin to add resumable function to a step, or a class that can be resumed, for example a checkpoint on disk.
     """
@@ -3335,7 +3362,7 @@ class ResumableStepMixin:
         return self.__repr__()
 
 
-class Identity(NonTransformableMixin, BaseTransformer):
+class Identity(NonTransformableMixin, NonFittableMixin, BaseTransformer):
     """
     A pipeline step that has no effect at all but to return the same data without changes.
 
@@ -3354,10 +3381,11 @@ class Identity(NonTransformableMixin, BaseTransformer):
         if savers is None:
             savers = [JoblibStepSaver()]
         BaseTransformer.__init__(self, name=name, savers=savers)
+        NonFittableMixin.__init__(self)
         NonTransformableMixin.__init__(self)
 
 
-class TransformHandlerOnlyMixin:
+class TransformHandlerOnlyMixin(MixinForBaseTransformer):
     """
     A pipeline step that only requires the implementation of _transform_data_container.
 
@@ -3383,7 +3411,7 @@ class TransformHandlerOnlyMixin:
                 self.name))
 
 
-class HandleOnlyMixin:
+class HandleOnlyMixin(MixinForBaseTransformer):
     """
     A pipeline step that only requires the implementation of handler methods :
         - _transform_data_container
@@ -3431,12 +3459,14 @@ class HandleOnlyMixin:
                 self.name))
 
 
-class ForceHandleMixin:
+class ForceHandleMixin(MixinForBaseTransformer):
     """
     A step that automatically calls handle methods in the transform, fit, and fit_transform methods.
+    The class that inherits from ForceHandleMixin can't use BaseStep's  _fit_data_container, _fit_transform_data_container and _transform_data_container. They must be redefined; failure to do so will trigger an Exception on initialisation (and would create infinite loop if these checks were not there).
 
     .. seealso::
         :class:`BaseStep`,
+        :class: MixinForBaseTransformer
         :class:`HandleOnlyMixin`,
         :class:`TransformHandlerOnlyMixin`,
         :class:`NonTransformableMixin`,
@@ -3445,9 +3475,24 @@ class ForceHandleMixin:
     """
 
     def __init__(self, cache_folder=None):
+        MixinForBaseTransformer.__init__(self)
         if cache_folder is None:
             cache_folder = DEFAULT_CACHE_FOLDER
         self.cache_folder = cache_folder
+        self._ensure_method_overriden("_fit_data_container", _FittableStep)
+        self._ensure_method_overriden("_fit_transform_data_container", _FittableStep)
+        self._ensure_method_overriden("_transform_data_container", _TransformerStep)
+
+    def _ensure_method_overriden(self, method_name, original_cls):
+        """
+        Asserts that a given method of current instance overrides the default one defined in a given class. We assume that current instance inherits from the given class but do not test it (MixinForBaseTransformer test inheritance to BaseTransfromer already).
+
+        :param method_name:
+        :param original_cls:
+        :return:
+        """
+        if original_cls.__dict__[method_name] == getattr(self, method_name).__func__:
+            raise NotImplementedError(f"Please define method {method_name} in {self.__class__.__name__}.")
 
     def transform(self, data_inputs) -> Iterable:
         """
@@ -3565,12 +3610,13 @@ class IdentityHandlerMethodsMixin(ForceHandleOnlyMixin):
         return self, data_container
 
 
-class EvaluableStepMixin:
+class EvaluableStepMixin(MixinForBaseTransformer):
     """
     A step that can be evaluated with the scoring functions.
 
     .. seealso::
         :class:`BaseStep`
+        :class:'MixinForBaseTransformer'
     """
 
     @abstractmethod
@@ -3657,6 +3703,7 @@ class _WithContextStepSaver(BaseSaver):
 
     def can_load(self, step: 'StepWithContext', context: 'ExecutionContext'):
         return True
+
 
 class StepWithContext(ForceHandleMixin, MetaStep):
     def __init__(self, wrapped: 'BaseTransformer', context: ExecutionContext):
