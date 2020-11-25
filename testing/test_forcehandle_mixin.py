@@ -35,7 +35,7 @@ def test_raises_exception_if_method_not_redefined(tmpdir):
 
     assert "_fit_transform_data_container" in exception_info.value.args[0]
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext)
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         return self, data_container
 
     BadForceHandleStep._fit_data_container = _fit_data_container
