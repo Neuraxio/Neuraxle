@@ -1966,12 +1966,6 @@ class _CouldHaveContext:
         :class:`~neuraxle.base._TransformerStep`,
     """
 
-    def __init__(self, has_service_assertions: List[Type] = None):
-        if has_service_assertions is None:
-            has_service_assertions = []
-
-        self.has_service_assertions: List[Type] = has_service_assertions
-
     def with_context(self, context: ExecutionContext):
         """
         An higher order step to inject a context inside a step.
@@ -1996,34 +1990,21 @@ class _CouldHaveContext:
         """
         return StepWithContext(wrapped=self, context=context)
 
-    def assert_has_services(self, *service_assertions) -> '_CouldHaveContext':
+    def assert_has_services(self, *service_assertions: List[Type]) -> 'GlobalyRetrievableServiceAssertionWrapper':
+        """
+        Set all service assertions to be made at the root of the pipeline and before processing the step.
+
+        :param service_assertions: base types that need to be available in the execution context at the root of the pipeline
+        """
+        return GlobalyRetrievableServiceAssertionWrapper(wrapped=self, service_assertions=service_assertions)
+
+    def assert_has_services_at_execution(self, *service_assertions: List[Type]) -> 'LocalServiceAssertionWrapper':
         """
         Set all service assertions to be made before processing the step.
 
         :param service_assertions: base types that need to be available in the execution context
-        :return: self
         """
-        self.has_service_assertions: List[Type] = service_assertions
-        return self
-
-    def _assert_has_services(self, context: ExecutionContext) -> RecursiveDict:
-        """
-        Assert that all the necessary services are provided in the execution context.
-
-        :param context: execution context
-        :return: self
-        """
-        for has_service_assertion in self.has_service_assertions:
-            if not context.has_service(service_abstract_class_type=has_service_assertion):
-                exception_message: str = '{} dependency missing in the ExecutionContext. Please register the service {} inside the ExecutionContext.\n'.format(
-                    has_service_assertion.__name__,
-                    has_service_assertion.__name__
-                )
-                step_method_message: str = 'You can do so by calling register_service, or set_services on any step.\n'
-                execution_context_methods_messsage: str = 'There is also the option to register all services inside the ExecutionContext'
-                raise AssertionError(exception_message + step_method_message + execution_context_methods_messsage)
-
-        return RecursiveDict()
+        return LocalServiceAssertionWrapper(wrapped=self, service_assertions=service_assertions)
 
 
 class BaseTransformer(
@@ -3362,7 +3343,7 @@ class ResumableStepMixin(MixinForBaseTransformer):
         return self.__repr__()
 
 
-class Identity(NonTransformableMixin, NonFittableMixin, BaseTransformer):
+class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
     """
     A pipeline step that has no effect at all but to return the same data without changes.
 
@@ -3380,7 +3361,7 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseTransformer):
     def __init__(self, savers=None, name=None):
         if savers is None:
             savers = [JoblibStepSaver()]
-        BaseTransformer.__init__(self, name=name, savers=savers)
+        BaseStep.__init__(self, name=name, savers=savers)
         NonFittableMixin.__init__(self)
         NonTransformableMixin.__init__(self)
 
@@ -3667,6 +3648,79 @@ class FullDumpLoader(Identity):
         return loaded_self.load(context, full_dump)
 
 
+def assert_has_services(has_service_assertions: List[Type], context: ExecutionContext):
+    """
+    Assert that all the necessary services are provided in the execution context.
+
+    :param context: The ExecutionContext for which we test the presence of service.
+    """
+    for has_service_assertion in has_service_assertions:
+        if not context.has_service(service_abstract_class_type=has_service_assertion):
+            exception_message: str = '{} dependency missing in the ExecutionContext. Please register the service {} inside the ExecutionContext.\n'.format(
+                has_service_assertion.__name__,
+                has_service_assertion.__name__
+            )
+            step_method_message: str = 'You can do so by calling register_service, or set_services on any step.\n'
+            execution_context_methods_messsage: str = 'There is also the option to register all services inside the ExecutionContext'
+            raise AssertionError(exception_message + step_method_message + execution_context_methods_messsage)
+
+
+class LocalServiceAssertionWrapper(MetaStep):
+    """Is used to assert the presence of service at execution time for a given step"""
+
+    def __init__(self, wrapped: BaseTransformer = None, service_assertions: List[Type] = None,
+                 savers: List[BaseSaver] = None):
+        MetaStep.__init__(self, wrapped=wrapped, savers=savers)
+        if service_assertions is None:
+            service_assertions = []
+        self.service_assertions = service_assertions
+
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
+            DataContainer, ExecutionContext):
+        """
+        Assert self.local_service_assertions are present in the context.
+        """
+        data_container, context = MetaStep._will_process(self, data_container, context)
+        assert_has_services(self.service_assertions, context)
+
+        return data_container, context
+
+
+class GlobalyRetrievableServiceAssertionWrapper(LocalServiceAssertionWrapper):
+    """Is used to assert the presence of service at the start of the pipeline for a given step"""
+
+    def _global_assert_has_services(self, context: ExecutionContext) -> RecursiveDict:
+        """
+        Intended to be used in a .apply('_global_assert_has_services') call from the outside.
+        Is used to test the presence of services at the root of the pipeline.
+
+        See also GlobalServiceAssertionExecutorMixin._apply_service_assertions
+        :params context : the execution context
+        """
+        assert_has_services(self.service_assertions, context)
+        return RecursiveDict()
+
+
+class GlobalServiceAssertionExecutorMixin(ForceHandleMixin, MetaStepMixin):
+    def __init__(self, wrapped: 'BaseTransformer', savers: List[BaseSaver] = None):
+        MetaStepMixin.__init__(self, wrapped=wrapped, savers=savers)
+        ForceHandleMixin.__init__(self)
+
+    def _apply_service_assertions(self, context: ExecutionContext):
+        """
+        Calls _global_assert_has_services on GlobalyRetrievableServiceAssertionWrapper instances that are (recursively) children of this node.
+        :param context: The ExecutionContext for which we test the presence of service.
+        """
+        self.apply('_global_assert_has_services', context=context)
+
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
+            DataContainer, ExecutionContext):
+        data_container, context = MetaStep._will_process(self, data_container, context)
+        self._apply_service_assertions(context)
+
+        return data_container, context
+
+
 class _WithContextStepSaver(BaseSaver):
     """
     Custom saver for steps that have an :class:`ExecutionContext`.
@@ -3705,21 +3759,24 @@ class _WithContextStepSaver(BaseSaver):
         return True
 
 
-class StepWithContext(ForceHandleMixin, MetaStep):
-    def __init__(self, wrapped: 'BaseTransformer', context: ExecutionContext):
-        MetaStep.__init__(self, wrapped=wrapped, savers=[_WithContextStepSaver()])
-        self.apply('_assert_has_services', context=context)
+class StepWithContext(GlobalServiceAssertionExecutorMixin, BaseStep):
+    def __init__(self, wrapped: 'BaseTransformer', context: ExecutionContext, raise_if_not_root: bool = True):
+        BaseStep.__init__(self)
+        GlobalServiceAssertionExecutorMixin.__init__(self, wrapped=wrapped, savers=[_WithContextStepSaver()])
         self.context = context
-        ForceHandleMixin.__init__(self)
+        self.raise_if_not_root = raise_if_not_root
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
+            DataContainer, ExecutionContext):
         """
-        Inject the given context before processing the wrapped step.
+        Inject the given context and test service assertion (if appliable) before processing the wrapped step.
 
         :param data_container: data container to process
         :return: data container, execution context
         """
-        if len(context) > 0:
-            raise AssertionError('WithContext should be at the root of the pipeline.')
+        if len(context) > 0 and self.raise_if_not_root:
+            raise AssertionError('StepWithContext should be at the root of the pipeline.')
 
-        return data_container, self.context
+        data_container, context = GlobalServiceAssertionExecutorMixin._will_process(self, data_container, self.context)
+
+        return data_container, context
