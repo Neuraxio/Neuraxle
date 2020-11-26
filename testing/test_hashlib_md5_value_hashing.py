@@ -8,7 +8,7 @@ from neuraxle.base import BaseTransformer, HashlibMd5ValueHasher, ExecutionConte
 
 class WindowTimeSeries(InputAndOutputTransformerMixin, BaseTransformer):
     def __init__(self):
-        super().__init__(hashers=[HashlibMd5ValueHasher()])
+        BaseTransformer.__init__(self,hashers=[HashlibMd5ValueHasher()])
         InputAndOutputTransformerMixin.__init__(self)
 
     def transform(self, data_inputs):
@@ -19,7 +19,7 @@ class WindowTimeSeries(InputAndOutputTransformerMixin, BaseTransformer):
 
 class WindowTimeSeriesForOutputTransformerWrapper(BaseTransformer):
     def __init__(self):
-        super().__init__()
+        BaseTransformer.__init__(self)
 
     def transform(self, data_inputs):
         di, eo = data_inputs
