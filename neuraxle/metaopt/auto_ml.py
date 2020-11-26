@@ -746,10 +746,8 @@ class AutoML(ForceHandleMixin, BaseStep):
 
         self.refit_trial: bool = refit_trial
 
-        if raise_all_error_types:
-            self.error_types_to_raise = (Exception,)
-        else:
-            self.error_types_to_raise = (SystemError, SystemExit, EOFError, KeyboardInterrupt)
+        self.error_types_to_raise = (Exception,) if raise_all_error_types \
+            else (SystemError, SystemExit, EOFError, KeyboardInterrupt)
 
         self.trainer = Trainer(
             epochs=epochs,
