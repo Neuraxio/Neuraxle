@@ -2485,7 +2485,7 @@ class MetaStepMixin(_HasChildrenMixin):
         self.wrapped = self.wrapped.handle_fit(data_container, context)
         return self
 
-    def _transform_data_container(self, data_container: ExecutionContext, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         data_container = self.wrapped.handle_transform(data_container, context)
         return data_container
 
