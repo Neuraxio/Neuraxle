@@ -1945,6 +1945,14 @@ class _CouldHaveContext:
             SomeStep().assert_has_services(BaseService)
         ]).with_context(context=context)
 
+    Or alternatively,
+
+    .. code-block:: python
+
+        p = Pipeline([
+            RegisterSomeService(),
+            SomeStep().assert_has_services_at_execution(BaseService)
+        ])
 
     Context services can be used inside any step with handler methods:
 
@@ -2306,6 +2314,7 @@ class _HasChildrenMixin(MixinForBaseTransformer):
     Mixin to add behavior to the steps that have children (sub steps).
 
     .. seealso::
+        :class:`MixinForBaseTransforme`
         :class:`~neuraxle.base.MetaStepMixin`,
         :class:`~neuraxle.base.TruncableSteps`
     """
@@ -2652,7 +2661,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
 NamedTupleList = List[Union[Tuple[str, BaseTransformer], BaseTransformer]]
 
 
-class NonFittableMixin:
+class NonFittableMixin(MixinForBaseTransformer):
     """
     A pipeline step that requires no fitting: fitting just returns self when called to do no action.
     Note: fit methods are not implemented
@@ -2826,9 +2835,9 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
             hyperparams: HyperparameterSamples = dict(),
             hyperparams_space: HyperparameterSpace = dict()
     ):
-        self.set_steps(steps_as_tuple)
         BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         _HasChildrenMixin.__init__(self)
+        self.set_steps(steps_as_tuple)
         self.set_savers([TruncableJoblibStepSaver()] + self.savers)
 
     def are_steps_before_index_the_same(self, other: 'TruncableSteps', index: int) -> bool:
@@ -3372,6 +3381,7 @@ class TransformHandlerOnlyMixin(MixinForBaseTransformer):
 
     .. seealso::
         :class:`BaseStep`,
+        :class:`MixinForBaseTransforme`
         :class:`NonFittableMixin`
     """
 
@@ -3403,6 +3413,7 @@ class HandleOnlyMixin(MixinForBaseTransformer):
 
     .. seealso::
         :class:`BaseStep`,
+        :class:`MixinForBaseTransforme`
         :class:`TransformHandlerOnlyMixin`,
         :class:`NonTransformableMixin`,
         :class:`NonFittableMixin`,
@@ -3460,8 +3471,9 @@ class ForceHandleMixin(MixinForBaseTransformer):
         if cache_folder is None:
             cache_folder = DEFAULT_CACHE_FOLDER
         self.cache_folder = cache_folder
-        self._ensure_method_overriden("_fit_data_container", _FittableStep)
-        self._ensure_method_overriden("_fit_transform_data_container", _FittableStep)
+        if isinstance(self, _FittableStep):
+            self._ensure_method_overriden("_fit_data_container", _FittableStep)
+            self._ensure_method_overriden("_fit_transform_data_container", _FittableStep)
         self._ensure_method_overriden("_transform_data_container", _TransformerStep)
 
     def _ensure_method_overriden(self, method_name, original_cls):
@@ -3666,7 +3678,9 @@ def assert_has_services(has_service_assertions: List[Type], context: ExecutionCo
 
 
 class LocalServiceAssertionWrapper(MetaStep):
-    """Is used to assert the presence of service at execution time for a given step"""
+    """
+    Is used to assert the presence of service at execution time for a given step
+    """
 
     def __init__(self, wrapped: BaseTransformer = None, service_assertions: List[Type] = None,
                  savers: List[BaseSaver] = None):
@@ -3687,7 +3701,9 @@ class LocalServiceAssertionWrapper(MetaStep):
 
 
 class GlobalyRetrievableServiceAssertionWrapper(LocalServiceAssertionWrapper):
-    """Is used to assert the presence of service at the start of the pipeline for a given step"""
+    """
+    Is used to assert the presence of service at the start of the pipeline AND at execution time for a given step
+    """
 
     def _global_assert_has_services(self, context: ExecutionContext) -> RecursiveDict:
         """
@@ -3702,6 +3718,9 @@ class GlobalyRetrievableServiceAssertionWrapper(LocalServiceAssertionWrapper):
 
 
 class GlobalServiceAssertionExecutorMixin(ForceHandleMixin, MetaStepMixin):
+    """
+    Any step which inherit of this class will test globaly retrievable service assertion of itself and all its children on a will_process call.
+    """
     def __init__(self, wrapped: 'BaseTransformer', savers: List[BaseSaver] = None):
         MetaStepMixin.__init__(self, wrapped=wrapped, savers=savers)
         ForceHandleMixin.__init__(self)

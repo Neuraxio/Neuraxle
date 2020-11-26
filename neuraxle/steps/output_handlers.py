@@ -27,7 +27,8 @@ import copy
 from abc import ABC
 from typing import List
 
-from neuraxle.base import ExecutionContext, BaseStep, MetaStep, ForceHandleOnlyMixin, BaseHasher
+from neuraxle.base import ExecutionContext, BaseStep, MetaStep, ForceHandleOnlyMixin, BaseHasher, \
+    MixinForBaseTransformer
 from neuraxle.data_container import DataContainer
 
 
@@ -145,7 +146,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         return data_container
 
 
-class _DidProcessInputOutputHandlerMixin:
+class _DidProcessInputOutputHandlerMixin(MixinForBaseTransformer):
     def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         di, eo = data_container.data_inputs
         if len(di) != len(eo):

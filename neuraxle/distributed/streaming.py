@@ -28,13 +28,13 @@ from threading import Thread
 from typing import Tuple, List, Union, Iterable, Any
 
 from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStep, BaseSaver, _FittableStep, \
-    BaseTransformer, NonFittableMixin
+    BaseTransformer, NonFittableMixin, MixinForBaseTransformer
 from neuraxle.data_container import DataContainer, ListDataContainer, AbsentValuesNullObject
 from neuraxle.pipeline import Pipeline, MiniBatchSequentialPipeline, Joiner
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
 
-class ObservableQueueMixin:
+class ObservableQueueMixin(MixinForBaseTransformer):
     """
     A class to represent a step that can put items in a queue.
     It can also notify other queues that have subscribed to him using subscribe.
@@ -49,6 +49,7 @@ class ObservableQueueMixin:
     """
 
     def __init__(self, queue):
+        MixinForBaseTransformer.__init__(self)
         self.queue = queue
         self.observers = []
         self._add_observable_queue_step_saver()
