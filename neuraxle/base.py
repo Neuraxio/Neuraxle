@@ -2301,7 +2301,7 @@ class MixinForBaseTransformer:
 
     def _ensure_basetransformer_init_called(self):
         """
-        Assert that BaseStep's init has been called.
+        Assert that BaseTransformer's init method has been called.
         """
         assert isinstance(self, BaseTransformer)
         if not all(map(lambda x: hasattr(self, x), ('name', 'savers', 'is_initialized', 'is_train', 'is_invalidated'))):
@@ -3665,8 +3665,31 @@ def assert_has_services(has_service_assertions: List[Type], context: ExecutionCo
             execution_context_methods_messsage: str = 'There is also the option to register all services inside the ExecutionContext'
             raise AssertionError(exception_message + step_method_message + execution_context_methods_messsage)
 
+class AssertionMixin:
+    @abstractmethod
+    def _assert(self, data_container: DataContainer, context: ExecutionContext):
+        pass
 
-class LocalServiceAssertionWrapper(MetaStep):
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
+            DataContainer, ExecutionContext):
+        """
+        Calls self._assert(data_container,context)
+        """
+        data_container, context = super()._will_process(data_container, context)
+        self._assert(data_container,context)
+
+        return data_container, context
+
+class AssertExpectedOutputNullMixin(AssertionMixin):
+
+    def _assert(self, data_container: DataContainer, context: ExecutionContext):
+        eo_not_empty = not all(v is None for v in data_container.expected_outputs)
+        if eo_not_empty:
+            raise AssertionError(
+                f"Expected datacontainer.expected_output to be a list of None. Received {data_container.expected_outputs}")
+
+
+class LocalServiceAssertionWrapper(AssertionMixin, MetaStep):
     """
     Is used to assert the presence of service at execution time for a given step
     """
@@ -3678,16 +3701,11 @@ class LocalServiceAssertionWrapper(MetaStep):
             service_assertions = []
         self.service_assertions = service_assertions
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
-            DataContainer, ExecutionContext):
+    def _assert(self, data_container: DataContainer, context: ExecutionContext):
         """
         Assert self.local_service_assertions are present in the context.
         """
-        data_container, context = MetaStep._will_process(self, data_container, context)
         assert_has_services(self.service_assertions, context)
-
-        return data_container, context
-
 
 class GlobalyRetrievableServiceAssertionWrapper(LocalServiceAssertionWrapper):
     """
