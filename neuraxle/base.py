@@ -875,6 +875,16 @@ class _TransformerStep(ABC):
         """
         return self, self.transform(data_inputs)
 
+    def fit(self, data_inputs, expected_outputs) -> '_TransformerStep':
+        """
+        Fit given data inputs. By default, a step only transforms in the fit transform method.
+        To add fitting to your step, see class:`_FittableStep` for more info.
+        :param data_inputs: data inputs
+        :param expected_outputs: expected outputs to fit on
+        :return: transformed data inputs
+        """
+        return self
+
     def handle_predict(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Handle_transform in test mode.
@@ -952,6 +962,7 @@ class _TransformerStep(ABC):
         :return: inverse transformed processed outputs
         """
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
+
 
 
 class _FittableStep:
@@ -2818,9 +2829,10 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
             hyperparams: HyperparameterSamples = dict(),
             hyperparams_space: HyperparameterSpace = dict()
     ):
-        self.set_steps(steps_as_tuple)
-        _HasChildrenMixin.__init__(self)
         BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
+        _HasChildrenMixin.__init__(self)
+
+        self.set_steps(steps_as_tuple)
         self.set_savers([TruncableJoblibStepSaver()] + self.savers)
 
     def are_steps_before_index_the_same(self, other: 'TruncableSteps', index: int) -> bool:

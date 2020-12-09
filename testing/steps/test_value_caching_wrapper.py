@@ -1,11 +1,9 @@
-import os
-
 import numpy as np
 
 from neuraxle.pipeline import Pipeline
+from neuraxle.steps.caching import PickleValueCachingWrapper
 from neuraxle.steps.misc import TapeCallbackFunction, \
     FitTransformCallbackStep
-from neuraxle.steps.caching import PickleValueCachingWrapper
 
 EXPECTED_OUTPUTS = [0.0, 0.0, 0.6931471805599453, 0.6931471805599453]
 
