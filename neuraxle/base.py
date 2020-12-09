@@ -2198,7 +2198,7 @@ class BaseTransformer(
         .. seealso::
             :func:`~neuraxle.base._TransformerStep.inverse_transform`
         """
-        return self.mutate(new_method="inverse_transform", method_to_assign_to="transform")
+        return self.mutate(new_method="inverse_transform", method_to_assign_to="transform", warn=False)
 
     def __reversed__(self) -> 'BaseTransformer':
         """
@@ -3483,11 +3483,10 @@ class ForceHandleMixin(MixinForBaseTransformer):
         :param data_inputs: data inputs
         :return: outputs
         """
-        execution_context = ExecutionContext(self.cache_folder, execution_mode=ExecutionMode.TRANSFORM)
         context, data_container = self._encapsulate_data(
             data_inputs, expected_outputs=None, execution_mode=ExecutionMode.TRANSFORM)
 
-        data_container = self.handle_transform(data_container, execution_context)
+        data_container = self.handle_transform(data_container, context)
 
         return data_container.data_inputs
 
@@ -3665,6 +3664,7 @@ def assert_has_services(has_service_assertions: List[Type], context: ExecutionCo
             execution_context_methods_messsage: str = 'There is also the option to register all services inside the ExecutionContext'
             raise AssertionError(exception_message + step_method_message + execution_context_methods_messsage)
 
+
 class AssertionMixin:
     @abstractmethod
     def _assert(self, data_container: DataContainer, context: ExecutionContext):
@@ -3676,9 +3676,10 @@ class AssertionMixin:
         Calls self._assert(data_container,context)
         """
         data_container, context = super()._will_process(data_container, context)
-        self._assert(data_container,context)
+        self._assert(data_container, context)
 
         return data_container, context
+
 
 class AssertExpectedOutputNullMixin(AssertionMixin):
 
@@ -3707,6 +3708,7 @@ class LocalServiceAssertionWrapper(AssertionMixin, MetaStep):
         """
         assert_has_services(self.service_assertions, context)
 
+
 class GlobalyRetrievableServiceAssertionWrapper(LocalServiceAssertionWrapper):
     """
     Is used to assert the presence of service at the start of the pipeline AND at execution time for a given step
@@ -3728,6 +3730,7 @@ class GlobalServiceAssertionExecutorMixin(ForceHandleMixin, MetaStepMixin):
     """
     Any step which inherit of this class will test globaly retrievable service assertion of itself and all its children on a will_process call.
     """
+
     def __init__(self, wrapped: 'BaseTransformer', savers: List[BaseSaver] = None):
         MetaStepMixin.__init__(self, wrapped=wrapped, savers=savers)
         ForceHandleMixin.__init__(self)
