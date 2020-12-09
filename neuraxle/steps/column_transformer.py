@@ -24,17 +24,17 @@ Pipeline steps to apply N-Dimensional column transformations to different column
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Iterable
 
 import numpy as np
 
-from neuraxle.base import BaseStep, MetaStep, BaseTransformer
+from neuraxle.base import MetaStep, BaseTransformer
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEachDataInput
 from neuraxle.union import FeatureUnion
 
-ColumnSelectionType = Union[Tuple[int, BaseTransformer], Tuple[List[int], BaseTransformer], Tuple[slice, BaseTransformer]]
-ColumnChooserTupleList = List[ColumnSelectionType]
+ColumnSelectionType = Union[int, Iterable[int], slice]
+ColumnChooserTupleList = List[Tuple[ColumnSelectionType, BaseTransformer]]
 
 
 class ColumnSelector2D(BaseTransformer):
@@ -84,7 +84,6 @@ class ColumnsSelectorND(MetaStep):
     """
 
     def __init__(self, columns_selection, n_dimension=3):
-
         col_selector: ColumnSelector2D = ColumnSelector2D(columns_selection=columns_selection)
         for _ in range(min(0, n_dimension - 2)):
             col_selector = ForEachDataInput(col_selector)
