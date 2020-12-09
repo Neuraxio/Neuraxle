@@ -3684,8 +3684,8 @@ class AssertionMixin:
 class AssertExpectedOutputNullMixin(AssertionMixin):
 
     def _assert(self, data_container: DataContainer, context: ExecutionContext):
-        eo_not_empty = not all(v is None for v in data_container.expected_outputs)
-        if eo_not_empty:
+        eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
+        if not eo_empty:
             raise AssertionError(
                 f"Expected datacontainer.expected_output to be a list of None. Received {data_container.expected_outputs}")
 
