@@ -127,7 +127,7 @@ class RecursiveDict(OrderedDict):
 
     def get(self, item):
         item_values = type(self)()
-        for name, values in self.items():
+        for name, values in self.items(): # TODO : WTF is this
             if item is None and not self.separator in name:
                 item_values[name] = values
 
@@ -195,7 +195,7 @@ class RecursiveDict(OrderedDict):
         :param dict_ctor: ``OrderedDict`` by default. Will use this as a class to create the new returned dict.
         :return: a flat hyperparameter dictionary.
         """
-        if isinstance(dict_ctor, RecursiveDict):
+        if isinstance(dict_ctor, RecursiveDict):  # TODO : this is quite bad in term of execution speed. We need to fix this.
             ret = dict_ctor(self.separator)
         else:
             ret = dict_ctor()
