@@ -309,6 +309,13 @@ class ExecutionMode(Enum):
     FIT_TRANSFORM = 'fit_transform'
     INVERSE_TRANSFORM = 'inverse_transform'
 
+class ExecutionPhase(Enum):
+    UNSPECIFIED = None
+    PRETRAIN = "pretraining"
+    TRAIN = "training"
+    VALIDATION = "validation"
+    TEST = "test"
+    PROD = "production"
 
 class ExecutionContext:
     """
@@ -329,14 +336,15 @@ class ExecutionContext:
     def __init__(
             self,
             root: str = DEFAULT_CACHE_FOLDER,
-            execution_mode: ExecutionMode = None,
+            execution_phase:ExecutionPhase = ExecutionPhase.UNSPECIFIED,
+            execution_mode: ExecutionMode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM,
             stripped_saver: BaseSaver = None,
             parents: List['BaseStep'] = None,
             services: Dict[Type, object] = None
     ):
-        if execution_mode is None:
-            execution_mode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM
+
         self.execution_mode = execution_mode
+        self.execution_phase = execution_phase
 
         if stripped_saver is None:
             stripped_saver: BaseSaver = JoblibStepSaver()
@@ -350,6 +358,16 @@ class ExecutionContext:
         if services is None:
             services: Dict[Type, object] = dict()
         self.services: Dict[Type, object] = services
+
+    def set_execution_phase(self, phase:ExecutionPhase) -> 'ExecutionContext':
+        """
+        Set the instance's execution phase to given phase.
+
+        :param phase:
+        :return:
+        """
+        self.execution_phase: ExecutionPhase = phase
+        return self
 
     def set_service_locator(self, services: Dict[Type, object]) -> 'ExecutionContext':
         """
@@ -473,6 +491,7 @@ class ExecutionContext:
         return ExecutionContext(
             root=self.root,
             execution_mode=self.execution_mode,
+            execution_phase=self.execution_phase,
             parents=self.parents + [step],
             services=self.services
         )
@@ -481,6 +500,7 @@ class ExecutionContext:
         return ExecutionContext(
             root=self.root,
             execution_mode=self.execution_mode,
+            execution_phase=self.execution_phase,
             parents=copy(self.parents),
             services=self.services
         )

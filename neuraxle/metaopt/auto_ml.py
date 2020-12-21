@@ -37,7 +37,7 @@ from typing import Callable, List, Union, Tuple
 
 import numpy as np
 
-from neuraxle.base import BaseStep, ExecutionContext, ForceHandleMixin
+from neuraxle.base import BaseStep, ExecutionContext, ForceHandleMixin, ExecutionPhase
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.callbacks import BaseCallback, CallbackList, ScoringCallback
@@ -621,9 +621,10 @@ Refer to `execute_trial` for full flexibility
 
         for i in range(self.epochs):
             self.print_func('\nepoch {}/{}'.format(i + 1, self.epochs))
-            trial_split = trial_split.fit_trial_split(train_data_container.copy(), context)
-            y_pred_train = trial_split.predict_with_pipeline(train_data_container.copy(), context)
-            y_pred_val = trial_split.predict_with_pipeline(validation_data_container.copy(), context)
+            trial_split = trial_split.fit_trial_split(train_data_container.copy(), context.copy().set_execution_phase(ExecutionPhase.TRAIN))
+            y_pred_train = trial_split.predict_with_pipeline(train_data_container.copy(), context.copy().set_execution_phase(ExecutionPhase.VALIDATION))
+            y_pred_val = trial_split.predict_with_pipeline(validation_data_container.copy(), context.copy().set_execution_phase(ExecutionPhase.VALIDATION))
+
 
             if self.callbacks.call(
                     trial=trial_split,
