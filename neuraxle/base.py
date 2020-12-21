@@ -3324,7 +3324,7 @@ class ResumableStepMixin(MixinForBaseTransformer):
     @abstractmethod
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
         """
-        Returns True if a step can be resumed with the given the data container, and execution context.
+        Returns True if a step can be resumed with the given the data container and execution context.
         See Checkpoint class documentation for more details on how a resumable checkpoint works.
 
         :param data_container: data container to resume from
@@ -3443,7 +3443,7 @@ class HandleOnlyMixin(MixinForBaseTransformer):
 class ForceHandleMixin(MixinForBaseTransformer):
     """
     A step that automatically calls handle methods in the transform, fit, and fit_transform methods.
-    The class that inherits from ForceHandleMixin can't use BaseStep's  _fit_data_container, _fit_transform_data_container and _transform_data_container. They must be redefined; failure to do so will trigger an Exception on initialisation (and would create infinite loop if these checks were not there).
+    A class which inherits from ForceHandleMixin can't use BaseStep's  _fit_data_container, _fit_transform_data_container and _transform_data_container. They must be redefined; failure to do so will trigger an Exception on initialisation (and would create infinite loop if these checks were not there).
 
     .. seealso::
         :class:`BaseStep`,
@@ -3681,7 +3681,7 @@ class AssertionMixin:
         return data_container, context
 
 
-class AssertExpectedOutputNullMixin(AssertionMixin):
+class AssertExpectedOutputIsNoneMixin(AssertionMixin):
 
     def _assert(self, data_container: DataContainer, context: ExecutionContext):
         eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
@@ -3689,6 +3689,9 @@ class AssertExpectedOutputNullMixin(AssertionMixin):
             raise AssertionError(
                 f"Expected datacontainer.expected_output to be a list of None. Received {data_container.expected_outputs}")
 
+class AssertExpecteOutputIsNoneStep(AssertExpectedOutputIsNoneMixin, Identity):
+    def __init__(self):
+        Identity.__init__(self)
 
 class LocalServiceAssertionWrapper(AssertionMixin, MetaStep):
     """
