@@ -3647,18 +3647,29 @@ class FullDumpLoader(Identity):
         context.pop()
         return loaded_self.load(context, full_dump)
 
-
-class WillProcessAssertionMixin:
+class AssertionMixin:
     @abstractmethod
     def _assert(self, data_container: DataContainer, context: ExecutionContext):
         pass
 
+class WillProcessAssertionMixin(AssertionMixin):
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
             DataContainer, ExecutionContext):
         """
         Calls self._assert(data_container,context)
         """
         data_container, context = super()._will_process(data_container, context)
+        self._assert(data_container, context)
+
+        return data_container, context
+
+class DidProcessAssertionMixin(AssertionMixin):
+    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> (
+            DataContainer, ExecutionContext):
+        """
+        Calls self._assert(data_container,context)
+        """
+        data_container, context = super()._did_process(data_container, context)
         self._assert(data_container, context)
 
         return data_container, context
