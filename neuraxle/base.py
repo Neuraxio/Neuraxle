@@ -3648,7 +3648,7 @@ class FullDumpLoader(Identity):
         return loaded_self.load(context, full_dump)
 
 
-class AssertionMixin:
+class WillProcessAssertionMixin:
     @abstractmethod
     def _assert(self, data_container: DataContainer, context: ExecutionContext):
         pass
@@ -3664,7 +3664,7 @@ class AssertionMixin:
         return data_container, context
 
 
-class AssertExpectedOutputNullMixin(AssertionMixin):
+class AssertExpectedOutputNullMixin(WillProcessAssertionMixin):
 
     def _assert(self, data_container: DataContainer, context: ExecutionContext):
         eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
@@ -3673,7 +3673,7 @@ class AssertExpectedOutputNullMixin(AssertionMixin):
                 f"Expected datacontainer.expected_output to be a list of None. Received {data_container.expected_outputs}")
 
 
-class LocalServiceAssertionWrapper(AssertionMixin, MetaStep):
+class LocalServiceAssertionWrapper(WillProcessAssertionMixin, MetaStep):
     """
     Is used to assert the presence of service at execution time for a given step
     """
