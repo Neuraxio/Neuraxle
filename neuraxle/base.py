@@ -3804,7 +3804,7 @@ class StepWithContext(GlobalServiceAssertionExecutorMixin, MetaStep):
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
             DataContainer, ExecutionContext):
         """
-        Inject the given context and test service assertion (if appliable) before processing the wrapped step.
+        Inject the given context and test service assertions (if any are appliable) before processing the wrapped step.
 
         :param data_container: data container to process
         :return: data container, execution context
