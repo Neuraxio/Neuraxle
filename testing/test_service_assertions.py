@@ -166,6 +166,7 @@ def test_auto_ml_should_fail_at_init_when_services_are_missing(tmpdir):
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     expected_outputs = data_inputs * 2
     p = Pipeline([
+        RegisterServiceDynamically(),
         SomeStep().assert_has_services(BaseService),
     ])
 
