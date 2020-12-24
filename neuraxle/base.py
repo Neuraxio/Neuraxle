@@ -3474,7 +3474,7 @@ class ForceHandleMixin(MixinForBaseTransformer):
         :return:
         """
         if original_cls.__dict__[method_name] == getattr(self, method_name).__func__:
-            raise NotImplementedError(f"The ForceHandleMixin class overrides fit, transform and fit_transform to force a call on their handler method counterparts. Failure to redefine basic _fit_data_container, _transform_data_container and _fit_transform_data_container methods can cause an infinite loop. Please define {method_name} in {self.__class__.__name__}")
+            raise NotImplementedError(f"The ForceHandleMixin class overrides fit, transform and fit_transform to force a call on their handler method counterparts. Failure to redefine basic _fit_data_container, _transform_data_container and _fit_transform_data_container methods can cause an infinite loop. Please define {method_name} in {self.__class__.__name__}.")
 
     def transform(self, data_inputs) -> Iterable:
         """
@@ -3648,23 +3648,6 @@ class FullDumpLoader(Identity):
         return loaded_self.load(context, full_dump)
 
 
-def assert_has_services(has_service_assertions: List[Type], context: ExecutionContext):
-    """
-    Assert that all the necessary services are provided in the execution context.
-
-    :param context: The ExecutionContext for which we test the presence of service.
-    """
-    for has_service_assertion in has_service_assertions:
-        if not context.has_service(service_abstract_class_type=has_service_assertion):
-            exception_message: str = '{} dependency missing in the ExecutionContext. Please register the service {} inside the ExecutionContext.\n'.format(
-                has_service_assertion.__name__,
-                has_service_assertion.__name__
-            )
-            step_method_message: str = 'You can do so by calling register_service, or set_services on any step.\n'
-            execution_context_methods_messsage: str = 'There is also the option to register all services inside the ExecutionContext'
-            raise AssertionError(exception_message + step_method_message + execution_context_methods_messsage)
-
-
 class AssertionMixin:
     @abstractmethod
     def _assert(self, data_container: DataContainer, context: ExecutionContext):
@@ -3694,6 +3677,23 @@ class LocalServiceAssertionWrapper(AssertionMixin, MetaStep):
     """
     Is used to assert the presence of service at execution time for a given step
     """
+    @staticmethod
+    def do_assert_has_services(has_service_assertions: List[Type], context: ExecutionContext):
+        """
+        Assert that all the necessary services are provided in the execution context.
+
+        :param context: The ExecutionContext for which we test the presence of service.
+        """
+        for has_service_assertion in has_service_assertions:
+            if not context.has_service(service_abstract_class_type=has_service_assertion):
+                exception_message: str = '{} dependency missing in the ExecutionContext. Please register the service {} inside the ExecutionContext.\n'.format(
+                    has_service_assertion.__name__,
+                    has_service_assertion.__name__
+                )
+                step_method_message: str = 'You can do so by calling register_service, or set_services on any step.\n'
+                execution_context_methods_messsage: str = 'There is also the option to register all services inside the ExecutionContext'
+                raise AssertionError(exception_message + step_method_message + execution_context_methods_messsage)
+
 
     def __init__(self, wrapped: BaseTransformer = None, service_assertions: List[Type] = None,
                  savers: List[BaseSaver] = None):
@@ -3706,12 +3706,14 @@ class LocalServiceAssertionWrapper(AssertionMixin, MetaStep):
         """
         Assert self.local_service_assertions are present in the context.
         """
-        assert_has_services(self.service_assertions, context)
+        LocalServiceAssertionWrapper.do_assert_has_services(self.service_assertions, context)
+
+
 
 
 class GlobalyRetrievableServiceAssertionWrapper(LocalServiceAssertionWrapper):
     """
-    Is used to assert the presence of service at the start of the pipeline AND at execution time for a given step
+    Is used to assert the presence of service at the start of the pipeline AND at execution time for a given step.
     """
 
     def _global_assert_has_services(self, context: ExecutionContext) -> RecursiveDict:
@@ -3722,7 +3724,7 @@ class GlobalyRetrievableServiceAssertionWrapper(LocalServiceAssertionWrapper):
         See also GlobalServiceAssertionExecutorMixin._apply_service_assertions
         :params context : the execution context
         """
-        assert_has_services(self.service_assertions, context)
+        LocalServiceAssertionWrapper.do_assert_has_services(self.service_assertions, context)
         return RecursiveDict()
 
 
