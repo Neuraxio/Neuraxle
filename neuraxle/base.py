@@ -3474,7 +3474,7 @@ class ForceHandleMixin(MixinForBaseTransformer):
         :return:
         """
         if original_cls.__dict__[method_name] == getattr(self, method_name).__func__:
-            raise NotImplementedError(f"Please define method {method_name} in {self.__class__.__name__}.")
+            raise NotImplementedError(f"The ForceHandleMixin class overrides fit, transform and fit_transform to force a call on their handler method counterparts. Failure to redefine basic _fit_data_container, _transform_data_container and _fit_transform_data_container methods can cause an infinite loop. Please define {method_name} in {self.__class__.__name__}")
 
     def transform(self, data_inputs) -> Iterable:
         """
