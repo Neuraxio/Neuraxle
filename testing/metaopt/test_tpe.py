@@ -131,7 +131,8 @@ def _test_trial_scores(
         n_trials=n_trials,
         refit_trial=True,
         epochs=n_epochs,
-        hyperparams_repository=hp_repository
+        hyperparams_repository=hp_repository,
+        raise_all_error_types=True
     )
 
     # When
