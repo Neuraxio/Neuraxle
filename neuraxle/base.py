@@ -2314,7 +2314,7 @@ class _HasChildrenMixin(MixinForBaseTransformer):
     Mixin to add behavior to the steps that have children (sub steps).
 
     .. seealso::
-        :class:`MixinForBaseTransforme`
+        :class:`MixinForBaseTransformer`
         :class:`~neuraxle.base.MetaStepMixin`,
         :class:`~neuraxle.base.TruncableSteps`
     """
@@ -3370,7 +3370,7 @@ class TransformHandlerOnlyMixin(MixinForBaseTransformer):
 
     .. seealso::
         :class:`BaseStep`,
-        :class:`MixinForBaseTransforme`
+        :class:`MixinForBaseTransformer`
         :class:`NonFittableMixin`
     """
 
@@ -3402,7 +3402,7 @@ class HandleOnlyMixin(MixinForBaseTransformer):
 
     .. seealso::
         :class:`BaseStep`,
-        :class:`MixinForBaseTransforme`
+        :class:`MixinForBaseTransformer`
         :class:`TransformHandlerOnlyMixin`,
         :class:`NonTransformableMixin`,
         :class:`NonFittableMixin`,
@@ -3447,7 +3447,7 @@ class ForceHandleMixin(MixinForBaseTransformer):
 
     .. seealso::
         :class:`BaseStep`,
-        :class: MixinForBaseTransformer
+        :class:'MixinForBaseTransformer'
         :class:`HandleOnlyMixin`,
         :class:`TransformHandlerOnlyMixin`,
         :class:`NonTransformableMixin`,
