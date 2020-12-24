@@ -37,7 +37,7 @@ from typing import Callable, List, Union, Tuple
 
 import numpy as np
 
-from neuraxle.base import BaseStep, ExecutionContext, ForceHandleMixin
+from neuraxle.base import BaseStep, ExecutionContext, ForceHandleMixin, _HasChildrenMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.callbacks import BaseCallback, CallbackList, ScoringCallback
@@ -663,7 +663,7 @@ Refer to `execute_trial` for full flexibility
         return self.callbacks[0].name
 
 
-class AutoML(ForceHandleMixin, BaseStep):
+class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
     """
     A step to execute any Automatic Machine Learning Algorithms.
 
@@ -875,6 +875,9 @@ class AutoML(ForceHandleMixin, BaseStep):
         :return: best model step
         """
         return copy.deepcopy(self.pipeline).update_hyperparams(hyperparams)
+
+    def get_children(self) -> List[BaseStep]:
+        return [self.pipeline]
 
 
 def _get_trial_split_description(
