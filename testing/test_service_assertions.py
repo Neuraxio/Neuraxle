@@ -24,20 +24,6 @@ class SomeService(BaseService):
         self.data = data
 
 
-# class SomeStepThatChangesTheRootOfTheExecutionContext(ForceHandleMixin, Identity):
-#     def __init__(self):
-#         Identity.__init__(self)
-#         ForceHandleMixin.__init__(self)
-#
-#     def _will_process(self, data_container: DataContainer, context: ExecutionContext):
-#         context.root = 'invalid_root'
-#         super()._will_process(data_container, context)
-#         return data_container, context
-#
-#     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
-#         return data_container
-
-
 class SomeStep(ForceHandleMixin, Identity):
     def __init__(self):
         Identity.__init__(self)
@@ -65,7 +51,6 @@ class RegisterServiceDynamically(ForceHandleMixin, Identity):
         ForceHandleMixin.__init__(self)
 
     def _will_process(self, data_container: DataContainer, context: ExecutionContext):
-        # data_container, context = ForceHandleMixin._will_process(data_container, context)
         context.register_service(BaseService, SomeService())
         return data_container, context
 
