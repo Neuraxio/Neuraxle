@@ -28,7 +28,7 @@ from typing import Union
 import numpy as np
 
 from neuraxle.base import BaseStep, MetaStep, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin, \
-    HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin, BaseTransformer, NonFittableMixin
+    HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin, BaseTransformer, NonFittableMixin, ExecutionPhase
 from neuraxle.data_container import ExpandedDataContainer
 from neuraxle.hyperparams.distributions import Boolean, Choice
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
@@ -149,6 +149,30 @@ class TestOnlyWrapper(TrainOrTestOnlyWrapper):
         TrainOrTestOnlyWrapper.__init__(self, wrapped=wrapped, is_train_only=False)
 
 
+class IfExecutionPhaseIsThenDo(ForceHandleOnlyMixin, MetaStep):
+    def __init__(self, phase: ExecutionPhase, wrapped: BaseTransformer):
+        MetaStep.__init__(self, wrapped=wrapped)
+        ForceHandleOnlyMixin.__init__(self)
+        self.phase = phase
+
+    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
+        if context.execution_phase == self.phase:
+            self.wrapped.handle_fit(data_container, context)
+        return self
+
+    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> \
+            ('BaseTransformer', DataContainer):
+        if context.execution_phase == self.phase:
+            new_wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
+        return self, data_container
+
+    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> \
+            ('BaseTransformer', DataContainer):
+        if context.execution_phase == self.phase:
+            new_wrapped, data_container = self.wrapped.handle_transform(data_container, context)
+        return self, data_container
+
+
 class Optional(ForceHandleOnlyMixin, MetaStep):
     """
     A wrapper to nullify a step : nullify its hyperparams, and also nullify all of his behavior.
@@ -189,7 +213,8 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
         self.nullified_return_value = nullified_return_value
         self.nullify_hyperparams = nullify_hyperparams
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseStep', DataContainer):
         """
         Nullify wrapped step hyperparams, and don't fit the wrapped step.
 
@@ -205,7 +230,8 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
 
         return self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseStep', DataContainer):
         """
         Nullify wrapped step hyperparams, and don't fit_transform the wrapped step.
 
@@ -330,7 +356,8 @@ class ChooseOneStepOf(FeatureUnion):
 
     def _update_optional_hyperparams(self):
         step_names = list(self.keys())
-        chosen_step_name = self.hyperparams[CHOICE_HYPERPARAM] if CHOICE_HYPERPARAM in self.hyperparams else step_names[0]
+        chosen_step_name = self.hyperparams[CHOICE_HYPERPARAM] if CHOICE_HYPERPARAM in self.hyperparams else step_names[
+            0]
 
         if chosen_step_name not in step_names:
             raise ValueError('Invalid Chosen Step in {0}'.format(self.name))
@@ -617,7 +644,8 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
 
         return data_container
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseStep', DataContainer):
         """
         According to the idiom of `(1, 2, reversed(1))`, we do this, in order:
 
