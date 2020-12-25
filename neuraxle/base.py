@@ -3551,6 +3551,11 @@ class ForceHandleMixin(MixinForBaseTransformer):
 
         return context, data_container
 
+class ForceHandleIdentity(ForceHandleMixin, Identity):
+    def __init__(self):
+        Identity.__init__(self)
+        ForceHandleMixin.__init__(self)
+
 
 class ForceHandleOnlyMixin(ForceHandleMixin, HandleOnlyMixin):
     """
