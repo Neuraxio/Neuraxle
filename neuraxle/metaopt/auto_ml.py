@@ -128,7 +128,7 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         :return:
         """
         hyperparams: HyperparameterSamples = self.get_best_hyperparams()
-        trial_hash: str = self._get_trial_hash(HyperparameterSamples(hyperparams).to_flat_as_dict_primitive())
+        trial_hash: str = self._get_trial_hash(HyperparameterSamples(hyperparams).to_flat_dict())
         p: BaseStep = ExecutionContext(str(self.best_retrained_model_folder)).load(trial_hash)
 
         return p
@@ -140,7 +140,7 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         :param step: step to save
         :return: saved step
         """
-        hyperparams = step.get_hyperparams().to_flat_as_dict_primitive()
+        hyperparams = step.get_hyperparams().to_flat_dict()
         trial_hash = self._get_trial_hash(hyperparams)
         step.set_name(trial_hash).save(ExecutionContext(self.best_retrained_model_folder), full_dump=True)
 
@@ -289,7 +289,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :param trial: trial to save
         :return:
         """
-        hp_dict = trial.hyperparams.to_flat_as_dict_primitive()
+        hp_dict = trial.hyperparams.to_flat_dict()
         current_hyperparameters_hash = self._get_trial_hash(hp_dict)
         self._remove_new_trial_json(current_hyperparameters_hash)
 
@@ -362,7 +362,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
         :return: (hyperparams, scores)
         """
-        hp_dict = trial.hyperparams.to_flat_as_dict_primitive()
+        hp_dict = trial.hyperparams.to_flat_dict()
         current_hyperparameters_hash = self._get_trial_hash(hp_dict)
 
         if not os.path.exists(self.cache_folder):
@@ -378,7 +378,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :param trial: trial
         :return: str
         """
-        trial_hash = self._get_trial_hash(trial.hyperparams.to_flat_as_dict_primitive())
+        trial_hash = self._get_trial_hash(trial.hyperparams.to_flat_dict())
         return os.path.join(
             self.cache_folder,
             str(float(trial.get_validation_score())).replace('.', ',') + "_" + trial_hash
@@ -391,7 +391,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :param trial:
         :return:
         """
-        trial_hash = self._get_trial_hash(trial.hyperparams.to_flat_as_dict_primitive())
+        trial_hash = self._get_trial_hash(trial.hyperparams.to_flat_dict())
         return os.path.join(self.cache_folder, 'FAILED_' + trial_hash) + '.json'
 
     def _remove_new_trial_json(self, current_hyperparameters_hash):

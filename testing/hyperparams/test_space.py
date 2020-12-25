@@ -19,8 +19,6 @@ Tests for Hyperparameters Distribution Spaces
 
 """
 
-from pprint import pprint
-
 import pytest
 
 from neuraxle.hyperparams.distributions import *
@@ -52,36 +50,17 @@ hyperparams_flat_and_dict_pairs = [
 ]
 
 
+@pytest.mark.parametrize("class_to_test", [RecursiveDict, HyperparameterSamples, HyperparameterSpace])
 @pytest.mark.parametrize("flat,expected_dic", hyperparams_flat_and_dict_pairs)
-def test_flat_to_dict_hyperparams(flat: dict, expected_dic: dict):
-    dic = RecursiveDict(flat).to_nested_dict_as_dict_primitive()
+def test_flat_to_dict_hyperparams(flat: dict, expected_dic: dict, class_to_test):
+    from_flat_dic = class_to_test(flat)
+    from_nested_dic = class_to_test(expected_dic)
 
-    assert dict(dic) == dict(expected_dic)
-
-
-@pytest.mark.parametrize("expected_flat,dic", hyperparams_flat_and_dict_pairs)
-def test_dict_to_flat_hyperparams(expected_flat: dict, dic: dict):
-    flat = RecursiveDict(dic).to_flat_as_dict_primitive()
-
-    pprint(dict(flat))
-    pprint(expected_flat)
-    assert dict(flat) == dict(expected_flat)
-
-
-@pytest.mark.parametrize("flat,expected_dic", hyperparams_flat_and_dict_pairs)
-def test_flat_to_dict_hyperparams_with_hyperparameter_space(flat: dict, expected_dic: dict):
-    dic = HyperparameterSpace(flat).to_nested_dict_as_dict_primitive()
-
-    assert dict(dic) == dict(expected_dic)
-
-
-@pytest.mark.parametrize("expected_flat,dic", hyperparams_flat_and_dict_pairs)
-def test_dict_to_flat_hyperparams_with_hyperparameter_space(expected_flat: dict, dic: dict):
-    flat = HyperparameterSpace(dic).to_flat_as_dict_primitive()
-
-    pprint(dict(flat))
-    pprint(expected_flat)
-    assert dict(flat) == dict(expected_flat)
+    assert from_flat_dic == from_nested_dic
+    assert from_flat_dic.to_flat_dict() == flat
+    assert from_nested_dic.to_flat_dict() == flat
+    assert from_nested_dic.to_nested_dict() == expected_dic
+    assert from_flat_dic.to_nested_dict() == expected_dic
 
 
 HYPE_SPACE = HyperparameterSpace({
@@ -100,39 +79,13 @@ HYPE_SPACE = HyperparameterSpace({
 })
 
 
-@pytest.mark.parametrize("to_flat_func_name", [
-    "to_flat",
-    "to_flat_as_dict_primitive",
-    "to_flat_as_ordered_dict_primitive"])
-@pytest.mark.parametrize("to_nested_dict_func_name", [
-    "to_nested_dict",
-    "to_nested_dict_as_dict_primitive",
-    "to_nested_dict_as_ordered_dict_primitive"])
-def test_hyperparams_space_round_robin(to_nested_dict_func_name, to_flat_func_name):
-    orig_space = copy.deepcopy(HYPE_SPACE)
-    print(orig_space.keys())
-
-    nestened = HyperparameterSpace(getattr(
-        orig_space,
-        to_nested_dict_func_name
-    )())
-    print(nestened)
-    flattened = HyperparameterSpace(getattr(
-        nestened,
-        to_flat_func_name
-    )())
-
-    print(flattened.keys())
-    assert flattened.to_flat_as_dict_primitive() == orig_space.to_flat_as_dict_primitive()
-
-
 def test_hyperparams_space_rvs_outputs_samples():
-    space = copy.deepcopy(HYPE_SPACE).to_flat()
+    space = copy.deepcopy(HYPE_SPACE)
 
     samples = space.rvs()
 
     assert isinstance(samples, HyperparameterSamples)
     assert len(samples) == len(space)
-    for k, v in samples.items():
+    for k, v in samples.items_flat():
         assert k in space
         assert not isinstance(v, HyperparameterDistribution)

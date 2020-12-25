@@ -49,7 +49,7 @@ def mock_hasher(current_ids, data_inputs, hyperparameters):
     if len(hyperparameters) == 0:
         return current_ids
     else:
-        items = ",".join([str(value) for prop, value in hyperparameters.to_flat().items()])
+        items = ",".join([str(value) for prop, value in hyperparameters.to_flat_dict().items()])
     return [
         ",".join([str(current_id), items])
         for current_id in current_ids

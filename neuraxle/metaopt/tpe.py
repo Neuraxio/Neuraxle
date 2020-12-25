@@ -4,7 +4,8 @@ Tree parzen estimator
 Code for tree parzen estimator auto ml.
 """
 from collections import Counter
-from typing import List, Any
+from operator import itemgetter
+from typing import List, Any, Tuple
 
 import numpy as np
 
@@ -51,7 +52,8 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
         :rtype: HyperparameterSamples
         """
         # Flatten hyperparameter space
-        flat_hyperparameter_space: HyperparameterSpace = auto_ml_container.hyperparameter_space.to_flat()
+        hyperparams_space_list: List[(str,HyperparameterDistribution)] = list(auto_ml_container.hyperparameter_space.to_flat_dict().items())
+
 
         if auto_ml_container.trial_number < self.number_of_initial_random_step:
             # Perform random search
@@ -67,11 +69,12 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
         )
 
         # Create gaussian mixture of good and gaussian mixture of bads.
-        good_posteriors = self._create_posterior(flat_hyperparameter_space, good_trials)
-        bad_posteriors = self._create_posterior(flat_hyperparameter_space, bad_trials)
+        hyperparams_keys = list(map(itemgetter(0),hyperparams_space_list))
+        good_posteriors:List[HyperparameterDistribution] = self._create_posterior(hyperparams_space_list, good_trials)
+        bad_posteriors:List[HyperparameterDistribution] = self._create_posterior(hyperparams_space_list, bad_trials)
 
         best_hyperparams = []
-        for (hyperparam_key, good_posterior) in good_posteriors.items():
+        for (hyperparam_key, good_posterior, bad_posterior) in zip(hyperparams_keys, good_posteriors,bad_posteriors):
             best_new_hyperparam_value = None
             best_ratio = None
             for _ in range(self.number_possible_hyperparams_candidates):
@@ -95,7 +98,7 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
                 # Seems to take log of pdf and not pdf directly probable to have `-` instead of `/`.
                 # TODO: Maybe they use the likelyhood to sum over all possible parameters to find the max so it become a join distribution of all hyperparameters, would make sense.
                 # TODO: verify is for quantized we do not want to do cdf(value higher) - cdf(value lower) to have pdf.
-                ratio = good_posterior.pdf(possible_new_hyperparm) / bad_posteriors[hyperparam_key].pdf(
+                ratio = good_posterior.pdf(possible_new_hyperparm) / bad_posterior.pdf(
                     possible_new_hyperparm)
 
                 if best_new_hyperparam_value is None:
@@ -109,16 +112,16 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
             best_hyperparams.append((hyperparam_key, best_new_hyperparam_value))
         return HyperparameterSamples(best_hyperparams)
 
-    def _create_posterior(self, flat_hyperparameter_space: HyperparameterSpace, trials: Trials) -> HyperparameterSpace:
+    def _create_posterior(self, flat_hyperparameter_space_list:  List[Tuple[str, HyperparameterDistribution]] , trials: Trials) -> HyperparameterSpace:
         # Create a list of all hyperparams and their trials.
 
         # Loop through all hyperparams
-        posterior_distributions: HyperparameterSpace = HyperparameterSpace()
-        for (hyperparam_key, hyperparam_distribution) in flat_hyperparameter_space.items():
+        posterior_distributions = []
+        for (hyperparam_key, hyperparam_distribution) in flat_hyperparameter_space_list:
 
             # Get trial hyperparams
             trial_hyperparams: List[HyperparameterSamples] = [
-                trial.hyperparams.to_flat_as_dict_primitive()[hyperparam_key] for trial in trials
+                trial.hyperparams[hyperparam_key] for trial in trials
             ]
 
             if hyperparam_distribution.is_discrete():
@@ -132,7 +135,7 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
                     trial_hyperparameters=trial_hyperparams
                 )
 
-            posterior_distributions.update({hyperparam_key: posterior_distribution})
+            posterior_distributions.append(posterior_distribution)
 
         return posterior_distributions
 

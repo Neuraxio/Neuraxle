@@ -118,7 +118,7 @@ class Trial:
         """
         Save fitted model in the trial hash folder.
         """
-        hyperparams = self.hyperparams.to_flat_as_dict_primitive()
+        hyperparams = self.hyperparams.to_flat_dict()
         trial_hash = self._get_trial_hash(hyperparams)
         self.pipeline.set_name(trial_hash).save(ExecutionContext(self.cache_folder), full_dump=True)
 
@@ -230,7 +230,7 @@ class Trial:
     def to_json(self):
         return {
             'status': self.status.value,
-            'hyperparams': self.hyperparams.to_flat_as_dict_primitive(),
+            'hyperparams': self.hyperparams.to_flat_dict(),
             'validation_splits': [v.to_json() for v in self.validation_splits],
             'error': self.error,
             'error_traceback': self.error_traceback,

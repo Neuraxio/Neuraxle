@@ -76,9 +76,9 @@ def test_has_children_mixin_apply_should_apply_method_to_direct_childrends():
         'Pipeline__hp': 2
     }))
 
-    assert p['a'].hyperparams.to_flat_as_dict_primitive()['hp'] == 0
-    assert p['b'].hyperparams.to_flat_as_dict_primitive()['hp'] == 1
-    assert p['Pipeline'].hyperparams.to_flat_as_dict_primitive()['hp'] == 2
+    assert p['a'].hyperparams.to_flat_dict()['hp'] == 0
+    assert p['b'].hyperparams.to_flat_dict()['hp'] == 1
+    assert p['Pipeline'].hyperparams.to_flat_dict()['hp'] == 2
 
 
 def test_has_children_mixin_apply_should_apply_method_to_recursive_childrends():
@@ -96,8 +96,8 @@ def test_has_children_mixin_apply_should_apply_method_to_recursive_childrends():
         'Pipeline__d__hp': 4
     }))
 
-    assert p['Pipeline']['c'].hyperparams.to_flat_as_dict_primitive()['hp'] == 3
-    assert p['Pipeline']['d'].hyperparams.to_flat_as_dict_primitive()['hp'] == 4
+    assert p['Pipeline']['c'].hyperparams.to_flat_dict()['hp'] == 3
+    assert p['Pipeline']['d'].hyperparams.to_flat_dict()['hp'] == 4
 
 
 def test_has_children_mixin_apply_should_return_recursive_dict_to_direct_childrends():
@@ -108,8 +108,8 @@ def test_has_children_mixin_apply_should_return_recursive_dict_to_direct_childre
 
     results = p.apply('_get_hyperparams', ra=None)
 
-    assert results.to_flat_as_dict_primitive()['a__hp'] == 0
-    assert results.to_flat_as_dict_primitive()['b__hp'] == 1
+    assert results.to_flat_dict()['a__hp'] == 0
+    assert results.to_flat_dict()['b__hp'] == 1
 
 
 def test_has_children_mixin_apply_should_return_recursive_dict_to_recursive_childrends():
@@ -121,7 +121,6 @@ def test_has_children_mixin_apply_should_return_recursive_dict_to_recursive_chil
     ])
 
     results = p.apply('_get_hyperparams', ra=None)
-    results = results.to_flat_as_dict_primitive()
 
     assert results['Pipeline__hp'] == 2
     assert results['Pipeline__c__hp'] == 3

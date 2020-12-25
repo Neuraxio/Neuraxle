@@ -123,7 +123,8 @@ def create_test_case_invalid_step_not_choosen():
 def test_choose_one_or_many_step_of_transform_should_choose_step(
         test_case: NeuraxleTestCase):
     p = test_case.pipeline
-    p.set_hyperparams_space(HyperparameterSpace(test_case.hyperparams_space))
+    test =HyperparameterSpace(test_case.hyperparams_space)
+    p.set_hyperparams_space(test)
     p.set_hyperparams(test_case.hyperparams)
 
     outputs = p.transform(DATA_INPUTS)

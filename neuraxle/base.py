@@ -107,7 +107,7 @@ class HashlibMd5Hasher(BaseHasher):
         m = hashlib.md5()
 
         current_hyperparameters_hash = hashlib.md5(
-            str.encode(str(hyperparameters.to_flat_as_dict_primitive()))
+            str.encode(str(hyperparameters.to_flat_dict()))
         ).hexdigest()
 
         m.update(str.encode(str(current_id)))
@@ -134,7 +134,7 @@ class HashlibMd5Hasher(BaseHasher):
         if len(hyperparameters) == 0:
             return current_ids
 
-        hyperperams_dict = hyperparameters.to_flat_as_dict_primitive()
+        hyperperams_dict = hyperparameters.to_flat_dict()
         current_hyperparameters_hash = hashlib.md5(str.encode(str(hyperperams_dict))).hexdigest()
 
         new_current_ids = []
@@ -170,7 +170,7 @@ class HashlibMd5ValueHasher(HashlibMd5Hasher):
         if len(hyperparameters) == 0:
             return current_ids
 
-        hyperperams_dict = hyperparameters.to_flat_as_dict_primitive()
+        hyperperams_dict = hyperparameters.to_flat_dict()
         current_hyperparameters_hash = hashlib.md5(str.encode(str(hyperperams_dict))).hexdigest()
 
         new_current_ids = []
@@ -309,6 +309,7 @@ class ExecutionMode(Enum):
     FIT_TRANSFORM = 'fit_transform'
     INVERSE_TRANSFORM = 'inverse_transform'
 
+
 class ExecutionPhase(Enum):
     UNSPECIFIED = None
     PRETRAIN = "pretraining"
@@ -316,6 +317,7 @@ class ExecutionPhase(Enum):
     VALIDATION = "validation"
     TEST = "test"
     PROD = "production"
+
 
 class ExecutionContext:
     """
@@ -336,7 +338,7 @@ class ExecutionContext:
     def __init__(
             self,
             root: str = DEFAULT_CACHE_FOLDER,
-            execution_phase:ExecutionPhase = ExecutionPhase.UNSPECIFIED,
+            execution_phase: ExecutionPhase = ExecutionPhase.UNSPECIFIED,
             execution_mode: ExecutionMode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM,
             stripped_saver: BaseSaver = None,
             parents: List['BaseStep'] = None,
@@ -359,7 +361,7 @@ class ExecutionContext:
             services: Dict[Type, object] = dict()
         self.services: Dict[Type, object] = services
 
-    def set_execution_phase(self, phase:ExecutionPhase) -> 'ExecutionContext':
+    def set_execution_phase(self, phase: ExecutionPhase) -> 'ExecutionContext':
         """
         Set the instance's execution phase to given phase.
 
@@ -681,12 +683,12 @@ class _HasRecursiveMethods:
         class _HasHyperparams:
             # ...
             def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]) -> HyperparameterSamples:
-                self.apply(method='_set_hyperparams', hyperparams=HyperparameterSamples(hyperparams).to_flat())
+                self.apply(method='_set_hyperparams', hyperparams=HyperparameterSamples(hyperparams))
                 return self
 
             def _set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]) -> HyperparameterSamples:
                 self._invalidate()
-                hyperparams = HyperparameterSamples(hyperparams).to_flat()
+                hyperparams = HyperparameterSamples(hyperparams)
                 self.hyperparams = hyperparams if len(hyperparams) > 0 else self.hyperparams
                 return self.hyperparams
 
@@ -1288,7 +1290,6 @@ class _HasHyperparamsSpace(ABC):
                 hyperparams_space = dict()
 
         self.hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space)
-        self.hyperparams_space = self.hyperparams_space.to_flat()
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseTransformer':
         """
@@ -1317,12 +1318,12 @@ class _HasHyperparamsSpace(ABC):
             :func:`_HasChildrenMixin._apply`,
             :func:`_HasChildrenMixin._get_params`
         """
-        self.apply(method='_set_hyperparams_space', hyperparams_space=HyperparameterSpace(hyperparams_space).to_flat())
+        self.apply(method='_set_hyperparams_space', hyperparams_space=HyperparameterSpace(hyperparams_space))
         return self
 
     def _set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> HyperparameterSpace:
         self._invalidate()
-        self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
+        self.hyperparams_space = HyperparameterSpace(hyperparams_space)
         return self.hyperparams_space
 
     def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseTransformer':
@@ -1357,12 +1358,12 @@ class _HasHyperparamsSpace(ABC):
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
         self.apply(method='_update_hyperparams_space',
-                   hyperparams_space=HyperparameterSpace(hyperparams_space).to_flat())
+                   hyperparams_space=HyperparameterSpace(hyperparams_space))
         return self
 
     def _update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> HyperparameterSpace:
         self._invalidate()
-        hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
+        hyperparams_space = HyperparameterSpace(hyperparams_space)
         self.hyperparams_space.update(hyperparams_space)
         return self.hyperparams_space
 
@@ -1385,10 +1386,10 @@ class _HasHyperparamsSpace(ABC):
             :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
         """
         results: HyperparameterSpace = self.apply(method='_get_hyperparams_space')
-        return results.to_flat()
+        return results
 
     def _get_hyperparams_space(self) -> HyperparameterSpace:
-        return HyperparameterSpace(self.hyperparams_space.to_flat_as_dict_primitive())
+        return HyperparameterSpace(self.hyperparams_space)
 
 
 class _HasHyperparams(ABC):
@@ -1427,7 +1428,6 @@ class _HasHyperparams(ABC):
                 hyperparams = dict()
 
         self.hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams)
-        self.hyperparams = self.hyperparams.to_flat()
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseTransformer':
         """
@@ -1454,12 +1454,12 @@ class _HasHyperparams(ABC):
             :func:`_HasChildrenMixin._apply`,
             :func:`_HasChildrenMixin._set_train`
         """
-        self.apply(method='_set_hyperparams', hyperparams=HyperparameterSamples(hyperparams).to_flat())
+        self.apply(method='_set_hyperparams', hyperparams=HyperparameterSamples(hyperparams))
         return self
 
     def _set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]) -> HyperparameterSamples:
         self._invalidate()
-        hyperparams = HyperparameterSamples(hyperparams).to_flat()
+        hyperparams = HyperparameterSamples(hyperparams)
         self.hyperparams = hyperparams if len(hyperparams) > 0 else self.hyperparams
         return self.hyperparams
 
@@ -1494,11 +1494,11 @@ class _HasHyperparams(ABC):
             :func:`_HasChildrenMixin._apply`,
             :func:`_HasChildrenMixin._update_hyperparams`
         """
-        self.apply(method='_update_hyperparams', hyperparams=HyperparameterSamples(hyperparams).to_flat())
+        self.apply(method='_update_hyperparams', hyperparams=HyperparameterSamples(hyperparams))
         return self
 
     def _update_hyperparams(self, hyperparams: Union[Dict, HyperparameterSamples]) -> HyperparameterSamples:
-        self.hyperparams.update(HyperparameterSamples(hyperparams).to_flat())
+        self.hyperparams.update(HyperparameterSamples(hyperparams))
         return self.hyperparams
 
     def get_hyperparams(self) -> HyperparameterSamples:
@@ -1517,10 +1517,10 @@ class _HasHyperparams(ABC):
             :func:`_HasChildrenMixin._get_hyperparams`
         """
         results: HyperparameterSamples = self.apply(method='_get_hyperparams')
-        return results.to_flat()
+        return results
 
     def _get_hyperparams(self) -> HyperparameterSamples:
-        return HyperparameterSamples(self.hyperparams.to_flat_as_dict_primitive())
+        return HyperparameterSamples(self.hyperparams)
 
     def set_params(self, **params) -> 'BaseTransformer':
         """
@@ -1545,7 +1545,7 @@ class _HasHyperparams(ABC):
             :func:`~neuraxle.base._HasChildrenMixin._apply`,
             :func:`~neuraxle.base._HasChildrenMixin._set_params`
         """
-        self.apply(method='_set_params', params=HyperparameterSamples(params).to_flat())
+        self.apply(method='_set_params', params=HyperparameterSamples(params))
         return self
 
     def _set_params(self, params: dict) -> HyperparameterSamples:
@@ -1577,7 +1577,7 @@ class _HasHyperparams(ABC):
         return results
 
     def _get_params(self) -> HyperparameterSamples:
-        return self.get_hyperparams().to_flat()
+        return self.get_hyperparams()
 
 
 class _HasSavers(ABC):
@@ -3709,9 +3709,11 @@ class AssertExpectedOutputIsNoneMixin(AssertionMixin):
             raise AssertionError(
                 f"Expected datacontainer.expected_output to be a list of None. Received {data_container.expected_outputs}")
 
+
 class AssertExpecteOutputIsNoneStep(AssertExpectedOutputIsNoneMixin, Identity):
     def __init__(self):
         Identity.__init__(self)
+
 
 class LocalServiceAssertionWrapper(AssertionMixin, MetaStep):
     """
