@@ -78,7 +78,8 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStep):
             return self
         return self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseStep', DataContainer):
         """
         :param data_container: data container
         :param context: execution context
@@ -150,25 +151,40 @@ class TestOnlyWrapper(TrainOrTestOnlyWrapper):
 
 
 class IfExecutionPhaseIsThenDo(ForceHandleOnlyMixin, MetaStep):
-    def __init__(self, phase: ExecutionPhase, wrapped: BaseTransformer):
+    """
+    If, at runtime, the execution phase is the same as the one given to the constructor, then execute wrapped step.
+
+    By default, will raise an error if the execution phase is not specified in the context.
+    Steps which implement ForceHandleMixin create context with unspecified phase on fit, fit_transform and transform call.
+    """
+
+    def __init__(self, phase: ExecutionPhase, wrapped: BaseTransformer, raise_if_phase_unspecified: bool = True):
         MetaStep.__init__(self, wrapped=wrapped)
         ForceHandleOnlyMixin.__init__(self)
         self.phase = phase
+        self.raise_if_phase_unspecified = raise_if_phase_unspecified
+
+    def check_context(self, context: ExecutionContext):
+        if context.execution_phase == self.phase:
+            return True
+        elif self.raise_if_phase_unspecified and context.execution_phase == ExecutionPhase.UNSPECIFIED:
+            raise ValueError("Execution phase is unspecified while a step requires it to be specified.")
+        return False
 
     def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
-        if context.execution_phase == self.phase:
+        if self.check_context(context):
             self.wrapped.handle_fit(data_container, context)
         return self
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> \
             ('BaseTransformer', DataContainer):
-        if context.execution_phase == self.phase:
+        if self.check_context(context):
             new_wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
         return self, data_container
 
     def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> \
             ('BaseTransformer', DataContainer):
-        if context.execution_phase == self.phase:
+        if self.check_context(context):
             new_wrapped, data_container = self.wrapped.handle_transform(data_container, context)
         return self, data_container
 
@@ -214,7 +230,7 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
         self.nullify_hyperparams = nullify_hyperparams
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+            'BaseStep', DataContainer):
         """
         Nullify wrapped step hyperparams, and don't fit the wrapped step.
 
@@ -231,7 +247,7 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
         return self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+            'BaseStep', DataContainer):
         """
         Nullify wrapped step hyperparams, and don't fit_transform the wrapped step.
 
@@ -645,7 +661,7 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
         return data_container
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+            'BaseStep', DataContainer):
         """
         According to the idiom of `(1, 2, reversed(1))`, we do this, in order:
 
