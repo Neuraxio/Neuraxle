@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from sklearn.metrics import mean_squared_error
 
-from neuraxle.base import Identity, ExecutionContext, ForceHandleMixin, StepWithContext
+from neuraxle.base import Identity, ExecutionContext, ForceHandleMixin, StepWithContext, ForceHandleIdentity
 from neuraxle.data_container import DataContainer
 from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, RandomSearchHyperparameterSelectionStrategy, \
     ValidationSplitter
@@ -24,38 +24,18 @@ class SomeService(BaseService):
         self.data = data
 
 
-class SomeStep(ForceHandleMixin, Identity):
-    def __init__(self):
-        Identity.__init__(self)
-        ForceHandleMixin.__init__(self)
-
+class SomeStep(ForceHandleIdentity):
     def _will_process(self, data_container: DataContainer, context: ExecutionContext):
         data_container, context = super()._will_process(data_container, context)
         service = context.get_service(BaseService)
+        service.service_method(data_container.data_inputs)
         return data_container, context
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
-        service: BaseService = context.get_service(BaseService)
-        service.service_method(data_container.data_inputs)
-        return self
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
-        service: BaseService = context.get_service(BaseService)
-        service.service_method(data_container.data_inputs)
-        return data_container
-
-
-class RegisterServiceDynamically(ForceHandleMixin, Identity):
-    def __init__(self):
-        Identity.__init__(self)
-        ForceHandleMixin.__init__(self)
-
+class RegisterServiceDynamically(ForceHandleIdentity):
     def _will_process(self, data_container: DataContainer, context: ExecutionContext):
         context.register_service(BaseService, SomeService())
         return data_container, context
-
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
-        return data_container
 
 
 def test_step_with_context_should_only_save_wrapped_step(tmpdir):
