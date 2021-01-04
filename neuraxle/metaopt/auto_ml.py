@@ -715,7 +715,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             refit_scoring_function: Callable = None,
             print_func: Callable = None,
             cache_folder_when_no_handle=None,
-            raise_all_error_types=False
+            continue_loop_on_error=True
     ):
         BaseStep.__init__(self)
         ForceHandleMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
@@ -746,8 +746,8 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
         self.refit_trial: bool = refit_trial
 
-        self.error_types_to_raise = (Exception,) if raise_all_error_types \
-            else (SystemError, SystemExit, EOFError, KeyboardInterrupt)
+        self.error_types_to_raise = (SystemError, SystemExit, EOFError, KeyboardInterrupt) if continue_loop_on_error \
+            else (Exception,)
 
         self.trainer = Trainer(
             epochs=epochs,

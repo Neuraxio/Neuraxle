@@ -139,7 +139,7 @@ def _make_autoML_loop(tmpdir, p: Pipeline):
         epochs=n_epochs,
         hyperparams_repository=hp_repository,
         cache_folder_when_no_handle=str(tmpdir),
-        raise_all_error_types=True
+        continue_loop_on_error=True
     )
 
 
