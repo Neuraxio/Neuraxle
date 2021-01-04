@@ -132,7 +132,7 @@ def _test_trial_scores(
         refit_trial=True,
         epochs=n_epochs,
         hyperparams_repository=hp_repository,
-        raise_all_error_types=True
+        continue_loop_on_error=False
     )
 
     # When

@@ -43,7 +43,7 @@ def test_automl_early_stopping_callback(tmpdir):
         refit_trial=True,
         epochs=n_epochs,
         hyperparams_repository=hp_repository,
-        raise_all_error_types=True
+        continue_loop_on_error=False
     )
 
     # When
@@ -78,7 +78,7 @@ def test_automl_with_kfold(tmpdir):
         refit_trial=True,
         print_func=print,
         hyperparams_repository=hp_repository,
-        raise_all_error_types=True
+        continue_loop_on_error=False
     )
 
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
@@ -263,7 +263,7 @@ def test_automl_should_shallow_copy_data_before_each_epoch():
         callbacks=[MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)],
         hyperparams_repository=InMemoryHyperparamsRepository(
             cache_folder='cache'),
-        raise_all_error_types=True
+        continue_loop_on_error=False
     )
 
     random_search = auto_ml.fit(data_inputs, expected_outputs)
