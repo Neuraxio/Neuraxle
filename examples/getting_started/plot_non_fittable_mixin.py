@@ -47,6 +47,9 @@ class NonFittableStep(NonFittableMixin, BaseStep):
     Also, make sure that BaseStep is the last step you inherit from.
     Note that we could also define the inverse_transform method in the present object.
     """
+    def __init__(self):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
 
     def transform(self, data_inputs):
         # insert your transform code here
@@ -60,6 +63,9 @@ class NonTransformableStep(NonTransformableMixin, BaseStep):
     Please make your steps inherit from NonTransformableMixin, when they don't need any transformations.
     Also, make sure that BaseStep is the last step you inherit from.
     """
+    def __init__(self):
+        BaseStep.__init__(self)
+        NonTransformableMixin.__init__(self)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'NonTransformableStep':
         # insert your fit code here

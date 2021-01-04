@@ -37,7 +37,7 @@ from typing import Callable, List, Union, Tuple
 
 import numpy as np
 
-from neuraxle.base import BaseStep, ExecutionContext, ForceHandleMixin
+from neuraxle.base import BaseStep, ExecutionContext, ForceHandleMixin, _HasChildrenMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.callbacks import BaseCallback, CallbackList, ScoringCallback
@@ -573,7 +573,7 @@ Refer to `execute_trial` for full flexibility
             with repo_trial_split:
                 trial_split_description = _get_trial_split_description(
                     repo_trial=repo_trial,
-                    repo_trial_split=repo_trial_split,
+                    repo_trial_split_number=repo_trial_split.split_number,
                     validation_splits=validation_splits,
                     trial_number=trial_number,
                     n_trial=n_trial
@@ -663,7 +663,7 @@ Refer to `execute_trial` for full flexibility
         return self.callbacks[0].name
 
 
-class AutoML(ForceHandleMixin, BaseStep):
+class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
     """
     A step to execute any Automatic Machine Learning Algorithms.
 
@@ -714,7 +714,8 @@ class AutoML(ForceHandleMixin, BaseStep):
             callbacks: List[BaseCallback] = None,
             refit_scoring_function: Callable = None,
             print_func: Callable = None,
-            cache_folder_when_no_handle=None
+            cache_folder_when_no_handle=None,
+            continue_loop_on_error=True
     ):
         BaseStep.__init__(self)
         ForceHandleMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
@@ -744,6 +745,9 @@ class AutoML(ForceHandleMixin, BaseStep):
         self.refit_scoring_function: Callable = refit_scoring_function
 
         self.refit_trial: bool = refit_trial
+
+        self.error_types_to_raise = (SystemError, SystemExit, EOFError, KeyboardInterrupt) if continue_loop_on_error \
+            else (Exception,)
 
         self.trainer = Trainer(
             epochs=epochs,
@@ -780,6 +784,7 @@ class AutoML(ForceHandleMixin, BaseStep):
                 )
 
                 with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
+                    repo_trial_split = None
                     self.print_func('\ntrial {}/{}'.format(trial_number + 1, self.n_trial))
 
                     repo_trial_split = self.trainer.execute_trial(
@@ -790,16 +795,17 @@ class AutoML(ForceHandleMixin, BaseStep):
                         validation_splits=validation_splits,
                         n_trial=self.n_trial
                     )
-            except (SystemError, SystemExit, EOFError, KeyboardInterrupt) as error:
+            except self.error_types_to_raise as error:
                 track = traceback.format_exc()
                 repo_trial.set_failed(error)
                 self.print_func(track)
                 raise error
             except Exception:
                 track = traceback.format_exc()
+                repo_trial_split_number = 0 if repo_trial_split is None else repo_trial_split.split_number + 1
                 self.print_func('failed trial {}'.format(_get_trial_split_description(
                     repo_trial=repo_trial,
-                    repo_trial_split=repo_trial_split,
+                    repo_trial_split_number=repo_trial_split_number,
                     validation_splits=validation_splits,
                     trial_number=trial_number,
                     n_trial=self.n_trial
@@ -825,6 +831,16 @@ class AutoML(ForceHandleMixin, BaseStep):
             self.hyperparams_repository.save_best_model(p)
 
         return self
+
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
+            ('BaseStep', DataContainer):
+        raise NotImplementedError("AutoML does not implement method _fit_transform_data_container. Use method such as "
+                                  "fit or handle_fit to train models and then use method such as get_best_model to "
+                                  "retrieve the model you wish to use for transform")
+
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        raise NotImplementedError("AutoML does not implement method _transform_data_container. Use method such as "
+                                  "get_best_model to retrieve the model you wish to use for transform")
 
     def _save_trial(self, repo_trial, trial_number):
         self.hyperparams_repository.save_trial(repo_trial)
@@ -860,10 +876,13 @@ class AutoML(ForceHandleMixin, BaseStep):
         """
         return copy.deepcopy(self.pipeline).update_hyperparams(hyperparams)
 
+    def get_children(self) -> List[BaseStep]:
+        return [self.pipeline]
+
 
 def _get_trial_split_description(
         repo_trial: Trial,
-        repo_trial_split: TrialSplit,
+        repo_trial_split_number: int,
         validation_splits: List[Tuple[DataContainer, DataContainer]],
         trial_number: int,
         n_trial: int
@@ -871,7 +890,7 @@ def _get_trial_split_description(
     trial_split_description = '{}/{} split {}/{}\nhyperparams: {}\n'.format(
         trial_number + 1,
         n_trial,
-        repo_trial_split.split_number + 1,
+        repo_trial_split_number + 1,
         len(validation_splits),
         json.dumps(repo_trial.hyperparams, sort_keys=True, indent=4)
     )
@@ -938,7 +957,8 @@ class RandomSearchHyperparameterSelectionStrategy(BaseHyperparameterSelectionStr
 
 
 class BaseValidationSplitter(ABC):
-    def split_data_container(self, data_container: DataContainer, context: ExecutionContext) -> List[Tuple[DataContainer, DataContainer]]:
+    def split_data_container(self, data_container: DataContainer, context: ExecutionContext) -> List[
+        Tuple[DataContainer, DataContainer]]:
         """
         Wrap a validation split function with a split data container function.
         A validation split function takes two arguments:  data inputs, and expected outputs.
@@ -976,7 +996,8 @@ class BaseValidationSplitter(ABC):
         return splits
 
     @abstractmethod
-    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[List, List, List, List]:
+    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[
+        List, List, List, List]:
         """
         Train/Test split data inputs and expected outputs.
 
@@ -1006,7 +1027,8 @@ class KFoldCrossValidationSplitter(BaseValidationSplitter):
         BaseValidationSplitter.__init__(self)
         self.k_fold = k_fold
 
-    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[List, List, List, List]:
+    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[
+        List, List, List, List]:
         data_inputs_train, data_inputs_val = kfold_cross_validation_split(
             data_inputs=data_inputs,
             k_fold=self.k_fold
@@ -1060,7 +1082,8 @@ class ValidationSplitter(BaseValidationSplitter):
     def __init__(self, test_size: float):
         self.test_size = test_size
 
-    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[List, List, List, List]:
+    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[
+        List, List, List, List]:
         train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = validation_split(
             test_size=self.test_size,
             data_inputs=data_inputs,

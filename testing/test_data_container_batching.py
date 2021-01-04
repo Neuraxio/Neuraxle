@@ -35,7 +35,7 @@ class SomeLazyLoadableCollection:
         return len(self.inner_list)
 
 
-def test_data_container_convolve1d_should_be_lazy_and_use_getitem_when_data_is_lazy_loadable():
+def test_data_container_minibatch_should_be_lazy_and_use_getitem_when_data_is_lazy_loadable():
     items = [LoadableItem() for _ in range(10)]
     data_inputs = SomeLazyLoadableCollection(items)
     expected_outputs = SomeLazyLoadableCollection([LoadableItem() for _ in range(10)])

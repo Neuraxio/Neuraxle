@@ -362,6 +362,9 @@ class NumpyRavel(NonFittableMixin, BaseStep):
         :class:`~neuraxle.base.BaseStep`,
         :class:`~neuraxle.base.NonFittableMixin`
     """
+    def __init__(self):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
 
     def transform(self, data_inputs):
         """
@@ -412,6 +415,9 @@ class NumpyAbs(NonFittableMixin, BaseStep):
         :class:`~neuraxle.base.BaseStep`,
         :class:`~neuraxle.base.NonFittableMixin`
     """
+    def __init__(self):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
 
     def transform(self, data_inputs):
         """

@@ -28,7 +28,7 @@ def test_data_container_len_method_should_return_data_inputs_len():
     assert len(data_container) == 100
 
 
-def test_data_container_should_iterate_through_batches_using_convolved():
+def test_data_container_should_iterate_through_data_using_minibatches():
     data_container = DataContainer(current_ids=[str(i) for i in range(100)], data_inputs=np.array(list(range(100))),
                                    expected_outputs=np.array(list(range(100, 200))))
 

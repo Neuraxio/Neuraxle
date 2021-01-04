@@ -37,6 +37,7 @@ from enum import Enum
 from typing import List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Dict, Tuple, Type
 
 from joblib import dump, load
+
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
 
@@ -525,7 +526,7 @@ class ExecutionContext:
 
     def empty(self):
         """
-        Return True if the context has parent steps.
+        Return True if the context doesn't have parent steps.
 
         :return: if parents len is 0
         """
@@ -1620,6 +1621,18 @@ class _HasSavers(ABC):
         self.savers: List[BaseSaver] = savers
         return self
 
+    def add_saver(self, saver: BaseSaver) -> 'BaseTransformer':
+        """
+        Add a step saver of a pipeline step.
+
+        :return: self
+
+        .. seealso::
+            :class:`BaseSaver`
+        """
+        self.savers.append(saver)
+        return self
+
     def should_save(self) -> bool:
         """
         Returns true if the step should be saved.
@@ -1915,10 +1928,6 @@ class _HasMutations(ABC):
         return self
 
 
-
-
-
-
 class _CouldHaveContext:
     """
     Step that can have a context.
@@ -1930,12 +1939,20 @@ class _CouldHaveContext:
 
         context = ExecutionContext(root=tmpdir)
         service = SomeService()
-        context.set_service_locator({BaseService: service})
+        context.set_service_locator({SomeBaseService: service})
 
         p = Pipeline([
-            SomeStep().assert_has_services(BaseService)
+            SomeStep().assert_has_services(SomeBaseService)
         ]).with_context(context=context)
 
+    Or alternatively,
+
+    .. code-block:: python
+
+        p = Pipeline([
+            RegisterSomeService(),
+            SomeStep().assert_has_services_at_execution(SomeBaseService)
+        ])
 
     Context services can be used inside any step with handler methods:
 
@@ -1947,7 +1964,7 @@ class _CouldHaveContext:
                 ForceHandleMixin.__init__(self)
 
             def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
-                service: BaseService = context.get_service(BaseService)
+                service: SomeBaseService = context.get_service(SomeBaseService)
                 service.service_method(data_container.data_inputs)
                 return data_container
 
@@ -1956,12 +1973,6 @@ class _CouldHaveContext:
         :class:`~neuraxle.base.BaseTransformer`,
         :class:`~neuraxle.base._TransformerStep`,
     """
-
-    def __init__(self, has_service_assertions: List[Type] = None):
-        if has_service_assertions is None:
-            has_service_assertions = []
-
-        self.has_service_assertions: List[Type] = has_service_assertions
 
     def with_context(self, context: ExecutionContext):
         """
@@ -1976,7 +1987,7 @@ class _CouldHaveContext:
             context.set_service_locator(ServiceLocator().services) # where services is of type Dict[Type, object]
 
             p = WithContext(Pipeline([
-                SomeStep().with_assertion_has_services(BaseService)
+                SomeStep().with_assertion_has_services(SomeBaseService)
             ]), context)
 
 
@@ -1987,34 +1998,21 @@ class _CouldHaveContext:
         """
         return StepWithContext(wrapped=self, context=context)
 
-    def assert_has_services(self, *service_assertions) -> '_CouldHaveContext':
+    def assert_has_services(self, *service_assertions: List[Type]) -> 'GlobalyRetrievableServiceAssertionWrapper':
+        """
+        Set all service assertions to be made at the root of the pipeline and before processing the step.
+
+        :param service_assertions: base types that need to be available in the execution context at the root of the pipeline
+        """
+        return GlobalyRetrievableServiceAssertionWrapper(wrapped=self, service_assertions=service_assertions)
+
+    def assert_has_services_at_execution(self, *service_assertions: List[Type]) -> 'LocalServiceAssertionWrapper':
         """
         Set all service assertions to be made before processing the step.
 
         :param service_assertions: base types that need to be available in the execution context
-        :return: self
         """
-        self.has_service_assertions: List[Type] = service_assertions
-        return self
-
-    def _assert_has_services(self, context: ExecutionContext) -> RecursiveDict:
-        """
-        Assert that all the necessary services are provided in the execution context.
-
-        :param context: execution context
-        :return: self
-        """
-        for has_service_assertion in self.has_service_assertions:
-            if not context.has_service(service_abstract_class_type=has_service_assertion):
-                exception_message: str = '{} dependency missing in the ExecutionContext. Please register the service {} inside the ExecutionContext.\n'.format(
-                    has_service_assertion.__name__,
-                    has_service_assertion.__name__
-                )
-                step_method_message: str = 'You can do so by calling register_service, or set_services on any step.\n'
-                execution_context_methods_messsage: str = 'There is also the option to register all services inside the ExecutionContext'
-                raise AssertionError(exception_message + step_method_message + execution_context_methods_messsage)
-
-        return RecursiveDict()
+        return LocalServiceAssertionWrapper(wrapped=self, service_assertions=service_assertions)
 
 
 class BaseTransformer(
@@ -2200,7 +2198,7 @@ class BaseTransformer(
         .. seealso::
             :func:`~neuraxle.base._TransformerStep.inverse_transform`
         """
-        return self.mutate(new_method="inverse_transform", method_to_assign_to="transform")
+        return self.mutate(new_method="inverse_transform", method_to_assign_to="transform", warn=False)
 
     def __reversed__(self) -> 'BaseTransformer':
         """
@@ -2224,7 +2222,8 @@ class BaseTransformer(
 
 
 def _sklearn_to_neuraxle_step(step) -> BaseTransformer:
-    if hasattr(step, '_get_param_names') and hasattr(step, '_more_tags') and hasattr(step, '_check_n_features') and hasattr(step, '_validate_data'):
+    if hasattr(step, '_get_param_names') and hasattr(step, '_more_tags') \
+            and hasattr(step, '_check_n_features') and hasattr(step, '_validate_data'):
         import neuraxle.steps.sklearn
         step = neuraxle.steps.sklearn.SKLearnWrapper(step)
         step.set_name(step.get_wrapped_sklearn_predictor().__class__.__name__)
@@ -2292,13 +2291,31 @@ class BaseStep(_FittableStep, BaseTransformer, ABC):
     pass
 
 
-class _HasChildrenMixin:
+class MixinForBaseTransformer:
+    """
+    Any steps/transformers within a pipeline that inherits of this class should implement BaseStep/BaseTransformer and initialize it before any mixin. This class checks that its the case at initialization.
+    """
+
+    def __init__(self):
+        self._ensure_basetransformer_init_called()
+
+    def _ensure_basetransformer_init_called(self):
+        """
+        Assert that BaseTransformer's init method has been called.
+        """
+        assert isinstance(self, BaseTransformer)
+        if not all(map(lambda x: hasattr(self, x), ('name', 'savers', 'is_initialized', 'is_train', 'is_invalidated'))):
+            raise RuntimeError('Please initialize Mixins in the good order. This Mixin should be initialized after '
+                               'BaseTransformer.')
+
+
+class _HasChildrenMixin(MixinForBaseTransformer):
     """
     Mixin to add behavior to the steps that have children (sub steps).
 
     .. seealso::
+        :class:`MixinForBaseTransformer`
         :class:`~neuraxle.base.MetaStepMixin`,
-        :class:`~neuraxle.base.TruncableSteps`,
         :class:`~neuraxle.base.TruncableSteps`
     """
 
@@ -2394,20 +2411,10 @@ class MetaStepMixin(_HasChildrenMixin):
     def __init__(self, wrapped: BaseTransformer = None, savers: List[BaseSaver] = None):
         if savers is None:
             savers = []
-
+        MixinForBaseTransformer.__init__(self)
         self.wrapped: BaseTransformer = _sklearn_to_neuraxle_step(wrapped)
-        self._ensure_proper_mixin_init_order(savers)
-
-    def _ensure_proper_mixin_init_order(self, savers: List[BaseSaver]):
         savers.append(MetaStepJoblibStepSaver())
-        if not hasattr(self, 'savers'):
-            warnings.warn(
-                'Please initialize Mixins in the good order. MetaStepMixin should be initialized after '
-                'BaseStep for {}. Appending the MetaStepJoblibStepSaver to the savers. Saving might fail.'.format(
-                    self.wrapped.name))
-            self.savers = savers
-        else:
-            self.savers.extend(savers)
+        self.savers.extend(savers)
 
     def set_step(self, step: BaseTransformer) -> BaseStep:
         """
@@ -2478,7 +2485,7 @@ class MetaStepMixin(_HasChildrenMixin):
         self.wrapped = self.wrapped.handle_fit(data_container, context)
         return self
 
-    def _transform_data_container(self, data_container: ExecutionContext, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
         data_container = self.wrapped.handle_transform(data_container, context)
         return data_container
 
@@ -2654,22 +2661,11 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
 NamedTupleList = List[Union[Tuple[str, BaseTransformer], BaseTransformer]]
 
 
-class NonFittableMixin:
+class NonFittableMixin(MixinForBaseTransformer):
     """
     A pipeline step that requires no fitting: fitting just returns self when called to do no action.
     Note: fit methods are not implemented
     """
-
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
-        data_container, context = self._will_process(data_container, context)
-        data_container, context = self._will_transform_data_container(data_container, context)
-
-        data_container = self._transform_data_container(data_container, context)
-
-        data_container = self._did_transform(data_container, context)
-        data_container = self._did_process(data_container, context)
-
-        return self, data_container
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
         return self
@@ -2688,7 +2684,7 @@ class NonFittableMixin:
         return self
 
 
-class NonTransformableMixin:
+class NonTransformableMixin(MixinForBaseTransformer):
     """
     A pipeline step that has no effect at all but to return the same data without changes.
     Transform method is automatically implemented as changing nothing.
@@ -2708,6 +2704,16 @@ class NonTransformableMixin:
     .. note::
         fit methods are not implemented
     """
+
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        """
+        Do nothing - return the same data.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: data container
+        """
+        return data_container
 
     def transform(self, data_inputs):
         """
@@ -2818,9 +2824,9 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
             hyperparams: HyperparameterSamples = dict(),
             hyperparams_space: HyperparameterSpace = dict()
     ):
-        self.set_steps(steps_as_tuple)
-        _HasChildrenMixin.__init__(self)
         BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
+        _HasChildrenMixin.__init__(self)
+        self.set_steps(steps_as_tuple)
         self.set_savers([TruncableJoblibStepSaver()] + self.savers)
 
     def are_steps_before_index_the_same(self, other: 'TruncableSteps', index: int) -> bool:
@@ -3310,7 +3316,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         return self.__repr__()
 
 
-class ResumableStepMixin:
+class ResumableStepMixin(MixinForBaseTransformer):
     """
     Mixin to add resumable function to a step, or a class that can be resumed, for example a checkpoint on disk.
     """
@@ -3335,7 +3341,7 @@ class ResumableStepMixin:
         return self.__repr__()
 
 
-class Identity(NonTransformableMixin, BaseTransformer):
+class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
     """
     A pipeline step that has no effect at all but to return the same data without changes.
 
@@ -3353,16 +3359,18 @@ class Identity(NonTransformableMixin, BaseTransformer):
     def __init__(self, savers=None, name=None):
         if savers is None:
             savers = [JoblibStepSaver()]
-        BaseTransformer.__init__(self, name=name, savers=savers)
+        BaseStep.__init__(self, name=name, savers=savers)
+        NonFittableMixin.__init__(self)
         NonTransformableMixin.__init__(self)
 
 
-class TransformHandlerOnlyMixin:
+class TransformHandlerOnlyMixin(MixinForBaseTransformer):
     """
     A pipeline step that only requires the implementation of _transform_data_container.
 
     .. seealso::
         :class:`BaseStep`,
+        :class:`MixinForBaseTransformer`
         :class:`NonFittableMixin`
     """
 
@@ -3383,7 +3391,7 @@ class TransformHandlerOnlyMixin:
                 self.name))
 
 
-class HandleOnlyMixin:
+class HandleOnlyMixin(MixinForBaseTransformer):
     """
     A pipeline step that only requires the implementation of handler methods :
         - _transform_data_container
@@ -3394,6 +3402,7 @@ class HandleOnlyMixin:
 
     .. seealso::
         :class:`BaseStep`,
+        :class:`MixinForBaseTransformer`
         :class:`TransformHandlerOnlyMixin`,
         :class:`NonTransformableMixin`,
         :class:`NonFittableMixin`,
@@ -3431,12 +3440,14 @@ class HandleOnlyMixin:
                 self.name))
 
 
-class ForceHandleMixin:
+class ForceHandleMixin(MixinForBaseTransformer):
     """
     A step that automatically calls handle methods in the transform, fit, and fit_transform methods.
+    The class that inherits from ForceHandleMixin can't use BaseStep's  _fit_data_container, _fit_transform_data_container and _transform_data_container. They must be redefined; failure to do so will trigger an Exception on initialisation (and would create infinite loop if these checks were not there).
 
     .. seealso::
         :class:`BaseStep`,
+        :class:'MixinForBaseTransformer'
         :class:`HandleOnlyMixin`,
         :class:`TransformHandlerOnlyMixin`,
         :class:`NonTransformableMixin`,
@@ -3445,9 +3456,26 @@ class ForceHandleMixin:
     """
 
     def __init__(self, cache_folder=None):
+        MixinForBaseTransformer.__init__(self)
         if cache_folder is None:
             cache_folder = DEFAULT_CACHE_FOLDER
         self.cache_folder = cache_folder
+        if isinstance(self, _FittableStep):
+            self._ensure_method_overriden("_fit_data_container", _FittableStep)
+            self._ensure_method_overriden("_fit_transform_data_container", _FittableStep)
+        self._ensure_method_overriden("_transform_data_container", _TransformerStep)
+
+    def _ensure_method_overriden(self, method_name, original_cls):
+        """
+        Asserts that a given method of current instance overrides the default one defined in a given class. We assume that current instance inherits from the given class but do not test it (MixinForBaseTransformer test inheritance to BaseTransfromer already).
+
+        :param method_name:
+        :param original_cls:
+        :return:
+        """
+        if original_cls.__dict__[method_name] == getattr(self, method_name).__func__:
+            raise NotImplementedError(
+                f"The ForceHandleMixin class overrides fit, transform and fit_transform to force a call on their handler method counterparts. Failure to redefine basic _fit_data_container, _transform_data_container and _fit_transform_data_container methods can cause an infinite loop. Please define {method_name} in {self.__class__.__name__}.")
 
     def transform(self, data_inputs) -> Iterable:
         """
@@ -3456,11 +3484,10 @@ class ForceHandleMixin:
         :param data_inputs: data inputs
         :return: outputs
         """
-        execution_context = ExecutionContext(self.cache_folder, execution_mode=ExecutionMode.TRANSFORM)
         context, data_container = self._encapsulate_data(
             data_inputs, expected_outputs=None, execution_mode=ExecutionMode.TRANSFORM)
 
-        data_container = self.handle_transform(data_container, execution_context)
+        data_container = self.handle_transform(data_container, context)
 
         return data_container.data_inputs
 
@@ -3565,12 +3592,13 @@ class IdentityHandlerMethodsMixin(ForceHandleOnlyMixin):
         return self, data_container
 
 
-class EvaluableStepMixin:
+class EvaluableStepMixin(MixinForBaseTransformer):
     """
     A step that can be evaluated with the scoring functions.
 
     .. seealso::
         :class:`BaseStep`
+        :class:'MixinForBaseTransformer'
     """
 
     @abstractmethod
@@ -3621,6 +3649,113 @@ class FullDumpLoader(Identity):
         return loaded_self.load(context, full_dump)
 
 
+class AssertionMixin(ForceHandleMixin):
+    def __init__(self):
+        ForceHandleMixin.__init__(self)
+
+    @abstractmethod
+    def _assert(self, data_container: DataContainer, context: ExecutionContext):
+        pass
+
+
+class WillProcessAssertionMixin(AssertionMixin):
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
+            DataContainer, ExecutionContext):
+        """
+        Calls self._assert(data_container,context)
+        """
+        data_container, context = super()._will_process(data_container, context)
+        self._assert(data_container, context)
+
+        return data_container, context
+
+
+class DidProcessAssertionMixin(AssertionMixin):
+    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> (
+            DataContainer, ExecutionContext):
+        """
+        Calls self._assert(data_container,context)
+        """
+        data_container, context = super()._did_process(data_container, context)
+        self._assert(data_container, context)
+
+        return data_container, context
+
+
+class AssertExpectedOutputNullMixin(WillProcessAssertionMixin):
+
+    def _assert(self, data_container: DataContainer, context: ExecutionContext):
+        eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
+        if not eo_empty:
+            raise AssertionError(
+                f"Expected datacontainer.expected_output to be a `None` or a list of `None`. Received {data_container.expected_outputs}.")
+
+
+class LocalServiceAssertionWrapper(WillProcessAssertionMixin, MetaStep):
+    """
+    Is used to assert the presence of service at execution time for a given step
+    """
+
+    def __init__(self, wrapped: BaseTransformer = None, service_assertions: List[Type] = None,
+                 savers: List[BaseSaver] = None):
+        MetaStep.__init__(self, wrapped=wrapped, savers=savers)
+        WillProcessAssertionMixin.__init__(self)
+
+        if service_assertions is None:
+            service_assertions = []
+        self.service_assertions = service_assertions
+
+    def _assert(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Assert self.local_service_assertions are present in the context.
+        """
+        self.do_assert_has_services(context)
+
+    def do_assert_has_services(self, context: ExecutionContext):
+        """
+        Assert that all the necessary services are provided in the execution context.
+
+        :param context: The ExecutionContext for which we test the presence of service.
+        """
+        for has_service_assertion in self.service_assertions:
+            if not context.has_service(service_abstract_class_type=has_service_assertion):
+                exception_message: str = '{} dependency missing in the ExecutionContext. Please register the service {} inside the ExecutionContext.\n'.format(
+                    has_service_assertion.__name__,
+                    has_service_assertion.__name__
+                )
+                step_method_message: str = 'You can do so by calling register_service, or set_services on any step.\n'
+                execution_context_methods_messsage: str = 'There is also the option to register all services inside the ExecutionContext'
+                raise AssertionError(exception_message + step_method_message + execution_context_methods_messsage)
+
+
+class GlobalyRetrievableServiceAssertionWrapper(LocalServiceAssertionWrapper):
+    """
+    Is used to assert the presence of service at the start of the pipeline AND at execution time for a given step.
+    """
+    def _global_assert_has_services(self, context: ExecutionContext) -> RecursiveDict:
+        """
+        Intended to be used in a .apply('_global_assert_has_services') call from the outside.
+        Is used to test the presence of services at the root of the pipeline.
+
+        See also GlobalServiceAssertionExecutorMixin._apply_service_assertions
+        :params context : the execution context
+        """
+        self.do_assert_has_services(context)
+        return RecursiveDict()
+
+
+class GlobalServiceAssertionExecutorMixin(WillProcessAssertionMixin):
+    """
+    Any step which inherit of this class will test globaly retrievable service assertion of itself and all its children on a will_process call.
+    """
+    def _assert(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Calls _global_assert_has_services on GlobalyRetrievableServiceAssertionWrapper instances that are (recursively) children of this node.
+        :param context: The ExecutionContext for which we test the presence of service.
+        """
+        self.apply('_global_assert_has_services', context=context)
+
+
 class _WithContextStepSaver(BaseSaver):
     """
     Custom saver for steps that have an :class:`ExecutionContext`.
@@ -3658,21 +3793,25 @@ class _WithContextStepSaver(BaseSaver):
     def can_load(self, step: 'StepWithContext', context: 'ExecutionContext'):
         return True
 
-class StepWithContext(ForceHandleMixin, MetaStep):
-    def __init__(self, wrapped: 'BaseTransformer', context: ExecutionContext):
-        MetaStep.__init__(self, wrapped=wrapped, savers=[_WithContextStepSaver()])
-        self.apply('_assert_has_services', context=context)
-        self.context = context
-        ForceHandleMixin.__init__(self)
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+class StepWithContext(GlobalServiceAssertionExecutorMixin, MetaStep):
+    def __init__(self, wrapped: 'BaseTransformer', context: ExecutionContext, raise_if_not_root: bool = True):
+        MetaStep.__init__(self, wrapped=wrapped, savers=[_WithContextStepSaver()])
+        GlobalServiceAssertionExecutorMixin.__init__(self)
+        self.context = context
+        self.raise_if_not_root = raise_if_not_root
+
+    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
+            DataContainer, ExecutionContext):
         """
-        Inject the given context before processing the wrapped step.
+        Inject the given context and test service assertions (if any are appliable) before processing the wrapped step.
 
         :param data_container: data container to process
         :return: data container, execution context
         """
-        if len(context) > 0:
-            raise AssertionError('WithContext should be at the root of the pipeline.')
+        if self.raise_if_not_root and len(context) > 0:
+            raise AssertionError('StepWithContext should be at the root of the pipeline.')
 
-        return data_container, self.context
+        data_container, context = GlobalServiceAssertionExecutorMixin._will_process(self, data_container, self.context)
+
+        return data_container, context
