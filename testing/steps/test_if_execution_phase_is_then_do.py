@@ -33,7 +33,7 @@ def _run(tmpdir, phase, expected):
     p = p.with_context(context)
 
     p.fit_transform(data_inputs)
-    assert some_step.did_process == expected
+    assert some_step.did_process is expected
 
 
 def test_ifexecphase_raise_exception_when_unspecified(tmpdir):
@@ -46,4 +46,4 @@ def test_ifexecphase_raise_exception_when_unspecified(tmpdir):
 
     with pytest.raises(ValueError) as error_info:
         p.fit_transform(data_inputs)
-    assert some_step.did_process == False
+    assert some_step.did_process is False
