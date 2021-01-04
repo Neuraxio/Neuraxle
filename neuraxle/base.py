@@ -1939,10 +1939,10 @@ class _CouldHaveContext:
 
         context = ExecutionContext(root=tmpdir)
         service = SomeService()
-        context.set_service_locator({BaseService: service})
+        context.set_service_locator({SomeBaseService: service})
 
         p = Pipeline([
-            SomeStep().assert_has_services(BaseService)
+            SomeStep().assert_has_services(SomeBaseService)
         ]).with_context(context=context)
 
     Or alternatively,
@@ -1951,7 +1951,7 @@ class _CouldHaveContext:
 
         p = Pipeline([
             RegisterSomeService(),
-            SomeStep().assert_has_services_at_execution(BaseService)
+            SomeStep().assert_has_services_at_execution(SomeBaseService)
         ])
 
     Context services can be used inside any step with handler methods:
@@ -1964,7 +1964,7 @@ class _CouldHaveContext:
                 ForceHandleMixin.__init__(self)
 
             def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
-                service: BaseService = context.get_service(BaseService)
+                service: SomeBaseService = context.get_service(SomeBaseService)
                 service.service_method(data_container.data_inputs)
                 return data_container
 
@@ -1987,7 +1987,7 @@ class _CouldHaveContext:
             context.set_service_locator(ServiceLocator().services) # where services is of type Dict[Type, object]
 
             p = WithContext(Pipeline([
-                SomeStep().with_assertion_has_services(BaseService)
+                SomeStep().with_assertion_has_services(SomeBaseService)
             ]), context)
 
 
