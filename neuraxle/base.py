@@ -3551,6 +3551,7 @@ class ForceHandleMixin(MixinForBaseTransformer):
 
         return context, data_container
 
+
 class ForceHandleIdentity(ForceHandleMixin, Identity):
     def __init__(self):
         Identity.__init__(self)
@@ -3714,10 +3715,12 @@ class AssertExpectedOutputIsNoneMixin(WillProcessAssertionMixin):
             raise AssertionError(
                 f"Expected datacontainer.expected_output to be a `None` or a list of `None`. Received {data_container.expected_outputs}.")
 
+
 class AssertExpectedOutputIsNoneStep(AssertExpectedOutputIsNoneMixin, Identity):
     def __init__(self):
         Identity.__init__(self)
         AssertExpectedOutputIsNoneMixin.__init__(self)
+
 
 class LocalServiceAssertionWrapper(WillProcessAssertionMixin, MetaStep):
     """
@@ -3760,6 +3763,7 @@ class GlobalyRetrievableServiceAssertionWrapper(LocalServiceAssertionWrapper):
     """
     Is used to assert the presence of service at the start of the pipeline AND at execution time for a given step.
     """
+
     def _global_assert_has_services(self, context: ExecutionContext) -> RecursiveDict:
         """
         Intended to be used in a .apply('_global_assert_has_services') call from the outside.
@@ -3776,6 +3780,7 @@ class GlobalServiceAssertionExecutorMixin(WillProcessAssertionMixin):
     """
     Any step which inherit of this class will test globaly retrievable service assertion of itself and all its children on a will_process call.
     """
+
     def _assert(self, data_container: DataContainer, context: ExecutionContext):
         """
         Calls _global_assert_has_services on GlobalyRetrievableServiceAssertionWrapper instances that are (recursively) children of this node.

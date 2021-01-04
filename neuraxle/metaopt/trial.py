@@ -358,7 +358,6 @@ class TrialSplit:
         """
         self.pipeline.set_train(True)
         self.pipeline = self.pipeline.handle_fit(train_data_container, context)
-
         return self
 
     def predict_with_pipeline(self, data_container: DataContainer, context: ExecutionContext) -> 'DataContainer':
