@@ -11,7 +11,7 @@ from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, RandomSearchHyperparameterSelectionStrategy, \
     HyperparamsJSONRepository, \
     ValidationSplitter, KFoldCrossValidationSplitter, Trainer
-from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
+from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback, EarlyStoppingCallback
 from neuraxle.metaopt.trial import Trial
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCallbackStep
@@ -20,10 +20,10 @@ from neuraxle.steps.sklearn import SKLearnWrapper
 
 
 def test_automl_early_stopping_callback(tmpdir):
-    # TODO: fix this unit test
     # Given
     hp_repository = InMemoryHyperparamsRepository(cache_folder=str(tmpdir))
-    n_epochs = 60
+    n_epochs = 10
+    max_epochs_without_improvement=3
     auto_ml = AutoML(
         pipeline=Pipeline([
             FitTransformCallbackStep().set_name('callback'),
@@ -31,13 +31,13 @@ def test_automl_early_stopping_callback(tmpdir):
                 'multiply_by': FixedHyperparameter(2)
             })),
             NumpyReshape(new_shape=(-1, 1)),
-            linear_model.LinearRegression()
         ]),
         hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
         validation_splitter=ValidationSplitter(0.20),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
             MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False),
+            EarlyStoppingCallback(max_epochs_without_improvement)
         ],
         n_trials=1,
         refit_trial=True,
@@ -49,10 +49,14 @@ def test_automl_early_stopping_callback(tmpdir):
     # When
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     expected_outputs = data_inputs * 2
-    auto_ml = auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
+    auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
-    p = auto_ml.get_best_model()
+    trial = hp_repository.trials[0]
+    assert len(trial.validation_splits) == 1
+    validation_scores = trial.validation_splits[0].get_validation_scores()
+    nepochs_executed = len(validation_scores)
+    assert nepochs_executed == max_epochs_without_improvement +1
 
 
 def test_automl_with_kfold(tmpdir):
