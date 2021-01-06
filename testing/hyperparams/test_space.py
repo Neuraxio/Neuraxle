@@ -86,6 +86,6 @@ def test_hyperparams_space_rvs_outputs_samples():
 
     assert isinstance(samples, HyperparameterSamples)
     assert len(samples) == len(space)
-    for k, v in samples.items_flat():
+    for k, v in samples.iter_flat():
         assert k in space
         assert not isinstance(v, HyperparameterDistribution)

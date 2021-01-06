@@ -170,13 +170,13 @@ class RecursiveDict(OrderedDict):
         except KeyError:
             return self.same_class_new_instance()
 
-    def items_flat(self, pre_key=""):
+    def iter_flat(self, pre_key=""):
         """
-        Returns a generator which yield (flatenned_key, value) pairs.
+        Returns a generator which yield (flatenned_key, value) pairs. value is never a RecursiveDict instance.
         """
         for k, v in self.items():
             if isinstance(v, RecursiveDict):
-                yield from v.items_flat(pre_key + k + self.separator)
+                yield from v.iter_flat(pre_key + k + self.separator)
             else:
                 yield (pre_key + k, v)
 
@@ -184,7 +184,7 @@ class RecursiveDict(OrderedDict):
         """
         Returns a dictionary with no recursively nested elements, i.e. {flattened_key -> value}.
         """
-        return dict(self.items_flat())
+        return dict(self.iter_flat())
 
     def to_nested_dict(self) -> dict:
         """
@@ -256,7 +256,7 @@ class HyperparameterSpace(RecursiveDict):
         :return: a random HyperparameterSamples, sampled from a point of the present HyperparameterSpace.
         """
         new_items = []
-        for k, v in self.items_flat():
+        for k, v in self.iter_flat():
             if isinstance(v, HyperparameterDistribution):
                 v = v.rvs()
             new_items.append((k, v))
@@ -266,7 +266,7 @@ class HyperparameterSpace(RecursiveDict):
 
     def nullify(self):
         new_items = []
-        for k, v in self.items_flat():
+        for k, v in self.iter_flat():
             if isinstance(v, HyperparameterDistribution) or isinstance(v, HyperparameterSpace):
                 v = v.nullify()
             new_items.append((k, v))
@@ -285,7 +285,7 @@ class HyperparameterSpace(RecursiveDict):
         :return: a new HyperparameterSpace containing the narrowed HyperparameterDistribution objects.
         """
         new_items = []
-        for k, v in self.items_flat():
+        for k, v in self.iter_flat():
             if isinstance(v, HyperparameterDistribution) or isinstance(v, HyperparameterSpace):
                 best_guess_v = best_guesses[k]
                 v = v.narrow_space_from_best_guess(best_guess_v, kept_space_ratio)
@@ -300,7 +300,7 @@ class HyperparameterSpace(RecursiveDict):
         :return: the original HyperparameterSpace before narrowing.
         """
         new_items = []
-        for k, v in self.items_flat():
+        for k, v in self.iter_flat():
             if isinstance(v, HyperparameterDistribution) or isinstance(v, HyperparameterSpace):
                 v = v.unnarrow()
             new_items.append((k, v))
