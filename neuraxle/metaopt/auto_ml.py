@@ -617,7 +617,6 @@ Refer to `execute_trial` for full flexibility
 
         :return: executed trial
         """
-        early_stopping = False
 
         for i in range(self.epochs):
             self.print_func('\nepoch {}/{}'.format(i + 1, self.epochs))
@@ -634,7 +633,7 @@ Refer to `execute_trial` for full flexibility
                     pred_train=y_pred_train,
                     input_val=validation_data_container,
                     pred_val=y_pred_val,
-                    is_finished_and_fitted=early_stopping
+                    is_finished_and_fitted=False
             ):
                 break
 
