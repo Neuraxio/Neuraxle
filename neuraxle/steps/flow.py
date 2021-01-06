@@ -297,10 +297,9 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
         self.wrapped.set_hyperparams(hyperparams_space.nullify())
 
 
-CHOICE_HYPERPARAM = 'choice'
-
 
 class ChooseOneStepOf(FeatureUnion):
+    CHOICE_HYPERPARAM = 'choice'
     """
     A pipeline to allow choosing one step using an hyperparameter.
 
@@ -335,14 +334,19 @@ class ChooseOneStepOf(FeatureUnion):
 
         self._make_all_steps_optional()
 
+        choices = list(self.keys())[:-1]
+
         if hyperparams is None:
-            choices = list(self.keys())[:-1]
-            self.set_hyperparams({
-                CHOICE_HYPERPARAM: choices[0]
+            self.update_hyperparams({
+                ChooseOneStepOf.CHOICE_HYPERPARAM: choices[0]
             })
-            self.set_hyperparams_space({
-                CHOICE_HYPERPARAM: Choice(choices)
+        else :
+            self.update_hyperparams({
+                ChooseOneStepOf.CHOICE_HYPERPARAM: hyperparams
             })
+        self.update_hyperparams_space({
+            ChooseOneStepOf.CHOICE_HYPERPARAM: Choice(choices)
+        })
 
     def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, dict]):
         """
