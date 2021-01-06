@@ -26,7 +26,6 @@ def test_automl_early_stopping_callback(tmpdir):
     max_epochs_without_improvement=3
     auto_ml = AutoML(
         pipeline=Pipeline([
-            FitTransformCallbackStep().set_name('callback'),
             MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
                 'multiply_by': FixedHyperparameter(2)
             })),
