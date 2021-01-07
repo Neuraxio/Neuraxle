@@ -234,6 +234,9 @@ class FixedHyperparameter(HyperparameterDistribution):
         """
         return 0
 
+    def __str__(self):
+        return self.__class__.__name__+f"(value={self.value}(type:{type(self.value)}))"
+
 
 # TODO: Mixin this or something:
 # class DelayedAdditionOf(MalleableDistribution):
@@ -358,6 +361,9 @@ class Boolean(DiscreteHyperparameterDistribution):
         :return: variance value of the random variable.
         """
         return self.proba_is_true * (1 - self.proba_is_true)
+
+    def __repr__(self):
+        return self.__class__.__name__+ f"(proba_is_true={self.proba_is_true})"
 
 
 class Choice(DiscreteHyperparameterDistribution):
@@ -500,6 +506,9 @@ class Choice(DiscreteHyperparameterDistribution):
         var = second_moment - mean**2
         return var
 
+    def __str__(self):
+        return self.__class__.__name__ + \
+               f"({'choice_list='+self.choice_list if len(self.choice_list<4) else f'a {len(self.choice_list)} elements choice_list'})"
 
 class PriorityChoice(DiscreteHyperparameterDistribution):
     """Get a random value from a choice list of possible value for this hyperparameter.
@@ -863,6 +872,8 @@ class RandInt(DiscreteHyperparameterDistribution):
         """
         return ((self.max_included - self.min_included + 1) ** 2 - 1) / 12
 
+    def __str__(self):
+        return self.__class__.__name__ + "("+"max_included=" + str(self.max_included)+",min_included=" + str(self.max_included)+")"
 
 class Uniform(HyperparameterDistribution):
     """Get a uniform distribution."""
@@ -963,6 +974,8 @@ class Uniform(HyperparameterDistribution):
         """
         return (self.max_included - self.min_included) ** 2 / 12
 
+    def __str__(self):
+        return self.__class__.__name__ + "("+"max_included=" + str(self.max_included)+",min_included=" + str(self.max_included)+")"
 
 class LogUniform(HyperparameterDistribution):
     """Get a LogUniform distribution.
@@ -1070,6 +1083,8 @@ class LogUniform(HyperparameterDistribution):
                 2 * math.log(2) * (self.log2_max_included - self.log2_min_included))
         return esperance_squared - (self.mean() ** 2)
 
+    def __str__(self):
+        return self.__class__.__name__ + "("+"max_included=" + str(self.max_included)+",min_included=" + str(self.max_included)+")"
 
 class Normal(HyperparameterDistribution):
     """Get a normal distribution."""
@@ -1263,6 +1278,10 @@ class Normal(HyperparameterDistribution):
         variance = self._std ** 2 * (1 + (alpha * norm.pdf(alpha) - beta * norm.pdf(beta)) / Z - (
                 (norm.pdf(alpha) - norm.pdf(beta)) / Z) ** 2)
         return variance
+
+    def __str__(self):
+        return self.__class__.__name__ + f"(_mean={str(self._mean)},_std={str(self._std)}" \
+                                         f",hard_clip_min={self.hard_clip_min},hard_clip_max={self.hard_clip_max})"
 
 
 class LogNormal(HyperparameterDistribution):
