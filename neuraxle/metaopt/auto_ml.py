@@ -289,14 +289,18 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :param trial: trial to save
         :return:
         """
-        hp_dict = trial.hyperparams.to_flat_dict()
-        current_hyperparameters_hash = self._get_trial_hash(hp_dict)
-        self._remove_new_trial_json(current_hyperparameters_hash)
+        self._remove_new_trial_json(trial)
+        if trial.status in (TRIAL_STATUS.SUCCESS, TRIAL_STATUS.FAILED):
+            self._remove_ongoing_trial_json(trial)
 
-        if trial.status == TRIAL_STATUS.SUCCESS:
-            trial_file_path = self._get_successful_trial_json_file_path(trial)
-        else:
-            trial_file_path = self._get_failed_trial_json_file_path(trial)
+        trial_path_func = {
+            TRIAL_STATUS.SUCCESS: self._get_successful_trial_json_file_path,
+            TRIAL_STATUS.FAILED: self._get_failed_trial_json_file_path,
+            TRIAL_STATUS.STARTED: self._get_ongoing_trial_json_file_path,
+            TRIAL_STATUS.PLANNED: self._get_new_trial_json_file_path
+        }
+        trial_file_path = trial_path_func[trial.status](trial)
+
 
         with open(trial_file_path, 'w+') as outfile:
             json.dump(trial.to_json(), outfile)
@@ -362,13 +366,10 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
         :return: (hyperparams, scores)
         """
-        hp_dict = trial.hyperparams.to_flat_dict()
-        current_hyperparameters_hash = self._get_trial_hash(hp_dict)
-
         if not os.path.exists(self.cache_folder):
             os.makedirs(self.cache_folder)
 
-        with open(os.path.join(self._get_new_trial_json_path(current_hyperparameters_hash)), 'w+') as outfile:
+        with open(os.path.join(self._get_new_trial_json_file_path(trial)), 'w+') as outfile:
             json.dump(trial.to_json(), outfile)
 
     def _get_successful_trial_json_file_path(self, trial: 'Trial') -> str:
@@ -388,31 +389,44 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         """
         Get the json path for the given failed trial.
 
-        :param trial:
-        :return:
+        :param trial: trial
+        :return: str
         """
         trial_hash = self._get_trial_hash(trial.hyperparams.to_flat_dict())
         return os.path.join(self.cache_folder, 'FAILED_' + trial_hash) + '.json'
 
-    def _remove_new_trial_json(self, current_hyperparameters_hash):
+    def _get_ongoing_trial_json_file_path(self, trial: 'Trial'):
         """
-        Remove trial file associated with the given hyperparameters hash.
+        Get ongoing trial json path.
+        """
+        hp_dict = trial.hyperparams.to_flat_dict()
+        current_hyperparameters_hash = self._get_trial_hash(hp_dict)
+        return os.path.join(self.cache_folder, "ONGOING_" + current_hyperparameters_hash) + '.json'
 
-        :param current_hyperparameters_hash:
-        :return:
+    def _remove_ongoing_trial_json(self, trial: 'Trial'):
         """
-        new_trial_json = self._get_new_trial_json_path(current_hyperparameters_hash)
+        Remove trial file associated with the given trial.
+        """
+        ongoing_trial_json = self._get_ongoing_trial_json_file_path(trial)
+        if os.path.exists(ongoing_trial_json):
+            os.remove(ongoing_trial_json)
+
+    def _get_new_trial_json_file_path(self, trial: 'Trial'):
+        """
+        Get new trial json path.
+        """
+        hp_dict = trial.hyperparams.to_flat_dict()
+        current_hyperparameters_hash = self._get_trial_hash(hp_dict)
+        return os.path.join(self.cache_folder, "NEW_" + current_hyperparameters_hash) + '.json'
+
+    def _remove_new_trial_json(self, trial:'Trial'):
+        """
+        Remove trial file associated with the given trial.
+        """
+        new_trial_json = self._get_new_trial_json_file_path(trial)
         if os.path.exists(new_trial_json):
             os.remove(new_trial_json)
 
-    def _get_new_trial_json_path(self, current_hyperparameters_hash):
-        """
-        Get new trial json path.
-
-        :param current_hyperparameters_hash:
-        :return:
-        """
-        return os.path.join(self.cache_folder, "NEW_" + current_hyperparameters_hash) + '.json'
 
     def subscribe_to_cache_folder_changes(self, refresh_interval_in_seconds: int,
                                           observer: _Observer[Tuple[HyperparamsRepository, Trial]]):
