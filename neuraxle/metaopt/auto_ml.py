@@ -281,6 +281,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
             cache_folder=cache_folder,
             best_retrained_model_folder=best_retrained_model_folder
         )
+        self.previous_json_path = None
 
     def _save_trial(self, trial: 'Trial'):
         """
@@ -289,9 +290,6 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :param trial: trial to save
         :return:
         """
-        self._remove_new_trial_json(trial)
-        if trial.status in (TRIAL_STATUS.SUCCESS, TRIAL_STATUS.FAILED):
-            self._remove_ongoing_trial_json(trial)
 
         trial_path_func = {
             TRIAL_STATUS.SUCCESS: self._get_successful_trial_json_file_path,
@@ -301,9 +299,11 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         }
         trial_file_path = trial_path_func[trial.status](trial)
 
-
         with open(trial_file_path, 'w+') as outfile:
             json.dump(trial.to_json(), outfile)
+
+        self._remove_previous_trial_state_json()
+        self.previous_json_path = trial_file_path
 
         # Sleeping to have a valid time difference between files when reloading them to sort them by creation time:
         time.sleep(0.1)
@@ -403,14 +403,6 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         current_hyperparameters_hash = self._get_trial_hash(hp_dict)
         return os.path.join(self.cache_folder, "ONGOING_" + current_hyperparameters_hash) + '.json'
 
-    def _remove_ongoing_trial_json(self, trial: 'Trial'):
-        """
-        Remove trial file associated with the given trial.
-        """
-        ongoing_trial_json = self._get_ongoing_trial_json_file_path(trial)
-        if os.path.exists(ongoing_trial_json):
-            os.remove(ongoing_trial_json)
-
     def _get_new_trial_json_file_path(self, trial: 'Trial'):
         """
         Get new trial json path.
@@ -419,14 +411,9 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         current_hyperparameters_hash = self._get_trial_hash(hp_dict)
         return os.path.join(self.cache_folder, "NEW_" + current_hyperparameters_hash) + '.json'
 
-    def _remove_new_trial_json(self, trial:'Trial'):
-        """
-        Remove trial file associated with the given trial.
-        """
-        new_trial_json = self._get_new_trial_json_file_path(trial)
-        if os.path.exists(new_trial_json):
-            os.remove(new_trial_json)
-
+    def _remove_previous_trial_state_json(self):
+        if self.previous_json_path and os.path.exists(self.previous_json_path):
+            os.remove(self.previous_json_path)
 
     def subscribe_to_cache_folder_changes(self, refresh_interval_in_seconds: int,
                                           observer: _Observer[Tuple[HyperparamsRepository, Trial]]):
