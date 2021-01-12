@@ -29,6 +29,8 @@ Utility function for plotting in notebooks.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
+from typing import Dict, Callable
+
 import matplotlib.pyplot as plt
 import os
 from neuraxle.metaopt.auto_ml import HyperparamsRepository
@@ -154,6 +156,7 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
     """
     def __init__(
             self,
+#            plotting_func_map: Dict[str, Tuple(Callable, Boolean, Boolean, Boolean)], TODO : introduction plot_function map so that we can have custom plotting function for each metric.
             plotting_folder_name: str = 'metric_results',
             save_plots: bool = True,
             plot_trial_on_next: bool = True,
@@ -173,6 +176,7 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
         :param value: hyperparams_repository, trial
         :return:
         """
+        # TODO : Rename function to something more meaningful like on_save_trial
         repo, trial = value
         if not self.plot_trial_on_next:
             return
@@ -185,6 +189,9 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
             for metric_name in split.get_metric_names():
                 train_results = split.get_metric_train_results(metric_name=metric_name)
                 validation_results = split.get_metric_validation_results(metric_name=metric_name)
+                if not isinstance(train_results[0], (float, int)):
+                    continue # TODO : this is a quick fix for compatibility with other types of metric.
+
                 plt.plot(train_results)
                 plt.plot(validation_results)
                 plt.ylabel(metric_name)
@@ -224,6 +231,9 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
         n_splits = trials.get_number_of_split()
         metric_names = trials.get_metric_names()
         for metric_name in metric_names:
+            if not isinstance(trials[0].get_metric_validation_results(metric_name=metric_name)[0], (float, int)):
+                continue  # TODO : this is a quick fix for compatibility with other types of metric.
+
             for split_number in range(n_splits):
                 self._plot_all_trials_training_results_for_metric(
                     trials=trials,
