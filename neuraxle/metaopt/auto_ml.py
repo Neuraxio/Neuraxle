@@ -290,6 +290,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :param trial: trial to save
         :return:
         """
+        self._remove_previous_trial_state_json()
 
         trial_path_func = {
             TRIAL_STATUS.SUCCESS: self._get_successful_trial_json_file_path,
@@ -302,7 +303,6 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         with open(trial_file_path, 'w+') as outfile:
             json.dump(trial.to_json(), outfile)
 
-        self._remove_previous_trial_state_json()
         self.previous_json_path = trial_file_path
 
         # Sleeping to have a valid time difference between files when reloading them to sort them by creation time:
@@ -826,7 +826,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             p = self.trainer.refit(
                 p=p,
                 data_container=data_container,
-                context=context
+                context=context.set_execution_phase(ExecutionPhase.TRAIN)
             )
 
             self.hyperparams_repository.save_best_model(p)
