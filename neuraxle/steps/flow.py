@@ -23,7 +23,7 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-from typing import Union
+from typing import Union, Optional as OptionalType, Callable, Dict
 
 import numpy as np
 
@@ -150,7 +150,7 @@ class TestOnlyWrapper(TrainOrTestOnlyWrapper):
         TrainOrTestOnlyWrapper.__init__(self, wrapped=wrapped, is_train_only=False)
 
 
-class IfExecutionPhaseIsThenDo(ForceHandleOnlyMixin, MetaStep):
+class IfExecutionPhaseIsThenDo(ForceHandleOnlyMixin, MetaStep): # TODO : CHange this for a more general If Then DO
     """
     If, at runtime, the execution phase is the same as the one given to the constructor, then execute wrapped step.
 
@@ -171,23 +171,56 @@ class IfExecutionPhaseIsThenDo(ForceHandleOnlyMixin, MetaStep):
             raise ValueError("Execution phase is unspecified while a step requires it to be specified.")
         return False
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         if self.check_context(context):
-            self.wrapped.handle_fit(data_container, context)
+            self.wrapped, self.wrapped.handle_fit(data_container, context)
         return self
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> \
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
             ('BaseTransformer', DataContainer):
         if self.check_context(context):
-            new_wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
+            self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
         return self, data_container
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext) -> \
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
             ('BaseTransformer', DataContainer):
         if self.check_context(context):
-            new_wrapped, data_container = self.wrapped.handle_transform(data_container, context)
+            data_container = self.wrapped.handle_transform(data_container, context)
         return self, data_container
 
+class ExecutionPhaseSwitch(HandleOnlyMixin, TruncableSteps):
+    def __init__(self, phase_to_callable: Dict[ExecutionPhase, BaseTransformer], default: OptionalType[BaseTransformer] = None):
+        TruncableSteps.__init__(self, steps_as_tuple=phase_to_callable.values())
+        self.phase_to_callable = phase_to_callable
+        self.default = default
+
+    def _get_step(self, context):
+        if context.execution_phase not in self.phase_to_callable.keys():
+            if self.default is None:
+                raise KeyError(f"No behaviour defined for {context.execution_phase}.")
+            return self.default
+        return self.phase_to_callable[context.execution_phase]
+
+    def _set_step(self, context, step):
+        if context.execution_phase not in self.phase_to_callable.keys():
+            if self.default is None:
+                raise KeyError(f"No behaviour defined for {context.execution_phase}.")
+            self.default = step
+        self.phase_to_callable[context.execution_phase] = step
+        return self
+
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
+        step = self._get_step(context).handle_fit(data_container, context)
+        return self._set_step(context, step)
+
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
+            ('BaseTransformer', DataContainer):
+        step, data_container = self._get_step(context).handle_fit_transform(data_container, context)
+        return self._set_step(context, step), data_container
+
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
+            ('BaseTransformer', DataContainer):
+        return self._get_step(context).handle_transform(data_container, context)
 
 class Optional(ForceHandleOnlyMixin, MetaStep):
     """
