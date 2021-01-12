@@ -154,19 +154,13 @@ get started quickly. Read more about `the why of Neuraxle here. <https://github.
 Community
 ---------
 
-Join our `Slack
-workspace <https://join.slack.com/t/neuraxio/shared_invite/zt-8lyw42c5-4PuWjTT8dQqeFK3at1s_dQ>`__ and our `Gitter <https://gitter.im/Neuraxle/community>`__!
-We <3 collaborators. You can also subscribe to our `mailing list <https://www.neuraxio.com/en/blog/index.html>`__ where we will post updates and news. 
-
-For **technical questions**, we recommend posting them on
+For **technical questions**, please post them on
 `StackOverflow <https://stackoverflow.com/questions/tagged/machine-learning>`__
-first with ``neuraxle`` in the tags (amongst probably ``python`` and
-``machine-learning``), and *then* opening an
-`issue <https://github.com/Neuraxio/Neuraxle/issues>`__ to link to your
-Stack Overflow question.
+using the ``neuraxle`` tag. The StackOverflow question will automatically
+be posted in Neuraxio's slack workspace in the #Neuraxle channel. 
 
-For **suggestions, comments, and issues**, don't hesitate to open an
-`issue <https://github.com/Neuraxio/Neuraxle/issues>`__.
+For **suggestions, feature requests, and error reports**, please
+open an `issue <https://github.com/Neuraxio/Neuraxle/issues>`__.
 
 For **contributors**, we recommend using the PyCharm code editor and to
 let it manage the virtual environment, with the default code
@@ -180,6 +174,10 @@ under the `Apache 2.0
 License <https://github.com/Neuraxio/Neuraxle/blob/master/LICENSE>`__,
 which is required for everyone to be able to use your open-source
 contributions.
+
+Finally, you can as well join our `Slack
+workspace <https://join.slack.com/t/neuraxio/shared_invite/zt-8lyw42c5-4PuWjTT8dQqeFK3at1s_dQ>`__ and our `Gitter <https://gitter.im/Neuraxle/community>`__ to collaborate with us. We <3 collaborators. You can also subscribe to our mailing list where we will post some `updates and news <https://www.neuraxle.org/stable/intro.html>`__. 
+
 
 License
 ~~~~~~~
@@ -216,6 +214,7 @@ Thanks to everyone who contributed to the project:
 -  Philippe Racicot: https://github.com/Vaunorage
 -  Neurodata: https://github.com/NeuroData-ltd
 -  Klaimohelmi: https://github.com/Klaimohelmi
+-  Vincent Antaki: https://github.com/vincent-antaki
 
 Supported By
 ~~~~~~~~~~~~
