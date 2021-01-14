@@ -508,7 +508,7 @@ class Choice(DiscreteHyperparameterDistribution):
 
     def __str__(self):
         return self.__class__.__name__ + \
-               f"({'choice_list='+self.choice_list if len(self.choice_list<4) else f'a {len(self.choice_list)} elements choice_list'})"
+               f"({'choice_list='+','.join(self.choice_list) if len(self.choice_list)<4 else f'a {len(self.choice_list)} elements choice_list'})"
 
 class PriorityChoice(DiscreteHyperparameterDistribution):
     """Get a random value from a choice list of possible value for this hyperparameter.
