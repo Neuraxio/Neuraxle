@@ -190,23 +190,30 @@ class IfExecutionPhaseIsThenDo(ForceHandleOnlyMixin, MetaStep): # TODO : CHange 
 
 class ExecutionPhaseSwitch(HandleOnlyMixin, TruncableSteps):
     def __init__(self, phase_to_callable: Dict[ExecutionPhase, BaseTransformer], default: OptionalType[BaseTransformer] = None):
-        TruncableSteps.__init__(self, steps_as_tuple=phase_to_callable.values())
-        self.phase_to_callable = phase_to_callable
+        phase, steps = zip(*phase_to_callable.items())
+        if default:
+            steps.append(default)
+        TruncableSteps.__init__(self, steps_as_tuple=steps)
+        self.phase_to_step_index = {p: i for i, p in enumerate(phase)}
         self.default = default
 
     def _get_step(self, context):
-        if context.execution_phase not in self.phase_to_callable.keys():
+        if context.execution_phase not in self.phase_to_step_index.keys():
             if self.default is None:
                 raise KeyError(f"No behaviour defined for {context.execution_phase}.")
-            return self.default
-        return self.phase_to_callable[context.execution_phase]
+            ind = -1
+        else:
+            ind = self.phase_to_step_index[context.execution_phase]
+        return self.steps_as_tuple[ind][1]
 
     def _set_step(self, context, step):
-        if context.execution_phase not in self.phase_to_callable.keys():
+        if context.execution_phase not in self.phase_to_step_index.keys():
             if self.default is None:
                 raise KeyError(f"No behaviour defined for {context.execution_phase}.")
-            self.default = step
-        self.phase_to_callable[context.execution_phase] = step
+            ind = -1
+        else :
+            ind = self.phase_to_step_index[context.execution_phase]
+        self.steps_as_tuple[ind] = (self.steps_as_tuple[ind][0], step)
         return self
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
