@@ -23,13 +23,13 @@ Pipeline Steps For Looping
 
 """
 import copy
-from typing import List
+from typing import List, Callable
 from typing import Tuple
 
 import numpy as np
 
 from neuraxle.base import MetaStep, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, \
-    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, BaseTransformer, MetaStepMixin
+    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, BaseTransformer, Identity
 from neuraxle.data_container import ListDataContainer
 
 
@@ -64,10 +64,15 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
         :return: self
         """
         for current_id, di, eo in data_container:
-            self.wrapped = self.wrapped.handle_fit(
-                DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
-                context
-            )
+            try:
+                self.wrapped = self.wrapped.handle_fit(
+                    DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
+                    context
+                )
+            except ContinueException:
+                continue
+            except BreakException:
+                break
         return self
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -83,16 +88,21 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
         output_data_container: ListDataContainer = ListDataContainer.empty(original_data_container=data_container)
 
         for current_id, di, eo in data_container:
-            output: DataContainer = self.wrapped.handle_transform(
-                DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
-                context
-            )
+            try:
+                output = self.wrapped.handle_transform(
+                    DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
+                    context
+                )
 
-            output_data_container.append(
-                current_id,
-                output.data_inputs,
-                output.expected_outputs
-            )
+                output_data_container.append(
+                    current_id,
+                    output.data_inputs,
+                    output.expected_outputs
+                )
+            except ContinueException:
+                continue
+            except BreakException:
+                break
         output_data_container.summary_id = data_container.summary_id
 
         return output_data_container
@@ -111,16 +121,20 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
         output_data_container: DataContainer = ListDataContainer.empty(original_data_container=data_container)
 
         for current_id, di, eo in data_container:
-            self.wrapped, output = self.wrapped.handle_fit_transform(
-                DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
-                context
-            )
-
-            output_data_container.append(
-                current_id,
-                output.data_inputs,
-                output.expected_outputs
-            )
+            try:
+                self.wrapped, output = self.wrapped.handle_fit_transform(
+                    DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
+                    context
+                )
+                output_data_container.append(
+                    current_id,
+                    output.data_inputs,
+                    output.expected_outputs
+                )
+            except ContinueException:
+                continue
+            except BreakException:
+                break
 
         output_data_container.summary_id = data_container.summary_id
 
@@ -138,6 +152,33 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
         if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context):
             return True
         return False
+
+class ContinueException(Exception):
+    pass
+
+
+class BreakException(Exception):
+    pass
+
+class Break(Identity):
+    def __init__(self, condition_function: Callable):
+        Identity.__init__(self)
+        self.condition_function = condition_function
+
+    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        if self.condition_function(data_container):
+            raise BreakException()
+        return data_container
+
+class Continue(Identity):
+    def __init__(self, condition_function: Callable):
+        Identity.__init__(self)
+        self.condition_function = condition_function
+
+    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        if self.condition_function(data_container):
+            raise ContinueException()
+        return data_container
 
 
 class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
