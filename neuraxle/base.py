@@ -887,6 +887,16 @@ class _TransformerStep(ABC):
         """
         return self, self.handle_transform(data_container, context)
 
+    def fit(self, data_inputs, expected_outputs) -> '_TransformerStep':
+        """
+        Fit given data inputs. By default, a step only transforms in the fit transform method.
+        To add fitting to your step, see class:`_FittableStep` for more info.
+        :param data_inputs: data inputs
+        :param expected_outputs: expected outputs to fit on
+        :return: transformed data inputs
+        """
+        return self
+
     def fit_transform(self, data_inputs, expected_outputs=None):
         """
         Fit transform given data inputs. By default, a step only transforms in the fit transform method.
