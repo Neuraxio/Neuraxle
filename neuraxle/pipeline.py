@@ -430,6 +430,9 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         )
         self.__patch_barriers_batch_size(batch_size)
 
+    def set_batch_size(self, batch_size):
+        self.__patch_barriers_batch_size(batch_size)
+
     def __validate_barriers_batch_size(self, batch_size):
         if batch_size is not None:
             return
