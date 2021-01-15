@@ -398,7 +398,6 @@ class TrialSplit:
             }
 
         self.metrics_results[name]['train_values'].append(score)
-        self.save_parent_trial()
 
     def add_metric_results_validation(self, name: str, score: float, higher_score_is_better: bool):
         """
@@ -417,7 +416,6 @@ class TrialSplit:
             }
 
         self.metrics_results[name]['validation_values'].append(score)
-        self.save_parent_trial()
 
     def get_validation_scores(self):
         """

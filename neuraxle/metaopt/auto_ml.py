@@ -637,6 +637,8 @@ Refer to `execute_trial` for full flexibility
                     is_finished_and_fitted=False
             ):
                 break
+            # Saves the metrics
+            trial_split.save_parent_trial()
 
         return trial_split
 
