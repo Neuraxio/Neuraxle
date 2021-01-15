@@ -217,6 +217,15 @@ class Pipeline(BasePipeline):
     def flush_all_cache(self):
         shutil.rmtree(self.cache_folder)
 
+    def setup(self, context: ExecutionContext = None) -> 'BaseTransformer':
+        """
+        Contrary to the default behaviour of TruncableStep, we don't want to recursively call .setup() in a Pipeline instance.
+        We'll call the setup before calling each steps on a fit call.
+        :param context:
+        :return:
+        """
+        self.is_initialized = True
+        return self
 
 class ResumablePipeline(ResumableStepMixin, Pipeline):
     """

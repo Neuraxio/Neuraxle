@@ -2372,6 +2372,19 @@ class _HasChildrenMixin(MixinForBaseTransformer):
 
         return results
 
+    def setup(self, context: ExecutionContext = None) -> BaseStep:
+        """
+        Initialize step before it runs. Also initialize its childrens.
+
+        :param context: execution context
+        :return: self
+        """
+        super().setup(context=context)
+        for step in self.get_children():
+            step.setup(context=context)
+        self.is_initialized = True
+        return self
+
     @abstractmethod
     def get_children(self) -> List[BaseStep]:
         """
@@ -2450,18 +2463,6 @@ class MetaStepMixin(_HasChildrenMixin):
         """
         self._invalidate()
         self.wrapped: BaseTransformer = _sklearn_to_neuraxle_step(step)
-        return self
-
-    def setup(self, context: ExecutionContext = None) -> BaseStep:
-        """
-        Initialize step before it runs. Also initialize the wrapped step.
-
-        :param context: execution context
-        :return: self
-        """
-        super().setup(context=context)
-        self.wrapped.setup(context=context)
-        self.is_initialized = True
         return self
 
     def teardown(self) -> BaseStep:
@@ -2898,20 +2899,6 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         steps_as_tuple = self._wrap_non_base_steps(steps_as_tuple)
         self.steps_as_tuple: NamedTupleList = self._patch_missing_names(steps_as_tuple)
         self._refresh_steps()
-
-    def setup(self, context: ExecutionContext = None) -> 'BaseTransformer':
-        """
-        Initialize step before it runs.
-
-        :param context: execution context
-        :return: self
-        """
-        if self.is_initialized:
-            return self
-
-        self.is_initialized = True
-
-        return self
 
     def teardown(self) -> 'BaseTransformer':
         """
