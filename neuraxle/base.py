@@ -2207,6 +2207,11 @@ class BaseTransformer(
         """
         return self.name
 
+    def get_step_by_name(self, name):
+        if self.name == name :
+            return self
+        return None
+
     def reverse(self) -> 'BaseTransformer':
         """
         The object will mutate itself such that the ``.transform`` method (and of all its underlying objects
@@ -2932,9 +2937,6 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
 
     def get_step_by_name(self, name):
         for step in self.values():
-            if step.name == name:
-                return step
-
             found_step = step.get_step_by_name(name)
             if found_step is not None:
                 return found_step
