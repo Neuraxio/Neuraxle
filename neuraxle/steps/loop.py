@@ -154,6 +154,7 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
             return True
         return False
 
+
 class ContinueInterrupt(Exception):
     pass
 
@@ -168,17 +169,17 @@ class ExecuteIf(MetaStep, IdentityHandlerMethodsMixin):
         self.condition_function = condition_function
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
-        if self.condition_function(data_container, context):
+        if self.condition_function(self, data_container, context):
             return MetaStep.handle_fit(self, data_container, context)
         return self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
-        if self.condition_function(data_container, context):
+        if self.condition_function(self, data_container, context):
             return MetaStep.handle_fit_transform(self, data_container, context)
         return self, data_container
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
-        if self.condition_function(data_container, context):
+        if self.condition_function(self, data_container, context):
             return MetaStep.handle_transform(self, data_container, context)
         return data_container
 
@@ -189,7 +190,7 @@ class BreakIf(ForceHandleMixin, Identity):
         self.condition_function = condition_function
 
     def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        if self.condition_function(data_container, context):
+        if self.condition_function(self, data_container, context):
             raise BreakInterrupt()
         return data_container
 
@@ -200,7 +201,7 @@ class ContinueIf(ForceHandleMixin, Identity):
         self.condition_function = condition_function
 
     def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        if self.condition_function(data_container, context):
+        if self.condition_function(self, data_container, context):
             raise ContinueInterrupt()
         return data_container
 
