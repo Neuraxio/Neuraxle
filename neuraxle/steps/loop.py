@@ -69,9 +69,9 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
                     DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
                     context
                 )
-            except ContinueException:
+            except ContinueInterrupt:
                 continue
-            except BreakException:
+            except BreakInterrupt:
                 break
         return self
 
@@ -99,9 +99,9 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
                     output.data_inputs,
                     output.expected_outputs
                 )
-            except ContinueException:
+            except ContinueInterrupt:
                 continue
-            except BreakException:
+            except BreakInterrupt:
                 break
         output_data_container.summary_id = data_container.summary_id
 
@@ -131,9 +131,9 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
                     output.data_inputs,
                     output.expected_outputs
                 )
-            except ContinueException:
+            except ContinueInterrupt:
                 continue
-            except BreakException:
+            except BreakInterrupt:
                 break
 
         output_data_container.summary_id = data_container.summary_id
@@ -153,31 +153,33 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
             return True
         return False
 
-class ContinueException(Exception):
+class ContinueInterrupt(Exception):
     pass
 
 
-class BreakException(Exception):
+class BreakInterrupt(Exception):
     pass
 
-class Break(Identity):
+
+class BreakIf(ForceHandleMixin, Identity):
     def __init__(self, condition_function: Callable):
         Identity.__init__(self)
         self.condition_function = condition_function
 
     def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        if self.condition_function(data_container):
-            raise BreakException()
+        if self.condition_function(data_container, context):
+            raise BreakInterrupt()
         return data_container
 
-class Continue(Identity):
+
+class ContinueIf(ForceHandleMixin, Identity):
     def __init__(self, condition_function: Callable):
         Identity.__init__(self)
         self.condition_function = condition_function
 
     def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        if self.condition_function(data_container):
-            raise ContinueException()
+        if self.condition_function(data_container, context):
+            raise ContinueInterrupt()
         return data_container
 
 
