@@ -29,7 +29,8 @@ from typing import Tuple
 import numpy as np
 
 from neuraxle.base import MetaStep, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, \
-    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, BaseTransformer, Identity
+    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, BaseTransformer, Identity, \
+    IdentityHandlerMethodsMixin
 from neuraxle.data_container import ListDataContainer
 
 
@@ -159,6 +160,27 @@ class ContinueInterrupt(Exception):
 
 class BreakInterrupt(Exception):
     pass
+
+
+class ExecuteIf(MetaStep, IdentityHandlerMethodsMixin):
+    def __init__(self, condition_function: Callable, wrapped:BaseStep):
+        MetaStep.__init__(self, wrapped)
+        self.condition_function = condition_function
+
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        if self.condition_function(data_container, context):
+            return MetaStep.handle_fit(self, data_container, context)
+        return self
+
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        if self.condition_function(data_container, context):
+            return MetaStep.handle_fit_transform(self, data_container, context)
+        return self, data_container
+
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        if self.condition_function(data_container, context):
+            return MetaStep.handle_transform(self, data_container, context)
+        return data_container
 
 
 class BreakIf(ForceHandleMixin, Identity):
