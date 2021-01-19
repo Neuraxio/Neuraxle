@@ -184,7 +184,7 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
         self._plot_all_trial_main_and_validation_metric_results(repo, trial)
 
     def _plot_all_trial_main_and_validation_metric_results(self, repo, trial):
-        trial_hash = repo._get_trial_hash(trial)
+        trial_hash = repo._get_trial_hash(trial.hyperparams.to_flat_dict())
         for split_number, split in enumerate(trial.validation_splits):
             for metric_name in split.get_metric_names():
                 train_results = split.get_metric_train_results(metric_name=metric_name)
