@@ -2587,7 +2587,7 @@ class MetaStepMixin(_HasChildrenMixin):
         :return: self, a copy of self, or even perhaps a new or different BaseStep object.
         """
         new_self = super().mutate(new_method, method_to_assign_to, warn)
-        self.wrapped = self.wrapped.mutate(new_method, method_to_assign_to, warn)
+        new_self.wrapped = self.wrapped.mutate(new_method, method_to_assign_to, warn)
 
         return new_self
 
@@ -3050,7 +3050,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
             :func:`~neuraxle.base.BaseStep.inverse_transform`
         """
         if self.pending_mutate[0] is None:
-            new_base_step = self
+            new_base_step = BaseStep.mutate(self, new_method, method_to_assign_to, warn)
             self.pending_mutate = (new_base_step, self.pending_mutate[1], self.pending_mutate[2])
 
             new_base_step.steps_as_tuple = [
@@ -3061,8 +3061,10 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
                 for k, v in new_base_step.steps_as_tuple
             ]
             new_base_step._refresh_steps()
-            return BaseStep.mutate(self, new_method, method_to_assign_to, warn)
+            return new_base_step
         else:
+            # Since we're remplacing ourselves with a new step, we don't have to call mutate on our childrens since
+            # they won't exist afterward.
             return BaseStep.mutate(self, new_method, method_to_assign_to, warn)
 
     def _step_index_to_name(self, step_index):
