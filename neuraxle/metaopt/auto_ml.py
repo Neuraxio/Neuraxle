@@ -495,7 +495,7 @@ class Trainer:
 
         self.print_func = print_func
 
-    def train(self, pipeline: BaseStep, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Trial:
+    def train(self, pipeline: BaseStep, data_inputs, expected_outputs=None, context: ExecutionContext=None) -> Trial:
         """
         Train pipeline using the validation splitter.
         Track training, and validation metrics for each epoch.
