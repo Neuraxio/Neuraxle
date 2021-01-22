@@ -30,7 +30,7 @@ import numpy as np
 
 from neuraxle.base import MetaStep, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, \
     ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, BaseTransformer, Identity, \
-    IdentityHandlerMethodsMixin
+    IdentityHandlerMethodsMixin, HandleOnlyMixin
 from neuraxle.data_container import ListDataContainer
 
 
@@ -155,6 +155,7 @@ class ForEachDataInput(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
         return False
 
 
+
 class ContinueInterrupt(Exception):
     pass
 
@@ -163,9 +164,10 @@ class BreakInterrupt(Exception):
     pass
 
 
-class ExecuteIf(MetaStep, IdentityHandlerMethodsMixin):
-    def __init__(self, condition_function: Callable, wrapped:BaseStep):
+class ExecuteIf(HandleOnlyMixin, MetaStep):
+    def __init__(self, condition_function: Callable, wrapped: BaseStep):
         MetaStep.__init__(self, wrapped)
+        ForceHandleMixin.__init__(self)
         self.condition_function = condition_function
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
@@ -237,7 +239,8 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
 
     def _copy_one_step_per_data_input(self, data_container):
         # One copy of step per data input:
-        steps = [self.copy_op(self.wrapped).set_name('{}[{}]'.format(self.wrapped.name, i)) for i in range(len(data_container))]
+        steps = [self.copy_op(self.wrapped).set_name('{}[{}]'.format(self.wrapped.name, i)) for i in
+                 range(len(data_container))]
         self.steps_as_tuple = [(step.name, step) for step in steps]
         self._invalidate()
 
