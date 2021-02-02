@@ -230,11 +230,6 @@ class StepSaverCallback(BaseCallback):
 
     .. seealso::
         :class:`BaseCallback`,
-        :class:`MetaCallback`,
-        :class:`EarlyStoppingCallback`,
-        :class:`IfBestScore`,
-        :class:`IfLastStep`,
-        :class:`StepSaverCallback`,
         :class:`~neuraxle.metaopt.auto_ml.AutoML`,
         :class:`~neuraxle.metaopt.auto_ml.Trainer`,
         :class:`~neuraxle.metaopt.trial.Trial`,
@@ -243,15 +238,25 @@ class StepSaverCallback(BaseCallback):
         :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
         :class:`~neuraxle.metaopt.auto_ml.RandomSearchHyperparameterSelectionStrategy`,
         :class:`~neuraxle.base.HyperparameterSamples`,
-        :class:`~neuraxle.data_container.DataContainer`
     """
+    def __init__(self, label):
+        BaseCallback.__init__(self)
+        self.label = label
 
     def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
              is_finished_and_fitted: bool):
-        trial.save_model()
+        trial.save_model(self.label)
         return False
 
+
+def SaveBestModelCallback():
+    """
+    Saves the pipeline model when the a new best validation score is reached.
+    It is important to note that when refit=True, an AutoML loop will overwrite the best model after refitting.
+    :return:
+    """
+    return IfBestScore(StepSaverCallback('best'))
 
 class CallbackList(BaseCallback):
     """
