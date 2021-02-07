@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from sklearn.preprocessing import StandardScaler
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error
@@ -11,8 +12,8 @@ from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, RandomSearchHyperparameterSelectionStrategy, \
     HyperparamsJSONRepository, \
     ValidationSplitter, KFoldCrossValidationSplitter, Trainer
-from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback, EarlyStoppingCallback
-from neuraxle.metaopt.trial import Trial
+from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback, EarlyStoppingCallback, SaveBestModelCallback
+from neuraxle.metaopt.trial import Trial, Trials
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCallbackStep
 from neuraxle.steps.numpy import MultiplyByN, NumpyReshape
@@ -57,6 +58,51 @@ def test_automl_early_stopping_callback(tmpdir):
     nepochs_executed = len(validation_scores)
     assert nepochs_executed == max_epochs_without_improvement +1
 
+@pytest.mark.skip
+def test_automl_savebestmodel_callback(tmpdir):
+    # Given
+    hp_repository = HyperparamsJSONRepository(cache_folder=str('caching'))
+    validation_splitter = ValidationSplitter(0.20)
+    auto_ml = AutoML(
+        pipeline=Pipeline([
+            MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
+                'multiply_by': FixedHyperparameter(2)
+            })),
+            NumpyReshape(new_shape=(-1, 1)),
+            linear_model.LinearRegression()
+        ]),
+        validation_splitter=validation_splitter,
+        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
+        callbacks=[
+            SaveBestModelCallback()
+        ],
+        n_trials=1,
+        epochs=10,
+        refit_trial=False,
+        print_func=print,
+        hyperparams_repository=hp_repository,
+        continue_loop_on_error=False
+    )
+
+    data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expected_outputs = data_inputs * 4
+
+    # When
+    auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
+
+
+    #Then
+    trials: Trials = hp_repository.load_all_trials()
+    best_trial = trials.get_best_trial()
+    best_trial_score = best_trial.get_validation_score()
+    best_trial.cache_folder = hp_repository.cache_folder
+    best_model = best_trial.get_model('best')
+    _, _, valid_inputs, valid_outputs = ValidationSplitter(0.20).split(data_inputs, expected_outputs)
+    predicted_output = best_model.predict(valid_inputs)
+    score = mean_squared_error(valid_outputs, predicted_output)
+
+    assert best_trial_score == score
 
 def test_automl_with_kfold(tmpdir):
     # Given
