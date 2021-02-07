@@ -3723,8 +3723,14 @@ class AssertExpectedOutputIsNoneMixin(WillProcessAssertionMixin):
         eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
         if not eo_empty:
             raise AssertionError(
-                f"Expected datacontainer.expected_output to be a `None` or a list of `None`. Received {data_container.expected_outputs}.")
+                f"Expected datacontainer.expected_outputs to be a `None` or a list of `None`. Received {data_container.expected_outputs}.")
 
+class AssertExpectedOutputIsNotNoneMixin(WillProcessAssertionMixin):
+    def _assert(self, data_container: DataContainer, context: ExecutionContext):
+        eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
+        if eo_empty:
+            raise AssertionError(
+                f"Expected datacontainer.expected_outputs to not be a `None` or a list of `None`. Received {data_container.expected_outputs}.")
 
 class AssertExpectedOutputIsNoneStep(AssertExpectedOutputIsNoneMixin, Identity):
     def __init__(self):
