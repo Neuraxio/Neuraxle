@@ -481,16 +481,18 @@ class Trainer:
         if callbacks is None:
             callbacks = []
         callbacks: List[BaseCallback] = [scoring_callback] + callbacks
-        self.callbacks: CallbackList = CallbackList(callbacks)
 
         if print_func is None:
             print_func = print
+
+        self.callbacks: CallbackList = CallbackList(callbacks, print_func=print_func)
+        self.print_func = print_func
+
 
         if hyperparams_repository is None:
             hyperparams_repository = InMemoryHyperparamsRepository()
         self.hyperparams_repository: HyperparamsRepository = hyperparams_repository
 
-        self.print_func = print_func
 
     def train(self, pipeline: BaseStep, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Trial:
         """
