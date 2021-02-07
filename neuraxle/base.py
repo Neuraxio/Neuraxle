@@ -26,6 +26,7 @@ This is the core of Neuraxle. Most pipeline steps derive (inherit) from those cl
 
 import hashlib
 import inspect
+import logging
 import os
 import pprint
 import traceback
@@ -301,6 +302,9 @@ class JoblibStepSaver(BaseSaver):
         return loaded_step
 
 
+logging.basicConfig(format='%(asctime)s %(message)s')
+
+
 class ExecutionMode(Enum):
     FIT_OR_FIT_TRANSFORM_OR_TRANSFORM = 'fit_or_fit_transform_or_transform'
     FIT_OR_FIT_TRANSFORM = 'fit_or_fit_transform'
@@ -342,7 +346,8 @@ class ExecutionContext:
             execution_mode: ExecutionMode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM,
             stripped_saver: BaseSaver = None,
             parents: List['BaseStep'] = None,
-            services: Dict[Type, object] = None
+            services: Dict[Type, object] = None,
+            logger: logging.Logger = None
     ):
 
         self.execution_mode = execution_mode
@@ -360,6 +365,10 @@ class ExecutionContext:
         if services is None:
             services: Dict[Type, object] = dict()
         self.services: Dict[Type, object] = services
+
+        if logger is None:
+            logger = logging.getLogger
+        self.logger = logger
 
     def set_execution_phase(self, phase: ExecutionPhase) -> 'ExecutionContext':
         """
@@ -2377,8 +2386,8 @@ class _HasChildrenMixin(MixinForBaseTransformer):
     def _apply_childrens(self, results: RecursiveDict, method: Union[str, Callable],
                          ra: _RecursiveArguments) -> RecursiveDict:
         for children in self.get_children():
-            children_results = children.apply(method=method, ra=ra[children.get_name()])
-            results[children.get_name()] = RecursiveDict(children_results)
+            children_results: RecursiveDict = children.apply(method=method, ra=ra[children.get_name()])
+            results[children.get_name()] = RecursiveDict(children_results)  #TODO: remove this RecursiveDict; children_results already is one.
 
         return results
 
