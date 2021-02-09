@@ -722,6 +722,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             refit_scoring_function: Callable = None,
             cache_folder_when_no_handle=None,
             multiprocess=False,
+            n_processes=None,
             continue_loop_on_error=True
     ):
         BaseStep.__init__(self)
@@ -748,6 +749,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
         self.refit_trial: bool = refit_trial
         self.multiprocess = multiprocess
+        self.n_processes = n_processes
 
         self.error_types_to_raise = (SystemError, SystemExit, EOFError, KeyboardInterrupt) if continue_loop_on_error \
             else (Exception,)
@@ -788,7 +790,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             #   context instances are not shared between trial but copied. Pretty much everything is copied.
             context.logger.info(f"Number of processors available: {multiprocessing.cpu_count()}")
 
-            with multiprocessing.get_context("spawn").Pool() as pool:
+            with multiprocessing.get_context("spawn").Pool(processes=self.n_processes) as pool:
                 args = [(self, trial_number, validation_splits, context) for trial_number in range(self.n_trial)]
                 pool.starmap(AutoML._attempt_trial, args)
 
