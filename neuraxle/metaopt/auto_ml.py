@@ -289,7 +289,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
             cache_folder=cache_folder,
             best_retrained_model_folder=best_retrained_model_folder
         )
-        self.previous_json_path = None
+        self.json_path_remove_on_update = None
 
     def _save_trial(self, trial: 'Trial'):
         """
@@ -314,7 +314,10 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         with open(trial_file_path, 'w+') as outfile:
             json.dump(trial.to_json(), outfile)
 
-        self.previous_json_path = trial_file_path
+        if trial.status in (TRIAL_STATUS.SUCCESS, TRIAL_STATUS.FAILED):
+            self.json_path_remove_on_update = None
+        else :
+            self.json_path_remove_on_update = trial_file_path
 
         # Sleeping to have a valid time difference between files when reloading them to sort them by creation time:
         time.sleep(0.1)
@@ -335,7 +338,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
             cache_folder=self.cache_folder,
             main_metric_name=auto_ml_container.main_scoring_metric_name
         )
-        self._save_trial(trial=trial)
+        self._save_trial(trial)
 
         return trial
 
@@ -413,8 +416,8 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         return os.path.join(self.cache_folder, "NEW_" + current_hyperparameters_hash) + '.json'
 
     def _remove_previous_trial_state_json(self):
-        if self.previous_json_path and os.path.exists(self.previous_json_path):
-            os.remove(self.previous_json_path)
+        if self.json_path_remove_on_update and os.path.exists(self.json_path_remove_on_update):
+            os.remove(self.json_path_remove_on_update)
 
     def subscribe_to_cache_folder_changes(self, refresh_interval_in_seconds: int,
                                           observer: _Observer[Tuple[HyperparamsRepository, Trial]]):

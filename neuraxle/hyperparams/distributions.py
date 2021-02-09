@@ -1084,7 +1084,7 @@ class LogUniform(HyperparameterDistribution):
         return esperance_squared - (self.mean() ** 2)
 
     def __str__(self):
-        return self.__class__.__name__ + "("+"max_included=" + str(self.max_included)+",min_included=" + str(self.max_included)+")"
+        return self.__class__.__name__ + "("+"max_included=" + str(self.max_included)+",min_included=" + str(self.min_included)+")"
 
 class Normal(HyperparameterDistribution):
     """Get a normal distribution."""

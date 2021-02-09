@@ -2395,7 +2395,7 @@ class _HasChildrenMixin(MixinForBaseTransformer):
 
         return results
 
-    def setup(self, context: ExecutionContext = None) -> BaseStep:
+    def setup(self, context: ExecutionContext = None) -> BaseTransformer:
         """
         Initialize step before it runs. Also initialize its childrens.
 
