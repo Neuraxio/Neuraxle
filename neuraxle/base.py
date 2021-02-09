@@ -43,7 +43,7 @@ from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
 
 DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
-
+logging.basicConfig(format='%(asctime)s %(message)s', level=logging.DEBUG)
 
 class BaseHasher(ABC):
     """
@@ -302,9 +302,6 @@ class JoblibStepSaver(BaseSaver):
         return loaded_step
 
 
-logging.basicConfig(format='%(asctime)s %(message)s')
-
-
 class ExecutionMode(Enum):
     FIT_OR_FIT_TRANSFORM_OR_TRANSFORM = 'fit_or_fit_transform_or_transform'
     FIT_OR_FIT_TRANSFORM = 'fit_or_fit_transform'
@@ -367,7 +364,7 @@ class ExecutionContext:
         self.services: Dict[Type, object] = services
 
         if logger is None:
-            logger = logging.getLogger
+            logger = logging.getLogger()
         self.logger = logger
 
     def set_execution_phase(self, phase: ExecutionPhase) -> 'ExecutionContext':
@@ -426,6 +423,10 @@ class ExecutionContext:
         :return: if the service registered or not
         """
         return service_abstract_class_type in self.services
+
+    def set_logger(self, logger):
+        self.logger = logger
+        return self
 
     def get_execution_mode(self) -> ExecutionMode:
         return self.execution_mode
@@ -504,7 +505,9 @@ class ExecutionContext:
             execution_mode=self.execution_mode,
             execution_phase=self.execution_phase,
             parents=self.parents + [step],
-            services=self.services
+            services=self.services,
+            logger=self.logger
+
         )
 
     def copy(self):
@@ -513,7 +516,8 @@ class ExecutionContext:
             execution_mode=self.execution_mode,
             execution_phase=self.execution_phase,
             parents=copy(self.parents),
-            services=self.services
+            services=self.services,
+            logger=self.logger
         )
 
     def peek(self) -> 'BaseTransformer':

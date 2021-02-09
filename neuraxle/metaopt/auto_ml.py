@@ -28,6 +28,7 @@ import copy
 import glob
 import hashlib
 import json
+import logging
 import math
 import multiprocessing
 import os
@@ -150,9 +151,11 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
     @abstractmethod
     def new_trial(self, auto_ml_container: 'AutoMLContainer'):
         """
-        Save hyperparams, and score for a failed trial.
+        Create a new trial with the best next hyperparams.
 
-        :return: (hyperparams, scores)
+        :param context:
+        :param auto_ml_container: auto ml data container
+        :return: trial
         """
         pass
 
@@ -166,6 +169,18 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         current_hyperparameters_hash = hashlib.md5(str.encode(str(hp_dict))).hexdigest()
         return current_hyperparameters_hash
 
+    def _create_logger_for_trial(self, trial_number) -> logging.Logger:
+        if not os.path.exists(self.cache_folder):
+                os.mkdir(self.cache_folder)
+
+        logfile_path = os.path.join(self.cache_folder, f"trial_{trial_number}.log")
+        logger_name = f"trial_{trial_number}"
+        logger = logging.getLogger(logger_name)
+        formatter = logging.Formatter("[%(asctime)s][%(levelname)s][%(module)s][%(lineno)d] : %(message)s \n", datefmt="%H:%M:%S")
+        file_handler = logging.FileHandler(filename=logfile_path)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        return logger
 
 class InMemoryHyperparamsRepository(HyperparamsRepository):
     """
@@ -193,7 +208,7 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
-    def __init__(self, hyperparameter_selection_strategy=None, print_func: Callable = None, cache_folder: str = None,
+    def __init__(self, hyperparameter_selection_strategy=None, cache_folder: str = None,
                  best_retrained_model_folder=None):
         HyperparamsRepository.__init__(
             self,
@@ -201,9 +216,6 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
             cache_folder=cache_folder,
             best_retrained_model_folder=best_retrained_model_folder
         )
-        if print_func is None:
-            print_func = print
-        self.print_func = print_func
         self.cache_folder = cache_folder
 
         self.trials = Trials()
@@ -224,21 +236,16 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         :param trial: trial to save
         :return:
         """
-        self.print_func(trial)
         self.trials.append(trial)
 
     def new_trial(self, auto_ml_container: 'AutoMLContainer') -> 'Trial':
-        """
-        Create a new trial with the best next hyperparams.
-
-        :param auto_ml_container: auto ml data container
-        :return: trial
-        """
         hyperparams = self.hyperparameter_selection_strategy.find_next_best_hyperparams(auto_ml_container)
-        self.print_func('new trial:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+        logger = self._create_logger_for_trial(auto_ml_container.trial_number)
+        logger.info('new trial:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
         return Trial(
             save_trial_function=self.save_trial,
+            logger=logger,
             hyperparams=hyperparams,
             main_metric_name=auto_ml_container.main_scoring_metric_name
         )
@@ -320,9 +327,11 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :return:
         """
         hyperparams = self.hyperparameter_selection_strategy.find_next_best_hyperparams(auto_ml_container)
+        logger = self._create_logger_for_trial(auto_ml_container.trial_number)
         trial = Trial(
             hyperparams=hyperparams,
             save_trial_function=self.save_trial,
+            logger=logger,
             cache_folder=self.cache_folder,
             main_metric_name=auto_ml_container.main_scoring_metric_name
         )
@@ -473,7 +482,6 @@ class Trainer:
             scoring_callback: ScoringCallback,
             validation_splitter: 'BaseValidationSplitter',
             callbacks: List[BaseCallback] = None,
-            print_func: Callable = None,
             hyperparams_repository: HyperparamsRepository = None
     ):
         self.epochs: int = epochs
@@ -482,12 +490,7 @@ class Trainer:
         if callbacks is None:
             callbacks = []
         callbacks: List[BaseCallback] = [scoring_callback] + callbacks
-
-        if print_func is None:
-            print_func = print
-
-        self.callbacks: CallbackList = CallbackList(callbacks, print_func=print_func)
-        self.print_func = print_func
+        self.callbacks: CallbackList = CallbackList(callbacks)
 
 
         if hyperparams_repository is None:
@@ -507,14 +510,18 @@ Refer to `execute_trial` for full flexibility
         :param expected_outputs: expected ouptuts to fit on
         :return: executed trial
         """
+        if context is None:
+            context = ExecutionContext()
+
         validation_splits: List[
             Tuple[DataContainer, DataContainer]] = self.validation_split_function.split_data_container(
             DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs),
-            context=ExecutionContext()
+            context=context
         )
 
         repo_trial: Trial = Trial(
             pipeline=pipeline,
+            logger=context.logger,
             hyperparams=pipeline.get_hyperparams(),
             main_metric_name=self.get_main_metric_name(),
             save_trial_function=self.hyperparams_repository.save_trial
@@ -524,7 +531,7 @@ Refer to `execute_trial` for full flexibility
             pipeline=pipeline,
             trial_number=1,
             repo_trial=repo_trial,
-            context=ExecutionContext(),
+            context=context,
             validation_splits=validation_splits,
             n_trial=1,
             delete_pipeline_on_completion=False
@@ -574,7 +581,7 @@ Refer to `execute_trial` for full flexibility
                     n_trial=n_trial
                 )
 
-                self.print_func('fitting trial {}'.format(
+                context.logger.info('fitting trial {}'.format(
                     trial_split_description
                 ))
 
@@ -587,7 +594,7 @@ Refer to `execute_trial` for full flexibility
 
                 repo_trial_split.set_success()
 
-                self.print_func('success trial {} best score: {} at epoch {}'.format(
+                context.logger.info('success trial {} best score: {} at epoch {}'.format(
                     trial_split_description,
                     repo_trial_split.get_best_validation_score(),
                     repo_trial_split.get_n_epochs_to_best_validation_score()
@@ -615,7 +622,7 @@ Refer to `execute_trial` for full flexibility
         """
 
         for i in range(self.epochs):
-            self.print_func('\nepoch {}/{}'.format(i + 1, self.epochs))
+            context.logger.info('\nepoch {}/{}'.format(i + 1, self.epochs))
             trial_split = trial_split.fit_trial_split(train_data_container.copy(), context.copy().set_execution_phase(ExecutionPhase.TRAIN))
             y_pred_train = trial_split.predict_with_pipeline(train_data_container.copy(), context.copy().set_execution_phase(ExecutionPhase.VALIDATION))
             y_pred_val = trial_split.predict_with_pipeline(validation_data_container.copy(), context.copy().set_execution_phase(ExecutionPhase.VALIDATION))
@@ -632,6 +639,7 @@ Refer to `execute_trial` for full flexibility
                     is_finished_and_fitted=False
             ):
                 break
+
             # Saves the metrics
             trial_split.save_parent_trial()
 
@@ -712,7 +720,6 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             epochs: int = 1,
             callbacks: List[BaseCallback] = None,
             refit_scoring_function: Callable = None,
-            print_func: Callable = None,
             cache_folder_when_no_handle=None,
             multiprocess=False,
             continue_loop_on_error=True
@@ -722,8 +729,6 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
         self.validation_splitter: BaseValidationSplitter = validation_splitter
 
-        if print_func is None:
-            print_func = print
 
         if hyperparams_optimizer is None:
             hyperparams_optimizer = RandomSearchHyperparameterSelectionStrategy()
@@ -735,7 +740,6 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             hyperparams_repository.set_strategy(hyperparams_optimizer)
 
         self.pipeline: BaseStep = pipeline
-        self.print_func: Callable = print_func
 
         self.n_trial: int = n_trials
         self.hyperparams_repository: HyperparamsRepository = hyperparams_repository
@@ -752,7 +756,6 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             epochs=epochs,
             scoring_callback=scoring_callback,
             callbacks=callbacks,
-            print_func=self.print_func,
             validation_splitter=validation_splitter
         )
 
@@ -772,13 +775,16 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             context=context
         )
 
+        # Keeping a reference of the main logger
+        main_logger = context.logger
+
         if not self.multiprocess:
             for trial_number in range(self.n_trial):
                 self._attempt_trial(trial_number, validation_splits, context)
         else :
             # Notes on multiprocess :
-            #   Usage of a Thread/multiprocess-safe hyperparams repository is recommended, although not always.
-            #   Beware of the behaviour of HyperparamRepository's observers/subscribers.
+            #   Usage of a Thread/multiprocess-safe hyperparams repository is recommended, although it is not always necessary.
+            #   Beware of the behaviour of HyperparamsRepository's observers/subscribers.
             #   context instances are not shared between trial but copied. Pretty much everything is copied.
             context.logger.info(f"Number of processors available: {multiprocessing.cpu_count()}")
 
@@ -786,9 +792,11 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
                 args = [(self, trial_number, validation_splits, context) for trial_number in range(self.n_trial)]
                 pool.starmap(AutoML._attempt_trial, args)
 
+        context.set_logger(main_logger)
+
         best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
 
-        self.print_func(
+        context.logger.info(
             'best hyperparams:\n{}'.format(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
         p: BaseStep = self._load_virgin_model(hyperparams=best_hyperparams)
 
@@ -803,7 +811,10 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
         return self
 
-    def _attempt_trial(self, trial_number, validation_splits, context:ExecutionContext):
+    def _attempt_trial(self, trial_number, validation_splits, context: ExecutionContext):
+
+
+
         try:
             auto_ml_data = AutoMLContainer(
                 trial_number=trial_number,
@@ -814,7 +825,8 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
             with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
                 repo_trial_split = None
-                self.print_func('\ntrial {}/{}'.format(trial_number + 1, self.n_trial))
+                context.set_logger(repo_trial.logger)
+                context.logger.info('\ntrial {}/{}'.format(trial_number + 1, self.n_trial))
 
                 repo_trial_split = self.trainer.execute_trial(
                     pipeline=self.pipeline,
@@ -827,19 +839,19 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         except self.error_types_to_raise as error:
             track = traceback.format_exc()
             repo_trial.set_failed(error)
-            self.print_func(track)
+            context.logger.error(track)
             raise error
         except Exception:
             track = traceback.format_exc()
             repo_trial_split_number = 0 if repo_trial_split is None else repo_trial_split.split_number + 1
-            self.print_func('failed trial {}'.format(_get_trial_split_description(
+            context.logger.error('failed trial {}'.format(_get_trial_split_description(
                 repo_trial=repo_trial,
                 repo_trial_split_number=repo_trial_split_number,
                 validation_splits=validation_splits,
                 trial_number=trial_number,
                 n_trial=self.n_trial
             )))
-            self.print_func(track)
+            context.logger.error(track)
         finally:
             repo_trial.update_final_trial_status()
             self.hyperparams_repository.save_trial(repo_trial)

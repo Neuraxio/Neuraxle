@@ -28,6 +28,7 @@ import traceback
 from abc import ABC, abstractmethod
 from typing import Callable
 
+from neuraxle.base import ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.metaopt.trial import TrialSplit
 
@@ -100,10 +101,12 @@ class EarlyStoppingCallback(BaseCallback):
         if len(validation_scores) > self.n_epochs_without_improvement:
             higher_score_is_better = trial.is_higher_score_better()
             if (higher_score_is_better) and \
-                all(validation_scores[-self.n_epochs_without_improvement] >= v for v in validation_scores[-self.n_epochs_without_improvement:]) :
+                    all(validation_scores[-self.n_epochs_without_improvement] >= v for v in
+                        validation_scores[-self.n_epochs_without_improvement:]):
                 return True
             if (not higher_score_is_better) and \
-                    all(validation_scores[-self.n_epochs_without_improvement] <= v for v in validation_scores[-self.n_epochs_without_improvement:]):
+                    all(validation_scores[-self.n_epochs_without_improvement] <= v for v in
+                        validation_scores[-self.n_epochs_without_improvement:]):
                 return True
         return False
 
@@ -239,6 +242,7 @@ class StepSaverCallback(BaseCallback):
         :class:`~neuraxle.metaopt.auto_ml.RandomSearchHyperparameterSelectionStrategy`,
         :class:`~neuraxle.base.HyperparameterSamples`,
     """
+
     def __init__(self, label):
         BaseCallback.__init__(self)
         self.label = label
@@ -257,6 +261,7 @@ def SaveBestModelCallback():
     :return:
     """
     return IfBestScore(StepSaverCallback('best'))
+
 
 class CallbackList(BaseCallback):
     """
@@ -280,11 +285,8 @@ class CallbackList(BaseCallback):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def __init__(self, callbacks, print_func: Callable = None):
+    def __init__(self, callbacks):
         self.callbacks = callbacks
-        if print_func is None:
-            print_func = print
-        self.print_func = print_func
 
     def __getitem__(self, item):
         return self.callbacks[item]
@@ -308,7 +310,9 @@ class CallbackList(BaseCallback):
                     is_finished_and_fitted = True
             except Exception as error:
                 track = traceback.format_exc()
-                self.print_func(track)
+                trial.trial.logger.error("Error occured during CallbackList execution!")
+                trial.trial.logger.error(track)
+
         return is_finished_and_fitted
 
 
@@ -336,15 +340,11 @@ class MetricCallback(BaseCallback):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def __init__(self, name: str, metric_function: Callable, higher_score_is_better: bool, print_metrics=True,
-                 print_function=None):
+    def __init__(self, name: str, metric_function: Callable, higher_score_is_better: bool, log_metrics=True):
         self.name = name
         self.metric_function = metric_function
         self.higher_score_is_better = higher_score_is_better
-        self.print_metrics = print_metrics
-        if print_function is None:
-            print_function = print
-        self.print_function = print_function
+        self.log_metrics = log_metrics
 
     def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
@@ -364,9 +364,9 @@ class MetricCallback(BaseCallback):
             higher_score_is_better=self.higher_score_is_better
         )
 
-        if self.print_metrics:
-            self.print_function('{} train: {}'.format(self.name, train_score))
-            self.print_function('{} validation: {}'.format(self.name, validation_score))
+        if self.log_metrics:
+            trial.trial.logger.info('{} train: {}'.format(self.name, train_score))
+            trial.trial.logger.info('{} validation: {}'.format(self.name, validation_score))
 
         return False
 
@@ -395,10 +395,11 @@ class ScoringCallback(MetricCallback):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def __init__(self, metric_function: Callable, name='main', higher_score_is_better: bool = True, print_metrics: bool = True):
+    def __init__(self, metric_function: Callable, name='main', higher_score_is_better: bool = True,
+                 log_metrics: bool = True):
         super().__init__(
             name=name,
             metric_function=metric_function,
             higher_score_is_better=higher_score_is_better,
-            print_metrics=print_metrics
+            log_metrics=log_metrics
         )

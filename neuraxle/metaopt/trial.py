@@ -23,9 +23,11 @@ Trial objects used by AutoML algorithm classes.
 
 import datetime
 import hashlib
+import logging
 import os
 import traceback
 from enum import Enum
+from logging import Logger
 from typing import Dict, List, Callable, Iterable
 
 from typing import Dict, List, Tuple
@@ -58,6 +60,7 @@ class Trial:
             hyperparams: HyperparameterSamples,
             main_metric_name: str,
             save_trial_function: Callable,
+            logger: Logger = None,
             status: 'TRIAL_STATUS' = None,
             pipeline: BaseStep = None,
             validation_splits: List['TrialSplit'] = None,
@@ -68,6 +71,11 @@ class Trial:
             end_time: datetime.datetime = None,
     ):
         self.save_trial_function: Callable = save_trial_function
+
+        if logger is None:
+            logger = logging.getLogger()
+        self.logger: Logger = logger
+
         if status is None:
             status = TRIAL_STATUS.PLANNED
         if validation_splits is None:

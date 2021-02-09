@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-from sklearn.preprocessing import StandardScaler
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error
 from sklearn.svm import LinearSVC
@@ -15,7 +14,6 @@ from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, Rand
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback, EarlyStoppingCallback, SaveBestModelCallback
 from neuraxle.metaopt.trial import Trial, Trials
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.misc import FitTransformCallbackStep
 from neuraxle.steps.numpy import MultiplyByN, NumpyReshape
 from neuraxle.steps.sklearn import SKLearnWrapper
 
@@ -125,7 +123,6 @@ def test_automl_with_kfold(tmpdir):
         n_trials=1,
         epochs=10,
         refit_trial=True,
-        print_func=print,
         hyperparams_repository=hp_repository,
         continue_loop_on_error=False
     )
