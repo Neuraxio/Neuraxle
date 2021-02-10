@@ -2507,9 +2507,6 @@ class MetaStepMixin(_HasChildrenMixin):
         """
         return self.wrapped
 
-    def get_best_model(self) -> BaseStep:
-        return self.best_model
-
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
         previous_summary_id = data_container.summary_id
         new_self, data_container = super().handle_fit_transform(data_container, context)

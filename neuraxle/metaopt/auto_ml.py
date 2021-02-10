@@ -170,8 +170,8 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         return current_hyperparameters_hash
 
     def _create_logger_for_trial(self, trial_number) -> logging.Logger:
-        if not os.path.exists(self.cache_folder):
-                os.mkdir(self.cache_folder)
+
+        os.makedirs(self.cache_folder, exist_ok=True)
 
         logfile_path = os.path.join(self.cache_folder, f"trial_{trial_number}.log")
         logger_name = f"trial_{trial_number}"
