@@ -508,7 +508,7 @@ class Choice(DiscreteHyperparameterDistribution):
 
     def __str__(self):
         return self.__class__.__name__ + \
-               f"({'choice_list='+','.join(self.choice_list) if len(self.choice_list)<4 else f'a {len(self.choice_list)} elements choice_list'})"
+               f"({'choice_list='+', '.join(self.choice_list) if len(self.choice_list)<4 else f'a {len(self.choice_list)} elements choice_list'})"
 
 class PriorityChoice(DiscreteHyperparameterDistribution):
     """Get a random value from a choice list of possible value for this hyperparameter.
@@ -873,7 +873,7 @@ class RandInt(DiscreteHyperparameterDistribution):
         return ((self.max_included - self.min_included + 1) ** 2 - 1) / 12
 
     def __str__(self):
-        return self.__class__.__name__ + "("+"max_included=" + str(self.max_included)+",min_included=" + str(self.max_included)+")"
+        return self.__class__.__name__ + "("+"max_included=" + str(self.max_included)+", min_included=" + str(self.max_included)+")"
 
 class Uniform(HyperparameterDistribution):
     """Get a uniform distribution."""
@@ -975,7 +975,7 @@ class Uniform(HyperparameterDistribution):
         return (self.max_included - self.min_included) ** 2 / 12
 
     def __str__(self):
-        return self.__class__.__name__ + "("+"max_included=" + str(self.max_included)+",min_included=" + str(self.max_included)+")"
+        return self.__class__.__name__ + "("+"max_included=" + str(self.max_included)+", min_included=" + str(self.max_included)+")"
 
 class LogUniform(HyperparameterDistribution):
     """Get a LogUniform distribution.
@@ -1084,7 +1084,7 @@ class LogUniform(HyperparameterDistribution):
         return esperance_squared - (self.mean() ** 2)
 
     def __str__(self):
-        return self.__class__.__name__ + "("+"max_included=" + str(self.max_included)+",min_included=" + str(self.min_included)+")"
+        return self.__class__.__name__ + "("+"max_included=" + str(self.max_included)+", min_included=" + str(self.min_included)+")"
 
 class Normal(HyperparameterDistribution):
     """Get a normal distribution."""
@@ -1280,8 +1280,8 @@ class Normal(HyperparameterDistribution):
         return variance
 
     def __str__(self):
-        return self.__class__.__name__ + f"(_mean={str(self._mean)},_std={str(self._std)}" \
-                                         f",hard_clip_min={self.hard_clip_min},hard_clip_max={self.hard_clip_max})"
+        return self.__class__.__name__ + f"(_mean={str(self._mean)}, _std={str(self._std)}" \
+                                         f", hard_clip_min={self.hard_clip_min}, hard_clip_max={self.hard_clip_max})"
 
 
 class LogNormal(HyperparameterDistribution):

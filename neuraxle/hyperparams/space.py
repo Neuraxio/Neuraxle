@@ -80,7 +80,7 @@ class RecursiveDict(OrderedDict):
         dct = RecursiveDict({'a':{'b':2}})
         assert dct["a__b"] == 2
         dct["a__b__c"] = 3
-        assert dct['a']['b']['c'] == dct["a__b__c"]
+        assert dct['a']['b']['c'] == dct["a__b__c"] == dct.to_flat_dict()["a__b__c"]
 
     This class serves as a base for HyperparameterSamples and HyperparameterSpace
     """
