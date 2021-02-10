@@ -235,7 +235,7 @@ class FixedHyperparameter(HyperparameterDistribution):
         return 0
 
     def __str__(self):
-        return self.__class__.__name__+f"(value={self.value}(type:{type(self.value)}))"
+        return self.__class__.__name__+f"(value={self.value}: {type(self.value)})"
 
 
 # TODO: Mixin this or something:
