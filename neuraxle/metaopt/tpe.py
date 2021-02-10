@@ -74,7 +74,7 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
         bad_posteriors:List[HyperparameterDistribution] = self._create_posterior(hyperparams_space_list, bad_trials)
 
         best_hyperparams = []
-        for (hyperparam_key, good_posterior, bad_posterior) in zip(hyperparams_keys, good_posteriors,bad_posteriors):
+        for (hyperparam_key, good_posterior, bad_posterior) in zip(hyperparams_keys, good_posteriors, bad_posteriors):
             best_new_hyperparam_value = None
             best_ratio = None
             for _ in range(self.number_possible_hyperparams_candidates):
