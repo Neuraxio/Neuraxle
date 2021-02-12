@@ -182,6 +182,7 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         logger.addHandler(file_handler)
         return logger
 
+
 class InMemoryHyperparamsRepository(HyperparamsRepository):
     """
     In memory hyperparams repository that can print information about trials.
@@ -803,9 +804,12 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
         context.logger.info(
             'best hyperparams:\n{}'.format(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
-        p: BaseStep = self._load_virgin_model(hyperparams=best_hyperparams)
+
+        # Notify HyperparamsRepository subscribers
+        self.hyperparams_repository.on_complete(value=self.hyperparams_repository)
 
         if self.refit_trial:
+            p: BaseStep = self._load_virgin_model(hyperparams=best_hyperparams)
             p = self.trainer.refit(
                 p=p,
                 data_container=data_container,
@@ -817,8 +821,6 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         return self
 
     def _attempt_trial(self, trial_number, validation_splits, context: ExecutionContext):
-
-
 
         try:
             auto_ml_data = AutoMLContainer(
