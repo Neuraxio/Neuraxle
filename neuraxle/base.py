@@ -3776,7 +3776,7 @@ class _WithContextStepSaver(BaseSaver):
         :return: loaded step with context
         """
         step.context = context
-        step.apply('_assert_has_services', context=context)
+        print("Warning! the loading of a StepWithContext instance overrides the context attribute with the one provided at loading.")
         return step
 
     def save_step(self, step: 'StepWithContext', context: ExecutionContext) -> 'StepWithContext':
