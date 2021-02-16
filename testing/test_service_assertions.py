@@ -58,17 +58,21 @@ class RegisterServiceDynamically(ForceHandleMixin, Identity):
         return data_container
 
 
-def test_step_with_context_should_only_save_wrapped_step(tmpdir):
+def test_step_with_context_saver(tmpdir):
     context = ExecutionContext(root=tmpdir)
     service = SomeService()
+    pipeline_name = 'testname'
     context.set_service_locator({SomeBaseService: service})
     p = Pipeline([
         SomeStep().assert_has_services(SomeBaseService)
     ]).with_context(context=context)
-
+    p.set_name(pipeline_name)
     p.save(context, full_dump=True)
 
-    p: Pipeline = ExecutionContext(root=tmpdir).load(os.path.join('StepWithContext', 'Pipeline'))
+    p: StepWithContext = ExecutionContext(root=tmpdir).load(pipeline_name)
+    assert isinstance(p, StepWithContext)
+
+    p: Pipeline = ExecutionContext(root=tmpdir).load(os.path.join(pipeline_name, 'Pipeline'))
     assert isinstance(p, Pipeline)
 
 
