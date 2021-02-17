@@ -3705,7 +3705,7 @@ class AssertExpectedOutputIsNoneMixin(WillProcessAssertionMixin):
                 f"Expected datacontainer.expected_output to be a `None` or a list of `None`. Received {data_container.expected_outputs}.")
 
 
-class AssertExpectedOutputIsNoneStep(AssertExpectedOutputIsNoneMixin, Identity):
+class AssertExpectedOutputIsNone(AssertExpectedOutputIsNoneMixin, Identity):
     def __init__(self):
         Identity.__init__(self)
         AssertExpectedOutputIsNoneMixin.__init__(self)
