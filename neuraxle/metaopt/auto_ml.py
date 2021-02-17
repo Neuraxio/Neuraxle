@@ -789,7 +789,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
                 self._attempt_trial(trial_number, validation_splits, context)
         else :
             # Notes on multiprocess :
-            #   Usage of a Thread/multiprocess-safe hyperparams repository is recommended, although it is not always necessary.
+            #   Usage of a Thread/multiprocess-safe hyperparams repository is recommended, although it is, most of the time, not necessary.
             #   Beware of the behaviour of HyperparamsRepository's observers/subscribers.
             #   context instances are not shared between trial but copied. Pretty much everything is copied.
             context.logger.info(f"Number of processors available: {multiprocessing.cpu_count()}")

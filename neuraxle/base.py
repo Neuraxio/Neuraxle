@@ -43,7 +43,7 @@ from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
 
 DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
-logging.basicConfig(format='%(asctime)s %(message)s', level=logging.DEBUG)
+logging.basicConfig(format="[%(asctime)s][%(levelname)s][%(module)s][%(lineno)d] : %(message)s \n", datefmt="%H:%M:%S", level=logging.INFO)
 
 class BaseHasher(ABC):
     """
@@ -2391,7 +2391,7 @@ class _HasChildrenMixin(MixinForBaseTransformer):
                          ra: _RecursiveArguments) -> RecursiveDict:
         for children in self.get_children():
             children_results: RecursiveDict = children.apply(method=method, ra=ra[children.get_name()])
-            results[children.get_name()] = RecursiveDict(children_results)  #TODO: remove this RecursiveDict; children_results already is one.
+            results[children.get_name()] = children_results
 
         return results
 
