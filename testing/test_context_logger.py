@@ -30,7 +30,7 @@ class LoggingStep(HandleOnlyMixin, BaseStep):
         logging_call_counter += 1
         return self
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> '_FittableStep':
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         global logging_call_counter
         context.logger.info(f"transform call - logging call # {logging_call_counter}")
         logging_call_counter += 1
