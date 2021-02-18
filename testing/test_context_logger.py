@@ -24,7 +24,7 @@ class LoggingStep(HandleOnlyMixin, BaseStep):
         HandleOnlyMixin.__init__(self)
 
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> '_FittableStep':
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
         global logging_call_counter
         context.logger.info(f"fit call - logging call # {logging_call_counter}")
         logging_call_counter += 1
