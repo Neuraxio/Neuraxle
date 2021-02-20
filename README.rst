@@ -155,7 +155,7 @@ Community
 ---------
 
 For **technical questions**, please post them on
-`StackOverflow <https://stackoverflow.com/questions/tagged/machine-learning>`__
+`StackOverflow <https://stackoverflow.com/questions/tagged/neuraxle>`__
 using the ``neuraxle`` tag. The StackOverflow question will automatically
 be posted in Neuraxio's slack workspace in the #Neuraxle channel. 
 
