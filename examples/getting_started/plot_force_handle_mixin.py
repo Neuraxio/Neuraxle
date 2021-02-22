@@ -45,7 +45,7 @@ class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
         BaseStep.__init__(self)
         ForceHandleMixin.__init__(self)
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> '_FittableStep':
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
         """
         Change the shape of the data container.
         and/or
