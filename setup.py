@@ -94,7 +94,7 @@ setup(
         'numpy',
         'scipy>=1.4.1',
         'scikit-learn>=0.20.3',
-        'matplotlib=3.3.4',
+        'matplotlib==3.3.4',
         'joblib>=0.13.2',
         'Flask>=1.1.1',
         'Flask-RESTful>=0.3.7',
