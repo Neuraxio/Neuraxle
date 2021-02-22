@@ -42,10 +42,10 @@ class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
     """
 
     def __init__(self):
-        ForceHandleMixin.__init__(self)
         BaseStep.__init__(self)
+        ForceHandleMixin.__init__(self)
 
-    def handle_fit(self, data_container: DataContainer, context: ExecutionContext):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> '_FittableStep':
         """
         Change the shape of the data container.
         and/or
@@ -56,7 +56,7 @@ class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
         data_container = self.hash_data_container(data_container)
         return self
 
-    def handle_transform(self, data_container: DataContainer, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Change the shape of the data container.
         and/or
@@ -67,7 +67,8 @@ class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
         data_container = self.hash_data_container(data_container)
         return data_container
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
+            ('BaseStep', DataContainer):
         """
         Change the shape of the data container.
         and/or
