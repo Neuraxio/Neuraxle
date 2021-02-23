@@ -34,7 +34,9 @@ NamedDataContainerTuple = Tuple[str, 'DataContainer']
 
 
 class AbsentValuesNullObject:
-    """This object, when passed to the default_value_data_inputs argument of the DataContainer.batch method, will return the minibatched data containers such that the last batch won't have the full batch_size if it was incomplete with trailing None values at the end."""
+    """
+    This object, when passed to the default_value_data_inputs argument of the DataContainer.batch method, will return the minibatched data containers such that the last batch won't have the full batch_size if it was incomplete with trailing None values at the end.
+    """
     pass
 
 
@@ -53,7 +55,7 @@ class DataContainer:
 
     .. seealso::
         :class:`~neuraxle.base.BaseHasher`,
-        :class: `neuraxle.base.BaseStep`
+        :class: `neuraxle.base.BaseStep`,
         :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
     """
 
@@ -92,7 +94,7 @@ class DataContainer:
 
         :param data_inputs: data inputs
         :type data_inputs: Iterable
-        :return:
+        :return: self
         """
         self.data_inputs = data_inputs
         return self
@@ -103,7 +105,7 @@ class DataContainer:
 
         :param expected_outputs: expected outputs
         :type expected_outputs: Iterable
-        :return:
+        :return: self
         """
         self.expected_outputs = expected_outputs
         return self
@@ -114,7 +116,7 @@ class DataContainer:
 
         :param current_ids: data inputs
         :type current_ids: List[str]
-        :return:
+        :return: self
         """
         self.current_ids = current_ids
         return self
@@ -124,7 +126,7 @@ class DataContainer:
         Set summary id.
 
         :param summary_id: str
-        :return:
+        :return: self
         """
         self.summary_id = summary_id
         return self
@@ -132,9 +134,10 @@ class DataContainer:
     def set_sub_data_containers(self, sub_data_containers: List['DataContainer']):
         """
         Set sub data containers
-        :return:
+        :return: self
         """
         self.sub_data_containers = sub_data_containers
+        return self
 
     def hash_summary(self):
         """
@@ -206,8 +209,8 @@ class DataContainer:
         :return: an iterator of DataContainer
         :rtype: Iterable[DataContainer]
 
-        ..seealso
-            :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`,
+        .. seealso::
+            :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
         """
         for i in range(0, len(self.data_inputs), batch_size):
             data_container = DataContainer(
@@ -369,7 +372,7 @@ class ExpandedDataContainer(DataContainer):
     Sub class of DataContainer to expand data container dimension.
 
     .. seealso::
-        :class:`DataContainer`,
+        :class:`DataContainer`
     """
 
     def __init__(self, data_inputs, current_ids, expected_outputs, summary_id, old_current_ids):
@@ -426,7 +429,7 @@ class ZipDataContainer(DataContainer):
     Sub class of DataContainer to zip two data sources together.
 
     .. seealso::
-        :class:`DataContainer`,
+        :class: `DataContainer`
     """
 
     @staticmethod
