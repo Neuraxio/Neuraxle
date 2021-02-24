@@ -55,8 +55,9 @@ class DataContainer:
 
     .. seealso::
         :class:`~neuraxle.base.BaseHasher`,
-        :class: `neuraxle.base.BaseStep`,
+        :class: `~neuraxle.base.BaseStep`,
         :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+
     """
 
     def __init__(
