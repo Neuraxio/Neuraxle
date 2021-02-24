@@ -504,13 +504,13 @@ class Trainer:
         """
         Train pipeline using the validation splitter.
         Track training, and validation metrics for each epoch.
-        Note: the present method is just a shortcut to using the `execute_trial` method with less boilerplate code needed. 
-Refer to `execute_trial` for full flexibility
+        Note: the present method is just a shortcut to using the `execute_trial` method with less boilerplate code needed. Refer to `execute_trial` for full flexibility
 
         :param pipeline: pipeline to train on
         :param data_inputs: data inputs
         :param expected_outputs: expected ouptuts to fit on
         :return: executed trial
+
         """
         validation_splits: List[
             Tuple[DataContainer, DataContainer]] = self.validation_split_function.split_data_container(
