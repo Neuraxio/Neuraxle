@@ -416,6 +416,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         :class:`Joiner`,
         :class:`~neuraxle.data_container.DataContainer`,
         :class:`~neuraxle.base.ExecutionContext`
+
     """
     def __init__(
             self,

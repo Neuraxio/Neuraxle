@@ -1446,7 +1446,7 @@ class _HasHyperparams(ABC):
         :return: self
 
         .. note::
-        This is a recursive method that will call :func:`~neuraxle.base._HasHyperparams._set_hyperparams` in the end.
+            This is a recursive method that will call :func:`~neuraxle.base._HasHyperparams._set_hyperparams`.
         .. seealso::
             :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
             :class:̀_HasChildrenMixin`,
@@ -1508,9 +1508,9 @@ class _HasHyperparams(ABC):
         :return: step hyperparameters
 
         .. note::
-        This is a recursive method that will call :func:`~neuraxle.base._HasHyperparams._get_hyperparams` in the end.
+            This is a recursive method that will call :func:`~neuraxle.base._HasHyperparams._get_hyperparams`.
         .. seealso::
-            * :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+            :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
             :class:̀_HasChildrenMixin`,
             :func:`BaseStep.apply`,
             :func:`_HasChildrenMixin._apply`,
@@ -1534,7 +1534,7 @@ class _HasHyperparams(ABC):
             hyperparams = s.get_params()
             assert hyperparams == {"learning_rate": 0.1}
 
-        :param **params: arbitrary number of arguments for hyperparameters
+        :param arbitrary number of arguments for hyperparameters
 
         .. note::
             This is a recursive method that will call :func:`~neuraxle.base._HasHyperparams._set_params` in the end.
@@ -2141,8 +2141,10 @@ class BaseTransformer(
             * the step name has changed func:`~neuraxle.base.BaseStep.set_name`
 
         :return: self
+
         .. note::
             This is a recursive method used in :class:̀_HasChildrenMixin`.
+
         .. seealso::
             :func:`~neuraxle.base._HasRecursiveMethods.apply`,
             :func:`~neuraxle.base._HasChildrenMixin._apply`
@@ -2220,6 +2222,7 @@ class BaseTransformer(
         Note: the reverse may fail if there is a pending mutate that was set earlier with ``.will_mutate_to``.
 
         :return: a copy of self, reversed. Each contained object will also have been reversed if self is a pipeline.
+
         .. seealso::
             :func:`~neuraxle.base._TransformerStep.inverse_transform`
         """
@@ -3012,9 +3015,9 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
     def should_save(self):
         """
         Returns if the step needs to be saved or not.
-        If self should be saved or any of his sub steps, return True.
 
-        :return:
+        :return: If self or any of his sub steps should be saved, returns True.
+
         .. seealso::
             :class:`TruncableJoblibStepSaver`
         """

@@ -2,7 +2,9 @@
 Neuraxle's Automatic Machine Learning Classes
 ==================================================
 All steps, and abstractions needed to build Automatic Machine Learning algorithms in Neuraxle.
+
 ..
+
     Copyright 2019, Neuraxio Inc.
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -13,6 +15,7 @@ All steps, and abstractions needed to build Automatic Machine Learning algorithm
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
     See the License for the specific language governing permissions and
     limitations under the License.
+
 """
 import copy
 import glob
@@ -660,6 +663,7 @@ class Trial:
 class Trials:
     """
     Data object containing auto ml trials.
+
     .. seealso::
         :class:`AutoMLSequentialWrapper`,
         :class:`RandomSearch`,
