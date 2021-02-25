@@ -52,8 +52,10 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
         :rtype: HyperparameterSamples
         """
         # Flatten hyperparameter space
+
         hyperparams_space_list: List[(str, HyperparameterDistribution)] = list(
             auto_ml_container.hyperparameter_space.to_flat_dict().items())
+
 
         if auto_ml_container.trial_number < self.number_of_initial_random_step:
             # Perform random search
@@ -69,6 +71,7 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
         )
 
         # Create gaussian mixture of good and gaussian mixture of bads.
+
         hyperparams_keys = list(map(itemgetter(0), hyperparams_space_list))
         good_posteriors: List[HyperparameterDistribution] = self._create_posterior(hyperparams_space_list, good_trials)
         bad_posteriors: List[HyperparameterDistribution] = self._create_posterior(hyperparams_space_list, bad_trials)
@@ -114,7 +117,6 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
 
     def _create_posterior(self, flat_hyperparameter_space_list: List[Tuple[str, HyperparameterDistribution]],
                           trials: Trials) -> HyperparameterSpace:
-        # Create a list of all hyperparams and their trials.
 
         # Loop through all hyperparams
         posterior_distributions = []

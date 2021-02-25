@@ -55,6 +55,7 @@ def test_automl_early_stopping_callback(tmpdir):
     validation_scores = trial.validation_splits[0].get_validation_scores()
     nepochs_executed = len(validation_scores)
     assert nepochs_executed == max_epochs_without_improvement +1
+    
 
 @pytest.mark.skip
 def test_automl_savebestmodel_callback(tmpdir):
@@ -102,6 +103,7 @@ def test_automl_savebestmodel_callback(tmpdir):
 
     assert best_trial_score == score
 
+    
 def test_automl_with_kfold(tmpdir):
     # Given
     hp_repository = HyperparamsJSONRepository(cache_folder=str('caching'))

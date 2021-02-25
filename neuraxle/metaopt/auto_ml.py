@@ -502,17 +502,17 @@ class Trainer:
         self.hyperparams_repository: HyperparamsRepository = hyperparams_repository
 
 
-    def train(self, pipeline: BaseStep, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Trial:
+    def train(self, pipeline: BaseStep, data_inputs, expected_outputs=None, context: ExecutionContext=None) -> Trial:
         """
         Train pipeline using the validation splitter.
         Track training, and validation metrics for each epoch.
-        Note: the present method is just a shortcut to using the `execute_trial` method with less boilerplate code needed. 
-Refer to `execute_trial` for full flexibility
+        Note: the present method is just a shortcut to using the `execute_trial` method with less boilerplate code needed. Refer to `execute_trial` for full flexibility
 
         :param pipeline: pipeline to train on
         :param data_inputs: data inputs
         :param expected_outputs: expected ouptuts to fit on
         :return: executed trial
+
         """
         if context is None:
             context = ExecutionContext()
@@ -626,7 +626,7 @@ Refer to `execute_trial` for full flexibility
         """
 
         for i in range(self.epochs):
-            context.logger.info('\nepoch {}/{}'.format(i + 1, self.epochs))
+            context.logger.info('epoch {}/{}'.format(i + 1, self.epochs))
             trial_split = trial_split.fit_trial_split(train_data_container.copy(), context.copy().set_execution_phase(ExecutionPhase.TRAIN))
             y_pred_train = trial_split.predict_with_pipeline(train_data_container.copy(), context.copy().set_execution_phase(ExecutionPhase.VALIDATION))
             y_pred_val = trial_split.predict_with_pipeline(validation_data_container.copy(), context.copy().set_execution_phase(ExecutionPhase.VALIDATION))
@@ -643,6 +643,8 @@ Refer to `execute_trial` for full flexibility
                     is_finished_and_fitted=False
             ):
                 break
+            # Saves the metrics
+            trial_split.save_parent_trial()
 
             # Saves the metrics
             trial_split.save_parent_trial()
@@ -813,7 +815,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             p = self.trainer.refit(
                 p=p,
                 data_container=data_container,
-                context=context
+                context=context.set_execution_phase(ExecutionPhase.TRAIN)
             )
 
             self.hyperparams_repository.save_best_model(p)

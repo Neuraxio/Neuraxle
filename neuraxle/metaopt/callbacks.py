@@ -104,7 +104,7 @@ class EarlyStoppingCallback(BaseCallback):
                     all(validation_scores[-self.n_epochs_without_improvement] >= v for v in
                         validation_scores[-self.n_epochs_without_improvement:]):
                 return True
-            if (not higher_score_is_better) and \
+            elif (not higher_score_is_better) and \
                     all(validation_scores[-self.n_epochs_without_improvement] <= v for v in
                         validation_scores[-self.n_epochs_without_improvement:]):
                 return True

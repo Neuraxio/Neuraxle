@@ -140,6 +140,7 @@ class Trial:
         Load model in the trial hash folder.
         """
         assert self.cache_folder is not None
+
         hyperparams = self.hyperparams.to_flat_dict()
         trial_hash = self._get_trial_hash(hyperparams)
         path = os.path.join(self.cache_folder, label)
