@@ -30,7 +30,7 @@ from neuraxle.base import DataContainer, ExecutionContext, ForceHandleMixin, Bas
 from neuraxle.base import NonFittableMixin, BaseStep
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.utils import DeprecatedClassMeta
+from neuraxle.utils import DeprecatedMetaClass
 
 
 class NumpyFlattenDatum(BaseTransformer):
@@ -82,7 +82,7 @@ class NumpyConcatenateOnAxis(BaseTransformer):
         return np.concatenate(data_inputs, axis=self.axis)
 
 
-class NumpyConcatenateOnCustomAxis(metaclass=DeprecatedClassMeta):
+class NumpyConcatenateOnCustomAxis(metaclass=DeprecatedMetaClass):
     """
     Previous name for NumpyConcatenateOnAxis.
     """
@@ -130,7 +130,7 @@ class NumpyConcatenateOnAxisIfNotEmpty(BaseTransformer):
         return np.concatenate(data_inputs, axis=self.axis)
 
 
-class NumpyConcatenateOnCustomAxisIfNotEmpty(metaclass=DeprecatedClassMeta):
+class NumpyConcatenateOnCustomAxisIfNotEmpty(metaclass=DeprecatedMetaClass):
     """
     Previous name for NumpyConcatenateOnAxis.
     """

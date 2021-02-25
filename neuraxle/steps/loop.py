@@ -32,7 +32,7 @@ from neuraxle.base import MetaStep, BaseStep, DataContainer, ExecutionContext, R
     ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, BaseTransformer, Identity, \
     IdentityHandlerMethodsMixin, HandleOnlyMixin
 from neuraxle.data_container import ListDataContainer
-from neuraxle.utils import DeprecatedClassMeta
+from neuraxle.utils import DeprecatedMetaClass
 
 
 class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
@@ -156,7 +156,7 @@ class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
         return False
 
 
-class ForEachDataInput(metaclass=DeprecatedClassMeta):
+class ForEachDataInput(metaclass=DeprecatedMetaClass):
     """
     Previous name for ForEach.
     """
