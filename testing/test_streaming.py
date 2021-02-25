@@ -8,7 +8,7 @@ from neuraxle.data_container import DataContainer, AbsentValuesNullObject
 from neuraxle.distributed.streaming import SequentialQueuedPipeline, ParallelQueuedFeatureUnion, QueueJoiner
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.loop import ForEachDataInput
+from neuraxle.steps.loop import ForEach
 from neuraxle.steps.misc import FitTransformCallbackStep, Sleep
 from neuraxle.steps.numpy import MultiplyByN
 
@@ -162,10 +162,10 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_max_queue_size():
 def test_parallel_queued_parallelize_correctly():
     sleep_time = 0.001
     p = SequentialQueuedPipeline([
-        ('1', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
-        ('2', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
-        ('3', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
-        ('4', 4, 10, Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]))
+        ('1', 4, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
+        ('2', 4, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
+        ('3', 4, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
+        ('4', 4, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]))
     ], batch_size=10)
 
     a = time.time()
@@ -174,10 +174,10 @@ def test_parallel_queued_parallelize_correctly():
     time_queued_pipeline = b - a
 
     p = Pipeline([
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])
+        Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
+        Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
+        Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
+        Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])
     ])
 
     a = time.time()

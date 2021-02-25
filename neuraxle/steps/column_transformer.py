@@ -30,7 +30,7 @@ import numpy as np
 
 from neuraxle.base import MetaStep, BaseTransformer
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.loop import ForEachDataInput
+from neuraxle.steps.loop import ForEach
 from neuraxle.union import FeatureUnion
 
 ColumnSelectionType = Union[int, Iterable[int], slice]
@@ -79,14 +79,14 @@ class ColumnSelector2D(BaseTransformer):
 
 class ColumnsSelectorND(MetaStep):
     """
-    ColumnSelectorND wraps a ColumnSelector2D by as many ForEachDataInput step
+    ColumnSelectorND wraps a ColumnSelector2D by as many ForEach step
     as needed to select the last dimension.
     """
 
     def __init__(self, columns_selection, n_dimension=3):
         col_selector: ColumnSelector2D = ColumnSelector2D(columns_selection=columns_selection)
         for _ in range(min(0, n_dimension - 2)):
-            col_selector = ForEachDataInput(col_selector)
+            col_selector = ForEach(col_selector)
 
         MetaStep.__init__(self, col_selector)
         self.n_dimension = n_dimension

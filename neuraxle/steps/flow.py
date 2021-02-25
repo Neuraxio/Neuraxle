@@ -23,15 +23,14 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-from typing import Union, Optional as OptionalType, Callable, Dict
-
-import numpy as np
+from typing import Union, Optional as OptionalType, Dict
 
 from neuraxle.base import BaseStep, MetaStep, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin, \
     HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin, BaseTransformer, NonFittableMixin, ExecutionPhase
 from neuraxle.data_container import ExpandedDataContainer
 from neuraxle.hyperparams.distributions import Boolean, Choice
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
+from neuraxle.steps.numpy import NumpyConcatenateOnAxisIfNotEmpty
 from neuraxle.union import FeatureUnion
 
 OPTIONAL_ENABLED_HYPERPARAM = 'enabled'
@@ -479,7 +478,7 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
 
     def __init__(self, steps, joiner: NonFittableMixin = None):
         if joiner is None:
-            joiner = NumpyConcatenateOnCustomAxisIfNotEmpty(axis=-1)
+            joiner = NumpyConcatenateOnAxisIfNotEmpty(axis=-1)
         FeatureUnion.__init__(self, steps_as_tuple=steps, joiner=joiner)
         self.set_hyperparams(HyperparameterSamples({}))
         self._make_all_steps_optional()
@@ -492,47 +491,6 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
         for step_name in step_names[:-1]:
             self[step_name] = Optional(self[step_name])
         self._refresh_steps()
-
-
-class NumpyConcatenateOnCustomAxisIfNotEmpty(BaseTransformer):
-    """
-    Numpy concetenation step where the concatenation is performed along the specified custom axis.
-    """
-
-    def __init__(self, axis):
-        """
-        Create a numpy concatenate on custom axis object.
-        :param axis: the axis where the concatenation is performed.
-        :return: NumpyConcatenateOnCustomAxis instance.
-        """
-        self.axis = axis
-        BaseTransformer.__init__(self)
-
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
-        """
-        Handle transform.
-
-        :param data_container: the data container to join
-        :param context: execution context
-        :return: transformed data container
-        """
-        data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs if len(dc.data_inputs) > 0])
-        data_container = DataContainer(data_inputs=data_inputs, current_ids=data_container.current_ids,
-                                       expected_outputs=data_container.expected_outputs)
-        data_container.set_data_inputs(data_inputs)
-
-        return data_container
-
-    def transform(self, data_inputs):
-        """
-        Apply the concatenation transformation along the specified axis.
-        :param data_inputs:
-        :return: Numpy array
-        """
-        return self._concat(data_inputs)
-
-    def _concat(self, data_inputs):
-        return np.concatenate(data_inputs, axis=self.axis)
 
 
 class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseTransformer):

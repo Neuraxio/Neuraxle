@@ -26,7 +26,7 @@ import numpy as np
 
 from neuraxle.distributed.streaming import SequentialQueuedPipeline
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.loop import ForEachDataInput
+from neuraxle.steps.loop import ForEach
 from neuraxle.steps.misc import Sleep
 from neuraxle.steps.numpy import MultiplyByN
 
@@ -38,7 +38,7 @@ def main():
     """
     sleep_time = 0.02
     p = SequentialQueuedPipeline([
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
+        Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
     ], n_workers_per_step=8, max_queue_size=10, batch_size=10)
 
     a = time.time()
@@ -53,7 +53,7 @@ def main():
     For each data input, sleep 0.02 seconds, and then multiply by 2.
     """
     p = Pipeline([
-        Pipeline([ForEachDataInput(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
+        Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
     ])
 
     a = time.time()

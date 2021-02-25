@@ -37,7 +37,7 @@ from neuraxle.metaopt.auto_ml import AutoML, RandomSearchHyperparameterSelection
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.pipeline import ResumablePipeline, DEFAULT_CACHE_FOLDER, Pipeline
 from neuraxle.steps.flow import ExpandDim
-from neuraxle.steps.loop import ForEachDataInput
+from neuraxle.steps.loop import ForEach
 from neuraxle.steps.misc import Sleep
 from neuraxle.steps.numpy import MultiplyByN
 
@@ -57,9 +57,9 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
 
     pipeline = Pipeline([
         ('multiplication_1', MultiplyByN()),
-        ('sleep_1', ForEachDataInput(Sleep(sleep_time))),
+        ('sleep_1', ForEach(Sleep(sleep_time))),
         ('multiplication_2', MultiplyByN()),
-        ('sleep_2', ForEachDataInput(Sleep(sleep_time))),
+        ('sleep_2', ForEach(Sleep(sleep_time))),
         ('multiplication_3', MultiplyByN()),
     ], cache_folder=classic_pipeline_folder).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
@@ -93,10 +93,10 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
 
     pipeline = ResumablePipeline([
         ('multiplication_1', MultiplyByN()),
-        ('ForEach(sleep_1)', ForEachDataInput(Sleep(sleep_time))),
+        ('ForEach(sleep_1)', ForEach(Sleep(sleep_time))),
         ('checkpoint1', ExpandDim(DefaultCheckpoint())),
         ('multiplication_2', MultiplyByN()),
-        ('sleep_2', ForEachDataInput(Sleep(sleep_time))),
+        ('sleep_2', ForEach(Sleep(sleep_time))),
         ('checkpoint2', ExpandDim(DefaultCheckpoint())),
         ('multiplication_3', MultiplyByN())
     ], cache_folder=resumable_pipeline_folder).set_hyperparams_space(HYPERPARAMETER_SPACE)
