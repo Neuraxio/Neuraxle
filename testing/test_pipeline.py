@@ -117,9 +117,9 @@ def test_pipeline_set_one_hyperparam_level_one_flat():
         "a__learning_rate": 7
     })
 
-    assert p["a"].hyperparams.to_flat_as_dict_primitive()["learning_rate"] == 7
-    assert p["b"].hyperparams.to_flat_as_dict_primitive() == dict()
-    assert p["c"].hyperparams.to_flat_as_dict_primitive() == dict()
+    assert p["a"].hyperparams.to_flat_dict()["learning_rate"] == 7
+    assert p["b"].hyperparams.to_flat_dict() == dict()
+    assert p["c"].hyperparams.to_flat_dict() == dict()
 
 
 def test_pipeline_set_one_hyperparam_level_one_dict():
@@ -157,9 +157,9 @@ def test_pipeline_set_one_hyperparam_level_two_flat():
     print(p.get_hyperparams())
 
     assert p["b"]["a"].hyperparams["learning_rate"] == 7
-    assert p["b"]["c"].hyperparams.to_flat_as_dict_primitive() == dict()
-    assert p["b"].hyperparams.to_flat_as_dict_primitive() == {'a__learning_rate': 7}
-    assert p["c"].hyperparams.to_flat_as_dict_primitive() == dict()
+    assert p["b"]["c"].hyperparams.to_flat_dict() == dict()
+    assert p["b"].hyperparams.to_flat_dict() == {'a__learning_rate': 7}
+    assert p["c"].hyperparams.to_flat_dict() == dict()
 
 
 def test_pipeline_set_one_hyperparam_level_two_dict():
@@ -248,7 +248,7 @@ def test_pipeline_update_hyperparam_level_two_flat():
     assert p["b"]["a"].hyperparams["learning_rate"] == 0.01
     assert p["b"]["a"].hyperparams["other_hp"] == 8
     assert p["b"]["c"].hyperparams == dict()
-    assert p["b"].hyperparams.to_flat_as_dict_primitive() == {
+    assert p["b"].hyperparams.to_flat_dict() == {
         'a__learning_rate': 0.01,
         'a__other_hp': 8
     }
@@ -382,11 +382,28 @@ def test_hyperparam_space():
     p.set_hyperparams(rvsed)
 
     hyperparams = p.get_hyperparams()
+    flat_hyperparams_keys = hyperparams.to_flat_dict().keys()
 
-    assert 'AddFeatures__SomeStep1__n_components' in hyperparams.keys()
-    assert 'AddFeatures__SomeStep__n_components' in hyperparams.keys()
-    assert 'AddFeatures__SomeStep1__n_components' in hyperparams.keys()
-    assert 'ModelStacking__SomeStep__n_estimators' in hyperparams.keys()
-    assert 'ModelStacking__SomeStep1__n_estimators' in hyperparams.keys()
-    assert 'ModelStacking__SomeStep2__max_depth' in hyperparams.keys()
-    assert 'ModelStacking__SomeStep3__max_depth' in hyperparams.keys()
+    assert 'AddFeatures' in hyperparams
+    assert 'SomeStep' in hyperparams["AddFeatures"]
+    assert "n_components" in hyperparams["AddFeatures"]["SomeStep"]
+    assert 'SomeStep1' in hyperparams["AddFeatures"]
+    assert "n_components" in hyperparams["AddFeatures"]["SomeStep1"]
+
+    assert 'ModelStacking' in hyperparams
+    assert 'SomeStep' in hyperparams["ModelStacking"]
+    assert 'n_estimators' in hyperparams["ModelStacking"]["SomeStep"]
+    assert 'SomeStep1' in hyperparams["ModelStacking"]
+    assert 'n_estimators' in hyperparams["ModelStacking"]["SomeStep1"]
+    assert 'SomeStep2' in hyperparams["ModelStacking"]
+    assert 'max_depth' in hyperparams["ModelStacking"]["SomeStep2"]
+    assert 'SomeStep3' in hyperparams["ModelStacking"]
+    assert 'max_depth' in hyperparams["ModelStacking"]["SomeStep3"]
+
+
+    assert 'AddFeatures__SomeStep1__n_components' in flat_hyperparams_keys
+    assert 'AddFeatures__SomeStep__n_components' in flat_hyperparams_keys
+    assert 'ModelStacking__SomeStep__n_estimators' in flat_hyperparams_keys
+    assert 'ModelStacking__SomeStep1__n_estimators' in flat_hyperparams_keys
+    assert 'ModelStacking__SomeStep2__max_depth' in flat_hyperparams_keys
+    assert 'ModelStacking__SomeStep3__max_depth' in flat_hyperparams_keys

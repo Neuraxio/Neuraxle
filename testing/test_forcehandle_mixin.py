@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from neuraxle.base import ForceHandleMixin, Identity, BaseStep, ExecutionContext
+from neuraxle.base import ForceHandleMixin, ForceHandleIdentity, BaseStep, ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.pipeline import Pipeline
 
@@ -9,12 +9,6 @@ from neuraxle.pipeline import Pipeline
 class BadForceHandleStep(ForceHandleMixin, BaseStep):
     def __init__(self):
         BaseStep.__init__(self)
-        ForceHandleMixin.__init__(self)
-
-
-class ForceHandleIdentity(ForceHandleMixin, Identity):
-    def __init__(self):
-        Identity.__init__(self)
         ForceHandleMixin.__init__(self)
 
 

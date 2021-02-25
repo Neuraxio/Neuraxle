@@ -99,11 +99,11 @@ class EarlyStoppingCallback(BaseCallback):
         validation_scores = trial.get_validation_scores()
         if len(validation_scores) > self.n_epochs_without_improvement:
             higher_score_is_better = trial.is_higher_score_better()
-            if validation_scores[-self.n_epochs_without_improvement] >= validation_scores[
-                -1] and higher_score_is_better:
+            if (higher_score_is_better) and \
+                all(validation_scores[-self.n_epochs_without_improvement] >= v for v in validation_scores[-self.n_epochs_without_improvement:]) :
                 return True
-            if validation_scores[-self.n_epochs_without_improvement] <= validation_scores[
-                -1] and not higher_score_is_better:
+            elif (not higher_score_is_better) and \
+                    all(validation_scores[-self.n_epochs_without_improvement] <= v for v in validation_scores[-self.n_epochs_without_improvement:]):
                 return True
         return False
 

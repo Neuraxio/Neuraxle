@@ -107,7 +107,7 @@ class HashlibMd5Hasher(BaseHasher):
         m = hashlib.md5()
 
         current_hyperparameters_hash = hashlib.md5(
-            str.encode(str(hyperparameters.to_flat_as_dict_primitive()))
+            str.encode(str(hyperparameters.to_flat_dict()))
         ).hexdigest()
 
         m.update(str.encode(str(current_id)))
@@ -134,7 +134,7 @@ class HashlibMd5Hasher(BaseHasher):
         if len(hyperparameters) == 0:
             return current_ids
 
-        hyperperams_dict = hyperparameters.to_flat_as_dict_primitive()
+        hyperperams_dict = hyperparameters.to_flat_dict()
         current_hyperparameters_hash = hashlib.md5(str.encode(str(hyperperams_dict))).hexdigest()
 
         new_current_ids = []
@@ -170,7 +170,7 @@ class HashlibMd5ValueHasher(HashlibMd5Hasher):
         if len(hyperparameters) == 0:
             return current_ids
 
-        hyperperams_dict = hyperparameters.to_flat_as_dict_primitive()
+        hyperperams_dict = hyperparameters.to_flat_dict()
         current_hyperparameters_hash = hashlib.md5(str.encode(str(hyperperams_dict))).hexdigest()
 
         new_current_ids = []
@@ -310,6 +310,15 @@ class ExecutionMode(Enum):
     INVERSE_TRANSFORM = 'inverse_transform'
 
 
+class ExecutionPhase(Enum):
+    UNSPECIFIED = None
+    PRETRAIN = "pretraining"
+    TRAIN = "training"
+    VALIDATION = "validation"
+    TEST = "test"
+    PROD = "production"
+
+
 class ExecutionContext:
     """
     Execution context object containing all of the pipeline hierarchy steps.
@@ -329,14 +338,15 @@ class ExecutionContext:
     def __init__(
             self,
             root: str = DEFAULT_CACHE_FOLDER,
-            execution_mode: ExecutionMode = None,
+            execution_phase: ExecutionPhase = ExecutionPhase.UNSPECIFIED,
+            execution_mode: ExecutionMode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM,
             stripped_saver: BaseSaver = None,
             parents: List['BaseStep'] = None,
             services: Dict[Type, object] = None
     ):
-        if execution_mode is None:
-            execution_mode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM
+
         self.execution_mode = execution_mode
+        self.execution_phase = execution_phase
 
         if stripped_saver is None:
             stripped_saver: BaseSaver = JoblibStepSaver()
@@ -350,6 +360,16 @@ class ExecutionContext:
         if services is None:
             services: Dict[Type, object] = dict()
         self.services: Dict[Type, object] = services
+
+    def set_execution_phase(self, phase: ExecutionPhase) -> 'ExecutionContext':
+        """
+        Set the instance's execution phase to given phase.
+
+        :param phase:
+        :return:
+        """
+        self.execution_phase: ExecutionPhase = phase
+        return self
 
     def set_service_locator(self, services: Dict[Type, object]) -> 'ExecutionContext':
         """
@@ -473,6 +493,7 @@ class ExecutionContext:
         return ExecutionContext(
             root=self.root,
             execution_mode=self.execution_mode,
+            execution_phase=self.execution_phase,
             parents=self.parents + [step],
             services=self.services
         )
@@ -481,6 +502,7 @@ class ExecutionContext:
         return ExecutionContext(
             root=self.root,
             execution_mode=self.execution_mode,
+            execution_phase=self.execution_phase,
             parents=copy(self.parents),
             services=self.services
         )
@@ -661,12 +683,12 @@ class _HasRecursiveMethods:
         class _HasHyperparams:
             # ...
             def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]) -> HyperparameterSamples:
-                self.apply(method='_set_hyperparams', hyperparams=HyperparameterSamples(hyperparams).to_flat())
+                self.apply(method='_set_hyperparams', hyperparams=HyperparameterSamples(hyperparams))
                 return self
 
             def _set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]) -> HyperparameterSamples:
                 self._invalidate()
-                hyperparams = HyperparameterSamples(hyperparams).to_flat()
+                hyperparams = HyperparameterSamples(hyperparams)
                 self.hyperparams = hyperparams if len(hyperparams) > 0 else self.hyperparams
                 return self.hyperparams
 
@@ -1268,7 +1290,6 @@ class _HasHyperparamsSpace(ABC):
                 hyperparams_space = dict()
 
         self.hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space)
-        self.hyperparams_space = self.hyperparams_space.to_flat()
 
     def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseTransformer':
         """
@@ -1297,12 +1318,12 @@ class _HasHyperparamsSpace(ABC):
             :func:`_HasChildrenMixin._apply`,
             :func:`_HasChildrenMixin._get_params`
         """
-        self.apply(method='_set_hyperparams_space', hyperparams_space=HyperparameterSpace(hyperparams_space).to_flat())
+        self.apply(method='_set_hyperparams_space', hyperparams_space=HyperparameterSpace(hyperparams_space))
         return self
 
     def _set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> HyperparameterSpace:
         self._invalidate()
-        self.hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
+        self.hyperparams_space = HyperparameterSpace(hyperparams_space)
         return self.hyperparams_space
 
     def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseTransformer':
@@ -1337,12 +1358,12 @@ class _HasHyperparamsSpace(ABC):
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
         self.apply(method='_update_hyperparams_space',
-                   hyperparams_space=HyperparameterSpace(hyperparams_space).to_flat())
+                   hyperparams_space=HyperparameterSpace(hyperparams_space))
         return self
 
     def _update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> HyperparameterSpace:
         self._invalidate()
-        hyperparams_space = HyperparameterSpace(hyperparams_space).to_flat()
+        hyperparams_space = HyperparameterSpace(hyperparams_space)
         self.hyperparams_space.update(hyperparams_space)
         return self.hyperparams_space
 
@@ -1365,10 +1386,10 @@ class _HasHyperparamsSpace(ABC):
             :class:`~neuraxle.hyperparams.distributions.HyperparameterDistribution`
         """
         results: HyperparameterSpace = self.apply(method='_get_hyperparams_space')
-        return results.to_flat()
+        return results
 
     def _get_hyperparams_space(self) -> HyperparameterSpace:
-        return HyperparameterSpace(self.hyperparams_space.to_flat_as_dict_primitive())
+        return HyperparameterSpace(self.hyperparams_space)
 
 
 class _HasHyperparams(ABC):
@@ -1407,7 +1428,6 @@ class _HasHyperparams(ABC):
                 hyperparams = dict()
 
         self.hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams)
-        self.hyperparams = self.hyperparams.to_flat()
 
     def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseTransformer':
         """
@@ -1434,12 +1454,12 @@ class _HasHyperparams(ABC):
             :func:`_HasChildrenMixin._apply`,
             :func:`_HasChildrenMixin._set_train`
         """
-        self.apply(method='_set_hyperparams', hyperparams=HyperparameterSamples(hyperparams).to_flat())
+        self.apply(method='_set_hyperparams', hyperparams=HyperparameterSamples(hyperparams))
         return self
 
     def _set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]) -> HyperparameterSamples:
         self._invalidate()
-        hyperparams = HyperparameterSamples(hyperparams).to_flat()
+        hyperparams = HyperparameterSamples(hyperparams)
         self.hyperparams = hyperparams if len(hyperparams) > 0 else self.hyperparams
         return self.hyperparams
 
@@ -1474,11 +1494,11 @@ class _HasHyperparams(ABC):
             :func:`_HasChildrenMixin._apply`,
             :func:`_HasChildrenMixin._update_hyperparams`
         """
-        self.apply(method='_update_hyperparams', hyperparams=HyperparameterSamples(hyperparams).to_flat())
+        self.apply(method='_update_hyperparams', hyperparams=HyperparameterSamples(hyperparams))
         return self
 
     def _update_hyperparams(self, hyperparams: Union[Dict, HyperparameterSamples]) -> HyperparameterSamples:
-        self.hyperparams.update(HyperparameterSamples(hyperparams).to_flat())
+        self.hyperparams.update(HyperparameterSamples(hyperparams))
         return self.hyperparams
 
     def get_hyperparams(self) -> HyperparameterSamples:
@@ -1497,10 +1517,10 @@ class _HasHyperparams(ABC):
             :func:`_HasChildrenMixin._get_hyperparams`
         """
         results: HyperparameterSamples = self.apply(method='_get_hyperparams')
-        return results.to_flat()
+        return results
 
     def _get_hyperparams(self) -> HyperparameterSamples:
-        return HyperparameterSamples(self.hyperparams.to_flat_as_dict_primitive())
+        return HyperparameterSamples(self.hyperparams)
 
     def set_params(self, **params) -> 'BaseTransformer':
         """
@@ -1525,7 +1545,7 @@ class _HasHyperparams(ABC):
             :func:`~neuraxle.base._HasChildrenMixin._apply`,
             :func:`~neuraxle.base._HasChildrenMixin._set_params`
         """
-        self.apply(method='_set_params', params=HyperparameterSamples(params).to_flat())
+        self.apply(method='_set_params', params=HyperparameterSamples(params))
         return self
 
     def _set_params(self, params: dict) -> HyperparameterSamples:
@@ -1557,7 +1577,7 @@ class _HasHyperparams(ABC):
         return results
 
     def _get_params(self) -> HyperparameterSamples:
-        return self.get_hyperparams().to_flat()
+        return self.get_hyperparams()
 
 
 class _HasSavers(ABC):
@@ -2189,6 +2209,11 @@ class BaseTransformer(
         """
         return self.name
 
+    def get_step_by_name(self, name):
+        if self.name == name :
+            return self
+        return None
+
     def reverse(self) -> 'BaseTransformer':
         """
         The object will mutate itself such that the ``.transform`` method (and of all its underlying objects
@@ -2350,6 +2375,19 @@ class _HasChildrenMixin(MixinForBaseTransformer):
 
         return results
 
+    def setup(self, context: ExecutionContext = None) -> BaseTransformer:
+        """
+        Initialize step before it runs. Also initialize its childrens.
+
+        :param context: execution context
+        :return: self
+        """
+        super().setup(context=context)
+        for step in self.get_children():
+            step.setup(context=context)
+        self.is_initialized = True
+        return self
+
     @abstractmethod
     def get_children(self) -> List[BaseStep]:
         """
@@ -2428,18 +2466,6 @@ class MetaStepMixin(_HasChildrenMixin):
         """
         self._invalidate()
         self.wrapped: BaseTransformer = _sklearn_to_neuraxle_step(step)
-        return self
-
-    def setup(self, context: ExecutionContext = None) -> BaseStep:
-        """
-        Initialize step before it runs. Also initialize the wrapped step.
-
-        :param context: execution context
-        :return: self
-        """
-        super().setup(context=context)
-        self.wrapped.setup(context=context)
-        self.is_initialized = True
         return self
 
     def teardown(self) -> BaseStep:
@@ -2544,7 +2570,7 @@ class MetaStepMixin(_HasChildrenMixin):
             return self.wrapped
         return self.wrapped.get_step_by_name(name)
 
-    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseTransformer':
+    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=False) -> 'BaseTransformer':
         """
         Mutate self, and self.wrapped. Please refer to :func:`~neuraxle.base._HasMutations.mutate` for more information.
 
@@ -2877,20 +2903,6 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         self.steps_as_tuple: NamedTupleList = self._patch_missing_names(steps_as_tuple)
         self._refresh_steps()
 
-    def setup(self, context: ExecutionContext = None) -> 'BaseTransformer':
-        """
-        Initialize step before it runs.
-
-        :param context: execution context
-        :return: self
-        """
-        if self.is_initialized:
-            return self
-
-        self.is_initialized = True
-
-        return self
-
     def teardown(self) -> 'BaseTransformer':
         """
         Teardown step after program execution.
@@ -2915,9 +2927,6 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
 
     def get_step_by_name(self, name):
         for step in self.values():
-            if step.name == name:
-                return step
-
             found_step = step.get_step_by_name(name)
             if found_step is not None:
                 return found_step
@@ -3020,7 +3029,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
                 return True
         return False
 
-    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseTransformer':
+    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=False) -> 'BaseTransformer':
         """
         Call mutate on every steps the the present truncable step contains.
 
@@ -3327,7 +3336,7 @@ class ResumableStepMixin(MixinForBaseTransformer):
     @abstractmethod
     def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
         """
-        Returns True if a step can be resumed with the given the data container, and execution context.
+        Returns True if a step can be resumed with the given the data container and execution context.
         See Checkpoint class documentation for more details on how a resumable checkpoint works.
 
         :param data_container: data container to resume from
@@ -3446,7 +3455,7 @@ class HandleOnlyMixin(MixinForBaseTransformer):
 class ForceHandleMixin(MixinForBaseTransformer):
     """
     A step that automatically calls handle methods in the transform, fit, and fit_transform methods.
-    The class that inherits from ForceHandleMixin can't use BaseStep's  _fit_data_container, _fit_transform_data_container and _transform_data_container. They must be redefined; failure to do so will trigger an Exception on initialisation (and would create infinite loop if these checks were not there).
+    A class which inherits from ForceHandleMixin can't use BaseStep's  _fit_data_container, _fit_transform_data_container and _transform_data_container. They must be redefined; failure to do so will trigger an Exception on initialisation (and would create infinite loop if these checks were not there).
 
     .. seealso::
         :class:`BaseStep`,
@@ -3533,6 +3542,12 @@ class ForceHandleMixin(MixinForBaseTransformer):
         context = ExecutionContext(root=self.cache_folder, execution_mode=execution_mode)
 
         return context, data_container
+
+
+class ForceHandleIdentity(ForceHandleMixin, Identity):
+    def __init__(self):
+        Identity.__init__(self)
+        ForceHandleMixin.__init__(self)
 
 
 class ForceHandleOnlyMixin(ForceHandleMixin, HandleOnlyMixin):
@@ -3685,13 +3700,18 @@ class DidProcessAssertionMixin(AssertionMixin):
         return data_container, context
 
 
-class AssertExpectedOutputNullMixin(WillProcessAssertionMixin):
-
+class AssertExpectedOutputIsNoneMixin(WillProcessAssertionMixin):
     def _assert(self, data_container: DataContainer, context: ExecutionContext):
         eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
         if not eo_empty:
             raise AssertionError(
                 f"Expected datacontainer.expected_output to be a `None` or a list of `None`. Received {data_container.expected_outputs}.")
+
+
+class AssertExpectedOutputIsNone(AssertExpectedOutputIsNoneMixin, Identity):
+    def __init__(self):
+        Identity.__init__(self)
+        AssertExpectedOutputIsNoneMixin.__init__(self)
 
 
 class LocalServiceAssertionWrapper(WillProcessAssertionMixin, MetaStep):
@@ -3735,6 +3755,7 @@ class GlobalyRetrievableServiceAssertionWrapper(LocalServiceAssertionWrapper):
     """
     Is used to assert the presence of service at the start of the pipeline AND at execution time for a given step.
     """
+
     def _global_assert_has_services(self, context: ExecutionContext) -> RecursiveDict:
         """
         Intended to be used in a .apply('_global_assert_has_services') call from the outside.
@@ -3751,6 +3772,7 @@ class GlobalServiceAssertionExecutorMixin(WillProcessAssertionMixin):
     """
     Any step which inherit of this class will test globaly retrievable service assertion of itself and all its children on a will_process call.
     """
+
     def _assert(self, data_container: DataContainer, context: ExecutionContext):
         """
         Calls _global_assert_has_services on GlobalyRetrievableServiceAssertionWrapper instances that are (recursively) children of this node.

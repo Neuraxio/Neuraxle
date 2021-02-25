@@ -255,7 +255,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
         :return: (hyperparams, scores)
         """
-        hp_dict = hyperparams.to_flat_as_dict_primitive()
+        hp_dict = hyperparams.to_flat_dict()
         current_hyperparameters_hash = self._get_trial_hash(hp_dict)
 
         with open(os.path.join(self._get_new_trial_json_path(current_hyperparameters_hash)), 'w+') as outfile:
@@ -271,7 +271,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
         :return: (hyperparams, scores)
         """
-        hp_dict = hyperparams.to_flat_as_dict_primitive()
+        hp_dict = hyperparams.to_flat_dict()
         current_hyperparameters_hash = self._get_trial_hash(hp_dict)
         self._remove_new_trial_json(current_hyperparameters_hash)
 
@@ -300,7 +300,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
         :return: (hyperparams, scores)
         """
-        hp_dict = hyperparams.to_flat_as_dict_primitive()
+        hp_dict = hyperparams.to_flat_dict()
         current_hyperparameters_hash = self._get_trial_hash(hp_dict)
         self._remove_new_trial_json(current_hyperparameters_hash)
 
@@ -409,7 +409,7 @@ class Trial:
 
     def to_json(self) -> dict:
         return {
-            'hyperparams': self.hyperparams.to_flat_as_dict_primitive(),
+            'hyperparams': self.hyperparams.to_flat_dict(),
             'score': self.score,
             'status': self.status
         }
@@ -639,7 +639,7 @@ class Trial:
 
     def to_json(self) -> dict:
         return {
-            'hyperparams': self.hyperparams.to_flat_as_dict_primitive(),
+            'hyperparams': self.hyperparams.to_flat_dict(),
             'score': self.score,
             'status': self.status
         }

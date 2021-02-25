@@ -38,12 +38,12 @@ from neuraxle.union import ModelStacking
 
 class SKLearnWrapper(BaseStep):
     def __init__(
-        self,
-        wrapped_sklearn_predictor,
-        hyperparams_space: HyperparameterSpace = None,
-        return_all_sklearn_default_params_on_get: bool = False,
-        use_partial_fit: bool = False,
-        use_predict_proba: bool = False
+            self,
+            wrapped_sklearn_predictor,
+            hyperparams_space: HyperparameterSpace = None,
+            return_all_sklearn_default_params_on_get: bool = False,
+            use_partial_fit: bool = False,
+            use_predict_proba: bool = False
     ):
         if not isinstance(wrapped_sklearn_predictor, BaseEstimator):
             raise ValueError("The wrapped_sklearn_predictor must be an instance of scikit-learn's BaseEstimator.")
@@ -115,14 +115,13 @@ class SKLearnWrapper(BaseStep):
         :param hyperparams:
         :return: self
         """
-        # flatten the step hyperparams, and set the wrapped sklearn predictor params
-        hyperparams = HyperparameterSamples(hyperparams)
-        BaseStep._set_hyperparams(self, hyperparams.to_flat())
+        # set the step hyperparams, and set the wrapped sklearn predictor params
+        BaseStep._set_hyperparams(self, hyperparams)
         self.wrapped_sklearn_predictor.set_params(
-            **hyperparams.with_separator(RecursiveDict.DEFAULT_SEPARATOR).to_flat_as_dict_primitive()
+            **hyperparams.with_separator(RecursiveDict.DEFAULT_SEPARATOR).to_flat_dict()
         )
 
-        return self.hyperparams.to_flat()
+        return self.hyperparams
 
     def _update_hyperparams(self, hyperparams: HyperparameterSamples) -> BaseStep:
         """
@@ -131,18 +130,17 @@ class SKLearnWrapper(BaseStep):
         :param hyperparams:
         :return: self
         """
-        # flatten the step hyperparams, and update the wrapped sklearn predictor params
-        hyperparams = HyperparameterSamples(hyperparams)
-        BaseStep._update_hyperparams(self, hyperparams.to_flat())
+        # update the step hyperparams, and update the wrapped sklearn predictor params
+        BaseStep._update_hyperparams(self, hyperparams)
         self.wrapped_sklearn_predictor.set_params(
-            **self.hyperparams.with_separator(RecursiveDict.DEFAULT_SEPARATOR).to_flat_as_dict_primitive()
+            **self.hyperparams.with_separator(RecursiveDict.DEFAULT_SEPARATOR).to_flat_dict()
         )
 
-        return self.hyperparams.to_flat()
+        return self.hyperparams
 
     def _get_hyperparams(self):
         if self.return_all_sklearn_default_params_on_get:
-            return HyperparameterSamples(self.wrapped_sklearn_predictor.get_params()).to_flat()
+            return HyperparameterSamples(self.wrapped_sklearn_predictor.get_params())
         else:
             return BaseStep._get_hyperparams(self)
 

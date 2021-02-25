@@ -217,6 +217,15 @@ class Pipeline(BasePipeline):
     def flush_all_cache(self):
         shutil.rmtree(self.cache_folder)
 
+    def setup(self, context: ExecutionContext = None) -> 'Pipeline':
+        """
+        Contrary to the default behaviour of TruncableStep, we don't want to recursively call .setup() in a Pipeline instance.
+        We'll call the setup before calling each steps on a fit call.
+        :param context:
+        :return:
+        """
+        self.is_initialized = True
+        return self
 
 class ResumablePipeline(ResumableStepMixin, Pipeline):
     """
@@ -429,6 +438,9 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             default_value_data_inputs=default_value_data_inputs,
             default_value_expected_outputs=default_value_expected_outputs
         )
+        self.__patch_barriers_batch_size(batch_size)
+
+    def set_batch_size(self, batch_size):
         self.__patch_barriers_batch_size(batch_size)
 
     def __validate_barriers_batch_size(self, batch_size):

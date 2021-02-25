@@ -54,7 +54,7 @@ def main():
     samples = p.get_hyperparams_space().rvs()
     p.set_hyperparams(samples)
 
-    samples = p.get_hyperparams().to_flat_as_dict_primitive()
+    samples = p.get_hyperparams()
     assert 42 <= samples['step1__multiply_by'] <= 50
     assert -10 <= samples['step2__multiply_by'] <= 0
     assert samples['Pipeline__PCA__n_components'] in [2, 3]

@@ -463,7 +463,7 @@ def test_normal_onside_upper_tail_truncated():
 @pytest.mark.parametrize("seed",(15,20,32,40,50))
 def test_lognormal(seed):
     np.random.seed(seed)
-    
+
     log2_space_mean = 0.0
     log2_space_std = 2.0
     hd = LogNormal(log2_space_mean, log2_space_std)

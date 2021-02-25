@@ -118,7 +118,7 @@ class Trial:
         """
         Save fitted model in the trial hash folder.
         """
-        hyperparams = self.hyperparams.to_flat_as_dict_primitive()
+        hyperparams = self.hyperparams.to_flat_dict()
         trial_hash = self._get_trial_hash(hyperparams)
         self.pipeline.set_name(trial_hash).save(ExecutionContext(self.cache_folder), full_dump=True)
 
@@ -230,7 +230,7 @@ class Trial:
     def to_json(self):
         return {
             'status': self.status.value,
-            'hyperparams': self.hyperparams.to_flat_as_dict_primitive(),
+            'hyperparams': self.hyperparams.to_flat_dict(),
             'validation_splits': [v.to_json() for v in self.validation_splits],
             'error': self.error,
             'error_traceback': self.error_traceback,
@@ -356,6 +356,7 @@ class TrialSplit:
         :param context: execution context
         :return: trial split with its fitted pipeline.
         """
+        self.pipeline.set_train(True)
         self.pipeline = self.pipeline.handle_fit(train_data_container, context)
         return self
 
@@ -397,7 +398,6 @@ class TrialSplit:
             }
 
         self.metrics_results[name]['train_values'].append(score)
-        self.save_parent_trial()
 
     def add_metric_results_validation(self, name: str, score: float, higher_score_is_better: bool):
         """
@@ -416,7 +416,6 @@ class TrialSplit:
             }
 
         self.metrics_results[name]['validation_values'].append(score)
-        self.save_parent_trial()
 
     def get_validation_scores(self):
         """
