@@ -382,6 +382,9 @@ class ToNumpy(ForceHandleMixin, BaseTransformer):
     """
     Convert data inputs, and expected outputs to a numpy array.
     """
+    def __init__(self):
+        BaseTransformer.__init__(self)
+        ForceHandleMixin.__init__(self)
 
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
             DataContainer, ExecutionContext):
