@@ -1,3 +1,4 @@
+from warnings import warn
 
 
 class DeprecatedMetaClass(type):
