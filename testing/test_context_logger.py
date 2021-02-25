@@ -114,7 +114,7 @@ class TestTrialLogger:
         # That not a great way of testing
         with open(file_paths[0], 'r') as f:
             l = f.readlines()
-            assert len(l) == 56
+            assert len(l) == 54
 
 
     def teardown(self):
