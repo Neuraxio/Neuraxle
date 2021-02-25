@@ -3455,7 +3455,7 @@ class HandleOnlyMixin(MixinForBaseTransformer):
     @abstractmethod
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
             ('BaseTransformer', DataContainer):
-        raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
+        raise NotImplementedError('Must implement _fit_transform_data_container in {0}'.format(self.name))
 
     def transform(self, data_inputs) -> 'HandleOnlyMixin':
         raise Exception(
