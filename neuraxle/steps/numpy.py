@@ -26,7 +26,7 @@ Those steps works with NumPy (np) arrays.
 
 import numpy as np
 
-from neuraxle.base import DataContainer, ExecutionContext, ForceHandleMixin, BaseTransformer
+from neuraxle.base import ExecutionContext, ForceHandleMixin, BaseTransformer
 from neuraxle.base import NonFittableMixin, BaseStep
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
