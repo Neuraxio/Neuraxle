@@ -4,7 +4,7 @@ from pytest import skip
 
 from neuraxle.base import ExecutionContext, ExecutionPhase
 from neuraxle.data_container import DataContainer
-from neuraxle.steps.flow import IfExecutionPhaseIsThenDo, ExecutionPhaseSwitch
+from neuraxle.steps.flow import IfExecutionPhaseIsThen, ExecutionPhaseSwitch
 from testing.test_forcehandle_mixin import ForceHandleIdentity
 
 
@@ -33,7 +33,7 @@ def _run(tmpdir, phase, expected):
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
     some_step = SomeStep()
-    p = IfExecutionPhaseIsThenDo(ExecutionPhase.TRAIN, some_step)
+    p = IfExecutionPhaseIsThen(ExecutionPhase.TRAIN, some_step)
     p = p.with_context(context)
 
     p.fit_transform(data_inputs)
@@ -45,7 +45,7 @@ def test_ifexecphase_raise_exception_when_unspecified(tmpdir):
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
     some_step = SomeStep()
-    p = IfExecutionPhaseIsThenDo(ExecutionPhase.TRAIN, some_step)
+    p = IfExecutionPhaseIsThen(ExecutionPhase.TRAIN, some_step)
     p = p.with_context(context)
 
     with pytest.raises(ValueError) as error_info:

@@ -171,28 +171,6 @@ class BreakInterrupt(Exception):
     pass
 
 
-class ExecuteIf(HandleOnlyMixin, MetaStep):
-    def __init__(self, condition_function: Callable, wrapped: BaseStep):
-        MetaStep.__init__(self, wrapped)
-        ForceHandleMixin.__init__(self)
-        self.condition_function = condition_function
-
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
-        if self.condition_function(self, data_container, context):
-            return MetaStep.handle_fit(self, data_container, context)
-        return self
-
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
-        if self.condition_function(self, data_container, context):
-            return MetaStep.handle_fit_transform(self, data_container, context)
-        return self, data_container
-
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
-        if self.condition_function(self, data_container, context):
-            return MetaStep.handle_transform(self, data_container, context)
-        return data_container
-
-
 class BreakIf(ForceHandleMixin, Identity):
     def __init__(self, condition_function: Callable):
         Identity.__init__(self)
