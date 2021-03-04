@@ -181,17 +181,16 @@ class IfExecutionPhaseIsThen(ExecuteIf):
 
 
     def __init__(self, phase: ExecutionPhase, wrapped: BaseTransformer, raise_if_phase_unspecified: bool = True):
-        def check_context(step, data_container, context: ExecutionContext):
-            if context.execution_phase == self.phase:
-                return True
-            elif self.raise_if_phase_unspecified and context.execution_phase == ExecutionPhase.UNSPECIFIED:
-                raise ValueError("Execution phase is unspecified while a step requires it to be specified.")
-            return False
-
-        ExecuteIf.__init__(self, check_context, wrapped)
+        ExecuteIf.__init__(self, self.check_context, wrapped)
         self.phase = phase
         self.raise_if_phase_unspecified = raise_if_phase_unspecified
 
+    def check_context(self, step, data_container, context: ExecutionContext):
+        if context.execution_phase == self.phase:
+            return True
+        elif self.raise_if_phase_unspecified and context.execution_phase == ExecutionPhase.UNSPECIFIED:
+            raise ValueError("Execution phase is unspecified while a step requires it to be specified.")
+        return False
 
 class ExecutionPhaseSwitch(HandleOnlyMixin, TruncableSteps):
     def __init__(self, phase_to_callable: Dict[ExecutionPhase, BaseTransformer], default: OptionalType[BaseTransformer] = None):
