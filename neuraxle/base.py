@@ -2754,6 +2754,9 @@ class NonTransformableMixin(MixinForBaseTransformer):
         fit methods are not implemented
     """
 
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        return self._fit_data_container(data_container, context), data_container
+
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Do nothing - return the same data.
