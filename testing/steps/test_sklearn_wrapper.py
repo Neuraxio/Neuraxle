@@ -73,3 +73,54 @@ def _create_data_source(shape):
     data_inputs = np.random.random(shape).astype(np.float32)
     expected_outputs = np.random.random(shape).astype(np.float32)
     return data_inputs, expected_outputs
+
+#
+from sklearn.ensemble import BaggingRegressor, GradientBoostingRegressor
+from sklearn.metrics import median_absolute_error
+
+from neuraxle.hyperparams.distributions import RandInt, Uniform
+from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
+from neuraxle.metaopt.auto_ml import KFoldCrossValidationSplitter, AutoML, RandomSearchHyperparameterSelectionStrategy, \
+    HyperparamsJSONRepository
+from neuraxle.metaopt.callbacks import ScoringCallback
+
+def _test_within_auto_ml_loop(tmpdir, pipeline):
+    X_train = np.random.random((25,50)).astype(np.float32)
+    Y_train = np.random.random((25,)).astype(np.float32)
+
+    validation_splitter = KFoldCrossValidationSplitter(3)
+    scoring_callback = ScoringCallback(
+        median_absolute_error, higher_score_is_better=False)
+
+    auto_ml = AutoML(
+        pipeline=pipeline,
+        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        validation_splitter=validation_splitter,
+        scoring_callback=scoring_callback,
+        n_trials=10,
+        epochs=1,
+        hyperparams_repository=HyperparamsJSONRepository(
+            cache_folder="cache"),
+        refit_trial=True,
+        continue_loop_on_error=False)
+
+    auto_ml.fit(X_train, Y_train)
+
+def test_automl_sklearn(tmpdir):
+    grad_boost = SKLearnWrapper(GradientBoostingRegressor())
+    _test_within_auto_ml_loop(tmpdir, grad_boost)
+
+def test_automl_sklearn_model_with_base_estimator(tmpdir):
+    grad_boost = GradientBoostingRegressor()
+    bagged_regressor = BaggingRegressor(
+        grad_boost, random_state=5, n_jobs=-1)
+
+    wrapped_bagged_regressor = SKLearnWrapper(
+        bagged_regressor,
+        HyperparameterSpace({
+            "n_estimators": RandInt(10, 100),
+            "max_features": Uniform(0.6, 1.0)}),
+            #  return_all_sklearn_default_params_on_get=True
+        )
+    _test_within_auto_ml_loop(tmpdir, wrapped_bagged_regressor)
+
