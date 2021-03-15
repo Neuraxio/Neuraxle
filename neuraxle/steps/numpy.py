@@ -165,8 +165,9 @@ class NumpyConcatenateOuterBatch(NumpyConcatenateOnAxis):
 
 
 class NumpyTranspose(BaseTransformer):
-    def __init__(self):
+    def __init__(self, axes=None):
         super().__init__()
+        self.axes = axes
 
     def _transform_data_container(self, data_container, context):
         """
@@ -190,7 +191,7 @@ class NumpyTranspose(BaseTransformer):
         return self._transpose(data_inputs)
 
     def _transpose(self, data_inputs):
-        return np.array(data_inputs).transpose()
+        return np.array(data_inputs).transpose(self.axes)
 
 
 class NumpyShapePrinter(BaseTransformer):
