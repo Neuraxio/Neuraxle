@@ -33,7 +33,7 @@ from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ResumableSte
     MetaStep, _CustomHandlerMethods, \
     ForceHandleMixin, Identity
 from neuraxle.checkpoints import Checkpoint
-from neuraxle.data_container import DataContainer, ListDataContainer, AbsentValuesNullObject
+from neuraxle.data_container import DataContainer, ListDataContainer, AbsentValuesNullObject, ZipDataContainer
 
 DEFAULT_CACHE_FOLDER = 'cache'
 
@@ -710,3 +710,39 @@ class Joiner(Barrier):
 
         return step, output_data_container
 
+class ZipMinibatchJoiner(Joiner):
+    """
+    Zips together minibatch outputs, i.e. returns a DataContainer where the first element is a tuple of every minibatches first element and so on.
+    """
+    def join_transform(self, step: TruncableSteps, data_container: DataContainer, context: ExecutionContext) -> ZipDataContainer:
+        context = context.push(step)
+        data_container_batches = data_container.minibatches(
+            batch_size=self.batch_size,
+            include_incomplete_batch=self.include_incomplete_batch,
+            default_value_data_inputs=self.default_value_data_inputs,
+            default_value_expected_outputs=self.default_value_expected_outputs
+        )
+
+        output_data_container = []
+        for data_container_batch in data_container_batches:
+            output_data_container.append(step._transform_data_container(data_container_batch, context))
+
+        return ZipDataContainer.create_from(*output_data_container)
+
+
+    def join_fit_transform(self, step: Pipeline, data_container: DataContainer, context: ExecutionContext) -> \
+            Tuple['Any', DataContainer]:
+        context = context.push(step)
+        data_container_batches = data_container.minibatches(
+            batch_size=self.batch_size,
+            include_incomplete_batch=self.include_incomplete_batch,
+            default_value_data_inputs=self.default_value_data_inputs,
+            default_value_expected_outputs=self.default_value_expected_outputs
+        )
+
+        output_data_container = []
+        for data_container_batch in data_container_batches:
+            step, data_container_batch = step._fit_transform_data_container(data_container_batch, context)
+            output_data_container.append(data_container_batch)
+
+        return step, ZipDataContainer.create_from(*output_data_container)
