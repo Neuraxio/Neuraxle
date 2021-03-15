@@ -27,7 +27,8 @@ This module contains steps to perform various feature unions and model stacking,
 from joblib import Parallel, delayed
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, Identity, ExecutionContext, DataContainer, \
-    ForceHandleOnlyMixin, BaseTransformer
+    ForceHandleOnlyMixin, BaseTransformer, NonFittableMixin, AssertExpectedOutputIsNoneMixin
+from neuraxle.data_container import ZipDataContainer
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
@@ -153,6 +154,15 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
         data_container = self[-1].handle_transform(data_container, context)
         return data_container
 
+class ZipFeatures(AssertExpectedOutputIsNoneMixin, NonFittableMixin, BaseStep):
+    def __init__(self):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        if any(not isinstance(di, DataContainer) for di in data_container.data_inputs):
+            raise ValueError("Input to Zip step")
+        return ZipDataContainer.create_from(*data_container.data_inputs)
 
 class AddFeatures(FeatureUnion):
     """
