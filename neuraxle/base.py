@@ -507,7 +507,6 @@ class ExecutionContext:
             parents=self.parents + [step],
             services=self.services,
             logger=self.logger
-
         )
 
     def copy(self):

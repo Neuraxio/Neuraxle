@@ -805,7 +805,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
 
         context.logger.info(
-            'best hyperparams:\n{}'.format(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+            '\nbest hyperparams:\n{}'.format(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
         # Notify HyperparamsRepository subscribers
         self.hyperparams_repository.on_complete(value=self.hyperparams_repository)
