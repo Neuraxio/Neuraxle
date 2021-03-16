@@ -27,6 +27,7 @@ import inspect
 from typing import Any
 
 from sklearn.base import BaseEstimator
+from sklearn.ensemble import BaseEnsemble
 from sklearn.linear_model import Ridge
 
 from neuraxle.base import BaseStep
@@ -48,12 +49,22 @@ class SKLearnWrapper(BaseStep):
         if not isinstance(wrapped_sklearn_predictor, BaseEstimator):
             raise ValueError("The wrapped_sklearn_predictor must be an instance of scikit-learn's BaseEstimator.")
         self.wrapped_sklearn_predictor = wrapped_sklearn_predictor
-        params: HyperparameterSamples = HyperparameterSamples(wrapped_sklearn_predictor.get_params())
+        self.is_ensemble = isinstance(wrapped_sklearn_predictor, BaseEnsemble)
+        params: dict = wrapped_sklearn_predictor.get_params()
+        self._delete_base_estimator_from_dict(params)
         BaseStep.__init__(self, hyperparams=params, hyperparams_space=hyperparams_space)
         self.return_all_sklearn_default_params_on_get = return_all_sklearn_default_params_on_get
         self.name += "_" + wrapped_sklearn_predictor.__class__.__name__
         self.partial_fit: bool = use_partial_fit
         self.use_predict_proba: bool = use_predict_proba
+
+    def _delete_base_estimator_from_dict(self, params):
+        """
+        Sklearn BaseEnsemble models contain other models as parameter; those can't be json encoded. We retrieve the parameters of theses sub-models on a .get_params(deep=True) call, we simply need to delete them from the parameter dictionary to avoid errors when saving/loading hyperparameters.
+        """
+        for name in list(params.keys()):
+            if isinstance(params[name], BaseEstimator):
+                del params[name]
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
         if hasattr(self.wrapped_sklearn_predictor, 'fit_transform'):
@@ -140,7 +151,9 @@ class SKLearnWrapper(BaseStep):
 
     def _get_hyperparams(self):
         if self.return_all_sklearn_default_params_on_get:
-            return HyperparameterSamples(self.wrapped_sklearn_predictor.get_params())
+            hp = self.wrapped_sklearn_predictor.get_params()
+            self._delete_base_estimator_from_dict(hp)
+            return HyperparameterSamples(hp)
         else:
             return BaseStep._get_hyperparams(self)
 
