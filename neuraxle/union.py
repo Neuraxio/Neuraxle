@@ -154,14 +154,19 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
         data_container = self[-1].handle_transform(data_container, context)
         return data_container
 
-class ZipFeatures(AssertExpectedOutputIsNoneMixin, NonFittableMixin, BaseStep):
+class ZipFeatures(NonFittableMixin, BaseStep):
     def __init__(self):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
 
+    def transform(self, data_inputs):
+        if any(not isinstance(di, DataContainer) for di in data_inputs):
+            raise ValueError("data_inputs given to ZipFeatures must be a list of DataContainer instances")
+        return ZipDataContainer.create_from(*data_inputs).data_inputs
+
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         if any(not isinstance(di, DataContainer) for di in data_container.data_inputs):
-            raise ValueError("Input to Zip step")
+            raise ValueError("data_inputs given to ZipFeatures must be a list of DataContainer instances")
         return ZipDataContainer.create_from(*data_container.data_inputs)
 
 class AddFeatures(FeatureUnion):

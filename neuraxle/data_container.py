@@ -435,7 +435,7 @@ class ZipDataContainer(DataContainer):
     @staticmethod
     def create_from(data_container: DataContainer, *other_data_containers: DataContainer) -> 'ZipDataContainer':
         """
-        Create ZipDataContainer that merges two data sources together.
+        Create ZipDataContainer that merges two data sources together. Zips only the data input part and keep the expected output of the first DataContainer in argument.
 
         :param data_container: data container to transform
         :type data_container: DataContainer
