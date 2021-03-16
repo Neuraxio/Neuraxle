@@ -23,7 +23,6 @@ Meta steps for hyperparameter tuning, such as random search.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-import copy
 import math
 from abc import ABC, abstractmethod
 from typing import List, Callable, Tuple
@@ -31,8 +30,7 @@ from typing import List, Callable, Tuple
 import numpy as np
 from sklearn.metrics import r2_score
 
-from neuraxle.base import MetaStep, BaseStep, ExecutionContext, HandleOnlyMixin, ForceHandleOnlyMixin, \
-    EvaluableStepMixin, _FittableStep
+from neuraxle.base import MetaStep, BaseStep, ExecutionContext, ForceHandleOnlyMixin, EvaluableStepMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import RecursiveDict
 from neuraxle.steps.loop import StepClonerForEachDataInput
@@ -73,7 +71,8 @@ class BaseValidation(MetaStep, ABC):
 
 class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValidation, ABC):
     # TODO: change default argument of scoring_function...
-    def __init__(self, wrapped=None, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch(), cache_folder_when_no_handle=None,
+    def __init__(self, wrapped=None, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch(),
+                 cache_folder_when_no_handle=None,
                  split_data_container_during_fit=True, predict_after_fit=True):
         BaseValidation.__init__(self, wrapped=wrapped, scoring_function=scoring_function)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
@@ -172,13 +171,15 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
         :param test_size: ratio for test size between 0 and 1
         :param scoring_function: scoring function with two arguments (y_true, y_pred)
         """
-        BaseCrossValidationWrapper.__init__(self, wrapped=wrapped, cache_folder_when_no_handle=cache_folder_when_no_handle)
+        BaseCrossValidationWrapper.__init__(self, wrapped=wrapped,
+                                            cache_folder_when_no_handle=cache_folder_when_no_handle)
 
         self.run_validation_split_in_test_mode = run_validation_split_in_test_mode
         self.test_size = test_size
         self.scoring_function = scoring_function
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('ValidationSplitWrapper', DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'ValidationSplitWrapper', DataContainer):
         """
         Fit using the training split.
         Calculate the scores using the validation split.
@@ -192,7 +193,8 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
         new_self, results_data_container = self._fit_transform_data_container(data_container, context)
         return new_self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseStep', DataContainer):
         """
         Fit Transform given data inputs without splitting.
 
