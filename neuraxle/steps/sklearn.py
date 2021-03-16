@@ -51,8 +51,7 @@ class SKLearnWrapper(BaseStep):
         self.wrapped_sklearn_predictor = wrapped_sklearn_predictor
         self.is_ensemble = isinstance(wrapped_sklearn_predictor, BaseEnsemble)
         params: dict = wrapped_sklearn_predictor.get_params()
-        if self.is_ensemble:
-            self._delete_base_estimator_from_dict(params)
+        self._delete_base_estimator_from_dict(params)
         BaseStep.__init__(self, hyperparams=params, hyperparams_space=hyperparams_space)
         self.return_all_sklearn_default_params_on_get = return_all_sklearn_default_params_on_get
         self.name += "_" + wrapped_sklearn_predictor.__class__.__name__

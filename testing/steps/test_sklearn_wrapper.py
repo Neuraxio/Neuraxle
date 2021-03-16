@@ -85,7 +85,7 @@ from neuraxle.metaopt.auto_ml import KFoldCrossValidationSplitter, AutoML, Rando
 from neuraxle.metaopt.callbacks import ScoringCallback
 
 def _test_within_auto_ml_loop(tmpdir, pipeline):
-    X_train = np.random.random((25,50)).astype(np.float32)
+    X_train = np.random.random((25, 50)).astype(np.float32)
     Y_train = np.random.random((25,)).astype(np.float32)
 
     validation_splitter = KFoldCrossValidationSplitter(3)
@@ -97,10 +97,10 @@ def _test_within_auto_ml_loop(tmpdir, pipeline):
         hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
         validation_splitter=validation_splitter,
         scoring_callback=scoring_callback,
-        n_trials=10,
+        n_trials=2,
         epochs=1,
         hyperparams_repository=HyperparamsJSONRepository(
-            cache_folder="cache"),
+            cache_folder=tmpdir),
         refit_trial=True,
         continue_loop_on_error=False)
 
