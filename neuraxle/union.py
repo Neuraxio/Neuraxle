@@ -155,19 +155,26 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
         return data_container
 
 class ZipFeatures(NonFittableMixin, BaseStep):
-    def __init__(self):
+    def __init__(self, concatenate_inner_features=False):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
+        self.concatenate_inner_features = concatenate_inner_features
 
     def transform(self, data_inputs):
         if any(not isinstance(di, DataContainer) for di in data_inputs):
             raise ValueError("data_inputs given to ZipFeatures must be a list of DataContainer instances")
-        return ZipDataContainer.create_from(*data_inputs).data_inputs
+        data_container = ZipDataContainer.create_from(*data_inputs)
+        if self.concatenate_inner_features:
+            data_container.concatenate_inner_features()
+        return data_container.data_inputs
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         if any(not isinstance(di, DataContainer) for di in data_container.data_inputs):
             raise ValueError("data_inputs given to ZipFeatures must be a list of DataContainer instances")
-        return ZipDataContainer.create_from(*data_container.data_inputs)
+        data_container = ZipDataContainer.create_from(*data_container.data_inputs)
+        if self.concatenate_inner_features:
+            data_container.concatenate_inner_features()
+        return data_container
 
 class AddFeatures(FeatureUnion):
     """
