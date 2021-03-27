@@ -170,7 +170,7 @@ class RecursiveDict(OrderedDict):
         except KeyError:
             return self.same_class_new_instance()
 
-    def iter_flat(self, pre_key=""):
+    def iter_flat(self, pre_key="", values_only=False):
         """
         Returns a generator which yield (flatenned_key, value) pairs. value is never a RecursiveDict instance.
         """
@@ -178,7 +178,10 @@ class RecursiveDict(OrderedDict):
             if isinstance(v, RecursiveDict):
                 yield from v.iter_flat(pre_key + k + self.separator)
             else:
-                yield (pre_key + k, v)
+                if values_only:
+                    yield v
+                else:
+                    yield (pre_key + k, v)
 
     def to_flat_dict(self) -> dict:
         """
