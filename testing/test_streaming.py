@@ -22,7 +22,7 @@ def test_queued_pipeline_with_excluded_incomplete_batch():
         MultiplyByN(2),
         MultiplyByN(2),
         MultiplyByN(2)
-    ], batch_size=10, include_incomplete_batch=False, n_workers_per_step=1, max_queue_size=5)
+    ], batch_size=10, keep_incomplete_batch=False, n_workers_per_step=1, max_queue_size=5)
 
     outputs = p.transform(list(range(15)))
 
@@ -38,7 +38,7 @@ def test_queued_pipeline_with_included_incomplete_batch():
             MultiplyByN(2)
         ],
         batch_size=10,
-        include_incomplete_batch=True,
+        keep_incomplete_batch=True,
         default_value_data_inputs=AbsentValuesNullObject(),
         default_value_expected_outputs=AbsentValuesNullObject(),
         n_workers_per_step=1,
@@ -59,7 +59,7 @@ def test_queued_pipeline_with_included_incomplete_batch_that_raises_an_exception
                 MultiplyByN(2)
             ],
             batch_size=10,
-            include_incomplete_batch=True,
+            keep_incomplete_batch=True,
             default_value_data_inputs=None, # this will raise an exception in the worker
             default_value_expected_outputs=None, # this will raise an exception in the worker
             n_workers_per_step=1,
