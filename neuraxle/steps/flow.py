@@ -154,7 +154,7 @@ class ExecuteIf(HandleOnlyMixin, MetaStep):
     def __init__(self, condition_function: Callable, wrapped: BaseStep):
         MetaStep.__init__(self, wrapped)
         HandleOnlyMixin.__init__(self)
-        self.condition_function = condition_function
+        self.condition_function: Callable = condition_function
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
         if self.condition_function(self, data_container, context):

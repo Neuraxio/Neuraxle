@@ -23,6 +23,7 @@ Those steps works with NumPy (np) arrays.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
+from typing import Sequence
 
 import numpy as np
 
@@ -165,7 +166,7 @@ class NumpyConcatenateOuterBatch(NumpyConcatenateOnAxis):
 
 
 class NumpyTranspose(BaseTransformer):
-    def __init__(self, axes=None):
+    def __init__(self, axes: Sequence[int] = None):
         super().__init__()
         self.axes = axes
 

@@ -29,9 +29,9 @@ from typing import Tuple
 import numpy as np
 
 from neuraxle.base import MetaStep, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, \
-    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, BaseTransformer, Identity, \
-    IdentityHandlerMethodsMixin, HandleOnlyMixin
+    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, BaseTransformer, Identity
 from neuraxle.data_container import ListDataContainer
+from neuraxle.steps.flow import ExecuteIf
 from neuraxle.utils import DeprecatedMetaClass
 
 
@@ -109,7 +109,8 @@ class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
 
         return output_data_container
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[BaseStep, DataContainer]:
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
+        BaseStep, DataContainer]:
         """
         Fit transform each step for each data inputs, and expected outputs
 
@@ -164,33 +165,39 @@ class ForEachDataInput(metaclass=DeprecatedMetaClass):
 
 
 class ContinueInterrupt(Exception):
+    """This exception is used to signal to the minibatch iterator to skip the rest of the execution of the current iteration."""
     pass
 
 
 class BreakInterrupt(Exception):
+    """This exception is used to signal the interruption of a minibatch"""
     pass
 
 
-class BreakIf(ForceHandleMixin, Identity):
-    def __init__(self, condition_function: Callable):
+class Break(ForceHandleMixin, Identity):
+    def __init__(self):
         Identity.__init__(self)
-        self.condition_function = condition_function
 
     def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        if self.condition_function(self, data_container, context):
-            raise BreakInterrupt()
-        return data_container
+        raise BreakInterrupt()
 
 
-class ContinueIf(ForceHandleMixin, Identity):
+class BreakIf(ExecuteIf):
     def __init__(self, condition_function: Callable):
+        ExecuteIf.__init__(self, condition_function, Break())
+
+
+class Continue(ForceHandleMixin, Identity):
+    def __init__(self):
         Identity.__init__(self)
-        self.condition_function = condition_function
 
     def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        if self.condition_function(self, data_container, context):
-            raise ContinueInterrupt()
-        return data_container
+        raise ContinueInterrupt()
+
+
+class ContinueIf(ExecuteIf):
+    def __init__(self, condition_function: Callable):
+        ExecuteIf.__init__(self, condition_function, Continue())
 
 
 class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
@@ -229,7 +236,8 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         self.steps_as_tuple = [(step.name, step) for step in steps]
         self._invalidate()
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseStep', DataContainer):
         fitted_steps_data_containers = []
         for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
             fitted_step_data_container = self[i].handle_fit_transform(
@@ -246,7 +254,8 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
 
         return self, output_data_container
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseStep', DataContainer):
         fitted_steps = []
         for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
             fitted_step = self[i].handle_fit(
@@ -259,7 +268,8 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
 
         return self
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
+    'BaseStep', DataContainer):
         transform_results = []
         for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
             transform_result = self[i].handle_transform(
@@ -273,7 +283,8 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
             output_data_container.append_data_container(data_container_batch)
         return output_data_container
 
-    def _inverse_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _inverse_transform_data_container(self, data_container: DataContainer,
+                                          context: ExecutionContext) -> DataContainer:
         inverse_transform_results = []
         for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
             inverse_transform_result = self[i].handle_inverse_transform(
@@ -347,7 +358,7 @@ class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStep):
         self.len_eo = []
 
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseTransformer', DataContainer):
+            'BaseTransformer', DataContainer):
         """
         Flatten data container before any processing is done on the wrapped step.
 

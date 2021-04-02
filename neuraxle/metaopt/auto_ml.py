@@ -39,7 +39,7 @@ from typing import Callable, List, Union, Tuple
 
 import numpy as np
 
-from neuraxle.base import BaseStep, ExecutionContext, ForceHandleMixin, ExecutionPhase, _HasChildrenMixin
+from neuraxle.base import BaseStep, ExecutionContext, ForceHandleMixin, ExecutionPhase, _HasChildrenMixin, LOGGER_FORMAT
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.callbacks import BaseCallback, CallbackList, ScoringCallback
@@ -176,7 +176,7 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         logfile_path = os.path.join(self.cache_folder, f"trial_{trial_number}.log")
         logger_name = f"trial_{trial_number}"
         logger = logging.getLogger(logger_name)
-        formatter = logging.Formatter("[%(asctime)s][%(levelname)s][%(module)s][%(lineno)d] : %(message)s \n", datefmt="%H:%M:%S")
+        formatter = logging.Formatter(fmt=LOGGER_FORMAT, datefmt=DATE_FORMAT)
         file_handler = logging.FileHandler(filename=logfile_path)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
@@ -514,8 +514,7 @@ class Trainer:
         :return: executed trial
 
         """
-        if context is None:
-            context = ExecutionContext()
+        assert not (context is None)  # TODO: change order of arguments so that context isn't an optional argument
 
         validation_splits: List[
             Tuple[DataContainer, DataContainer]] = self.validation_split_function.split_data_container(
