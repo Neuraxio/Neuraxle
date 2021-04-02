@@ -43,7 +43,7 @@ from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
 
 DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
-logging.basicConfig(format="[%(asctime)s][%(levelname)s][%(module)s][%(lineno)d] : %(message)s \n", datefmt="%H:%M:%S", level=logging.INFO)
+logging.basicConfig(format="[%(asctime)s][%(levelname)s][%(module)s][%(lineno)d]: %(message)s", datefmt="%H:%M:%S", level=logging.INFO)
 
 class BaseHasher(ABC):
     """
@@ -1716,6 +1716,9 @@ class _HasSavers(ABC):
         def _initialize_if_needed(step):
             if not step.is_initialized:
                 step.setup(context=context)
+            if not step.is_initialized:
+                raise NotImplementedError(f"The `setup` method of the following class "
+                                          f"failed to set `self.is_initialized` to True: {step.__class__.__name__}.")
             return RecursiveDict()
 
         def _invalidate(step):
@@ -2585,6 +2588,8 @@ class MetaStepMixin(_HasChildrenMixin):
         return [self.wrapped]
 
     def get_step_by_name(self, name):
+        if self.name == name:
+            return self
         if self.wrapped.name == name:
             return self.wrapped
         return self.wrapped.get_step_by_name(name)
@@ -2840,7 +2845,7 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         step.steps_as_tuple = []
 
         for step_name, savers in step.sub_steps_savers:
-            if savers is None:
+            if (savers is None):
                 # keep step as it is if it hasn't been saved
                 step.steps_as_tuple.append((step_name, step[step_name]))
             else:
