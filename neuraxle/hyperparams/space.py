@@ -176,7 +176,7 @@ class RecursiveDict(OrderedDict):
         """
         for k, v in self.items():
             if isinstance(v, RecursiveDict):
-                yield from v.iter_flat(pre_key + k + self.separator)
+                yield from v.iter_flat(pre_key + k + self.separator, values_only=values_only)
             else:
                 if values_only:
                     yield v
