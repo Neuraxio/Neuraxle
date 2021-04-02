@@ -16,5 +16,8 @@ Steps to reproduce the behavior.
 **Expected behavior**
 A clear and concise description of what you expected to happen.
 
+**Suggested Fix**
+Any idea that may help fixing the bug the right way.
+
 **Additional context**
 Add any other context about the problem here.
