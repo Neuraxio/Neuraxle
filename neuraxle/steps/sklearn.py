@@ -63,6 +63,7 @@ class SKLearnWrapper(BaseStep):
         self.use_predict_proba: bool = use_predict_proba
 
     def setup(self, context: ExecutionContext = None) -> 'SKLearnWrapper':
+        BaseStep.setup(self, context)
         if self.use_partial_fit:
             self.wrapped_sklearn_predictor.fit = functools.partial(self.wrapped_sklearn_predictor.partial_fit,
                                                                    **self.partial_fit_kwargs)
