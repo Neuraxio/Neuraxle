@@ -111,10 +111,11 @@ class TestTrialLogger:
 
         for f in file_paths:
             assert os.path.exists(f)
-        # That not a great way of testing
+
+        # That not a great way of testing...
         with open(file_paths[0], 'r') as f:
             l = f.readlines()
-            assert len(l) == 54
+            assert len(l) == 38
 
 
     def teardown(self):
