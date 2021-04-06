@@ -157,13 +157,6 @@ class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
         return False
 
 
-class ForEachDataInput(metaclass=DeprecatedMetaClass):
-    """
-    Previous name for ForEach.
-    """
-    _DeprecatedClassMeta__alias = ForEach
-
-
 class ContinueInterrupt(Exception):
     """This exception is used to signal to the minibatch iterator to skip the rest of the execution of the current iteration."""
     pass
