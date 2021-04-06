@@ -32,8 +32,6 @@ from neuraxle.base import MetaStep, BaseStep, DataContainer, ExecutionContext, R
     ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, BaseTransformer, Identity
 from neuraxle.data_container import ListDataContainer
 from neuraxle.steps.flow import ExecuteIf
-from neuraxle.utils import DeprecatedMetaClass
-
 
 class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
     """
