@@ -338,7 +338,7 @@ def test_trainer_train():
         validation_splitter=ValidationSplitter(test_size=0.20)
     )
 
-    repo_trial: Trial = trainer.train(pipeline=p, data_inputs=data_inputs, expected_outputs=expected_outputs)
+    repo_trial: Trial = trainer.train(pipeline=p, data_inputs=data_inputs, expected_outputs=expected_outputs, context=ExecutionContext())
 
     trained_pipeline = repo_trial.get_trained_pipeline(split_number=0)
 
