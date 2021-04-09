@@ -112,10 +112,10 @@ class TestTrialLogger:
         for f in file_paths:
             assert os.path.exists(f)
 
-        # That not a great way of testing...
+        # That not a great way of testing... but at least it raises a flag when something changes in the logging process
         with open(file_paths[0], 'r') as f:
             l = f.readlines()
-            assert len(l) == 38
+            assert len(l) == 36
 
 
     def teardown(self):

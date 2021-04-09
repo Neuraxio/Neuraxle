@@ -243,7 +243,7 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
     def new_trial(self, auto_ml_container: 'AutoMLContainer') -> 'Trial':
         hyperparams = self.hyperparameter_selection_strategy.find_next_best_hyperparams(auto_ml_container)
         logger = self._create_logger_for_trial(auto_ml_container.trial_number)
-        logger.info('new trial:\n{}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+        logger.info('\nnew trial: {}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
         return Trial(
             save_trial_function=self.save_trial,
@@ -598,7 +598,7 @@ class Trainer:
 
                 repo_trial_split.set_success()
 
-                context.logger.info('success trial {} best score: {} at epoch {}'.format(
+                context.logger.info('success trial {}\nbest score: {} at epoch {}'.format(
                     trial_split_description,
                     repo_trial_split.get_best_validation_score(),
                     repo_trial_split.get_n_epochs_to_best_validation_score()
@@ -805,7 +805,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
 
         context.logger.info(
-            '\nbest hyperparams:\n{}'.format(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+            '\nbest hyperparams: {}'.format(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
         # Notify HyperparamsRepository subscribers
         self.hyperparams_repository.on_complete(value=self.hyperparams_repository)
@@ -835,7 +835,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
                 repo_trial_split = None
                 context.set_logger(repo_trial.logger)
-                context.logger.info('\ntrial {}/{}'.format(trial_number + 1, self.n_trial))
+                context.logger.info('trial {}/{}'.format(trial_number + 1, self.n_trial))
 
                 repo_trial_split = self.trainer.execute_trial(
                     pipeline=self.pipeline,
@@ -915,7 +915,7 @@ def _get_trial_split_description(
         trial_number: int,
         n_trial: int
 ):
-    trial_split_description = '{}/{} split {}/{}\nhyperparams: {}\n'.format(
+    trial_split_description = '{}/{} split {}/{}\nhyperparams: {}'.format(
         trial_number + 1,
         n_trial,
         repo_trial_split_number + 1,
