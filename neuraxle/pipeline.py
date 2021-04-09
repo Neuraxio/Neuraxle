@@ -431,7 +431,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             steps: NamedTupleList,
             batch_size=None,
             keep_incomplete_batch: bool = None,
-            default_value_data_inputs=None,
+            default_value_data_inputs=AbsentValuesNullObject(),
             default_value_expected_outputs=None,
             cache_folder=None
     ):
@@ -660,7 +660,7 @@ class Joiner(Barrier):
             self,
             batch_size: int,
             keep_incomplete_batch: bool = True,
-            default_value_data_inputs=None,
+            default_value_data_inputs=AbsentValuesNullObject(),
             default_value_expected_outputs=None
     ):
         Barrier.__init__(self)
