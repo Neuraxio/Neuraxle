@@ -24,11 +24,10 @@ import pytest
 
 from neuraxle.base import ExecutionContext, NonTransformableMixin, BaseStep
 from neuraxle.hyperparams.distributions import RandInt, LogUniform
-from neuraxle.hyperparams.space import HyperparameterSpace, RecursiveDict
+from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction
 from neuraxle.steps.numpy import NumpyTranspose
-from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.union import Identity, AddFeatures, ModelStacking
 from testing.mocks.step_mocks import SomeStep, AN_INPUT, AN_EXPECTED_OUTPUT
 
@@ -416,8 +415,9 @@ def test_pipeline_setup_incrementally():
             BaseStep.__init__(self)
             self.has_fitted = False
 
-        def fit(self, data_inputs, expected_outputs) -> '_TransformerStep':
+        def fit(self, data_inputs, expected_outputs) -> '_FittableStep':
             self.has_fitted = True
+            return self
 
     class StepWithSensitiveSetup(Identity):
         """ Asserts that step given in argument has fitted before performing setup"""
@@ -428,6 +428,7 @@ def test_pipeline_setup_incrementally():
         def setup(self, context: ExecutionContext = None) -> 'BaseTransformer':
             assert some_step.has_fitted is True
             assert some_step2.has_fitted is False
+            return self
 
     some_step = SomeStepThatFits()
     some_step2 = SomeStepThatFits()
