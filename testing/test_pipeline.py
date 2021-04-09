@@ -22,7 +22,7 @@ Tests for Pipelines
 import numpy as np
 import pytest
 
-from neuraxle.base import ExecutionContext, NonTransformableMixin, BaseStep
+from neuraxle.base import ExecutionContext, NonTransformableMixin, BaseStep, BaseTransformer, _FittableStep
 from neuraxle.hyperparams.distributions import RandInt, LogUniform
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.pipeline import Pipeline
@@ -415,7 +415,7 @@ def test_pipeline_setup_incrementally():
             BaseStep.__init__(self)
             self.has_fitted = False
 
-        def fit(self, data_inputs, expected_outputs) -> '_FittableStep':
+        def fit(self, data_inputs, expected_outputs=None) -> _FittableStep:
             self.has_fitted = True
             return self
 
@@ -425,7 +425,7 @@ def test_pipeline_setup_incrementally():
         def __init__(self):
             Identity.__init__(self)
 
-        def setup(self, context: ExecutionContext = None) -> 'BaseTransformer':
+        def setup(self, context: ExecutionContext = None) -> BaseTransformer:
             assert some_step.has_fitted is True
             assert some_step2.has_fitted is False
             return self
