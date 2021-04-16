@@ -414,6 +414,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
     for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
     to trim absent values from the batch
     :param cache_folder: cache_folder if its at the root of the pipeline
+    :param mute_joiner_batch_size_warning: If False, will log a warning when automatically setting the joiner batch_size attribut.
 
     .. seealso::
         :func:`~neuraxle.data_container.DataContainer.minibatches`,
@@ -433,7 +434,8 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             keep_incomplete_batch: bool = None,
             default_value_data_inputs=AbsentValuesNullObject(),
             default_value_expected_outputs=None,
-            cache_folder=None
+            cache_folder=None,
+            mute_joiner_batch_size_warning: bool = True
     ):
         Pipeline.__init__(self, steps=steps, cache_folder=cache_folder)
         ForceHandleMixin.__init__(self)
@@ -446,6 +448,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             default_value_data_inputs=default_value_data_inputs,
             default_value_expected_outputs=default_value_expected_outputs
         )
+        self.mute_joiner_batch_size_warning = mute_joiner_batch_size_warning
         self.__patch_barriers_batch_size(batch_size)
 
     def set_batch_size(self, batch_size):
@@ -468,7 +471,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
 
         for _, step in self:
             if isinstance(step, Barrier):
-                if step.batch_size is not None:
+                if step.batch_size is not None and not self.mute_joiner_batch_size_warning:
                     warnings.warn(
                         'Replacing {}[{}].batch_size by {}.batch_size.'.format(self.name, step.name, self.name))
                 step.batch_size = batch_size

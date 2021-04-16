@@ -2881,10 +2881,12 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
             self,
             steps_as_tuple: NamedTupleList,
             hyperparams: HyperparameterSamples = dict(),
-            hyperparams_space: HyperparameterSpace = dict()
+            hyperparams_space: HyperparameterSpace = dict(),
+            mute_step_renaming_warning: bool = True,
     ):
         BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         _HasChildrenMixin.__init__(self)
+        self.warn_step_renaming = not mute_step_renaming_warning
         self.set_steps(steps_as_tuple)
         self.set_savers([TruncableJoblibStepSaver()] + self.savers)
 
@@ -3001,9 +3003,10 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         for class_name, step in steps_as_tuple:
             _name = class_name
             if class_name in names_yet:
-                warnings.warn(
-                    "Named pipeline tuples must be unique. "
-                    "Will rename '{}' because it already exists.".format(class_name))
+                if self.warn_step_renaming:
+                    warnings.warn(
+                        "Named pipeline tuples must be unique. "
+                        "Will rename '{}' because it already exists.".format(class_name))
 
                 _name = self._rename_step(step_name=_name, class_name=class_name, names_yet=names_yet)
                 step.set_name(_name)
