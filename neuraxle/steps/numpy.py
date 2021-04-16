@@ -27,12 +27,9 @@ from typing import Sequence
 
 import numpy as np
 
-from neuraxle.base import ExecutionContext, ForceHandleMixin, BaseTransformer
-from neuraxle.base import NonFittableMixin, BaseStep
+from neuraxle.base import ExecutionContext, ForceHandleMixin, BaseTransformer, NonFittableMixin, BaseStep
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.steps.column_transformer import ColumnSelectionType
-
 
 class NumpyFlattenDatum(BaseTransformer):
     def __init__(self):
@@ -610,43 +607,3 @@ class NumpyArgMax(NonFittableMixin, BaseStep):
         :return: max value for the given axis
         """
         return np.argmax(data_inputs, axis=self.axis)
-
-
-class NumpyColumnSelector2D(BaseTransformer):
-    """
-    A numpy version of the :class:`~neuraxle.steps.column_transformer.ColumnSelector2D`.
-    """
-
-    def __init__(self, columns_selection: ColumnSelectionType):
-        super().__init__()
-        self.column_selection = columns_selection
-
-    def transform(self, data_inputs):
-        if isinstance(self.column_selection, range):
-            self.column_selection = slice(
-                self.column_selection.start,
-                self.column_selection.stop,
-                self.column_selection.step
-            )
-
-        if isinstance(self.column_selection, int):
-            return np.expand_dims(np.array(data_inputs)[:, self.column_selection], axis=-1)
-
-        if isinstance(self.column_selection, slice):
-            return np.array(data_inputs)[:, self.column_selection]
-
-        if isinstance(self.column_selection, list):
-            columns = [
-                np.expand_dims(np.array(data_inputs)[:, i], axis=-1)
-                for i in self.column_selection
-            ]
-            return np.concatenate(columns, axis=-1)
-
-        if self.column_selection is None:
-            return data_inputs
-
-        raise ValueError(
-            'column selection type not supported : {0}\nSupported types'.format(
-                self.column_selection,
-                repr(ColumnSelectionType)
-            ))

@@ -37,6 +37,7 @@ from neuraxle.union import FeatureUnion
 ColumnSelectionType = Union[int, Iterable[int], slice]
 ColumnChooserTupleList = List[Tuple[ColumnSelectionType, BaseTransformer]]
 
+
 class ColumnSelector2D(BaseTransformer):
     """
     A ColumnSelector2D selects column in a sequence.
@@ -51,10 +52,9 @@ class ColumnSelector2D(BaseTransformer):
                 columns_selection.step
             )
         elif isinstance(columns_selection, int):
-            columns_selection = slice(columns_selection, columns_selection+1)
+            columns_selection = slice(columns_selection, columns_selection + 1)
 
         self.columns_selection = columns_selection
-
 
     def transform(self, data_inputs):
         dtype = type(data_inputs)
@@ -79,6 +79,46 @@ class ColumnSelector2D(BaseTransformer):
         if dtype == np.ndarray and not isinstance(ret, np.ndarray):
             return np.array(ret)
         return ret
+
+
+class NumpyColumnSelector2D(BaseTransformer):
+    """
+    A numpy version of the :class:`~neuraxle.steps.column_transformer.ColumnSelector2D`.
+    """
+
+    def __init__(self, columns_selection: ColumnSelectionType):
+        super().__init__()
+        self.column_selection = columns_selection
+
+    def transform(self, data_inputs):
+        if isinstance(self.column_selection, range):
+            self.column_selection = slice(
+                self.column_selection.start,
+                self.column_selection.stop,
+                self.column_selection.step
+            )
+
+        if isinstance(self.column_selection, int):
+            return np.expand_dims(np.array(data_inputs)[:, self.column_selection], axis=-1)
+
+        if isinstance(self.column_selection, slice):
+            return np.array(data_inputs)[:, self.column_selection]
+
+        if isinstance(self.column_selection, list):
+            columns = [
+                np.expand_dims(np.array(data_inputs)[:, i], axis=-1)
+                for i in self.column_selection
+            ]
+            return np.concatenate(columns, axis=-1)
+
+        if self.column_selection is None:
+            return data_inputs
+
+        raise ValueError(
+            'column selection type not supported : {0}\nSupported types'.format(
+                self.column_selection,
+                repr(ColumnSelectionType)
+            ))
 
 
 class ColumnsSelectorND(MetaStep):
