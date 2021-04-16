@@ -78,7 +78,7 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStep):
         return self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+            'BaseStep', DataContainer):
         """
         :param data_container: data container
         :param context: execution context
@@ -149,7 +149,6 @@ class TestOnlyWrapper(TrainOrTestOnlyWrapper):
         TrainOrTestOnlyWrapper.__init__(self, wrapped=wrapped, is_train_only=False)
 
 
-
 class ExecuteIf(HandleOnlyMixin, MetaStep):
     def __init__(self, condition_function: Callable, wrapped: BaseStep):
         MetaStep.__init__(self, wrapped)
@@ -171,6 +170,7 @@ class ExecuteIf(HandleOnlyMixin, MetaStep):
             return MetaStep._transform_data_container(self, data_container, context)
         return data_container
 
+
 class IfExecutionPhaseIsThen(ExecuteIf):
     """
     If, at runtime, the execution phase is the same as the one given to the constructor, then execute wrapped step.
@@ -178,7 +178,6 @@ class IfExecutionPhaseIsThen(ExecuteIf):
     By default, will raise an error if the execution phase is not specified in the context.
     Steps which implement ForceHandleMixin create context with unspecified phase on fit, fit_transform and transform call.
     """
-
 
     def __init__(self, phase: ExecutionPhase, wrapped: BaseTransformer, raise_if_phase_unspecified: bool = True):
         ExecuteIf.__init__(self, self.check_context, wrapped)
@@ -192,8 +191,10 @@ class IfExecutionPhaseIsThen(ExecuteIf):
             raise ValueError("Execution phase is unspecified while a step requires it to be specified.")
         return False
 
+
 class ExecutionPhaseSwitch(HandleOnlyMixin, TruncableSteps):
-    def __init__(self, phase_to_callable: Dict[ExecutionPhase, BaseTransformer], default: OptionalType[BaseTransformer] = None):
+    def __init__(self, phase_to_callable: Dict[ExecutionPhase, BaseTransformer],
+                 default: OptionalType[BaseTransformer] = None):
         phase, steps = zip(*phase_to_callable.items())
         if default:
             steps.append(default)
@@ -215,7 +216,7 @@ class ExecutionPhaseSwitch(HandleOnlyMixin, TruncableSteps):
             if self.default is None:
                 raise KeyError(f"No behaviour defined for {context.execution_phase}.")
             ind = -1
-        else :
+        else:
             ind = self.phase_to_step_index[context.execution_phase]
         self.steps_as_tuple[ind] = (self.steps_as_tuple[ind][0], step)
         return self
@@ -232,6 +233,7 @@ class ExecutionPhaseSwitch(HandleOnlyMixin, TruncableSteps):
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
             ('BaseTransformer', DataContainer):
         return self._get_step(context).handle_transform(data_container, context)
+
 
 class Optional(ForceHandleOnlyMixin, MetaStep):
     """
@@ -341,7 +343,6 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
         self.wrapped.set_hyperparams(hyperparams_space.nullify())
 
 
-
 class ChooseOneStepOf(FeatureUnion):
     CHOICE_HYPERPARAM = 'choice'
     """
@@ -384,7 +385,7 @@ class ChooseOneStepOf(FeatureUnion):
             self.update_hyperparams({
                 ChooseOneStepOf.CHOICE_HYPERPARAM: choices[0]
             })
-        else :
+        else:
             self.update_hyperparams({
                 ChooseOneStepOf.CHOICE_HYPERPARAM: hyperparams
             })
@@ -420,7 +421,8 @@ class ChooseOneStepOf(FeatureUnion):
 
     def _update_optional_hyperparams(self):
         step_names = list(self.keys())
-        chosen_step_name = self.hyperparams[self.CHOICE_HYPERPARAM] if self.CHOICE_HYPERPARAM in self.hyperparams else step_names[
+        chosen_step_name = self.hyperparams[self.CHOICE_HYPERPARAM] if self.CHOICE_HYPERPARAM in self.hyperparams else \
+        step_names[
             0]
 
         if chosen_step_name not in step_names:
