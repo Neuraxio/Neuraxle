@@ -127,6 +127,7 @@ class Trial:
         """
         Save fitted model in the trial hash folder.
         """
+        assert self.cache_folder is not None
         self._save_model(self.pipeline, label)
 
     def _save_model(self, pipeline: BaseStep, label: str):

@@ -246,6 +246,7 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         logger.info('\nnew trial: {}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
         return Trial(
+            cache_folder=self.cache_folder,
             save_trial_function=self.save_trial,
             logger=logger,
             hyperparams=hyperparams,
@@ -789,9 +790,11 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         if not self.multiprocess:
             for trial_number in range(self.n_trial):
                 self._attempt_trial(trial_number, validation_splits, context)
-        else :
+        else:
+            if isinstance(self.hyperparams_repository, InMemoryHyperparamsRepository):
+                raise ValueError("Cannot use InMemoryHyperparamsRepository for multiprocessing, use json-based repository.")
             # Notes on multiprocess :
-            #   Usage of a Thread/multiprocess-safe hyperparams repository is recommended, although it is, most of the time, not necessary.
+            #   Usage of a multiprocess-safe hyperparams repository is recommended, although it is, most of the time, not necessary.
             #   Beware of the behaviour of HyperparamsRepository's observers/subscribers.
             #   context instances are not shared between trial but copied. Pretty much everything is copied.
             context.logger.info(f"Number of processors available: {multiprocessing.cpu_count()}")
