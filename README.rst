@@ -157,7 +157,8 @@ Community
 For **technical questions**, please post them on
 `StackOverflow <https://stackoverflow.com/questions/tagged/neuraxle>`__
 using the ``neuraxle`` tag. The StackOverflow question will automatically
-be posted in Neuraxio's slack workspace in the #Neuraxle channel. 
+be posted in `Neuraxio's Slack
+workspace <https://join.slack.com/t/neuraxio/shared_invite/zt-8lyw42c5-4PuWjTT8dQqeFK3at1s_dQ>`__ and our `Gitter <https://gitter.im/Neuraxle/community>`__ in the #Neuraxle channel. 
 
 For **suggestions, feature requests, and error reports**, please
 open an `issue <https://github.com/Neuraxio/Neuraxle/issues>`__.
