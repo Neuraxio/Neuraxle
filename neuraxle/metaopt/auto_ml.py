@@ -869,7 +869,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         except self.error_types_to_raise as error:
             track = traceback.format_exc()
             repo_trial.set_failed(error)
-            context.logger.error(track)
+            context.logger.critical(track)
             raise error
         except Exception:
             track = traceback.format_exc()

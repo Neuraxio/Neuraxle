@@ -308,7 +308,7 @@ class CallbackList(BaseCallback):
                     is_finished_and_fitted = True
             except Exception as error:
                 track = traceback.format_exc()
-                trial.trial.logger.error("Error occured during CallbackList execution!")
+                trial.trial.logger.error("Error occured during CallbackList execution! At: {}".format(context.get_path()))
                 trial.trial.logger.error(track)
 
         return is_finished_and_fitted
