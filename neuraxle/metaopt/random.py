@@ -34,7 +34,7 @@ from neuraxle.base import MetaStep, BaseStep, ExecutionContext, ForceHandleOnlyM
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import RecursiveDict
 from neuraxle.steps.loop import StepClonerForEachDataInput
-from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnAxis
+from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnAxis, NumpyConcatenateInnerFeatures
 
 VALIDATION_SUB_DATA_CONTAINER_NAME = 'validation'
 
@@ -434,7 +434,7 @@ class AnchoredWalkForwardTimeSeriesCrossValidationWrapper(BaseCrossValidationWra
     """
 
     def __init__(self, minimum_training_size, validation_window_size=None, padding_between_training_and_validation=0,
-                 drop_remainder=False, scoring_function=r2_score, joiner=NumpyConcatenateOnAxis(axis=1)):
+                 drop_remainder=False, scoring_function=r2_score, joiner=NumpyConcatenateInnerFeatures()):
         """
         Create a anchored walk forward time series cross validation object.
 

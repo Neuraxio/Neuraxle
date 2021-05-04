@@ -28,7 +28,6 @@ import traceback
 from abc import ABC, abstractmethod
 from typing import Callable
 
-from neuraxle.base import ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.metaopt.trial import TrialSplit
 
@@ -254,11 +253,10 @@ class StepSaverCallback(BaseCallback):
         return False
 
 
-def SaveBestModelCallback():
+def BestModelCheckpoint():
     """
-    Saves the pipeline model when the a new best validation score is reached.
+    Saves the pipeline model in a folder named "best" when the a new best validation score is reached.
     It is important to note that when refit=True, an AutoML loop will overwrite the best model after refitting.
-    :return:
     """
     return IfBestScore(StepSaverCallback('best'))
 
@@ -346,27 +344,25 @@ class MetricCallback(BaseCallback):
         self.higher_score_is_better = higher_score_is_better
         self.log_metrics = log_metrics
 
-    def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
+    def call(self, ts: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
              is_finished_and_fitted: bool):
         train_score = self.metric_function(pred_train.expected_outputs, pred_train.data_inputs)
         validation_score = self.metric_function(pred_val.expected_outputs, pred_val.data_inputs)
 
-        trial.add_metric_results_train(
+        ts.add_metric_results_train(
             name=self.name,
             score=train_score,
-            higher_score_is_better=self.higher_score_is_better
+            higher_score_is_better=self.higher_score_is_better,
+            logger=(ts.trial.logger if self.log_metrics else None)
         )
 
-        trial.add_metric_results_validation(
+        ts.add_metric_results_validation(
             name=self.name,
             score=validation_score,
-            higher_score_is_better=self.higher_score_is_better
+            higher_score_is_better=self.higher_score_is_better,
+            logger=(ts.trial.logger if self.log_metrics else None)
         )
-
-        if self.log_metrics:
-            trial.trial.logger.info('{} train: {}'.format(self.name, train_score))
-            trial.trial.logger.info('{} validation: {}'.format(self.name, validation_score))
 
         return False
 

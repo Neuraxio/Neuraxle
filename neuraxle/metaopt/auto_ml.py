@@ -319,7 +319,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
         if trial.status in (TRIAL_STATUS.SUCCESS, TRIAL_STATUS.FAILED):
             self.json_path_remove_on_update = None
-        else :
+        else:
             self.json_path_remove_on_update = trial_file_path
 
         # Sleeping to have a valid time difference between files when reloading them to sort them by creation time:
@@ -647,9 +647,6 @@ class Trainer:
             # Saves the metrics
             trial_split.save_parent_trial()
 
-            # Saves the metrics
-            trial_split.save_parent_trial()
-
         return trial_split
 
     def refit(self, p: BaseStep, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
@@ -709,6 +706,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         :class:`~neuraxle.metaopt.trial.Trials`,
         :class:`HyperparamsRepository`,
         :class:`InMemoryHyperparamsRepository`,
+        :class:`BaseValidationSplitter`,
         :class:`HyperparamsJSONRepository`,
         :class:`BaseHyperparameterSelectionStrategy`,
         :class:`RandomSearchHyperparameterSelectionStrategy`,
@@ -728,10 +726,30 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             callbacks: List[BaseCallback] = None,
             refit_scoring_function: Callable = None,
             cache_folder_when_no_handle=None,
-            multiprocess=False,
-            n_processes=None,
+            n_jobs=-1,
             continue_loop_on_error=True
     ):
+        """
+        Notes on multiprocess :
+              Usage of a multiprocess-safe hyperparams repository is recommended, although it is, most of the time, not necessary.
+              Beware of the behaviour of HyperparamsRepository's observers/subscribers.
+              Context instances are not shared between trial but copied. So is the AutoML loop and the DataContainers.
+
+
+        :param pipeline: The pipeline, or BaseStep, which will be use by the AutoMLloop
+        :param validation_splitter: A :class:`BaseValidationSplitter` instance to split data between training and validation set.
+        :param refit_trial: A boolean indicating whether to perform, after ,  a fit call with
+        :param scoring_callback: The scoring callback to use during training
+        :param hyperparams_optimizer: a :class:`BaseHyperparameterSelectionStrategy` instance that can be queried for new sets of hyperparameters.
+        :param hyperparams_repository: a :class:`HyperparamsRepository` instance to store experiement status and results.
+        :param n_trials: The number of different hyperparameters to try.
+        :param epochs: The number of epoch to perform for each trial.
+        :param callbacks: A list of callbacks to perform after each epoch.
+        :param refit_scoring_function: A scoring function to use on a refit call
+        :param cache_folder_when_no_handle: default cache folder used if auto_ml_loop isn't called through handler functions.
+        :param n_jobs: If n_jobs in (-1, None, 1), then automl is executed in a single thread. if n_jobs > 1, then n_jobs thread are launched, if n_jobs < -1 then (n_cpus + 1 + n_jobs) thread are launched.
+        :param continue_loop_on_error:
+        """
         BaseStep.__init__(self)
         ForceHandleMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
 
@@ -755,8 +773,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         self.refit_scoring_function: Callable = refit_scoring_function
 
         self.refit_trial: bool = refit_trial
-        self.multiprocess = multiprocess
-        self.n_processes = n_processes
+        self.n_jobs = n_jobs
 
         self.error_types_to_raise = (SystemError, SystemExit, EOFError, KeyboardInterrupt) if continue_loop_on_error \
             else (Exception,)
@@ -787,19 +804,20 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         # Keeping a reference of the main logger
         main_logger = context.logger
 
-        if not self.multiprocess:
+        if self.n_jobs in (-1, None, 1):
             for trial_number in range(self.n_trial):
                 self._attempt_trial(trial_number, validation_splits, context)
         else:
-            if isinstance(self.hyperparams_repository, InMemoryHyperparamsRepository):
-                raise ValueError("Cannot use InMemoryHyperparamsRepository for multiprocessing, use json-based repository.")
-            # Notes on multiprocess :
-            #   Usage of a multiprocess-safe hyperparams repository is recommended, although it is, most of the time, not necessary.
-            #   Beware of the behaviour of HyperparamsRepository's observers/subscribers.
-            #   context instances are not shared between trial but copied. Pretty much everything is copied.
             context.logger.info(f"Number of processors available: {multiprocessing.cpu_count()}")
 
-            with multiprocessing.get_context("spawn").Pool(processes=self.n_processes) as pool:
+            if isinstance(self.hyperparams_repository, InMemoryHyperparamsRepository):
+                raise ValueError("Cannot use InMemoryHyperparamsRepository for multiprocessing, use json-based repository.")
+
+            n_jobs = self.n_jobs
+            if n_jobs < -1:
+                n_jobs = multiprocessing.cpu_count() + 1 + self.n_jobs
+
+            with multiprocessing.get_context("spawn").Pool(processes=n_jobs) as pool:
                 args = [(self, trial_number, validation_splits, context) for trial_number in range(self.n_trial)]
                 pool.starmap(AutoML._attempt_trial, args)
 
@@ -866,7 +884,6 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             context.logger.error(track)
         finally:
             repo_trial.update_final_trial_status()
-            self.hyperparams_repository.save_trial(repo_trial)
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
             ('BaseStep', DataContainer):

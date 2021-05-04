@@ -11,7 +11,7 @@ from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, RandomSearchHyperparameterSelectionStrategy, \
     HyperparamsJSONRepository, \
     ValidationSplitter, KFoldCrossValidationSplitter, Trainer
-from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback, EarlyStoppingCallback, SaveBestModelCallback
+from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback, EarlyStoppingCallback, BestModelCheckpoint
 from neuraxle.metaopt.trial import Trial, Trials
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import MultiplyByN, NumpyReshape
@@ -74,7 +74,7 @@ def test_automl_savebestmodel_callback(tmpdir):
         hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
-            SaveBestModelCallback()
+            BestModelCheckpoint()
         ],
         n_trials=1,
         epochs=10,

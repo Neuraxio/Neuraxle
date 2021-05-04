@@ -123,11 +123,12 @@ class NumpyColumnSelector2D(BaseTransformer):
 
 class ColumnsSelectorND(MetaStep):
     """
-    ColumnSelectorND wraps a ColumnSelector2D by as many ForEach step
-    as needed to select the last dimension.
+    ColumnSelectorND wraps a ColumnSelector2D by as many ForEach step as needed to select the last dimension.
+    n_dimension must therefore be greater or equal to 2.
     """
 
     def __init__(self, columns_selection, n_dimension=3):
+        assert n_dimension >= 2
         col_selector: ColumnSelector2D = ColumnSelector2D(columns_selection=columns_selection)
         for _ in range(min(0, n_dimension - 2)):
             col_selector = ForEach(col_selector)

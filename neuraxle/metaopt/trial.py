@@ -430,7 +430,7 @@ class TrialSplit:
 
         return self
 
-    def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool):
+    def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool, logger: Logger):
         """
         Add a train metric result in the metric results dictionary.
 
@@ -448,7 +448,11 @@ class TrialSplit:
 
         self.metrics_results[name]['train_values'].append(score)
 
-    def add_metric_results_validation(self, name: str, score: float, higher_score_is_better: bool):
+        if logger:
+            logger.info('{} train: {}'.format(self.name, score))
+
+
+    def add_metric_results_validation(self, name: str, score: float, higher_score_is_better: bool, logger: Logger):
         """
         Add a validation metric result in the metric results dictionary.
 
@@ -465,6 +469,10 @@ class TrialSplit:
             }
 
         self.metrics_results[name]['validation_values'].append(score)
+
+        if logger:
+            logger.info('{} validation: {}'.format(self.name, score))
+
 
     def get_validation_scores(self):
         """
@@ -689,9 +697,7 @@ class Trials:
 
     def get_best_trial(self) -> Trial:
         """
-        Get trial with best score from all trials.
-
-        :return:
+        :return: trial with best score from all trials
         """
         best_score, best_trial = None, None
 
