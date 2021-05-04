@@ -28,9 +28,8 @@ import os
 import traceback
 from enum import Enum
 from logging import Logger
-from typing import Dict, List, Callable, Iterable
+from typing import Dict, List, Callable, Iterable, Tuple
 
-from typing import Dict, List, Tuple
 import numpy as np
 
 from neuraxle.base import BaseStep, ExecutionContext
@@ -123,7 +122,7 @@ class Trial:
         self.save_trial()
         return trial_split
 
-    def save_model(self, label:str):
+    def save_model(self, label: str):
         """
         Save fitted model in the trial hash folder.
         """
@@ -146,7 +145,6 @@ class Trial:
         trial_hash = self._get_trial_hash(hyperparams)
         path = os.path.join(self.cache_folder, label)
         return ExecutionContext(path).load(trial_hash)
-
 
     def set_main_metric_name(self, name: str) -> 'Trial':
         """
@@ -390,7 +388,7 @@ class TrialSplit:
         self.trial.save_trial()
         return self
 
-    def save_model(self, label:str):
+    def save_model(self, label: str):
         """
         Saves the pipeline instance the same way a Trial instance would. Will overwrite
         :return:
@@ -430,7 +428,7 @@ class TrialSplit:
 
         return self
 
-    def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool, logger: Logger):
+    def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool, log_metric: bool):
         """
         Add a train metric result in the metric results dictionary.
 
@@ -448,11 +446,10 @@ class TrialSplit:
 
         self.metrics_results[name]['train_values'].append(score)
 
-        if logger:
-            logger.info('{} train: {}'.format(self.name, score))
+        if log_metric:
+            self.trial.logger.info('{} train: {}'.format(name, score))
 
-
-    def add_metric_results_validation(self, name: str, score: float, higher_score_is_better: bool, logger: Logger):
+    def add_metric_results_validation(self, name: str, score: float, higher_score_is_better: bool, log_metric: bool):
         """
         Add a validation metric result in the metric results dictionary.
 
@@ -470,9 +467,8 @@ class TrialSplit:
 
         self.metrics_results[name]['validation_values'].append(score)
 
-        if logger:
-            logger.info('{} validation: {}'.format(self.name, score))
-
+        if log_metric:
+            self.trial.logger.info('{} validation: {}'.format(name, score))
 
     def get_validation_scores(self):
         """
@@ -714,7 +710,8 @@ class Trials:
 
         return best_trial
 
-    def split_good_and_bad_trials(self, quantile_threshold: float, number_of_good_trials_max_cap: int) -> Tuple['Trials', 'Trials']:
+    def split_good_and_bad_trials(self, quantile_threshold: float, number_of_good_trials_max_cap: int) -> Tuple[
+        'Trials', 'Trials']:
         success_trials: Trials = self.filter(TRIAL_STATUS.SUCCESS)
 
         # Split trials into good and bad using quantile threshold.
