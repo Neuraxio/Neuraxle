@@ -54,7 +54,7 @@ def test_automl_early_stopping_callback(tmpdir):
     assert len(trial.validation_splits) == 1
     validation_scores = trial.validation_splits[0].get_validation_scores()
     nepochs_executed = len(validation_scores)
-    assert nepochs_executed == max_epochs_without_improvement +1
+    assert nepochs_executed == max_epochs_without_improvement + 1
     
 
 @pytest.mark.skip

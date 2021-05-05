@@ -428,7 +428,7 @@ class TrialSplit:
 
         return self
 
-    def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool, log_metric: bool):
+    def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool, log_metric: bool=False):
         """
         Add a train metric result in the metric results dictionary.
 
@@ -449,7 +449,7 @@ class TrialSplit:
         if log_metric:
             self.trial.logger.info('{} train: {}'.format(name, score))
 
-    def add_metric_results_validation(self, name: str, score: float, higher_score_is_better: bool, log_metric: bool):
+    def add_metric_results_validation(self, name: str, score: float, higher_score_is_better: bool, log_metric: bool=False):
         """
         Add a validation metric result in the metric results dictionary.
 

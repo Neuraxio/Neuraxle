@@ -634,7 +634,7 @@ class Trainer:
 
 
             if self.callbacks.call(
-                    trial=trial_split,
+                    trial_split=trial_split,
                     epoch_number=i,
                     total_epochs=self.epochs,
                     input_train=train_data_container,
