@@ -874,6 +874,7 @@ class RandInt(DiscreteHyperparameterDistribution):
 
     def __str__(self):
         return self.__class__.__name__ + "("+"max_included=" + str(self.max_included)+", min_included=" + str(self.max_included)+")"
+      
 
 class Uniform(HyperparameterDistribution):
     """Get a uniform distribution."""

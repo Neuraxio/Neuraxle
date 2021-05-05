@@ -23,6 +23,7 @@ Those steps works with scikit-learn (sklearn) transformers and estimators.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
+import functools
 import inspect
 from typing import Any
 
@@ -30,7 +31,7 @@ from sklearn.base import BaseEstimator
 from sklearn.ensemble import BaseEnsemble
 from sklearn.linear_model import Ridge
 
-from neuraxle.base import BaseStep
+from neuraxle.base import BaseStep, ExecutionContext
 from neuraxle.hyperparams.distributions import LogUniform, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
 from neuraxle.steps.numpy import NumpyTranspose
@@ -44,7 +45,8 @@ class SKLearnWrapper(BaseStep):
             hyperparams_space: HyperparameterSpace = None,
             return_all_sklearn_default_params_on_get: bool = False,
             use_partial_fit: bool = False,
-            use_predict_proba: bool = False
+            use_predict_proba: bool = False,
+            partial_fit_kwargs: dict = {}
     ):
         if not isinstance(wrapped_sklearn_predictor, BaseEstimator):
             raise ValueError("The wrapped_sklearn_predictor must be an instance of scikit-learn's BaseEstimator.")
@@ -55,8 +57,17 @@ class SKLearnWrapper(BaseStep):
         BaseStep.__init__(self, hyperparams=params, hyperparams_space=hyperparams_space)
         self.return_all_sklearn_default_params_on_get = return_all_sklearn_default_params_on_get
         self.name += "_" + wrapped_sklearn_predictor.__class__.__name__
-        self.partial_fit: bool = use_partial_fit
+        self.use_partial_fit: bool = use_partial_fit
+        if self.use_partial_fit:
+            self.partial_fit_kwargs = partial_fit_kwargs
         self.use_predict_proba: bool = use_predict_proba
+
+    def setup(self, context: ExecutionContext = None) -> 'SKLearnWrapper':
+        BaseStep.setup(self, context)
+        if self.use_partial_fit:
+            self.wrapped_sklearn_predictor.fit = functools.partial(self.wrapped_sklearn_predictor.partial_fit,
+                                                                   **self.partial_fit_kwargs)
+        return self
 
     def _delete_base_estimator_from_dict(self, params):
         """
@@ -79,15 +90,12 @@ class SKLearnWrapper(BaseStep):
         return self, self.transform(data_inputs)
 
     def _sklearn_fit_transform_with_expected_outputs(self, data_inputs, expected_outputs):
-        if self.partial_fit:
-            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.partial_fit(data_inputs, expected_outputs)
-        else:
-            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs, expected_outputs)
+        self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs, expected_outputs)
         return self.transform(data_inputs)
 
     def _sklearn_fit_transform_without_expected_outputs(self, data_inputs):
-        if self.partial_fit:
-            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.partial_fit(data_inputs)
+        if self.use_partial_fit:
+            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs)
             out = self.transform(data_inputs)
         else:
             out = self.wrapped_sklearn_predictor.fit_transform(data_inputs)
@@ -101,16 +109,10 @@ class SKLearnWrapper(BaseStep):
         return self
 
     def _sklearn_fit_with_expected_outputs(self, data_inputs, expected_outputs):
-        if self.partial_fit:
-            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.partial_fit(data_inputs, expected_outputs)
-        else:
-            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs, expected_outputs)
+        self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs, expected_outputs)
 
     def _sklearn_fit_without_expected_outputs(self, data_inputs):
-        if self.partial_fit:
-            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.partial_fit(data_inputs)
-        else:
-            self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs)
+        self.wrapped_sklearn_predictor = self.wrapped_sklearn_predictor.fit(data_inputs)
 
     def transform(self, data_inputs):
         if self.use_predict_proba and hasattr(self.wrapped_sklearn_predictor, 'predict_proba'):

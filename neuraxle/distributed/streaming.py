@@ -313,9 +313,9 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
     :param data_joiner: transformer step to join streamed batches together at the end of the pipeline
     :param use_threading: (Optional.) use threading for parallel processing. multiprocessing.context.Process is used by default.
     :param use_savers: use savers to serialize steps for parallel processing.
-    :param include_incomplete_batch: (Optional.) A bool representing
+    :param keep_incomplete_batch: (Optional.) A bool representing
     whether the last batch should be dropped in the case it has fewer than
-    `batch_size` elements; the default behavior is not to drop the smaller
+    `batch_size` elements; the default behavior is to keep the smaller
     batch.
     :param default_value_data_inputs: expected_outputs default fill value
     for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
@@ -341,7 +341,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             data_joiner = None,
             use_threading: bool = False,
             use_savers: bool = False,
-            include_incomplete_batch: bool = False,
+            keep_incomplete_batch: bool = True,
             default_value_data_inputs: Union[Any, AbsentValuesNullObject] = None,
             default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = None,
             cache_folder: str = None,
@@ -356,7 +356,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         self.use_savers = use_savers
 
         self.batch_size: int = batch_size
-        self.include_incomplete_batch: bool = include_incomplete_batch
+        self.keep_incomplete_batch: bool = keep_incomplete_batch
         self.default_value_data_inputs: Union[Any, AbsentValuesNullObject] = default_value_data_inputs
         self.default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = default_value_expected_outputs
 
@@ -365,7 +365,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             steps=self._initialize_steps_as_tuple(steps),
             cache_folder=cache_folder,
             batch_size=batch_size,
-            include_incomplete_batch=include_incomplete_batch,
+            keep_incomplete_batch=keep_incomplete_batch,
             default_value_data_inputs=default_value_data_inputs,
             default_value_expected_outputs=default_value_expected_outputs
         )
@@ -507,7 +507,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         """
         data_container_batches = data_container.minibatches(
             batch_size=self.batch_size,
-            include_incomplete_batch=self.include_incomplete_batch,
+            keep_incomplete_batch=self.keep_incomplete_batch,
             default_value_data_inputs=self.default_value_data_inputs,
             default_value_expected_outputs=self.default_value_expected_outputs
         )
@@ -600,7 +600,7 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
         """
         return data_container.get_n_batches(
             batch_size=self.batch_size,
-            include_incomplete_batch=self.include_incomplete_batch
+            keep_incomplete_batch=self.keep_incomplete_batch
         )
 
     def connect_queued_pipeline(self):

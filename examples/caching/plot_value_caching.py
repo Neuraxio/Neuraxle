@@ -29,7 +29,7 @@ import numpy as np
 
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.caching import PickleValueCachingWrapper
-from neuraxle.steps.loop import ForEachDataInput
+from neuraxle.steps.loop import ForEach
 from neuraxle.steps.misc import Sleep
 from neuraxle.steps.numpy import MultiplyByN
 
@@ -46,7 +46,7 @@ def main():
     for i in range(5):
         p = Pipeline([
             PickleValueCachingWrapper(
-                ForEachDataInput(Pipeline([Sleep(sleep_time=sleep_time), MultiplyByN(2)])),
+                ForEach(Pipeline([Sleep(sleep_time=sleep_time), MultiplyByN(2)])),
                 cache_folder=value_caching_folder
             )
         ])
@@ -59,7 +59,7 @@ def main():
     a = time.time()
     for i in range(5):
         p = Pipeline([
-            ForEachDataInput(Pipeline([Sleep(sleep_time=sleep_time), MultiplyByN(2)])),
+            ForEach(Pipeline([Sleep(sleep_time=sleep_time), MultiplyByN(2)])),
         ])
 
         outputs_vanilla = p.transform(data_inputs)

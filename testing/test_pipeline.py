@@ -22,12 +22,12 @@ Tests for Pipelines
 import numpy as np
 import pytest
 
+from neuraxle.base import ExecutionContext, NonTransformableMixin, BaseStep, BaseTransformer, _FittableStep
 from neuraxle.hyperparams.distributions import RandInt, LogUniform
-from neuraxle.hyperparams.space import HyperparameterSpace, RecursiveDict
+from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction
 from neuraxle.steps.numpy import NumpyTranspose
-from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.union import Identity, AddFeatures, ModelStacking
 from testing.mocks.step_mocks import SomeStep, AN_INPUT, AN_EXPECTED_OUTPUT
 
@@ -407,3 +407,34 @@ def test_hyperparam_space():
     assert 'ModelStacking__SomeStep1__n_estimators' in flat_hyperparams_keys
     assert 'ModelStacking__SomeStep2__max_depth' in flat_hyperparams_keys
     assert 'ModelStacking__SomeStep3__max_depth' in flat_hyperparams_keys
+
+
+def test_pipeline_setup_incrementally():
+    class SomeStepThatFits(NonTransformableMixin, BaseStep):
+        def __init__(self):
+            BaseStep.__init__(self)
+            self.has_fitted = False
+
+        def fit(self, data_inputs, expected_outputs=None) -> _FittableStep:
+            self.has_fitted = True
+            return self
+
+    class StepWithSensitiveSetup(Identity):
+        """ Asserts that step given in argument has fitted before performing setup"""
+
+        def __init__(self):
+            Identity.__init__(self)
+
+        def setup(self, context: ExecutionContext = None) -> BaseTransformer:
+            assert some_step.has_fitted is True
+            assert some_step2.has_fitted is False
+            return self
+
+    some_step = SomeStepThatFits()
+    some_step2 = SomeStepThatFits()
+
+    p = Pipeline([some_step,
+                  StepWithSensitiveSetup(),
+                  some_step2])
+
+    p.fit_transform(None, None)

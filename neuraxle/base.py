@@ -26,6 +26,7 @@ This is the core of Neuraxle. Most pipeline steps derive (inherit) from those cl
 
 import hashlib
 import inspect
+import logging
 import os
 import pprint
 import traceback
@@ -43,6 +44,9 @@ from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSample
 
 DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
 
+LOGGER_FORMAT = "[%(asctime)s][%(levelname)s][%(module)s][%(lineno)d]: %(message)s"
+DATE_FORMAT = "%H:%M:%S"
+logging.basicConfig(format=LOGGER_FORMAT, datefmt=DATE_FORMAT, level=logging.INFO)
 
 class BaseHasher(ABC):
     """
@@ -342,7 +346,8 @@ class ExecutionContext:
             execution_mode: ExecutionMode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM,
             stripped_saver: BaseSaver = None,
             parents: List['BaseStep'] = None,
-            services: Dict[Type, object] = None
+            services: Dict[Type, object] = None,
+            logger: logging.Logger = None
     ):
 
         self.execution_mode = execution_mode
@@ -360,6 +365,10 @@ class ExecutionContext:
         if services is None:
             services: Dict[Type, object] = dict()
         self.services: Dict[Type, object] = services
+
+        if logger is None:
+            logger = logging.getLogger()
+        self.logger = logger
 
     def set_execution_phase(self, phase: ExecutionPhase) -> 'ExecutionContext':
         """
@@ -417,6 +426,10 @@ class ExecutionContext:
         :return: if the service registered or not
         """
         return service_abstract_class_type in self.services
+
+    def set_logger(self, logger):
+        self.logger = logger
+        return self
 
     def get_execution_mode(self) -> ExecutionMode:
         return self.execution_mode
@@ -495,7 +508,8 @@ class ExecutionContext:
             execution_mode=self.execution_mode,
             execution_phase=self.execution_phase,
             parents=self.parents + [step],
-            services=self.services
+            services=self.services,
+            logger=self.logger
         )
 
     def copy(self):
@@ -504,7 +518,8 @@ class ExecutionContext:
             execution_mode=self.execution_mode,
             execution_phase=self.execution_phase,
             parents=copy(self.parents),
-            services=self.services
+            services=self.services,
+            logger=self.logger
         )
 
     def peek(self) -> 'BaseTransformer':
@@ -886,6 +901,16 @@ class _TransformerStep(ABC):
         :return: tuple(fitted pipeline, data_container)
         """
         return self, self.handle_transform(data_container, context)
+
+    def fit(self, data_inputs, expected_outputs) -> '_TransformerStep':
+        """
+        Fit given data inputs. By default, a step only transforms in the fit transform method.
+        To add fitting to your step, see class:`_FittableStep` for more info.
+        :param data_inputs: data inputs
+        :param expected_outputs: expected outputs to fit on
+        :return: transformed data inputs
+        """
+        return self
 
     def fit_transform(self, data_inputs, expected_outputs=None):
         """
@@ -1694,6 +1719,9 @@ class _HasSavers(ABC):
         def _initialize_if_needed(step):
             if not step.is_initialized:
                 step.setup(context=context)
+            if not step.is_initialized:
+                raise NotImplementedError(f"The `setup` method of the following class "
+                                          f"failed to set `self.is_initialized` to True: {step.__class__.__name__}.")
             return RecursiveDict()
 
         def _invalidate(step):
@@ -2370,8 +2398,8 @@ class _HasChildrenMixin(MixinForBaseTransformer):
     def _apply_childrens(self, results: RecursiveDict, method: Union[str, Callable],
                          ra: _RecursiveArguments) -> RecursiveDict:
         for children in self.get_children():
-            children_results = children.apply(method=method, ra=ra[children.get_name()])
-            results[children.get_name()] = RecursiveDict(children_results)
+            children_results: RecursiveDict = children.apply(method=method, ra=ra[children.get_name()])
+            results[children.get_name()] = children_results
 
         return results
 
@@ -2487,9 +2515,6 @@ class MetaStepMixin(_HasChildrenMixin):
         """
         return self.wrapped
 
-    def get_best_model(self) -> BaseStep:
-        return self.best_model
-
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
         previous_summary_id = data_container.summary_id
         new_self, data_container = super().handle_fit_transform(data_container, context)
@@ -2566,6 +2591,8 @@ class MetaStepMixin(_HasChildrenMixin):
         return [self.wrapped]
 
     def get_step_by_name(self, name):
+        if self.name == name:
+            return self
         if self.wrapped.name == name:
             return self.wrapped
         return self.wrapped.get_step_by_name(name)
@@ -2580,7 +2607,7 @@ class MetaStepMixin(_HasChildrenMixin):
         :return: self, a copy of self, or even perhaps a new or different BaseStep object.
         """
         new_self = super().mutate(new_method, method_to_assign_to, warn)
-        self.wrapped = self.wrapped.mutate(new_method, method_to_assign_to, warn)
+        new_self.wrapped = self.wrapped.mutate(new_method, method_to_assign_to, warn)
 
         return new_self
 
@@ -2734,6 +2761,9 @@ class NonTransformableMixin(MixinForBaseTransformer):
         fit methods are not implemented
     """
 
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        return self._fit_data_container(data_container, context), data_container
+
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         Do nothing - return the same data.
@@ -2818,7 +2848,7 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         step.steps_as_tuple = []
 
         for step_name, savers in step.sub_steps_savers:
-            if savers is None:
+            if (savers is None):
                 # keep step as it is if it hasn't been saved
                 step.steps_as_tuple.append((step_name, step[step_name]))
             else:
@@ -2851,10 +2881,12 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
             self,
             steps_as_tuple: NamedTupleList,
             hyperparams: HyperparameterSamples = dict(),
-            hyperparams_space: HyperparameterSpace = dict()
+            hyperparams_space: HyperparameterSpace = dict(),
+            mute_step_renaming_warning: bool = True,
     ):
         BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         _HasChildrenMixin.__init__(self)
+        self.warn_step_renaming = not mute_step_renaming_warning
         self.set_steps(steps_as_tuple)
         self.set_savers([TruncableJoblibStepSaver()] + self.savers)
 
@@ -2971,9 +3003,10 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         for class_name, step in steps_as_tuple:
             _name = class_name
             if class_name in names_yet:
-                warnings.warn(
-                    "Named pipeline tuples must be unique. "
-                    "Will rename '{}' because it already exists.".format(class_name))
+                if self.warn_step_renaming:
+                    warnings.warn(
+                        "Named pipeline tuples must be unique. "
+                        "Will rename '{}' because it already exists.".format(class_name))
 
                 _name = self._rename_step(step_name=_name, class_name=class_name, names_yet=names_yet)
                 step.set_name(_name)
@@ -3043,7 +3076,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
             :func:`~neuraxle.base.BaseStep.inverse_transform`
         """
         if self.pending_mutate[0] is None:
-            new_base_step = self
+            new_base_step = BaseStep.mutate(self, new_method, method_to_assign_to, warn)
             self.pending_mutate = (new_base_step, self.pending_mutate[1], self.pending_mutate[2])
 
             new_base_step.steps_as_tuple = [
@@ -3054,8 +3087,10 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
                 for k, v in new_base_step.steps_as_tuple
             ]
             new_base_step._refresh_steps()
-            return BaseStep.mutate(self, new_method, method_to_assign_to, warn)
+            return new_base_step
         else:
+            # Since we're remplacing ourselves with a new step, we don't have to call mutate on our childrens since
+            # they won't exist afterward.
             return BaseStep.mutate(self, new_method, method_to_assign_to, warn)
 
     def _step_index_to_name(self, step_index):
@@ -3423,8 +3458,7 @@ class HandleOnlyMixin(MixinForBaseTransformer):
     """
 
     @abstractmethod
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
-            ('BaseTransformer', DataContainer):
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseTransformer':
         raise NotImplementedError('Must implement _fit_data_container in {0}'.format(self.name))
 
     @abstractmethod
@@ -3434,7 +3468,7 @@ class HandleOnlyMixin(MixinForBaseTransformer):
     @abstractmethod
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
             ('BaseTransformer', DataContainer):
-        raise NotImplementedError('Must implement handle_fit_transform in {0}'.format(self.name))
+        raise NotImplementedError('Must implement _fit_transform_data_container in {0}'.format(self.name))
 
     def transform(self, data_inputs) -> 'HandleOnlyMixin':
         raise Exception(
@@ -3705,7 +3739,19 @@ class AssertExpectedOutputIsNoneMixin(WillProcessAssertionMixin):
         eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
         if not eo_empty:
             raise AssertionError(
-                f"Expected datacontainer.expected_output to be a `None` or a list of `None`. Received {data_container.expected_outputs}.")
+                f"Expected datacontainer.expected_outputs to be a `None` or a list of `None`. Received {data_container.expected_outputs}.")
+
+class AssertExpectedOutputIsNotNoneMixin(WillProcessAssertionMixin):
+    def _assert(self, data_container: DataContainer, context: ExecutionContext):
+        eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
+        if eo_empty:
+            raise AssertionError(
+                f"Expected datacontainer.expected_outputs to not be a `None` or a list of `None`. Received {data_container.expected_outputs}.")
+
+class AssertExpectedOutputIsNoneStep(AssertExpectedOutputIsNoneMixin, Identity):
+    def __init__(self):
+        Identity.__init__(self)
+        AssertExpectedOutputIsNoneMixin.__init__(self)
 
 
 class AssertExpectedOutputIsNone(AssertExpectedOutputIsNoneMixin, Identity):

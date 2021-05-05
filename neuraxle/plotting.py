@@ -206,14 +206,14 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
 
                 self._show_or_save_plot(plotting_file)
 
-    def on_complete(self, value: Tuple[HyperparamsRepository, Trial]):
+    def on_complete(self, value: HyperparamsRepository):
         """
         Plot trial metric results upon completion.
 
         :param value: hyperparams_repository, trial
         :return:
         """
-        repo, trial = value
+        repo = value
         trials: Trials = repo.load_all_trials(TRIAL_STATUS.SUCCESS)
         if not self.plot_all_trials_on_complete:
             return
@@ -231,7 +231,7 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
         n_splits = trials.get_number_of_split()
         metric_names = trials.get_metric_names()
         for metric_name in metric_names:
-            if not isinstance(trials[0].get_metric_validation_results(metric_name=metric_name)[0], (float, int)):
+            if not isinstance(trials[0][0].get_metric_validation_results(metric_name=metric_name)[0], (float, int)):
                 continue  # TODO : this is a quick fix for compatibility with other types of metric.
 
             for split_number in range(n_splits):
