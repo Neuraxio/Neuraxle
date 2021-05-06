@@ -504,7 +504,7 @@ class Trainer:
         self.hyperparams_repository: HyperparamsRepository = hyperparams_repository
 
 
-    def train(self, pipeline: BaseStep, data_inputs, expected_outputs=None, context: ExecutionContext=None) -> Trial:
+    def train(self, pipeline: BaseStep, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Trial:
         """
         Train pipeline using the validation splitter.
         Track training, and validation metrics for each epoch.
@@ -628,10 +628,12 @@ class Trainer:
 
         for i in range(self.epochs):
             context.logger.info('epoch {}/{}'.format(i + 1, self.epochs))
-            trial_split = trial_split.fit_trial_split(train_data_container.copy(), context.copy().set_execution_phase(ExecutionPhase.TRAIN))
-            y_pred_train = trial_split.predict_with_pipeline(train_data_container.copy(), context.copy().set_execution_phase(ExecutionPhase.VALIDATION))
-            y_pred_val = trial_split.predict_with_pipeline(validation_data_container.copy(), context.copy().set_execution_phase(ExecutionPhase.VALIDATION))
-
+            trial_split = trial_split.fit_trial_split(train_data_container.copy(), 
+                                                      context.copy().set_execution_phase(ExecutionPhase.TRAIN))
+            y_pred_train = trial_split.predict_with_pipeline(train_data_container.copy(), 
+                                                             context.copy().set_execution_phase(ExecutionPhase.VALIDATION))
+            y_pred_val = trial_split.predict_with_pipeline(validation_data_container.copy(),
+                                                           context.copy().set_execution_phase(ExecutionPhase.VALIDATION))
 
             if self.callbacks.call(
                     trial_split=trial_split,
@@ -1014,14 +1016,17 @@ class BaseValidationSplitter(ABC):
         :param data_container: data container to split
         :return: a function that returns the pairs of training, and validation data containers for each validation split.
         """
-        train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = self.split(
+        train_data_inputs, train_expected_outputs, train_current_ids, validation_data_inputs, validation_expected_outputs, validation_current_ids = self.split(
             data_inputs=data_container.data_inputs,
             expected_outputs=data_container.expected_outputs,
             context=context
         )
 
-        train_data_container = DataContainer(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
+        train_data_container = DataContainer(data_inputs=train_data_inputs,
+                                             current_ids=train_current_ids,
+                                             expected_outputs=train_expected_outputs)
         validation_data_container = DataContainer(data_inputs=validation_data_inputs,
+                                                  current_ids=validation_current_ids,
                                                   expected_outputs=validation_expected_outputs)
 
         splits = []
@@ -1044,15 +1049,16 @@ class BaseValidationSplitter(ABC):
         return splits
 
     @abstractmethod
-    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[
-        List, List, List, List]:
+    def split(self, data_inputs, current_ids=None, expected_outputs=None, context: ExecutionContext = None) \
+            -> Tuple[List, List, List, List, List, List]:
         """
         Train/Test split data inputs and expected outputs.
 
         :param data_inputs: data inputs
+        :param current_ids: id associated with each data entry (optional)
         :param expected_outputs: expected outputs (optional)
         :param context: execution context (optional)
-        :return: data_inputs_train, expected_outputs_train, data_inputs_validation, expected_outputs_validation
+        :return: train_data_inputs, train_expected_outputs, train_current_ids, validation_data_inputs, validation_expected_outputs, validation_current_ids
         """
         pass
 
@@ -1075,22 +1081,32 @@ class KFoldCrossValidationSplitter(BaseValidationSplitter):
         BaseValidationSplitter.__init__(self)
         self.k_fold = k_fold
 
-    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[
-        List, List, List, List]:
+    def split(self, data_inputs, current_ids=None, expected_outputs=None, context: ExecutionContext = None) \
+            -> Tuple[List, List, List, List, List, List]:
         data_inputs_train, data_inputs_val = kfold_cross_validation_split(
             data_inputs=data_inputs,
             k_fold=self.k_fold
         )
+
+        if current_ids is not None:
+            current_ids_train, current_ids_val = kfold_cross_validation_split(
+                data_inputs=current_ids,
+                k_fold=self.k_fold
+            )
+        else:
+            current_ids_train, current_ids_val = [None] * len(data_inputs_train), [None] * len(data_inputs_val)
 
         if expected_outputs is not None:
             expected_outputs_train, expected_outputs_val = kfold_cross_validation_split(
                 data_inputs=expected_outputs,
                 k_fold=self.k_fold
             )
+        else:
+            expected_outputs_train, expected_outputs_val = [None] * len(data_inputs_train), [None] * len(
+                data_inputs_val)
 
-            return data_inputs_train, expected_outputs_train, data_inputs_val, expected_outputs_val
-
-        return data_inputs_train, [None] * len(data_inputs_train), data_inputs_val, [None] * len(data_inputs_val)
+        return data_inputs_train, expected_outputs_train, current_ids_train, \
+               data_inputs_val, expected_outputs_val, current_ids_val
 
 
 def kfold_cross_validation_split(data_inputs, k_fold):
@@ -1130,37 +1146,46 @@ class ValidationSplitter(BaseValidationSplitter):
     def __init__(self, test_size: float):
         self.test_size = test_size
 
-    def split(self, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Tuple[
+    def split(self, data_inputs, current_ids=None, expected_outputs=None, context: ExecutionContext = None) -> Tuple[
         List, List, List, List]:
-        train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = validation_split(
+        train_data_inputs, train_expected_outputs, train_current_ids, validation_data_inputs, validation_expected_outputs, validation_current_ids = validation_split(
             test_size=self.test_size,
             data_inputs=data_inputs,
+            current_ids=current_ids,
             expected_outputs=expected_outputs
         )
 
-        return [train_data_inputs], [train_expected_outputs], [validation_data_inputs], [validation_expected_outputs]
+        return [train_data_inputs], [train_expected_outputs], [train_current_ids], \
+               [validation_data_inputs], [validation_expected_outputs], [validation_current_ids]
 
 
-def validation_split(test_size: float, data_inputs, expected_outputs=None) -> Tuple[List, List, List, List]:
+def validation_split(test_size: float, data_inputs, current_ids=None, expected_outputs=None) \
+        -> Tuple[List, List, List, List, List, List]:
     """
     Split data inputs, and expected outputs into a training set, and a validation set.
 
     :param test_size: test size in float
     :param data_inputs: data inputs to split
+    :param current_ids: ids associated with each data entry
     :param expected_outputs: expected outputs to split
-    :return: train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
+    :return: train_data_inputs, train_expected_outputs, current_ids_train, validation_data_inputs, validation_expected_outputs, current_ids_val
     """
     validation_data_inputs = _validation_split(data_inputs, test_size)
-    validation_expected_outputs = None
+    validation_expected_outputs, current_ids_val = None, None
     if expected_outputs is not None:
         validation_expected_outputs = _validation_split(expected_outputs, test_size)
+    if current_ids is not None:
+        current_ids_val = _validation_split(current_ids, test_size)
 
     train_data_inputs = _train_split(data_inputs, test_size)
-    train_expected_outputs = None
+    train_expected_outputs, current_ids_train = None, None
     if expected_outputs is not None:
         train_expected_outputs = _train_split(expected_outputs, test_size)
+    if current_ids is not None:
+        current_ids_train = _train_split(current_ids, test_size)
 
-    return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
+    return train_data_inputs, train_expected_outputs, current_ids_train, \
+           validation_data_inputs, validation_expected_outputs, current_ids_val
 
 
 def _train_split(data_inputs, test_size) -> List:
