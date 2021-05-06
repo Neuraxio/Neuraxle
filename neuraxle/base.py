@@ -2471,7 +2471,6 @@ class MetaStepMixin(_HasChildrenMixin):
 
     .. seealso::
         :class:`~neuraxle.steps.loop.ForEachDataInput`,
-        :class:`~neuraxle.metaopt.sklearn.MetaSKLearnWrapper`,
         :class:`~neuraxle.metaopt.random.BaseCrossValidationWrapper`,
         :class:`~neuraxle.steps.caching.ValueCachingWrapper`,
         :class:`~neuraxle.steps.loop.StepClonerForEachDataInput`
