@@ -83,7 +83,7 @@ def test_data_container_batching(batch_size, include_incomplete_pass, default_va
     data_containers = []
     for dc in data_container.minibatches(
         batch_size=batch_size,
-        include_incomplete_batch=include_incomplete_pass,
+        keep_incomplete_batch=include_incomplete_pass,
         default_value_data_inputs=default_value
     ):
         data_containers.append(dc)

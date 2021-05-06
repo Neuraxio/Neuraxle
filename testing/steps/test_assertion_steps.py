@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+
 from neuraxle.base import AssertExpectedOutputIsNone
 from neuraxle.pipeline import Pipeline
 

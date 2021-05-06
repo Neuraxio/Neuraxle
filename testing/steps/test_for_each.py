@@ -1,5 +1,5 @@
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.loop import ForEachDataInput
+from neuraxle.steps.loop import ForEach
 from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction, FitCallbackStep, \
     FitTransformCallbackStep
 
@@ -7,7 +7,7 @@ from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction, Fit
 def test_fit_for_each_should_fit_all_steps_for_each_data_inputs_expected_outputs():
     tape = TapeCallbackFunction()
     p = Pipeline([
-        ForEachDataInput(Pipeline([
+        ForEach(Pipeline([
             FitCallbackStep(tape.callback, ["1"]),
             FitCallbackStep(tape.callback, ["2"]),
         ]))
@@ -26,7 +26,7 @@ def test_fit_transform_should_fit_transform_all_steps_for_each_data_inputs_expec
     tape = TapeCallbackFunction()
     tape_fit = TapeCallbackFunction()
     p = Pipeline([
-        ForEachDataInput(Pipeline([
+        ForEach(Pipeline([
             FitTransformCallbackStep(tape.callback, tape_fit, ["1"]),
             FitTransformCallbackStep(tape.callback, tape_fit, ["2"]),
         ]))
@@ -44,7 +44,7 @@ def test_fit_transform_should_fit_transform_all_steps_for_each_data_inputs_expec
 def test_transform_should_transform_all_steps_for_each_data_inputs_expected_outputs():
     tape = TapeCallbackFunction()
     p = Pipeline([
-        ForEachDataInput(Pipeline([
+        ForEach(Pipeline([
             TransformCallbackStep(tape.callback, ["1"]),
             TransformCallbackStep(tape.callback, ["2"]),
         ]))

@@ -23,13 +23,13 @@ Those steps works with NumPy (np) arrays.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
+from typing import Sequence
 
 import numpy as np
 
-from neuraxle.base import DataContainer, ExecutionContext, ForceHandleMixin, BaseTransformer
-from neuraxle.base import NonFittableMixin, BaseStep
+from neuraxle.base import ExecutionContext, ForceHandleMixin, BaseTransformer, NonFittableMixin, BaseStep
+from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
-
 
 class NumpyFlattenDatum(BaseTransformer):
     def __init__(self):
@@ -39,7 +39,7 @@ class NumpyFlattenDatum(BaseTransformer):
         return data_inputs.reshape(data_inputs.shape[0], -1)
 
 
-class NumpyConcatenateOnCustomAxis(BaseTransformer):
+class NumpyConcatenateOnAxis(BaseTransformer):
     """
     Numpy concetenation step where the concatenation is performed along the specified custom axis.
     """
@@ -48,7 +48,7 @@ class NumpyConcatenateOnCustomAxis(BaseTransformer):
         """
         Create a numpy concatenate on custom axis object.
         :param axis: the axis where the concatenation is performed.
-        :return: NumpyConcatenateOnCustomAxis instance.
+        :return: NumpyConcatenateOnAxis instance.
         """
         self.axis = axis
         BaseTransformer.__init__(self)
@@ -80,7 +80,48 @@ class NumpyConcatenateOnCustomAxis(BaseTransformer):
         return np.concatenate(data_inputs, axis=self.axis)
 
 
-class NumpyConcatenateInnerFeatures(NumpyConcatenateOnCustomAxis):
+class NumpyConcatenateOnAxisIfNotEmpty(BaseTransformer):
+    """
+    Numpy concatenation step where the concatenation is performed along the specified custom axis.
+    """
+
+    def __init__(self, axis):
+        """
+        Create a numpy concatenate on custom axis object.
+        :param axis: the axis where the concatenation is performed.
+        :return: NumpyConcatenateOnAxis instance.
+        """
+        self.axis = axis
+        BaseTransformer.__init__(self)
+
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        Handle transform.
+
+        :param data_container: the data container to join
+        :param context: execution context
+        :return: transformed data container
+        """
+        data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs if len(dc.data_inputs) > 0])
+        data_container = DataContainer(data_inputs=data_inputs, current_ids=data_container.current_ids,
+                                       expected_outputs=data_container.expected_outputs)
+        data_container.set_data_inputs(data_inputs)
+
+        return data_container
+
+    def transform(self, data_inputs):
+        """
+        Apply the concatenation transformation along the specified axis.
+        :param data_inputs:
+        :return: Numpy array
+        """
+        return self._concat(data_inputs)
+
+    def _concat(self, data_inputs):
+        return np.concatenate(data_inputs, axis=self.axis)
+
+
+class NumpyConcatenateInnerFeatures(NumpyConcatenateOnAxis):
     """
     Numpy concatenation step where the concatenation is performed along `axis=-1`.
     """
@@ -88,13 +129,13 @@ class NumpyConcatenateInnerFeatures(NumpyConcatenateOnCustomAxis):
     def __init__(self):
         """
         Create a numpy concatenate inner features object.
-        :return: NumpyConcatenateOnCustomAxis instance.
+        :return: NumpyConcatenateOnAxis instance.
         """
         # The concatenate is on the inner features so axis = -1.
-        NumpyConcatenateOnCustomAxis.__init__(self, axis=-1)
+        NumpyConcatenateOnAxis.__init__(self, axis=-1)
 
 
-class NumpyConcatenateOuterBatch(NumpyConcatenateOnCustomAxis):
+class NumpyConcatenateOuterBatch(NumpyConcatenateOnAxis):
     """
     Numpy concetenation step where the concatenation is performed along `axis=0`.
     """
@@ -102,14 +143,15 @@ class NumpyConcatenateOuterBatch(NumpyConcatenateOnCustomAxis):
     def __init__(self):
         """
         Create a numpy concatenate outer batch object.
-        :return: NumpyConcatenateOnCustomAxis instance which is inherited by base step.
+        :return: NumpyConcatenateOnAxis instance which is inherited by base step.
         """
-        NumpyConcatenateOnCustomAxis.__init__(self, axis=0)
+        NumpyConcatenateOnAxis.__init__(self, axis=0)
 
 
 class NumpyTranspose(BaseTransformer):
-    def __init__(self):
+    def __init__(self, axes: Sequence[int] = None):
         super().__init__()
+        self.axes = axes
 
     def _transform_data_container(self, data_container, context):
         """
@@ -133,7 +175,7 @@ class NumpyTranspose(BaseTransformer):
         return self._transpose(data_inputs)
 
     def _transpose(self, data_inputs):
-        return np.array(data_inputs).transpose()
+        return np.array(data_inputs).transpose(self.axes)
 
 
 class NumpyShapePrinter(BaseTransformer):
@@ -325,6 +367,9 @@ class ToNumpy(ForceHandleMixin, BaseTransformer):
     """
     Convert data inputs, and expected outputs to a numpy array.
     """
+    def __init__(self):
+        BaseTransformer.__init__(self)
+        ForceHandleMixin.__init__(self)
 
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
             DataContainer, ExecutionContext):
@@ -562,5 +607,3 @@ class NumpyArgMax(NonFittableMixin, BaseStep):
         :return: max value for the given axis
         """
         return np.argmax(data_inputs, axis=self.axis)
-
-

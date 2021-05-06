@@ -55,7 +55,7 @@ class BaseCallback(ABC):
     """
 
     @abstractmethod
-    def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
+    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
              is_finished_and_fitted: bool):
         pass
@@ -87,7 +87,7 @@ class EarlyStoppingCallback(BaseCallback):
 
     def call(
             self,
-            trial: TrialSplit,
+            trial_split: TrialSplit,
             epoch_number: int,
             total_epochs: int,
             input_train: DataContainer,
@@ -96,14 +96,16 @@ class EarlyStoppingCallback(BaseCallback):
             pred_val: DataContainer,
             is_finished_and_fitted: bool
     ):
-        validation_scores = trial.get_validation_scores()
+        validation_scores = trial_split.get_validation_scores()
         if len(validation_scores) > self.n_epochs_without_improvement:
-            higher_score_is_better = trial.is_higher_score_better()
+            higher_score_is_better = trial_split.is_higher_score_better()
             if (higher_score_is_better) and \
-                all(validation_scores[-self.n_epochs_without_improvement] >= v for v in validation_scores[-self.n_epochs_without_improvement:]) :
+                    all(validation_scores[-self.n_epochs_without_improvement] >= v for v in
+                        validation_scores[-self.n_epochs_without_improvement:]):
                 return True
             elif (not higher_score_is_better) and \
-                    all(validation_scores[-self.n_epochs_without_improvement] <= v for v in validation_scores[-self.n_epochs_without_improvement:]):
+                    all(validation_scores[-self.n_epochs_without_improvement] <= v for v in
+                        validation_scores[-self.n_epochs_without_improvement:]):
                 return True
         return False
 
@@ -135,7 +137,7 @@ class MetaCallback(BaseCallback):
     @abstractmethod
     def call(
             self,
-            trial: TrialSplit,
+            trial_split: TrialSplit,
             epoch_number: int,
             total_epochs: int,
             input_train: DataContainer,
@@ -168,12 +170,12 @@ class IfBestScore(MetaCallback):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
+    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
              is_finished_and_fitted: bool):
-        if trial.is_new_best_score():
+        if trial_split.is_new_best_score():
             if self.wrapped_callback.call(
-                    trial,
+                    trial_split,
                     epoch_number,
                     total_epochs,
                     input_train,
@@ -206,12 +208,12 @@ class IfLastStep(MetaCallback):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
+    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
              is_finished_and_fitted: bool):
         if epoch_number == total_epochs - 1 or is_finished_and_fitted:
             self.wrapped_callback.call(
-                trial,
+                trial_split,
                 epoch_number,
                 total_epochs,
                 input_train,
@@ -230,11 +232,6 @@ class StepSaverCallback(BaseCallback):
 
     .. seealso::
         :class:`BaseCallback`,
-        :class:`MetaCallback`,
-        :class:`EarlyStoppingCallback`,
-        :class:`IfBestScore`,
-        :class:`IfLastStep`,
-        :class:`StepSaverCallback`,
         :class:`~neuraxle.metaopt.auto_ml.AutoML`,
         :class:`~neuraxle.metaopt.auto_ml.Trainer`,
         :class:`~neuraxle.metaopt.trial.Trial`,
@@ -243,14 +240,25 @@ class StepSaverCallback(BaseCallback):
         :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
         :class:`~neuraxle.metaopt.auto_ml.RandomSearchHyperparameterSelectionStrategy`,
         :class:`~neuraxle.base.HyperparameterSamples`,
-        :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
+    def __init__(self, label):
+        BaseCallback.__init__(self)
+        self.label = label
+
+    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
              is_finished_and_fitted: bool):
-        trial.save_model()
+        trial_split.save_model(self.label)
         return False
+
+
+def BestModelCheckpoint():
+    """
+    Saves the pipeline model in a folder named "best" when the a new best validation score is reached.
+    It is important to note that when refit=True, an AutoML loop will overwrite the best model after refitting.
+    """
+    return IfBestScore(StepSaverCallback('best'))
 
 
 class CallbackList(BaseCallback):
@@ -275,23 +283,20 @@ class CallbackList(BaseCallback):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def __init__(self, callbacks, print_func: Callable = None):
+    def __init__(self, callbacks):
         self.callbacks = callbacks
-        if print_func is None:
-            print_func = print
-        self.print_func = print_func
 
     def __getitem__(self, item):
         return self.callbacks[item]
 
-    def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
+    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
              is_finished_and_fitted: bool):
         is_finished_and_fitted = False
         for callback in self.callbacks:
             try:
                 if callback.call(
-                        trial=trial,
+                        trial_split=trial_split,
                         epoch_number=epoch_number,
                         total_epochs=total_epochs,
                         input_train=input_train,
@@ -303,7 +308,8 @@ class CallbackList(BaseCallback):
                     is_finished_and_fitted = True
             except Exception as error:
                 track = traceback.format_exc()
-                self.print_func(track)
+                trial_split.trial.logger.error(track)
+
         return is_finished_and_fitted
 
 
@@ -331,37 +337,31 @@ class MetricCallback(BaseCallback):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def __init__(self, name: str, metric_function: Callable, higher_score_is_better: bool, print_metrics=True,
-                 print_function=None):
+    def __init__(self, name: str, metric_function: Callable, higher_score_is_better: bool, log_metrics=True):
         self.name = name
         self.metric_function = metric_function
         self.higher_score_is_better = higher_score_is_better
-        self.print_metrics = print_metrics
-        if print_function is None:
-            print_function = print
-        self.print_function = print_function
+        self.log_metrics = log_metrics
 
-    def call(self, trial: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
+    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
              is_finished_and_fitted: bool):
         train_score = self.metric_function(pred_train.expected_outputs, pred_train.data_inputs)
         validation_score = self.metric_function(pred_val.expected_outputs, pred_val.data_inputs)
 
-        trial.add_metric_results_train(
+        trial_split.add_metric_results_train(
             name=self.name,
             score=train_score,
-            higher_score_is_better=self.higher_score_is_better
+            higher_score_is_better=self.higher_score_is_better,
+            log_metric=self.log_metrics
         )
 
-        trial.add_metric_results_validation(
+        trial_split.add_metric_results_validation(
             name=self.name,
             score=validation_score,
-            higher_score_is_better=self.higher_score_is_better
+            higher_score_is_better=self.higher_score_is_better,
+            log_metric=self.log_metrics
         )
-
-        if self.print_metrics:
-            self.print_function('{} train: {}'.format(self.name, train_score))
-            self.print_function('{} validation: {}'.format(self.name, validation_score))
 
         return False
 
@@ -390,10 +390,11 @@ class ScoringCallback(MetricCallback):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def __init__(self, metric_function: Callable, name='main', higher_score_is_better: bool = True, print_metrics: bool = True):
+    def __init__(self, metric_function: Callable, name='main', higher_score_is_better: bool = True,
+                 log_metrics: bool = True):
         super().__init__(
             name=name,
             metric_function=metric_function,
             higher_score_is_better=higher_score_is_better,
-            print_metrics=print_metrics
+            log_metrics=log_metrics
         )

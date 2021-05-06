@@ -23,11 +23,13 @@ Trial objects used by AutoML algorithm classes.
 
 import datetime
 import hashlib
+import logging
+import os
 import traceback
 from enum import Enum
-from typing import Dict, List, Callable, Iterable
+from logging import Logger
+from typing import Dict, List, Callable, Iterable, Tuple
 
-from typing import Dict, List, Tuple
 import numpy as np
 
 from neuraxle.base import BaseStep, ExecutionContext
@@ -57,6 +59,7 @@ class Trial:
             hyperparams: HyperparameterSamples,
             main_metric_name: str,
             save_trial_function: Callable,
+            logger: Logger = None,
             status: 'TRIAL_STATUS' = None,
             pipeline: BaseStep = None,
             validation_splits: List['TrialSplit'] = None,
@@ -67,6 +70,11 @@ class Trial:
             end_time: datetime.datetime = None,
     ):
         self.save_trial_function: Callable = save_trial_function
+
+        if logger is None:
+            logger = logging.getLogger()
+        self.logger: Logger = logger
+
         if status is None:
             status = TRIAL_STATUS.PLANNED
         if validation_splits is None:
@@ -114,13 +122,29 @@ class Trial:
         self.save_trial()
         return trial_split
 
-    def save_model(self):
+    def save_model(self, label: str):
         """
         Save fitted model in the trial hash folder.
         """
+        assert self.cache_folder is not None
+        self._save_model(self.pipeline, label)
+
+    def _save_model(self, pipeline: BaseStep, label: str):
         hyperparams = self.hyperparams.to_flat_dict()
         trial_hash = self._get_trial_hash(hyperparams)
-        self.pipeline.set_name(trial_hash).save(ExecutionContext(self.cache_folder), full_dump=True)
+        path = os.path.join(self.cache_folder, label)
+        pipeline.set_name(trial_hash).save(ExecutionContext(path), full_dump=True)
+
+    def get_model(self, label: str) -> BaseStep:
+        """
+        Load model in the trial hash folder.
+        """
+        assert self.cache_folder is not None
+
+        hyperparams = self.hyperparams.to_flat_dict()
+        trial_hash = self._get_trial_hash(hyperparams)
+        path = os.path.join(self.cache_folder, label)
+        return ExecutionContext(path).load(trial_hash)
 
     def set_main_metric_name(self, name: str) -> 'Trial':
         """
@@ -152,19 +176,35 @@ class Trial:
 
     def get_validation_score(self) -> float:
         """
-        Return the latest validation score for the main scoring metric.
+        Return the best validation score for the main scoring metric.
         Returns the average score for all validation splits.
 
         :return: validation score
         """
         scores = [
-            validation_split.get_validation_score()
+            validation_split.get_best_validation_score()
             for validation_split in self.validation_splits if validation_split.is_success()
         ]
 
         score = sum(scores) / len(scores)
 
         return score
+
+    def get_n_epoch_to_best_validation_score(self) -> float:
+        """
+        Return the best validation score for the main scoring metric.
+        Returns the average score for all validation splits.
+
+        :return: validation score
+        """
+        n_epochs = [
+            validation_split.get_n_epochs_to_best_validation_score()
+            for validation_split in self.validation_splits if validation_split.is_success()
+        ]
+
+        n_epochs = sum(n_epochs) / len(n_epochs)
+
+        return n_epochs
 
     def set_success(self) -> 'Trial':
         """
@@ -348,6 +388,13 @@ class TrialSplit:
         self.trial.save_trial()
         return self
 
+    def save_model(self, label: str):
+        """
+        Saves the pipeline instance the same way a Trial instance would. Will overwrite
+        :return:
+        """
+        self.trial._save_model(self.pipeline, label)
+
     def fit_trial_split(self, train_data_container: DataContainer, context: ExecutionContext) -> 'TrialSplit':
         """
         Fit the trial split pipeline with the training data container.
@@ -381,7 +428,7 @@ class TrialSplit:
 
         return self
 
-    def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool):
+    def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool, log_metric: bool=False):
         """
         Add a train metric result in the metric results dictionary.
 
@@ -399,7 +446,10 @@ class TrialSplit:
 
         self.metrics_results[name]['train_values'].append(score)
 
-    def add_metric_results_validation(self, name: str, score: float, higher_score_is_better: bool):
+        if log_metric:
+            self.trial.logger.info('{} train: {}'.format(name, score))
+
+    def add_metric_results_validation(self, name: str, score: float, higher_score_is_better: bool, log_metric: bool=False):
         """
         Add a validation metric result in the metric results dictionary.
 
@@ -417,27 +467,48 @@ class TrialSplit:
 
         self.metrics_results[name]['validation_values'].append(score)
 
+        if log_metric:
+            self.trial.logger.info('{} validation: {}'.format(name, score))
+
     def get_validation_scores(self):
         """
         Return the validation scores for the main scoring metric.
-
-        :return:
         """
         return self.metrics_results[self.main_metric_name]['validation_values']
 
-    def get_validation_score(self):
+    def get_final_validation_score(self):
         """
         Return the latest validation score for the main scoring metric.
-
-        :return:
         """
         return self.metrics_results[self.main_metric_name]['validation_values'][-1]
 
+    def get_best_validation_score(self):
+        """
+        Return the best validation score for the main scoring metric.
+        """
+        higher_score_is_better = self.metrics_results[self.main_metric_name]["higher_score_is_better"]
+        if higher_score_is_better is True:
+            f = np.max
+        elif higher_score_is_better is False:
+            f = np.min
+
+        return f(self.metrics_results[self.main_metric_name]['validation_values'])
+
+    def get_n_epochs_to_best_validation_score(self):
+        """
+        Return the number of epochs
+        """
+        higher_score_is_better = self.metrics_results[self.main_metric_name]["higher_score_is_better"]
+        if higher_score_is_better is True:
+            f = np.argmax
+        elif higher_score_is_better is False:
+            f = np.argmin
+
+        return f(self.metrics_results[self.main_metric_name]['validation_values'])
+
     def get_pipeline(self):
         """
-        Return the trained pipeline
-
-        :return:
+        Return the trained pipeline.
         """
         return self.pipeline
 
@@ -615,11 +686,19 @@ class Trials:
 
         :return:
         """
-        best_score = None
-        best_hyperparams = None
-
         if len(self) == 0:
             raise Exception('Could not get best hyperparams because there were no successful trial.')
+
+        return self.get_best_trial().hyperparams
+
+    def get_best_trial(self) -> Trial:
+        """
+        :return: trial with best score from all trials
+        """
+        best_score, best_trial = None, None
+
+        if len(self) == 0:
+            raise Exception('Could not get best trial because there were no successful trial.')
 
         higher_score_is_better = self.trials[-1].is_higher_score_better()
 
@@ -627,11 +706,12 @@ class Trials:
             trial_score = trial.get_validation_score()
             if best_score is None or higher_score_is_better == (trial_score > best_score):
                 best_score = trial_score
-                best_hyperparams = trial.hyperparams
+                best_trial = trial
 
-        return best_hyperparams
+        return best_trial
 
-    def split_good_and_bad_trials(self, quantile_threshold: float, number_of_good_trials_max_cap: int) -> Tuple['Trials', 'Trials']:
+    def split_good_and_bad_trials(self, quantile_threshold: float, number_of_good_trials_max_cap: int) -> Tuple[
+        'Trials', 'Trials']:
         success_trials: Trials = self.filter(TRIAL_STATUS.SUCCESS)
 
         # Split trials into good and bad using quantile threshold.

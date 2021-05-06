@@ -9,7 +9,7 @@ from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpac
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyTranspose, NumpyConcatenateInnerFeatures
 from neuraxle.steps.sklearn import SKLearnWrapper
-from neuraxle.union import FeatureUnion, ModelStacking
+from neuraxle.union import FeatureUnion, ModelStacking, ZipFeatures
 
 
 def test_feature_union_should_transform_with_concatenate_inner_features():
@@ -19,11 +19,11 @@ def test_feature_union_should_transform_with_concatenate_inner_features():
             Identity(),
         ], joiner=NumpyConcatenateInnerFeatures())
     ])
-    data_inputs = np.random.randint((1, 20))
+    data_inputs = np.random.randint(low=0, high=100, size=(1, 20))
 
     outputs = p.transform(data_inputs)
 
-    assert np.array_equal(outputs, np.concatenate([data_inputs, data_inputs]))
+    assert np.array_equal(outputs, np.concatenate([data_inputs, data_inputs], axis=-1))
 
 
 def test_feature_union_should_fit_transform_with_concatenate_inner_features():
@@ -33,12 +33,12 @@ def test_feature_union_should_fit_transform_with_concatenate_inner_features():
             Identity(),
         ], joiner=NumpyConcatenateInnerFeatures())
     ])
-    data_inputs = np.random.randint((1, 20))
-    expected_outputs = np.random.randint((1, 20))
+    data_inputs = np.random.randint(low=0, high=100, size=(2, 20))
+    expected_outputs = None
 
     p, outputs = p.fit_transform(data_inputs, expected_outputs)
 
-    assert np.array_equal(outputs, np.concatenate([data_inputs, data_inputs]))
+    assert np.array_equal(outputs, np.concatenate([data_inputs, data_inputs], axis=-1))
 
 
 def test_feature_union_should_transform_with_numpy_transpose():
@@ -48,7 +48,7 @@ def test_feature_union_should_transform_with_numpy_transpose():
             Identity(),
         ], joiner=NumpyTranspose())
     ])
-    data_inputs = np.random.randint((1, 20))
+    data_inputs = np.random.randint(low=0, high=100, size=(2, 20))
 
     outputs = p.transform(data_inputs)
 
@@ -62,12 +62,40 @@ def test_feature_union_should_fit_transform_with_numpy_transpose():
             Identity(),
         ], joiner=NumpyTranspose())
     ])
-    data_inputs = np.random.randint((1, 20))
-    expected_outputs = np.random.randint((1, 20))
+    data_inputs = np.random.randint(low=0, high=100, size=(2, 20))
+    expected_outputs = None
 
     p, outputs = p.fit_transform(data_inputs, expected_outputs)
 
     assert np.array_equal(outputs, np.array([data_inputs, data_inputs]).transpose())
+
+def test_feature_union_should_transform_with_zip_features():
+    p = Pipeline([
+        FeatureUnion([
+            Identity(),
+            Identity(),
+        ], joiner=ZipFeatures())
+    ])
+    data_inputs = np.random.randint(low=0, high=100, size=(2, 20))
+
+    outputs = p.transform(data_inputs)
+
+    assert np.array_equal(outputs, np.stack([data_inputs, data_inputs], axis=1))
+
+
+def test_feature_union_should_fit_transform_with_zip_features():
+    p = Pipeline([
+        FeatureUnion([
+            Identity(),
+            Identity(),
+        ], joiner=ZipFeatures())
+    ])
+    data_inputs = np.random.randint(low=0, high=100, size=(2, 20))
+    expected_outputs = None
+
+    p, outputs = p.fit_transform(data_inputs, expected_outputs)
+
+    assert np.array_equal(outputs, np.stack([data_inputs, data_inputs], axis=1))
 
 
 def test_feature_union_should_apply_to_self_and_sub_steps():

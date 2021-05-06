@@ -27,7 +27,8 @@ This module contains steps to perform various feature unions and model stacking,
 from joblib import Parallel, delayed
 
 from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, Identity, ExecutionContext, DataContainer, \
-    ForceHandleOnlyMixin, BaseTransformer
+    ForceHandleOnlyMixin, BaseTransformer, NonFittableMixin
+from neuraxle.data_container import ZipDataContainer
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
@@ -151,6 +152,34 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
 
     def _did_fit_transform(self, data_container, context):
         data_container = self[-1].handle_transform(data_container, context)
+        return data_container
+
+
+class ZipFeatures(NonFittableMixin, BaseStep):
+    """
+    This class receives an iterable of DataContainer and zips their feature together.
+    If concatenate_inner_features is True, then features are concatenated after being zipped.
+    """
+
+    def __init__(self, concatenate_inner_features=False):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+        self.concatenate_inner_features = concatenate_inner_features
+
+    def transform(self, data_inputs):
+        if any(not isinstance(di, DataContainer) for di in data_inputs):
+            raise ValueError("data_inputs given to ZipFeatures must be a list of DataContainer instances")
+        data_container = ZipDataContainer.create_from(*data_inputs)
+        if self.concatenate_inner_features:
+            data_container.concatenate_inner_features()
+        return data_container.data_inputs
+
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        if any(not isinstance(di, DataContainer) for di in data_container.data_inputs):
+            raise ValueError("data_inputs given to ZipFeatures must be a list of DataContainer instances")
+        data_container = ZipDataContainer.create_from(*data_container.data_inputs)
+        if self.concatenate_inner_features:
+            data_container.concatenate_inner_features()
         return data_container
 
 
@@ -283,4 +312,3 @@ class ModelStacking(FeatureUnion):
         data_container.set_data_inputs(results.data_inputs)
 
         return data_container
-

@@ -23,7 +23,6 @@ import random
 from typing import Iterable
 
 from neuraxle.base import BaseStep, MetaStep, ExecutionContext, ForceHandleOnlyMixin, BaseTransformer
-from neuraxle.base import NonTransformableMixin
 from neuraxle.data_container import DataContainer, _inner_concatenate_np_array
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import TrainOnlyWrapper

@@ -154,7 +154,7 @@ class DataContainer:
     def minibatches(
             self,
             batch_size: int,
-            include_incomplete_batch: bool = False,
+            keep_incomplete_batch: bool = True,
             default_value_data_inputs=None,
             default_value_expected_outputs=None
     ) -> Iterable['DataContainer']:
@@ -171,14 +171,14 @@ class DataContainer:
             # [array([0, 1]), array([2, 3]), ..., array([8, 9])]
 
             data_container = DataContainer(data_inputs=np.array(list(range(10)))
-            for data_container_batch in data_container.minibatches(batch_size=3, include_incomplete_batch=False):
+            for data_container_batch in data_container.minibatches(batch_size=3, keep_incomplete_batch=False):
                 print(data_container_batch.data_inputs)
             # [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8])]
 
             data_container = DataContainer(data_inputs=np.array(list(range(10)))
             for data_container_batch in data_container.minibatches(
                 batch_size=3,
-                include_incomplete_batch=True,
+                keep_incomplete_batch=True,
                 default_value_data_inputs=None,
                 default_value_expected_outputs=None
             ):
@@ -188,7 +188,7 @@ class DataContainer:
             data_container = DataContainer(data_inputs=np.array(list(range(10)))
             for data_container_batch in data_container.minibatches(
                 batch_size=3,
-                include_incomplete_batch=True,
+                keep_incomplete_batch=True,
                 default_value_data_inputs=AbsentValuesNullObject()
             ):
                 print(data_container_batch.data_inputs)
@@ -196,9 +196,9 @@ class DataContainer:
 
 
         :param batch_size: number of elements to combine into a single batch
-        :param include_incomplete_batch: (Optional.) A bool representing
+        :param keep_incomplete_batch: (Optional.) A bool representing
         whether the last batch should be dropped in the case it has fewer than
-        `batch_size` elements; the default behavior is not to drop the smaller
+        `batch_size` elements; the default behavior is to keep the smaller
         batch.
         :param default_value_data_inputs: expected_outputs default fill value
         for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
@@ -221,7 +221,7 @@ class DataContainer:
 
             incomplete_batch = len(data_container.data_inputs) < batch_size
             if incomplete_batch:
-                if not include_incomplete_batch:
+                if not keep_incomplete_batch:
                     break
 
                 data_container = _pad_or_keep_incomplete_batch(
@@ -233,8 +233,8 @@ class DataContainer:
 
             yield data_container
 
-    def get_n_batches(self, batch_size: int, include_incomplete_batch: bool = False) -> int:
-        if include_incomplete_batch:
+    def get_n_batches(self, batch_size: int, keep_incomplete_batch: bool = True) -> int:
+        if keep_incomplete_batch:
             return math.ceil(len(self.data_inputs) / batch_size)
         else:
             return math.floor(len(self.data_inputs) / batch_size)
@@ -435,7 +435,7 @@ class ZipDataContainer(DataContainer):
     @staticmethod
     def create_from(data_container: DataContainer, *other_data_containers: DataContainer) -> 'ZipDataContainer':
         """
-        Create ZipDataContainer that merges two data sources together.
+        Merges two data sources together. Zips only the data input part and keeps the expected output of the first DataContainer as is.
 
         :param data_container: data container to transform
         :type data_container: DataContainer

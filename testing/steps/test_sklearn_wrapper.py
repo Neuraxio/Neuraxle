@@ -1,10 +1,19 @@
 import numpy as np
 import pytest
 from sklearn.decomposition import PCA
-from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import BaggingRegressor, GradientBoostingRegressor
+from sklearn.linear_model import LinearRegression, SGDRegressor, SGDClassifier
+from sklearn.metrics import median_absolute_error
 
 from neuraxle.base import Identity
+from neuraxle.hyperparams.distributions import RandInt, Uniform
 from neuraxle.hyperparams.space import HyperparameterSamples
+from neuraxle.hyperparams.space import HyperparameterSpace
+from neuraxle.metaopt.auto_ml import KFoldCrossValidationSplitter, AutoML, RandomSearchHyperparameterSelectionStrategy, \
+    HyperparamsJSONRepository
+from neuraxle.metaopt.callbacks import ScoringCallback
+from neuraxle.pipeline import Pipeline
+from neuraxle.steps.data import DataShuffler
 from neuraxle.steps.sklearn import SKLearnWrapper
 
 
@@ -46,6 +55,40 @@ def test_sklearn_wrapper_fit_transform_with_transform():
     assert outputs.shape == (dim1, n_components)
 
 
+# Testing with partial_fit
+
+def test_sklearn_wrapper_transform_partial_fit_with_predict():
+    model = SKLearnWrapper(SGDRegressor(), use_partial_fit=True)
+    p = Pipeline([DataShuffler(), model])
+    data_inputs = np.expand_dims(np.array(list(range(10))), axis=-1)
+    expected_outputs = np.expand_dims(np.array(list(range(10, 20))), axis=-1)
+
+    for _ in range(2000):
+        p = p.fit(data_inputs, expected_outputs)
+    outputs = model.transform(data_inputs)
+
+    assert all([np.isclose(a, b, atol=0.1) for a, b in zip(expected_outputs, outputs)])
+
+
+# Partial fit classifier
+
+def test_sklearn_wrapper_transform_partial_fit_classifier():
+    data_inputs = np.array([[0, 1], [0, 0], [3, -2], [-1, 1], [-2, 1], [2, 0], [2, -1], [4, -2], [-3, 1], [-1, 0]])
+    expected_outputs = np.expand_dims(data_inputs[:, 0] + 2 * data_inputs[:, 1] + 1, axis=-1)
+    classes = np.array([0, 1, 2, 3])
+    model = SKLearnWrapper(SGDClassifier(), use_partial_fit=True, partial_fit_kwargs={'classes': classes})
+    p = Pipeline([DataShuffler(), model])
+
+    for _ in range(2000):
+        p = p.fit(data_inputs, expected_outputs)
+    outputs = model.transform(data_inputs)
+
+    assert outputs.shape == (10,)
+    assert len(set(outputs) - set(classes)) == 0
+
+
+# Testing get, set and update
+
 def test_sklearn_wrapper_set_hyperparams():
     p = SKLearnWrapper(PCA())
     p.set_hyperparams(HyperparameterSamples({
@@ -74,15 +117,8 @@ def _create_data_source(shape):
     expected_outputs = np.random.random(shape).astype(np.float32)
     return data_inputs, expected_outputs
 
-#
-from sklearn.ensemble import BaggingRegressor, GradientBoostingRegressor
-from sklearn.metrics import median_absolute_error
 
-from neuraxle.hyperparams.distributions import RandInt, Uniform
-from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
-from neuraxle.metaopt.auto_ml import KFoldCrossValidationSplitter, AutoML, RandomSearchHyperparameterSelectionStrategy, \
-    HyperparamsJSONRepository
-from neuraxle.metaopt.callbacks import ScoringCallback
+# With AutoML loop
 
 def _test_within_auto_ml_loop(tmpdir, pipeline):
     X_train = np.random.random((25, 50)).astype(np.float32)
@@ -106,9 +142,11 @@ def _test_within_auto_ml_loop(tmpdir, pipeline):
 
     auto_ml.fit(X_train, Y_train)
 
+
 def test_automl_sklearn(tmpdir):
     grad_boost = SKLearnWrapper(GradientBoostingRegressor())
     _test_within_auto_ml_loop(tmpdir, grad_boost)
+
 
 def test_automl_sklearn_model_with_base_estimator(tmpdir):
     grad_boost = GradientBoostingRegressor()
@@ -120,7 +158,6 @@ def test_automl_sklearn_model_with_base_estimator(tmpdir):
         HyperparameterSpace({
             "n_estimators": RandInt(10, 100),
             "max_features": Uniform(0.6, 1.0)}),
-            #  return_all_sklearn_default_params_on_get=True
-        )
+        #  return_all_sklearn_default_params_on_get=True
+    )
     _test_within_auto_ml_loop(tmpdir, wrapped_bagged_regressor)
-
