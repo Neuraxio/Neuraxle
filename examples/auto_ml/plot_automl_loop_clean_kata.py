@@ -53,7 +53,7 @@ def main():
             'criterion': Choice(['gini', 'entropy']),
             'splitter': Choice(['best', 'random']),
             'min_samples_leaf': RandInt(2, 5),
-            'min_samples_split': RandInt(1, 3)
+            'min_samples_split': RandInt(2, 4)
         }))
 
     extra_tree_classifier = SKLearnWrapper(
@@ -61,7 +61,7 @@ def main():
             'criterion': Choice(['gini', 'entropy']),
             'splitter': Choice(['best', 'random']),
             'min_samples_leaf': RandInt(2, 5),
-            'min_samples_split': RandInt(1, 3)
+            'min_samples_split': RandInt(2, 4)
         }))
 
     ridge_classifier = Pipeline([
@@ -90,7 +90,7 @@ def main():
             'n_estimators': RandInt(50, 600),
             'criterion': Choice(['gini', 'entropy']),
             'min_samples_leaf': RandInt(2, 5),
-            'min_samples_split': RandInt(1, 3),
+            'min_samples_split': RandInt(2, 4),
             'bootstrap': Boolean()
         }))
     ]).set_name('RandomForestClassifier')
