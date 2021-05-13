@@ -104,16 +104,16 @@ test_case_index_start_end_2d = ColumnChooserTestCase(
 )
 
 test_case_index_range_2d = ColumnChooserTestCase(
-    data_inputs=np.array([[
+    data_inputs=np.array([
         [0, 1, 2, 3],
         [10, 11, 12, 13],
         [20, 21, 22, 23]
-    ]]),
-    expected_outputs=np.array([[
+    ]),
+    expected_outputs=np.array([
         [0, 1, 2, 3],
         [10, 11, 12, 13],
         [20, 21, 22, 23]
-    ]]),
+    ]),
     expected_processed_outputs=np.array([
         [0, 2],
         [20, 22],
@@ -491,6 +491,13 @@ test_case_list_of_columns = ColumnChooserTestCase(
     copy.deepcopy(test_case_index_end),
     copy.deepcopy(test_case_index_last),
     copy.deepcopy(test_case_list_of_columns),
+    copy.deepcopy(test_case_index_int_2d),
+    copy.deepcopy(test_case_index_start_end_2d),
+    copy.deepcopy(test_case_index_start_2d),
+    copy.deepcopy(test_case_index_range_2d),
+    copy.deepcopy(test_case_index_end_2d),
+    copy.deepcopy(test_case_index_last_2d),
+    copy.deepcopy(test_case_list_of_columns_2d)
 ])
 def test_column_transformer_transform_should_support_indexes(test_case: ColumnChooserTestCase):
     data_inputs = test_case.data_inputs
@@ -508,7 +515,14 @@ def test_column_transformer_transform_should_support_indexes(test_case: ColumnCh
     copy.deepcopy(test_case_index_range),
     copy.deepcopy(test_case_index_end),
     copy.deepcopy(test_case_index_last),
-    copy.deepcopy(test_case_list_of_columns)
+    copy.deepcopy(test_case_list_of_columns),
+    copy.deepcopy(test_case_index_int_2d),
+    copy.deepcopy(test_case_index_start_end_2d),
+    copy.deepcopy(test_case_index_start_2d),
+    copy.deepcopy(test_case_index_range_2d),
+    copy.deepcopy(test_case_index_end_2d),
+    copy.deepcopy(test_case_index_last_2d),
+    copy.deepcopy(test_case_list_of_columns_2d)
 ])
 def test_column_transformer_fit_transform_should_support_indexes(test_case: ColumnChooserTestCase):
     data_inputs = test_case.data_inputs
@@ -530,7 +544,14 @@ def test_column_transformer_fit_transform_should_support_indexes(test_case: Colu
     copy.deepcopy(test_case_index_range),
     copy.deepcopy(test_case_index_end),
     copy.deepcopy(test_case_index_last),
-    copy.deepcopy(test_case_list_of_columns)
+    copy.deepcopy(test_case_list_of_columns),
+    copy.deepcopy(test_case_index_int_2d),
+    copy.deepcopy(test_case_index_start_end_2d),
+    copy.deepcopy(test_case_index_start_2d),
+    copy.deepcopy(test_case_index_range_2d),
+    copy.deepcopy(test_case_index_end_2d),
+    copy.deepcopy(test_case_index_last_2d),
+    copy.deepcopy(test_case_list_of_columns_2d)
 ])
 def test_column_transformer_fit_should_support_indexes(test_case: ColumnChooserTestCase):
     data_inputs = test_case.data_inputs
@@ -547,25 +568,25 @@ def test_column_transformer_fit_should_support_multiple_tuples():
     # Given
     test_case = ColumnChooserTestCase(
         data_inputs=np.array([
-            [1, 1, 2, 3],
-            [10, 11, 12, 13],
-            [20, 21, 22, 23]
+            [[1, 1, 2, 3]],
+            [[10, 11, 12, 13]],
+            [[20, 21, 22, 23]]
         ]),
         expected_outputs=np.array([
-            [0, 1, 2, 3],
-            [10, 11, 12, 13],
-            [20, 21, 22, 23]
+            [[0, 1, 2, 3]],
+            [[10, 11, 12, 13]],
+            [[20, 21, 22, 23]]
         ]),
         expected_processed_outputs=np.array([
-            [2, 2, 2, 3],
-            [20, 22, 12, 13],
-            [40, 42, 44, 46]
+            [[2, 2, 2, 3]],
+            [[20, 22, 12, 13]],
+            [[40, 42, 44, 46]]
         ]),
         column_transformer_tuple_list=[
             (slice(0, 2), MultiplyBy2()),
             (2, MultiplyBy2())
         ],
-        n_dimension=2
+        n_dimension=3
     )
     data_inputs = test_case.data_inputs
     p = ColumnTransformer(test_case.column_transformer_tuple_list, test_case.n_dimension)
@@ -575,11 +596,16 @@ def test_column_transformer_fit_should_support_multiple_tuples():
 
     # Then
     actual_fitted_data = p['2_MultiplyBy2']['MultiplyBy2'].fitted_data
-    expected_fitted_data = [([[2], [12], [22]], [[0, 1, 2, 3], [10, 11, 12, 13], [20, 21, 22, 23]])]
+    expected_fitted_data = [
+        ([np.array([[2]]), np.array([[12]]), np.array([[22]])],
+         [np.array([[0, 1, 2, 3]]), np.array([[10, 11, 12, 13]]), np.array([[20, 21, 22, 23]])])
+    ]
     assert_data_fitted_properly(actual_fitted_data, expected_fitted_data)
 
     actual_fitted_data = p['slice(0, 2, None)_MultiplyBy2']['MultiplyBy2'].fitted_data
-    expected_fitted_data = [([[1, 1], [10, 11], [20, 21]], [[0, 1, 2, 3], [10, 11, 12, 13], [20, 21, 22, 23]])]
+    expected_fitted_data = [([np.array([[1, 1]]), np.array([[10, 11]]), np.array([[20, 21]])],
+                              [np.array([[0, 1, 2, 3]]), np.array([[10, 11, 12, 13]]), np.array([[20, 21, 22, 23]])]
+                            )]
     assert_data_fitted_properly(actual_fitted_data, expected_fitted_data)
 
 
@@ -587,25 +613,25 @@ def test_column_transformer_fit_transform_should_support_multiple_tuples():
     # Given
     test_case = ColumnChooserTestCase(
         data_inputs=np.array([
-            [1, 1, 2, 3],
-            [10, 11, 12, 13],
-            [20, 21, 22, 23]
+            [[1, 1, 2, 3]],
+            [[10, 11, 12, 13]],
+            [[20, 21, 22, 23]]
         ]),
         expected_outputs=np.array([
-            [0, 1, 2, 3],
-            [10, 11, 12, 13],
-            [20, 21, 22, 23]
+            [[0, 1, 2, 3]],
+            [[10, 11, 12, 13]],
+            [[20, 21, 22, 23]]
         ]),
         expected_processed_outputs=np.array([
-            [2, 2, 4],
-            [20, 22, 24],
-            [40, 42, 44]
+            [[2, 2, 4]],
+            [[20, 22, 24]],
+            [[40, 42, 44]]
         ]),
         column_transformer_tuple_list=[
             (slice(0, 2), MultiplyBy2()),
             (2, MultiplyBy2())
         ],
-        n_dimension=2
+        n_dimension=3
     )
     data_inputs = test_case.data_inputs
     p = ColumnTransformer(test_case.column_transformer_tuple_list, test_case.n_dimension)
@@ -616,11 +642,17 @@ def test_column_transformer_fit_transform_should_support_multiple_tuples():
     # Then
     assert np.array_equal(test_case.expected_processed_outputs, outputs)
     actual_fitted_data = p['2_MultiplyBy2']['MultiplyBy2'].fitted_data
-    expected_fitted_data = [([[2], [12], [22]], [[0, 1, 2, 3], [10, 11, 12, 13], [20, 21, 22, 23]])]
+    expected_fitted_data = [
+        ([np.array([[2]]), np.array([[12]]), np.array([[22]])],
+         [np.array([[0, 1, 2, 3]]), np.array([[10, 11, 12, 13]]), np.array([[20, 21, 22, 23]])])
+                            ]
     assert_data_fitted_properly(actual_fitted_data, expected_fitted_data)
 
     actual_fitted_data = p['slice(0, 2, None)_MultiplyBy2']['MultiplyBy2'].fitted_data
-    expected_fitted_data = [([[1, 1], [10, 11], [20, 21]], [[0, 1, 2, 3], [10, 11, 12, 13], [20, 21, 22, 23]])]
+    expected_fitted_data = [
+        ([np.array([[1, 1]]), np.array([[10, 11]]), np.array([[20, 21]])],
+         [np.array([[0, 1, 2, 3]]), np.array([[10, 11, 12, 13]]), np.array([[20, 21, 22, 23]])])
+        ]
     assert_data_fitted_properly(actual_fitted_data, expected_fitted_data)
 
 
@@ -628,25 +660,25 @@ def test_column_transformer_transform_should_support_multiple_tuples():
     # Given
     test_case = ColumnChooserTestCase(
         data_inputs=np.array([
-            [1, 1, 2, 3],
-            [10, 11, 12, 13],
-            [20, 21, 22, 23]
+            [[1, 1, 2, 3]],
+            [[10, 11, 12, 13]],
+            [[20, 21, 22, 23]]
         ]),
         expected_outputs=np.array([
-            [0, 1, 2, 3],
-            [10, 11, 12, 13],
-            [20, 21, 22, 23]
+            [[0, 1, 2, 3]],
+            [[10, 11, 12, 13]],
+            [[20, 21, 22, 23]]
         ]),
         expected_processed_outputs=np.array([
-            [2, 2, 4],
-            [20, 22, 24],
-            [40, 42, 44]
+            [[2, 2, 4]],
+            [[20, 22, 24]],
+            [[40, 42, 44]]
         ]),
         column_transformer_tuple_list=[
             (slice(0, 2), MultiplyBy2()),
             (2, MultiplyBy2())
         ],
-        n_dimension=2
+        n_dimension=3
     )
     data_inputs = test_case.data_inputs
     p = ColumnTransformer(test_case.column_transformer_tuple_list, test_case.n_dimension)
