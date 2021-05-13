@@ -1,6 +1,5 @@
 from typing import Any
 
-import pytest
 
 from neuraxle.base import NamedTupleList, BaseStep, ExecutionContext
 from neuraxle.pipeline import Pipeline
@@ -44,21 +43,27 @@ def test_fit_transform_should_setup_pipeline_and_steps():
         step_setup
     ])
 
+    assert not p.is_initialized
+    assert not step_setup.is_initialized
+
     p.fit_transform([1], [1])
 
     assert p.is_initialized
+    assert step_setup.is_initialized
 
 
-def test_transform_should_not_setup_pipeline_and_steps():
+def test_transform_should_setup_pipeline_and_steps():
     step_setup = SomeStepSetup()
     p = SomePipeline([
         step_setup
     ])
     assert not p.is_initialized
+    assert not step_setup.is_initialized
 
     p.transform([1])
 
-    assert not p.is_initialized
+    assert p.is_initialized
+    assert step_setup.is_initialized
 
 
 def test_fit_should_setup_pipeline_and_steps():
@@ -66,7 +71,10 @@ def test_fit_should_setup_pipeline_and_steps():
     p = SomePipeline([
         step_setup
     ])
+    assert not p.is_initialized
+    assert not step_setup.is_initialized
 
     p.fit([1], [1])
 
+    assert p.is_initialized
     assert step_setup.is_initialized
