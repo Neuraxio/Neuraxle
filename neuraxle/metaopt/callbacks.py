@@ -28,6 +28,7 @@ import traceback
 from abc import ABC, abstractmethod
 from typing import Callable
 
+from neuraxle.base import ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.metaopt.trial import TrialSplit
 
@@ -56,7 +57,7 @@ class BaseCallback(ABC):
 
     @abstractmethod
     def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
              is_finished_and_fitted: bool):
         pass
 
@@ -82,8 +83,14 @@ class EarlyStoppingCallback(BaseCallback):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def __init__(self, max_epochs_without_improvement):
+    def __init__(self, max_epochs_without_improvement, metric_name=None):
+        """
+
+        :param max_epochs_without_improvement: The number of step without improvement on the validation score before an early stopping is triggered.
+        :param metric_name: The name of the metric on which we want to condition the early stopping. If None, the main metric will be used.
+        """
         self.n_epochs_without_improvement = max_epochs_without_improvement
+        self.metric_name = None
 
     def call(
             self,
@@ -94,9 +101,14 @@ class EarlyStoppingCallback(BaseCallback):
             pred_train: DataContainer,
             input_val: DataContainer,
             pred_val: DataContainer,
+            context: ExecutionContext,
             is_finished_and_fitted: bool
     ):
-        validation_scores = trial_split.get_validation_scores()
+        if self.metric_name is None:
+            validation_scores = trial_split.get_validation_scores()
+        else :
+            validation_scores = trial_split.get_metric_validation_results(self.metric_name)
+
         if len(validation_scores) > self.n_epochs_without_improvement:
             higher_score_is_better = trial_split.is_higher_score_better()
             if (higher_score_is_better) and \
@@ -144,6 +156,7 @@ class MetaCallback(BaseCallback):
             pred_train: DataContainer,
             input_val: DataContainer,
             pred_val: DataContainer,
+            context: ExecutionContext,
             is_finished_and_fitted: bool
     ):
         pass
@@ -171,7 +184,7 @@ class IfBestScore(MetaCallback):
     """
 
     def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
              is_finished_and_fitted: bool):
         if trial_split.is_new_best_score():
             if self.wrapped_callback.call(
@@ -182,6 +195,7 @@ class IfBestScore(MetaCallback):
                     pred_train,
                     input_val,
                     pred_val,
+                    context,
                     is_finished_and_fitted
             ):
                 return True
@@ -209,7 +223,7 @@ class IfLastStep(MetaCallback):
     """
 
     def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
              is_finished_and_fitted: bool):
         if epoch_number == total_epochs - 1 or is_finished_and_fitted:
             self.wrapped_callback.call(
@@ -220,6 +234,7 @@ class IfLastStep(MetaCallback):
                 pred_train,
                 input_val,
                 pred_val,
+                context,
                 is_finished_and_fitted
             )
             return True
@@ -247,7 +262,7 @@ class StepSaverCallback(BaseCallback):
         self.label = label
 
     def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
              is_finished_and_fitted: bool):
         trial_split.save_model(self.label)
         return False
@@ -290,7 +305,7 @@ class CallbackList(BaseCallback):
         return self.callbacks[item]
 
     def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
              is_finished_and_fitted: bool):
         is_finished_and_fitted = False
         for callback in self.callbacks:
@@ -303,6 +318,7 @@ class CallbackList(BaseCallback):
                         pred_train=pred_train,
                         input_val=input_val,
                         pred_val=pred_val,
+                        context=context,
                         is_finished_and_fitted=is_finished_and_fitted
                 ):
                     is_finished_and_fitted = True
@@ -344,7 +360,7 @@ class MetricCallback(BaseCallback):
         self.log_metrics = log_metrics
 
     def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
              is_finished_and_fitted: bool):
         train_score = self.metric_function(pred_train.expected_outputs, pred_train.data_inputs)
         validation_score = self.metric_function(pred_val.expected_outputs, pred_val.data_inputs)

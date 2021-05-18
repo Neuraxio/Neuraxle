@@ -643,7 +643,8 @@ class Trainer:
                     pred_train=y_pred_train,
                     input_val=validation_data_container,
                     pred_val=y_pred_val,
-                    is_finished_and_fitted=False
+                    context=context.copy().set_execution_phase(ExecutionPhase.VALIDATION),
+                    is_finished_and_fitted=False,
             ):
                 break
             # Saves the metrics
