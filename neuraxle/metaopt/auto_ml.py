@@ -728,7 +728,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             callbacks: List[BaseCallback] = None,
             refit_scoring_function: Callable = None,
             cache_folder_when_no_handle=None,
-            n_jobs=-1,
+            n_jobs=None,
             continue_loop_on_error=True
     ):
         """
@@ -749,7 +749,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         :param callbacks: A list of callbacks to perform after each epoch.
         :param refit_scoring_function: A scoring function to use on a refit call
         :param cache_folder_when_no_handle: default cache folder used if auto_ml_loop isn't called through handler functions.
-        :param n_jobs: If n_jobs in (-1, None, 1), then automl is executed in a single thread. if n_jobs > 1, then n_jobs thread are launched, if n_jobs < -1 then (n_cpus + 1 + n_jobs) thread are launched.
+        :param n_jobs: If n_jobs in (None, 1), then automl is executed in a single process, which may spawns on multiple thread. if n_jobs > 1, then n_jobs process are launched, if n_jobs <= -1 then (n_cpus + 1 + n_jobs) process are launched. One trial at a time is executed by process.
         :param continue_loop_on_error:
         """
         BaseStep.__init__(self)
@@ -806,7 +806,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         # Keeping a reference of the main logger
         main_logger = context.logger
 
-        if self.n_jobs in (-1, None, 1):
+        if self.n_jobs in (None, 1):
             for trial_number in range(self.n_trial):
                 self._attempt_trial(trial_number, validation_splits, context)
         else:
@@ -816,7 +816,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
                 raise ValueError("Cannot use InMemoryHyperparamsRepository for multiprocessing, use json-based repository.")
 
             n_jobs = self.n_jobs
-            if n_jobs < -1:
+            if n_jobs <= -1:
                 n_jobs = multiprocessing.cpu_count() + 1 + self.n_jobs
 
             with multiprocessing.get_context("spawn").Pool(processes=n_jobs) as pool:

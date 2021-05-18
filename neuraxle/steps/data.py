@@ -20,7 +20,8 @@ You can find here steps that take action on data.
 
 """
 import random
-from typing import Iterable
+from operator import attrgetter
+from typing import Iterable, List
 
 from neuraxle.base import BaseStep, MetaStep, ExecutionContext, ForceHandleOnlyMixin, BaseTransformer
 from neuraxle.data_container import DataContainer, _inner_concatenate_np_array
@@ -259,7 +260,7 @@ class InnerConcatenateDataContainer(ForceHandleOnlyMixin, BaseTransformer):
         """
         return self._concatenate_sub_data_containers(data_container)
 
-    def _concatenate_sub_data_containers(self, data_container: DataContainer):
+    def _concatenate_sub_data_containers(self, data_container: DataContainer) -> DataContainer:
         """
         Merge sub data containers into the current data container.
 
@@ -268,7 +269,7 @@ class InnerConcatenateDataContainer(ForceHandleOnlyMixin, BaseTransformer):
         :return: base step, data container
         :rtype: DataContainer
         """
-        sub_data_containers_to_zip = []
+        sub_data_containers_to_zip = [data_container]
         if self.data_sources is None:
             self.data_sources = data_container.get_sub_data_container_names()
 
@@ -276,12 +277,12 @@ class InnerConcatenateDataContainer(ForceHandleOnlyMixin, BaseTransformer):
             if name in self.data_sources:
                 sub_data_containers_to_zip.append(sub_data_container)
 
-        for data_container_to_zip in sub_data_containers_to_zip:
-            data_container = self._concatenate_sub_data_container(data_container, data_container_to_zip)
+        if len(sub_data_containers_to_zip) > 1:
+            data_container = self._concatenate_sub_data_container(sub_data_containers_to_zip)
 
         return data_container
 
-    def _concatenate_sub_data_container(self, data_container, data_container_to_zip) -> DataContainer:
+    def _concatenate_sub_data_container(self, data_container_to_zip: List[DataContainer]) -> DataContainer:
         """
         Zip a data container into another data container with a higher dimension.
 
@@ -291,15 +292,13 @@ class InnerConcatenateDataContainer(ForceHandleOnlyMixin, BaseTransformer):
         :type data_container_to_zip: DataContainer
         :return: concatenated data containers
         """
-        data_inputs = _inner_concatenate_np_array(data_container.data_inputs,
-                                                  data_container_to_zip.data_inputs)
-        data_container.set_data_inputs(data_inputs)
+        data_inputs = _inner_concatenate_np_array(list(map(attrgetter("data_inputs"), data_container_to_zip)))
 
-        expected_outputs = _inner_concatenate_np_array(data_container.expected_outputs,
-                                                       data_container_to_zip.expected_outputs)
-        data_container.set_expected_outputs(expected_outputs)
+        expected_outputs = _inner_concatenate_np_array(list(map(attrgetter("expected_outputs"), data_container_to_zip)))
 
-        return data_container
+        return data_container_to_zip[0].copy()\
+            .set_data_inputs(data_inputs)\
+            .set_expected_outputs(expected_outputs)
 
 
 class ZipBatchDataContainer(ForceHandleOnlyMixin, BaseTransformer):
