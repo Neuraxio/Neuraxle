@@ -353,17 +353,24 @@ class MetricCallback(BaseCallback):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def __init__(self, name: str, metric_function: Callable, higher_score_is_better: bool, log_metrics=True):
+    def __init__(self, name: str, metric_function: Callable, higher_score_is_better: bool, log_metrics=True,
+                 pass_context_to_metric_function: bool = False):
         self.name = name
         self.metric_function = metric_function
         self.higher_score_is_better = higher_score_is_better
         self.log_metrics = log_metrics
+        self.pass_context_to_metric_function = pass_context_to_metric_function
 
     def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
              is_finished_and_fitted: bool):
-        train_score = self.metric_function(pred_train.expected_outputs, pred_train.data_inputs)
-        validation_score = self.metric_function(pred_val.expected_outputs, pred_val.data_inputs)
+
+        if self.pass_context_to_metric_function:
+            train_score = self.metric_function(pred_train.expected_outputs, pred_train.data_inputs, context=context)
+            validation_score = self.metric_function(pred_val.expected_outputs, pred_val.data_inputs, context=context)
+        else:
+            train_score = self.metric_function(pred_train.expected_outputs, pred_train.data_inputs)
+            validation_score = self.metric_function(pred_val.expected_outputs, pred_val.data_inputs)
 
         trial_split.add_metric_results_train(
             name=self.name,
@@ -405,12 +412,12 @@ class ScoringCallback(MetricCallback):
         :class:`~neuraxle.base.HyperparameterSamples`,
         :class:`~neuraxle.data_container.DataContainer`
     """
-
     def __init__(self, metric_function: Callable, name='main', higher_score_is_better: bool = True,
-                 log_metrics: bool = True):
+                 log_metrics: bool = True, pass_context_to_metric_function: bool = False):
         super().__init__(
             name=name,
             metric_function=metric_function,
             higher_score_is_better=higher_score_is_better,
-            log_metrics=log_metrics
+            log_metrics=log_metrics,
+            pass_context_to_metric_function=pass_context_to_metric_function
         )
