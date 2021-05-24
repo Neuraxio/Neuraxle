@@ -406,7 +406,7 @@ class ChooseOneStepOf(FeatureUnion):
 
         return self
 
-    def update_hyperparams(self, hyperparams: Union[HyperparameterSamples, dict]):
+    def _update_hyperparams(self, hyperparams: Union[HyperparameterSamples, dict]):
         """
         Set chosen step hyperparams.
 
@@ -414,10 +414,9 @@ class ChooseOneStepOf(FeatureUnion):
         :type hyperparams: HyperparameterSamples
         :return:
         """
-        super().update_hyperparams(hyperparams)
+        super()._update_hyperparams(hyperparams)
         self._update_optional_hyperparams()
-
-        return self
+        return self.hyperparams
 
     def _update_optional_hyperparams(self):
         step_names = list(self.keys())

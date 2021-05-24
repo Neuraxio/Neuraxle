@@ -433,3 +433,77 @@ def test_choose_one_step_of_invalid_chosen_step():
                 ('b', Identity())
             ]).set_hyperparams({'choice': 'c'}),
         ])
+
+@pytest.mark.parametrize("method_name, args, kwargs", [
+    ("set_hyperparams", [{'choice': 'b'}], {}),
+    ("update_hyperparams", [{'choice': 'b'}], {}),
+    ("apply", ["_update_hyperparams"], {"hyperparams":{'choice': 'b'}}) # This case correspond to the update in an AutoML loop.
+])
+def test_choose_one_step_of_set_hyperparams(method_name, args, kwargs):
+    a_callback = TapeCallbackFunction()
+    b_callback = TapeCallbackFunction()
+    c_callback = TapeCallbackFunction()
+    d_callback = TapeCallbackFunction()
+
+    choose_one_step_of = ChooseOneStepOf([
+            ('a', FitTransformCallbackStep(a_callback, c_callback, transform_function=lambda di: di * 2).set_name("step_1")),
+            ('b', FitTransformCallbackStep(b_callback, d_callback, transform_function=lambda di: di * 2).set_name("step_1"))
+        ])
+
+    p = Pipeline([
+        choose_one_step_of
+    ])
+
+    p.transform(DATA_INPUTS)
+
+    assert len(a_callback.data) == 1
+    assert all(a_callback.data[0] == DATA_INPUTS)
+    assert len(b_callback.data) == 0
+    assert len(c_callback.data) == 0
+    assert len(d_callback.data) == 0
+
+    getattr(choose_one_step_of, method_name)(*args, **kwargs)
+
+    p.transform(DATA_INPUTS)
+
+    assert len(a_callback.data) == 1
+    assert all(a_callback.data[0] == DATA_INPUTS)
+    assert len(b_callback.data) == 1
+    assert all(b_callback.data[0] == DATA_INPUTS)
+    assert len(c_callback.data) == 0
+    assert len(d_callback.data) == 0
+
+
+def test_choose_one_step_of_update_hyperparams():
+    a_callback = TapeCallbackFunction()
+    b_callback = TapeCallbackFunction()
+    c_callback = TapeCallbackFunction()
+    d_callback = TapeCallbackFunction()
+
+    choose_one_step_of = ChooseOneStepOf([
+            ('a', FitTransformCallbackStep(a_callback, c_callback, transform_function=lambda di: di * 2).set_name("step_1")),
+            ('b', FitTransformCallbackStep(b_callback, d_callback, transform_function=lambda di: di * 2).set_name("step_1"))
+        ])
+
+    p = Pipeline([
+        choose_one_step_of
+    ])
+
+    p.transform(DATA_INPUTS)
+
+    assert len(a_callback.data) == 1
+    assert all(a_callback.data[0] == DATA_INPUTS)
+    assert len(b_callback.data) == 0
+    assert len(c_callback.data) == 0
+    assert len(d_callback.data) == 0
+
+    choose_one_step_of.update_hyperparams({'choice': 'b'})
+
+    p.transform(DATA_INPUTS)
+
+    assert len(a_callback.data) == 1
+    assert all(a_callback.data[0] == DATA_INPUTS)
+    assert len(b_callback.data) == 1
+    assert all(b_callback.data[0] == DATA_INPUTS)
+    assert len(c_callback.data) == 0
+    assert len(d_callback.data) == 0
