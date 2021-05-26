@@ -69,13 +69,10 @@ def test_logger():
     with open(file_path) as f:
         l = f.read()
         print(l)
-
     # Teardown
-    if os.path.exists(file_path):
-        os.remove(file_path)
+    os.remove(file_path)
 
 class TestTrialLogger:
-
     def test_logger_automl_multiprocessing(self, tmpdir):
         # Given
         context = ExecutionContext()
