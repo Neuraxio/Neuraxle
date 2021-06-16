@@ -35,17 +35,8 @@ Neuraxle is a Machine Learning (ML) library for building machine learning pipeli
 Documentation
 -------------
 
-You can find the Neuraxle documentation `on the website <https://www.neuraxle.org/stable/index.html>`_.
+You can find the Neuraxle documentation `on the website <https://www.neuraxle.org/stable/index.html>`_. It also contains multiple examples demonstrating some of its features.
 
-The documentation is divided into several sections:
-
-- `Handler Methods <https://www.neuraxle.org/stable/handler_methods.html>`_
-- `Introduction to Automatic Hyperparameter Tuning <https://www.neuraxle.org/stable/hyperparameter_tuning.html>`_
-- `Introduction to Random Distributions <https://www.neuraxle.org/stable/random_distributions.html>`_
-- `Step Saving And Lifecycle <https://www.neuraxle.org/stable/step_saving_and_lifecycle.html>`_
-- `REST API Serving <https://www.neuraxle.org/stable/rest_api_serving.html>`_
-- `Complete API documentation <https://www.neuraxle.org/stable/api.html>`_
-- `Usage Examples <https://www.neuraxle.org/stable/examples/index.html>`_
 
 Installation
 ------------
