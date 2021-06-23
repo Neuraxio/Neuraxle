@@ -73,7 +73,7 @@ def test_logger():
     os.remove(file_path)
 
 class TestTrialLogger:
-    def test_logger_automl_multiprocessing(self, tmpdir):
+    def test_logger_automl(self, tmpdir):
         # Given
         context = ExecutionContext()
         self.tmpdir = str(tmpdir)
@@ -94,7 +94,6 @@ class TestTrialLogger:
             n_trials=n_trials,
             refit_trial=True,
             epochs=n_epochs,
-            n_jobs=-1,
             hyperparams_repository=hp_repository,
             continue_loop_on_error=False
         )
