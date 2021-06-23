@@ -3711,25 +3711,8 @@ class AssertionMixin(ForceHandleMixin):
         ForceHandleMixin.__init__(self)
 
     @abstractmethod
-    def _assert_conditition(self, data_container: DataContainer, context: ExecutionContext):
-        """
-        We expect this function to call self._assert with the result of its condition testing
-        
-        """
+    def _assert(self, data_container: DataContainer, context: ExecutionContext):
         pass
-
-    def _assert(self, truth_value: bool, error_msg:str, context:ExecutionContext):
-        pass
-
-class AssertStep(AssertionMixin, BaseStep):
-    def __init__(self, func: Callable):
-        self.func = func
-        assert not isinstance(func, type(lambda _:0))  # TODO: assert is serializable. (e.g. not default lambda). Check what pickle does as a check
-        BaseStep.__init__(self)
-        ...
-
-    def _assert_condition(self, data_container, context):
-        self.func(data_container, context)
 
 
 class WillProcessAssertionMixin(AssertionMixin):
