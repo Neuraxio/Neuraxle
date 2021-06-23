@@ -1010,6 +1010,9 @@ class _TransformerStep(ABC):
         """
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
+    def teardown(self)->'BaseTransformer':
+        self._teardown()
+        return self
 
 class _FittableStep:
     """
@@ -2210,7 +2213,7 @@ class BaseTransformer(
         self.is_invalidated = True
         return RecursiveDict()
 
-    def teardown(self) -> 'BaseTransformer':
+    def _teardown(self) -> 'BaseTransformer':
         """
         Teardown step after program execution. Inverse of setup, and it should clear memory.
         Override this method if you need to clear memory.
@@ -2222,7 +2225,7 @@ class BaseTransformer(
 
     def __del__(self):
         try:
-            self.teardown()
+            self._teardown()
         except Exception:
             import traceback
             print(traceback.format_exc())
@@ -2444,6 +2447,14 @@ class _HasChildrenMixin(MixinForBaseTransformer):
         :return:
         """
         pass
+
+    def teardown(self) -> BaseStep:
+        """
+        Teardown step. Also teardown the wrapped step.
+        :return: self
+        """
+        self.apply("_teardown")
+        return self
 
 
 class MetaStepMixin(_HasChildrenMixin):
@@ -3700,8 +3711,25 @@ class AssertionMixin(ForceHandleMixin):
         ForceHandleMixin.__init__(self)
 
     @abstractmethod
-    def _assert(self, data_container: DataContainer, context: ExecutionContext):
+    def _assert_conditition(self, data_container: DataContainer, context: ExecutionContext):
+        """
+        We expect this function to call self._assert with the result of its condition testing
+        
+        """
         pass
+
+    def _assert(self, truth_value: bool, error_msg:str, context:ExecutionContext):
+        pass
+
+class AssertStep(AssertionMixin, BaseStep):
+    def __init__(self, func: Callable):
+        self.func = func
+        assert not isinstance(func, type(lambda _:0))  # TODO: assert is serializable. (e.g. not default lambda). Check what pickle does as a check
+        BaseStep.__init__(self)
+        ...
+
+    def _assert_condition(self, data_container, context):
+        self.func(data_container, context)
 
 
 class WillProcessAssertionMixin(AssertionMixin):
