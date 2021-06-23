@@ -25,6 +25,7 @@ Classes used to build any Automatic Machine Learning strategies.
 """
 
 import copy
+import gc
 import glob
 import hashlib
 import json
@@ -124,6 +125,12 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         best_hyperparams = HyperparameterSamples(trials.get_best_hyperparams())
         return best_hyperparams
 
+    def _save_best_model(self, step: BaseStep, trial_hash: str):
+        step.set_name(trial_hash).save(ExecutionContext(self.best_retrained_model_folder), full_dump=True)
+
+    def _load_best_model(self, trial_hash: str) -> BaseStep:
+        return ExecutionContext(str(self.best_retrained_model_folder)).load(trial_hash)
+
     def get_best_model(self):
         """
         Load the best model saved inside the best retrained model folder.
@@ -132,8 +139,7 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         """
         hyperparams: HyperparameterSamples = self.get_best_hyperparams()
         trial_hash: str = self._get_trial_hash(HyperparameterSamples(hyperparams).to_flat_dict())
-        p: BaseStep = ExecutionContext(str(self.best_retrained_model_folder)).load(trial_hash)
-
+        p: BaseStep = self._load_best_model(trial_hash)
         return p
 
     def save_best_model(self, step: BaseStep):
@@ -145,8 +151,7 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         """
         hyperparams = step.get_hyperparams().to_flat_dict()
         trial_hash = self._get_trial_hash(hyperparams)
-        step.set_name(trial_hash).save(ExecutionContext(self.best_retrained_model_folder), full_dump=True)
-
+        self._save_best_model(step, trial_hash)
         return step
 
     @abstractmethod
@@ -498,11 +503,9 @@ class Trainer:
         callbacks: List[BaseCallback] = [scoring_callback] + callbacks
         self.callbacks: CallbackList = CallbackList(callbacks)
 
-
         if hyperparams_repository is None:
             hyperparams_repository = InMemoryHyperparamsRepository()
         self.hyperparams_repository: HyperparamsRepository = hyperparams_repository
-
 
     def train(self, pipeline: BaseStep, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Trial:
         """
@@ -628,12 +631,14 @@ class Trainer:
 
         for i in range(self.epochs):
             context.logger.info('epoch {}/{}'.format(i + 1, self.epochs))
-            trial_split = trial_split.fit_trial_split(train_data_container.copy(), 
+            trial_split = trial_split.fit_trial_split(train_data_container.copy(),
                                                       context.copy().set_execution_phase(ExecutionPhase.TRAIN))
-            y_pred_train = trial_split.predict_with_pipeline(train_data_container.copy(), 
-                                                             context.copy().set_execution_phase(ExecutionPhase.VALIDATION))
+            y_pred_train = trial_split.predict_with_pipeline(train_data_container.copy(),
+                                                             context.copy().set_execution_phase(
+                                                                 ExecutionPhase.VALIDATION))
             y_pred_val = trial_split.predict_with_pipeline(validation_data_container.copy(),
-                                                           context.copy().set_execution_phase(ExecutionPhase.VALIDATION))
+                                                           context.copy().set_execution_phase(
+                                                               ExecutionPhase.VALIDATION))
 
             if self.callbacks.call(
                     trial_split=trial_split,
@@ -758,7 +763,6 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
         self.validation_splitter: BaseValidationSplitter = validation_splitter
 
-
         if hyperparams_optimizer is None:
             hyperparams_optimizer = RandomSearchHyperparameterSelectionStrategy()
         self.hyperparameter_optimizer: BaseHyperparameterSelectionStrategy = hyperparams_optimizer
@@ -808,13 +812,16 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         main_logger = context.logger
 
         if self.n_jobs in (None, 1):
+            # Single Process
             for trial_number in range(self.n_trial):
                 self._attempt_trial(trial_number, validation_splits, context)
         else:
+            # Multiprocssing
             context.logger.info(f"Number of processors available: {multiprocessing.cpu_count()}")
 
             if isinstance(self.hyperparams_repository, InMemoryHyperparamsRepository):
-                raise ValueError("Cannot use InMemoryHyperparamsRepository for multiprocessing, use json-based repository.")
+                raise ValueError(
+                    "Cannot use InMemoryHyperparamsRepository for multiprocessing, use json-based repository.")
 
             n_jobs = self.n_jobs
             if n_jobs <= -1:
@@ -891,6 +898,9 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             context.logger.error(track)
         finally:
             repo_trial.update_final_trial_status()
+            # Some heavy objects might have stayed in memory for a while during the execution of our trial;
+            # It is best to do a full collection as that may free up some ram.
+            gc.collect()
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
             ('BaseStep', DataContainer):
