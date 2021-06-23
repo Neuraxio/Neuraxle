@@ -2220,6 +2220,13 @@ class BaseTransformer(
         self.is_initialized = False
         return self
 
+    def __del__(self):
+        try:
+            self.teardown()
+        except Exception:
+            import traceback
+            print(traceback.format_exc())
+
     def set_train(self, is_train: bool = True):
         """
         This method overrides the method of BaseStep to also consider the wrapped step as well as self.
@@ -2506,17 +2513,6 @@ class MetaStepMixin(_HasChildrenMixin):
         """
         self._invalidate()
         self.wrapped: BaseTransformer = _sklearn_to_neuraxle_step(step)
-        return self
-
-    def teardown(self) -> BaseStep:
-        """
-        Teardown step. Also teardown the wrapped step.
-
-        :return: self
-        """
-        super().teardown()
-        self.wrapped.teardown()
-        self.is_initialized = False
         return self
 
     def get_step(self) -> BaseStep:
@@ -2946,20 +2942,6 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         steps_as_tuple = self._wrap_non_base_steps(steps_as_tuple)
         self.steps_as_tuple: NamedTupleList = self._patch_missing_names(steps_as_tuple)
         self._refresh_steps()
-
-    def teardown(self) -> 'BaseTransformer':
-        """
-        Teardown step after program execution.
-        Teardowns all of the sub steps as well.
-
-        :return: self
-        """
-        for step_name, step in self.steps_as_tuple:
-            step.teardown()
-
-        self.is_initialized = False
-
-        return self
 
     def get_children(self) -> List[BaseStep]:
         """
