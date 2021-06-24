@@ -434,33 +434,31 @@ class ZipDataContainer(DataContainer):
     """
 
     @staticmethod
-    def create_from(data_container: DataContainer, *other_data_containers: DataContainer) -> 'ZipDataContainer':
+    def create_from(data_container: DataContainer, *other_data_containers: List[DataContainer], zip_expected_outputs:bool=False) -> 'ZipDataContainer':
         """
         Merges two data sources together. Zips only the data input part and keeps the expected output of the first DataContainer as is.
+        NOTE: Expects that all DataContainer are at least as long as data_container.
 
-        :param data_container: data container to transform
+        :param data_container: the main data container, the attribute of this data container will be kept by the returned ZipDataContainer.
         :type data_container: DataContainer
         :param other_data_containers: other data containers to zip with data container
         :type other_data_containers: List[DataContainer]
+        :param zip_expected_outputs: Determines wether we kept the expected_output of data_container or we zip the expected_outputs of all DataContainer provided
         :return: expanded data container
         :rtype: ExpandedDataContainer
         """
-        new_data_inputs = []
 
-        for i, (_, di, eo) in enumerate(data_container):
-            new_data_input = [di]
-
-            for other_data_container in other_data_containers:
-                _, di, eo = other_data_container[i]
-                new_data_input.append(di)
-
-            new_data_inputs.append(tuple(new_data_input))
+        new_data_inputs = tuple(zip(*map(attrgetter("data_inputs"), [data_container] + list(other_data_containers))))
+        if zip_expected_outputs:
+            expected_outputs = tuple(zip(*map(attrgetter("expected_outputs"), [data_container] + list(other_data_containers))))
+        else:
+            expected_outputs = data_container.expected_outputs
 
         return ZipDataContainer(
             data_inputs=new_data_inputs,
+            expected_outputs=expected_outputs,
             current_ids=data_container.current_ids,
             summary_id=data_container.summary_id,
-            expected_outputs=data_container.expected_outputs,
             sub_data_containers=data_container.sub_data_containers
         )
 

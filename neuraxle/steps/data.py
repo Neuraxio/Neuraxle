@@ -303,6 +303,8 @@ class InnerConcatenateDataContainer(ForceHandleOnlyMixin, BaseTransformer):
 
 class ZipBatchDataContainer(ForceHandleOnlyMixin, BaseTransformer):
     """
+    WARNING: Unexpected behaviour from this class. It's not to date.
+
     Concatenate outer batch of sub data containers along `axis=0`..
 
     Code example:
