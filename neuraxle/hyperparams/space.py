@@ -252,8 +252,10 @@ class CompressedHyperparameterSamples:
         """Takes in `HyperparameterSamples` object and generates a compressed _seq."""
         if not hps or not isinstance(hps, HyperparameterSamples):
             raise ValueError("pass a valid `HyperparameterSamples` object")
-        self.separator: str = hps.separator
-        self._seq: List[dict] = self._convert(hps)
+        self._flat_hps: dict = hps.to_flat_dict()  # this will be used to reconstruct the hyperparameters from
+        # compressed format
+        self._separator: str = hps.separator
+        self._seq: List[dict] = self._convert()
 
     def __str__(self) -> str:
         """Prints the `CompressedHyperparameterSamples._seq`."""
@@ -271,8 +273,8 @@ class CompressedHyperparameterSamples:
         """
         grouped_hyper_params = OrderedDict()
         for steps_and_hps, hyper_param_val in flat_steps_hps:
-            *steps, hyper_param_key = steps_and_hps.split(self.separator)
-            grouped_hyper_params.setdefault(f"{self.separator}".join(steps), dict()).update({
+            *steps, hyper_param_key = steps_and_hps.split(self._separator)
+            grouped_hyper_params.setdefault(f"{self._separator}".join(steps), dict()).update({
                 hyper_param_key: hyper_param_val})
 
         return grouped_hyper_params
@@ -281,16 +283,22 @@ class CompressedHyperparameterSamples:
         """Converts grouped hyper params to Compressed format."""
         compressed = []
         for steps in group_by_step:
-            *prev_steps, current_step = steps.split(self.separator)
+            *prev_steps, current_step = steps.split(self._separator)
             hps: dict = group_by_step[steps]
 
             compressed.append(CompressedHyperparameter(step_name=current_step, hyperparams=hps,
                                                        ancestor_steps=prev_steps).__dict__)
         return compressed
 
-    def _convert(self, hps: HyperparameterSamples) -> 'List[dict]':
-        grouped_result: OrderedDict[str, dict] = self._group_hps_by_step(flat_steps_hps=hps.to_flat_dict().items())
+    def _convert(self) -> 'List[dict]':
+        grouped_result: OrderedDict[str, dict] = self._group_hps_by_step(flat_steps_hps=self._flat_hps.items())
         return self._convert_to_compressed_format(group_by_step=grouped_result)
+
+    def remove_parents(self) -> 'CompressedHyperparameterSamples':
+        raise NotImplementedError()
+
+    def wildcards(self) -> OrderedDict:
+        raise NotImplementedError()
 
 
 class HyperparameterSpace(RecursiveDict):
