@@ -231,7 +231,7 @@ We thank these organisations for generously supporting the project:
 
     <img src="https://raw.githubusercontent.com/Neuraxio/Neuraxle/master/assets/images/solution_nexam_io.jpg" width="180px">
 
--  La Cité, LP: https://www.lacitelp.com/
+-  La Cité, LP: https://www.lacitelp.com/accueil
 
 .. raw:: html
 

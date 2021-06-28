@@ -46,7 +46,7 @@ class SKLearnWrapper(BaseStep):
             return_all_sklearn_default_params_on_get: bool = False,
             use_partial_fit: bool = False,
             use_predict_proba: bool = False,
-            partial_fit_kwargs: dict = {}
+            partial_fit_kwargs: dict = None
     ):
         if not isinstance(wrapped_sklearn_predictor, BaseEstimator):
             raise ValueError("The wrapped_sklearn_predictor must be an instance of scikit-learn's BaseEstimator.")
@@ -59,6 +59,8 @@ class SKLearnWrapper(BaseStep):
         self.name += "_" + wrapped_sklearn_predictor.__class__.__name__
         self.use_partial_fit: bool = use_partial_fit
         if self.use_partial_fit:
+            if partial_fit_kwargs is None:
+                partial_fit_kwargs = {}
             self.partial_fit_kwargs = partial_fit_kwargs
         self.use_predict_proba: bool = use_predict_proba
 

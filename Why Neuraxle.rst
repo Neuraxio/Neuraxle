@@ -47,10 +47,10 @@ allow the step to be sent to a remote computer or to be threadable
 by reloading the save. The save can be dumped to a RAM disk for
 more performance and avoid truly writing to disks.
 
-Neuraxle is compatible with most other ML and DL libraries. We're
-currently already writing savers for PyTorch and TensorFlow, such as in the
+Neuraxle is compatible with most other ML and DL libraries. We've
+written savers and steps for TensorFlow in the
 `Neuraxle-TensorFlow <https://github.com/Neuraxio/Neuraxle-TensorFlow>`__
-extensions of this project.
+extensions of this project, installable with "pip install neuraxle_tensorflow".
 
 Time Series Processing
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -64,19 +64,13 @@ series projects, as
 With the various abstractions that Neuraxle provides, it's easy to get
 started building a time-series processing project. Neuraxle is also the
 backbone of `the Neuraxio Time Series
-project <https://www.neuraxio.com/en/time-series-solution>`__, which is
+project <https://www.neuraxio.com/pages/neuraxios-time-series-solution>`__, which is
 a premium software package built on top of Neuraxle for business boost
 their time series machine learning projects by providing out-of-the-box
 specialized pipeline steps. Some of those specialized steps are featured
 in the `Deep Learning Pipelines <#deep-learning-pipelines>`__ section above.
 
-Note: `the Neuraxio Time Series
-project <https://www.neuraxio.com/en/time-series-solution>`__ is
-different from the Neuraxle project, those are separate projects.
-Neuraxio is commited to build open-source software, and defines itself
-as an open-source company. Learn more on `Neuraxle's
-license <#license>`__. The Neuraxle library is free and will always stay
-free, while Neuraxio Time Series is a premium add-on to Neuraxle.
+Note: `the Neuraxio Time Series project <https://www.neuraxio.com/pages/neuraxios-time-series-solution>`__ is different from the Neuraxle project; those are separate projects. Neuraxio is commited to build open-source software, and defines itself as an open-source company. Learn more on `Neuraxle's license <#license>`__. The Neuraxle library is free and will always stay free, while Neuraxio Time Series is a premium add-on to Neuraxle.
 
 Automatied Machine Learning
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

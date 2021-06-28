@@ -26,6 +26,7 @@ Classes for containing the data that flows throught the pipeline steps.
 import copy
 import hashlib
 import math
+from operator import attrgetter
 from typing import Any, Iterable, List, Tuple, Union
 
 import numpy as np
@@ -433,46 +434,43 @@ class ZipDataContainer(DataContainer):
     """
 
     @staticmethod
-    def create_from(data_container: DataContainer, *other_data_containers: DataContainer) -> 'ZipDataContainer':
+    def create_from(data_container: DataContainer, *other_data_containers: List[DataContainer], zip_expected_outputs:bool=False) -> 'ZipDataContainer':
         """
         Merges two data sources together. Zips only the data input part and keeps the expected output of the first DataContainer as is.
+        NOTE: Expects that all DataContainer are at least as long as data_container.
 
-        :param data_container: data container to transform
+        :param data_container: the main data container, the attribute of this data container will be kept by the returned ZipDataContainer.
         :type data_container: DataContainer
         :param other_data_containers: other data containers to zip with data container
         :type other_data_containers: List[DataContainer]
+        :param zip_expected_outputs: Determines wether we kept the expected_output of data_container or we zip the expected_outputs of all DataContainer provided
         :return: expanded data container
         :rtype: ExpandedDataContainer
         """
-        new_data_inputs = []
 
-        for i, (_, di, eo) in enumerate(data_container):
-            new_data_input = [di]
-
-            for other_data_container in other_data_containers:
-                _, di, eo = other_data_container[i]
-                new_data_input.append(di)
-
-            new_data_inputs.append(tuple(new_data_input))
+        new_data_inputs = tuple(zip(*map(attrgetter("data_inputs"), [data_container] + list(other_data_containers))))
+        if zip_expected_outputs:
+            expected_outputs = tuple(zip(*map(attrgetter("expected_outputs"), [data_container] + list(other_data_containers))))
+        else:
+            expected_outputs = data_container.expected_outputs
 
         return ZipDataContainer(
             data_inputs=new_data_inputs,
+            expected_outputs=expected_outputs,
             current_ids=data_container.current_ids,
             summary_id=data_container.summary_id,
-            expected_outputs=data_container.expected_outputs,
             sub_data_containers=data_container.sub_data_containers
         )
 
     def concatenate_inner_features(self):
         """
         Concatenate inner features from zipped data inputs.
-        Broadcast data inputs if the dimension is smaller.
+        Assumes each data_input entry is an iterable of numpy arrays.
         """
         new_data_inputs = [di[0] for di in self.data_inputs]
 
         for i, data_input in enumerate(self.data_inputs):
-            for di in data_input[1:]:
-                new_data_inputs[i] = _inner_concatenate_np_array(new_data_inputs[i], di)
+            new_data_inputs[i] = _inner_concatenate_np_array(list(data_input))
 
         self.set_data_inputs(new_data_inputs)
 
@@ -611,21 +609,30 @@ def _pad_data(data: Iterable, default_value: Any, batch_size: int):
     return data_
 
 
-def _inner_concatenate_np_array(np_array, np_array_to_zip):
+def _inner_concatenate_np_array(np_arrays_to_concatenate: List[np.ndarray]):
     """
-    Concatenate numpy arrays on the last axis using expand dim, and broadcasting.
+    Concatenate numpy arrays on the last axis, expanding and broadcasting if necessary.
 
-    :param np_array: data container
-    :type np_array: np.ndarray
-    :param np_array_to_zip: numpy array to zip with the other
-    :type np_array_to_zip: np.ndarray
+    :param np_arrays_to_concatenate: numpy arrays to zip with the other
+    :type np_arrays_to_concatenate: Iterable[np.ndarray]
     :return: concatenated np array
     :rtype: np.ndarray
     """
-    while len(np_array_to_zip.shape) < len(np_array.shape):
-        np_array_to_zip = np.expand_dims(np_array_to_zip, axis=-1)
+    n_arrays = len(np_arrays_to_concatenate)
+    target_n_dims = max(map(lambda x: len(x.shape), np_arrays_to_concatenate))
+    # These three next lines may be a bit hard to follow;
+    # they compute the max for every dimensions of the np arrays except the last.
+    # Previous code just assumed np_arrays_to_concatenate[0].shape[:-1]
+    _temp = map(attrgetter('shape'), np_arrays_to_concatenate)
+    _temp = map(lambda x: list(x)+[0 for _ in range(target_n_dims-len(x))], _temp)
+    target_dims_m1 = list(map(max, *list(_temp)))[:-1]
 
-    target_shape = tuple(list(np_array.shape[:-1]) + [np_array_to_zip.shape[-1]])
-    np_array_to_zip = np.broadcast_to(np_array_to_zip, target_shape)
+    for i in range(n_arrays):
+        while len(np_arrays_to_concatenate[i].shape) < target_n_dims:
+            np_arrays_to_concatenate[i] = np.expand_dims(np_arrays_to_concatenate[i], axis=-1)
 
-    return np.concatenate((np_array, np_array_to_zip), axis=-1)
+        target_shape = tuple(target_dims_m1 + [np_arrays_to_concatenate[i].shape[-1]])
+        np_arrays_to_concatenate[i] = np.broadcast_to(np_arrays_to_concatenate[i], target_shape)
+
+    return np.concatenate(np_arrays_to_concatenate, axis=-1)
+
