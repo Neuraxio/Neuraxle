@@ -235,7 +235,10 @@ class HyperparameterSamples(RecursiveDict):
 
 @dataclass
 class CompressedHyperparameter:
-    """CompressedHyperParameter"""
+    """
+    Compressed and easy to read representation of a hyperparameter sample.
+    This class is used by the HyperparameterSamples class.
+    """
     step_name: str
     hyperparams: dict
     ancestor_steps: list
