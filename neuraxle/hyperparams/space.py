@@ -229,7 +229,7 @@ class HyperparameterSamples(RecursiveDict):
         super().__init__(*args, separator=separator, **kwds)
 
     def compress(self) -> 'CompressedHyperparameterSamples':
-        """Compresses the HyperparameterSamples representation"""
+        """Compresses the HyperparameterSamples representation."""
 
         return CompressedHyperparameterSamples(self)
 
@@ -249,7 +249,7 @@ class CompressedHyperparameterSamples:
     """
 
     def __init__(self, hps: HyperparameterSamples):
-        """Takes in `HyperparameterSamples` object and generates a compressed _seq"""
+        """Takes in `HyperparameterSamples` object and generates a compressed _seq."""
         if not hps or not isinstance(hps, HyperparameterSamples):
             raise ValueError("pass a valid `HyperparameterSamples` object")
         self.separator: str = hps.separator
