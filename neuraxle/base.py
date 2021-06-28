@@ -1011,7 +1011,11 @@ class _TransformerStep(ABC):
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
     def teardown(self)->'BaseTransformer':
-        self._teardown()
+        """
+        Applies _teardown on the step and, if applicable, its children.
+        :return: self
+        """
+        self.apply("_teardown")
         return self
 
 class _FittableStep:
@@ -2447,14 +2451,6 @@ class _HasChildrenMixin(MixinForBaseTransformer):
         :return:
         """
         pass
-
-    def teardown(self) -> BaseStep:
-        """
-        Teardown step. Also teardown the wrapped step.
-        :return: self
-        """
-        self.apply("_teardown")
-        return self
 
 
 class MetaStepMixin(_HasChildrenMixin):
