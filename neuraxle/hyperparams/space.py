@@ -230,14 +230,12 @@ class HyperparameterSamples(RecursiveDict):
 
     def compress(self) -> 'CompressedHyperparameterSamples':
         """Compresses the HyperparameterSamples representation."""
-
         return CompressedHyperparameterSamples(self)
 
 
 @dataclass
 class CompressedHyperparameter:
     """CompressedHyperParameter"""
-
     step_name: str
     hyperparams: dict
     ancestor_steps: list
