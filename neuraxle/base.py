@@ -1010,7 +1010,7 @@ class _TransformerStep(ABC):
         """
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
-    def teardown(self)->'BaseTransformer':
+    def teardown(self) -> 'BaseTransformer':
         """
         Applies _teardown on the step and, if applicable, its children.
         :return: self
@@ -2231,7 +2231,6 @@ class BaseTransformer(
         try:
             self._teardown()
         except Exception:
-            import traceback
             print(traceback.format_exc())
 
     def set_train(self, is_train: bool = True):
