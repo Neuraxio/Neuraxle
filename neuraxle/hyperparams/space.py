@@ -64,7 +64,7 @@ ready to be sent to an instance of the pipeline to try and score it, for example
 from collections import OrderedDict, ItemsView
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List
 
 from scipy.stats import rv_continuous, rv_discrete
 from scipy.stats._distn_infrastructure import rv_generic
@@ -229,7 +229,7 @@ class HyperparameterSamples(RecursiveDict):
         super().__init__(*args, separator=separator, **kwds)
 
     def compress(self) -> 'CompressedHyperparameterSamples':
-        """Compresses the HyperparameterSamples representation """
+        """Compresses the HyperparameterSamples representation"""
 
         return CompressedHyperparameterSamples(self)
 
@@ -237,6 +237,7 @@ class HyperparameterSamples(RecursiveDict):
 @dataclass
 class CompressedHyperparameter:
     """CompressedHyperParameter"""
+
     step_name: str
     hyperparams: dict
     ancestor_steps: list
@@ -248,12 +249,14 @@ class CompressedHyperparameterSamples:
     """
 
     def __init__(self, hps: HyperparameterSamples):
+        """Takes in `HyperparameterSamples` object and generates a compressed _seq"""
         if not hps or not isinstance(hps, HyperparameterSamples):
             raise ValueError("pass a valid `HyperparameterSamples` object")
         self.separator: str = hps.separator
         self._seq: List[dict] = self._convert(hps)
 
     def __str__(self) -> str:
+        """Prints the `CompressedHyperparameterSamples._seq`."""
         return f"{self._seq}"
 
     def _group_hps_by_step(self, flat_steps_hps: ItemsView) -> 'OrderedDict[str, dict]':
@@ -275,7 +278,7 @@ class CompressedHyperparameterSamples:
         return grouped_hyper_params
 
     def _convert_to_compressed_format(self, group_by_step: 'OrderedDict[str, dict]') -> 'List[dict]':
-        """Converts grouped hyper params to Compressed format"""
+        """Converts grouped hyper params to Compressed format."""
         compressed = []
         for steps in group_by_step:
             *prev_steps, current_step = steps.split(self.separator)
