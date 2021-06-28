@@ -49,48 +49,49 @@ def main():
     # See also HyperparameterSpace documentation : https://www.neuraxle.org/stable/api/neuraxle.hyperparams.space.html#neuraxle.hyperparams.space.HyperparameterSpace
 
     decision_tree_classifier = SKLearnWrapper(
-        DecisionTreeClassifier(), HyperparameterSpace({
+        DecisionTreeClassifier(),
+        HyperparameterSpace({
             'criterion': Choice(['gini', 'entropy']),
             'splitter': Choice(['best', 'random']),
             'min_samples_leaf': RandInt(2, 5),
-            'min_samples_split': RandInt(1, 3)
+            'min_samples_split': RandInt(2, 4)
         }))
 
     extra_tree_classifier = SKLearnWrapper(
-        ExtraTreeClassifier(), HyperparameterSpace({
+        ExtraTreeClassifier(),
+        HyperparameterSpace({
             'criterion': Choice(['gini', 'entropy']),
             'splitter': Choice(['best', 'random']),
             'min_samples_leaf': RandInt(2, 5),
-            'min_samples_split': RandInt(1, 3)
+            'min_samples_split': RandInt(2, 4)
         }))
 
-    ridge_classifier = Pipeline([
-        OutputTransformerWrapper(NumpyRavel()),
-        SKLearnWrapper(RidgeClassifier(), HyperparameterSpace({
-            'alpha': Choice([(0.0, 1.0, 10.0), (0.0, 10.0, 100.0)]),
+    ridge_classifier = Pipeline([OutputTransformerWrapper(NumpyRavel()), SKLearnWrapper(
+        RidgeClassifier(),
+        HyperparameterSpace({
+            'alpha': Choice([0.0, 1.0, 10.0, 100.0]),
             'fit_intercept': Boolean(),
             'normalize': Boolean()
         }))
     ]).set_name('RidgeClassifier')
 
-    logistic_regression = Pipeline([
-        OutputTransformerWrapper(NumpyRavel()),
-        SKLearnWrapper(LogisticRegression(), HyperparameterSpace({
+    logistic_regression = Pipeline([OutputTransformerWrapper(NumpyRavel()), SKLearnWrapper(
+        LogisticRegression(),
+        HyperparameterSpace({
             'C': LogUniform(0.01, 10.0),
             'fit_intercept': Boolean(),
-            'dual': Boolean(),
-            'penalty': Choice(['l1', 'l2']),
+            'penalty': Choice(['none', 'l2']),
             'max_iter': RandInt(20, 200)
         }))
     ]).set_name('LogisticRegression')
 
-    random_forest_classifier = Pipeline([
-        OutputTransformerWrapper(NumpyRavel()),
-        SKLearnWrapper(RandomForestClassifier(), HyperparameterSpace({
+    random_forest_classifier = Pipeline([OutputTransformerWrapper(NumpyRavel()), SKLearnWrapper(
+        RandomForestClassifier(),
+        HyperparameterSpace({
             'n_estimators': RandInt(50, 600),
             'criterion': Choice(['gini', 'entropy']),
             'min_samples_leaf': RandInt(2, 5),
-            'min_samples_split': RandInt(1, 3),
+            'min_samples_split': RandInt(2, 4),
             'bootstrap': Boolean()
         }))
     ]).set_name('RandomForestClassifier')
@@ -120,6 +121,7 @@ def main():
         epochs=1,
         hyperparams_repository=HyperparamsJSONRepository(cache_folder='cache'),
         refit_trial=True,
+        continue_loop_on_error=False
     )
 
     # Load data, and launch AutoML loop !

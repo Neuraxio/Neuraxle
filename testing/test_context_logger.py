@@ -10,7 +10,7 @@ from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import AutoML, InMemoryHyperparamsRepository, RandomSearchHyperparameterSelectionStrategy, \
-    ValidationSplitter
+    ValidationSplitter, HyperparamsJSONRepository
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import MultiplyByN, NumpyReshape
@@ -73,12 +73,11 @@ def test_logger():
     os.remove(file_path)
 
 class TestTrialLogger:
-
-    def test_logger_automl_multiprocessing(self, tmpdir):
+    def test_logger_automl(self, tmpdir):
         # Given
         context = ExecutionContext()
         self.tmpdir = str(tmpdir)
-        hp_repository = InMemoryHyperparamsRepository(cache_folder=self.tmpdir)
+        hp_repository = HyperparamsJSONRepository(cache_folder=self.tmpdir)
         n_epochs = 2
         n_trials = 4
         auto_ml = AutoML(
@@ -113,9 +112,10 @@ class TestTrialLogger:
             assert os.path.exists(f)
 
         # That not a great way of testing... but at least it raises a flag when something changes in the logging process
-        with open(file_paths[0], 'r') as f:
-            l = f.readlines()
-            assert len(l) == 36
+        for f in file_paths:
+            with open(f, 'r') as f:
+                l = f.readlines()
+                assert len(l) == 30
 
 
     def teardown(self):
