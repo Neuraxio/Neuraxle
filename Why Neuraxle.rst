@@ -72,7 +72,7 @@ in the `Deep Learning Pipelines <#deep-learning-pipelines>`__ section above.
 
 Note: `the Neuraxio Time Series project <https://www.neuraxio.com/pages/neuraxios-time-series-solution>`__ is different from the Neuraxle project; those are separate projects. Neuraxio is commited to build open-source software, and defines itself as an open-source company. Learn more on `Neuraxle's license <#license>`__. The Neuraxle library is free and will always stay free, while Neuraxio Time Series is a premium add-on to Neuraxle.
 
-Automatied Machine Learning
+Automated Machine Learning
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 One of the core goal of this framework is to enable easy automated
