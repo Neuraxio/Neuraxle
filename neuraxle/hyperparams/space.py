@@ -61,7 +61,7 @@ ready to be sent to an instance of the pipeline to try and score it, for example
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-from collections import OrderedDict, ItemsView
+from collections import OrderedDict, ItemsView, Counter
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import List
@@ -228,9 +228,9 @@ class HyperparameterSamples(RecursiveDict):
     def __init__(self, *args, separator=None, **kwds):
         super().__init__(*args, separator=separator, **kwds)
 
-    def compress(self) -> 'CompressedHyperparameterSamples':
+    def compress(self, remove_parents=False) -> 'CompressedHyperparameterSamples':
         """Compresses the HyperparameterSamples representation."""
-        return CompressedHyperparameterSamples(self)
+        return CompressedHyperparameterSamples(self, remove_parents)
 
 
 @dataclass
@@ -249,13 +249,14 @@ class CompressedHyperparameterSamples:
     Short-hand representation of `HyperparameterSamples`
     """
 
-    def __init__(self, hps: HyperparameterSamples):
+    def __init__(self, hps: HyperparameterSamples, remove_parents=False):
         """Takes in `HyperparameterSamples` object and generates a compressed _seq."""
         if not hps or not isinstance(hps, HyperparameterSamples):
             raise ValueError("pass a valid `HyperparameterSamples` object")
         self._flat_hps: dict = hps.to_flat_dict()  # this will be used to reconstruct the hyperparameters from
         # compressed format
         self._separator: str = hps.separator
+        self._trim_parents = remove_parents
         self._seq: List[dict] = self._convert()
 
     def __str__(self) -> str:
@@ -288,18 +289,90 @@ class CompressedHyperparameterSamples:
             hps: dict = group_by_step[steps]
 
             compressed.append(CompressedHyperparameter(step_name=current_step, hyperparams=hps,
-                                                       ancestor_steps=prev_steps).__dict__)
+                                                       ancestor_steps=prev_steps
+                                                       if not self._trim_parents else None).__dict__)
         return compressed
 
     def _convert(self) -> 'List[dict]':
         grouped_result: OrderedDict[str, dict] = self._group_hps_by_step(flat_steps_hps=self._flat_hps.items())
         return self._convert_to_compressed_format(group_by_step=grouped_result)
 
-    def remove_parents(self) -> 'CompressedHyperparameterSamples':
-        raise NotImplementedError()
-
     def wildcards(self) -> OrderedDict:
-        raise NotImplementedError()
+        return self._convert_to_wild_cards()
+
+    def _generate_reverse_suffix_strings(self, string_array: List[str]):
+        """
+        Generates reverse suffix set of strings for an given input array of strings
+        :param string_array:
+        :return:
+
+        >>>ip_array = ["a","b","c"]
+        >>>self._separator = '__'
+        >>>self._generate_reverse_suffix_strings(ip_array)
+        ...{'a__b__c', 'b__c', 'c'}
+        """
+        suffix_strings = set()
+        for idx in range(1, len(string_array) + 1):
+            suffix_strings.add(f"{self._separator}".join(string_array[-idx:]))
+        return suffix_strings
+
+    def _generate_string_pairs(self, string_array: List[str]):
+        """
+        Generates set of string pairs tuple
+        :param string_array:
+        :return:
+
+        >>>temp_array = ["a","b","c"]
+        >>>self._generate_string_pairs(temp_array)
+        ...{('a','b'),('a','c')}
+        """
+        string_pairs = set()
+        y = string_array[-1]
+        for x in string_array[:-1]:
+            string_pairs.add((x, y))
+        return string_pairs
+
+    def _can_be_pruned_further(self, unique_str: List[str], string_pairs_freq: Counter) -> bool:
+        """Checks if unique string can be pruned or not"""
+        return string_pairs_freq[(unique_str[0], unique_str[-1])] <= 1
+
+    def _convert_to_wild_cards(self) -> OrderedDict:
+        """
+        Method compresses the self._flat_hps into wildcard format
+        """
+        # preprocessing step for phase1: selection of unique strings
+        # preprocessing step for phase2: pruning of selected strings from phase1
+        reverse_suffix_strings_freq: Counter = Counter()
+        all_string_pairs_freq: Counter = Counter()
+        for hp in self._flat_hps:
+            temp = hp.split(self._separator)
+            reverse_suffix_strings_freq.update(
+                self._generate_reverse_suffix_strings(temp))  # phase1 preprocessing step
+            all_string_pairs_freq.update(self._generate_string_pairs(temp))  # phase2 preprocessing step
+
+        selected_string_key_for_each_hp: dict = {}
+        wild_card_compressed_strings: OrderedDict = OrderedDict()
+        for hp in self._flat_hps:
+            fitted_list = hp.split(self._separator)
+            for i in range(1,
+                           len(fitted_list) + 1):  # phase1: selection of unique strings for each absolute
+                # hyperparameter path
+                temp = f"{self._separator}".join(fitted_list[-i:])
+                if reverse_suffix_strings_freq[temp] <= 1:
+                    selected_string_key_for_each_hp[hp] = temp
+                    break
+            compressed_key = hp
+            # phase2: Pruning(Converting to wild card format) the output from phase1
+            if compressed_key == selected_string_key_for_each_hp[hp]:  # if `selected_string` is same has absolute hp
+                wild_card_compressed_strings[compressed_key] = self._flat_hps[hp]
+                continue
+            selected_hp: List[str] = selected_string_key_for_each_hp[hp].split(self._separator)
+            current_selected_hp_len: int = len(selected_hp)
+            compressed_key = f"*{selected_string_key_for_each_hp[hp]}"
+            if self._can_be_pruned_further(selected_hp, all_string_pairs_freq) and current_selected_hp_len >= 3:
+                compressed_key = f"*{selected_hp[0]}*{selected_hp[-1]}"
+            wild_card_compressed_strings[compressed_key] = self._flat_hps[hp]
+        return wild_card_compressed_strings
 
 
 class HyperparameterSpace(RecursiveDict):
