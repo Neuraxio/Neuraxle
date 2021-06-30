@@ -333,7 +333,9 @@ class CompressedHyperparameterSamples:
         return string_pairs
 
     def _can_be_pruned_further(self, unique_str: List[str], string_pairs_freq: Counter) -> bool:
-        """Checks if unique string can be pruned or not"""
+        """
+        Checks if unique string can be pruned or not
+        """
         return string_pairs_freq[(unique_str[0], unique_str[-1])] <= 1
 
     def _convert_to_wild_cards(self) -> OrderedDict:
