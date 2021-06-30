@@ -147,14 +147,12 @@ class Pipeline(BasePipeline):
         :return: tuple(pipeline, data_container)
         """
         steps_left_to_do, data_container = self._load_checkpoint(data_container, context)
-        self.setup(context=context)
 
         index_last_step = len(steps_left_to_do) - 1
 
         new_steps_as_tuple: NamedTupleList = []
 
         for index, (step_name, step) in enumerate(steps_left_to_do):
-            step.setup(context=context)
 
             if index != index_last_step:
                 step, data_container = step.handle_fit_transform(data_container, context)
@@ -178,12 +176,10 @@ class Pipeline(BasePipeline):
         :return: tuple(pipeline, data_container)
         """
         steps_left_to_do, data_container = self._load_checkpoint(data_container, context)
-        self.setup(context=context)
 
         new_steps_as_tuple: NamedTupleList = []
 
         for step_name, step in steps_left_to_do:
-            step.setup(context=context)
             step, data_container = step.handle_fit_transform(data_container, context)
             new_steps_as_tuple.append((step_name, step))
 
@@ -221,16 +217,6 @@ class Pipeline(BasePipeline):
 
     def flush_all_cache(self):
         shutil.rmtree(self.cache_folder)
-
-    def setup(self, context: ExecutionContext = None) -> 'Pipeline':
-        """
-        Contrary to the default behaviour of TruncableStep, we don't want to recursively call .setup() in a Pipeline instance.
-        We'll call the setup before calling each steps on a fit call.
-        :param context:
-        :return:
-        """
-        self.is_initialized = True
-        return self
 
 
 class ResumablePipeline(ResumableStepMixin, Pipeline):

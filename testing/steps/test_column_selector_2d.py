@@ -55,7 +55,7 @@ def test_column_selector_2d_should_throw_exception_on_unsupported_type(column_se
 
 
 def test_column_selector_nd_should_transform_with_column_selector_2d():
-    step = ColumnsSelectorND(0)
+    step = ColumnsSelectorND(0, n_dimension=2)
     data_inputs, expected_outputs = _create_data_source((20, 20))
 
     outputs = step.transform(data_inputs)

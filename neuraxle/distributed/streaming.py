@@ -54,7 +54,7 @@ class ObservableQueueMixin(MixinForBaseTransformer):
         self.observers = []
         self._add_observable_queue_step_saver()
 
-    def teardown(self):
+    def _teardown(self):
         self.queue = None
         return self
 
@@ -197,7 +197,7 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
             p.start()
             self.workers.append(p)
 
-    def teardown(self):
+    def _teardown(self):
         """
         Stop all processes on teardown.
 
@@ -688,7 +688,7 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
         Joiner.__init__(self, batch_size=batch_size)
         ObservableQueueMixin.__init__(self, Queue())
 
-    def teardown(self) -> 'BaseTransformer':
+    def _teardown(self) -> 'BaseTransformer':
         """
         Properly clean queue, summary ids, and results during teardown.
 
