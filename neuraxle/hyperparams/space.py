@@ -355,11 +355,11 @@ class CompressedHyperparameterSamples:
         selected_string_key_for_each_hp: dict = {}
         wild_card_compressed_strings: OrderedDict = OrderedDict()
         for hp in self._flat_hps:
-            fitted_list = hp.split(self._separator)
+            split_hp_param: List[str] = hp.split(self._separator)
             for i in range(1,
-                           len(fitted_list) + 1):  # phase1: selection of unique strings for each absolute
+                           len(split_hp_param) + 1):  # phase1: selection of unique strings for each absolute
                 # hyperparameter path
-                temp = f"{self._separator}".join(fitted_list[-i:])
+                temp = f"{self._separator}".join(split_hp_param[-i:])
                 if reverse_suffix_strings_freq[temp] <= 1:
                     selected_string_key_for_each_hp[hp] = temp
                     break
@@ -375,6 +375,12 @@ class CompressedHyperparameterSamples:
                 compressed_key = f"*{selected_hp[0]}*{selected_hp[-1]}"
             wild_card_compressed_strings[compressed_key] = self._flat_hps[hp]
         return wild_card_compressed_strings
+
+    def restore(self):
+        """
+        Restoring HyperparameterSamples from CompressedHyperparameterSamples
+        """
+        return HyperparameterSamples(self._flat_hps)
 
 
 class HyperparameterSpace(RecursiveDict):
