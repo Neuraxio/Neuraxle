@@ -464,7 +464,7 @@ class ChooseOneStepOf(FeatureUnion):
                 self.remove_step(step_name)  # `def TruncableStep.remove_step(self, step_name: str) -> self`
                 # then, remove step in choice:
                 self.remove_step_from_choice(
-                    step_name)  # `def ChooseOneStepOf.remove_step_from_choice(self, step_name: str) -> self`
+                    step_name)
 
         return self.hyperparams
 
