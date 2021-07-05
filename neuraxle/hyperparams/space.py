@@ -227,61 +227,6 @@ class HyperparameterSamples(RecursiveDict):
     def __init__(self, *args, separator=None, **kwds):
         super().__init__(*args, separator=separator, **kwds)
 
-        def compress(self, trim_parents=False):
-            """Compresses the HyperparameterSamples representation """
-            grouped_result = self._group_hps_by_step(flat_steps_hps=self.items())
-            return self._convert_to_compressed_format(group_by_step=grouped_result, trim_parents=trim_parents)
-
-        def _group_hps_by_step(self, flat_steps_hps: list) -> dict:
-            """
-            Groups hyperparams
-            :param flat_steps_hps: Flat list of steps and hyper parameter
-            :return: OrderedDict containning grouped hyperparams as values and keys as pipeline stages & steps
-
-            >>>hyper_params = [('AddFeatures__PCA__copy', True), ('AddFeatures__PCA__iterated_power', 'auto')]
-            >>>group_hyper_params(hyper_params = hyper_params)
-            ...OrderedDict([('AddFeatures__PCA', OrderedDict([('copy', True), ('iterated_power', 'auto')]))])
-            """
-            grouped_hyper_params = OrderedDict()
-            for steps_and_hps, hyper_param_val in flat_steps_hps:
-                *steps, hyper_param_key = steps_and_hps.split(self.separator)
-                grouped_hyper_params.setdefault(f"{self.separator}".join(steps), OrderedDict()).update({
-                    hyper_param_key: hyper_param_val})
-
-            return grouped_hyper_params
-
-        def _convert_to_compressed_format(self, group_by_step, trim_parents=False):
-            """Converts grouped hyper params to Compressed format"""
-            compressed = []
-            for steps in group_by_step:
-                *prev_steps, current_step = steps.split(self.separator)
-                hps = group_by_step[steps]
-
-                compressed.append(CompressedHyperParameter(step_name=current_step, hyper_parameters=hps,
-                                                           ancestor_steps=prev_steps if not trim_parents else None).__dict__)
-            return CompressedHyperparameterSamples(compressed)
-
-
-@dataclass
-class CompressedHyperParameter:
-    """CompressedHyperParameter"""
-    step_name: str
-    hyper_parameters: dict
-    ancestor_steps: list
-
-
-class CompressedHyperparameterSamples(HyperparameterSamples):
-    """
-    Short-hand representation of `HyperparameterSamples`
-    """
-
-    def __init__(self, seq):
-        super(CompressedHyperparameterSamples, self).__init__()
-        self._seq = seq
-
-    def __str__(self):
-        return f"{self._seq}"
-
 
 class HyperparameterSpace(RecursiveDict):
     """
