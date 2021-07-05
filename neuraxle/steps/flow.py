@@ -455,9 +455,9 @@ class ChooseOneStepOf(FeatureUnion):
         Prune self so as to keep only the chosen step as set in the choice hyperparameter.
         """
         # first, get chosen step name. it looks like this:
-        chosen_step_name = self.get_hyperparams()["choice"]
+        chosen_step_name: str = self.get_hyperparams()["choice"]
         # second, delete the others:
-        all_steps_names = [step[0] for step in self]
+        all_steps_names: list = [step[0] for step in self]
         for step_name in all_steps_names:  # this for loop is defined in Truncable Steps
             if step_name != chosen_step_name:
                 # first, remove step in self:
@@ -468,7 +468,7 @@ class ChooseOneStepOf(FeatureUnion):
 
         return self.hyperparams
 
-    def remove_step_from_choice(self, step_name):
+    def remove_step_from_choice(self, step_name) -> tuple:
         return self.hyperparams.popitem(step_name)
 
 
