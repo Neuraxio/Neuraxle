@@ -461,7 +461,7 @@ class ChooseOneStepOf(FeatureUnion):
         for step_name in all_steps_names:  # this for loop is defined in Truncable Steps
             if step_name != chosen_step_name:
                 # first, remove step in self:
-                self.remove_step(step_name)  # `def TruncableStep.remove_step(self, step_name: str) -> self`
+                self.remove_step(step_name)
                 # then, remove step in choice:
                 self.remove_step_from_choice(
                     step_name)
