@@ -806,6 +806,9 @@ class _TransformerStep(ABC):
         :param context: execution context
         :return: transformed data container
         """
+        if not self.is_initialized:
+            self.setup(context)
+
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_transform_data_container(data_container, context)
 
@@ -887,6 +890,9 @@ class _TransformerStep(ABC):
             :class:`~neuraxle.data_container.DataContainer`,
             :class:`~neuraxle.pipeline.Pipeline`
         """
+        if not self.is_initialized:
+            self.setup(context)
+
         self._did_process(data_container, context)
         return self
 
@@ -967,6 +973,9 @@ class _TransformerStep(ABC):
             :class:`~neuraxle.data_container.DataContainer`,
             :class:`~neuraxle.pipeline.Pipeline`
         """
+        if not self.is_initialized:
+            self.setup(context)
+
         data_container, context = self._will_process(data_container, context)
         data_container = self._inverse_transform_data_container(data_container, context)
         data_container = self._did_process(data_container, context)
@@ -1001,6 +1010,13 @@ class _TransformerStep(ABC):
         """
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
+    def teardown(self)->'BaseTransformer':
+        """
+        Applies _teardown on the step and, if applicable, its children.
+        :return: self
+        """
+        self.apply("_teardown")
+        return self
 
 class _FittableStep:
     """
@@ -1022,6 +1038,9 @@ class _FittableStep:
         :param context: execution context
         :return: tuple(fitted pipeline, data_container)
         """
+        if not self.is_initialized:
+            self.setup(context)
+
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit(data_container, context)
 
@@ -1106,6 +1125,9 @@ class _FittableStep:
         :param context: execution context
         :return: tuple(fitted pipeline, data_container)
         """
+        if not self.is_initialized:
+            self.setup(context)
+
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit_transform(data_container, context)
 
@@ -1200,6 +1222,8 @@ class _CustomHandlerMethods:
             :class:`~neuraxle.data_container.DataContainer`,
             :class:`~neuraxle.base.ExecutionContext`
         """
+        if not self.is_initialized:
+            self.setup(context)
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit(data_container, context)
 
@@ -1226,6 +1250,9 @@ class _CustomHandlerMethods:
             :class:`~neuraxle.data_container.DataContainer`,
             :class:`~neuraxle.base.ExecutionContext`
         """
+        if not self.is_initialized:
+            self.setup(context)
+
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit_transform(data_container, context)
 
@@ -1251,6 +1278,9 @@ class _CustomHandlerMethods:
             :class:`~neuraxle.data_container.DataContainer`,
             :class:`~neuraxle.base.ExecutionContext`
         """
+        if not self.is_initialized:
+            self.setup(context)
+
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_transform_data_container(data_container, context)
 
@@ -2148,7 +2178,10 @@ class BaseTransformer(
         Initialize the step before it runs. Only from here and not before that heavy things should be created
         (e.g.: things inside GPU), and NOT in the constructor.
 
-        The setup method is called for each step before any fit, or fit_transform.
+        .. warning::
+            The setup method is called once for each step when handle_fit, handle_fit_transform or handle_transform is called.
+            The setup method is executed only if is self.is_initialized is False
+            A setup function should set the self.is_initialized to True when called.
 
         :param context: execution context
         :return: self
@@ -2184,7 +2217,7 @@ class BaseTransformer(
         self.is_invalidated = True
         return RecursiveDict()
 
-    def teardown(self) -> 'BaseTransformer':
+    def _teardown(self) -> 'BaseTransformer':
         """
         Teardown step after program execution. Inverse of setup, and it should clear memory.
         Override this method if you need to clear memory.
@@ -2193,6 +2226,13 @@ class BaseTransformer(
         """
         self.is_initialized = False
         return self
+
+    def __del__(self):
+        try:
+            self._teardown()
+        except Exception:
+            import traceback
+            print(traceback.format_exc())
 
     def set_train(self, is_train: bool = True):
         """
@@ -2403,19 +2443,6 @@ class _HasChildrenMixin(MixinForBaseTransformer):
 
         return results
 
-    def setup(self, context: ExecutionContext = None) -> BaseTransformer:
-        """
-        Initialize step before it runs. Also initialize its childrens.
-
-        :param context: execution context
-        :return: self
-        """
-        super().setup(context=context)
-        for step in self.get_children():
-            step.setup(context=context)
-        self.is_initialized = True
-        return self
-
     @abstractmethod
     def get_children(self) -> List[BaseStep]:
         """
@@ -2471,7 +2498,6 @@ class MetaStepMixin(_HasChildrenMixin):
 
     .. seealso::
         :class:`~neuraxle.steps.loop.ForEachDataInput`,
-        :class:`~neuraxle.metaopt.sklearn.MetaSKLearnWrapper`,
         :class:`~neuraxle.metaopt.random.BaseCrossValidationWrapper`,
         :class:`~neuraxle.steps.caching.ValueCachingWrapper`,
         :class:`~neuraxle.steps.loop.StepClonerForEachDataInput`
@@ -2494,17 +2520,6 @@ class MetaStepMixin(_HasChildrenMixin):
         """
         self._invalidate()
         self.wrapped: BaseTransformer = _sklearn_to_neuraxle_step(step)
-        return self
-
-    def teardown(self) -> BaseStep:
-        """
-        Teardown step. Also teardown the wrapped step.
-
-        :return: self
-        """
-        super().teardown()
-        self.wrapped.teardown()
-        self.is_initialized = False
         return self
 
     def get_step(self) -> BaseStep:
@@ -2934,20 +2949,6 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         steps_as_tuple = self._wrap_non_base_steps(steps_as_tuple)
         self.steps_as_tuple: NamedTupleList = self._patch_missing_names(steps_as_tuple)
         self._refresh_steps()
-
-    def teardown(self) -> 'BaseTransformer':
-        """
-        Teardown step after program execution.
-        Teardowns all of the sub steps as well.
-
-        :return: self
-        """
-        for step_name, step in self.steps_as_tuple:
-            step.teardown()
-
-        self.is_initialized = False
-
-        return self
 
     def get_children(self) -> List[BaseStep]:
         """

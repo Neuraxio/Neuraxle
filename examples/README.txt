@@ -1,5 +1,4 @@
-Usage Examples
+\>\>\> Practical Examples
 ==================
 
-Navigate the examples.
-
+Navigate the hands-on examples.

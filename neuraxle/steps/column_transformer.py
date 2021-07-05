@@ -130,7 +130,7 @@ class ColumnsSelectorND(MetaStep):
     def __init__(self, columns_selection, n_dimension=3):
         assert n_dimension >= 2
         col_selector: ColumnSelector2D = ColumnSelector2D(columns_selection=columns_selection)
-        for _ in range(min(0, n_dimension - 2)):
+        for _ in range(max(0, n_dimension - 2)):
             col_selector = ForEach(col_selector)
 
         MetaStep.__init__(self, col_selector)

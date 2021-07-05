@@ -23,6 +23,7 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
+from operator import attrgetter
 from typing import Union, Optional as OptionalType, Dict, Callable
 
 from neuraxle.base import BaseStep, MetaStep, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin, \
@@ -375,7 +376,7 @@ class ChooseOneStepOf(FeatureUnion):
     """
 
     def __init__(self, steps, hyperparams=None):
-        FeatureUnion.__init__(self, steps, joiner=SelectNonEmptyDataInputs())
+        FeatureUnion.__init__(self, steps, joiner=SelectNonEmptyDataContainer())
 
         self._make_all_steps_optional()
 
@@ -406,7 +407,7 @@ class ChooseOneStepOf(FeatureUnion):
 
         return self
 
-    def update_hyperparams(self, hyperparams: Union[HyperparameterSamples, dict]):
+    def _update_hyperparams(self, hyperparams: Union[HyperparameterSamples, dict]):
         """
         Set chosen step hyperparams.
 
@@ -414,16 +415,14 @@ class ChooseOneStepOf(FeatureUnion):
         :type hyperparams: HyperparameterSamples
         :return:
         """
-        super().update_hyperparams(hyperparams)
+        super()._update_hyperparams(hyperparams)
         self._update_optional_hyperparams()
-
-        return self
+        return self.hyperparams
 
     def _update_optional_hyperparams(self):
         step_names = list(self.keys())
-        chosen_step_name = self.hyperparams[self.CHOICE_HYPERPARAM] if self.CHOICE_HYPERPARAM in self.hyperparams else \
-        step_names[
-            0]
+        chosen_step_name = self.hyperparams[self.CHOICE_HYPERPARAM] if self.CHOICE_HYPERPARAM in self.hyperparams \
+            else step_names[0]
 
         if chosen_step_name not in step_names:
             raise ValueError('Invalid Chosen Step in {0}'.format(self.name))
@@ -527,9 +526,33 @@ class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseTransformer):
 
         data_container = DataContainer(data_inputs=data_inputs, current_ids=data_container.current_ids,
                                        expected_outputs=data_container.expected_outputs)
-        data_container.set_data_inputs(data_inputs)
 
         return data_container
+
+class SelectNonEmptyDataContainer(TransformHandlerOnlyMixin, BaseTransformer):
+    """
+    A step that selects non empty data containers.
+    Assumes that the given DataContainer contains a list of DataContainer as data_inputs.
+
+    .. seealso::
+        :class:`~neuraxle.base.TransformHandlerOnlyMixin`,
+        :class:`~neuraxle.base.BaseStep`
+    """
+
+    def __init__(self):
+        BaseTransformer.__init__(self)
+        TransformHandlerOnlyMixin.__init__(self)
+
+    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+
+        data_containers = list(filter(lambda dc: (len(dc.data_inputs) > 0 and len(dc.expected_outputs) > 0),
+                                      data_container.data_inputs))
+        if len(data_containers) == 1:
+            return data_containers[0]
+        else:
+            return DataContainer(data_inputs=list(map(attrgetter("data_inputs"))),
+                                 expected_outputs=list(map(attrgetter("expected_outputs"))),
+                                 current_ids=data_container.current_ids)
 
 
 class ExpandDim(ResumableStepMixin, MetaStep):
