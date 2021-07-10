@@ -93,32 +93,48 @@ def test_hyperparams_space_rvs_outputs_samples():
 
 
 def test_hyperparameter_samples_compress():
-    _flat_hps = {
+    hps = HyperparameterSamples({
         "b__a__learning_rate": 7,
         "b__learning_rate": 9,
         "Sklearn__test1__test__abc": False,
         "Sklearn__test2__test__abc": "Parallel"
-    }
-    expected_compressed_hps_with_parents = [
+    }, separator="__")
+    expected = [
         {'step_name': 'a', 'hyperparams': {'learning_rate': 7}, 'ancestor_steps': ['b']},
         {'step_name': 'b', 'hyperparams': {'learning_rate': 9}, 'ancestor_steps': []},
         {'step_name': 'test', 'hyperparams': {'abc': False}, 'ancestor_steps': ["Sklearn", "test1"]},
         {'step_name': 'test', 'hyperparams': {'abc': "Parallel"}, 'ancestor_steps': ["Sklearn", "test2"]}]
-    expected_compressed_hps_with_out_parents = [
+
+    actual = hps.compress()
+    assert isinstance(actual, CompressedHyperparameterSamples)
+    assert str(actual) == str(expected)
+
+
+def test_hyperparameter_samples_compress_without_parents():
+    hps = HyperparameterSamples({
+        "b__a__learning_rate": 7,
+        "b__learning_rate": 9,
+        "Sklearn__test1__test__abc": False,
+        "Sklearn__test2__test__abc": "Parallel"
+    }, separator="__")
+    expected = [
         {'step_name': 'a', 'hyperparams': {'learning_rate': 7}, 'ancestor_steps': None},
         {'step_name': 'b', 'hyperparams': {'learning_rate': 9}, 'ancestor_steps': None},
         {'step_name': 'test', 'hyperparams': {'abc': False}, 'ancestor_steps': None},
         {'step_name': 'test', 'hyperparams': {'abc': "Parallel"}, 'ancestor_steps': None}]
-    expected_compressed_wild_cards = [('*a__learning_rate', 7), ('b__learning_rate', 9), ('*test1*abc', False),
-                                      ("*test2*abc", 'Parallel')]
-    _separator = "__"
-    hps = HyperparameterSamples(_flat_hps, separator=_separator)
-    hps_compressed_with_parents = hps.compress()
-    assert isinstance(hps_compressed_with_parents, CompressedHyperparameterSamples)
-    assert str(hps_compressed_with_parents) == str(expected_compressed_hps_with_parents)
+    actual = hps.compress(remove_parents=True)
+    assert isinstance(actual, CompressedHyperparameterSamples)
+    assert str(actual) == str(expected)
 
-    hps_compressed_without_parents = hps.compress(remove_parents=True)
-    assert isinstance(hps_compressed_without_parents, CompressedHyperparameterSamples)
-    assert str(hps_compressed_without_parents) == str(expected_compressed_hps_with_out_parents)
 
-    assert list(hps_compressed_with_parents.wildcards().items()) == expected_compressed_wild_cards
+def test_hyperparameter_samples_compress_wildcards():
+    hps = HyperparameterSamples({
+        "b__a__learning_rate": 7,
+        "b__learning_rate": 9,
+        "Sklearn__test1__test__abc": False,
+        "Sklearn__test2__test__abc": "Parallel"
+    }, separator="__")
+    expected = [('*a__learning_rate', 7), ('b__learning_rate', 9), ('*test1*abc', False),
+                ("*test2*abc", 'Parallel')]
+    actual = hps.compress().wildcards().items()
+    assert list(actual) == expected
