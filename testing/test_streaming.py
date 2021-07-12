@@ -76,9 +76,12 @@ def test_queued_pipeline_with_step():
         MultiplyByN(2)
     ], batch_size=10, n_workers_per_step=1, max_queue_size=5)
 
-    outputs = p.transform(list(range(100)))
+    data_container = DataContainer(data_inputs=list(range(100)))
+    context = ExecutionContext()
 
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+    outputs = p.handle_transform(data_container, context)
+
+    assert np.array_equal(outputs.data_inputs, EXPECTED_OUTPUTS)
 
 
 def test_queued_pipeline_with_step_name_step():
