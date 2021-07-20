@@ -47,10 +47,10 @@ allow the step to be sent to a remote computer or to be threadable
 by reloading the save. The save can be dumped to a RAM disk for
 more performance and avoid truly writing to disks.
 
-Neuraxle is compatible with most other ML and DL libraries. We're
-currently already writing savers for TensorFlow in the
+Neuraxle is compatible with most other ML and DL libraries. We've
+written savers and steps for TensorFlow in the
 `Neuraxle-TensorFlow <https://github.com/Neuraxio/Neuraxle-TensorFlow>`__
-extensions of this project.
+extensions of this project, installable with "pip install neuraxle_tensorflow".
 
 Time Series Processing
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -72,10 +72,10 @@ in the `Deep Learning Pipelines <#deep-learning-pipelines>`__ section above.
 
 Note: `the Neuraxio Time Series project <https://www.neuraxio.com/pages/neuraxios-time-series-solution>`__ is different from the Neuraxle project; those are separate projects. Neuraxio is commited to build open-source software, and defines itself as an open-source company. Learn more on `Neuraxle's license <#license>`__. The Neuraxle library is free and will always stay free, while Neuraxio Time Series is a premium add-on to Neuraxle.
 
-Automatic Machine Learning
+Automated Machine Learning
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-One of the core goal of this framework is to enable easy automatic
+One of the core goal of this framework is to enable easy automated
 machine learning, and also meta-learning. It should be easy to train a
 meta-optimizer on many different tasks: the optimizer is a model itself
 that maps features of datasets and features of the hyperparameter space
@@ -132,8 +132,8 @@ spaCy
 
 spaCy has copyleft dependencies or may download copyleft content, and it
 is built only for Natural Language Processing (NLP) projects. Neuraxle
-is open to any kind of machine learning projects and isn't an NLP-first
-project.
+is open to any kind of machine learning projects and isn't an NLP-only
+or NLP-first project.
 
 Kubeflow
 ~~~~~~~~
@@ -148,4 +148,3 @@ project is best deployed as a microservice within your software
 environment, and you can fully control and customize how you deploy your
 project (e.g.: coding yourself a pipeline step that does json conversion
 to accept http requests).
-
