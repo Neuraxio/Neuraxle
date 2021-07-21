@@ -694,8 +694,8 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
 
         :return: teardowned self
         """
-        ObservableQueueMixin.teardown(self)
-        Joiner.teardown(self)
+        ObservableQueueMixin._teardown(self)
+        Joiner._teardown(self)
         self.summary_ids = []
         self.result = {}
         return self
