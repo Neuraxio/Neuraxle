@@ -15,7 +15,7 @@ parser.add_argument('--accepted_licenses', nargs='*',
                     default=["Apache Software License", "Apache 2.0", "BSD", "ZLIB", "MIT", "Unlicense", "CC0", "CC-BY","PSF", "MPL", "Mozilla Public License 2.0"])
 parser.add_argument('--forbidden_licenses', nargs='*',
                     help="A list of license which are considered problematic for your project.",
-                    default=["GNU", "GPL", "Commons Clause"])
+                    default=["GNU", "GPL", "Commons Clause", "BY-N"])
 args = parser.parse_args()
 
 python_dependencies = args.dependencies
