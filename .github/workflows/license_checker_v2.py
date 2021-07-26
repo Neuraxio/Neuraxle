@@ -12,7 +12,7 @@ parser.add_argument('--dependencies', nargs='+', required=True,
                     help="A list of python library name you want to check the license of.")
 parser.add_argument('--accepted_licenses', nargs='*',
                     help="A list of license which are considered acceptable for your project.",
-                    default=["Apache Software License", "Apache 2.0", "BSD", "ZLIB", "MIT", "Unlicense", "CC0", "CC-BY","PSF", "MPL", "Mozilla Public License 2.0"])
+                    default=["Apache Software License", "Apache 2.0", "BSD", "ZLIB", "MIT", "Unlicense", "CC0", "CC-BY","PSF", "MPL", "Mozilla Public License 2.0", "Historical Permission Notice and Disclaimer", "HPND"])
 parser.add_argument('--forbidden_licenses', nargs='*',
                     help="A list of license which are considered problematic for your project.",
                     default=["GNU", "GPL", "Commons Clause", "BY-N"])
