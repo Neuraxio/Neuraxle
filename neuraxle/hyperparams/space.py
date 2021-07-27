@@ -365,14 +365,20 @@ class CompressedHyperparameterSamples:
                     break
             compressed_key = hp
             # phase2: Pruning(Converting to wild card format) the output from phase1
-            if compressed_key == selected_string_key_for_each_hp[hp]:  # if `selected_string` is same has absolute hp
-                wild_card_compressed_strings[compressed_key] = self._flat_hps[hp]
-                continue
             selected_hp: List[str] = selected_string_key_for_each_hp[hp].split(self._separator)
             current_selected_hp_len: int = len(selected_hp)
-            compressed_key = f"*{selected_string_key_for_each_hp[hp]}"
-            if self._can_be_pruned_further(selected_hp, all_string_pairs_freq) and current_selected_hp_len >= 3:
+            can_be_pruned = self._can_be_pruned_further(selected_hp, all_string_pairs_freq)
+            if compressed_key == selected_string_key_for_each_hp[hp] and not can_be_pruned:
+                wild_card_compressed_strings[compressed_key] = self._flat_hps[hp]
+                continue
+            if can_be_pruned and current_selected_hp_len >= 3:
+
                 compressed_key = f"*{selected_hp[0]}*{selected_hp[-1]}"
+            else:
+                compressed_key = f"*{selected_string_key_for_each_hp[hp]}"
+
+            if compressed_key[1:len(split_hp_param[0]) + 1] == split_hp_param[0]:
+                compressed_key = compressed_key[1:]
             wild_card_compressed_strings[compressed_key] = self._flat_hps[hp]
         return wild_card_compressed_strings
 
