@@ -105,12 +105,15 @@ venv.bak/
 
 # IDEs
 .idea
+.vscode
 
 # Other
 ___*
 
 **cache/**
+**caching/**
 cache/**
+caching/**
 testing/examples/cache/**
 testing/cache/**
 testing/cache/*
