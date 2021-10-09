@@ -68,13 +68,29 @@ def test_queued_pipeline_with_included_incomplete_batch_that_raises_an_exception
         p.transform(list(range(15)))
 
 
-def test_queued_pipeline_with_step():
+def test_queued_pipeline_with_step_with_process():
     p = SequentialQueuedPipeline([
         MultiplyByN(2),
         MultiplyByN(2),
         MultiplyByN(2),
         MultiplyByN(2)
-    ], batch_size=10, n_workers_per_step=1, max_queue_size=5)
+    ], batch_size=10, n_workers_per_step=1, max_queue_size=5, use_threading=False)
+
+    data_container = DataContainer(data_inputs=list(range(100)))
+    context = ExecutionContext()
+
+    outputs = p.handle_transform(data_container, context)
+
+    assert np.array_equal(outputs.data_inputs, EXPECTED_OUTPUTS)
+
+
+def test_queued_pipeline_with_step_with_threading():
+    p = SequentialQueuedPipeline([
+        MultiplyByN(2),
+        MultiplyByN(2),
+        MultiplyByN(2),
+        MultiplyByN(2)
+    ], batch_size=10, n_workers_per_step=1, max_queue_size=5, use_threading=True)
 
     data_container = DataContainer(data_inputs=list(range(100)))
     context = ExecutionContext()
@@ -296,7 +312,6 @@ def test_queued_pipeline_saving(tmpdir):
 
 def test_queued_pipeline_with_savers(tmpdir):
     # Given
-
     p = ParallelQueuedFeatureUnion([
         ('1', MultiplyByN(2)),
         ('2', MultiplyByN(2)),
@@ -305,11 +320,9 @@ def test_queued_pipeline_with_savers(tmpdir):
     ], n_workers_per_step=1, max_queue_size=10, batch_size=10, use_savers=True, cache_folder=tmpdir)
 
     # When
-
     outputs = p.transform(list(range(100)))
 
     # Then
-
     assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
 
 

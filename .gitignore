@@ -106,6 +106,7 @@ venv.bak/
 # IDEs
 .idea
 .vscode
+vandelay-py.js
 
 # Other
 ___*
