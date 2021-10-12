@@ -48,6 +48,7 @@ LOGGER_FORMAT = "[%(asctime)s][%(levelname)s][%(module)s][%(lineno)d]: %(message
 DATE_FORMAT = "%H:%M:%S"
 logging.basicConfig(format=LOGGER_FORMAT, datefmt=DATE_FORMAT, level=logging.INFO)
 
+
 class BaseHasher(ABC):
     """
     Base class to hash hyperparamters, and data input ids together.
@@ -521,6 +522,14 @@ class ExecutionContext:
             services=self.services,
             logger=self.logger
         )
+
+    def thread_safe(self):
+        threaded_context = self.copy()
+        # Not passing parents to threads. We could, but we would need to sanitize some parents:
+        threaded_context.parents = []
+        # Must compensate lost parents:
+        threaded_context.root = self.get_path()
+        return threaded_context
 
     def peek(self) -> 'BaseTransformer':
         """
@@ -1010,13 +1019,14 @@ class _TransformerStep(ABC):
         """
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
-    def teardown(self)->'BaseTransformer':
+    def teardown(self) -> 'BaseTransformer':
         """
         Applies _teardown on the step and, if applicable, its children.
         :return: self
         """
         self.apply("_teardown")
         return self
+
 
 class _FittableStep:
     """
@@ -1999,7 +2009,8 @@ class _HasMutations(ABC):
         self._invalidate()
 
         if new_method is None or method_to_assign_to is None:
-            new_method = method_to_assign_to = "transform"  # No changes will be applied (transform will stay transform).
+            # No changes will be applied (transform will stay transform).
+            new_method = method_to_assign_to = "transform"
 
         self.pending_mutate = (new_base_step, new_method, method_to_assign_to)
 
@@ -2278,7 +2289,7 @@ class BaseTransformer(
         return self.name
 
     def get_step_by_name(self, name):
-        if self.name == name :
+        if self.name == name:
             return self
         return None
 
@@ -2307,14 +2318,19 @@ class BaseTransformer(
         """
         return self.reverse()
 
-    def __repr__(self):
-        output = self.__class__.__name__ + "(\n\tname=" + self.name + "," + "\n\thyperparameters=" + pprint.pformat(
-            self.hyperparams) + "\n)"
+    def __str__(self) -> str:
+        return self.__repr__()
+
+    def __repr__(self) -> str:
+        return self._repr()
+
+    def _repr(self, level=0) -> str:
+        tab0 = "\t" * (level + 1)
+        tab1 = "\t" * level
+        output = self.__class__.__name__ + "(\n" + tab1 + "name=" + self.name + "," + "\n" + tab1 + "hyperparameters=" + pprint.pformat(
+            self.hyperparams) + "\n" + tab0 + ")"
 
         return output
-
-    def __str__(self):
-        return self.__repr__()
 
 
 def _sklearn_to_neuraxle_step(step) -> BaseTransformer:
@@ -2639,10 +2655,12 @@ class MetaStepMixin(_HasChildrenMixin):
         new_self = super().will_mutate_to(new_base_step, new_method, method_to_assign_to)
         return new_self
 
-    def __repr__(self):
-        output = self.__class__.__name__ + "(\n\twrapped=" + repr(
-            self.wrapped) + "," + "\n\thyperparameters=" + pprint.pformat(
-            self.hyperparams) + "\n)"
+    def _repr(self, level=0):
+        tab0 = "\t" * (level + 1)
+        tab1 = "\t" * level
+        output = self.__class__.__name__ + "(\n" \
+            + tab1 + "wrapped=" + self.wrapped._repr(level + 1) + "," + "\n" + tab1 + "hyperparameters=" + pprint.pformat(
+            self.hyperparams) + "\n" + tab0 + ")"
         return output
 
 
@@ -3350,18 +3368,14 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         """
         return isinstance(self[-1], step_type)
 
-    def __repr__(self):
-
-        output = self.__class__.__name__ + '\n' \
-                 + "(\n\t" + super(TruncableSteps, self).__repr__() \
-                 + "(\n\t\t" + pprint.pformat(self.steps_as_tuple) \
-                 + "\t\n)" \
-                 + "\n)"
+    def _repr(self, level=0):
+        tab0 = "\t" * (level + 1)
+        tab1 = "\t" * level
+        output = self.__class__.__name__ + "(\n" + ''.join(
+            [tab1 + s._repr(level=level+1) + ",\n" for s in self.get_children()]
+        ) + tab0 + ")"
 
         return output
-
-    def __str__(self):
-        return self.__repr__()
 
 
 class ResumableStepMixin(MixinForBaseTransformer):
@@ -3742,12 +3756,14 @@ class AssertExpectedOutputIsNoneMixin(WillProcessAssertionMixin):
             raise AssertionError(
                 f"Expected datacontainer.expected_outputs to be a `None` or a list of `None`. Received {data_container.expected_outputs}.")
 
+
 class AssertExpectedOutputIsNotNoneMixin(WillProcessAssertionMixin):
     def _assert(self, data_container: DataContainer, context: ExecutionContext):
         eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
         if eo_empty:
             raise AssertionError(
                 f"Expected datacontainer.expected_outputs to not be a `None` or a list of `None`. Received {data_container.expected_outputs}.")
+
 
 class AssertExpectedOutputIsNoneStep(AssertExpectedOutputIsNoneMixin, Identity):
     def __init__(self):
@@ -3848,7 +3864,8 @@ class _WithContextStepSaver(BaseSaver):
         :return: loaded step with context
         """
         step.context = context
-        warnings.warn("Warning! the loading of a StepWithContext instance overrides the context attribute with the one provided at loading.")
+        warnings.warn(
+            "Warning! the loading of a StepWithContext instance overrides the context attribute with the one provided at loading.")
         return step
 
     def save_step(self, step: 'StepWithContext', context: ExecutionContext) -> 'StepWithContext':

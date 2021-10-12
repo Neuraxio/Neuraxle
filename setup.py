@@ -1,7 +1,7 @@
 """
-Neuraxle
+Neuraxle setup file
 ====================================
-This is the core of Neuraxle. Most pipeline steps derive (inherit) from those classes. They are worth noticing.
+Setup file specifying the python version and so forth.
 
 ..
     Copyright 2019, Neuraxio Inc.
@@ -50,6 +50,7 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
         "Topic :: Adaptive Technologies",
         "Topic :: Office/Business",
         "Topic :: Scientific/Engineering",
@@ -91,22 +92,22 @@ setup(
     test_suite="testing",
     setup_requires=["pytest-runner"],
     install_requires=[
-        'numpy',
+        'numpy>=1.16.2',
         'scipy>=1.4.1',
         'scikit-learn>=0.24.1',
         'matplotlib==3.3.4',
         'joblib>=0.13.2',
-        'Flask>=1.1.1',
+        'Flask>=1.1.4',
         'Flask-RESTful>=0.3.7',
     ],
     tests_require=[
         "pytest",
         "pytest-cov",
-        "scikit-learn>=0.20.3"
+        "scikit-learn>=0.24.1"
     ],
     include_package_data=True,
     license='Apache 2.0',
-    keywords='pipeline pipelines data science machine learning deep learning'
+    keywords='pipeline pipelines data science machine learning deep learning neuraxle sklearn scikit-learn scipy numpy pandas tensorflow'
 )
 
 print("""
