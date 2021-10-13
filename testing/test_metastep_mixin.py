@@ -1,7 +1,8 @@
 from neuraxle.pipeline import Pipeline
-
-from neuraxle.base import MetaStep, BaseStep, NonTransformableMixin, MetaStepMixin
+from neuraxle.base import BaseStep, MetaStepMixin
 from neuraxle.union import Identity
+
+from testing.mocks.step_mocks import SomeMetaStepWithHyperparams
 
 
 class SomeMetaStep(MetaStepMixin, BaseStep):
@@ -35,25 +36,6 @@ def test_metastepmixin_set_train_should_set_train_to_true():
     assert p.wrapped.is_train
 
 
-from testing.mocks.step_mocks import SomeMetaStepWithHyperparams
-
-EXPECTED_STR_OUTPUT = """SomeMetaStepWithHyperparams(
-	wrapped=SomeStepWithHyperparams(
-	name=MockStep,
-	hyperparameters=HyperparameterSamples([('learning_rate', 0.1),
-                       ('l2_weight_reg', 0.001),
-                       ('hidden_size', 32),
-                       ('num_layers', 3),
-                       ('num_lstm_layers', 1),
-                       ('use_xavier_init', True),
-                       ('use_max_pool_else_avg_pool', True),
-                       ('dropout_drop_proba', 0.5),
-                       ('momentum', 0.1)])
-),
-	hyperparameters=HyperparameterSamples()
-)"""
-
-
-def test_basestep_representation_works_correctly():
+def test_basestep_str_representation_works_correctly():
     output = str(SomeMetaStepWithHyperparams())
-    assert output == EXPECTED_STR_OUTPUT
+    assert output == "SomeMetaStepWithHyperparams(SomeStepWithHyperparams(name='MockStep'), name='SomeMetaStepWithHyperparams')"

@@ -2319,17 +2319,16 @@ class BaseTransformer(
         return self.reverse()
 
     def __str__(self) -> str:
-        return self.__repr__()
+        return self._repr(verbose=False)
 
     def __repr__(self) -> str:
-        return self._repr()
+        return self._repr(verbose=True)
 
-    def _repr(self, level=0) -> str:
-        tab0 = "\t" * (level + 1)
-        tab1 = "\t" * level
-        output = self.__class__.__name__ + "(\n" + tab1 + "name=" + self.name + "," + "\n" + tab1 + "hyperparameters=" + pprint.pformat(
-            self.hyperparams) + "\n" + tab0 + ")"
-
+    def _repr(self, level=0, verbose=False) -> str:
+        output = self.__class__.__name__ + "(name='" + self.name + "'"
+        if verbose:
+            output += ", hyperparameters=" + pprint.pformat(self.hyperparams)
+        output += ")"
         return output
 
 
@@ -2655,12 +2654,12 @@ class MetaStepMixin(_HasChildrenMixin):
         new_self = super().will_mutate_to(new_base_step, new_method, method_to_assign_to)
         return new_self
 
-    def _repr(self, level=0):
-        tab0 = "\t" * (level + 1)
-        tab1 = "\t" * level
-        output = self.__class__.__name__ + "(\n" \
-            + tab1 + "wrapped=" + self.wrapped._repr(level + 1) + "," + "\n" + tab1 + "hyperparameters=" + pprint.pformat(
-            self.hyperparams) + "\n" + tab0 + ")"
+    def _repr(self, level=0, verbose=False):
+        output = self.__class__.__name__ + "("
+        output += self.wrapped._repr(level=level + 1, verbose=verbose) + ", name='" + self.name + "'"
+        if verbose:
+            output += ", hyperparameters=" + pprint.pformat(self.hyperparams)
+        output += ")"
         return output
 
 
@@ -3368,13 +3367,15 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         """
         return isinstance(self[-1], step_type)
 
-    def _repr(self, level=0):
-        tab0 = "\t" * (level + 1)
-        tab1 = "\t" * level
-        output = self.__class__.__name__ + "(\n" + ''.join(
-            [tab1 + s._repr(level=level+1) + ",\n" for s in self.get_children()]
-        ) + tab0 + ")"
-
+    def _repr(self, level=0, verbose=False):
+        tab0 = "    " * level
+        tab1 = "    " * (level + 1)
+        output = self.__class__.__name__ + "([\n" + ''.join(
+            [tab1 + s._repr(level=level + 1, verbose=verbose) + ",\n" for s in self.get_children()]
+        ) + tab0 + "], name='" + self.name + "'"
+        if verbose:
+            output += ", hyperparameters=" + pprint.pformat(self.hyperparams)
+        output += ")"
         return output
 
 
