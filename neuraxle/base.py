@@ -2319,9 +2319,23 @@ class BaseTransformer(
         return self.reverse()
 
     def __str__(self) -> str:
+        """
+        Return a pretty representation of the pipeline step.
+        Use :func:`~neuraxle.base.BaseTransformer.__repr__`, for a more
+        detailed string representation if needed.
+
+        :return: return pretty representation such as ``StepName(name='StepName')``.
+        """
         return self._repr(verbose=False)
 
     def __repr__(self) -> str:
+        """
+        Return a detailed and pretty representation of the pipeline step.
+        Use :func:`~neuraxle.base.BaseTransformer.__str__`, for a less
+        detailed string representation if needed.
+
+        :return: return pretty representation, such as ``StepName(name='StepName', hyperparameters=HyperparameterSamples({...}))``.
+        """
         return self._repr(verbose=True)
 
     def _repr(self, level=0, verbose=False) -> str:
@@ -2654,7 +2668,7 @@ class MetaStepMixin(_HasChildrenMixin):
         new_self = super().will_mutate_to(new_base_step, new_method, method_to_assign_to)
         return new_self
 
-    def _repr(self, level=0, verbose=False):
+    def _repr(self, level=0, verbose=False) -> str:
         output = self.__class__.__name__ + "("
         output += self.wrapped._repr(level=level + 1, verbose=verbose) + ", name='" + self.name + "'"
         if verbose:
@@ -3367,7 +3381,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         """
         return isinstance(self[-1], step_type)
 
-    def _repr(self, level=0, verbose=False):
+    def _repr(self, level=0, verbose=False) -> str:
         tab0 = "    " * level
         tab1 = "    " * (level + 1)
         output = self.__class__.__name__ + "([\n" + ''.join(

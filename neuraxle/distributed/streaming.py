@@ -187,7 +187,7 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
 
     def __getstate__(self):
         """
-        This class, upon being forked() to a new process with pickles, 
+        This class, upon being forked() to a new process with pickles,
         should not copy references to other threads.
         """
         state = self.__dict__.copy()

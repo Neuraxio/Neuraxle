@@ -25,10 +25,11 @@ The checkpoint classes used by the checkpoint pipeline runner
 """
 
 import os
-import pickle
 from abc import abstractmethod, ABC
 from enum import Enum
 from typing import List, Tuple, Any
+
+import joblib
 
 from neuraxle.base import ResumableStepMixin, BaseStep, ExecutionContext, \
     ExecutionMode, NonTransformableMixin, Identity, _FittableStep, HandleOnlyMixin, ForceHandleOnlyMixin, \
@@ -176,7 +177,7 @@ class Checkpoint(IdentityHandlerMethodsMixin, ResumableStepMixin, BaseStep):
     for the current execution mode (fit or fit_transform).
 
     By default(no arguments specified), the Checkpoint step saves the step checkpoints for any fit or fit transform,
-    and saves a different data checkpoint with pickle data container checkpointers :
+    and saves a different data checkpoint with joblib data container checkpointers :
 
     .. code:: python
 
@@ -184,8 +185,8 @@ class Checkpoint(IdentityHandlerMethodsMixin, ResumableStepMixin, BaseStep):
             all_checkpointers=[
                 StepSavingCheckpointer(),
                 MiniDataCheckpointerWrapper(
-                    data_input_checkpointer=PickleMiniDataCheckpointer(),
-                    expected_output_checkpointer=PickleMiniDataCheckpointer()
+                    data_input_checkpointer=JoblibMiniDataCheckpointer(),
+                    expected_output_checkpointer=JoblibMiniDataCheckpointer()
                 )
             ]
         )
@@ -286,8 +287,8 @@ class BaseSummaryCheckpointer(ABC):
                 StepSavingCheckpointer(),
                 MiniDataCheckpointerWrapper(
                     summary_checkpointer=TextSummaryCheckpointer(),
-                    data_input_checkpointer=PickleMiniDataCheckpointer(),
-                    expected_output_checkpointer=PickleMiniDataCheckpointer()
+                    data_input_checkpointer=JoblibMiniDataCheckpointer(),
+                    expected_output_checkpointer=JoblibMiniDataCheckpointer()
                 )
             ]
         )
@@ -295,7 +296,7 @@ class BaseSummaryCheckpointer(ABC):
     .. seealso::
         :class:`BaseMiniDataCheckpointer`,
         :class:`MiniDataCheckpointerWrapper`,
-        :class:`PickleMiniDataCheckpointer`
+        :class:`JoblibMiniDataCheckpointer`
     """
 
     @abstractmethod
@@ -334,7 +335,7 @@ class BaseSummaryCheckpointer(ABC):
 
 class BaseMiniDataCheckpointer(ABC):
     """
-    Mini Data Checkpoint that uses pickle to create a checkpoint for a current id, and a data input or an expected output.
+    Mini Data Checkpoint that uses joblib to create a checkpoint for a current id, and a data input or an expected output.
 
     A mini data checkpointer must be wrapped with a :class:`MiniDataCheckpointerWrapper` to be added to a :class:`Checkpoint`
     :py:attr:`~Checkpoint.data_checkpointers` :
@@ -345,9 +346,9 @@ class BaseMiniDataCheckpointer(ABC):
             all_checkpointers=[
                 StepSavingCheckpointer(),
                 MiniDataCheckpointerWrapper(
-                    summary_checkpointer=PickleSummaryCheckpointer(),
-                    data_input_checkpointer=PickleMiniDataCheckpointer(),
-                    expected_output_checkpointer=PickleMiniDataCheckpointer()
+                    summary_checkpointer=JoblibSummaryCheckpointer(),
+                    data_input_checkpointer=JoblibMiniDataCheckpointer(),
+                    expected_output_checkpointer=JoblibMiniDataCheckpointer()
                 )
             ]
         )
@@ -355,7 +356,7 @@ class BaseMiniDataCheckpointer(ABC):
     .. seealso::
         :class:`BaseMiniDataCheckpointer`,
         :class:`MiniDataCheckpointerWrapper`,
-        :class:`PickleMiniDataCheckpointer`
+        :class:`JoblibMiniDataCheckpointer`
     """
 
     @abstractmethod
@@ -423,7 +424,7 @@ class TextFileSummaryCheckpointer(BaseSummaryCheckpointer):
         :class:`BaseSummaryCheckpointer`,
         :class:`BaseMiniDataCheckpointer`,
         :class:`MiniDataCheckpointerWrapper`,
-        :class:`PickleMiniDataCheckpointer`
+        :class:`JoblibMiniDataCheckpointer`
     """
 
     def save_summary(self, checkpoint_path: str, data_container: DataContainer):
@@ -466,9 +467,9 @@ class TextFileSummaryCheckpointer(BaseSummaryCheckpointer):
         )
 
 
-class PickleMiniDataCheckpointer(BaseMiniDataCheckpointer):
+class JoblibMiniDataCheckpointer(BaseMiniDataCheckpointer):
     """
-    Mini Data Checkpoint that uses pickle to create a pickle checkpoint file for a current id, and a data input or expected output.
+    Mini Data Checkpoint that uses joblib to create a joblib checkpoint file for a current id, and a data input or expected output.
 
     A mini data checkpointer must be wrapped with a :class:`MiniDataCheckpointerWrapper` to be added to a :class:`Checkpoint`
     :py:attr:`~Checkpoint.data_checkpointers` :
@@ -480,8 +481,8 @@ class PickleMiniDataCheckpointer(BaseMiniDataCheckpointer):
                 StepSavingCheckpointer(),
                 MiniDataCheckpointerWrapper(
                     summary_checkpointer=TextSummaryCheckpointer(),
-                    data_input_checkpointer=PickleMiniDataCheckpointer(),
-                    expected_output_checkpointer=PickleMiniDataCheckpointer()
+                    data_input_checkpointer=JoblibMiniDataCheckpointer(),
+                    expected_output_checkpointer=JoblibMiniDataCheckpointer()
                 )
             ]
         )
@@ -503,7 +504,7 @@ class PickleMiniDataCheckpointer(BaseMiniDataCheckpointer):
 
     def save_checkpoint(self, checkpoint_path: str, current_id, data):
         """
-        Save the given current id, data input, and expected output using pickle.dump.
+        Save the given current id, data input, and expected output using joblib.dump.
 
         :param checkpoint_path: checkpoint path
         :type checkpoint_path: str
@@ -515,13 +516,11 @@ class PickleMiniDataCheckpointer(BaseMiniDataCheckpointer):
         """
         if not os.path.exists(checkpoint_path):
             os.makedirs(checkpoint_path)
-
-        with open(self.get_checkpoint_filename_path_for_current_id(checkpoint_path, current_id), 'wb') as file:
-            pickle.dump(data, file)
+        joblib.dump(data, self.get_checkpoint_filename_path_for_current_id(checkpoint_path, current_id))
 
     def read_checkpoint(self, checkpoint_path: str, current_id) -> Any:
         """
-        Read the data inputs, and expected outputs for the given current id using pickle.load.
+        Read the data inputs, and expected outputs for the given current id using joblib.load.
 
         :param checkpoint_path: checkpoint folder path
         :type checkpoint_path: str
@@ -530,8 +529,7 @@ class PickleMiniDataCheckpointer(BaseMiniDataCheckpointer):
         :return: tuple(current_id, checkpoint_data_input, checkpoint_expected_output)
         :rtype: Any
         """
-        with open(self.get_checkpoint_filename_path_for_current_id(checkpoint_path, current_id), 'rb') as file:
-            return pickle.load(file)
+        return joblib.load(self.get_checkpoint_filename_path_for_current_id(checkpoint_path, current_id))
 
     def get_checkpoint_filename_path_for_current_id(self, checkpoint_path: str, current_id: str) -> str:
         """
@@ -544,7 +542,7 @@ class PickleMiniDataCheckpointer(BaseMiniDataCheckpointer):
         :return: path
         :rtype: str
         """
-        return os.path.join(checkpoint_path, '{0}.pickle'.format(current_id))
+        return os.path.join(checkpoint_path, '{0}.joblib'.format(current_id))
 
     def checkpoint_exists(self, checkpoint_path: str, current_id: str) -> bool:
         """
@@ -558,7 +556,7 @@ class PickleMiniDataCheckpointer(BaseMiniDataCheckpointer):
         :rtype: str
         """
         return os.path.exists(
-            os.path.join(checkpoint_path, '{0}.pickle'.format(current_id))
+            os.path.join(checkpoint_path, '{0}.joblib'.format(current_id))
         )
 
 
@@ -569,8 +567,8 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
     .. code:: python
 
         MiniDataCheckpointerWrapper(
-            data_input_checkpointer=PickleMiniDataCheckpointer(),
-            expected_output_checkpointer=PickleMiniDataCheckpointer()
+            data_input_checkpointer=JoblibMiniDataCheckpointer(),
+            expected_output_checkpointer=JoblibMiniDataCheckpointer()
         )
 
     .. seealso::
@@ -712,7 +710,7 @@ class MiniDataCheckpointerWrapper(BaseCheckpointer):
 
 class DefaultCheckpoint(Checkpoint):
     """
-    :class:`Checkpoint` with pickle mini data checkpointers wrapped in a :class:`MiniDataCheckpointerWrapper`, and the default step saving checkpointer.
+    :class:`Checkpoint` with joblib mini data checkpointers wrapped in a :class:`MiniDataCheckpointerWrapper`, and the default step saving checkpointer.
 
     .. seealso::
         :class:`Checkpoint`,
@@ -726,8 +724,8 @@ class DefaultCheckpoint(Checkpoint):
                 StepSavingCheckpointer(),
                 MiniDataCheckpointerWrapper(
                     summary_checkpointer=TextFileSummaryCheckpointer(),
-                    data_input_checkpointer=PickleMiniDataCheckpointer(),
-                    expected_output_checkpointer=PickleMiniDataCheckpointer()
+                    data_input_checkpointer=JoblibMiniDataCheckpointer(),
+                    expected_output_checkpointer=JoblibMiniDataCheckpointer()
                 )
             ]
         )

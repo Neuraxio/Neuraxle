@@ -164,7 +164,7 @@ class SKLearnWrapper(BaseStep):
     def get_wrapped_sklearn_predictor(self):
         return self.wrapped_sklearn_predictor
 
-    def _repr(self) -> str:
+    def _repr(self, level=0, verbose=False) -> str:
         type_ = self.__class__
         module = type_.__module__
         qualname = type_.__qualname__

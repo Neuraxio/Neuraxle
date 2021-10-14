@@ -80,9 +80,9 @@ def test_classic_walkforward_crossvalidation_split(training_window_size: int, va
         remainder_size = validation_window_size_temp
 
     # Initialize the inputs.
-    data_inputs = np.random.randint(low=0, high=1, size=(batch_size, time_series_size, features_size)).astype(np.float)
+    data_inputs = np.random.randint(low=0, high=1, size=(batch_size, time_series_size, features_size)).astype(float)
     expected_outputs = np.random.randint(low=0, high=1, size=(batch_size, time_series_size, features_size)) \
-        .astype(np.float)
+        .astype(float)
 
     # Initialize the class to test.
     step = WalkForwardTimeSeriesCrossValidationWrapper(
@@ -185,9 +185,9 @@ def test_anchored_walkforward_crossvalidation_split(minimum_training_size: int, 
         remainder_size = validation_window_size_temp
 
     # Initialize the inputs.
-    data_inputs = np.random.randint(low=0, high=1, size=(batch_size, time_series_size, features_size)).astype(np.float)
+    data_inputs = np.random.randint(low=0, high=1, size=(batch_size, time_series_size, features_size)).astype(float)
     expected_outputs = np.random.randint(low=0, high=1, size=(batch_size, time_series_size, features_size)) \
-        .astype(np.float)
+        .astype(float)
 
     # Initialize the class to test.
     step = AnchoredWalkForwardTimeSeriesCrossValidationWrapper(

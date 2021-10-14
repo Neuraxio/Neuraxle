@@ -301,7 +301,7 @@ def test_queued_pipeline_saving(tmpdir, use_processes, use_savers):
         use_processes=use_processes, use_savers=use_savers).with_context(ExecutionContext(tmpdir))
 
     # When
-    p, outputs = p.fit_transform(list(range(200)), list(range(200)))
+    p, _ = p.fit_transform(list(range(200)), list(range(200)))
     p = p.wrapped  # clear execution context wrapper
     p.save(ExecutionContext(tmpdir))
     p.apply('clear_callbacks')

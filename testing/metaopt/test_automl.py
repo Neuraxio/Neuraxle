@@ -292,7 +292,8 @@ def extract_validation_split_data(validation_splits):
 def test_automl_should_shallow_copy_data_before_each_epoch():
     # see issue #332 https://github.com/Neuraxio/Neuraxle/issues/332
     data_inputs = np.random.randint(0, 100, (100, 3))
-    expected_outputs = np.random.randint(0, 3, 100)
+    expected_outputs = np.array(np.sum(data_inputs, axis=-1) / 100, dtype=int)
+    data_inputs += np.random.randint(0, 100, (100, 3))
 
     from sklearn.preprocessing import StandardScaler
     p = Pipeline([
