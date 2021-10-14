@@ -28,6 +28,7 @@ import hashlib
 import inspect
 import logging
 import os
+import sys
 import pprint
 import traceback
 import warnings
@@ -46,7 +47,10 @@ DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
 
 LOGGER_FORMAT = "[%(asctime)s][%(levelname)s][%(module)s][%(lineno)d]: %(message)s"
 DATE_FORMAT = "%H:%M:%S"
-logging.basicConfig(format=LOGGER_FORMAT, datefmt=DATE_FORMAT, level=logging.INFO, force=True)
+if sys.version_info.major <= 3 and sys.version_info.minor <= 7:
+    logging.basicConfig(format=LOGGER_FORMAT, datefmt=DATE_FORMAT, level=logging.INFO)
+else:
+    logging.basicConfig(format=LOGGER_FORMAT, datefmt=DATE_FORMAT, level=logging.INFO, force=True)
 
 
 class BaseHasher(ABC):
