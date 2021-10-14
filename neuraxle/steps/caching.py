@@ -24,7 +24,6 @@ Pipeline Steps For Caching
 """
 import hashlib
 import os
-import pickle
 import shutil
 from abc import abstractmethod, ABC
 from typing import Iterable, Any
@@ -177,40 +176,9 @@ class ValueCachingWrapper(MetaStep):
         raise NotImplementedError()
 
 
-class PickleValueCachingWrapper(ValueCachingWrapper):
-    """
-    Value Caching Wrapper class that caches the wrapped step transformed data inputs using python ``pickle`` library.
-    """
-
-    def create_checkpoint_path(self) -> str:
-        if not os.path.exists(self.value_caching_folder):
-            os.makedirs(self.value_caching_folder)
-
-        return self.value_caching_folder
-
-    def flush_cache(self):
-        shutil.rmtree(self.value_caching_folder)
-        os.mkdir(self.value_caching_folder)
-
-    def read_cache(self, data_input):
-        with open(self.get_cache_path_for(data_input), 'rb') as file_:
-            return pickle.load(file_)
-
-    def write_cache(self, data_input, output):
-        with open(self.get_cache_path_for(data_input), 'wb') as file_:
-            return pickle.dump(output, file_)
-
-    def contains_cache_for(self, data_input) -> bool:
-        return os.path.exists(self.get_cache_path_for(data_input))
-
-    def get_cache_path_for(self, data_input):
-        hash_value = self._hash_value(data_input)
-        return os.path.join(self.value_caching_folder, '{0}.pickle'.format(hash_value))
-
-
 class JoblibValueCachingWrapper(ValueCachingWrapper):
     """
-    Joblib Value Caching Wrapper class that caches the wrapped step transformed data inputs using python ``pickle`` library.
+    Value Caching Wrapper class that caches the wrapped step transformed data inputs using python ``joblib`` library.
     """
 
     def create_checkpoint_path(self) -> str:
@@ -224,12 +192,10 @@ class JoblibValueCachingWrapper(ValueCachingWrapper):
         os.mkdir(self.value_caching_folder)
 
     def read_cache(self, data_input):
-        with open(self.get_cache_path_for(data_input), 'rb') as file_:
-            return joblib.load(file_)
+        return joblib.load(self.get_cache_path_for(data_input))
 
     def write_cache(self, data_input, output):
-        with open(self.get_cache_path_for(data_input), 'wb') as file_:
-            return joblib.dump(output, file_)
+        return joblib.dump(output, self.get_cache_path_for(data_input))
 
     def contains_cache_for(self, data_input) -> bool:
         return os.path.exists(self.get_cache_path_for(data_input))

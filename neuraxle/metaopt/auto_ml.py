@@ -33,6 +33,7 @@ import logging
 import math
 import multiprocessing
 import os
+import sys
 import time
 import traceback
 from abc import ABC, abstractmethod
@@ -818,9 +819,10 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
                 n_jobs = multiprocessing.cpu_count() + 1 + self.n_jobs
 
             with multiprocessing.get_context("spawn").Pool(processes=n_jobs) as pool:
-                # Note : In python 3.6, the root logger possess a lock which make it non-pickable.
-                # The following line is not necessary in Python 3.7 and 3.8.
-                context.set_logger(None)
+                if sys.version_info.major <= 3 and sys.version_info.minor <= 6:
+                    # Note : In python 3.6, the root logger possess a lock which make it non-pickable.
+                    # The following line is not necessary in Python 3.7 and 3.8.
+                    context.set_logger(None)
 
                 args = [(self, trial_number, validation_splits, context) for trial_number in range(self.n_trial)]
                 pool.starmap(AutoML._attempt_trial, args)

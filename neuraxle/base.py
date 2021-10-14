@@ -28,6 +28,7 @@ import hashlib
 import inspect
 import logging
 import os
+import sys
 import pprint
 import traceback
 import warnings
@@ -46,7 +47,11 @@ DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
 
 LOGGER_FORMAT = "[%(asctime)s][%(levelname)s][%(module)s][%(lineno)d]: %(message)s"
 DATE_FORMAT = "%H:%M:%S"
-logging.basicConfig(format=LOGGER_FORMAT, datefmt=DATE_FORMAT, level=logging.INFO)
+if sys.version_info.major <= 3 and sys.version_info.minor <= 7:
+    logging.basicConfig(format=LOGGER_FORMAT, datefmt=DATE_FORMAT, level=logging.INFO)
+else:
+    logging.basicConfig(format=LOGGER_FORMAT, datefmt=DATE_FORMAT, level=logging.INFO, force=True)
+
 
 class BaseHasher(ABC):
     """
@@ -521,6 +526,14 @@ class ExecutionContext:
             services=self.services,
             logger=self.logger
         )
+
+    def thread_safe(self):
+        threaded_context = self.copy()
+        # Not passing parents to threads. We could, but we would need to sanitize some parents:
+        threaded_context.parents = []
+        # Must compensate lost parents:
+        threaded_context.root = self.get_path()
+        return threaded_context
 
     def peek(self) -> 'BaseTransformer':
         """
@@ -1017,6 +1030,7 @@ class _TransformerStep(ABC):
         """
         self.apply("_teardown")
         return self
+
 
 class _FittableStep:
     """
@@ -1999,7 +2013,8 @@ class _HasMutations(ABC):
         self._invalidate()
 
         if new_method is None or method_to_assign_to is None:
-            new_method = method_to_assign_to = "transform"  # No changes will be applied (transform will stay transform).
+            # No changes will be applied (transform will stay transform).
+            new_method = method_to_assign_to = "transform"
 
         self.pending_mutate = (new_base_step, new_method, method_to_assign_to)
 
@@ -2127,7 +2142,7 @@ class BaseTransformer(
 
                 return data_inputs + self.hyperparams['add']
 
-            def inverse_transform(self, data_inputs):
+            def inverse_transform(self, processed_outputs):
                 if not isinstance(data_inputs, np.ndarray):
                     data_inputs = np.array(data_inputs)
 
@@ -2279,7 +2294,7 @@ class BaseTransformer(
         return self.name
 
     def get_step_by_name(self, name):
-        if self.name == name :
+        if self.name == name:
             return self
         return None
 
@@ -2308,14 +2323,32 @@ class BaseTransformer(
         """
         return self.reverse()
 
-    def __repr__(self):
-        output = self.__class__.__name__ + "(\n\tname=" + self.name + "," + "\n\thyperparameters=" + pprint.pformat(
-            self.hyperparams) + "\n)"
+    def __str__(self) -> str:
+        """
+        Return a pretty representation of the pipeline step.
+        Use :func:`~neuraxle.base.BaseTransformer.__repr__`, for a more
+        detailed string representation if needed.
 
+        :return: return pretty representation such as ``StepName(name='StepName')``.
+        """
+        return self._repr(verbose=False)
+
+    def __repr__(self) -> str:
+        """
+        Return a detailed and pretty representation of the pipeline step.
+        Use :func:`~neuraxle.base.BaseTransformer.__str__`, for a less
+        detailed string representation if needed.
+
+        :return: return pretty representation, such as ``StepName(name='StepName', hyperparameters=HyperparameterSamples({...}))``.
+        """
+        return self._repr(verbose=True)
+
+    def _repr(self, level=0, verbose=False) -> str:
+        output = self.__class__.__name__ + "(name='" + self.name + "'"
+        if verbose:
+            output += ", hyperparameters=" + pprint.pformat(self.hyperparams)
+        output += ")"
         return output
-
-    def __str__(self):
-        return self.__repr__()
 
 
 def _sklearn_to_neuraxle_step(step) -> BaseTransformer:
@@ -2575,8 +2608,8 @@ class MetaStepMixin(_HasChildrenMixin):
         data_inputs = self.wrapped.transform(data_inputs)
         return data_inputs
 
-    def inverse_transform(self, data_inputs):
-        data_inputs = self.wrapped.inverse_transform(data_inputs)
+    def inverse_transform(self, processed_outputs):
+        data_inputs = self.wrapped.inverse_transform(processed_outputs)
         return data_inputs
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext):
@@ -2640,10 +2673,12 @@ class MetaStepMixin(_HasChildrenMixin):
         new_self = super().will_mutate_to(new_base_step, new_method, method_to_assign_to)
         return new_self
 
-    def __repr__(self):
-        output = self.__class__.__name__ + "(\n\twrapped=" + repr(
-            self.wrapped) + "," + "\n\thyperparameters=" + pprint.pformat(
-            self.hyperparams) + "\n)"
+    def _repr(self, level=0, verbose=False) -> str:
+        output = self.__class__.__name__ + "("
+        output += self.wrapped._repr(level=level + 1, verbose=verbose) + ", name='" + self.name + "'"
+        if verbose:
+            output += ", hyperparameters=" + pprint.pformat(self.hyperparams)
+        output += ")"
         return output
 
 
@@ -3351,18 +3386,16 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         """
         return isinstance(self[-1], step_type)
 
-    def __repr__(self):
-
-        output = self.__class__.__name__ + '\n' \
-                 + "(\n\t" + super(TruncableSteps, self).__repr__() \
-                 + "(\n\t\t" + pprint.pformat(self.steps_as_tuple) \
-                 + "\t\n)" \
-                 + "\n)"
-
+    def _repr(self, level=0, verbose=False) -> str:
+        tab0 = "    " * level
+        tab1 = "    " * (level + 1)
+        output = self.__class__.__name__ + "([\n" + ''.join(
+            [tab1 + s._repr(level=level + 1, verbose=verbose) + ",\n" for s in self.get_children()]
+        ) + tab0 + "], name='" + self.name + "'"
+        if verbose:
+            output += ", hyperparameters=" + pprint.pformat(self.hyperparams)
+        output += ")"
         return output
-
-    def __str__(self):
-        return self.__repr__()
 
 
 class ResumableStepMixin(MixinForBaseTransformer):
@@ -3747,12 +3780,14 @@ class AssertExpectedOutputIsNoneMixin(WillProcessAssertionMixin):
             raise AssertionError(
                 f"Expected datacontainer.expected_outputs to be a `None` or a list of `None`. Received {data_container.expected_outputs}.")
 
+
 class AssertExpectedOutputIsNotNoneMixin(WillProcessAssertionMixin):
     def _assert(self, data_container: DataContainer, context: ExecutionContext):
         eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
         if eo_empty:
             raise AssertionError(
                 f"Expected datacontainer.expected_outputs to not be a `None` or a list of `None`. Received {data_container.expected_outputs}.")
+
 
 class AssertExpectedOutputIsNoneStep(AssertExpectedOutputIsNoneMixin, Identity):
     def __init__(self):
@@ -3853,7 +3888,8 @@ class _WithContextStepSaver(BaseSaver):
         :return: loaded step with context
         """
         step.context = context
-        warnings.warn("Warning! the loading of a StepWithContext instance overrides the context attribute with the one provided at loading.")
+        warnings.warn(
+            "Warning! the loading of a StepWithContext instance overrides the context attribute with the one provided at loading.")
         return step
 
     def save_step(self, step: 'StepWithContext', context: ExecutionContext) -> 'StepWithContext':

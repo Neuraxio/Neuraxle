@@ -55,13 +55,11 @@ def test_sklearn_wrapper_fit_transform_with_transform():
     assert outputs.shape == (dim1, n_components)
 
 
-# Testing with partial_fit
-
 def test_sklearn_wrapper_transform_partial_fit_with_predict():
     model = SKLearnWrapper(SGDRegressor(), use_partial_fit=True)
     p = Pipeline([DataShuffler(), model])
     data_inputs = np.expand_dims(np.array(list(range(10))), axis=-1)
-    expected_outputs = np.expand_dims(np.array(list(range(10, 20))), axis=-1)
+    expected_outputs = np.ravel(np.expand_dims(np.array(list(range(10, 20))), axis=-1))
 
     for _ in range(2000):
         p = p.fit(data_inputs, expected_outputs)
@@ -70,11 +68,9 @@ def test_sklearn_wrapper_transform_partial_fit_with_predict():
     assert all([np.isclose(a, b, atol=0.1) for a, b in zip(expected_outputs, outputs)])
 
 
-# Partial fit classifier
-
 def test_sklearn_wrapper_transform_partial_fit_classifier():
     data_inputs = np.array([[0, 1], [0, 0], [3, -2], [-1, 1], [-2, 1], [2, 0], [2, -1], [4, -2], [-3, 1], [-1, 0]])
-    expected_outputs = np.expand_dims(data_inputs[:, 0] + 2 * data_inputs[:, 1] + 1, axis=-1)
+    expected_outputs = np.ravel(np.expand_dims(data_inputs[:, 0] + 2 * data_inputs[:, 1] + 1, axis=-1))
     classes = np.array([0, 1, 2, 3])
     model = SKLearnWrapper(SGDClassifier(), use_partial_fit=True, partial_fit_kwargs={'classes': classes})
     p = Pipeline([DataShuffler(), model])
@@ -86,8 +82,6 @@ def test_sklearn_wrapper_transform_partial_fit_classifier():
     assert outputs.shape == (10,)
     assert len(set(outputs) - set(classes)) == 0
 
-
-# Testing get, set and update
 
 def test_sklearn_wrapper_set_hyperparams():
     p = SKLearnWrapper(PCA())

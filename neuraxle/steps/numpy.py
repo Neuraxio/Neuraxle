@@ -171,8 +171,8 @@ class NumpyTranspose(BaseTransformer):
     def transform(self, data_inputs):
         return self._transpose(data_inputs)
 
-    def inverse_transform(self, data_inputs):
-        return self._transpose(data_inputs)
+    def inverse_transform(self, processed_outputs):
+        return self._transpose(processed_outputs)
 
     def _transpose(self, data_inputs):
         return np.array(data_inputs).transpose(self.axes)
@@ -227,11 +227,11 @@ class MultiplyByN(BaseTransformer):
 
         return data_inputs * self.hyperparams['multiply_by']
 
-    def inverse_transform(self, data_inputs):
-        if not isinstance(data_inputs, np.ndarray):
-            data_inputs = np.array(data_inputs)
+    def inverse_transform(self, processed_outputs):
+        if not isinstance(processed_outputs, np.ndarray):
+            processed_outputs = np.array(processed_outputs)
 
-        return data_inputs / self.hyperparams['multiply_by']
+        return processed_outputs / self.hyperparams['multiply_by']
 
 
 class AddN(BaseTransformer):
@@ -262,11 +262,11 @@ class AddN(BaseTransformer):
 
         return data_inputs + self.hyperparams['add']
 
-    def inverse_transform(self, data_inputs):
-        if not isinstance(data_inputs, np.ndarray):
-            data_inputs = np.array(data_inputs)
+    def inverse_transform(self, processed_outputs):
+        if not isinstance(processed_outputs, np.ndarray):
+            processed_outputs = np.array(processed_outputs)
 
-        return data_inputs - self.hyperparams['add']
+        return processed_outputs - self.hyperparams['add']
 
 
 class Sum(BaseTransformer):
