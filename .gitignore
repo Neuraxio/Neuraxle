@@ -118,3 +118,5 @@ caching/**
 testing/examples/cache/**
 testing/cache/**
 testing/cache/*
+cov.xml
+

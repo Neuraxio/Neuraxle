@@ -35,7 +35,7 @@ from typing import Tuple, List, Union, Iterable, Any
 from neuraxle.base import NamedTupleList, ExecutionContext, MetaStep, BaseSaver, _FittableStep, \
     BaseTransformer, NonFittableMixin, MixinForBaseTransformer
 from neuraxle.data_container import DataContainer, ListDataContainer, AbsentValuesNullObject
-from neuraxle.pipeline import MiniBatchSequentialPipeline, Joiner
+from neuraxle.pipeline import MiniBatchSequentialPipeline, Joiner, Pipeline
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
 
@@ -509,7 +509,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         return self
 
     def fit_transform_data_container(
-            self, data_container: DataContainer, context: ExecutionContext) -> ('Pipeline', DataContainer):
+            self, data_container: DataContainer, context: ExecutionContext) -> (Pipeline, DataContainer):
         """
         Fit transform sequentially if any step is fittable. Otherwise transform in parallel.
 
