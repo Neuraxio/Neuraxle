@@ -1,48 +1,7 @@
 from neuraxle.pipeline import Pipeline
+from neuraxle.steps.flow import TrainOnlyWrapper
 from testing.mocks.step_mocks import SomeSplitStep, SomeStep, SomeTruncableStep
 
-EXPECTED_STR_OUTPUT = """SomeTruncableStep
-(
-	SomeTruncableStep(
-	name=SomeTruncableStep,
-	hyperparameters=HyperparameterSamples([('learning_rate', 0.1),
-                       ('l2_weight_reg', 0.001),
-                       ('hidden_size', 32),
-                       ('num_layers', 3),
-                       ('num_lstm_layers', 1),
-                       ('use_xavier_init', True),
-                       ('use_max_pool_else_avg_pool', True),
-                       ('dropout_drop_proba', 0.5),
-                       ('momentum', 0.1)])
-)(
-		[('MockStep',
-  SomeStepWithHyperparams(
-	name=MockStep,
-	hyperparameters=HyperparameterSamples([('learning_rate', 0.1),
-                       ('l2_weight_reg', 0.001),
-                       ('hidden_size', 32),
-                       ('num_layers', 3),
-                       ('num_lstm_layers', 1),
-                       ('use_xavier_init', True),
-                       ('use_max_pool_else_avg_pool', True),
-                       ('dropout_drop_proba', 0.5),
-                       ('momentum', 0.1)])
-)),
- ('MockStep1',
-  SomeStepWithHyperparams(
-	name=MockStep1,
-	hyperparameters=HyperparameterSamples([('learning_rate', 0.1),
-                       ('l2_weight_reg', 0.001),
-                       ('hidden_size', 32),
-                       ('num_layers', 3),
-                       ('num_lstm_layers', 1),
-                       ('use_xavier_init', True),
-                       ('use_max_pool_else_avg_pool', True),
-                       ('dropout_drop_proba', 0.5),
-                       ('momentum', 0.1)])
-))]	
-)
-)"""
 
 def test_truncable_steps_should_split_by_type():
     pipeline = Pipeline([
@@ -100,6 +59,41 @@ def test_set_train_should_set_train_to_true():
     assert pipeline[2][0].is_train
 
 
-def test_basestep_representation_works_correctly():
-    output = str(SomeTruncableStep())
-    assert output == EXPECTED_STR_OUTPUT
+def test_step_print_str_representation_works_correctly():
+    output = str(TrainOnlyWrapper(SomeTruncableStep()))
+    assert output == """TrainOnlyWrapper(SomeTruncableStep([
+        SomeStepWithHyperparams(name='MockStep'),
+        SomeStepWithHyperparams(name='MockStep1'),
+    ], name='SomeTruncableStep'), name='TrainOnlyWrapper')"""
+
+
+def test_step_repr_representation_works_correctly():
+    output = repr(TrainOnlyWrapper(SomeTruncableStep()))
+    assert output == """TrainOnlyWrapper(SomeTruncableStep([
+        SomeStepWithHyperparams(name='MockStep', hyperparameters=HyperparameterSamples([('learning_rate', 0.1),
+                       ('l2_weight_reg', 0.001),
+                       ('hidden_size', 32),
+                       ('num_layers', 3),
+                       ('num_lstm_layers', 1),
+                       ('use_xavier_init', True),
+                       ('use_max_pool_else_avg_pool', True),
+                       ('dropout_drop_proba', 0.5),
+                       ('momentum', 0.1)])),
+        SomeStepWithHyperparams(name='MockStep1', hyperparameters=HyperparameterSamples([('learning_rate', 0.1),
+                       ('l2_weight_reg', 0.001),
+                       ('hidden_size', 32),
+                       ('num_layers', 3),
+                       ('num_lstm_layers', 1),
+                       ('use_xavier_init', True),
+                       ('use_max_pool_else_avg_pool', True),
+                       ('dropout_drop_proba', 0.5),
+                       ('momentum', 0.1)])),
+    ], name='SomeTruncableStep', hyperparameters=HyperparameterSamples([('learning_rate', 0.1),
+                       ('l2_weight_reg', 0.001),
+                       ('hidden_size', 32),
+                       ('num_layers', 3),
+                       ('num_lstm_layers', 1),
+                       ('use_xavier_init', True),
+                       ('use_max_pool_else_avg_pool', True),
+                       ('dropout_drop_proba', 0.5),
+                       ('momentum', 0.1)])), name='TrainOnlyWrapper', hyperparameters=HyperparameterSamples())"""

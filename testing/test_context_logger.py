@@ -9,32 +9,33 @@ from neuraxle.base import BaseStep, ExecutionContext, HandleOnlyMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, InMemoryHyperparamsRepository, RandomSearchHyperparameterSelectionStrategy, \
-    ValidationSplitter, HyperparamsJSONRepository
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearchHyperparameterSelectionStrategy, ValidationSplitter, HyperparamsJSONRepository
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import MultiplyByN, NumpyReshape
 
 
-logging_call_counter = 0
-
 class LoggingStep(HandleOnlyMixin, BaseStep):
     def __init__(self):
         BaseStep.__init__(self)
         HandleOnlyMixin.__init__(self)
-
+        self.logging_call_counter = 0
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
-        global logging_call_counter
-        context.logger.info(f"fit call - logging call # {logging_call_counter}")
-        logging_call_counter += 1
+        self._log(context, "fit")
         return self
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        global logging_call_counter
-        context.logger.info(f"transform call - logging call # {logging_call_counter}")
-        logging_call_counter += 1
+        self._log(context, "transform")
         return data_container
+
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+        self._log(context, "fit_transform")
+        return data_container
+
+    def _log(self, context, name):
+        context.logger.warning(f"{name} call - logging call # {self.logging_call_counter}")
+        self.logging_call_counter += 1
 
 
 def test_logger():
@@ -43,7 +44,7 @@ def test_logger():
     if os.path.exists(file_path):
         os.remove(file_path)
 
-    #Given
+    # Given
     logger = logging.getLogger('test')
     file_handler = logging.FileHandler(file_path)
     file_handler.setLevel('DEBUG')
@@ -51,12 +52,12 @@ def test_logger():
     logger.setLevel('DEBUG')
     context = ExecutionContext(logger=logger)
     pipeline = Pipeline([
-            MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
-                'multiply_by': FixedHyperparameter(2)
-            })),
-            NumpyReshape(new_shape=(-1, 1)),
-            LoggingStep()
-        ])
+        MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
+            'multiply_by': FixedHyperparameter(2)
+        })),
+        NumpyReshape(new_shape=(-1, 1)),
+        LoggingStep()
+    ])
 
     # When
     data_container = DataContainer(
@@ -71,6 +72,7 @@ def test_logger():
         print(l)
     # Teardown
     os.remove(file_path)
+
 
 class TestTrialLogger:
     def test_logger_automl(self, tmpdir):
@@ -107,6 +109,7 @@ class TestTrialLogger:
 
         # Then
         file_paths = [os.path.join(hp_repository.cache_folder, f"trial_{i}.log") for i in range(n_trials)]
+        assert len(file_paths) == n_trials
 
         for f in file_paths:
             assert os.path.exists(f)
@@ -114,9 +117,8 @@ class TestTrialLogger:
         # That not a great way of testing... but at least it raises a flag when something changes in the logging process
         for f in file_paths:
             with open(f, 'r') as f:
-                l = f.readlines()
-                assert len(l) == 30
-
+                log = f.readlines()
+                assert len(log) == 30
 
     def teardown(self):
         shutil.rmtree(self.tmpdir)

@@ -1,5 +1,5 @@
 """
-Tests for pickle checkpoint steps
+Tests for joblib checkpoint steps
 ========================================
 
 ..
@@ -20,8 +20,8 @@ Tests for pickle checkpoint steps
 """
 
 import os
-import pickle
 
+import joblib
 import numpy as np
 from py._path.local import LocalPath
 
@@ -46,13 +46,13 @@ class DifferentCallbackStep(BaseCallbackStep):
         return data_inputs
 
 
-def create_pipeline(tmpdir, pickle_checkpoint_step, tape, hyperparameters=None, different=False, save_pipeline=True):
+def create_pipeline(tmpdir, joblib_checkpoint_step, tape, hyperparameters=None, different=False, save_pipeline=True):
     if different:
         pipeline = ResumablePipeline(
             steps=[
                 ('a',
                  DifferentCallbackStep(tape.callback, ["1"], hyperparams=hyperparameters)),
-                ('pickle_checkpoint', pickle_checkpoint_step),
+                ('joblib_checkpoint', joblib_checkpoint_step),
                 ('c', TransformCallbackStep(tape.callback, ["2"])),
                 ('d', TransformCallbackStep(tape.callback, ["3"]))
             ],
@@ -63,7 +63,7 @@ def create_pipeline(tmpdir, pickle_checkpoint_step, tape, hyperparameters=None, 
             steps=[
                 ('a',
                  TransformCallbackStep(tape.callback, ["1"], hyperparams=hyperparameters)),
-                ('pickle_checkpoint', pickle_checkpoint_step),
+                ('joblib_checkpoint', joblib_checkpoint_step),
                 ('c', TransformCallbackStep(tape.callback, ["2"])),
                 ('d', TransformCallbackStep(tape.callback, ["3"]))
             ], cache_folder=tmpdir
@@ -71,26 +71,26 @@ def create_pipeline(tmpdir, pickle_checkpoint_step, tape, hyperparameters=None, 
     return pipeline
 
 
-def test_when_no_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
+def test_when_no_hyperparams_should_save_checkpoint_joblib(tmpdir: LocalPath):
     tape = TapeCallbackFunction()
-    pickle_checkpoint_step = DefaultCheckpoint()
-    pipeline = create_pipeline(tmpdir, pickle_checkpoint_step, tape)
+    joblib_checkpoint_step = DefaultCheckpoint()
+    pipeline = create_pipeline(tmpdir, joblib_checkpoint_step, tape)
 
     pipeline, actual_data_inputs = pipeline.fit_transform(data_inputs, expected_outputs)
 
     actual_tape = tape.get_name_tape()
     assert np.array_equal(actual_data_inputs, data_inputs)
     assert actual_tape == ["1", "2", "3"]
-    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', 'di', '0.pickle'))
-    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', 'di', '1.pickle'))
-    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', 'eo', '0.pickle'))
-    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', 'eo', '1.pickle'))
+    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'joblib_checkpoint', 'di', '0.joblib'))
+    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'joblib_checkpoint', 'di', '1.joblib'))
+    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'joblib_checkpoint', 'eo', '0.joblib'))
+    assert os.path.exists(os.path.join(tmpdir, 'ResumablePipeline', 'joblib_checkpoint', 'eo', '1.joblib'))
 
 
-def test_when_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
+def test_when_hyperparams_should_save_checkpoint_joblib(tmpdir: LocalPath):
     tape = TapeCallbackFunction()
-    pickle_checkpoint_step = DefaultCheckpoint()
-    pipeline = create_pipeline(tmpdir, pickle_checkpoint_step, tape,
+    joblib_checkpoint_step = DefaultCheckpoint()
+    pipeline = create_pipeline(tmpdir, joblib_checkpoint_step, tape,
                                HyperparameterSamples({"a__learning_rate": 1}))
 
     pipeline, actual_data_inputs = pipeline.fit_transform(data_inputs, expected_outputs)
@@ -100,30 +100,30 @@ def test_when_hyperparams_should_save_checkpoint_pickle(tmpdir: LocalPath):
     assert actual_tape == ["1", "2", "3"]
 
     assert os.path.exists(
-        os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', 'di', '44f9d6dd8b6ccae571ca04525c3eaffa.pickle'))
+        os.path.join(tmpdir, 'ResumablePipeline', 'joblib_checkpoint', 'di', '44f9d6dd8b6ccae571ca04525c3eaffa.joblib'))
     assert os.path.exists(
-        os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', 'di', '898a67b2f5eeae6393ca4b3162ba8e3d.pickle'))
+        os.path.join(tmpdir, 'ResumablePipeline', 'joblib_checkpoint', 'di', '898a67b2f5eeae6393ca4b3162ba8e3d.joblib'))
     assert os.path.exists(
-        os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', 'eo', '44f9d6dd8b6ccae571ca04525c3eaffa.pickle'))
+        os.path.join(tmpdir, 'ResumablePipeline', 'joblib_checkpoint', 'eo', '44f9d6dd8b6ccae571ca04525c3eaffa.joblib'))
     assert os.path.exists(
-        os.path.join(tmpdir, 'ResumablePipeline', 'pickle_checkpoint', 'eo', '898a67b2f5eeae6393ca4b3162ba8e3d.pickle'))
+        os.path.join(tmpdir, 'ResumablePipeline', 'joblib_checkpoint', 'eo', '898a67b2f5eeae6393ca4b3162ba8e3d.joblib'))
 
 
-def test_when_no_hyperparams_and_saved_same_pipeline_should_load_checkpoint_pickle(tmpdir: LocalPath):
+def test_when_no_hyperparams_and_saved_same_pipeline_should_load_checkpoint_joblib(tmpdir: LocalPath):
     # Given
     tape = TapeCallbackFunction()
 
     # When
     pipeline_save = create_pipeline(
         tmpdir=tmpdir,
-        pickle_checkpoint_step=DefaultCheckpoint(),
+        joblib_checkpoint_step=DefaultCheckpoint(),
         tape=TapeCallbackFunction()
     )
     pipeline_save.fit_transform(data_inputs, expected_outputs)
 
     pipeline_load = create_pipeline(
         tmpdir=tmpdir,
-        pickle_checkpoint_step=DefaultCheckpoint(),
+        joblib_checkpoint_step=DefaultCheckpoint(),
         tape=tape
     )
     pipeline_load, actual_data_inputs = pipeline_load.fit_transform(data_inputs, expected_outputs)
@@ -134,14 +134,14 @@ def test_when_no_hyperparams_and_saved_same_pipeline_should_load_checkpoint_pick
     assert actual_tape == EXPECTED_TAPE_AFTER_CHECKPOINT
 
 
-def test_when_hyperparams_and_saved_same_pipeline_should_load_checkpoint_pickle(tmpdir: LocalPath):
+def test_when_hyperparams_and_saved_same_pipeline_should_load_checkpoint_joblib(tmpdir: LocalPath):
     # Given
     tape = TapeCallbackFunction()
 
     # When
     pipeline_save = create_pipeline(
         tmpdir=tmpdir,
-        pickle_checkpoint_step=DefaultCheckpoint(),
+        joblib_checkpoint_step=DefaultCheckpoint(),
         tape=TapeCallbackFunction(),
         hyperparameters=HyperparameterSamples({"a__learning_rate": 1})
     )
@@ -149,7 +149,7 @@ def test_when_hyperparams_and_saved_same_pipeline_should_load_checkpoint_pickle(
 
     pipeline_load = create_pipeline(
         tmpdir=tmpdir,
-        pickle_checkpoint_step=DefaultCheckpoint(),
+        joblib_checkpoint_step=DefaultCheckpoint(),
         tape=tape,
         hyperparameters=HyperparameterSamples({"a__learning_rate": 1})
     )
@@ -161,15 +161,15 @@ def test_when_hyperparams_and_saved_same_pipeline_should_load_checkpoint_pickle(
     assert actual_tape == EXPECTED_TAPE_AFTER_CHECKPOINT
 
 
-def test_when_hyperparams_and_saved_no_pipeline_should_not_load_checkpoint_pickle(tmpdir: LocalPath):
+def test_when_hyperparams_and_saved_no_pipeline_should_not_load_checkpoint_joblib(tmpdir: LocalPath):
     # Given
     tape = TapeCallbackFunction()
-    pickle_checkpoint_step = DefaultCheckpoint()
+    joblib_checkpoint_step = DefaultCheckpoint()
 
     # When
     pipeline_save = create_pipeline(
         tmpdir=tmpdir,
-        pickle_checkpoint_step=Identity(),
+        joblib_checkpoint_step=Identity(),
         tape=TapeCallbackFunction(),
         hyperparameters=HyperparameterSamples({"a__learning_rate": 1}),
         different=True,
@@ -179,7 +179,7 @@ def test_when_hyperparams_and_saved_no_pipeline_should_not_load_checkpoint_pickl
 
     pipeline_load = create_pipeline(
         tmpdir=tmpdir,
-        pickle_checkpoint_step=pickle_checkpoint_step,
+        joblib_checkpoint_step=joblib_checkpoint_step,
         tape=tape,
         hyperparameters=HyperparameterSamples({"a__learning_rate": 1})
     )
@@ -191,27 +191,28 @@ def test_when_hyperparams_and_saved_no_pipeline_should_not_load_checkpoint_pickl
     assert actual_tape == ["1", "2", "3"]
 
 
-def setup_pickle_checkpoint(current_id, data_input, expected_output, pickle_checkpoint_step):
-    with open(pickle_checkpoint_step.get_checkpoint_filename_path_for_current_id(current_id), 'wb') as file:
-        pickle.dump((current_id, data_input, expected_output), file)
+def setup_joblib_checkpoint(current_id, data_input, expected_output, joblib_checkpoint_step):
+    file = joblib_checkpoint_step.get_checkpoint_filename_path_for_current_id(current_id)
+    joblib.dump((current_id, data_input, expected_output), file)
 
 
-def test_pickle_checkpoint_step_should_load_data_container(tmpdir: LocalPath):
+def create_pipeline_output_transformer(tmpdir):
+    return ResumablePipeline([
+        ('output_transformer_1', MultiplyBy2OutputTransformer()),
+        ('joblib_checkpoint', DefaultCheckpoint()),
+        ('output_transformer_2', MultiplyBy2OutputTransformer()),
+    ], cache_folder=tmpdir)
+
+
+def test_joblib_checkpoint_step_should_load_data_container(tmpdir: LocalPath):
     initial_data_inputs = [1, 2]
     initial_expected_outputs = [2, 3]
 
-    create_pipeline_output_transformer = lambda: ResumablePipeline(
-        [
-            ('output_transformer_1', MultiplyBy2OutputTransformer()),
-            ('pickle_checkpoint', DefaultCheckpoint()),
-            ('output_transformer_2', MultiplyBy2OutputTransformer()),
-        ], cache_folder=tmpdir)
-
-    create_pipeline_output_transformer().fit_transform(
+    create_pipeline_output_transformer(tmpdir).fit_transform(
         data_inputs=initial_data_inputs, expected_outputs=initial_expected_outputs
     )
-    transformer = create_pipeline_output_transformer()
-    actual_data_container = transformer.handle_transform(
+
+    actual_data_container = create_pipeline_output_transformer(tmpdir).handle_transform(
         DataContainer(data_inputs=initial_data_inputs, current_ids=[0, 1], expected_outputs=initial_expected_outputs),
         ExecutionContext(tmpdir)
     )

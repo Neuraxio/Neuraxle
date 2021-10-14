@@ -1,5 +1,6 @@
 from py._path.local import LocalPath
 
+
 def test_auto_ml_loop_clean_kara(tmpdir: LocalPath):
     from examples.auto_ml.plot_automl_loop_clean_kata import main
     main()

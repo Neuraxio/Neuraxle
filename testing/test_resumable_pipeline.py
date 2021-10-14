@@ -243,8 +243,8 @@ def create_test_cases():
         expected_outputs,
         [
             ("a", FitTransformCallbackStep(tape11.callback, tape11_fit.callback, ["1"])),
-            ("pickle_1", SomeCheckpointStep(data_container=dc)),
-            ("pickle_2", SomeCheckpointStep(data_container=dc)),
+            ("joblib_1", SomeCheckpointStep(data_container=dc)),
+            ("joblib_2", SomeCheckpointStep(data_container=dc)),
             ("c", FitTransformCallbackStep(tape11.callback, tape11_fit.callback, ["2"])),
             ("d", FitTransformCallbackStep(tape11.callback, tape11_fit.callback, ["3"]))
         ],

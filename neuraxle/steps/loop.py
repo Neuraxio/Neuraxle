@@ -33,6 +33,7 @@ from neuraxle.base import MetaStep, BaseStep, DataContainer, ExecutionContext, R
 from neuraxle.data_container import ListDataContainer
 from neuraxle.steps.flow import ExecuteIf
 
+
 class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
     """
     Truncable step that fits/transforms each step for each of the data inputs, and expected outputs.
@@ -66,7 +67,7 @@ class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
         for current_id, di, eo in data_container:
             try:
                 self.wrapped = self.wrapped.handle_fit(
-                    DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
+                    DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo, summary_id=current_id),
                     context
                 )
             except ContinueInterrupt:
@@ -108,7 +109,7 @@ class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
         return output_data_container
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> Tuple[
-        BaseStep, DataContainer]:
+            BaseStep, DataContainer]:
         """
         Fit transform each step for each data inputs, and expected outputs
 
@@ -153,6 +154,13 @@ class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
         if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context):
             return True
         return False
+
+    def resume(self, data_container: DataContainer, context: ExecutionContext):
+        context = context.push(self)
+        if not isinstance(self.wrapped, ResumableStepMixin):
+            raise Exception('cannot resume steps that don\' inherit from ResumableStepMixin')
+        data_container = self.wrapped.resume(data_container, context)
+        return data_container
 
 
 class ContinueInterrupt(Exception):
@@ -228,7 +236,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         self._invalidate()
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+            'BaseStep', DataContainer):
         fitted_steps_data_containers = []
         for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
             fitted_step_data_container = self[i].handle_fit_transform(
@@ -246,7 +254,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         return self, output_data_container
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+            'BaseStep', DataContainer):
         fitted_steps = []
         for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
             fitted_step = self[i].handle_fit(
@@ -260,7 +268,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         return self
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+            'BaseStep', DataContainer):
         transform_results = []
         for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
             transform_result = self[i].handle_transform(
@@ -289,8 +297,8 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
             output_data_container.append_data_container(data_container_batch)
         return output_data_container
 
-    def inverse_transform(self, data_output):
-        return [self[i].inverse_transform(di) for i, di in enumerate(data_output)]
+    def inverse_transform(self, processed_outputs):
+        return [self[i].inverse_transform(di) for i, di in enumerate(processed_outputs)]
 
     def __getitem__(self, item):
         """

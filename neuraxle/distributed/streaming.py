@@ -1,8 +1,13 @@
 """
-Streaming Parallel Data Processing
+Streaming Pipelines for Parallel and Queued Data Processing
 ===================================================================
 
-Neuraxle steps for streaming data in parallel in the pipeline
+Neuraxle steps for streaming data in parallel in the pipeline.
+
+Pipelines can stream data in queues with workers for each steps.
+Max queue sizes can be set, as well as number of clones per steps
+for the transformers.
+
 
 ..
     Copyright 2019, Neuraxio Inc.
@@ -27,17 +32,23 @@ from multiprocessing.context import Process
 from threading import Thread
 from typing import Tuple, List, Union, Iterable, Any
 
-from neuraxle.base import NamedTupleList, ExecutionContext, BaseStep, MetaStep, BaseSaver, _FittableStep, \
+from neuraxle.base import NamedTupleList, ExecutionContext, MetaStep, BaseSaver, _FittableStep, \
     BaseTransformer, NonFittableMixin, MixinForBaseTransformer
 from neuraxle.data_container import DataContainer, ListDataContainer, AbsentValuesNullObject
-from neuraxle.pipeline import Pipeline, MiniBatchSequentialPipeline, Joiner
+from neuraxle.pipeline import MiniBatchSequentialPipeline, Joiner, Pipeline
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
 
 class ObservableQueueMixin(MixinForBaseTransformer):
     """
-    A class to represent a step that can put items in a queue.
-    It can also notify other queues that have subscribed to him using subscribe.
+    A class to represent a step that can put items in a queue so that the
+    step can be used to consume its tasks on its own.
+
+    Once tasks are solved, their results are added to the
+    subscribers that were subscribed with the notify call.
+
+    A subscriber is itself an ObservableQueueMixin and will thus be
+    used to consume the tasks added to it in probably another thread.
 
     .. seealso::
         :class:`BaseStep`,
@@ -68,37 +79,38 @@ class ObservableQueueMixin(MixinForBaseTransformer):
         else:
             self.savers.append(ObservableQueueStepSaver())
 
-    def subscribe(self, observer_queue_worker: 'ObservableQueueMixin') -> 'ObservableQueueMixin':
+    def subscribe_step(self, observer_queue_worker: 'ObservableQueueMixin') -> 'ObservableQueueMixin':
         """
-        Subscribe a queue worker.
+        Subscribe a queue worker to self such that we can notify them to post tasks to put on them.
         The subscribed queue workers get notified when :func:`~neuraxle.distributed.streaming.ObservableQueueMixin.notify` is called.
         """
         self.observers.append(observer_queue_worker.queue)
         return self
 
-    def get(self) -> 'QueuedPipelineTask':
+    def get_task(self) -> 'QueuedPipelineTask':
         """
         Get last item in queue.
         """
         return self.queue.get()
 
-    def put(self, value: DataContainer):
+    def put_task(self, value: DataContainer):
         """
         Put a queued pipeline task in queue.
         """
         self.queue.put(QueuedPipelineTask(step_name=self.name, data_container=value.copy()))
 
-    def notify(self, value):
+    def notify_step(self, value: DataContainer):
         """
-        Notify all subscribed queue workers
+        Notify all subscribed queue workers to put them some tasks on their queue.
         """
-        for observer in self.observers:
-            observer.put(value)
+        for observer_queue in self.observers:
+            observer_queue.put(QueuedPipelineTask(step_name=self.name, data_container=value))
 
 
 class QueuedPipelineTask(object):
     """
     Data object to contain the tasks processed by the queued pipeline.
+    Attributes: step_name, data_container
 
     .. seealso::
         :class:`QueueWorker`,
@@ -156,9 +168,9 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
             wrapped: BaseTransformer,
             max_queue_size: int,
             n_workers: int,
-            use_threading: bool,
-            additional_worker_arguments=None,
-            use_savers=False
+            use_processes: bool = True,
+            additional_worker_arguments: List = None,
+            use_savers: bool = False
     ):
         if not additional_worker_arguments:
             additional_worker_arguments = [[] for _ in range(n_workers)]
@@ -166,12 +178,21 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
         MetaStep.__init__(self, wrapped)
         ObservableQueueMixin.__init__(self, Queue(maxsize=max_queue_size))
 
-        self.use_threading: bool = use_threading
+        self.use_processes: bool = use_processes
         self.workers: List[Process] = []
         self.n_workers: int = n_workers
         self.observers: List[Queue] = []
         self.additional_worker_arguments = additional_worker_arguments
         self.use_savers = use_savers
+
+    def __getstate__(self):
+        """
+        This class, upon being forked() to a new process with pickles,
+        should not copy references to other threads.
+        """
+        state = self.__dict__.copy()
+        state['workers'] = None
+        return state
 
     def start(self, context: ExecutionContext):
         """
@@ -181,18 +202,27 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
         :type context: ExecutionContext
         :return:
         """
-        target_function = worker_function
+        thread_safe_context = context
+        thread_safe_self = self
+        parallel_call = Thread
+
+        if self.use_processes:
+            # New process requires trimming the references to other processes
+            # when we create many processes: https://stackoverflow.com/a/65749012
+            thread_safe_context = context.thread_safe()
+            parallel_call = Process
+
         if self.use_savers:
-            self.save(context, full_dump=True)
-            target_function = worker_function
+            _ = thread_safe_self.save(thread_safe_context, full_dump=True)  # Cannot delete queue worker self.
+            del thread_safe_self.wrapped
+            # del thread_safe_self.queue
 
         self.workers = []
         for _, worker_arguments in zip(range(self.n_workers), self.additional_worker_arguments):
-            if self.use_threading:
-                p = Thread(target=target_function, args=(self, context, self.use_savers, worker_arguments))
-            else:
-                p = Process(target=target_function, args=(self, context, self.use_savers, worker_arguments))
-
+            p = parallel_call(
+                target=worker_function,
+                args=(thread_safe_self, thread_safe_context, self.use_savers, worker_arguments)
+            )
             p.daemon = True
             p.start()
             self.workers.append(p)
@@ -212,7 +242,7 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
 
         :return:
         """
-        if not self.use_threading:
+        if self.use_processes:
             [w.terminate() for w in self.workers]
 
         self.workers = []
@@ -230,27 +260,32 @@ def worker_function(queue_worker: QueueWorker, context: ExecutionContext, use_sa
     :param additional_worker_arguments: any additional arguments that need to be passed to the workers
     :return:
     """
-    step = queue_worker.get_step()
-    if use_savers:
-        saved_queue_worker: QueueWorker = context.load(queue_worker.get_name())
-        step = saved_queue_worker.get_step()
 
-    additional_worker_arguments = tuple(
-        additional_worker_arguments[i: i + 2] for i in range(0, len(additional_worker_arguments), 2)
-    )
+    try:
+        if use_savers:
+            saved_queue_worker: QueueWorker = context.load(queue_worker.get_name())
+            queue_worker.set_step(saved_queue_worker.get_step())
+        step = queue_worker.get_step()
 
-    for argument_name, argument_value in additional_worker_arguments:
-        step.__dict__.update({argument_name: argument_value})
+        additional_worker_arguments = tuple(
+            additional_worker_arguments[i: i + 2] for i in range(0, len(additional_worker_arguments), 2)
+        )
 
-    while True:
-        try:
-            task: QueuedPipelineTask = queue_worker.get()
-            summary_id = task.data_container.summary_id
-            data_container = step.handle_transform(task.data_container, context)
-            data_container = data_container.set_summary_id(summary_id)
-            queue_worker.notify(QueuedPipelineTask(step_name=queue_worker.name, data_container=data_container))
-        except Exception as err:
-            queue_worker.notify(QueuedPipelineTask(step_name=queue_worker.name, data_container=err))
+        for argument_name, argument_value in additional_worker_arguments:
+            step.__dict__.update({argument_name: argument_value})
+
+        while True:
+            try:
+                task: QueuedPipelineTask = queue_worker.get_task()
+                summary_id = task.data_container.summary_id
+                data_container = step.handle_transform(task.data_container, context)
+                data_container = data_container.set_summary_id(summary_id)
+                queue_worker.notify_step(data_container)
+
+            except Exception as err:
+                queue_worker.notify_step(err)
+    except Exception as err:
+        queue_worker.notify_step(err)
 
 
 QueuedPipelineStepsTuple = Union[
@@ -273,46 +308,50 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
     .. code-block:: python
 
+        # Multiple ways of specifying the steps tuples exists to do various things:
         # step name, step
-
-        p = QueuedPipeline([
+        p = SequentialQueuedPipeline([
             ('step_a', Identity()),
             ('step_b', Identity()),
         ], n_workers=1, batch_size=10, max_queue_size=10)
 
         # step name, number of workers, step
-
-        p = QueuedPipeline([
+        p = SequentialQueuedPipeline([
             ('step_a', 1, Identity()),
             ('step_b', 1, Identity()),
         ], batch_size=10, max_queue_size=10)
 
         # step name, number of workers, and max size
-
-        p = QueuedPipeline([
+        p = SequentialQueuedPipeline([
             ('step_a', 1, 10, Identity()),
             ('step_b', 1, 10, Identity()),
         ], batch_size=10)
 
         # step name, number of workers for each step, and additional argument for each worker
-
-        p = QueuedPipeline([
+        p = SequentialQueuedPipeline([
             ('step_a', 1, [('host', 'host1'), ('host', 'host2')], 10, Identity())
         ], batch_size=10)
 
         # step name, number of workers for each step, additional argument for each worker, and max size
-
-        p = QueuedPipeline([
+        p = SequentialQueuedPipeline([
             ('step_a', 1, [('host', 'host1'), ('host', 'host2')], 10, Identity())
         ], batch_size=10)
+
+        # It's also possible to do parallel feature unions:
+        n_workers = 4
+        worker_arguments = [('hyperparams', HyperparameterSamples({'multiply_by': 2})) for _ in range(n_workers)]
+        p = ParallelQueuedFeatureUnion([
+            ('1', n_workers, worker_arguments, MultiplyByN()),
+        ], batch_size=10, max_queue_size=5)
+        outputs = p.transform(list(range(100)))
 
     :param steps: pipeline steps
     :param batch_size: number of elements to combine into a single batch
     :param n_workers_per_step: number of workers to spawn per step
     :param max_queue_size: max number of elements inside the processing queue
     :param data_joiner: transformer step to join streamed batches together at the end of the pipeline
-    :param use_threading: (Optional.) use threading for parallel processing. multiprocessing.context.Process is used by default.
-    :param use_savers: use savers to serialize steps for parallel processing.
+    :param use_processes: use processes instead of threads for parallel processing. multiprocessing.context.Process is used by default.
+    :param use_savers: use savers to serialize steps for parallel processing. Recommended if using processes instead of threads.
     :param keep_incomplete_batch: (Optional.) A bool representing
     whether the last batch should be dropped in the case it has fewer than
     `batch_size` elements; the default behavior is to keep the smaller
@@ -338,8 +377,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             batch_size: int,
             n_workers_per_step: int = None,
             max_queue_size: int = None,
-            data_joiner = None,
-            use_threading: bool = False,
+            data_joiner: BaseTransformer = None,
+            use_processes: bool = True,
             use_savers: bool = False,
             keep_incomplete_batch: bool = True,
             default_value_data_inputs: Union[Any, AbsentValuesNullObject] = None,
@@ -352,7 +391,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         self.max_queue_size = max_queue_size
         self.batch_size = batch_size
         self.n_workers_per_step = n_workers_per_step
-        self.use_threading = use_threading
+        self.use_processes = use_processes
         self.use_savers = use_savers
 
         self.batch_size: int = batch_size
@@ -395,7 +434,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         return QueueWorker(
             actual_step,
             n_workers=n_workers,
-            use_threading=self.use_threading,
+            use_processes=self.use_processes,
             max_queue_size=max_queue_size,
             additional_worker_arguments=additional_worker_arguments,
             use_savers=self.use_savers
@@ -469,8 +508,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         super().setup(context=context)
         return self
 
-    def fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'Pipeline', DataContainer):
+    def fit_transform_data_container(
+            self, data_container: DataContainer, context: ExecutionContext) -> (Pipeline, DataContainer):
         """
         Fit transform sequentially if any step is fittable. Otherwise transform in parallel.
 
@@ -481,7 +520,6 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :return:
         """
         all_steps_are_not_fittable = True
-
         for _, step in self[:-1]:
             if isinstance(step.get_step(), _FittableStep) and not isinstance(step.get_step(), NonFittableMixin):
                 all_steps_are_not_fittable = False
@@ -610,7 +648,7 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
         :return:
         """
         for i, (name, step) in enumerate(self[1:]):
-            self[i].subscribe(step)
+            self[i].subscribe_step(step)
 
     def send_batch_to_queued_pipeline(self, batch_index: int, data_container: DataContainer):
         """
@@ -622,7 +660,7 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
         """
         data_container = data_container.set_summary_id(data_container.hash_summary())
         self[-1].summary_ids.append(data_container.summary_id)
-        self[0].put(data_container)
+        self[0].put_task(data_container)
 
 
 class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
@@ -653,7 +691,7 @@ class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
         :return:
         """
         for name, step in self[:-1]:
-            step.subscribe(self[-1])
+            step.subscribe_step(self[-1])
 
     def send_batch_to_queued_pipeline(self, batch_index: int, data_container: DataContainer):
         """
@@ -666,7 +704,7 @@ class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
         for name, step in self[:-1]:
             data_container = data_container.set_summary_id(data_container.hash_summary())
             self[-1].summary_ids.append(data_container.summary_id)
-            step.put(data_container)
+            step.put_task(data_container)
 
 
 class QueueJoiner(ObservableQueueMixin, Joiner):
@@ -711,7 +749,7 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
         :rtype: DataContainer
         """
         while self.n_batches_left_to_do > 0:
-            task: QueuedPipelineTask = self.queue.get()
+            task: QueuedPipelineTask = self.get_task()
             self.n_batches_left_to_do -= 1
             step_name = task.step_name
 

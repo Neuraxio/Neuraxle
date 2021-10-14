@@ -1,8 +1,10 @@
 import numpy as np
 import pytest
 from sklearn import linear_model
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.metrics import mean_squared_error
 from sklearn.svm import LinearSVC
+from sklearn.utils._testing import ignore_warnings
 
 from neuraxle.base import ExecutionContext
 from neuraxle.data_container import DataContainer
@@ -289,10 +291,12 @@ def extract_validation_split_data(validation_splits):
     return train_di, train_eo, validation_di, validation_eo
 
 
+@ignore_warnings(category=ConvergenceWarning)
 def test_automl_should_shallow_copy_data_before_each_epoch():
     # see issue #332 https://github.com/Neuraxio/Neuraxle/issues/332
     data_inputs = np.random.randint(0, 100, (100, 3))
-    expected_outputs = np.random.randint(0, 3, 100)
+    expected_outputs = np.array(np.sum(data_inputs, axis=-1) / 100, dtype=int)
+    data_inputs += np.random.randint(0, 100, (100, 3))
 
     from sklearn.preprocessing import StandardScaler
     p = Pipeline([
@@ -305,7 +309,7 @@ def test_automl_should_shallow_copy_data_before_each_epoch():
         validation_splitter=ValidationSplitter(0.20),
         refit_trial=True,
         n_trials=10,
-        epochs=10,
+        epochs=1,
         cache_folder_when_no_handle='cache',
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)],
