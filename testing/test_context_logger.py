@@ -117,8 +117,8 @@ class TestTrialLogger:
         # That not a great way of testing... but at least it raises a flag when something changes in the logging process
         for f in file_paths:
             with open(f, 'r') as f:
-                l = f.readlines()
-                assert len(l) == 30
+                log = f.readlines()
+                assert len(log) == 30
 
     def teardown(self):
         shutil.rmtree(self.tmpdir)
