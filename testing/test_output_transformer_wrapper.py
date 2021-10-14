@@ -26,16 +26,16 @@ class MultiplyByNInputAndOutput(BaseTransformer):
 
         return data_inputs * self.hyperparams['multiply_by'], expected_outputs * self.hyperparams['multiply_by']
 
-    def inverse_transform(self, data_inputs):
-        data_inputs, expected_outputs = data_inputs
+    def inverse_transform(self, processed_outputs):
+        processed_outputs, expected_outputs = processed_outputs
 
-        if not isinstance(data_inputs, np.ndarray):
-            data_inputs = np.array(data_inputs)
+        if not isinstance(processed_outputs, np.ndarray):
+            processed_outputs = np.array(processed_outputs)
 
         if not isinstance(expected_outputs, np.ndarray):
             expected_outputs = np.array(expected_outputs)
 
-        return data_inputs / self.hyperparams['multiply_by'], expected_outputs / self.hyperparams['multiply_by']
+        return processed_outputs / self.hyperparams['multiply_by'], expected_outputs / self.hyperparams['multiply_by']
 
 
 def test_output_transformer_wrapper_should_fit_with_data_inputs_and_expected_outputs_as_data_inputs():

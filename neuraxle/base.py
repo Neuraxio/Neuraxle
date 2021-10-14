@@ -2140,7 +2140,7 @@ class BaseTransformer(
 
                 return data_inputs + self.hyperparams['add']
 
-            def inverse_transform(self, data_inputs):
+            def inverse_transform(self, processed_outputs):
                 if not isinstance(data_inputs, np.ndarray):
                     data_inputs = np.array(data_inputs)
 
@@ -2607,8 +2607,8 @@ class MetaStepMixin(_HasChildrenMixin):
         data_inputs = self.wrapped.transform(data_inputs)
         return data_inputs
 
-    def inverse_transform(self, data_inputs):
-        data_inputs = self.wrapped.inverse_transform(data_inputs)
+    def inverse_transform(self, processed_outputs):
+        data_inputs = self.wrapped.inverse_transform(processed_outputs)
         return data_inputs
 
     def should_resume(self, data_container: DataContainer, context: ExecutionContext):

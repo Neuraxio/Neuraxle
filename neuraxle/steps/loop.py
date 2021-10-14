@@ -67,7 +67,7 @@ class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
         for current_id, di, eo in data_container:
             try:
                 self.wrapped = self.wrapped.handle_fit(
-                    DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
+                    DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo, summary_id=current_id),
                     context
                 )
             except ContinueInterrupt:
@@ -297,8 +297,8 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
             output_data_container.append_data_container(data_container_batch)
         return output_data_container
 
-    def inverse_transform(self, data_output):
-        return [self[i].inverse_transform(di) for i, di in enumerate(data_output)]
+    def inverse_transform(self, processed_outputs):
+        return [self[i].inverse_transform(di) for i, di in enumerate(processed_outputs)]
 
     def __getitem__(self, item):
         """
