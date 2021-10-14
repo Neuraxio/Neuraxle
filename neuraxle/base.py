@@ -2096,6 +2096,7 @@ class _CouldHaveContext:
         Set all service assertions to be made at the root of the pipeline and before processing the step.
 
         :param service_assertions: base types that need to be available in the execution context at the root of the pipeline
+        :type service_assertions: List[Type]
         """
         return GlobalyRetrievableServiceAssertionWrapper(wrapped=self, service_assertions=service_assertions)
 
@@ -2103,7 +2104,8 @@ class _CouldHaveContext:
         """
         Set all service assertions to be made before processing the step.
 
-        :param service_assertions: base types that need to be available in the execution context
+        :param service_assertions: base types that need to be available in the execution context before the execution of the step
+        :type service_assertions: List[Type]
         """
         return LocalServiceAssertionWrapper(wrapped=self, service_assertions=service_assertions)
 
@@ -2246,7 +2248,6 @@ class BaseTransformer(
         try:
             self._teardown()
         except Exception:
-            import traceback
             print(traceback.format_exc())
 
     def set_train(self, is_train: bool = True):
@@ -3613,6 +3614,10 @@ class ForceHandleMixin(MixinForBaseTransformer):
 
 
 class ForceHandleIdentity(ForceHandleMixin, Identity):
+    """
+    An identity step which forces usage of handler methods. Mostly used in unit tests.
+    Useful when you only want to define few methods such as _will_process or _did_process.
+    """
     def __init__(self):
         Identity.__init__(self)
         ForceHandleMixin.__init__(self)

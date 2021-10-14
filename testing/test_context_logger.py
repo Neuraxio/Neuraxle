@@ -69,7 +69,7 @@ def test_logger():
     assert os.path.exists(file_path)
     with open(file_path) as f:
         l = f.read()
-        print(l)
+
     # Teardown
     os.remove(file_path)
 
@@ -114,11 +114,10 @@ class TestTrialLogger:
         for f in file_paths:
             assert os.path.exists(f)
 
-        # That not a great way of testing... but at least it raises a flag when something changes in the logging process
         for f in file_paths:
             with open(f, 'r') as f:
                 log = f.readlines()
-                assert len(log) == 30
+                assert len(log) == 36
 
     def teardown(self):
         shutil.rmtree(self.tmpdir)
