@@ -46,7 +46,7 @@ DEFAULT_CACHE_FOLDER = os.path.join(os.getcwd(), 'cache')
 
 LOGGER_FORMAT = "[%(asctime)s][%(levelname)s][%(module)s][%(lineno)d]: %(message)s"
 DATE_FORMAT = "%H:%M:%S"
-logging.basicConfig(format=LOGGER_FORMAT, datefmt=DATE_FORMAT, level=logging.INFO)
+logging.basicConfig(format=LOGGER_FORMAT, datefmt=DATE_FORMAT, level=logging.INFO, force=True)
 
 
 class BaseHasher(ABC):
