@@ -49,6 +49,7 @@ def test_queued_pipeline_with_included_incomplete_batch():
 
     assert np.array_equal(outputs, np.array(list(range(15))) * 2 * 2 * 2 * 2)
 
+
 def test_queued_pipeline_with_included_incomplete_batch_that_raises_an_exception():
     with pytest.raises(AttributeError):
         p = SequentialQueuedPipeline(
@@ -60,8 +61,8 @@ def test_queued_pipeline_with_included_incomplete_batch_that_raises_an_exception
             ],
             batch_size=10,
             keep_incomplete_batch=True,
-            default_value_data_inputs=None, # this will raise an exception in the worker
-            default_value_expected_outputs=None, # this will raise an exception in the worker
+            default_value_data_inputs=None,  # this will raise an exception in the worker
+            default_value_expected_outputs=None,  # this will raise an exception in the worker
             n_workers_per_step=1,
             max_queue_size=5
         )

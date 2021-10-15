@@ -272,6 +272,7 @@ def test_choice_and_priority_choice(ctor):
     assert abs((hd.mean() - np.mean(samples_index)) / hd.mean()) < 1e-1
     assert abs((hd.var() - np.var(samples_index)) / hd.var()) < 1e-1
 
+
 @pytest.mark.parametrize("hd, test_method", [
     (RandInt(min_included=-10, max_included=10, null_default_value=0), _test_randint),
     (LogNormal(hard_clip_min=-5, hard_clip_max=5, log2_space_mean=0.0, log2_space_std=2.0, null_default_value=-1.0), _test_lognormal),
@@ -283,8 +284,8 @@ def test_choice_and_priority_choice(ctor):
     (Histogram(histogram=np.histogram(norm.rvs(size=10000, loc=0, scale=1.5, random_state=123), bins=100), null_default_value=0.0), _test_histogram)
 ])
 def test_after_serialization(hd, test_method, tmpdir):
-    joblib.dump(hd, os.path.join(str(tmpdir), '{}.joblib'.format(hd.__class__)))
-    hd_loaded = joblib.load(os.path.join(str(tmpdir), '{}.joblib'.format(hd.__class__)))
+    joblib.dump(hd, os.path.join(str(tmpdir), '{}.joblib'.format(hd.__class__.__name__)))
+    hd_loaded = joblib.load(os.path.join(str(tmpdir), '{}.joblib'.format(hd.__class__.__name__)))
 
     assert hd.__class__ == hd_loaded.__class__
     test_method(hd_loaded)

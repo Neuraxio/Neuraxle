@@ -1,4 +1,5 @@
 import datetime
+import time
 
 from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository
 
@@ -19,279 +20,244 @@ EXPECTED_METRIC_RESULTS = {
 MAIN_METRIC_NAME = 'mse'
 
 
-def test_trial_should_create_new_split():
-    hp = HyperparameterSamples({'a': 2})
-    repo = InMemoryHyperparamsRepository()
-    trial = Trial(
-        save_trial_function=repo.save_trial,
-        hyperparams=hp,
-        main_metric_name=MAIN_METRIC_NAME
-    )
+class TestTrials:
+    def setup(self):
+        self.hp = HyperparameterSamples({'a': 2})
+        self.repo = InMemoryHyperparamsRepository()
+        self.trial = Trial(
+            trial_number=0,
+            save_trial_function=self.repo.save_trial,
+            hyperparams=self.hp,
+            main_metric_name=MAIN_METRIC_NAME
+        )
 
-    with trial.new_validation_split(Identity()) as trial_split:
-        trial_split.set_success()
+    def test_trial_should_have_end_time_later_than_start_time(self):
+        with self.trial.new_validation_split(Identity()) as trial_split:
+            time.sleep(0.001)  # TODO: maybe remove sleep?
+            trial_split.set_success()
 
-    assert isinstance(trial_split.start_time, datetime.datetime)
-    assert isinstance(trial_split.end_time, datetime.datetime)
-    assert trial_split.start_time < trial_split.end_time
-    assert trial.validation_splits[0] == trial_split
+        assert isinstance(trial_split.start_time, datetime.datetime)
+        assert isinstance(trial_split.end_time, datetime.datetime)
+        assert trial_split.start_time < trial_split.end_time
 
+    def test_trial_should_create_new_split(self):
+        with self.trial.new_validation_split(Identity()) as trial_split:
+            trial_split.set_success()
 
-def test_trial_split_is_new_best_score_should_return_true_with_one_score():
-    hp = HyperparameterSamples({'a': 2})
-    repo = InMemoryHyperparamsRepository()
-    trial = Trial(save_trial_function=repo.save_trial, hyperparams=hp, main_metric_name=MAIN_METRIC_NAME)
+        assert self.trial.validation_splits[0] == trial_split
 
-    with trial.new_validation_split(Identity()) as trial_split:
-        trial_split.add_metric_results_train(name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
-        trial_split.add_metric_results_validation(name=MAIN_METRIC_NAME, score=0.5,
-                                                  higher_score_is_better=False)
+    def test_trial_split_is_new_best_score_should_return_true_with_one_score(self):
+        with self.trial.new_validation_split(Identity()) as trial_split:
+            trial_split.add_metric_results_train(
+                name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
+            trial_split.add_metric_results_validation(
+                name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
 
-    assert trial_split.is_new_best_score()
+        assert trial_split.is_new_best_score()
 
+    def test_trial_split_is_new_best_score_should_return_false_with_not_a_new_best_score(self):
+        with self.trial.new_validation_split(Identity()) as trial_split:
+            trial_split.add_metric_results_train(
+                name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
+            trial_split.add_metric_results_validation(
+                name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
 
-def test_trial_split_is_new_best_score_should_return_false_with_not_a_new_best_score():
-    hp = HyperparameterSamples({'a': 2})
-    repo = InMemoryHyperparamsRepository()
-    trial = Trial(save_trial_function=repo.save_trial, hyperparams=hp, main_metric_name=MAIN_METRIC_NAME)
+            trial_split.add_metric_results_train(
+                name=MAIN_METRIC_NAME, score=0.7, higher_score_is_better=False)
+            trial_split.add_metric_results_validation(
+                name=MAIN_METRIC_NAME, score=0.7, higher_score_is_better=False)
 
-    with trial.new_validation_split(Identity()) as trial_split:
-        trial_split.add_metric_results_train(name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
-        trial_split.add_metric_results_validation(name=MAIN_METRIC_NAME, score=0.5,
-                                                  higher_score_is_better=False)
+        assert not trial_split.is_new_best_score()
 
-        trial_split.add_metric_results_train(name=MAIN_METRIC_NAME, score=0.7, higher_score_is_better=False)
-        trial_split.add_metric_results_validation(name=MAIN_METRIC_NAME, score=0.7,
-                                                  higher_score_is_better=False)
+    def test_trial_split_is_new_best_score_should_return_true_with_a_new_best_score_after_multiple_scores(self):
+        with self.trial.new_validation_split(Identity()) as trial_split:
+            trial_split.add_metric_results_train(
+                name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
+            trial_split.add_metric_results_validation(
+                name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
 
-    assert not trial_split.is_new_best_score()
+            trial_split.add_metric_results_train(
+                name=MAIN_METRIC_NAME, score=0.7, higher_score_is_better=False)
+            trial_split.add_metric_results_validation(
+                name=MAIN_METRIC_NAME, score=0.7, higher_score_is_better=False)
 
+            trial_split.add_metric_results_train(
+                name=MAIN_METRIC_NAME, score=0.4, higher_score_is_better=False)
+            trial_split.add_metric_results_validation(
+                name=MAIN_METRIC_NAME, score=0.4, higher_score_is_better=False)
 
-def test_trial_split_is_new_best_score_should_return_true_with_a_new_best_score_after_multiple_scores():
-    hp = HyperparameterSamples({'a': 2})
-    repo = InMemoryHyperparamsRepository()
-    trial = Trial(save_trial_function=repo.save_trial, hyperparams=hp, main_metric_name=MAIN_METRIC_NAME)
+        assert trial_split.is_new_best_score()
 
-    with trial.new_validation_split(Identity()) as trial_split:
-        trial_split.add_metric_results_train(name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
-        trial_split.add_metric_results_validation(name=MAIN_METRIC_NAME, score=0.5,
-                                                  higher_score_is_better=False)
+    def test_success_trial_split_to_json(self):
+        with self.trial:
+            trial_split = self._given_success_trial_validation_split(self.trial)
+            trial_json = trial_split.to_json()
 
-        trial_split.add_metric_results_train(name=MAIN_METRIC_NAME, score=0.7, higher_score_is_better=False)
-        trial_split.add_metric_results_validation(name=MAIN_METRIC_NAME, score=0.7,
-                                                  higher_score_is_better=False)
+        self._then_success_trial_split_json_is_valid(trial_json)
 
-        trial_split.add_metric_results_train(name=MAIN_METRIC_NAME, score=0.4, higher_score_is_better=False)
-        trial_split.add_metric_results_validation(name=MAIN_METRIC_NAME, score=0.4,
-                                                  higher_score_is_better=False)
+    def _then_success_trial_split_json_is_valid(self, trial_json):
+        assert trial_json['status'] == TRIAL_STATUS.SUCCESS.value
+        assert trial_json['error'] is None
+        assert trial_json['error_traceback'] is None
+        assert trial_json['metric_results'] == EXPECTED_METRIC_RESULTS
+        assert trial_json['main_metric_name'] == MAIN_METRIC_NAME
+        start_time = datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT)
+        end_time = datetime.datetime.strptime(trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT) + datetime.timedelta(
+            hours=1)
+        assert start_time < end_time
 
-    assert trial_split.is_new_best_score()
+        return True
 
+    def test_success_trial_to_json(self):
+        with self.trial:
+            self._given_success_trial_validation_split(self.trial)
 
-def test_success_trial_split_to_json():
-    hp = HyperparameterSamples({'a': 2})
-    repo = InMemoryHyperparamsRepository()
-    trial = Trial(
-        save_trial_function=repo.save_trial,
-        hyperparams=hp,
-        main_metric_name=MAIN_METRIC_NAME
-    )
+        trial_json = self.trial.to_json()
 
-    with trial:
-        trial_split = given_success_trial_validation_split(trial)
+        assert trial_json['status'] == TRIAL_STATUS.SUCCESS.value
+        assert trial_json['error'] is None
+        assert trial_json['error_traceback'] is None
+        assert trial_json['main_metric_name'] == self.trial.main_metric_name
+        assert self._then_success_trial_split_json_is_valid(trial_json['validation_splits'][0])
+
+        start_time = datetime.datetime.strptime(
+            trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT)
+        end_time = datetime.datetime.strptime(
+            trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT) + datetime.timedelta(hours=1)
+
+        assert start_time < end_time
+
+    def test_success_trial_get_validation_score(self):
+        with self.trial:
+            self._given_success_trial_validation_split(self.trial, best_score=0.3)
+
+        validation_score = self.trial.get_validation_score()
+
+        assert validation_score == 0.3
+
+    def test_success_trial_multiple_splits_should_average_the_scores(self):
+        with self.trial:
+            self._given_success_trial_validation_split(self.trial, best_score=0.3)
+            self._given_success_trial_validation_split(self.trial, best_score=0.1)
+
+        validation_score = self.trial.get_validation_score()
+
+        assert validation_score == 0.2
+
+    def test_trial_with_failed_split_should_only_average_successful_splits(self):
+
+        with self.trial:
+            self._given_success_trial_validation_split(self.trial, best_score=0.3)
+            self._given_success_trial_validation_split(self.trial, best_score=0.1)
+            self._given_failed_trial_split(self.trial)
+
+        validation_score = self.trial.get_validation_score()
+
+        assert validation_score == 0.2
+
+    def _given_success_trial_validation_split(self, trial, best_score=0.4):
+        with trial.new_validation_split(Identity()) as trial_split:
+            trial_split.add_metric_results_train(
+                name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
+            trial_split.add_metric_results_validation(
+                name=MAIN_METRIC_NAME, score=0.5,
+                higher_score_is_better=False)
+
+            trial_split.add_metric_results_train(
+                name=MAIN_METRIC_NAME, score=0.7, higher_score_is_better=False)
+            trial_split.add_metric_results_validation(
+                name=MAIN_METRIC_NAME, score=0.7, higher_score_is_better=False)
+
+            trial_split.add_metric_results_train(
+                name=MAIN_METRIC_NAME, score=best_score, higher_score_is_better=False)
+            trial_split.add_metric_results_validation(
+                name=MAIN_METRIC_NAME, score=best_score, higher_score_is_better=False)
+
+            trial_split.set_success()
+            trial.set_success()
+
+        return trial_split
+
+    def test_failure_trial_split_to_json(self):
+        with self.trial:
+            trial_split = self._given_failed_trial_split(self.trial)
+
         trial_json = trial_split.to_json()
 
-    then_success_trial_split_json_is_valid(trial_json)
+        self._then_failed_validation_split_json_is_valid(trial_json, trial_split)
 
+    def _then_failed_validation_split_json_is_valid(self, trial_json, trial_split):
+        assert trial_json['status'] == TRIAL_STATUS.FAILED.value
+        assert trial_json['error'] == str(trial_split.error)
+        assert trial_json['error_traceback'] == EXPECTED_ERROR_TRACEBACK
+        assert trial_json['metric_results'] == EXPECTED_METRIC_RESULTS
+        assert trial_json['main_metric_name'] == trial_split.main_metric_name
 
-def then_success_trial_split_json_is_valid(trial_json):
-    assert trial_json['status'] == TRIAL_STATUS.SUCCESS.value
-    assert trial_json['error'] is None
-    assert trial_json['error_traceback'] is None
-    assert trial_json['metric_results'] == EXPECTED_METRIC_RESULTS
-    assert trial_json['main_metric_name'] == MAIN_METRIC_NAME
-    start_time = datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT)
-    end_time = datetime.datetime.strptime(trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT) + datetime.timedelta(
-        hours=1)
-    assert start_time < end_time
+        start_time = datetime.datetime.strptime(
+            trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT)
+        end_time = datetime.datetime.strptime(
+            trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT) + datetime.timedelta(hours=1)
+        assert start_time < end_time
+        return True
 
-    return True
+    def test_failure_trial_to_json(self):
+        with self.trial:
+            trial_split = self._given_failed_trial_split(self.trial)
 
+        trial_json = self.trial.to_json()
 
-def test_success_trial_to_json():
-    hp = HyperparameterSamples({'a': 2})
-    repo = InMemoryHyperparamsRepository()
-    trial = Trial(
-        save_trial_function=repo.save_trial,
-        hyperparams=hp,
-        main_metric_name='mse'
-    )
+        assert trial_json['status'] == TRIAL_STATUS.FAILED.value
+        assert trial_json['error'] == str(trial_split.error)
+        assert trial_json['error_traceback'] == EXPECTED_ERROR_TRACEBACK
+        assert trial_json['main_metric_name'] == self.trial.main_metric_name
+        assert self._then_failed_validation_split_json_is_valid(
+            trial_json['validation_splits'][0], trial_split=trial_split)
 
-    with trial:
-        given_success_trial_validation_split(trial)
+        start_time = datetime.datetime.strptime(
+            trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT)
+        end_time = datetime.datetime.strptime(
+            trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT) + datetime.timedelta(hours=1)
 
-    trial_json = trial.to_json()
+        assert start_time < end_time
 
-    assert trial_json['status'] == TRIAL_STATUS.SUCCESS.value
-    assert trial_json['error'] is None
-    assert trial_json['error_traceback'] is None
-    assert trial_json['main_metric_name'] == trial.main_metric_name
-    assert then_success_trial_split_json_is_valid(trial_json['validation_splits'][0])
+    def _given_failed_trial_split(self, trial):
+        with trial.new_validation_split(Identity()) as trial_split:
+            trial_split.add_metric_results_train(
+                name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
+            trial_split.add_metric_results_validation(
+                name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
 
-    start_time = datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT)
-    end_time = datetime.datetime.strptime(trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT) + datetime.timedelta(
-        hours=1)
+            trial_split.add_metric_results_train(
+                name=MAIN_METRIC_NAME, score=0.7, higher_score_is_better=False)
+            trial_split.add_metric_results_validation(
+                name=MAIN_METRIC_NAME, score=0.7, higher_score_is_better=False)
 
-    assert start_time < end_time
+            trial_split.add_metric_results_train(
+                name=MAIN_METRIC_NAME, score=0.4, higher_score_is_better=False)
+            trial_split.add_metric_results_validation(
+                name=MAIN_METRIC_NAME, score=0.4, higher_score_is_better=False)
+            error = IndexError('index error')
+            trial_split.set_failed(error)
+            trial.set_failed(error)
+        return trial_split
 
+    def test_trials_get_best_hyperparams_should_return_hyperparams_of_best_trial(self):
+        # Given
+        trial_1 = self.trial
+        with trial_1:
+            self._given_success_trial_validation_split(trial_1, best_score=0.2)
 
-def test_success_trial_get_validation_score():
-    hp = HyperparameterSamples({'a': 2})
-    repo = InMemoryHyperparamsRepository()
-    trial = Trial(save_trial_function=repo.save_trial, hyperparams=hp, main_metric_name='mse')
+        hp_trial_2 = HyperparameterSamples({'b': 3})
+        trial_2 = Trial(
+            trial_number=1, save_trial_function=self.repo.save_trial,
+            hyperparams=hp_trial_2, main_metric_name=MAIN_METRIC_NAME)
+        with trial_2:
+            self._given_success_trial_validation_split(trial_2, best_score=0.1)
 
-    with trial:
-        given_success_trial_validation_split(trial, best_score=0.3)
+        trials = Trials(trials=[trial_1, trial_2])
 
-    validation_score = trial.get_validation_score()
+        # When
+        best_hyperparams = trials.get_best_hyperparams()
 
-    assert validation_score == 0.3
-
-
-def test_success_trial_multiple_splits_should_average_the_scores():
-    hp = HyperparameterSamples({'a': 2})
-    repo = InMemoryHyperparamsRepository()
-    trial = Trial(save_trial_function=repo.save_trial, hyperparams=hp, main_metric_name='mse')
-
-    with trial:
-        given_success_trial_validation_split(trial, best_score=0.3)
-        given_success_trial_validation_split(trial, best_score=0.1)
-
-    validation_score = trial.get_validation_score()
-
-    assert validation_score == 0.2
-
-
-def test_trial_with_failed_split_should_only_average_successful_splits():
-    hp = HyperparameterSamples({'a': 2})
-    repo = InMemoryHyperparamsRepository()
-    trial = Trial(save_trial_function=repo.save_trial, hyperparams=hp, main_metric_name='mse')
-
-    with trial:
-        given_success_trial_validation_split(trial, best_score=0.3)
-        given_success_trial_validation_split(trial, best_score=0.1)
-        given_failed_trial_split(trial)
-
-    validation_score = trial.get_validation_score()
-
-    assert validation_score == 0.2
-
-
-def given_success_trial_validation_split(trial, best_score=0.4):
-    with trial.new_validation_split(Identity()) as trial_split:
-        trial_split.add_metric_results_train(name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
-        trial_split.add_metric_results_validation(name=MAIN_METRIC_NAME, score=0.5,
-                                                  higher_score_is_better=False)
-
-        trial_split.add_metric_results_train(name=MAIN_METRIC_NAME, score=0.7, higher_score_is_better=False)
-        trial_split.add_metric_results_validation(name=MAIN_METRIC_NAME, score=0.7,
-                                                  higher_score_is_better=False)
-
-        trial_split.add_metric_results_train(name=MAIN_METRIC_NAME, score=best_score,
-                                             higher_score_is_better=False)
-        trial_split.add_metric_results_validation(name=MAIN_METRIC_NAME, score=best_score,
-                                                  higher_score_is_better=False)
-        trial_split.set_success()
-        trial.set_success()
-
-    return trial_split
-
-
-def test_failure_trial_split_to_json():
-    hp = HyperparameterSamples({'a': 2})
-    repo = InMemoryHyperparamsRepository()
-    trial = Trial(save_trial_function=repo.save_trial, hyperparams=hp, main_metric_name='mse')
-    with trial:
-        trial_split = given_failed_trial_split(trial)
-
-    trial_json = trial_split.to_json()
-
-    then_failed_validation_split_json_is_valid(trial_json, trial_split)
-
-
-def then_failed_validation_split_json_is_valid(trial_json, trial_split):
-    assert trial_json['status'] == TRIAL_STATUS.FAILED.value
-    assert trial_json['error'] == str(trial_split.error)
-    assert trial_json['error_traceback'] == EXPECTED_ERROR_TRACEBACK
-    assert trial_json['metric_results'] == EXPECTED_METRIC_RESULTS
-    assert trial_json['main_metric_name'] == trial_split.main_metric_name
-
-    start_time = datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT)
-    end_time = datetime.datetime.strptime(trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT) + datetime.timedelta(
-        hours=1)
-    assert start_time < end_time
-    return True
-
-
-def test_failure_trial_to_json():
-    hp = HyperparameterSamples({'a': 2})
-    repo = InMemoryHyperparamsRepository()
-    trial = Trial(save_trial_function=repo.save_trial, hyperparams=hp, main_metric_name='mse')
-
-    with trial:
-        trial_split = given_failed_trial_split(trial)
-
-    trial_json = trial.to_json()
-
-    assert trial_json['status'] == TRIAL_STATUS.FAILED.value
-    assert trial_json['error'] == str(trial_split.error)
-    assert trial_json['error_traceback'] == EXPECTED_ERROR_TRACEBACK
-    assert trial_json['main_metric_name'] == trial.main_metric_name
-    assert then_failed_validation_split_json_is_valid(trial_json['validation_splits'][0], trial_split=trial_split)
-
-    start_time = datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT)
-    end_time = datetime.datetime.strptime(trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT) + datetime.timedelta(
-        hours=1)
-
-    assert start_time < end_time
-
-
-def given_failed_trial_split(trial):
-    with trial.new_validation_split(Identity()) as trial_split:
-        trial_split.add_metric_results_train(name=MAIN_METRIC_NAME, score=0.5, higher_score_is_better=False)
-        trial_split.add_metric_results_validation(name=MAIN_METRIC_NAME, score=0.5,
-                                                  higher_score_is_better=False)
-
-        trial_split.add_metric_results_train(name=MAIN_METRIC_NAME, score=0.7, higher_score_is_better=False)
-        trial_split.add_metric_results_validation(name=MAIN_METRIC_NAME, score=0.7,
-                                                  higher_score_is_better=False)
-
-        trial_split.add_metric_results_train(name=MAIN_METRIC_NAME, score=0.4, higher_score_is_better=False)
-        trial_split.add_metric_results_validation(name=MAIN_METRIC_NAME, score=0.4,
-                                                  higher_score_is_better=False)
-        error = IndexError('index error')
-        trial_split.set_failed(error)
-        trial.set_failed(error)
-    return trial_split
-
-
-def test_trials_get_best_hyperparams_should_return_hyperparams_of_best_trial():
-    # Given
-    repo = InMemoryHyperparamsRepository()
-    hp_trial_1 = HyperparameterSamples({'a': 2})
-    trial_1 = Trial(save_trial_function=repo.save_trial, hyperparams=hp_trial_1, main_metric_name=MAIN_METRIC_NAME)
-    with trial_1:
-        given_success_trial_validation_split(trial_1, best_score=0.2)
-
-    hp_trial_2 = HyperparameterSamples({'b': 3})
-    trial_2 = Trial(save_trial_function=repo.save_trial, hyperparams=hp_trial_2, main_metric_name=MAIN_METRIC_NAME)
-    with trial_2:
-        given_success_trial_validation_split(trial_2, best_score=0.1)
-
-    trials = Trials(trials=[trial_1, trial_2])
-
-    # When
-    best_hyperparams = trials.get_best_hyperparams()
-
-    # Then
-    assert best_hyperparams == hp_trial_2
+        # Then
+        assert best_hyperparams == hp_trial_2

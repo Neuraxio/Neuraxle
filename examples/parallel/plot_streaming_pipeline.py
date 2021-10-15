@@ -3,9 +3,27 @@ Parallel processing in Neuraxle
 ===================================================================
 
 This demonstrates how to stream data in parallel in a Neuraxle pipeline.
+The pipeline steps' parallelism here will be obvious.
+
+The pipeline has two steps:
+1. Preprocessing: the step that process the data simply sleeps.
+2. Model: the model simply multiplies the data by two. 
+
+This can be used with scikit-learn as well to transform things in parallel,
+and any other library such as tensorflow.
+
+Pipelines benchmarked: 
+1. We first use a classical pipeline and evaluate the time.
+2. Then we use a minibatched pipeline and we evaluate the time.
+3. Then we use a parallel pipeline and we evaluate the time.
+
+We expect the parallel pipeline to be faster due to having more workers
+in parallel, as well as starting the model's transformations at the same
+time that other batches are being preprocessed, using queues.
+
 
 ..
-    Copyright 2019, Neuraxio Inc.
+    Copyright 2021, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -25,47 +43,49 @@ import time
 import numpy as np
 
 from neuraxle.distributed.streaming import SequentialQueuedPipeline
-from neuraxle.pipeline import Pipeline
+from neuraxle.pipeline import BasePipeline, Pipeline, MiniBatchSequentialPipeline
 from neuraxle.steps.loop import ForEach
 from neuraxle.steps.misc import Sleep
 from neuraxle.steps.numpy import MultiplyByN
 
 
+def eval_run_time(pipeline: BasePipeline):
+    pipeline.setup()
+    a = time.time()
+    output = pipeline.transform(list(range(100)))
+    b = time.time()
+    seconds = b - a
+    return seconds, output
+
+
 def main():
     """
-    Process tasks of batch size 10 with 8 queued workers that have a max queue size of 10.
-    Each task doest the following: For each data input, sleep 0.02 seconds, and multiply by 2.
+    The task is to sleep 0.02 seconds for each data input and then multiply by 2.
     """
     sleep_time = 0.02
-    p = SequentialQueuedPipeline([
-        Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
-    ], n_workers_per_step=8, max_queue_size=10, batch_size=10)
+    preprocessing_and_model_steps = [ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]
 
-    a = time.time()
-    outputs_streaming = p.transform(list(range(100)))
-    b = time.time()
-    time_queued_pipeline = b - a
-    print('SequentialQueuedPipeline')
-    print('execution time: {} seconds'.format(time_queued_pipeline))
+    # Classical pipeline - all at once with one big batch:
+    p = Pipeline(preprocessing_and_model_steps)
+    time_vanilla_pipeline, output_classical = eval_run_time(p)
+    print(f"Classical 'Pipeline' execution time: {time_vanilla_pipeline} seconds.")
 
-    """
-    Process data inputs sequentially. 
-    For each data input, sleep 0.02 seconds, and then multiply by 2.
-    """
-    p = Pipeline([
-        Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
-    ])
+    # Classical minibatch pipeline - minibatch size 10:
+    p = MiniBatchSequentialPipeline(preprocessing_and_model_steps,
+                                    batch_size=10)
+    time_minibatch_pipeline, output_minibatch = eval_run_time(p)
+    print(f"Minibatched 'MiniBatchSequentialPipeline' execution time: {time_minibatch_pipeline} seconds.")
 
-    a = time.time()
-    outputs_vanilla = p.transform(list(range(100)))
-    b = time.time()
-    time_vanilla_pipeline = b - a
+    # Parallel pipeline - minibatch size 10 with 8 workers per step that
+    # have a max queue size of 5 batches between preprocessing and the model:
+    p = SequentialQueuedPipeline(preprocessing_and_model_steps,
+                                 n_workers_per_step=8, max_queue_size=5, batch_size=10)
+    time_parallel_pipeline, output_parallel = eval_run_time(p)
+    print(f"Parallel 'SequentialQueuedPipeline' execution time: {time_parallel_pipeline} seconds.")
 
-    print('VanillaPipeline')
-    print('execution time: {} seconds'.format(time_vanilla_pipeline))
-
-    assert time_queued_pipeline < time_vanilla_pipeline
-    assert np.array_equal(outputs_streaming, outputs_vanilla)
+    assert time_parallel_pipeline < time_minibatch_pipeline, str((time_parallel_pipeline, time_vanilla_pipeline))
+    assert np.array_equal(output_classical, output_minibatch)
+    assert np.array_equal(output_classical, output_parallel)
 
 
 if __name__ == '__main__':
