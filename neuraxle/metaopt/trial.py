@@ -90,8 +90,11 @@ class Trial:
         self.start_time: datetime.datetime = start_time
         self.end_time: datetime.datetime = end_time
 
-        if logger is None and self.cache_folder is not None:
-            logger = self._initialize_logger_with_file()
+        if logger is None:
+            if self.cache_folder is not None:
+                logger = self._initialize_logger_with_file()
+            else:
+                logger = logging.getLogger()
         self.logger: Logger = logger
 
     def save_trial(self) -> 'Trial':
@@ -732,11 +735,9 @@ class Trials:
         if len(self) == 0:
             raise Exception('Could not get best trial because there were no successful trial.')
 
-        higher_score_is_better = self.trials[-1].is_higher_score_better()
-
         for trial in self.trials:
             trial_score = trial.get_validation_score()
-            if best_score is None or higher_score_is_better == (trial_score > best_score):
+            if best_score is None or self.trials[-1].is_higher_score_better() == (trial_score > best_score):
                 best_score = trial_score
                 best_trial = trial
 

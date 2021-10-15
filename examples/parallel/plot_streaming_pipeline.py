@@ -52,7 +52,7 @@ from neuraxle.steps.numpy import MultiplyByN
 def eval_run_time(pipeline: BasePipeline):
     pipeline.setup()
     a = time.time()
-    output = pipeline.transform(list(range(200)))
+    output = pipeline.transform(list(range(100)))
     b = time.time()
     seconds = b - a
     return seconds, output
