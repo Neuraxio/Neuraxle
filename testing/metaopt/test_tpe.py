@@ -110,7 +110,6 @@ def test_tpe(expected_output_mult, pipeline, tmpdir):
     assert mean_tpe_score < mean_random_score
 
 
-
 def _test_trial_scores(
     expected_output_mult,
     pipeline,
@@ -144,4 +143,3 @@ def _test_trial_scores(
     trials: Trials = hp_repository.load_all_trials(status=TRIAL_STATUS.SUCCESS)
     validation_scores = [t.get_validation_score() for t in trials]
     return validation_scores
-

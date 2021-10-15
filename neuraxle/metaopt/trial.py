@@ -26,13 +26,14 @@ import hashlib
 import logging
 import os
 import traceback
+import json
 from enum import Enum
-from logging import Logger
+from logging import FileHandler, Logger
 from typing import Dict, List, Callable, Iterable, Tuple
 
 import numpy as np
 
-from neuraxle.base import BaseStep, ExecutionContext
+from neuraxle.base import BaseStep, ExecutionContext, LOGGER_FORMAT, DATE_FORMAT
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
 
@@ -56,10 +57,10 @@ class Trial:
 
     def __init__(
             self,
+            trial_number: int,
             hyperparams: HyperparameterSamples,
             main_metric_name: str,
             save_trial_function: Callable,
-            logger: Logger = None,
             status: 'TRIAL_STATUS' = None,
             pipeline: BaseStep = None,
             validation_splits: List['TrialSplit'] = None,
@@ -68,12 +69,10 @@ class Trial:
             error_traceback: str = None,
             start_time: datetime.datetime = None,
             end_time: datetime.datetime = None,
+            logger: Logger = None
     ):
+        self.trial_number = trial_number
         self.save_trial_function: Callable = save_trial_function
-
-        if logger is None:
-            logger = logging.getLogger()
-        self.logger: Logger = logger
 
         if status is None:
             status = TRIAL_STATUS.PLANNED
@@ -90,6 +89,10 @@ class Trial:
         self.error: str = error
         self.start_time: datetime.datetime = start_time
         self.end_time: datetime.datetime = end_time
+
+        if logger is None and self.cache_folder is not None:
+            logger = self._initialize_logger_with_file()
+        self.logger: Logger = logger
 
     def save_trial(self) -> 'Trial':
         """
@@ -269,6 +272,7 @@ class Trial:
 
     def to_json(self):
         return {
+            'trial_number': self.trial_number,
             'status': self.status.value,
             'hyperparams': self.hyperparams.to_flat_dict(),
             'validation_splits': [v.to_json() for v in self.validation_splits],
@@ -280,8 +284,9 @@ class Trial:
         }
 
     @staticmethod
-    def from_json(update_trial_function: Callable, trial_json: Dict) -> 'Trial':
+    def from_json(update_trial_function: Callable, trial_json: Dict, cache_folder: str = None) -> 'Trial':
         trial: Trial = Trial(
+            trial_number=trial_json["trial_number"],
             main_metric_name=trial_json['main_metric_name'],
             status=TRIAL_STATUS(trial_json['status']),
             hyperparams=HyperparameterSamples(trial_json['hyperparams']),
@@ -289,7 +294,9 @@ class Trial:
             error=trial_json['error'],
             error_traceback=trial_json['error_traceback'],
             start_time=datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT),
-            end_time=datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT)
+            end_time=datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT),
+            cache_folder=cache_folder,
+            logger=None
         )
 
         trial.validation_splits = [
@@ -304,12 +311,36 @@ class Trial:
     def __getitem__(self, item) -> 'TrialSplit':
         return self.validation_splits[item]
 
+    def _initialize_logger_with_file(self) -> logging.Logger:
+
+        os.makedirs(self.cache_folder, exist_ok=True)
+
+        logfile_path = os.path.join(self.cache_folder, f"trial_{self.trial_number}.log")
+        logger_name = f"trial_{self.trial_number}"
+        logger = logging.getLogger(logger_name)
+        formatter = logging.Formatter(fmt=LOGGER_FORMAT, datefmt=DATE_FORMAT)
+        file_handler = logging.FileHandler(filename=logfile_path)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        return logger
+
+    def _free_logger_file(self):
+        """Remove file handlers from logger to free file lock on Windows."""
+        for h in self.logger.handlers:
+            if isinstance(h, FileHandler):
+                self.logger.removeHandler(h)
+
     def __enter__(self):
         """
         Start trial, and set the trial status to PLANNED.
         """
         self.start_time = datetime.datetime.now()
         self.status = TRIAL_STATUS.STARTED
+
+        self.logger.info(
+            '\nnew trial: {}'.format(
+                json.dumps(self.hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+
         self.save_trial()
         return self
 
@@ -330,6 +361,7 @@ class Trial:
             raise exc_val
 
         self.save_trial()
+        self._free_logger_file()
         return self
 
 
@@ -428,7 +460,7 @@ class TrialSplit:
 
         return self
 
-    def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool, log_metric: bool=False):
+    def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool, log_metric: bool = False):
         """
         Add a train metric result in the metric results dictionary.
 
@@ -449,7 +481,7 @@ class TrialSplit:
         if log_metric:
             self.trial.logger.info('{} train: {}'.format(name, score))
 
-    def add_metric_results_validation(self, name: str, score: float, higher_score_is_better: bool, log_metric: bool=False):
+    def add_metric_results_validation(self, name: str, score: float, higher_score_is_better: bool, log_metric: bool = False):
         """
         Add a validation metric result in the metric results dictionary.
 
@@ -711,7 +743,7 @@ class Trials:
         return best_trial
 
     def split_good_and_bad_trials(self, quantile_threshold: float, number_of_good_trials_max_cap: int) -> Tuple[
-        'Trials', 'Trials']:
+            'Trials', 'Trials']:
         success_trials: Trials = self.filter(TRIAL_STATUS.SUCCESS)
 
         # Split trials into good and bad using quantile threshold.

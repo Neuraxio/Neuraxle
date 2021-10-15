@@ -41,8 +41,7 @@ from typing import Callable, List, Union, Tuple
 
 import numpy as np
 
-from neuraxle.base import BaseStep, ExecutionContext, ForceHandleMixin, ExecutionPhase, _HasChildrenMixin, \
-    LOGGER_FORMAT, DATE_FORMAT
+from neuraxle.base import BaseStep, ExecutionContext, ForceHandleMixin, ExecutionPhase, _HasChildrenMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.callbacks import BaseCallback, CallbackList, ScoringCallback
@@ -54,6 +53,7 @@ from neuraxle.metaopt.trial import Trial, TrialSplit, TRIAL_STATUS, Trials
 class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], ABC):
     """
     Hyperparams repository that saves hyperparams, and scores for every AutoML trial.
+    Cache folder can be changed to do different round numbers.
 
     .. seealso::
         :class:`AutoML`,
@@ -66,10 +66,15 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
-    def __init__(self, hyperparameter_selection_strategy=None, cache_folder=None, best_retrained_model_folder=None):
+    def __init__(
+        self,
+        hyperparameter_selection_strategy: 'BaseHyperparameterSelectionStrategy' = None,
+        cache_folder: str = None,
+        best_retrained_model_folder: str = None,
+    ):
         super().__init__()
         if cache_folder is None:
-            cache_folder = 'trials'
+            cache_folder = os.path.join(f'{self.__class__.__name__}', 'trials')
         if best_retrained_model_folder is None:
             best_retrained_model_folder = os.path.join(cache_folder, 'best')
         self.best_retrained_model_folder = best_retrained_model_folder
@@ -155,7 +160,7 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         self._save_best_model(step, trial_hash)
         return step
 
-    def new_trial(self, auto_ml_container: 'AutoMLContainer'):
+    def new_trial(self, auto_ml_container: 'AutoMLContainer') -> Trial:
         """
         Create a new trial with the best next hyperparams.
 
@@ -164,18 +169,15 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         :return: trial
         """
         hyperparams = self.hyperparameter_selection_strategy.find_next_best_hyperparams(auto_ml_container)
-        logger = self._create_logger_for_trial(auto_ml_container.trial_number)
-        logger.info('\nnew trial: {}'.format(json.dumps(hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
         trial = Trial(
+            trial_number=auto_ml_container.trial_number,
             hyperparams=hyperparams,
             save_trial_function=self.save_trial,
-            logger=logger,
             cache_folder=self.cache_folder,
             main_metric_name=auto_ml_container.main_scoring_metric_name
         )
         return trial
-
 
     def _get_trial_hash(self, hp_dict):
         """
@@ -186,19 +188,6 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         """
         current_hyperparameters_hash = hashlib.md5(str.encode(str(hp_dict))).hexdigest()
         return current_hyperparameters_hash
-
-    def _create_logger_for_trial(self, trial_number) -> logging.Logger:
-
-        os.makedirs(self.cache_folder, exist_ok=True)
-
-        logfile_path = os.path.join(self.cache_folder, f"trial_{trial_number}.log")
-        logger_name = f"trial_{trial_number}"
-        logger = logging.getLogger(logger_name)
-        formatter = logging.Formatter(fmt=LOGGER_FORMAT, datefmt=DATE_FORMAT)
-        file_handler = logging.FileHandler(filename=logfile_path)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
-        return logger
 
 
 class InMemoryHyperparamsRepository(HyperparamsRepository):
@@ -329,14 +318,14 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         # Sleeping to have a valid time difference between files when reloading them to sort them by creation time:
         time.sleep(0.1)
 
-    def new_trial(self, auto_ml_container: 'AutoMLContainer'):
+    def new_trial(self, auto_ml_container: 'AutoMLContainer') -> Trial:
         """
         Create new hyperperams trial json file.
 
         :param auto_ml_container: auto ml container
         :return:
         """
-        trial = HyperparamsRepository.new_trial(self, auto_ml_container)
+        trial: Trial = HyperparamsRepository.new_trial(self, auto_ml_container)
         self._save_trial(trial)
 
         return trial
@@ -346,6 +335,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         Load all hyperparameter trials with their corresponding score.
         Reads all the saved trial json files, sorted by creation date.
 
+        :param status: (optional) filter to select only trials with this status.
         :return: (hyperparams, scores)
         """
         trials = Trials()
@@ -370,7 +360,8 @@ class HyperparamsJSONRepository(HyperparamsRepository):
             if status is None or trial_json['status'] == status.value:
                 trials.append(Trial.from_json(
                     update_trial_function=self.save_trial,
-                    trial_json=trial_json
+                    trial_json=trial_json,
+                    cache_folder=self.cache_folder
                 ))
 
         return trials
@@ -498,7 +489,14 @@ class Trainer:
             hyperparams_repository = InMemoryHyperparamsRepository()
         self.hyperparams_repository: HyperparamsRepository = hyperparams_repository
 
-    def train(self, pipeline: BaseStep, data_inputs, expected_outputs=None, context: ExecutionContext = None) -> Trial:
+    def train(
+        self,
+        pipeline: BaseStep,
+        data_inputs,
+        expected_outputs=None,
+        context: ExecutionContext = None,
+        trial_number=0
+    ) -> Trial:
         """
         Train pipeline using the validation splitter.
         Track training, and validation metrics for each epoch.
@@ -523,12 +521,12 @@ class Trainer:
             logger=context.logger,
             hyperparams=pipeline.get_hyperparams(),
             main_metric_name=self.get_main_metric_name(),
-            save_trial_function=self.hyperparams_repository.save_trial
+            save_trial_function=self.hyperparams_repository.save_trial,
+            trial_number=trial_number
         )
 
         self.execute_trial(
             pipeline=pipeline,
-            trial_number=1,
             repo_trial=repo_trial,
             context=context,
             validation_splits=validation_splits,
@@ -541,7 +539,6 @@ class Trainer:
     def execute_trial(
             self,
             pipeline: BaseStep,
-            trial_number: int,
             repo_trial: Trial,
             context: ExecutionContext,
             validation_splits: List[Tuple[DataContainer, DataContainer]],
@@ -576,7 +573,7 @@ class Trainer:
                     repo_trial=repo_trial,
                     repo_trial_split_number=repo_trial_split.split_number,
                     validation_splits=validation_splits,
-                    trial_number=trial_number,
+                    trial_number=repo_trial.trial_number,
                     n_trial=n_trial
                 )
 
@@ -867,7 +864,6 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
                 repo_trial_split = self.trainer.execute_trial(
                     pipeline=self.pipeline,
                     context=context,
-                    trial_number=trial_number,
                     repo_trial=repo_trial,
                     validation_splits=validation_splits,
                     n_trial=self.n_trial
@@ -1153,8 +1149,9 @@ class ValidationSplitter(BaseValidationSplitter):
     def __init__(self, test_size: float):
         self.test_size = test_size
 
-    def split(self, data_inputs, current_ids=None, expected_outputs=None, context: ExecutionContext = None) -> Tuple[
-        List, List, List, List]:
+    def split(
+        self, data_inputs, current_ids=None, expected_outputs=None, context: ExecutionContext = None
+    ) -> Tuple[List, List, List, List]:
         train_data_inputs, train_expected_outputs, train_current_ids, validation_data_inputs, validation_expected_outputs, validation_current_ids = validation_split(
             test_size=self.test_size,
             data_inputs=data_inputs,

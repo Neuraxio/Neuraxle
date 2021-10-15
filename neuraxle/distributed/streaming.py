@@ -59,7 +59,7 @@ class ObservableQueueMixin(MixinForBaseTransformer):
         :class:`SequentialQueuedPipeline`
     """
 
-    def __init__(self, queue):
+    def __init__(self, queue: Queue):
         MixinForBaseTransformer.__init__(self)
         self.queue = queue
         self.observers = []
@@ -176,7 +176,7 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
             additional_worker_arguments = [[] for _ in range(n_workers)]
 
         MetaStep.__init__(self, wrapped)
-        ObservableQueueMixin.__init__(self, Queue(maxsize=max_queue_size))
+        ObservableQueueMixin.__init__(self, Queue(maxsize=max_queue_size))  # max_queue_size is in batches
 
         self.use_processes: bool = use_processes
         self.workers: List[Process] = []
@@ -345,17 +345,16 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         ], batch_size=10, max_queue_size=5)
         outputs = p.transform(list(range(100)))
 
-    :param steps: pipeline steps
-    :param batch_size: number of elements to combine into a single batch
-    :param n_workers_per_step: number of workers to spawn per step
-    :param max_queue_size: max number of elements inside the processing queue
-    :param data_joiner: transformer step to join streamed batches together at the end of the pipeline
+    :param steps: pipeline steps.
+    :param batch_size: number of elements to combine into a single batch.
+    :param n_workers_per_step: number of workers to spawn per step.
+    :param max_queue_size: max number of batches inside the processing queue between the workers.
+    :param data_joiner: transformer step to join streamed batches together at the end of the pipeline.
     :param use_processes: use processes instead of threads for parallel processing. multiprocessing.context.Process is used by default.
     :param use_savers: use savers to serialize steps for parallel processing. Recommended if using processes instead of threads.
-    :param keep_incomplete_batch: (Optional.) A bool representing
-    whether the last batch should be dropped in the case it has fewer than
-    `batch_size` elements; the default behavior is to keep the smaller
-    batch.
+    :param keep_incomplete_batch: (Optional.) A bool that indicates whether
+    or not the last batch should be dropped in the case it has fewer than
+    `batch_size` elements; the default behavior is to keep the smaller batch.
     :param default_value_data_inputs: expected_outputs default fill value
     for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
     to trim absent values from the batch

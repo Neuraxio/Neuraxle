@@ -24,7 +24,7 @@ def test_automl_early_stopping_callback(tmpdir):
     # Given
     hp_repository = InMemoryHyperparamsRepository(cache_folder=str(tmpdir))
     n_epochs = 10
-    max_epochs_without_improvement=3
+    max_epochs_without_improvement = 3
     auto_ml = AutoML(
         pipeline=Pipeline([
             MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
@@ -57,12 +57,11 @@ def test_automl_early_stopping_callback(tmpdir):
     validation_scores = trial.validation_splits[0].get_validation_scores()
     nepochs_executed = len(validation_scores)
     assert nepochs_executed == max_epochs_without_improvement + 1
-    
 
-@pytest.mark.skip
+
 def test_automl_savebestmodel_callback(tmpdir):
     # Given
-    hp_repository = HyperparamsJSONRepository(cache_folder=str('caching'))
+    hp_repository = HyperparamsJSONRepository(cache_folder=tmpdir)
     validation_splitter = ValidationSplitter(0.20)
     auto_ml = AutoML(
         pipeline=Pipeline([
@@ -78,13 +77,12 @@ def test_automl_savebestmodel_callback(tmpdir):
         callbacks=[
             BestModelCheckpoint()
         ],
-        n_trials=1,
-        epochs=10,
+        n_trials=3,
+        epochs=1,
         refit_trial=False,
-        print_func=print,
         hyperparams_repository=hp_repository,
         continue_loop_on_error=False
-    )
+    ).with_context(ExecutionContext(tmpdir))
 
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     expected_outputs = data_inputs * 4
@@ -92,23 +90,21 @@ def test_automl_savebestmodel_callback(tmpdir):
     # When
     auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
-
-    #Then
+    # Then
     trials: Trials = hp_repository.load_all_trials()
     best_trial = trials.get_best_trial()
     best_trial_score = best_trial.get_validation_score()
-    best_trial.cache_folder = hp_repository.cache_folder
     best_model = best_trial.get_model('best')
-    _, _, valid_inputs, valid_outputs = ValidationSplitter(0.20).split(data_inputs, expected_outputs)
-    predicted_output = best_model.predict(valid_inputs)
-    score = mean_squared_error(valid_outputs, predicted_output)
+    _, _, _, valid_inputs, valid_outputs, _ = validation_splitter.split(data_inputs=data_inputs, expected_outputs=expected_outputs)
+    predicted_output = best_model.predict(*valid_inputs)
+    score = mean_squared_error(*valid_outputs, predicted_output)
 
     assert best_trial_score == score
 
-    
+
 def test_automl_with_kfold(tmpdir):
     # Given
-    hp_repository = HyperparamsJSONRepository(cache_folder=str('caching'))
+    hp_repository = HyperparamsJSONRepository(cache_folder=tmpdir)
     auto_ml = AutoML(
         pipeline=Pipeline([
             MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
@@ -342,7 +338,8 @@ def test_trainer_train():
         validation_splitter=ValidationSplitter(test_size=0.20)
     )
 
-    repo_trial: Trial = trainer.train(pipeline=p, data_inputs=data_inputs, expected_outputs=expected_outputs, context=ExecutionContext())
+    repo_trial: Trial = trainer.train(pipeline=p, data_inputs=data_inputs,
+                                      expected_outputs=expected_outputs, context=ExecutionContext())
 
     trained_pipeline = repo_trial.get_trained_pipeline(split_number=0)
 
@@ -350,4 +347,3 @@ def test_trainer_train():
     mse = mean_squared_error(expected_outputs, outputs)
 
     assert mse < 1
-

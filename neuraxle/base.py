@@ -2242,7 +2242,7 @@ class BaseTransformer(
         :return: self
         """
         self.is_initialized = False
-        return self
+        return RecursiveDict()
 
     def __del__(self):
         try:

@@ -71,6 +71,7 @@ def test_logger():
         l = f.read()
 
     # Teardown
+    file_handler.close()
     os.remove(file_path)
 
 
@@ -118,6 +119,3 @@ class TestTrialLogger:
             with open(f, 'r') as f:
                 log = f.readlines()
                 assert len(log) == 36
-
-    def teardown(self):
-        shutil.rmtree(self.tmpdir)
