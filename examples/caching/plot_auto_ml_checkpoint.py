@@ -79,7 +79,6 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
 
     actual_score = mean_squared_error(EXPECTED_OUTPUTS, outputs)
     print('{0} seconds'.format(time_b - time_a))
-    print('output: {0}'.format(outputs))
     print('smallest mse: {0}'.format(actual_score))
     print('best hyperparams: {0}'.format(pipeline.get_hyperparams()))
 
@@ -109,17 +108,17 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
         ]
     )
     auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
-    outputs = auto_ml.get_best_model().predict(DATA_INPUTS)
+    outputs2 = auto_ml.get_best_model().predict(DATA_INPUTS)
     time_b = time.time()
     pipeline.flush_all_cache()
 
-    actual_score = mean_squared_error(EXPECTED_OUTPUTS, outputs)
+    actual_score = mean_squared_error(EXPECTED_OUTPUTS, outputs2)
     print('{0} seconds'.format(time_b - time_a))
-    print('output: {0}'.format(outputs))
     print('smallest mse: {0}'.format(actual_score))
     print('best hyperparams: {0}'.format(pipeline.get_hyperparams()))
 
     assert isinstance(actual_score, float)
+    assert (outputs == outputs2).all()
 
 
 if __name__ == "__main__":
