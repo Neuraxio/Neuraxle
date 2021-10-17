@@ -76,10 +76,10 @@ def main():
     time_minibatch_pipeline, output_minibatch = eval_run_time(p)
     print(f"Minibatched 'MiniBatchSequentialPipeline' execution time: {time_minibatch_pipeline} seconds.")
 
-    # Parallel pipeline - minibatch size 10 with 8 workers per step that
-    # have a max queue size of 5 batches between preprocessing and the model:
+    # Parallel pipeline - minibatch size 10 with 16 parallel workers per step that
+    # have a max queue size of 10 batches between preprocessing and the model:
     p = SequentialQueuedPipeline(preprocessing_and_model_steps,
-                                 n_workers_per_step=8, max_queue_size=5, batch_size=10)
+                                 n_workers_per_step=16, max_queue_size=10, batch_size=10)
     time_parallel_pipeline, output_parallel = eval_run_time(p)
     print(f"Parallel 'SequentialQueuedPipeline' execution time: {time_parallel_pipeline} seconds.")
 
