@@ -73,7 +73,7 @@ def main(tmpdir: LocalPath):
             SKLearnWrapper(
                 GradientBoostingRegressor(),
                 HyperparameterSpace({
-                    "n_estimators": RandInt(50, 600), "max_depth": RandInt(1, 10),
+                    "n_estimators": RandInt(50, 300), "max_depth": RandInt(1, 4),
                     "learning_rate": LogUniform(0.07, 0.7)
                 })
             ),
@@ -96,7 +96,7 @@ def main(tmpdir: LocalPath):
         validation_splitter=ValidationSplitter(0.20),
         refit_trial=True,
         n_trials=10,
-        epochs=10,
+        epochs=1,  # 1 epoc here due to using sklearn models that just fit once.
         cache_folder_when_no_handle=str(tmpdir),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)],
