@@ -33,13 +33,13 @@ from neuraxle.base import ExecutionContext
 
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, RandomSearchHyperparameterSelectionStrategy, ValidationSplitter
+from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearchHyperparameterSelectionStrategy, ValidationSplitter
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.flow import ExpandDim
 from neuraxle.steps.loop import ForEach
 from neuraxle.steps.misc import Sleep
 from neuraxle.steps.numpy import MultiplyByN
+from neuraxle.steps.caching import JoblibValueCachingWrapper
 
 
 def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
@@ -61,7 +61,7 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
     ], cache_folder=classic_pipeline_folder).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
-    auto_ml = AutoML(
+    auto_ml = EasyAutoML(
         pipeline,
         refit_trial=True,
         n_trials=n_iter,
@@ -85,21 +85,22 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
     assert isinstance(actual_score, float)
 
     print('Resumable Pipeline:')
-    resumable_pipeline_folder = os.path.join(str(tmpdir), 'resumable')
+    caching_pipeline_folder = os.path.join(str(tmpdir), 'cache')
 
-    pipeline = ResumablePipeline([
+    pipeline: Pipeline = Pipeline([
         ('multiplication_1', MultiplyByN()),
-        ('sleep_1', ForEach(Sleep(sleep_time))),
-        ('checkpoint1', ExpandDim(DefaultCheckpoint())),
-        ('multiplication_2', MultiplyByN()),
-    ], cache_folder=resumable_pipeline_folder).set_hyperparams_space(HYPERPARAMETER_SPACE)
+        ("value_checkpoints", JoblibValueCachingWrapper(Pipeline([
+            ('sleep_1', ForEach(Sleep(sleep_time))),
+            ('multiplication_2', MultiplyByN()),
+        ]))),
+    ], cache_folder=caching_pipeline_folder).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
-    auto_ml = AutoML(
+    auto_ml = EasyAutoML(
         pipeline,
         refit_trial=True,
         n_trials=n_iter,
-        cache_folder_when_no_handle=resumable_pipeline_folder,
+        cache_folder_when_no_handle=caching_pipeline_folder,
         validation_splitter=ValidationSplitter(0.2),
         hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
@@ -110,7 +111,6 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
     auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
     outputs2 = auto_ml.get_best_model().predict(DATA_INPUTS)
     time_b = time.time()
-    pipeline.flush_all_cache()
 
     actual_score = mean_squared_error(EXPECTED_OUTPUTS, outputs2)
     print('{0} seconds'.format(time_b - time_a))

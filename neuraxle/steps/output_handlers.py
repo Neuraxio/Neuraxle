@@ -132,7 +132,8 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
 
         return data_container
 
-    def _set_expected_outputs(self, data_container, new_expected_outputs_data_container) -> DataContainer:
+    def _set_expected_outputs(
+            self, data_container: DataContainer, new_expected_outputs_data_container: DataContainer) -> DataContainer:
         if len(data_container.data_inputs) != len(data_container.expected_outputs):
             raise AssertionError(
                 'OutputTransformerWrapper: Found different len for data inputs, and expected outputs. '
@@ -140,7 +141,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
                 'or otherwise create your own handler methods to do more funky things.')
 
         data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
-        data_container.set_current_ids(new_expected_outputs_data_container.current_ids)
+        data_container.set_ids(new_expected_outputs_data_container.ids)
 
         return data_container
 
@@ -266,9 +267,6 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
             ),
             context.push(self.wrapped)
         )
-
-        current_ids = self.hash(data_container)
-        data_container.set_ids(current_ids)
 
         return output_data_container
 

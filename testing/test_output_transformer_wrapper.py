@@ -124,6 +124,7 @@ class ChangeLenDataInputs(BaseTransformer):
     """
     This should raise an error because it does not return the same length for data_inputs and expected_outputs
     """
+
     def __init__(self):
         super().__init__()
 
@@ -134,8 +135,9 @@ class ChangeLenDataInputs(BaseTransformer):
 
 class ChangeLenDataInputsAndExpectedOutputs(BaseTransformer):
     """
-    This should raise an error because current_ids are not changed to fit the new length of data_inputs and expected_outputs
+    This should raise an error because ids are not changed to fit the new length of data_inputs and expected_outputs
     """
+
     def __init__(self):
         BaseTransformer.__init__(self)
 
@@ -143,10 +145,12 @@ class ChangeLenDataInputsAndExpectedOutputs(BaseTransformer):
         data_inputs, expected_outputs = data_inputs
         return data_inputs[0:int(len(data_inputs) / 2)], expected_outputs[0:int(len(data_inputs) / 2)]
 
+
 class DoubleData(ForceHandleMixin, BaseTransformer):
     """
     This should double the data given in entry. Expects to be wrapped in an InputAndOutputTransformerWrapper.
     """
+
     def __init__(self):
         BaseTransformer.__init__(self)
         ForceHandleMixin.__init__(self)
@@ -155,6 +159,7 @@ class DoubleData(ForceHandleMixin, BaseTransformer):
         di, eo = data_container.data_inputs
         return DataContainer(data_inputs=(di[0].tolist()*2, eo[0].tolist()*2),
                              ids=data_container.ids*2)
+
 
 def test_input_and_output_transformer_wrapper_should_not_return_a_different_amount_of_data_inputs_and_expected_outputs():
     with pytest.raises(AssertionError):
@@ -169,7 +174,7 @@ def test_input_and_output_transformer_wrapper_should_not_return_a_different_amou
     # TODO: assert the error message is the right one (something about different length of di and eo)
 
 
-def test_input_and_output_transformer_wrapper_should_raise_an_assertion_error_if_current_ids_have_not_been_resampled_correctly():
+def test_input_and_output_transformer_wrapper_should_raise_an_assertion_error_if_ids_have_not_been_resampled_correctly():
     with pytest.raises(AssertionError) as e:
         p = InputAndOutputTransformerWrapper(ChangeLenDataInputsAndExpectedOutputs())
         data_inputs, expected_outputs = _create_data_source((10, 10))
@@ -178,7 +183,7 @@ def test_input_and_output_transformer_wrapper_should_raise_an_assertion_error_if
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         ), ExecutionContext())
-    # TODO: assert the error message is the right one (something about cache system and current_ids)
+
 
 def test_data_doubler():
     p = InputAndOutputTransformerWrapper(DoubleData())

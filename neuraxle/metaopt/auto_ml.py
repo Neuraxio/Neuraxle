@@ -162,7 +162,7 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         self._save_best_model(step, trial_hash)
         return step
 
-    def new_trial(self, auto_ml_container: 'AutoMLContainer') -> Trial:
+    def new_trial(self, auto_ml_container) -> Trial:
         """
         Create a new trial with the best next hyperparams.
 
@@ -320,7 +320,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         # Sleeping to have a valid time difference between files when reloading them to sort them by creation time:
         time.sleep(0.1)
 
-    def new_trial(self, auto_ml_container: 'AutoMLContainer') -> Trial:
+    def new_trial(self, auto_ml_container) -> Trial:
         """
         Create new hyperperams trial json file.
 
@@ -428,7 +428,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
 class BaseHyperparameterSelectionStrategy(ABC):
     @abstractmethod
-    def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, auto_ml_container) -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials.
 
@@ -476,8 +476,8 @@ class Trainer:
             n_epochs: int = None
     ):
         self.validation_split_function = validation_splitter
-        self.callbacks: CallbackList = CallbackList(callbacks) if callbacks is not None else []
-        self.main_metric_name = main_metric_name
+        self.callbacks: CallbackList = CallbackList(callbacks).append(scoring_callback) if callbacks is not None else []
+        self.main_metric_name = main_metric_name if scoring_callback is None else scoring_callback.name
 
         warn_deprecated_arg(
             self, "scoring_callback", None, scoring_callback, "callbacks", EasyAutoML)
@@ -793,7 +793,6 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             hp_repo: HyperparamsRepository = None,
             hyperparams_optimizer: BaseHyperparameterSelectionStrategy = None,
             hyperparams_repository: HyperparamsRepository = None,
-            # TODO: class EasyAutoML(AutoML) to provide easy deprecated old call. Place deprecated Sentinel here.
     ):
         """
         Notes on multiprocess :
@@ -1015,6 +1014,26 @@ def _get_trial_split_description(
 
 
 class EasyAutoML(AutoML):
+    """
+    This is a wrapper to the old version of the AutoML module.
+    It is kept for easier backwards compatibility. It also provides a
+    nice interface to easily use the AutoML module.
+
+    :param pipeline: pipeline to copy and use for training
+    :param validation_splitter: validation splitter to use
+    :param refit_trial: whether to refit the best model on the whole dataset after the optimization
+    :param scoring_callback: main callback to use for scoring, that is deprecated
+    :param hyperparams_optimizer: hyperparams optimizer to use
+    :param hyperparams_repository: hyperparams repository to use
+    :param n_trials: number of trials to run
+    :param epochs: number of epochs to train the model for each val split
+    :param callbacks: callbacks to use for training - there can be aditionnal metrics there
+    :param refit_scoring_function: scoring function to use for refitting the best model
+    :param cache_folder_when_no_handle: folder to use for caching when no handle is provided
+    :param n_jobs: number of jobs to use for parallelization, defaults is None for no parallelization
+    :param continue_loop_on_error: whether to continue the main optimization loop on error or not
+    :return: AutoML objectr ready to use
+    """
     def __init__(
         self,
         pipeline: BaseStep,
@@ -1026,31 +1045,35 @@ class EasyAutoML(AutoML):
         n_trials: int = 10,
         epochs: int = 1,
         callbacks: List[BaseCallback] = None,
-        refit_scoring_function: Callable = None,
         cache_folder_when_no_handle=None,
         n_jobs=None,
         continue_loop_on_error=True
     ):
         warn_deprecated_class(self, AutoML)
-        # TODO: complete this.
 
         trainer = Trainer(
             scoring_callback=scoring_callback,
             callbacks=callbacks,
-            validation_splitter=validation_splitter
+            validation_splitter=validation_splitter,
+            main_metric_name=scoring_callback.name,
         )
         controller_loop = DefaultLoop(
             trainer=trainer,
             n_trials=n_trials,
             n_epochs=epochs,
             next_best_prediction_algo=hyperparams_optimizer,
-            continue_loop_on_error=continue_loop_on_error
+            continue_loop_on_error=continue_loop_on_error,
+            hyperparams_repository=hyperparams_repository,
+            n_jobs=n_jobs
         )
+        assert cache_folder_when_no_handle is None  # TODO: remove this.
 
         AutoML.__init__(
             self,
             pipeline=pipeline,
             controller_loop=controller_loop,
+            refit_best_trial=refit_trial,
+            start_new_run=True
         )
 
 
@@ -1074,7 +1097,7 @@ class RandomSearchHyperparameterSelectionStrategy(BaseHyperparameterSelectionStr
     def __init__(self):
         BaseHyperparameterSelectionStrategy.__init__(self)
 
-    def find_next_best_hyperparams(self, auto_ml_container: 'AutoMLContainer') -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, auto_ml_container) -> HyperparameterSamples:
         """
         Randomly sample the next hyperparams to try.
 

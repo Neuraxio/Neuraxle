@@ -8,16 +8,27 @@ from neuraxle.steps.numpy import MultiplyByN
 from neuraxle.steps.output_handlers import OutputTransformerWrapper
 
 DATA_SHAPE = (3, 4)
+FLAT_DATA_SHAPE = (3 * 4, )
 
 
-def test_flatten_for_each_should_transform_data_inputs():
-    p = FlattenForEach(MultiplyByN(2))
-    data_inputs, expected_outputs = _create_random_of_shape(DATA_SHAPE)
+def test_flatten_for_each_unflatten_should_transform_data_inputs():
+    p = FlattenForEach(MultiplyByN(2), then_unflatten=True)
+    data_inputs, _ = _create_random_of_shape(DATA_SHAPE)
 
     outputs = p.transform(data_inputs)
 
     assert np.array(outputs).shape == DATA_SHAPE
     assert np.array_equal(outputs, data_inputs * 2)
+
+
+def test_flatten_for_each_should_transform_data_inputs():
+    p = FlattenForEach(MultiplyByN(2), then_unflatten=False)
+    data_inputs, _ = _create_random_of_shape(DATA_SHAPE)
+
+    outputs = p.transform(data_inputs)
+
+    assert np.array(outputs).shape == FLAT_DATA_SHAPE
+    assert np.array_equal(outputs.flatten(), data_inputs.flatten() * 2)
 
 
 def test_flatten_for_each_should_transform_data_inputs_and_expected_outputs():

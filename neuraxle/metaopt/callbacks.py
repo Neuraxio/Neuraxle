@@ -324,11 +324,16 @@ class CallbackList(BaseCallback):
                         is_finished_and_fitted=is_finished_and_fitted
                 ):
                     is_finished_and_fitted = True
-            except Exception as error:
+            except Exception as _:
                 track = traceback.format_exc()
                 trial_split.trial.logger.error(track)
 
         return is_finished_and_fitted
+
+    def append(self, callback: BaseCallback) -> 'CallbackList':
+        if callback is not None:
+            self.callbacks.append(callback)
+        return self
 
 
 class MetricCallback(BaseCallback):

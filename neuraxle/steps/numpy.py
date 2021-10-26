@@ -23,6 +23,7 @@ Those steps works with NumPy (np) arrays.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
+import copy
 from typing import Sequence
 
 import numpy as np
@@ -63,11 +64,7 @@ class NumpyConcatenateOnAxis(BaseTransformer):
         :return: transformed data container
         """
         data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs])
-        data_container = DataContainer(data_inputs=data_inputs, ids=data_container.current_ids,
-                                       expected_outputs=data_container.expected_outputs)
-        data_container.set_data_inputs(data_inputs)
-
-        return data_container
+        return data_container.copy().set_data_inputs(data_inputs)
 
     def transform(self, data_inputs):
         """
@@ -163,11 +160,7 @@ class NumpyTranspose(BaseTransformer):
         :return: transformed data container
         """
         data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs])
-        data_container = DataContainer(data_inputs=data_inputs, ids=data_container.current_ids,
-                                       expected_outputs=data_container.expected_outputs)
-        data_container.set_data_inputs(data_inputs)
-
-        return data_container
+        return data_container.copy().set_data_inputs(data_inputs)
 
     def transform(self, data_inputs):
         return self._transpose(data_inputs)

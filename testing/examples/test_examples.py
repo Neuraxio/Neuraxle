@@ -1,7 +1,7 @@
 from py._path.local import LocalPath
 
 
-def test_auto_ml_loop_clean_kara(tmpdir: LocalPath):
+def test_auto_ml_loop_clean_kata(tmpdir: LocalPath):
     from examples.auto_ml.plot_automl_loop_clean_kata import main
     main()
 
@@ -53,11 +53,6 @@ def test_hyperparams():
 
 def test_apply():
     from examples.operations.plot_apply_method import main
-    main()
-
-
-def test_mutate():
-    from examples.operations.plot_mutate import main
     main()
 
 

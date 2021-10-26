@@ -14,7 +14,7 @@ from neuraxle.hyperparams.distributions import DistributionMixture, PriorityChoi
 from neuraxle.hyperparams.scipy_distributions import Choice, LogNormal, LogUniform, Quantized
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.auto_ml import BaseHyperparameterSelectionStrategy, RandomSearchHyperparameterSelectionStrategy, \
-    TRIAL_STATUS, AutoMLContainer
+    TRIAL_STATUS
 from neuraxle.metaopt.trial import Trials
 
 _LOG_DISTRIBUTION = (LogNormal, LogUniform)
@@ -42,7 +42,7 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
         self.use_linear_forgetting_weights: bool = use_linear_forgetting_weights
         self.number_recent_trial_at_full_weights: int = number_recent_trial_at_full_weights
 
-    def find_next_best_hyperparams(self, auto_ml_container: AutoMLContainer) -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, auto_ml_container) -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials.
 

@@ -177,12 +177,11 @@ class ContinueIf(ExecuteIf):
 
 
 class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
-    def __init__(self, wrapped: BaseTransformer, copy_op=copy.deepcopy, cache_folder_when_no_handle=None):
+    def __init__(self, wrapped: BaseTransformer, copy_op=copy.deepcopy):
         MetaStep.__init__(self, wrapped=wrapped)
-        ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
+        ForceHandleOnlyMixin.__init__(self)
         self.savers.append(TruncableJoblibStepSaver())
 
-        self.set_step(wrapped)
         self.steps_as_tuple: List[NamedTupleList] = []
         self.copy_op = copy_op
 
@@ -190,9 +189,9 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         """
         Get the list of all the children for that step.
 
-        :return: list of children
+        :return: list of children. The first is the original wrapped step, the others are the steps that are cloned.
         """
-        wrapped: List[BaseStep] = self.get_step()
+        wrapped: List[BaseStep] = [self.get_step()]
         cloned_children = [step for _, step in self.steps_as_tuple]
         wrapped.extend(cloned_children)
         return wrapped
@@ -212,12 +211,13 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         self.steps_as_tuple = [(step.name, step) for step in steps]
         self._invalidate()
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _fit_transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> (BaseStep, DataContainer):
         fitted_steps_data_containers = []
-        for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
+        for i, (ids, data_inputs, expected_outputs) in enumerate(data_container):
             fitted_step_data_container = self[i].handle_fit_transform(
-                DataContainer(ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
+                DataContainer(ids=ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
                 context
             )
             fitted_steps_data_containers.append(fitted_step_data_container)
@@ -233,9 +233,9 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
             'BaseStep', DataContainer):
         fitted_steps = []
-        for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
+        for i, (ids, data_inputs, expected_outputs) in enumerate(data_container):
             fitted_step = self[i].handle_fit(
-                DataContainer(ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
+                DataContainer(ids=ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
                 context
             )
             fitted_steps.append(fitted_step)
@@ -247,9 +247,9 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
             'BaseStep', DataContainer):
         transform_results = []
-        for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
+        for i, (ids, data_inputs, expected_outputs) in enumerate(data_container):
             transform_result = self[i].handle_transform(
-                DataContainer(ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
+                DataContainer(ids=ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
                 context
             )
             transform_results.append(transform_result)
@@ -262,9 +262,9 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
     def _inverse_transform_data_container(self, data_container: DataContainer,
                                           context: ExecutionContext) -> DataContainer:
         inverse_transform_results = []
-        for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
+        for i, (ids, data_inputs, expected_outputs) in enumerate(data_container):
             inverse_transform_result = self[i].handle_inverse_transform(
-                DataContainer(ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
+                DataContainer(ids=ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
                 context
             )
             inverse_transform_results.append(inverse_transform_result)
@@ -330,6 +330,7 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
 
         self.len_di = []
         self.len_eo = []
+        self.len_ids = []
 
     def _will_process(
         self, data_container: DataContainer, context: ExecutionContext
@@ -350,7 +351,7 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
             data_container.set_expected_outputs(expected_outputs)
 
         di, self.len_di = self._flatten_list(data_container.data_inputs)
-        _id, self.len_di = self._flatten_list(data_container.ids)
+        _id, self.len_ids = self._flatten_list(data_container.ids)
         eo, self.len_eo = self._flatten_list(data_container.expected_outputs)
 
         flattened_data_container = DataContainer(
@@ -395,6 +396,7 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
         if self.then_unflatten:
             data_container.set_data_inputs(self._reaugment_list(data_container.data_inputs, self.len_di))
             data_container.set_expected_outputs(self._reaugment_list(data_container.expected_outputs, self.len_eo))
+            data_container.set_ids(self._reaugment_list(data_container.ids, self.len_ids))
             self.len_di = []
             self.len_eo = []
 

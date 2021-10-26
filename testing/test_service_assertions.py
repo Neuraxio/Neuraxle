@@ -8,7 +8,7 @@ from sklearn.metrics import mean_squared_error
 
 from neuraxle.base import Identity, ExecutionContext, ForceHandleMixin, StepWithContext, ForceHandleIdentity
 from neuraxle.data_container import DataContainer
-from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, RandomSearchHyperparameterSelectionStrategy, \
+from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, EasyAutoML, RandomSearchHyperparameterSelectionStrategy, \
     ValidationSplitter, HyperparamsJSONRepository
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.pipeline import Pipeline
@@ -97,7 +97,7 @@ def _make_autoML_loop(tmpdir, p: Pipeline):
     hp_repository = HyperparamsJSONRepository(cache_folder=tmpdir)
 #    hp_repository = InMemoryHyperparamsRepository(cache_folder=str(tmpdir) + "_hp")
     n_epochs = 1
-    return AutoML(
+    return EasyAutoML(
         pipeline=p,
         hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
         validation_splitter=ValidationSplitter(0.20),
@@ -109,6 +109,7 @@ def _make_autoML_loop(tmpdir, p: Pipeline):
         cache_folder_when_no_handle=str(tmpdir),
         continue_loop_on_error=False
     )
+
 
 class TestServiceAssertion:
 
@@ -138,8 +139,7 @@ class TestServiceAssertion:
         p: Pipeline = ExecutionContext(root=self.tmpdir).load(os.path.join(pipeline_name, 'Pipeline'))
         assert isinstance(p, Pipeline)
 
-
-    def test_auto_ml_should_inject_dependencies_properly(self,tmpdir):
+    def test_auto_ml_should_inject_dependencies_properly(self, tmpdir):
         self._setup(tmpdir)
         data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
         expected_outputs = data_inputs * 2
@@ -157,7 +157,6 @@ class TestServiceAssertion:
         auto_ml.fit(data_inputs, expected_outputs)
 
         assert np.array_equal(service.data, data_inputs)
-
 
     def test_auto_ml_should_fail_at_init_when_services_are_missing(self, tmpdir):
         self._setup(tmpdir)
@@ -179,7 +178,6 @@ class TestServiceAssertion:
 
         assert 'SomeBaseService dependency missing' in exception_info.value.args[0]
 
-
     def test_auto_ml_should_fail_at_exec_when_services_are_missing(self, tmpdir):
         self._setup(tmpdir)
         data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
@@ -196,7 +194,6 @@ class TestServiceAssertion:
         with pytest.raises(AssertionError) as exception_info:
             auto_ml.fit(data_inputs, expected_outputs)
         assert 'SomeBaseService dependency missing' in exception_info.value.args[0]
-
 
     def test_auto_ml_should_assert_dependecies_properly_at_exec(self, tmpdir):
         self._setup(tmpdir)

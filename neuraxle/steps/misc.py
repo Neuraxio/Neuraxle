@@ -278,8 +278,6 @@ class CallbackWrapper(HandleOnlyMixin, MetaStep):
         """
         self.inverse_transform_callback_function(data_container.data_inputs, *self.more_arguments)
         data_container = self.wrapped.handle_inverse_transform(data_container, context.push(self.wrapped))
-        current_ids = self.hash(data_container)
-        data_container.set_ids(current_ids)
 
         return data_container
 

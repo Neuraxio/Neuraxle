@@ -38,7 +38,7 @@ def silence_all_warnings():
 
 def warn_deprecated_class(self, replacement_class: type):
     global SILENCE_WARNING
-    if not SILENCE_WARNING and self.replacement_class is not None:
+    if not SILENCE_WARNING and replacement_class is not None:
         warnings.warn(
             f"The class `{self.__class__.__name__}` is deprecated. "
             f"Please consider using the class `{replacement_class.__name__}` instead. " if replacement_class.__name__ is not None else ""

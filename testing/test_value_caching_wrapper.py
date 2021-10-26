@@ -38,11 +38,6 @@ class PipelineTestCase:
         self.tape = tape
 
 
-def create_test_case(di, eo, steps, expected_tape):
-    tape = TapeCallbackFunction()
-    return PipelineTestCase(tape, di, eo, steps, expected_tape)
-
-
 def create_test_cases():
     data_inputs = np.ones((1, 1))
     expected_outputs = np.ones((1, 1))
@@ -152,10 +147,10 @@ def create_test_cases():
             expected_outputs,
             [
                 ("a", FitTransformCallbackStep(tape10.callback, tape10_fit.callback, ["1"])),
-                ("b", JoblibValueCachingWrapper(FitTransformCallbackStep(tape10.callback, tape10.callback, ["2"])))
+                ("b", JoblibValueCachingWrapper(FitTransformCallbackStep(tape10.callback, tape10_fit.callback, ["2"]))),
                 ("c", FitTransformCallbackStep(tape10.callback, tape10_fit.callback, ["3"])),
-                ("b", JoblibValueCachingWrapper(FitTransformCallbackStep(tape10.callback, tape10.callback, ["4"])))
-                ("d", FitTransformCallbackStep(tape10.callback, tape10_fit.callback, ["5"]))
+                ("d", JoblibValueCachingWrapper(FitTransformCallbackStep(tape10.callback, tape10_fit.callback, ["4"]))),
+                ("e", FitTransformCallbackStep(tape10.callback, tape10_fit.callback, ["5"]))
             ],
             ["1", "3", "5"])
         return tape_saved_checkpoint_after_another_saved_checkpoint

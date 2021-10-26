@@ -34,7 +34,7 @@ from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier
 
 from neuraxle.hyperparams.distributions import Choice, RandInt, Boolean, LogUniform
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, RandomSearchHyperparameterSelectionStrategy, ValidationSplitter, \
+from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearchHyperparameterSelectionStrategy, ValidationSplitter, \
     HyperparamsJSONRepository
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.pipeline import Pipeline
@@ -46,7 +46,6 @@ from neuraxle.steps.sklearn import SKLearnWrapper
 
 def main():
     # Define classification models, and hyperparams.
-    # See also HyperparameterSpace documentation : https://www.neuraxle.org/stable/api/neuraxle.hyperparams.space.html#neuraxle.hyperparams.space.HyperparameterSpace
 
     decision_tree_classifier = SKLearnWrapper(
         DecisionTreeClassifier(),
@@ -112,7 +111,7 @@ def main():
     # Create the AutoML loop object.
     # See also AutoML documentation : https://www.neuraxle.org/stable/api/neuraxle.metaopt.auto_ml.html#neuraxle.metaopt.auto_ml.AutoML
 
-    auto_ml = AutoML(
+    auto_ml = EasyAutoML(
         pipeline=pipeline,
         hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
         validation_splitter=ValidationSplitter(test_size=0.20),

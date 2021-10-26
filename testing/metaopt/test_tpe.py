@@ -9,7 +9,7 @@ from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, ValidationSplitter, \
     RandomSearchHyperparameterSelectionStrategy, BaseHyperparameterSelectionStrategy
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
-from neuraxle.metaopt.tpe import TreeParzenEstimatorHyperparameterSelectionStrategy
+from neuraxle.metaopt.hyperopt.tpe import TreeParzenEstimatorHyperparameterSelectionStrategy
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCallbackStep
 from neuraxle.steps.numpy import AddN

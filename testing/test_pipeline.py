@@ -276,7 +276,7 @@ def test_pipeline_update_hyperparam_level_two_dict():
     assert p["c"].hyperparams == dict()
 
 
-def test_pipeline_simple_mutate_inverse_transform():
+def test_pipeline_simple_inverse_transform():
     expected_tape = ["1", "2", "3", "4", "4", "3", "2", "1"]
     tape = TapeCallbackFunction()
 
@@ -290,16 +290,12 @@ def test_pipeline_simple_mutate_inverse_transform():
     ])
 
     p, _ = p.fit_transform(np.ones((1, 1)))
-
-    print("[mutating]")
-    p = p.mutate(new_method="inverse_transform", method_to_assign_to="transform")
-
-    p.transform(np.ones((1, 1)))
+    p.inverse_transform(np.ones((1, 1)))
 
     assert expected_tape == tape.get_name_tape()
 
 
-def test_pipeline_nested_mutate_inverse_transform():
+def test_pipeline_nested_inverse_transform():
     expected_tape = ["1", "2", "3", "4", "5", "6", "7", "7", "6", "5", "4", "3", "2", "1"]
     tape = TapeCallbackFunction()
 
@@ -321,17 +317,14 @@ def test_pipeline_nested_mutate_inverse_transform():
 
     p, _ = p.fit_transform(np.ones((1, 1)))  # will add range(1, 8) to tape.
 
-    print("[mutating]")
-    p = p.mutate(new_method="inverse_transform", method_to_assign_to="transform")
-
-    p.transform(np.ones((1, 1)))  # will add reversed(range(1, 8)) to tape.
+    p.inverse_transform(np.ones((1, 1)))  # will add reversed(range(1, 8)) to tape.
 
     print(expected_tape)
     print(tape.get_name_tape())
     assert expected_tape == tape.get_name_tape()
 
 
-def test_pipeline_nested_mutate_inverse_transform_without_identities():
+def test_pipeline_nested_inverse_transform_without_identities():
     """
     This test was required for a strange bug at the border of the pipelines
     that happened when the identities were not used.
@@ -353,8 +346,7 @@ def test_pipeline_nested_mutate_inverse_transform_without_identities():
 
     p, _ = p.fit_transform(np.ones((1, 1)))  # will add range(1, 8) to tape.
 
-    print("[mutating, inversing, and calling each inverse_transform]")
-    reversed(p).transform(np.ones((1, 1)))  # will add reversed(range(1, 8)) to tape, calling inverse_transforms.
+    p.inverse_transform(np.ones((1, 1)))  # will add reversed(range(1, 8)) to tape, calling inverse_transforms.
 
     print(expected_tape)
     print(tape.get_name_tape())
