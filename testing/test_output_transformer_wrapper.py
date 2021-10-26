@@ -154,7 +154,7 @@ class DoubleData(ForceHandleMixin, BaseTransformer):
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         di, eo = data_container.data_inputs
         return DataContainer(data_inputs=(di[0].tolist()*2, eo[0].tolist()*2),
-                      current_ids=data_container.current_ids*2)
+                             ids=data_container.ids*2)
 
 def test_input_and_output_transformer_wrapper_should_not_return_a_different_amount_of_data_inputs_and_expected_outputs():
     with pytest.raises(AssertionError):
@@ -192,7 +192,7 @@ def test_data_doubler():
     doubled_length = len(out.data_inputs)
     assert doubled_length == 2*len(data_inputs)
     assert doubled_length == len(out.expected_outputs)
-    assert doubled_length == len(out.current_ids)
+    assert doubled_length == len(out.ids)
 
 
 def _create_data_source(shape):

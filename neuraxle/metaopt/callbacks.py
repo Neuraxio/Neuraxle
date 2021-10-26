@@ -28,7 +28,9 @@ import traceback
 from abc import ABC, abstractmethod
 from typing import Callable
 
-from neuraxle.base import ExecutionContext
+import warnings
+from neuraxle.base import BaseStep, BaseTransformer, ExecutionContext, MixinForBaseTransformer
+from neuraxle.logging.warnings import warn_deprecated_class, warn_deprecated_arg
 from neuraxle.data_container import DataContainer
 from neuraxle.metaopt.trial import TrialSplit
 
@@ -106,7 +108,7 @@ class EarlyStoppingCallback(BaseCallback):
     ):
         if self.metric_name is None:
             validation_scores = trial_split.get_validation_scores()
-        else :
+        else:
             validation_scores = trial_split.get_metric_validation_results(self.metric_name)
 
         if len(validation_scores) > self.n_epochs_without_improvement:
@@ -412,12 +414,15 @@ class ScoringCallback(MetricCallback):
         :class:`~neuraxle.base.HyperparameterSamples`,
         :class:`~neuraxle.data_container.DataContainer`
     """
+
     def __init__(self, metric_function: Callable, name='main', higher_score_is_better: bool = True,
                  log_metrics: bool = True, pass_context_to_metric_function: bool = False):
-        super().__init__(
+        MetricCallback.__init__(
+            self,
             name=name,
             metric_function=metric_function,
             higher_score_is_better=higher_score_is_better,
             log_metrics=log_metrics,
             pass_context_to_metric_function=pass_context_to_metric_function
         )
+        warn_deprecated_class(self, MetricCallback)

@@ -1,7 +1,8 @@
 """
 Neuraxle's Observable Classes
 ===================================================================
-Base observable classes
+Base observable classes, implementing the Observer pattern.
+Some of them are used to track the evolution of the optimization process.
 
 ..
     Copyright 2019, Neuraxio Inc.
@@ -20,14 +21,33 @@ Base observable classes
 
 """
 from abc import abstractmethod
-from typing import TypeVar, Generic
+from typing import Set, TypeVar, Generic
 
 T = TypeVar('T')
 
 
 class _Observable(Generic[T]):
+    """
+    This class is used to implement the Observer design pattern. 
+    The _Observable class is a subject that is being observed by the _Observer class.
+    The type T is the type of the value that will be observed.
+
+    There are methods that the observer can define to send the notification:
+    - notify_next(value: T),
+    - notify_complete(value: T).
+
+    The _Observable class is a generic class, so it can be used with any type T.
+
+    It is possible to subscribe and unsubscribe observers.
+    A subscription is a call to the subscribe method of the _Observable class.
+    A unsubscription is a call to the unsubscribe method of the _Observable class.
+    Thus, the subsibers receive the notifications of the _Observable class.
+
+    A notification is a call to one of the notify_* methods of the _Observable class.
+    A notification is a call to one of the update_* methods of the _Observer class.
+    """
     def __init__(self):
-        self._observers = set()
+        self._observers: Set[_Observer[T]] = set()
 
     def subscribe(self, observer: '_Observer[T]'):
         self._observers.add(observer)
@@ -35,26 +55,30 @@ class _Observable(Generic[T]):
     def unsubscribe(self, observer: '_Observer[T]'):
         self._observers.discard(observer)
 
-    def on_next(self, value: T):
+    def notify_next(self, value: T):
         for observer in self._observers:
-            observer.on_next(value)
+            observer.update_next(value)
 
-    def on_complete(self, value: T):
+    def notify_complete(self, value: T):
         for observer in self._observers:
-            observer.on_complete(value)
-
-    def on_error(self, value: Exception):
-        for observer in self._observers:
-            observer.on_error(value)
+            observer.update_complete(value)
 
 
 class _Observer(Generic[T]):
+    """
+    This class is used to implement the Observer design pattern.
+    The _Observer class is an observer that is being notified by the _Observable class.
+    The type T is the type of the value that will be observed.
+
+    Upon receiving a notification, the _Observer class can define these methods:
+    - update_next(value: T),
+    - update_complete(value: T)
+
+    These methods are called by the _Observable class observing the observer.
+    """
     @abstractmethod
-    def on_next(self, value: T):
+    def update_next(self, value: T):
         pass
 
-    def on_complete(self, value: T):
-        pass
-
-    def on_error(self, value: Exception):
+    def update_complete(self, value: T):
         pass

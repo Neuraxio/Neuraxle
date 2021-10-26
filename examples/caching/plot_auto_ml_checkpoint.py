@@ -29,13 +29,13 @@ import time
 
 import numpy as np
 from sklearn.metrics import mean_squared_error
+from neuraxle.base import ExecutionContext
 
-from neuraxle.checkpoints import DefaultCheckpoint
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import AutoML, RandomSearchHyperparameterSelectionStrategy, ValidationSplitter
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
-from neuraxle.pipeline import ResumablePipeline, DEFAULT_CACHE_FOLDER, Pipeline
+from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import ExpandDim
 from neuraxle.steps.loop import ForEach
 from neuraxle.steps.misc import Sleep
@@ -122,4 +122,4 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
 
 
 if __name__ == "__main__":
-    main(DEFAULT_CACHE_FOLDER, sleep_time=0.005, n_iter=10)
+    main(ExecutionContext.get_new_cache_folder(), sleep_time=0.005, n_iter=10)

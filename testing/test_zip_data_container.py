@@ -11,7 +11,7 @@ def test_zip_data_container_should_merge_two_data_sources_together():
 
     zip_data_container = ZipDataContainer.create_from(data_container, data_container_2d)
 
-    assert zip_data_container.current_ids == data_container.current_ids
+    assert zip_data_container.ids == data_container.ids
     for i, di in enumerate(zip_data_container.data_inputs):
         assert np.array_equal(di[0], data_inputs_3d[i])
         assert np.array_equal(di[1], data_inputs_2d[i])
@@ -25,7 +25,7 @@ def test_zip_data_container_should_merge_1d_with_2d():
 
     zip_data_container = ZipDataContainer.create_from(data_container, data_container_1d)
 
-    assert zip_data_container.current_ids == data_container.current_ids
+    assert zip_data_container.ids == data_container.ids
     for i, di in enumerate(zip_data_container.data_inputs):
         assert np.array_equal(di[0], data_inputs_3d[i])
         assert np.array_equal(di[1], data_inputs_1d[i])
@@ -41,7 +41,7 @@ def test_zip_data_container_should_merge_multiple_data_sources_together():
 
     zip_data_container = ZipDataContainer.create_from(data_container, data_container_2d, data_container_1d)
 
-    assert zip_data_container.current_ids == data_container.current_ids
+    assert zip_data_container.ids == data_container.ids
     for i, di in enumerate(zip_data_container.data_inputs):
         assert np.array_equal(di[0], data_inputs_3d[i])
         assert np.array_equal(di[1], data_inputs_2d[i])

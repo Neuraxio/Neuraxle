@@ -26,7 +26,7 @@ Pipeline wrapper steps that only implement the handle methods, and don't apply a
 from operator import attrgetter
 from typing import Union, Optional as OptionalType, Dict, Callable
 
-from neuraxle.base import BaseStep, MetaStep, DataContainer, ExecutionContext, TruncableSteps, ResumableStepMixin, \
+from neuraxle.base import BaseStep, MetaStep, DataContainer, ExecutionContext, TruncableSteps, \
     HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin, BaseTransformer, NonFittableMixin, ExecutionPhase
 from neuraxle.data_container import ExpandedDataContainer
 from neuraxle.hyperparams.distributions import Boolean, Choice
@@ -78,8 +78,9 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStep):
             return self
         return self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _fit_transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> (BaseStep, DataContainer):
         """
         :param data_container: data container
         :param context: execution context
@@ -99,10 +100,6 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStep):
         if self._should_execute_wrapped_step():
             return self.wrapped.handle_transform(data_container, context)
         return data_container
-
-    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
-        context = context.push(self)
-        return self._should_execute_wrapped_step() and self.wrapped.should_resume(data_container, context)
 
     def _should_execute_wrapped_step(self):
         return (self.wrapped.is_train and self.is_train_only) or (not self.wrapped.is_train and not self.is_train_only)
@@ -310,7 +307,7 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
 
         return self, DataContainer(
             data_inputs=self.nullified_return_value,
-            current_ids=data_container.current_ids,
+            ids=data_container.ids,
             expected_outputs=self.nullified_return_value
         )
 
@@ -330,7 +327,7 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
 
         return DataContainer(
             data_inputs=self.nullified_return_value,
-            current_ids=data_container.current_ids,
+            ids=data_container.ids,
             expected_outputs=self.nullified_return_value
         )
 
@@ -524,10 +521,11 @@ class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseTransformer):
         if len(data_inputs) == 1:
             data_inputs = data_inputs[0]
 
-        data_container = DataContainer(data_inputs=data_inputs, current_ids=data_container.current_ids,
+        data_container = DataContainer(data_inputs=data_inputs, ids=data_container.ids,
                                        expected_outputs=data_container.expected_outputs)
 
         return data_container
+
 
 class SelectNonEmptyDataContainer(TransformHandlerOnlyMixin, BaseTransformer):
     """
@@ -552,17 +550,17 @@ class SelectNonEmptyDataContainer(TransformHandlerOnlyMixin, BaseTransformer):
         else:
             return DataContainer(data_inputs=list(map(attrgetter("data_inputs"))),
                                  expected_outputs=list(map(attrgetter("expected_outputs"))),
-                                 current_ids=data_container.current_ids)
+                                 ids=data_container.ids)
 
 
-class ExpandDim(ResumableStepMixin, MetaStep):
+class ExpandDim(MetaStep):
     """
     Similar to numpys expand_dim function, ExpandDim step expands the dimension of all the data inside the data container.
     ExpandDim sends the expanded data container to the wrapped step.
     ExpandDim returns the transformed expanded dim reduced to its original shape (see :func:`~neuraxle.steps.loop.ExpandedDataContainer.reduce_dim`).
 
     The wrapped step will receive a single current_id, data_input, and expected output:
-        - The current_id is a list of one element that contains a single summary hash for all of the current ids.
+        - The ids is a list of one element that contains a single summary id created from all of the current ids.
         - The data_inputs is a list of one element that contains the original expected outputs list.
         - The expected_outputs is a list of one element that contains the original expected outputs list.
 
@@ -576,7 +574,6 @@ class ExpandDim(ResumableStepMixin, MetaStep):
 
     def __init__(self, wrapped: BaseTransformer):
         MetaStep.__init__(self, wrapped)
-        ResumableStepMixin.__init__(self)
 
     def _will_process(self, data_container, context):
         data_container, context = BaseStep._will_process(self, data_container, context)
@@ -585,37 +582,6 @@ class ExpandDim(ResumableStepMixin, MetaStep):
     def _did_process(self, data_container: DataContainer, context: ExecutionContext):
         data_container = super()._did_process(data_container, context)
         return data_container.reduce_dim()
-
-    def resume(self, data_container: DataContainer, context: ExecutionContext):
-        context = context.push(self)
-        if not isinstance(self.wrapped, ResumableStepMixin):
-            raise Exception('cannot resume steps that don\' inherit from ResumableStepMixin')
-
-        old_current_ids = data_container.current_ids
-
-        data_container = self.wrapped.resume(data_container, context)
-
-        expanded_data_container = ExpandedDataContainer(
-            data_inputs=data_container.data_inputs,
-            expected_outputs=data_container.expected_outputs,
-            current_ids=data_container.current_ids,
-            summary_id=data_container.summary_id,
-            old_current_ids=old_current_ids
-        )
-
-        data_container = self._did_process(expanded_data_container, context)
-
-        return data_container
-
-    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
-        context = context.push(self)
-        expanded_data_container = ExpandedDataContainer.create_from(data_container)
-
-        if isinstance(self.wrapped, ResumableStepMixin) and \
-                self.wrapped.should_resume(expanded_data_container, context):
-            return True
-
-        return False
 
 
 class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
@@ -663,7 +629,7 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
             self["postprocessing_step"].handle_fit(data_container, context)
 
         current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+        data_container.set_ids(current_ids)
 
         return self
 
@@ -688,7 +654,7 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
                                                                              context.push(self["preprocessing_step"]))
 
         current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+        data_container.set_ids(current_ids)
 
         return data_container
 
@@ -720,6 +686,6 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
         )
 
         current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+        data_container.set_ids(current_ids)
 
         return self, data_container

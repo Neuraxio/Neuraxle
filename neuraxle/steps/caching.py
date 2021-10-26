@@ -3,7 +3,7 @@ Pipeline Steps For Caching
 =====================================
 
 ..
-    Copyright 2019, Neuraxio Inc.
+    Copyright 2021, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -32,7 +32,25 @@ import joblib
 
 from neuraxle.base import MetaStep, BaseStep, ExecutionContext
 from neuraxle.data_container import DataContainer
-from neuraxle.pipeline import DEFAULT_CACHE_FOLDER
+
+
+class BaseDataInputsValueHasher(ABC):
+    @abstractmethod
+    def hash(self, data_input):
+        raise NotImplementedError()
+
+
+class DataInputStrValueHasher(BaseDataInputsValueHasher):
+    """
+    Hashes the data inputs by converting them to a string
+    and then using hashlib.blake2s (:func:`hashlib.blake2s`).
+    """
+
+    def hash(self, data_input):
+        m = hashlib.blake2s()
+        m.update(str.encode(str(data_input)))
+
+        return m.hexdigest()
 
 
 class ValueCachingWrapper(MetaStep):
@@ -43,18 +61,24 @@ class ValueCachingWrapper(MetaStep):
     def __init__(
             self,
             wrapped: BaseStep,
-            cache_folder: str = DEFAULT_CACHE_FOLDER,
-            value_hasher: 'BaseValueHasher' = None,
+            cache_folder: str = None,
+            value_hasher: BaseDataInputsValueHasher = None,
     ):
         MetaStep.__init__(self, wrapped)
         self.value_hasher = value_hasher
 
         if self.value_hasher is None:
-            self.value_hasher = Md5Hasher()
+            self.value_hasher = DataInputStrValueHasher()
 
+        if cache_folder is None:
+            cache_folder = os.path.join(ExecutionContext().push(self).get_path(), "cache")
         self.value_caching_folder = cache_folder
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> (
+        BaseStep, DataContainer
+    ):
         """
         Fit transform data container.
 
@@ -203,17 +227,3 @@ class JoblibValueCachingWrapper(ValueCachingWrapper):
     def get_cache_path_for(self, data_input):
         hash_value = self._hash_value(data_input)
         return os.path.join(self.value_caching_folder, '{0}.joblib'.format(hash_value))
-
-
-class BaseValueHasher(ABC):
-    @abstractmethod
-    def hash(self, data_input):
-        raise NotImplementedError()
-
-
-class Md5Hasher(BaseValueHasher):
-    def hash(self, data_input):
-        m = hashlib.md5()
-        m.update(str.encode(str(data_input)))
-
-        return m.hexdigest()

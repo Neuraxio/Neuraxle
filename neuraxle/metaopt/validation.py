@@ -36,8 +36,6 @@ from neuraxle.hyperparams.space import RecursiveDict
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnAxis, NumpyConcatenateInnerFeatures
 
-VALIDATION_SUB_DATA_CONTAINER_NAME = 'validation'
-
 
 class BaseValidation(MetaStep, ABC):
     """
@@ -45,10 +43,10 @@ class BaseValidation(MetaStep, ABC):
     It has a scoring function to calculate the score for the validation split.
 
     .. seealso::
-        :class`neuraxle.metaopt.random.ValidationSplitWrapper`,
-        :class`Kneuraxle.metaopt.random.FoldCrossValidationWrapper`,
-        :class`neuraxle.metaopt.random.AnchoredWalkForwardTimeSeriesCrossValidationWrapper`,
-        :class`neuraxle.metaopt.random.WalkForwardTimeSeriesCrossValidationWrapper`
+        :class`neuraxle.metaopt.validation.ValidationSplitWrapper`,
+        :class`Kneuraxle.metaopt.validation.FoldCrossValidationWrapper`,
+        :class`neuraxle.metaopt.validation.AnchoredWalkForwardTimeSeriesCrossValidationWrapper`,
+        :class`neuraxle.metaopt.validation.WalkForwardTimeSeriesCrossValidationWrapper`
 
     """
 
@@ -179,7 +177,7 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
         self.scoring_function = scoring_function
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'ValidationSplitWrapper', DataContainer):
+            'ValidationSplitWrapper', DataContainer):
         """
         Fit using the training split.
         Calculate the scores using the validation split.
@@ -194,7 +192,7 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
         return new_self
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseStep', DataContainer):
+            'BaseStep', DataContainer):
         """
         Fit Transform given data inputs without splitting.
 
@@ -264,19 +262,17 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
         train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = \
             self.split(data_container.data_inputs, data_container.expected_outputs)
 
-        train_ids = self.train_split(data_container.current_ids)
+        train_ids = self.train_split(data_container.ids)
         train_data_container = DataContainer(
             data_inputs=train_data_inputs,
-            current_ids=train_ids,
-            summary_id=data_container.summary_id,
+            ids=train_ids,
             expected_outputs=train_expected_outputs
         )
 
-        validation_ids = self.validation_split(data_container.current_ids)
+        validation_ids = self.validation_split(data_container.ids)
         validation_data_container = DataContainer(
             data_inputs=validation_data_inputs,
-            current_ids=validation_ids,
-            summary_id=data_container.summary_id,
+            ids=validation_ids,
             expected_outputs=validation_expected_outputs
         )
 

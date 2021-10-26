@@ -5,7 +5,8 @@ from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository
 
 from neuraxle.base import Identity
 from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.metaopt.trial import Trial, TRIAL_STATUS, TRIAL_DATETIME_STR_FORMAT, Trials
+from neuraxle.metaopt.trial import Trial, TRIAL_STATUS, Trials
+from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
 
 EXPECTED_ERROR_TRACEBACK = 'NoneType: None\n'
 
@@ -101,8 +102,8 @@ class TestTrials:
         assert trial_json['error_traceback'] is None
         assert trial_json['metric_results'] == EXPECTED_METRIC_RESULTS
         assert trial_json['main_metric_name'] == MAIN_METRIC_NAME
-        start_time = datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT)
-        end_time = datetime.datetime.strptime(trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT) + datetime.timedelta(
+        start_time = datetime.datetime.strptime(trial_json['start_time'], LOGGING_DATETIME_STR_FORMAT)
+        end_time = datetime.datetime.strptime(trial_json['end_time'], LOGGING_DATETIME_STR_FORMAT) + datetime.timedelta(
             hours=1)
         assert start_time < end_time
 
@@ -121,9 +122,9 @@ class TestTrials:
         assert self._then_success_trial_split_json_is_valid(trial_json['validation_splits'][0])
 
         start_time = datetime.datetime.strptime(
-            trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT)
+            trial_json['start_time'], LOGGING_DATETIME_STR_FORMAT)
         end_time = datetime.datetime.strptime(
-            trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT) + datetime.timedelta(hours=1)
+            trial_json['end_time'], LOGGING_DATETIME_STR_FORMAT) + datetime.timedelta(hours=1)
 
         assert start_time < end_time
 
@@ -194,9 +195,9 @@ class TestTrials:
         assert trial_json['main_metric_name'] == trial_split.main_metric_name
 
         start_time = datetime.datetime.strptime(
-            trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT)
+            trial_json['start_time'], LOGGING_DATETIME_STR_FORMAT)
         end_time = datetime.datetime.strptime(
-            trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT) + datetime.timedelta(hours=1)
+            trial_json['end_time'], LOGGING_DATETIME_STR_FORMAT) + datetime.timedelta(hours=1)
         assert start_time < end_time
         return True
 
@@ -214,9 +215,9 @@ class TestTrials:
             trial_json['validation_splits'][0], trial_split=trial_split)
 
         start_time = datetime.datetime.strptime(
-            trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT)
+            trial_json['start_time'], LOGGING_DATETIME_STR_FORMAT)
         end_time = datetime.datetime.strptime(
-            trial_json['end_time'], TRIAL_DATETIME_STR_FORMAT) + datetime.timedelta(hours=1)
+            trial_json['end_time'], LOGGING_DATETIME_STR_FORMAT) + datetime.timedelta(hours=1)
 
         assert start_time < end_time
 

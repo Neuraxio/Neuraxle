@@ -28,13 +28,13 @@ from typing import Tuple
 
 import numpy as np
 
-from neuraxle.base import MetaStep, BaseStep, DataContainer, ExecutionContext, ResumableStepMixin, \
+from neuraxle.base import MetaStep, BaseStep, DataContainer, ExecutionContext, \
     ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, BaseTransformer, Identity
 from neuraxle.data_container import ListDataContainer
 from neuraxle.steps.flow import ExecuteIf
 
 
-class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
+class ForEach(ForceHandleOnlyMixin, MetaStep):
     """
     Truncable step that fits/transforms each step for each of the data inputs, and expected outputs.
 
@@ -42,7 +42,6 @@ class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
         :class:`~neuraxle.base.BaseStep`,
         :class:`~neuraxle.base.BaseSaver`,
         :class:`~neuraxle.base.BaseHasher`,
-        :class:`~neuraxle.base.ResumableStepMixin`,
         :class:`~neuraxle.base.NonTransformableMixin`,
         :class:`~neuraxle.pipeline.Pipeline`,
         :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
@@ -64,10 +63,11 @@ class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
         :type context: ExecutionContext
         :return: self
         """
-        for current_id, di, eo in data_container:
+        for i, (_id, di, eo) in enumerate(data_container):
             try:
+                # TODO: DataDescriptor object.
                 self.wrapped = self.wrapped.handle_fit(
-                    DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo, summary_id=current_id),
+                    DataContainer(data_inputs=di, ids=f"{_id}_{i}", expected_outputs=eo),
                     context
                 )
             except ContinueInterrupt:
@@ -88,15 +88,15 @@ class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
         """
         output_data_container: ListDataContainer = ListDataContainer.empty(original_data_container=data_container)
 
-        for current_id, di, eo in data_container:
+        for _id, di, eo in data_container:
             try:
                 output = self.wrapped.handle_transform(
-                    DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
+                    DataContainer(data_inputs=di, ids=None, expected_outputs=eo),
                     context
                 )
 
                 output_data_container.append(
-                    current_id,
+                    _id,
                     output.data_inputs,
                     output.expected_outputs
                 )
@@ -104,7 +104,6 @@ class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
                 continue
             except BreakInterrupt:
                 break
-        output_data_container.summary_id = data_container.summary_id
 
         return output_data_container
 
@@ -125,7 +124,7 @@ class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
         for current_id, di, eo in data_container:
             try:
                 self.wrapped, output = self.wrapped.handle_fit_transform(
-                    DataContainer(data_inputs=di, current_ids=None, expected_outputs=eo),
+                    DataContainer(data_inputs=di, ids=None, expected_outputs=eo),
                     context
                 )
                 output_data_container.append(
@@ -138,29 +137,7 @@ class ForEach(ForceHandleOnlyMixin, ResumableStepMixin, MetaStep):
             except BreakInterrupt:
                 break
 
-        output_data_container.summary_id = data_container.summary_id
-
         return self, output_data_container
-
-    def hash_data_container(self, data_container: DataContainer) -> DataContainer:
-        output_data_container = self.wrapped.hash_data_container(data_container)
-        output_data_container.summary_id = data_container.summary_id
-
-        return output_data_container
-
-    def should_resume(self, data_container: DataContainer, context: ExecutionContext) -> bool:
-        context: ExecutionContext = context.push(self)
-
-        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context):
-            return True
-        return False
-
-    def resume(self, data_container: DataContainer, context: ExecutionContext):
-        context = context.push(self)
-        if not isinstance(self.wrapped, ResumableStepMixin):
-            raise Exception('cannot resume steps that don\' inherit from ResumableStepMixin')
-        data_container = self.wrapped.resume(data_container, context)
-        return data_container
 
 
 class ContinueInterrupt(Exception):
@@ -215,10 +192,10 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
 
         :return: list of children
         """
-        children: List[BaseStep] = MetaStep.get_children(self)
+        wrapped: List[BaseStep] = self.get_step()
         cloned_children = [step for _, step in self.steps_as_tuple]
-        children.extend(cloned_children)
-        return children
+        wrapped.extend(cloned_children)
+        return wrapped
 
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
         data_container, context = super()._will_process(data_container, context)
@@ -240,7 +217,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         fitted_steps_data_containers = []
         for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
             fitted_step_data_container = self[i].handle_fit_transform(
-                DataContainer(current_ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
+                DataContainer(ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
                 context
             )
             fitted_steps_data_containers.append(fitted_step_data_container)
@@ -258,7 +235,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         fitted_steps = []
         for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
             fitted_step = self[i].handle_fit(
-                DataContainer(current_ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
+                DataContainer(ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
                 context
             )
             fitted_steps.append(fitted_step)
@@ -272,7 +249,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         transform_results = []
         for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
             transform_result = self[i].handle_transform(
-                DataContainer(current_ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
+                DataContainer(ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
                 context
             )
             transform_results.append(transform_result)
@@ -287,7 +264,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         inverse_transform_results = []
         for i, (current_ids, data_inputs, expected_outputs) in enumerate(data_container):
             inverse_transform_result = self[i].handle_inverse_transform(
-                DataContainer(current_ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
+                DataContainer(ids=current_ids, data_inputs=data_inputs, expected_outputs=expected_outputs),
                 context
             )
             inverse_transform_results.append(inverse_transform_result)
@@ -325,7 +302,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         return len(self.steps_as_tuple)
 
 
-class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStep):
+class FlattenForEach(ForceHandleMixin, MetaStep):
     """
     Step that reduces a dimension instead of manually looping on it.
 
@@ -333,7 +310,6 @@ class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStep):
         :class:`~neuraxle.base.BaseStep`,
         :class:`~neuraxle.base.BaseSaver`,
         :class:`~neuraxle.base.BaseHasher`,
-        :class:`~neuraxle.base.ResumableStepMixin`,
         :class:`~neuraxle.base.MetaStepMixin`,
         :class:`~neuraxle.base.NonTransformableMixin`,
         :class:`~neuraxle.pipeline.Pipeline`,
@@ -348,7 +324,6 @@ class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStep):
             then_unflatten: bool = True
     ):
         MetaStep.__init__(self, wrapped)
-        ResumableStepMixin.__init__(self)
         ForceHandleMixin.__init__(self)
 
         self.then_unflatten = then_unflatten
@@ -356,8 +331,9 @@ class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStep):
         self.len_di = []
         self.len_eo = []
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseTransformer', DataContainer):
+    def _will_process(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> (BaseTransformer, DataContainer):
         """
         Flatten data container before any processing is done on the wrapped step.
 
@@ -374,11 +350,12 @@ class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStep):
             data_container.set_expected_outputs(expected_outputs)
 
         di, self.len_di = self._flatten_list(data_container.data_inputs)
+        _id, self.len_di = self._flatten_list(data_container.ids)
         eo, self.len_eo = self._flatten_list(data_container.expected_outputs)
 
         flattened_data_container = DataContainer(
-            summary_id=data_container.summary_id,
             data_inputs=di,
+            ids=_id,
             expected_outputs=eo,
             sub_data_containers=data_container.sub_data_containers
         )
@@ -441,10 +418,3 @@ class FlattenForEach(ForceHandleMixin, ResumableStepMixin, MetaStep):
             i += list_length
 
         return reaugmented_list
-
-    def should_resume(self, data_container: DataContainer, context: ExecutionContext):
-        context = context.push(self)
-
-        if isinstance(self.wrapped, ResumableStepMixin) and self.wrapped.should_resume(data_container, context):
-            return True
-        return False

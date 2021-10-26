@@ -156,7 +156,7 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
     """
     def __init__(
             self,
-#            plotting_func_map: Dict[str, Tuple(Callable, Boolean, Boolean, Boolean)], TODO : introduction plot_function map so that we can have custom plotting function for each metric.
+            # plotting_func_map: Dict[str, Tuple(Callable, Boolean, Boolean, Boolean)], TODO : introduction plot_function map so that we can have custom plotting function for each metric.
             plotting_folder_name: str = 'metric_results',
             save_plots: bool = True,
             plot_trial_on_next: bool = True,

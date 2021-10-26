@@ -21,7 +21,7 @@ Tests for Metaopt
 import pytest
 import math
 import numpy as np
-from neuraxle.metaopt.random import WalkForwardTimeSeriesCrossValidationWrapper, AnchoredWalkForwardTimeSeriesCrossValidationWrapper
+from neuraxle.metaopt.validation import WalkForwardTimeSeriesCrossValidationWrapper, AnchoredWalkForwardTimeSeriesCrossValidationWrapper
 
 classic_walforward_parameters = {
     # (training_size, validation_size, padding_between_training_and_validation, drop_remainder)

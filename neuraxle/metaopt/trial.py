@@ -29,30 +29,21 @@ import traceback
 import json
 from enum import Enum
 from logging import FileHandler, Logger
-from typing import Dict, List, Callable, Iterable, Tuple
+from typing import Any, Dict, List, Callable, Iterable, Tuple
 
 import numpy as np
 
-from neuraxle.base import BaseStep, ExecutionContext, LOGGER_FORMAT, DATE_FORMAT
+from neuraxle.base import BaseStep, ExecutionContext
+from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
 from neuraxle.data_container import DataContainer
-from neuraxle.hyperparams.space import HyperparameterSamples
-
-TRIAL_DATETIME_STR_FORMAT = '%m/%d/%Y, %H:%M:%S'
+from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
 
 
 class Trial:
     """
-    Trial data container for :class:`AutoML`.
-    A Trial contains the results for each validation split.
-    Each trial split contains both the training set results, and the validation set results.
-
-    .. seealso::
-        :class:`AutoML`,
-        :class:`TrialSplit`,
-        :class:`HyperparamsRepository`,
-        :class:`BaseHyperparameterSelectionStrategy`,
-        :class:`RandomSearchHyperparameterSelectionStrategy`,
-        :class:`DataContainer`
+    This class is a data structure most often used under :class:`AutoML` to store information about a trial.
+    This information is itself managed by the :class:`HyperparameterRepository` class
+    and the :class:`TrialRepo` class within the AutoML.
     """
 
     def __init__(
@@ -60,19 +51,16 @@ class Trial:
             trial_number: int,
             hyperparams: HyperparameterSamples,
             main_metric_name: str,
-            save_trial_function: Callable,
             status: 'TRIAL_STATUS' = None,
-            pipeline: BaseStep = None,
             validation_splits: List['TrialSplit'] = None,
-            cache_folder: str = None,
             error: str = None,
             error_traceback: str = None,
             start_time: datetime.datetime = None,
             end_time: datetime.datetime = None,
-            logger: Logger = None
+            log: str = None,
+            introspection_data: RecursiveDict = None
     ):
         self.trial_number = trial_number
-        self.save_trial_function: Callable = save_trial_function
 
         if status is None:
             status = TRIAL_STATUS.PLANNED
@@ -82,13 +70,82 @@ class Trial:
         self.main_metric_name: str = main_metric_name
         self.status: TRIAL_STATUS = status
         self.hyperparams: HyperparameterSamples = hyperparams
-        self.pipeline: BaseStep = pipeline
         self.validation_splits: List['TrialSplit'] = validation_splits
-        self.cache_folder: str = cache_folder
         self.error_traceback: str = error_traceback
         self.error: str = error
         self.start_time: datetime.datetime = start_time
         self.end_time: datetime.datetime = end_time
+        self.log: str = log if log is not None else ""
+        self.introspection_data: RecursiveDict = (
+            introspection_data if introspection_data is not None else RecursiveDict())
+
+    def to_json_dict(self) -> dict[str, Any]:
+        return {
+            'trial_number': self.trial_number,
+            'status': self.status.value,
+            'hyperparams': self.hyperparams.to_flat_dict(),
+            'validation_splits': [v.to_json() for v in self.validation_splits],
+            'error': self.error,
+            'error_traceback': self.error_traceback,
+            'start_time': self.start_time.strftime(LOGGING_DATETIME_STR_FORMAT) if self.start_time is not None else '',
+            'end_time': self.end_time.strftime(LOGGING_DATETIME_STR_FORMAT) if self.end_time is not None else '',
+            'main_metric_name': self.main_metric_name,
+            'log': self.log,
+            'introspection_data': self.introspection_data.to_flat_dict()
+        }
+
+    @staticmethod
+    def from_json_dict(trial_json: Dict) -> 'Trial':
+        trial: Trial = Trial(
+            trial_number=trial_json["trial_number"],
+            main_metric_name=trial_json['main_metric_name'],
+            status=TRIAL_STATUS(trial_json['status']),
+            hyperparams=HyperparameterSamples(trial_json['hyperparams']),
+            error=trial_json['error'],
+            error_traceback=trial_json['error_traceback'],
+            start_time=datetime.datetime.strptime(trial_json['start_time'], LOGGING_DATETIME_STR_FORMAT),
+            end_time=datetime.datetime.strptime(trial_json['start_time'], LOGGING_DATETIME_STR_FORMAT),
+            log=trial_json['log'],
+            introspection_data=RecursiveDict(trial_json['introspection_data'])
+        )
+
+        trial.validation_splits = [
+            TrialSplit.from_json(
+                trial=trial,
+                trial_split_json=validation_split_json
+            ) for validation_split_json in trial_json['validation_splits']
+        ]
+
+        return trial
+
+    def __getitem__(self, item) -> 'TrialSplit':
+        return self.validation_splits[item]
+
+
+class TrialRepo:
+    """
+    This class is a sub-contextualization of the :class:`HyperparameterRepository`
+    class for holding a trial and manipulating it within its context.
+    A Trial contains the results for each validation split.
+    Each trial split contains both the training set results, and the validation set results.
+
+    .. seealso::
+        :class:`Trial`,
+        :class:`TrialSplit`,
+        :class:`HyperparamsRepository`,
+        :class:`AutoML`,
+        :class:`ExecutionContext`
+    """
+
+    def __init__(
+        self,
+        save_trial_function: Callable,
+        pipeline: BaseStep = None,
+        logger: Logger = None
+    ):
+        self.save_trial_function: Callable = save_trial_function
+
+        self.pipeline: BaseStep = pipeline
 
         if logger is None:
             if self.cache_folder is not None:
@@ -97,14 +154,38 @@ class Trial:
                 logger = logging.getLogger()
         self.logger: Logger = logger
 
+        self.trial = Trial()  # TODO: do this.
+
     def save_trial(self) -> 'Trial':
         """
         Update trial with the hyperparams repository.
 
-        :return:
+        :return: The trial
         """
-        self.save_trial_function(self)
+        self.save_trial_function(self.trial)
         return self
+
+    def save_model(self, context: ExecutionContext):
+        """
+        Save fitted model in the trial's folder given from the trial's context.
+        """
+        assert self.cache_folder is not None
+        self._save_model(self.pipeline, context)
+
+    def _save_model(self, pipeline: BaseStep, context: ExecutionContext):
+        hyperparams = self.hyperparams.to_flat_dict()
+        trial_hash = self._get_trial_hash(hyperparams)
+        pipeline.set_name(trial_hash).save(context, full_dump=True)
+
+    def load_model(self, context: ExecutionContext) -> BaseStep:
+        """
+        Load model in the trial hash folder.
+        """
+        trial_hash: str = self._get_trial_hash(self.hyperparams.to_flat_dict)
+        return ExecutionContext.load(
+            context=context,
+            pipeline_name=trial_hash,
+        )
 
     def new_validation_split(self, pipeline: BaseStep, delete_pipeline_on_completion: bool = True) -> 'TrialSplit':
         """
@@ -128,30 +209,6 @@ class Trial:
         self.save_trial()
         return trial_split
 
-    def save_model(self, label: str):
-        """
-        Save fitted model in the trial hash folder.
-        """
-        assert self.cache_folder is not None
-        self._save_model(self.pipeline, label)
-
-    def _save_model(self, pipeline: BaseStep, label: str):
-        hyperparams = self.hyperparams.to_flat_dict()
-        trial_hash = self._get_trial_hash(hyperparams)
-        path = os.path.join(self.cache_folder, label)
-        pipeline.set_name(trial_hash).save(ExecutionContext(path), full_dump=True)
-
-    def get_model(self, label: str) -> BaseStep:
-        """
-        Load model in the trial hash folder.
-        """
-        assert self.cache_folder is not None
-
-        hyperparams = self.hyperparams.to_flat_dict()
-        trial_hash = self._get_trial_hash(hyperparams)
-        path = os.path.join(self.cache_folder, label)
-        return ExecutionContext(path).load(trial_hash)
-
     def set_main_metric_name(self, name: str) -> 'Trial':
         """
         Set trial main metric name.
@@ -159,17 +216,6 @@ class Trial:
         :return: self
         """
         self.main_metric_name = name
-        return self
-
-    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'Trial':
-        """
-        Set trial hyperparams.
-
-        :param hyperparams: trial hyperparams
-        :return:
-        """
-        self.hyperparams = hyperparams
-
         return self
 
     def is_higher_score_better(self) -> bool:
@@ -265,54 +311,13 @@ class Trial:
 
     def _get_trial_hash(self, hp_dict: Dict):
         """
-        Hash hyperparams with md5 to create a trial hash.
+        Hash hyperparams with blake2s to create a trial hash.
 
         :param hp_dict: hyperparams dict
         :return:
         """
-        current_hyperparameters_hash = hashlib.md5(str.encode(str(hp_dict))).hexdigest()
+        current_hyperparameters_hash = hashlib.blake2s(str.encode(str(hp_dict))).hexdigest()
         return current_hyperparameters_hash
-
-    def to_json(self):
-        return {
-            'trial_number': self.trial_number,
-            'status': self.status.value,
-            'hyperparams': self.hyperparams.to_flat_dict(),
-            'validation_splits': [v.to_json() for v in self.validation_splits],
-            'error': self.error,
-            'error_traceback': self.error_traceback,
-            'start_time': self.start_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.start_time is not None else '',
-            'end_time': self.end_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.end_time is not None else '',
-            'main_metric_name': self.main_metric_name
-        }
-
-    @staticmethod
-    def from_json(update_trial_function: Callable, trial_json: Dict, cache_folder: str = None) -> 'Trial':
-        trial: Trial = Trial(
-            trial_number=trial_json["trial_number"],
-            main_metric_name=trial_json['main_metric_name'],
-            status=TRIAL_STATUS(trial_json['status']),
-            hyperparams=HyperparameterSamples(trial_json['hyperparams']),
-            save_trial_function=update_trial_function,
-            error=trial_json['error'],
-            error_traceback=trial_json['error_traceback'],
-            start_time=datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT),
-            end_time=datetime.datetime.strptime(trial_json['start_time'], TRIAL_DATETIME_STR_FORMAT),
-            cache_folder=cache_folder,
-            logger=None
-        )
-
-        trial.validation_splits = [
-            TrialSplit.from_json(
-                trial=trial,
-                trial_split_json=validation_split_json
-            ) for validation_split_json in trial_json['validation_splits']
-        ]
-
-        return trial
-
-    def __getitem__(self, item) -> 'TrialSplit':
-        return self.validation_splits[item]
 
     def _initialize_logger_with_file(self) -> logging.Logger:
 
@@ -593,8 +598,8 @@ class TrialSplit:
             'error': self.error,
             'metric_results': self.metrics_results,
             'error_traceback': self.error_traceback,
-            'start_time': self.start_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.start_time is not None else '',
-            'end_time': self.end_time.strftime(TRIAL_DATETIME_STR_FORMAT) if self.end_time is not None else '',
+            'start_time': self.start_time.strftime(LOGGING_DATETIME_STR_FORMAT) if self.start_time is not None else '',
+            'end_time': self.end_time.strftime(LOGGING_DATETIME_STR_FORMAT) if self.end_time is not None else '',
             'split_number': self.split_number,
             'main_metric_name': self.main_metric_name
         }
@@ -614,8 +619,8 @@ class TrialSplit:
             error=trial_split_json['error'],
             error_traceback=trial_split_json['error_traceback'],
             metrics_results=trial_split_json['metric_results'],
-            start_time=datetime.datetime.strptime(trial_split_json['start_time'], TRIAL_DATETIME_STR_FORMAT),
-            end_time=datetime.datetime.strptime(trial_split_json['end_time'], TRIAL_DATETIME_STR_FORMAT),
+            start_time=datetime.datetime.strptime(trial_split_json['start_time'], LOGGING_DATETIME_STR_FORMAT),
+            end_time=datetime.datetime.strptime(trial_split_json['end_time'], LOGGING_DATETIME_STR_FORMAT),
             split_number=trial_split_json['split_number'],
             main_metric_name=trial_split_json['main_metric_name']
         )
@@ -700,7 +705,6 @@ class Trials:
     Data object containing auto ml trials.
 
     .. seealso::
-        :class:`AutoMLSequentialWrapper`,
         :class:`RandomSearch`,
         :class:`HyperparamsRepository`,
         :class:`MetaStepMixin`,

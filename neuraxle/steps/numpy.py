@@ -4,7 +4,7 @@ Pipeline Steps Based on NumPy
 Those steps works with NumPy (np) arrays.
 
 ..
-    Copyright 2019, Neuraxio Inc.
+    Copyright 2021, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import numpy as np
 from neuraxle.base import ExecutionContext, ForceHandleMixin, BaseTransformer, NonFittableMixin, BaseStep
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples
+
 
 class NumpyFlattenDatum(BaseTransformer):
     def __init__(self):
@@ -62,7 +63,7 @@ class NumpyConcatenateOnAxis(BaseTransformer):
         :return: transformed data container
         """
         data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs])
-        data_container = DataContainer(data_inputs=data_inputs, current_ids=data_container.current_ids,
+        data_container = DataContainer(data_inputs=data_inputs, ids=data_container.current_ids,
                                        expected_outputs=data_container.expected_outputs)
         data_container.set_data_inputs(data_inputs)
 
@@ -103,7 +104,7 @@ class NumpyConcatenateOnAxisIfNotEmpty(BaseTransformer):
         :return: transformed data container
         """
         data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs if len(dc.data_inputs) > 0])
-        data_container = DataContainer(data_inputs=data_inputs, current_ids=data_container.current_ids,
+        data_container = DataContainer(data_inputs=data_inputs, ids=data_container.ids,
                                        expected_outputs=data_container.expected_outputs)
         data_container.set_data_inputs(data_inputs)
 
@@ -162,7 +163,7 @@ class NumpyTranspose(BaseTransformer):
         :return: transformed data container
         """
         data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs])
-        data_container = DataContainer(data_inputs=data_inputs, current_ids=data_container.current_ids,
+        data_container = DataContainer(data_inputs=data_inputs, ids=data_container.current_ids,
                                        expected_outputs=data_container.expected_outputs)
         data_container.set_data_inputs(data_inputs)
 

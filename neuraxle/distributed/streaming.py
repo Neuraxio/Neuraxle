@@ -30,7 +30,7 @@ from abc import abstractmethod
 from multiprocessing import Queue
 from multiprocessing.context import Process
 from threading import Thread
-from typing import Tuple, List, Union, Iterable, Any
+from typing import Dict, Tuple, List, Union, Iterable, Any
 
 from neuraxle.base import NamedTupleList, ExecutionContext, MetaStep, BaseSaver, _FittableStep, \
     BaseTransformer, NonFittableMixin, MixinForBaseTransformer
@@ -82,7 +82,7 @@ class ObservableQueueMixin(MixinForBaseTransformer):
     def subscribe_step(self, observer_queue_worker: 'ObservableQueueMixin') -> 'ObservableQueueMixin':
         """
         Subscribe a queue worker to self such that we can notify them to post tasks to put on them.
-        The subscribed queue workers get notified when :func:`~neuraxle.distributed.streaming.ObservableQueueMixin.notify` is called.
+        The subscribed queue workers get notified when :func:`~neuraxle.distributed.streaming.ObservableQueueMixin.notify_step` is called.
         """
         self.observers.append(observer_queue_worker.queue)
         return self
@@ -277,9 +277,7 @@ def worker_function(queue_worker: QueueWorker, context: ExecutionContext, use_sa
         while True:
             try:
                 task: QueuedPipelineTask = queue_worker.get_task()
-                summary_id = task.data_container.summary_id
                 data_container = step.handle_transform(task.data_container, context)
-                data_container = data_container.set_summary_id(summary_id)
                 queue_worker.notify_step(data_container)
 
             except Exception as err:
@@ -616,8 +614,15 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 class SequentialQueuedPipeline(BaseQueuedPipeline):
     """
     Using :class:`QueueWorker`, run all steps sequentially even if they are in separate processes or threads.
+    This is a parallel pipeline that uses a queue to communicate between the steps, and which parallelizes the steps
+    using many workers in different processes or threads.
+
+    This pipeline is useful when the steps are independent of each other and can be run in parallel. This is especially
+    the case when the steps are not fittable, such as inheriting from the :class:`~neuraxle.base.NonFittableMixin`.
+    Otherwise, fitting may not be parallelized, although the steps can be run in parallel for the transformation.
 
     .. seealso::
+        :class:`~neuraxle.pipeline.BasePipeline`,
         :func:`~neuraxle.data_container.DataContainer.minibatches`,
         :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`,
         :class:`QueueWorker`,
@@ -657,8 +662,7 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
         :param data_container: data container batch
         :return:
         """
-        data_container = data_container.set_summary_id(data_container.hash_summary())
-        self[-1].summary_ids.append(data_container.summary_id)
+        self[-1].summaries.append(data_container.get_ids_summary())
         self[0].put_task(data_container)
 
 
@@ -701,8 +705,8 @@ class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
         :return:
         """
         for name, step in self[:-1]:
-            data_container = data_container.set_summary_id(data_container.hash_summary())
-            self[-1].summary_ids.append(data_container.summary_id)
+            queue_joiner: QueueJoiner = self[-1]
+            queue_joiner.summaries.append(data_container.get_ids_summary())
             step.put_task(data_container)
 
 
@@ -720,7 +724,7 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
 
     def __init__(self, batch_size, n_batches=None):
         self.n_batches_left_to_do = n_batches
-        self.summary_ids = []
+        self.summaries: List[str] = []
         self.result = {}
         Joiner.__init__(self, batch_size=batch_size)
         ObservableQueueMixin.__init__(self, Queue())
@@ -733,8 +737,8 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
         """
         ObservableQueueMixin._teardown(self)
         Joiner._teardown(self)
-        self.summary_ids = []
-        self.result = {}
+        self.summaries = []
+        self.result: Dict[str, ListDataContainer] = dict()
         return self
 
     def set_n_batches(self, n_batches):
@@ -753,16 +757,10 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
             step_name = task.step_name
 
             if step_name not in self.result:
-                if not isinstance(task.data_container, DataContainer):
-                    summary_id = None
-                else:
-                    summary_id = task.data_container.summary_id
-
                 self.result[step_name] = ListDataContainer(
-                    current_ids=[],
+                    ids=[],
                     data_inputs=[],
-                    expected_outputs=[],
-                    summary_id=summary_id
+                    expected_outputs=[]
                 )
 
             self.result[step_name].append_data_container_in_data_inputs(task.data_container)
@@ -785,20 +783,19 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
 
         return results
 
-    def _raise_exception_throwned_by_workers_if_needed(self, data_containers):
+    def _raise_exception_throwned_by_workers_if_needed(self, data_containers: ListDataContainer):
         for dc in data_containers.data_inputs:
             if isinstance(dc, Exception):
                 # an exception has been throwned by the worker so reraise it here!
                 exception = dc
                 raise exception
 
-    def _join_step_results(self, data_containers):
-        # reorder results by summary id
-        data_containers.data_inputs.sort(key=lambda dc: self.summary_ids.index(dc.summary_id))
+    def _join_step_results(self, data_containers: ListDataContainer):
+        # reorder results by ids of summary
+        data_containers.data_inputs.sort(key=lambda dc: self.summaries.index(dc.get_ids_summary()))
 
         step_results = ListDataContainer.empty()
         for data_container in data_containers.data_inputs:
-            data_container = data_container.set_summary_id(data_containers.data_inputs[-1].summary_id)
             step_results.concat(data_container)
 
         return step_results

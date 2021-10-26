@@ -27,8 +27,7 @@ import copy
 from abc import ABC
 from typing import List
 
-from neuraxle.base import ExecutionContext, BaseStep, MetaStep, ForceHandleOnlyMixin, BaseHasher, \
-    MixinForBaseTransformer
+from neuraxle.base import ExecutionContext, BaseStep, MetaStep, ForceHandleOnlyMixin, MixinForBaseTransformer
 from neuraxle.data_container import DataContainer
 
 
@@ -55,7 +54,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         new_expected_outputs_data_container = self.wrapped.handle_transform(
             DataContainer(
                 data_inputs=data_container.expected_outputs,
-                current_ids=data_container.current_ids,
+                ids=data_container.ids,
                 expected_outputs=None
             ),
             context
@@ -78,7 +77,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         self.wrapped = self.wrapped.handle_fit(
             DataContainer(
                 data_inputs=data_container.expected_outputs,
-                current_ids=data_container.current_ids,
+                ids=data_container.ids,
                 expected_outputs=None
             ),
             context
@@ -101,7 +100,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         self.wrapped, new_expected_outputs_data_container = self.wrapped.handle_fit_transform(
             DataContainer(
                 data_inputs=data_container.expected_outputs,
-                current_ids=data_container.current_ids,
+                ids=data_container.ids,
                 expected_outputs=None
             ),
             context
@@ -123,7 +122,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         new_expected_outputs_data_container = self.wrapped.handle_inverse_transform(
             DataContainer(
                 data_inputs=data_container.expected_outputs,
-                current_ids=data_container.current_ids,
+                ids=data_container.ids,
                 expected_outputs=None
             ),
             context.push(self.wrapped)
@@ -159,7 +158,7 @@ class _DidProcessInputOutputHandlerMixin(MixinForBaseTransformer):
 
         data_container = super()._did_process(data_container, context)
 
-        if len(data_container.current_ids) != len(data_container.data_inputs):
+        if len(data_container.ids) != len(data_container.data_inputs):
             raise AssertionError(
                 '{}: Caching broken because there is a different len of current ids, and data inputs. Please use InputAndOutputTransformerWrapper if you plan to change the len of the data inputs.'.format(
                     self.name))
@@ -177,8 +176,8 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         :class:`~neuraxle.base.ForceHandleOnlyMixin`
     """
 
-    def __init__(self, wrapped, hashers: List[BaseHasher] = None, cache_folder_when_no_handle=None):
-        MetaStep.__init__(self, wrapped, hashers=hashers)
+    def __init__(self, wrapped, cache_folder_when_no_handle=None):
+        MetaStep.__init__(self, wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
         _DidProcessInputOutputHandlerMixin.__init__(self)
 
@@ -195,7 +194,7 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         output_data_container = self.wrapped.handle_transform(
             DataContainer(
                 data_inputs=(data_container.data_inputs, data_container.expected_outputs),
-                current_ids=data_container.current_ids,
+                ids=data_container.ids,
                 expected_outputs=None
             ),
             context
@@ -217,7 +216,7 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         self.wrapped = self.wrapped.handle_fit(
             DataContainer(
                 data_inputs=(copy.copy(data_container.data_inputs), copy.copy(data_container.expected_outputs)),
-                current_ids=data_container.current_ids,
+                ids=data_container.ids,
                 expected_outputs=None
             ),
             context
@@ -242,7 +241,7 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         self.wrapped, output_data_container = self.wrapped.handle_fit_transform(
             DataContainer(
                 data_inputs=(data_container.data_inputs, data_container.expected_outputs),
-                current_ids=data_container.current_ids,
+                ids=data_container.ids,
                 expected_outputs=None
             ),
             context
@@ -262,14 +261,14 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         output_data_container = self.wrapped.handle_inverse_transform(
             DataContainer(
                 data_inputs=(data_container.data_inputs, data_container.expected_outputs),
-                current_ids=data_container.current_ids,
+                ids=data_container.ids,
                 expected_outputs=None
             ),
             context.push(self.wrapped)
         )
 
         current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
+        data_container.set_ids(current_ids)
 
         return output_data_container
 

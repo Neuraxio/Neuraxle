@@ -1,7 +1,8 @@
 """
 Neuraxle's AutoML Classes
 ====================================
-Classes used to build any Automatic Machine Learning strategies.
+Classes used to build any Automatic Machine Learning pipelines.
+Hyperparameter selection strategies are used to optimize the hyperparameters of given pipelines.
 
 ..
     Copyright 2019, Neuraxio Inc.
@@ -46,8 +47,9 @@ from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.callbacks import BaseCallback, CallbackList, ScoringCallback
 from neuraxle.metaopt.observable import _Observable, _Observer
-from neuraxle.metaopt.random import BaseCrossValidationWrapper
+from neuraxle.metaopt.validation import BaseCrossValidationWrapper
 from neuraxle.metaopt.trial import Trial, TrialSplit, TRIAL_STATUS, Trials
+from neuraxle.logging.warnings import warn_deprecated_class, warn_deprecated_arg
 
 
 class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], ABC):
@@ -109,7 +111,7 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         :return:
         """
         self._save_trial(trial)
-        self.on_next(value=(self, trial))  # notify a tuple of (repo, trial) to observers
+        self.notify_next(value=(self, trial))  # notify a tuple of (repo, trial) to observers
 
     @abstractmethod
     def _save_trial(self, trial: 'Trial'):
@@ -137,7 +139,7 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
     def _load_best_model(self, trial_hash: str) -> BaseStep:
         return ExecutionContext(str(self.best_retrained_model_folder)).load(trial_hash)
 
-    def get_best_model(self):
+    def get_best_model(self) -> BaseStep:
         """
         Load the best model saved inside the best retrained model folder.
 
@@ -181,12 +183,12 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
 
     def _get_trial_hash(self, hp_dict):
         """
-        Hash hyperparams with md5 to create a trial hash.
+        Hash hyperparams with blake2s to create a trial hash.
 
         :param hp_dict:
         :return:
         """
-        current_hyperparameters_hash = hashlib.md5(str.encode(str(hp_dict))).hexdigest()
+        current_hyperparameters_hash = hashlib.blake2s(str.encode(str(hp_dict))).hexdigest()
         return current_hyperparameters_hash
 
 
@@ -438,17 +440,15 @@ class BaseHyperparameterSelectionStrategy(ABC):
 
 class Trainer:
     """
+    Class used to train a pipeline using various data splits and callbacks for evaluation purposes.
 
-    Example usage :
+    Example usage:
 
     .. code-block:: python
 
         trainer = Trainer(
-            epochs=10,
-            callbacks=[EarlyStoppingCallback()],
-            scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
             validation_splitter=ValidationSplitter(test_size=0.15),
-            print_func=print
+            callbacks=[EarlyStoppingCallback(), MetricCallback("main", mean_squared_error, higher_score_is_better=False)],
         )
 
         repo_trial = trainer.train(
@@ -460,34 +460,31 @@ class Trainer:
 
     .. seealso::
         :class:`AutoML`,
-        :class:`Trainer`,
         :class:`~neuraxle.metaopt.trial.Trial`,
         :class:`InMemoryHyperparamsRepository`,
         :class:`HyperparamsJSONRepository`,
-        :class:`BaseHyperparameterSelectionStrategy`,
         :class:`RandomSearchHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
     def __init__(
             self,
-            epochs: int,
-            scoring_callback: ScoringCallback,
             validation_splitter: 'BaseValidationSplitter',
             callbacks: List[BaseCallback] = None,
-            hyperparams_repository: HyperparamsRepository = None
+            main_metric_name: str = "main",
+            scoring_callback: ScoringCallback = None,
+            hyperparams_repository: HyperparamsRepository = None,
+            n_epochs: int = None
     ):
-        self.epochs: int = epochs
         self.validation_split_function = validation_splitter
+        self.callbacks: CallbackList = CallbackList(callbacks) if callbacks is not None else []
+        self.main_metric_name = main_metric_name
 
-        if callbacks is None:
-            callbacks = []
-        callbacks: List[BaseCallback] = [scoring_callback] + callbacks
-        self.callbacks: CallbackList = CallbackList(callbacks)
-
-        if hyperparams_repository is None:
-            hyperparams_repository = InMemoryHyperparamsRepository()
-        self.hyperparams_repository: HyperparamsRepository = hyperparams_repository
+        warn_deprecated_arg(
+            self, "scoring_callback", None, scoring_callback, "callbacks", EasyAutoML)
+        warn_deprecated_arg(
+            self, "hyperparams_repository", None, hyperparams_repository, None, EasyAutoML)
+        warn_deprecated_arg(
+            self, "n_epochs", None, n_epochs, None, DefaultLoop)
 
     def train(
         self,
@@ -670,6 +667,83 @@ class Trainer:
         return self.callbacks[0].name
 
 
+class BaseControllerLoop:
+
+    def __init__(
+        self,
+        trainer: Trainer,
+        # # TODO: add this `with_val_set` method that would change splitter to PresetValidationSetSplitter(self, val) and override.
+        n_trials: int,
+        n_epochs: int = 1,
+        next_best_prediction_algo: BaseHyperparameterSelectionStrategy = None,
+        continue_loop_on_error: bool = True
+    ):
+        # super().__init__()
+
+        if next_best_prediction_algo is None:
+            next_best_prediction_algo = RandomSearchHyperparameterSelectionStrategy()
+
+        self.trainer = trainer
+        self.next_best_prediction_algo = next_best_prediction_algo
+        self.n_trials = n_trials
+        self.n_epochs = n_epochs
+
+    def _get_next(self):
+        """
+        Distributed or parallel for loop like `for i in n_trials`.
+        """
+        for i in range(self.n_trials):
+            yield i
+
+
+class DefaultLoop(BaseControllerLoop):
+
+    def __init__(
+        self,
+        trainer: Trainer,
+        n_trials: int,
+        n_epochs: int = 1,
+        next_best_prediction_algo: BaseHyperparameterSelectionStrategy = None,
+        continue_loop_on_error: bool = True
+    ):
+        super().__init__(trainer, n_trials, n_epochs=n_epochs,
+                         next_best_prediction_algo=next_best_prediction_algo, continue_loop_on_error=continue_loop_on_error)
+        self.n_jobs = n_jobs
+
+    def loop(self, repo_run, p: BaseStep, data_container: DataContainer, context: ExecutionContext):
+        for i in self._get_next():
+
+            # TDA for lock unlock to be all in new_trial().
+            repo_run.lock()
+            p = self.next_best_prediction_algo.prepare_new_trial(p, repo_run.all_trials())
+            hps = p.get_hyperparams()
+            with repo_run.new_trial(hps) as trial:
+                repo_run.unlock()
+                # assert trial.is_started()
+                # assert not trial.is_finished()
+
+                trial_result: TrialResult = self.trainer.train(
+                    p,
+                    data_container,
+                    context.with_trial(trial),
+                    # this param is for allowing hyperband to easily control the n_epochs in percents...
+                )
+
+                # assert trial.repo_run == repo_run
+                # if isinstance(trial.repo_run.repo, PostGreSQLHPRepo): assert hasattr(trial.repo_run.repo.db.connection)
+                trial.set_finished(p, trial_result)
+
+        _comment = """
+            def _next_best_prediction_algo.prepare_new_trial(p: BaseStep, past_trials_with_scores) -> BaseStep:
+                trial_p = p.copy()
+
+                space = trial_p.get_hyperparam_space()
+                rvs = next_best_prediction_algo.rvs(space, past_trials_with_scores)  # can have NULL scores as well.
+                trial_p.set_hyperparams(rvs)
+                return trial_p
+        """
+
+
 class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
     """
     A step to execute any Automatic Machine Learning Algorithms.
@@ -712,18 +786,14 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
     def __init__(
             self,
             pipeline: BaseStep,
+            controller_loop: BaseControllerLoop,  # HyperbandControllerLoop(), ClusteringParallelFor()
             validation_splitter: 'BaseValidationSplitter',
-            refit_trial: bool,
-            scoring_callback: ScoringCallback,
+            start_new_run: bool = True,  # otherwise, pick last run. TODO: here?
+            refit_best_trial: bool = True,
+            hp_repo: HyperparamsRepository = None,
             hyperparams_optimizer: BaseHyperparameterSelectionStrategy = None,
             hyperparams_repository: HyperparamsRepository = None,
-            n_trials: int = 10,
-            epochs: int = 1,
-            callbacks: List[BaseCallback] = None,
-            refit_scoring_function: Callable = None,
-            cache_folder_when_no_handle=None,
-            n_jobs=None,
-            continue_loop_on_error=True
+            # TODO: class EasyAutoML(AutoML) to provide easy deprecated old call. Place deprecated Sentinel here.
     ):
         """
         Notes on multiprocess :
@@ -741,13 +811,12 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         :param n_trials: The number of different hyperparameters to try.
         :param epochs: The number of epoch to perform for each trial.
         :param callbacks: A list of callbacks to perform after each epoch.
-        :param refit_scoring_function: A scoring function to use on a refit call
         :param cache_folder_when_no_handle: default cache folder used if auto_ml_loop isn't called through handler functions.
         :param n_jobs: If n_jobs in (None, 1), then automl is executed in a single process, which may spawns on multiple thread. if n_jobs > 1, then n_jobs process are launched, if n_jobs <= -1 then (n_cpus + 1 + n_jobs) process are launched. One trial at a time is executed by process.
         :param continue_loop_on_error:
         """
         BaseStep.__init__(self)
-        ForceHandleMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
+        ForceHandleMixin.__init__(self)
 
         self.validation_splitter: BaseValidationSplitter = validation_splitter
 
@@ -755,30 +824,22 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             hyperparams_optimizer = RandomSearchHyperparameterSelectionStrategy()
         self.hyperparameter_optimizer: BaseHyperparameterSelectionStrategy = hyperparams_optimizer
 
-        if hyperparams_repository is None:
-            hyperparams_repository = HyperparamsJSONRepository(hyperparams_optimizer, cache_folder_when_no_handle)
+        if hp_repo is None:
+            hp_repo = HyperparamsJSONRepository(hyperparams_optimizer)
         else:
-            hyperparams_repository.set_strategy(hyperparams_optimizer)
+            hp_repo.set_strategy(hyperparams_optimizer)
 
         self.pipeline: BaseStep = pipeline
 
         self.n_trial: int = n_trials
         self.hyperparams_repository: HyperparamsRepository = hyperparams_repository
 
-        self.refit_scoring_function: Callable = refit_scoring_function
-
-        self.refit_trial: bool = refit_trial
-        self.n_jobs = n_jobs
+        self.refit_best_trial: bool = refit_best_trial
 
         self.error_types_to_raise = (SystemError, SystemExit, EOFError, KeyboardInterrupt) if continue_loop_on_error \
             else (Exception,)
 
-        self.trainer = Trainer(
-            epochs=epochs,
-            scoring_callback=scoring_callback,
-            callbacks=callbacks,
-            validation_splitter=validation_splitter
-        )
+        self.controller_loop = controller_loop
 
     def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
         """
@@ -832,7 +893,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             '\nbest hyperparams: {}'.format(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
 
         # Notify HyperparamsRepository subscribers
-        self.hyperparams_repository.on_complete(value=self.hyperparams_repository)
+        self.hyperparams_repository.notify_complete(value=self.hyperparams_repository)
 
         if self.refit_trial:
             p: BaseStep = self._load_virgin_model(hyperparams=best_hyperparams)
@@ -897,16 +958,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
                                   "retrieve the model you wish to use for transform")
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        raise NotImplementedError("AutoML does not implement method _transform_data_container. Use method such as "
-                                  "get_best_model to retrieve the model you wish to use for transform")
-
-    def get_best_model(self):
-        """
-        Get best model using the hyperparams repository.
-
-        :return:
-        """
-        return self.hyperparams_repository.get_best_model()
+        return self.wrapped.handle_transform(data_container, context)
 
     def _load_virgin_best_model(self) -> BaseStep:
         """
@@ -929,8 +981,20 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         """
         return copy.deepcopy(self.pipeline).update_hyperparams(hyperparams)
 
+    def get_best_model(self) -> BaseStep:
+        """
+        Get best model using the hyperparams repository.
+
+        :return:
+        """
+        return self.hyperparams_repository.get_best_model()
+
     def get_children(self) -> List[BaseStep]:
-        return [self.pipeline]
+        return [self.get_best_model()]
+
+    @property
+    def wrapped(self) -> BaseStep:
+        return self.get_children()
 
 
 def _get_trial_split_description(
@@ -950,33 +1014,44 @@ def _get_trial_split_description(
     return trial_split_description
 
 
-class AutoMLContainer:
-    """
-    Data object for auto ml.
-
-    .. seealso::
-        :class:`Trainer`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
-        :class:`~neuraxle.metaopt.trial.Trials`,
-        :class:`HyperparamsRepository`,
-        :class:`InMemoryHyperparamsRepository`,
-        :class:`HyperparamsJSONRepository`,
-        :class:`BaseHyperparameterSelectionStrategy`,
-        :class:`RandomSearchHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
-    """
-
+class EasyAutoML(AutoML):
     def __init__(
-            self,
-            trials: 'Trials',
-            hyperparameter_space: HyperparameterSpace,
-            trial_number: int,
-            main_scoring_metric_name: str
+        self,
+        pipeline: BaseStep,
+        validation_splitter: 'BaseValidationSplitter',
+        refit_trial: bool,
+        scoring_callback: ScoringCallback,
+        hyperparams_optimizer: BaseHyperparameterSelectionStrategy = None,
+        hyperparams_repository: HyperparamsRepository = None,
+        n_trials: int = 10,
+        epochs: int = 1,
+        callbacks: List[BaseCallback] = None,
+        refit_scoring_function: Callable = None,
+        cache_folder_when_no_handle=None,
+        n_jobs=None,
+        continue_loop_on_error=True
     ):
-        self.trials = trials
-        self.hyperparameter_space = hyperparameter_space
-        self.trial_number = trial_number
-        self.main_scoring_metric_name = main_scoring_metric_name
+        warn_deprecated_class(self, AutoML)
+        # TODO: complete this.
+
+        trainer = Trainer(
+            scoring_callback=scoring_callback,
+            callbacks=callbacks,
+            validation_splitter=validation_splitter
+        )
+        controller_loop = DefaultLoop(
+            trainer=trainer,
+            n_trials=n_trials,
+            n_epochs=epochs,
+            next_best_prediction_algo=hyperparams_optimizer,
+            continue_loop_on_error=continue_loop_on_error
+        )
+
+        AutoML.__init__(
+            self,
+            pipeline=pipeline,
+            controller_loop=controller_loop,
+        )
 
 
 class RandomSearchHyperparameterSelectionStrategy(BaseHyperparameterSelectionStrategy):
@@ -1011,7 +1086,7 @@ class RandomSearchHyperparameterSelectionStrategy(BaseHyperparameterSelectionStr
 
 class BaseValidationSplitter(ABC):
     def split_data_container(self, data_container: DataContainer, context: ExecutionContext) -> List[
-        Tuple[DataContainer, DataContainer]]:
+            Tuple[DataContainer, DataContainer]]:
         """
         Wrap a validation split function with a split data container function.
         A validation split function takes two arguments:  data inputs, and expected outputs.
@@ -1019,30 +1094,29 @@ class BaseValidationSplitter(ABC):
         :param data_container: data container to split
         :return: a function that returns the pairs of training, and validation data containers for each validation split.
         """
-        train_data_inputs, train_expected_outputs, train_current_ids, validation_data_inputs, validation_expected_outputs, validation_current_ids = self.split(
+        train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids = self.split(
             data_inputs=data_container.data_inputs,
             expected_outputs=data_container.expected_outputs,
             context=context
         )
 
         train_data_container = DataContainer(data_inputs=train_data_inputs,
-                                             current_ids=train_current_ids,
+                                             ids=train_ids,
                                              expected_outputs=train_expected_outputs)
         validation_data_container = DataContainer(data_inputs=validation_data_inputs,
-                                                  current_ids=validation_current_ids,
+                                                  ids=validation_ids,
                                                   expected_outputs=validation_expected_outputs)
 
         splits = []
-        for (train_current_id, train_di, train_eo), (validation_current_id, validation_di, validation_eo) in zip(
+        for (train_id, train_di, train_eo), (validation_id, validation_di, validation_eo) in zip(
                 train_data_container, validation_data_container):
+            # TODO: use ListDataContainer instead of DataContainer
             train_data_container_split = DataContainer(
-                summary_id=train_current_id,
                 data_inputs=train_di,
                 expected_outputs=train_eo
             )
 
             validation_data_container_split = DataContainer(
-                summary_id=validation_current_id,
                 data_inputs=validation_di,
                 expected_outputs=validation_eo
             )
@@ -1052,16 +1126,16 @@ class BaseValidationSplitter(ABC):
         return splits
 
     @abstractmethod
-    def split(self, data_inputs, current_ids=None, expected_outputs=None, context: ExecutionContext = None) \
+    def split(self, data_inputs, ids=None, expected_outputs=None, context: ExecutionContext = None) \
             -> Tuple[List, List, List, List, List, List]:
         """
         Train/Test split data inputs and expected outputs.
 
         :param data_inputs: data inputs
-        :param current_ids: id associated with each data entry (optional)
+        :param ids: id associated with each data entry (optional)
         :param expected_outputs: expected outputs (optional)
         :param context: execution context (optional)
-        :return: train_data_inputs, train_expected_outputs, train_current_ids, validation_data_inputs, validation_expected_outputs, validation_current_ids
+        :return: train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids
         """
         pass
 
@@ -1084,20 +1158,20 @@ class KFoldCrossValidationSplitter(BaseValidationSplitter):
         BaseValidationSplitter.__init__(self)
         self.k_fold = k_fold
 
-    def split(self, data_inputs, current_ids=None, expected_outputs=None, context: ExecutionContext = None) \
+    def split(self, data_inputs, ids=None, expected_outputs=None, context: ExecutionContext = None) \
             -> Tuple[List, List, List, List, List, List]:
         data_inputs_train, data_inputs_val = kfold_cross_validation_split(
             data_inputs=data_inputs,
             k_fold=self.k_fold
         )
 
-        if current_ids is not None:
-            current_ids_train, current_ids_val = kfold_cross_validation_split(
-                data_inputs=current_ids,
+        if ids is not None:
+            ids_train, ids_val = kfold_cross_validation_split(
+                data_inputs=ids,
                 k_fold=self.k_fold
             )
         else:
-            current_ids_train, current_ids_val = [None] * len(data_inputs_train), [None] * len(data_inputs_val)
+            ids_train, ids_val = [None] * len(data_inputs_train), [None] * len(data_inputs_val)
 
         if expected_outputs is not None:
             expected_outputs_train, expected_outputs_val = kfold_cross_validation_split(
@@ -1108,8 +1182,8 @@ class KFoldCrossValidationSplitter(BaseValidationSplitter):
             expected_outputs_train, expected_outputs_val = [None] * len(data_inputs_train), [None] * len(
                 data_inputs_val)
 
-        return data_inputs_train, expected_outputs_train, current_ids_train, \
-               data_inputs_val, expected_outputs_val, current_ids_val
+        return data_inputs_train, expected_outputs_train, ids_train, \
+            data_inputs_val, expected_outputs_val, ids_val
 
 
 def kfold_cross_validation_split(data_inputs, k_fold):
@@ -1150,46 +1224,46 @@ class ValidationSplitter(BaseValidationSplitter):
         self.test_size = test_size
 
     def split(
-        self, data_inputs, current_ids=None, expected_outputs=None, context: ExecutionContext = None
+        self, data_inputs, ids=None, expected_outputs=None, context: ExecutionContext = None
     ) -> Tuple[List, List, List, List]:
-        train_data_inputs, train_expected_outputs, train_current_ids, validation_data_inputs, validation_expected_outputs, validation_current_ids = validation_split(
+        train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids = validation_split(
             test_size=self.test_size,
             data_inputs=data_inputs,
-            current_ids=current_ids,
+            ids=ids,
             expected_outputs=expected_outputs
         )
 
-        return [train_data_inputs], [train_expected_outputs], [train_current_ids], \
-               [validation_data_inputs], [validation_expected_outputs], [validation_current_ids]
+        return [train_data_inputs], [train_expected_outputs], [train_ids], \
+               [validation_data_inputs], [validation_expected_outputs], [validation_ids]
 
 
-def validation_split(test_size: float, data_inputs, current_ids=None, expected_outputs=None) \
+def validation_split(test_size: float, data_inputs, ids=None, expected_outputs=None) \
         -> Tuple[List, List, List, List, List, List]:
     """
     Split data inputs, and expected outputs into a training set, and a validation set.
 
     :param test_size: test size in float
     :param data_inputs: data inputs to split
-    :param current_ids: ids associated with each data entry
+    :param ids: ids associated with each data entry
     :param expected_outputs: expected outputs to split
-    :return: train_data_inputs, train_expected_outputs, current_ids_train, validation_data_inputs, validation_expected_outputs, current_ids_val
+    :return: train_data_inputs, train_expected_outputs, ids_train, validation_data_inputs, validation_expected_outputs, ids_val
     """
     validation_data_inputs = _validation_split(data_inputs, test_size)
-    validation_expected_outputs, current_ids_val = None, None
+    validation_expected_outputs, ids_val = None, None
     if expected_outputs is not None:
         validation_expected_outputs = _validation_split(expected_outputs, test_size)
-    if current_ids is not None:
-        current_ids_val = _validation_split(current_ids, test_size)
+    if ids is not None:
+        ids_val = _validation_split(ids, test_size)
 
     train_data_inputs = _train_split(data_inputs, test_size)
-    train_expected_outputs, current_ids_train = None, None
+    train_expected_outputs, ids_train = None, None
     if expected_outputs is not None:
         train_expected_outputs = _train_split(expected_outputs, test_size)
-    if current_ids is not None:
-        current_ids_train = _train_split(current_ids, test_size)
+    if ids is not None:
+        ids_train = _train_split(ids, test_size)
 
-    return train_data_inputs, train_expected_outputs, current_ids_train, \
-           validation_data_inputs, validation_expected_outputs, current_ids_val
+    return train_data_inputs, train_expected_outputs, ids_train, \
+        validation_data_inputs, validation_expected_outputs, ids_val
 
 
 def _train_split(data_inputs, test_size) -> List:

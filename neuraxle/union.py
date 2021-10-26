@@ -122,8 +122,7 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
 
         return DataContainer(
             data_inputs=data_containers,
-            current_ids=data_container.current_ids,
-            summary_id=data_container.summary_id,
+            ids=data_container.ids,
             expected_outputs=data_container.expected_outputs,
             sub_data_containers=data_container.sub_data_containers
         )

@@ -400,7 +400,6 @@ def test_hyperparam_space():
     assert 'SomeStep3' in hyperparams["ModelStacking"]
     assert 'max_depth' in hyperparams["ModelStacking"]["SomeStep3"]
 
-
     assert 'AddFeatures__SomeStep1__n_components' in flat_hyperparams_keys
     assert 'AddFeatures__SomeStep__n_components' in flat_hyperparams_keys
     assert 'ModelStacking__SomeStep__n_estimators' in flat_hyperparams_keys

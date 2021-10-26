@@ -2,15 +2,15 @@
 Create Pipeline Steps that require implementing only handler methods
 ========================================================================================================================
 
-If a pipeline step only needs to implement handler methods, then you can inherit from the ForceHandleMixin as demonstrated here.
-Handler methods are useful when :
+If a pipeline step only needs to implement handler methods, then you can inherit from the
+ForceHandleMixin as demonstrated here. Handler methods are useful when :
 
     - You need to change the shape of the data container passed to the following steps, or the wrapped steps.
     - You want to apply side effects based on the data container, and the execution context.
     - You want to change the pipeline execution flow based on the data container, and the execution context.
 
 ..
-    Copyright 2019, Neuraxio Inc.
+    Copyright 2021, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
         And/or
         Change the execution flow of the pipeline
         """
-        data_container = self.hash_data_container(data_container)
+        context.logger.info("Handling the 'fit' with handler method!")
         return self
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -64,11 +64,14 @@ class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
         And/or
         Change the execution flow of the pipeline
         """
-        data_container = self.hash_data_container(data_container)
+        context.logger.info("Handling the 'transform' with handler method!")
         return data_container
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
-            ('BaseStep', DataContainer):
+    def _fit_transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> (
+        BaseStep, DataContainer
+    ):
         """
         Change the shape of the data container.
         and/or
@@ -76,7 +79,7 @@ class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
         And/or
         Change the execution flow of the pipeline
         """
-        data_container = self.hash_data_container(data_container)
+        context.logger.info("Handling the 'fit_transform' with handler method!")
         return self, data_container
 
 
