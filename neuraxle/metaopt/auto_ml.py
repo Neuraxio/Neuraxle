@@ -687,6 +687,7 @@ class BaseControllerLoop:
         self.next_best_prediction_algo = next_best_prediction_algo
         self.n_trials = n_trials
         self.n_epochs = n_epochs
+        self.continue_loop_on_error = continue_loop_on_error
 
     def _get_next(self):
         """
@@ -704,7 +705,8 @@ class DefaultLoop(BaseControllerLoop):
         n_trials: int,
         n_epochs: int = 1,
         next_best_prediction_algo: BaseHyperparameterSelectionStrategy = None,
-        continue_loop_on_error: bool = True
+        continue_loop_on_error: bool = True,
+        n_jobs: int = 1
     ):
         super().__init__(trainer, n_trials, n_epochs=n_epochs,
                          next_best_prediction_algo=next_best_prediction_algo, continue_loop_on_error=continue_loop_on_error)

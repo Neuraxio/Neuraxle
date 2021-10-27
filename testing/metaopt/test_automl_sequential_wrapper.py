@@ -1,16 +1,19 @@
 import numpy as np
 from sklearn.metrics import mean_squared_error
+from neuraxle.base import ExecutionContext
 
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.validation import ValidationSplitWrapper
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import MultiplyByN
+from neuraxle.data_container import DataContainer
 
 
 def test_automl_sequential_wrapper(tmpdir):
     # Setting seed for reproducibility
     np.random.seed(68)
+
     # Given
     data_inputs = np.array(range(100))
     expected_outputs = np.array(range(100, 200))
@@ -25,7 +28,7 @@ def test_automl_sequential_wrapper(tmpdir):
         ('multiplication_1', MultiplyByN()),
         ('multiplication_2', MultiplyByN()),
         ('multiplication_3', MultiplyByN())
-    ], cache_folder=tmpdir).set_hyperparams_space(hyperparameter_space)
+    ]).set_hyperparams_space(hyperparameter_space)
 
     auto_ml = RandomSearch(
         KFoldCrossValidationWrapper().set_step(pipeline),
@@ -33,7 +36,8 @@ def test_automl_sequential_wrapper(tmpdir):
     )
 
     # When
-    auto_ml: AutoMLSequentialWrapper = auto_ml.fit(data_inputs, expected_outputs)
+    auto_ml: AutoMLSequentialWrapper = auto_ml.handle_fit(
+        DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs), ExecutionContext(tmpdir))
     best_model: Pipeline = auto_ml.get_best_model()
     predicted_outputs = best_model.transform(data_inputs)
 
@@ -59,7 +63,7 @@ def test_automl_sequential_wrapper_with_validation_split_wrapper(tmpdir):
         ('multiplication_1', MultiplyByN()),
         ('multiplication_2', MultiplyByN()),
         ('multiplication_3', MultiplyByN())
-    ], cache_folder=tmpdir).set_hyperparams_space(hyperparameter_space)
+    ]).set_hyperparams_space(hyperparameter_space)
 
     random_search = RandomSearch(
         ValidationSplitWrapper(
@@ -71,7 +75,7 @@ def test_automl_sequential_wrapper_with_validation_split_wrapper(tmpdir):
         hyperparams_repository=HyperparamsJSONRepository(tmpdir),
         higher_score_is_better=False,
         n_iter=100
-    )
+    ).with_context(ExecutionContext(tmpdir))
 
     # When
     mse_before = ((data_inputs - expected_outputs) ** 2).mean()
