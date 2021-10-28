@@ -5,7 +5,7 @@ from sklearn.ensemble import BaggingRegressor, GradientBoostingRegressor
 from sklearn.linear_model import LinearRegression, SGDRegressor, SGDClassifier
 from sklearn.metrics import median_absolute_error
 
-from neuraxle.base import Identity
+from neuraxle.base import ExecutionContext, Identity
 from neuraxle.hyperparams.distributions import RandInt, Uniform
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.hyperparams.space import HyperparameterSpace
@@ -68,12 +68,12 @@ def test_sklearn_wrapper_transform_partial_fit_with_predict():
     assert all([np.isclose(a, b, atol=0.1) for a, b in zip(expected_outputs, outputs)])
 
 
-def test_sklearn_wrapper_transform_partial_fit_classifier():
+def test_sklearn_wrapper_transform_partial_fit_classifier(tmpdir):
     data_inputs = np.array([[0, 1], [0, 0], [3, -2], [-1, 1], [-2, 1], [2, 0], [2, -1], [4, -2], [-3, 1], [-1, 0]])
     expected_outputs = np.ravel(np.expand_dims(data_inputs[:, 0] + 2 * data_inputs[:, 1] + 1, axis=-1))
     classes = np.array([0, 1, 2, 3])
     model = SKLearnWrapper(SGDClassifier(), use_partial_fit=True, partial_fit_kwargs={'classes': classes})
-    p = Pipeline([DataShuffler(), model])
+    p = Pipeline([DataShuffler(), model]).with_context(ExecutionContext(tmpdir))
 
     for _ in range(2000):
         p = p.fit(data_inputs, expected_outputs)

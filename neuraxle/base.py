@@ -1979,6 +1979,32 @@ class _CouldHaveContext:
             self._assert(context.has_service(service_assertion),
                          'Missing Service {0}'.format(service_assertion.__name__))
 
+    def _assert(self, condition: bool, message: str, context: ExecutionContext = None):
+        """
+        Assert that the ``condition`` is true.
+        If not, raise an exception with the ``message``.
+        The exception will be logged with the logger in the ``context``.
+        If the ``context`` is in :class:`ExecutionPhase` ``.PROD``,
+        the exception will not be raised and only logged.
+
+        :param condition: condition to assert
+        :param message: message to log and raise if the condition is false
+        :param context: execution context to log the exception, and not raise it if in ``PROD`` mode.
+        """
+        if context is None:
+            context = ExecutionContext()
+
+        try:
+            assert condition, message
+        except AssertionError as e:
+            # log the error in the context's logger
+            context.logger.exception(e)
+
+            # Don't crash in prod context:
+            if context.execution_phase != ExecutionPhase.PROD:
+                raise e
+
+
 
 class _HasSetupTeardownLifecycle:
     """

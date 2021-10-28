@@ -6,7 +6,7 @@ from sklearn.metrics import mean_squared_error
 
 from neuraxle.hyperparams.distributions import Uniform, LogNormal, Normal, Choice, Quantized, LogUniform
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, ValidationSplitter, \
+from neuraxle.metaopt.auto_ml import EasyAutoML, InMemoryHyperparamsRepository, AutoML, ValidationSplitter, \
     RandomSearchHyperparameterSelectionStrategy, BaseHyperparameterSelectionStrategy
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.metaopt.hyperopt.tpe import TreeParzenEstimatorHyperparameterSelectionStrategy
@@ -119,14 +119,12 @@ def _test_trial_scores(
     hp_repository: InMemoryHyperparamsRepository = InMemoryHyperparamsRepository(cache_folder=str(tmpdir))
     n_epochs = 1
     n_trials = 10
-    auto_ml: AutoML = AutoML(
+    auto_ml: AutoML = EasyAutoML(
         pipeline=pipeline,
         hyperparams_optimizer=hyperparams_optimizer,
         validation_splitter=ValidationSplitter(0.5),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
-        callbacks=[
-            MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False),
-        ],
+        callbacks=[MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)],
         n_trials=n_trials,
         refit_trial=True,
         epochs=n_epochs,

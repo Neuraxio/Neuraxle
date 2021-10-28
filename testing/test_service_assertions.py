@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from sklearn.metrics import mean_squared_error
 
-from neuraxle.base import Identity, ExecutionContext, ForceHandleMixin, StepWithContext, ForceHandleIdentity
+from neuraxle.base import BaseService, Identity, ExecutionContext, ForceHandleMixin, NonFittableMixin, StepWithContext, ForceHandleIdentity, BaseStep
 from neuraxle.data_container import DataContainer
 from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, EasyAutoML, RandomSearchHyperparameterSelectionStrategy, \
     ValidationSplitter, HyperparamsJSONRepository
@@ -14,7 +14,7 @@ from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.pipeline import Pipeline
 
 
-class SomeBaseService(ABC):
+class SomeBaseService(BaseService):
     @abstractmethod
     def service_method(self, data):
         pass
@@ -37,6 +37,40 @@ class RegisterServiceDynamically(ForceHandleIdentity):
     def _will_process(self, data_container: DataContainer, context: ExecutionContext):
         context.register_service(SomeBaseService, SomeService())
         return data_container, context
+
+
+class SomeStepWithFailedAssertion(NonFittableMixin, BaseStep):
+    def __init__(self):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+
+    # Create a step that will self._assert false and raise an exception and ensure it raised.
+    def transform(self, data_inputs):
+        for di in data_inputs:
+            self._assert(di, f"{di}")
+        return None
+
+
+def test_context_assertions_raises_when_it_throws(tmpdir):
+    assertion_was_raised = False
+
+    try:
+        SomeStepWithFailedAssertion().transform([True, True, False])
+    except AssertionError as _:
+        assertion_was_raised = True
+
+    assert assertion_was_raised
+
+
+def test_context_assertions_passes_when_it_passes(tmpdir):
+    assertion_was_raised = False
+
+    try:
+        SomeStepWithFailedAssertion().transform([True, True, True])
+    except AssertionError as _:
+        assertion_was_raised = True
+
+    assert not assertion_was_raised
 
 
 def test_with_context_should_inject_dependencies_properly(tmpdir):
@@ -64,7 +98,7 @@ def test_with_context_should_fail_at_init_when_services_are_missing(tmpdir):
     with pytest.raises(AssertionError) as exception_info:
         p.transform(data_inputs=data_inputs)
 
-    assert 'SomeBaseService dependency missing' in exception_info.value.args[0]
+    assert 'Expected context to have service of type SomeBaseService' in exception_info.value.args[0]
 
 
 def test_localassert_should_assert_dependencies_properly_at_exec(tmpdir):
@@ -90,7 +124,7 @@ def test_localassert_should_fail_when_services_are_missing_at_exec(tmpdir):
     with pytest.raises(AssertionError) as exception_info:
         p.transform(data_inputs=data_inputs)
 
-    assert 'SomeBaseService dependency missing' in exception_info.value.args[0]
+    assert 'Expected context to have service of type SomeBaseService' in exception_info.value.args[0]
 
 
 def _make_autoML_loop(tmpdir, p: Pipeline):
@@ -146,7 +180,7 @@ class TestServiceAssertion:
         service = SomeService()
         context.set_service_locator({SomeBaseService: service})
 
-        auto_ml: AutoML = _make_autoML_loop(self.tmpdir_hp, p)
+        auto_ml: EasyAutoML = _make_autoML_loop(self.tmpdir_hp, p)
         auto_ml: StepWithContext = auto_ml.with_context(context=context)
         assert isinstance(auto_ml, StepWithContext)
         auto_ml.fit(data_inputs, expected_outputs)
@@ -164,7 +198,7 @@ class TestServiceAssertion:
 
         context = ExecutionContext(root=self.tmpdir)
 
-        auto_ml: AutoML = _make_autoML_loop(self.tmpdir_hp, p)
+        auto_ml: EasyAutoML = _make_autoML_loop(self.tmpdir_hp, p)
         auto_ml: StepWithContext = auto_ml.with_context(context=context)
         assert isinstance(auto_ml, StepWithContext)
 
@@ -182,7 +216,7 @@ class TestServiceAssertion:
         ])
         context = ExecutionContext(root=self.tmpdir)
 
-        auto_ml: AutoML = _make_autoML_loop(self.tmpdir_hp, p)
+        auto_ml: EasyAutoML = _make_autoML_loop(self.tmpdir_hp, p)
         auto_ml: StepWithContext = auto_ml.with_context(context=context)
         assert isinstance(auto_ml, StepWithContext)
 
@@ -200,7 +234,7 @@ class TestServiceAssertion:
         ])
         context = ExecutionContext(root=self.tmpdir)
 
-        auto_ml: AutoML = _make_autoML_loop(self.tmpdir_hp, p)
+        auto_ml: EasyAutoML = _make_autoML_loop(self.tmpdir_hp, p)
         auto_ml: StepWithContext = auto_ml.with_context(context=context)
         assert isinstance(auto_ml, StepWithContext)
         auto_ml.fit(data_inputs, expected_outputs)

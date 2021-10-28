@@ -7,7 +7,7 @@ Not only a pipeline is defined, but also an hyperparameter space is defined for 
 performed to find the best possible combination of hyperparameters by sampling randomly in the hyperparameter space.
 
 ..
-    Copyright 2019, Neuraxio Inc.
+    Copyright 2021, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ from sklearn.utils import shuffle
 
 from neuraxle.hyperparams.distributions import RandInt, LogUniform, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, InMemoryHyperparamsRepository, ValidationSplitter
+from neuraxle.metaopt.auto_ml import EasyAutoML, InMemoryHyperparamsRepository, ValidationSplitter
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyTranspose
@@ -91,7 +91,7 @@ def main(tmpdir: LocalPath):
     ])
 
     print("Meta-fitting on train:")
-    auto_ml = AutoML(
+    auto_ml = EasyAutoML(
         p,
         validation_splitter=ValidationSplitter(0.20),
         refit_trial=True,

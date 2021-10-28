@@ -75,7 +75,6 @@ def test_step_cloner_should_inverse_transform():
     expected_outputs = _create_data((2, 2))
 
     p, processed_outputs = p.fit_transform(data_inputs, expected_outputs)
-    p = p.reverse()
 
     assert np.array_equal(processed_outputs, data_inputs * 2)
     inverse_processed_outputs = p.inverse_transform(processed_outputs)
@@ -139,12 +138,11 @@ def test_step_cloner_should_load_sub_steps(tmpdir):
         Pipeline([
             FitCallbackStep(tape),
             MultiplyByN(2)
-        ]),
-        cache_folder_when_no_handle=tmpdir
-    )
+        ])
+    ).with_context(ExecutionContext(tmpdir))
     data_inputs = _create_data((2, 2))
     expected_outputs = _create_data((2, 2))
-    p, processed_outputs = p.fit_transform(data_inputs, expected_outputs)
+    p, _ = p.fit_transform(data_inputs, expected_outputs)
 
     p.save(ExecutionContext(tmpdir), full_dump=True)
 
