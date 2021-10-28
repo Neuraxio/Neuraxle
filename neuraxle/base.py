@@ -238,7 +238,7 @@ class ExecutionContext:
             execution_mode: ExecutionMode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM,
             stripped_saver: BaseSaver = None,
             parents: List['BaseStep'] = None,
-            services: Dict[Type, 'BaseService'] = None,
+            services: Dict[Type['BaseService'], 'BaseService'] = None,
             logger: logging.Logger = None
     ):
 
@@ -266,8 +266,8 @@ class ExecutionContext:
         self.root: str = root
 
         if services is None:
-            services: Dict[Type, object] = dict()
-        self.services: Dict[Type, object] = services
+            services: Dict[Type['BaseService'], BaseService] = dict()
+        self.services: Dict[Type['BaseService'], BaseService] = services
 
         if logger is None:
             logger = logging.getLogger()
@@ -286,7 +286,7 @@ class ExecutionContext:
         self.execution_phase: ExecutionPhase = phase
         return self
 
-    def set_service_locator(self, services: Dict['BaseService', object]) -> 'ExecutionContext':
+    def set_service_locator(self, services: Dict[Type['BaseService'], 'BaseService']) -> 'ExecutionContext':
         """
         Register abstract class type instances that inherit and implement
         the class :class:`~neuraxle.base.BaseService`.
@@ -294,10 +294,12 @@ class ExecutionContext:
         :param services: A dictionary of concrete services to register.
         :return: self
         """
-        self.services: Dict[BaseService, object] = services
+        self.services: Dict[Type['BaseService'], 'BaseService'] = services
         return self
 
-    def register_service(self, service_abstract_class_type: Type, service_instance: object) -> 'ExecutionContext':
+    def register_service(
+        self, service_abstract_class_type: Type['BaseService'], service_instance: 'BaseService'
+    ) -> 'ExecutionContext':
         """
         Register base class instance inside the services.
 
@@ -308,17 +310,17 @@ class ExecutionContext:
         self.services[service_abstract_class_type] = service_instance
         return self
 
-    def get_service(self, service_abstract_class_type: Type) -> object:
+    def get_service(self, service_abstract_class_type: Type['BaseService']) -> object:
         """
-        Get the registered instance for the given abstract class type.
+        Get the registered instance for the given abstract class :class:`~neuraxle.base.BaseService` type.
         It is common to use service types as keys in the services dictionary.
 
-        :param service_abstract_class_type: base type
+        :param service_abstract_class_type: service type
         :return: self
         """
         return self.services[service_abstract_class_type]
 
-    def get_services(self) -> object:
+    def get_services(self) -> Dict[Type['BaseService'], 'BaseService']:
         """
         Get the registered instances in the services.
 
@@ -326,7 +328,7 @@ class ExecutionContext:
         """
         return self.services
 
-    def has_service(self, service_abstract_class_type: Type) -> bool:
+    def has_service(self, service_abstract_class_type: Type['BaseService']) -> bool:
         """
         Return a bool indicating if the service has been registered.
 
@@ -1325,14 +1327,11 @@ class _HasHyperparamsSpace(ABC):
 
     def __init__(self, hyperparams_space: HyperparameterSpace = None):
         if hyperparams_space is None:
-            if hasattr(self, "HYPERPARAMS_SPACE"):
-                hyperparams_space = self.HYPERPARAMS_SPACE
-            else:
-                hyperparams_space = dict()
+            hyperparams_space = dict()
 
         self.hyperparams_space: HyperparameterSpace = HyperparameterSpace(hyperparams_space)
 
-    def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseTransformer':
+    def set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> 'BaseTransformer':
         """
         Set step hyperparameters space.
 
@@ -1359,15 +1358,17 @@ class _HasHyperparamsSpace(ABC):
             :func:`_HasChildrenMixin._apply`,
             :func:`_HasChildrenMixin._get_params`
         """
-        self.apply(method='_set_hyperparams_space', hyperparams_space=HyperparameterSpace(hyperparams_space))
+        if not isinstance(hyperparams_space, HyperparameterSpace):
+            hyperparams_space = HyperparameterSpace(hyperparams_space)
+        self.apply(method='_set_hyperparams_space', hyperparams_space=hyperparams_space)
         return self
 
-    def _set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> HyperparameterSpace:
+    def _set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> HyperparameterSpace:
         self._invalidate()
-        self.hyperparams_space = HyperparameterSpace(hyperparams_space)
+        self.hyperparams_space = hyperparams_space
         return self.hyperparams_space
 
-    def update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseTransformer':
+    def update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> 'BaseTransformer':
         """
         Update the step hyperparameter spaces without removing the already-set hyperparameters.
         This can be useful to add more hyperparameter spaces to the existing ones without flushing the ones that were already set.
@@ -1398,13 +1399,13 @@ class _HasHyperparamsSpace(ABC):
             :func:`~BaseStep.update_hyperparams`,
             :class:`~neuraxle.hyperparams.space.HyperparameterSpace`
         """
-        self.apply(method='_update_hyperparams_space',
-                   hyperparams_space=HyperparameterSpace(hyperparams_space))
+        if not isinstance(hyperparams_space, HyperparameterSpace):
+            hyperparams_space = HyperparameterSpace(hyperparams_space)
+        self.apply(method='_update_hyperparams_space', hyperparams_space=hyperparams_space)
         return self
 
-    def _update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> HyperparameterSpace:
+    def _update_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> HyperparameterSpace:
         self._invalidate()
-        hyperparams_space = HyperparameterSpace(hyperparams_space)
         self.hyperparams_space.update(hyperparams_space)
         return self.hyperparams_space
 
@@ -1430,7 +1431,7 @@ class _HasHyperparamsSpace(ABC):
         return results
 
     def _get_hyperparams_space(self) -> HyperparameterSpace:
-        return HyperparameterSpace(self.hyperparams_space)
+        return self.hyperparams_space
 
 
 class _HasHyperparams(ABC):
@@ -1463,14 +1464,11 @@ class _HasHyperparams(ABC):
 
     def __init__(self, hyperparams: HyperparameterSamples = None):
         if hyperparams is None:
-            if hasattr(self, "HYPERPARAMS"):
-                hyperparams = self.HYPERPARAMS
-            else:
-                hyperparams = dict()
+            hyperparams = dict()
 
         self.hyperparams: HyperparameterSamples = HyperparameterSamples(hyperparams)
 
-    def set_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseTransformer':
+    def set_hyperparams(self, hyperparams: Union[Dict, HyperparameterSamples]) -> 'BaseTransformer':
         """
         Set the step hyperparameters.
 
@@ -1495,16 +1493,17 @@ class _HasHyperparams(ABC):
             :func:`_HasChildrenMixin._apply`,
             :func:`_HasChildrenMixin._set_train`
         """
-        self.apply(method='_set_hyperparams', hyperparams=HyperparameterSamples(hyperparams))
+        if not isinstance(hyperparams, HyperparameterSamples):
+            hyperparams = HyperparameterSamples(hyperparams)
+        self.apply(method='_set_hyperparams', hyperparams=hyperparams)
         return self
 
-    def _set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]) -> HyperparameterSamples:
+    def _set_hyperparams(self, hyperparams: HyperparameterSamples) -> HyperparameterSamples:
         self._invalidate()
-        hyperparams = HyperparameterSamples(hyperparams)
         self.hyperparams = hyperparams if len(hyperparams) > 0 else self.hyperparams
         return self.hyperparams
 
-    def update_hyperparams(self, hyperparams: HyperparameterSamples) -> 'BaseTransformer':
+    def update_hyperparams(self, hyperparams: Union[Dict, HyperparameterSamples]) -> 'BaseTransformer':
         """
         Update the step hyperparameters without removing the already-set hyperparameters.
         This can be useful to add more hyperparameters to the existing ones without flushing the ones that were already set.
@@ -1535,11 +1534,13 @@ class _HasHyperparams(ABC):
             :func:`_HasChildrenMixin._apply`,
             :func:`_HasChildrenMixin._update_hyperparams`
         """
-        self.apply(method='_update_hyperparams', hyperparams=HyperparameterSamples(hyperparams))
+        if not isinstance(hyperparams, HyperparameterSamples):
+            hyperparams = HyperparameterSamples(hyperparams)
+        self.apply(method='_update_hyperparams', hyperparams=hyperparams)
         return self
 
-    def _update_hyperparams(self, hyperparams: Union[Dict, HyperparameterSamples]) -> HyperparameterSamples:
-        self.hyperparams.update(HyperparameterSamples(hyperparams))
+    def _update_hyperparams(self, hyperparams: HyperparameterSamples) -> HyperparameterSamples:
+        self.hyperparams.update(hyperparams)
         return self.hyperparams
 
     def get_hyperparams(self) -> HyperparameterSamples:
@@ -1561,9 +1562,9 @@ class _HasHyperparams(ABC):
         return results
 
     def _get_hyperparams(self) -> HyperparameterSamples:
-        return HyperparameterSamples(self.hyperparams)
+        return self.hyperparams
 
-    def set_params(self, **params) -> 'BaseTransformer':
+    def set_params(self, **params: dict) -> 'BaseTransformer':
         """
         Set step hyperparameters with a dictionary.
 
@@ -1586,12 +1587,8 @@ class _HasHyperparams(ABC):
             :func:`~neuraxle.base._HasChildrenMixin._apply`,
             :func:`~neuraxle.base._HasChildrenMixin._set_params`
         """
-        self.apply(method='_set_params', params=HyperparameterSamples(params))
+        self.apply(method='_set_hyperparams', hyperparams=HyperparameterSamples(params))
         return self
-
-    def _set_params(self, params: dict) -> HyperparameterSamples:
-        self.set_hyperparams(HyperparameterSamples(params))
-        return self.hyperparams
 
     def get_params(self) -> dict:
         """
@@ -1614,11 +1611,86 @@ class _HasHyperparams(ABC):
             :func:`~neuraxle.base._HasChildrenMixin.apply`,
             :func:`~neuraxle.base._HasHyperparams._get_params`
         """
-        results: HyperparameterSamples = self.apply(method='_get_params')
+        results: HyperparameterSamples = self.apply(method='_get_hyperparams')
+        return results.to_flat_dict()
+
+
+class _HasConfig(ABC):
+    """
+    An internal class to represent a step that has config params.
+    This is useful to store the config of a step.
+
+    A config :class:`~neuraxle.hyperparams.space.RecursiveDict` config
+    attribute is used when you don't want to use a
+    :class:`~neuraxle.hyperparams.space.HyperparameterSamples` attribute.
+    The reason sometimes is that you don't want to tune your config, whereas
+    hyperparameters are used to tune your step in the AutoML
+    from hyperparameter spaces, such as using hyperopt.
+
+    A good example of a config parameter would be the number of threads,
+    or an API key loaded from the OS' environment variables, since they won't
+    be tuned but are changeable from the outside.
+
+    Thus, this class looks a lot like :class:`~neuraxle.base._HasHyperparams`
+    and :class:`~neuraxle.hyperparams.space.HyperparameterSpace`.
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`BaseTransformer`,
+        :class:`~neuraxle.base._HasHyperparams`,
+        :class:`~neuraxle.base._HasHyperparamsSpace`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`~neuraxle.hyperparams.space.RecursiveDict`
+    """
+
+    def __init__(self, config: Union[Dict, RecursiveDict] = None):
+        if config is None:
+            config = dict()
+
+        self.config: RecursiveDict = RecursiveDict(config)
+
+    def set_config(self, config: Union[Dict, RecursiveDict]) -> 'BaseTransformer':
+        """
+        Set step config. See :func:`~neuraxle.base._HasHyperparams.set_hyperparams`
+        for more usage examples and documentation, it works the same way.
+        """
+        if not isinstance(config, RecursiveDict):
+            config = RecursiveDict(config)
+        self.apply(method='_set_config', config=config)
+        return self
+
+    def _set_config(self, config: RecursiveDict) -> RecursiveDict:
+        self._invalidate()
+        self.config = config
+        return self.config
+
+    def update_config(self, config: Union[Dict, RecursiveDict]) -> 'BaseTransformer':
+        """
+        Update the step config variables without removing the already-set config variables.
+        This method is similar to :func:`~neuraxle.base._HasHyperparams.update_hyperparams`.
+        Refer to it for more documentation and usage examples, it works the same way.
+        """
+        if not isinstance(config, RecursiveDict):
+            config = RecursiveDict(config)
+        self.apply(method='_update_config', config=config)
+        return self
+
+    def _update_config(self, config: RecursiveDict) -> RecursiveDict:
+        self._invalidate()
+        self.config.update(config)
+        return self.config
+
+    def get_config(self) -> RecursiveDict:
+        """
+        Get step config. Refer to :func:`~neuraxle.base._HasHyperparams.get_hyperparams`
+        for more documentation and usage examples, it works the same way.
+        """
+        results: RecursiveDict = self.apply(method='_get_config')
         return results
 
-    def _get_params(self) -> HyperparameterSamples:
-        return self.get_hyperparams()
+    def _get_config(self) -> RecursiveDict:
+        return self.config
 
 
 class _HasSavers(ABC):
@@ -1862,7 +1934,8 @@ class _CouldHaveContext:
         .. code-block:: python
 
             context = ExecutionContext(tmpdir)
-            context.set_service_locator(ServiceLocator().services) # where services is of type Dict[BaseService, object]
+            context.set_service_locator(ServiceLocator().services)
+            # where services is of type Dict[Type['BaseService'], 'BaseService']
 
             p = WithContext(Pipeline([
                 # When the context will be processing the SomeStep,
@@ -1878,7 +1951,7 @@ class _CouldHaveContext:
         """
         return StepWithContext(wrapped=self, context=context)
 
-    def assert_has_services(self, *service_assertions: List[Type]) -> 'GlobalyRetrievableServiceAssertionWrapper':
+    def assert_has_services(self, *service_assertions: List[Type['BaseService']]) -> 'GlobalyRetrievableServiceAssertionWrapper':
         """
         Set all service assertions to be made at the root of the pipeline and before processing the step.
 
@@ -1887,7 +1960,7 @@ class _CouldHaveContext:
         """
         return GlobalyRetrievableServiceAssertionWrapper(wrapped=self, service_assertions=service_assertions)
 
-    def assert_has_services_at_execution(self, *service_assertions: List[Type]) -> 'LocalServiceAssertionWrapper':
+    def assert_has_services_at_execution(self, *service_assertions: List[Type['BaseService']]) -> 'LocalServiceAssertionWrapper':
         """
         Set all service assertions to be made before processing the step.
 
@@ -1895,6 +1968,16 @@ class _CouldHaveContext:
         :type service_assertions: List[Type]
         """
         return LocalServiceAssertionWrapper(wrapped=self, service_assertions=service_assertions)
+
+    def _assert_at_lifecycle(self, context: ExecutionContext):
+        """
+        Assert that the context has all the services required to process the step.
+        This method will be registred within a handler method's _will_process or _did_process,
+        or other lifecycle methods like these.
+        """
+        for service_assertion in self.service_assertions:
+            self._assert(context.has_service(service_assertion),
+                         'Missing Service {0}'.format(service_assertion.__name__))
 
 
 class _HasSetupTeardownLifecycle:
@@ -1941,7 +2024,19 @@ class _HasSetupTeardownLifecycle:
             print(traceback.format_exc())
 
 
-class BaseService(_HasSetupTeardownLifecycle):
+class BaseService(
+    _HasSetupTeardownLifecycle,
+    _HasConfig,
+    ABC
+):
+    """
+    Base class for all services registred into the :class:`ExecutionContext`.
+
+    .. seealso::
+        :class:`ExecutionContext`,
+
+
+    """
     pass
 
 
@@ -1950,6 +2045,7 @@ class BaseTransformer(
     _HasSetupTeardownLifecycle,
     _HasHyperparamsSpace,
     _HasHyperparams,
+    _HasConfig,
     _HasSavers,
     _HasRecursiveMethods,
     _TransformerStep,
@@ -1958,7 +2054,8 @@ class BaseTransformer(
     """
     Base class for a pipeline step that can only be transformed.
 
-    Every step has hyperparemeters, and hyperparameters spaces that can be set before the learning process begins (see :class:`_HasHyperparams`, and :class:`_HasHyperparamsSpace` for more info).
+    Every step has hyperparemeters, and hyperparameters spaces that can be set before the
+    learning process begins (see :class:`_HasHyperparams`, and :class:`_HasHyperparamsSpace` for more info).
 
     Example usage :
 
@@ -1966,7 +2063,7 @@ class BaseTransformer(
 
         class AddN(BaseTransformer):
             def __init__(self, add=1):
-                super().__init__(hyperparams=HyperparameterSamples({ 'add': add }))
+                super().__init__(hyperparams=HyperparameterSamples({'add': add}))
 
             def transform(self, data_inputs):
                 if not isinstance(data_inputs, np.ndarray):
@@ -1996,6 +2093,7 @@ class BaseTransformer(
             self,
             hyperparams: HyperparameterSamples = None,
             hyperparams_space: HyperparameterSpace = None,
+            config: RecursiveDict = None,
             name: str = None,
             savers: List[BaseSaver] = None,
     ):
@@ -2003,6 +2101,7 @@ class BaseTransformer(
         _HasRecursiveMethods.__init__(self)
         _HasHyperparams.__init__(self, hyperparams=hyperparams)
         _HasHyperparamsSpace.__init__(self, hyperparams_space=hyperparams_space)
+        _HasConfig.__init__(self, config)
         _HasSavers.__init__(self, savers=savers)
         _HasSetupTeardownLifecycle.__init__(self)
         _CouldHaveContext.__init__(self)
@@ -3403,7 +3502,7 @@ class AssertionMixin(ForceHandleMixin):
         ForceHandleMixin.__init__(self)
 
     @abstractmethod
-    def _assert(self, data_container: DataContainer, context: ExecutionContext):
+    def _assert_at_lifecycle(self, data_container: DataContainer, context: ExecutionContext):
         pass
 
 
@@ -3411,10 +3510,10 @@ class WillProcessAssertionMixin(AssertionMixin):
     def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
             DataContainer, ExecutionContext):
         """
-        Calls self._assert(data_container,context)
+        Calls self._assert_at_lifecycle(data_container, context).
         """
         data_container, context = super()._will_process(data_container, context)
-        self._assert(data_container, context)
+        self._assert_at_lifecycle(data_container, context)
 
         return data_container, context
 
@@ -3423,16 +3522,16 @@ class DidProcessAssertionMixin(AssertionMixin):
     def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> (
             DataContainer, ExecutionContext):
         """
-        Calls self._assert(data_container,context)
+        Calls self._assert_at_lifecycle(data_container,context)
         """
         data_container, context = super()._did_process(data_container, context)
-        self._assert(data_container, context)
+        self._assert_at_lifecycle(data_container, context)
 
         return data_container, context
 
 
 class AssertExpectedOutputIsNoneMixin(WillProcessAssertionMixin):
-    def _assert(self, data_container: DataContainer, context: ExecutionContext):
+    def _assert_at_lifecycle(self, data_container: DataContainer, context: ExecutionContext):
         eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
         if not eo_empty:
             raise AssertionError(
@@ -3440,7 +3539,7 @@ class AssertExpectedOutputIsNoneMixin(WillProcessAssertionMixin):
 
 
 class AssertExpectedOutputIsNotNoneMixin(WillProcessAssertionMixin):
-    def _assert(self, data_container: DataContainer, context: ExecutionContext):
+    def _assert_at_lifecycle(self, data_container: DataContainer, context: ExecutionContext):
         eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
         if eo_empty:
             raise AssertionError(
@@ -3464,16 +3563,17 @@ class LocalServiceAssertionWrapper(WillProcessAssertionMixin, MetaStep):
     Is used to assert the presence of service at execution time for a given step
     """
 
-    def __init__(self, wrapped: BaseTransformer = None, service_assertions: List[Type] = None,
-                 savers: List[BaseSaver] = None):
-        MetaStep.__init__(self, wrapped=wrapped, savers=savers)
+    def __init__(
+        self, wrapped: BaseTransformer = None, service_assertions: List[Type['BaseService']] = None
+    ):
+        MetaStep.__init__(self, wrapped=wrapped)
         WillProcessAssertionMixin.__init__(self)
 
         if service_assertions is None:
             service_assertions = []
-        self.service_assertions = service_assertions
+        self.service_assertions: List[Type['BaseService']] = service_assertions
 
-    def _assert(self, data_container: DataContainer, context: ExecutionContext):
+    def _assert_at_lifecycle(self, data_container: DataContainer, context: ExecutionContext):
         """
         Assert self.local_service_assertions are present in the context.
         """
@@ -3485,15 +3585,14 @@ class LocalServiceAssertionWrapper(WillProcessAssertionMixin, MetaStep):
 
         :param context: The ExecutionContext for which we test the presence of service.
         """
-        for has_service_assertion in self.service_assertions:
-            if not context.has_service(service_abstract_class_type=has_service_assertion):
-                exception_message: str = '{} dependency missing in the ExecutionContext. Please register the service {} inside the ExecutionContext.\n'.format(
-                    has_service_assertion.__name__,
-                    has_service_assertion.__name__
-                )
-                step_method_message: str = 'You can do so by calling register_service, or set_services on any step.\n'
-                execution_context_methods_messsage: str = 'There is also the option to register all services inside the ExecutionContext'
-                raise AssertionError(exception_message + step_method_message + execution_context_methods_messsage)
+        for service_type in self.service_assertions:
+            self._assert(
+                context.has_service(service_abstract_class_type=service_type),
+                f"Expected context to have service of type {service_type.__name__} but it did not. "
+                f"Please register the service {service_type.__name__} inside the ExecutionContext. "
+                f'You can do so by calling register_service, or set_services on any step. '
+                f'There is also the option to register all services inside the ExecutionContext'
+            )
 
 
 class GlobalyRetrievableServiceAssertionWrapper(LocalServiceAssertionWrapper):
@@ -3518,9 +3617,12 @@ class GlobalServiceAssertionExecutorMixin(WillProcessAssertionMixin):
     Any step which inherit of this class will test globaly retrievable service assertion of itself and all its children on a will_process call.
     """
 
-    def _assert(self, data_container: DataContainer, context: ExecutionContext):
+    def _assert_at_lifecycle(self, data_container: DataContainer, context: ExecutionContext):
         """
-        Calls _global_assert_has_services on GlobalyRetrievableServiceAssertionWrapper instances that are (recursively) children of this node.
+        Calls _global_assert_has_services on GlobalyRetrievableServiceAssertionWrapper
+        instances that are (recursively) children of this node.
+
+        :param data_container: The DataContainer, probably unused.
         :param context: The ExecutionContext for which we test the presence of service.
         """
         self.apply('_global_assert_has_services', context=context)
@@ -3572,6 +3674,7 @@ class StepWithContext(GlobalServiceAssertionExecutorMixin, MetaStep):
     on a step with context, and the handle will be made automatically with the provided context, also
     wrapping the data into a data container.
     """
+
     def __init__(self, wrapped: 'BaseTransformer', context: ExecutionContext, raise_if_not_root: bool = True):
         MetaStep.__init__(self, wrapped=wrapped, savers=[_WithContextStepSaver()])
         GlobalServiceAssertionExecutorMixin.__init__(self)

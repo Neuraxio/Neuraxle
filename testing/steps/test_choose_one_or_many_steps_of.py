@@ -1,3 +1,4 @@
+from typing import Callable
 import numpy as np
 import pytest
 
@@ -388,10 +389,10 @@ def choose_one_step_single_step_chosen_transform():
 
 
 @pytest.mark.parametrize('test_case', [
-    choose_one_step_single_step_chosen_fit_transform()
+    choose_one_step_single_step_chosen_fit_transform
 ])
-def test_choose_one_step_of_fit_transform_should_choose_step(
-        test_case: NeuraxleTestCase):
+def test_choose_one_step_of_fit_transform_should_choose_step(test_case: Callable[[], NeuraxleTestCase]):
+    test_case: NeuraxleTestCase = test_case()
     p = test_case.pipeline
     p.set_hyperparams(test_case.hyperparams)
 
@@ -402,9 +403,10 @@ def test_choose_one_step_of_fit_transform_should_choose_step(
 
 
 @pytest.mark.parametrize('test_case', [
-    choose_one_step_single_step_chosen_fit()
+    choose_one_step_single_step_chosen_fit
 ])
-def test_choose_one_step_of_fit_should_choose_step(test_case: NeuraxleTestCase):
+def test_choose_one_step_of_fit_should_choose_step(test_case: Callable[[], NeuraxleTestCase]):
+    test_case: NeuraxleTestCase = test_case()
     p = test_case.pipeline
     p.set_hyperparams(test_case.hyperparams)
 
@@ -414,9 +416,10 @@ def test_choose_one_step_of_fit_should_choose_step(test_case: NeuraxleTestCase):
 
 
 @pytest.mark.parametrize('test_case', [
-    choose_one_step_single_step_chosen_transform()
+    choose_one_step_single_step_chosen_transform
 ])
-def test_choose_one_step_of_fit_should_choose_step(test_case: NeuraxleTestCase):
+def test_choose_one_step_of_fit_should_choose_step(test_case: Callable[[], NeuraxleTestCase]):
+    test_case: NeuraxleTestCase = test_case()
     p = test_case.pipeline
     p.set_hyperparams(test_case.hyperparams)
 
@@ -437,7 +440,8 @@ def test_choose_one_step_of_invalid_chosen_step():
 @pytest.mark.parametrize("method_name, args, kwargs", [
     ("set_hyperparams", [{'choice': 'b'}], {}),
     ("update_hyperparams", [{'choice': 'b'}], {}),
-    ("apply", ["_update_hyperparams"], {"hyperparams":{'choice': 'b'}}) # This case correspond to the update in an AutoML loop.
+    ("apply", ["_update_hyperparams"], {"hyperparams": {'choice': 'b'}})
+    # This case correspond to the update in an AutoML loop.
 ])
 def test_choose_one_step_of_set_hyperparams(method_name, args, kwargs):
     a_callback = TapeCallbackFunction()

@@ -76,9 +76,7 @@ class ValueCachingWrapper(MetaStep):
 
     def _fit_transform_data_container(
         self, data_container: DataContainer, context: ExecutionContext
-    ) -> (
-        BaseStep, DataContainer
-    ):
+    ) -> (BaseStep, DataContainer):
         """
         Fit transform data container.
 

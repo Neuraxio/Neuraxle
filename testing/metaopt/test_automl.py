@@ -309,8 +309,7 @@ def test_automl_should_shallow_copy_data_before_each_epoch(tmpdir):
         cache_folder_when_no_handle=tmpdir,
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)],
-        hyperparams_repository=InMemoryHyperparamsRepository(
-            cache_folder=tmpdir),
+        hyperparams_repository=InMemoryHyperparamsRepository(cache_folder=tmpdir),
         continue_loop_on_error=False
     )
 

@@ -23,7 +23,7 @@ from typing import Callable
 import numpy as np
 import pytest
 
-from neuraxle.base import Identity
+from neuraxle.base import ExecutionContext, Identity
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import TapeCallbackFunction, FitTransformCallbackStep
 from neuraxle.steps.caching import JoblibValueCachingWrapper
@@ -186,10 +186,7 @@ def create_test_cases():
 @pytest.mark.parametrize("test_case", create_test_cases())
 def test_should_fit_transform_each_steps(test_case: Callable, tmpdir):
     test_case: PipelineTestCase = test_case()
-    pipeline = Pipeline(
-        steps=test_case.steps,
-        cache_folder=tmpdir
-    )
+    pipeline = Pipeline(test_case.steps).with_context(ExecutionContext(tmpdir))
 
     actual_pipeline, actual_data_inputs = pipeline.fit_transform(test_case.data_inputs, test_case.expected_outputs)
 
@@ -202,10 +199,7 @@ def test_should_fit_transform_each_steps(test_case: Callable, tmpdir):
 @pytest.mark.parametrize("test_case", create_test_cases())
 def test_should_fit_each_steps(test_case: Callable, tmpdir):
     test_case: PipelineTestCase = test_case()
-    pipeline = Pipeline(
-        steps=test_case.steps,
-        cache_folder=tmpdir
-    )
+    pipeline = Pipeline(test_case.steps).with_context(ExecutionContext(tmpdir))
 
     actual_pipeline = pipeline.fit(test_case.data_inputs, test_case.expected_outputs)
 
@@ -217,10 +211,7 @@ def test_should_fit_each_steps(test_case: Callable, tmpdir):
 @pytest.mark.parametrize("test_case", create_test_cases())
 def test_should_transform_each_steps(test_case: Callable, tmpdir):
     test_case: PipelineTestCase = test_case()
-    pipeline = Pipeline(
-        steps=test_case.steps,
-        cache_folder=tmpdir
-    )
+    pipeline = Pipeline(test_case.steps).with_context(ExecutionContext(tmpdir))
 
     actual_data_inputs = pipeline.transform(test_case.data_inputs)
 

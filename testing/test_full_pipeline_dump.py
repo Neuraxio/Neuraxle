@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 
-from neuraxle.base import Identity, ExecutionContext, JoblibStepSaver, FullDumpLoader
+from neuraxle.base import Identity, ExecutionContext
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCallbackStep, TapeCallbackFunction
 from neuraxle.steps.output_handlers import OutputTransformerWrapper
@@ -22,10 +22,10 @@ def test_load_full_dump_from_pipeline_name(tmpdir):
         ('step_b', OutputTransformerWrapper(
             FitTransformCallbackStep(tape_fit_callback_function, tape_transform_callback_function)
         ))
-    ], cache_folder=tmpdir).set_name(PIPELINE_NAME)
+    ]).set_name(PIPELINE_NAME).with_context(ExecutionContext(tmpdir))
 
     # When
-    pipeline, outputs = pipeline.fit_transform(DATA_INPUTS, EXPECTED_OUTPUTS)
+    pipeline, _ = pipeline.fit_transform(DATA_INPUTS, EXPECTED_OUTPUTS)
     pipeline.save(ExecutionContext(tmpdir), full_dump=True)
 
     # Then
@@ -50,10 +50,10 @@ def test_load_full_dump_from_path(tmpdir):
         ('step_b', OutputTransformerWrapper(
             FitTransformCallbackStep(tape_fit_callback_function, tape_transform_callback_function)
         ))
-    ], cache_folder=tmpdir).set_name(PIPELINE_NAME)
+    ]).set_name(PIPELINE_NAME).with_context(ExecutionContext(tmpdir))
 
     # When
-    pipeline, outputs = pipeline.fit_transform(DATA_INPUTS, EXPECTED_OUTPUTS)
+    pipeline, _ = pipeline.fit_transform(DATA_INPUTS, EXPECTED_OUTPUTS)
     pipeline.save(ExecutionContext(tmpdir), full_dump=True)
 
     # Then

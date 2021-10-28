@@ -129,8 +129,7 @@ def _test_within_auto_ml_loop(tmpdir, pipeline):
         scoring_callback=scoring_callback,
         n_trials=2,
         epochs=1,
-        hyperparams_repository=HyperparamsJSONRepository(
-            cache_folder=tmpdir),
+        hyperparams_repository=HyperparamsJSONRepository(cache_folder=tmpdir),
         refit_trial=True,
         continue_loop_on_error=False)
 
