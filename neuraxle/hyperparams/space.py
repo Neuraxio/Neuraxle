@@ -138,13 +138,14 @@ class RecursiveDict(OrderedDict):
         """
         if key is None:
             return dict(filter(lambda x: not isinstance(x[1], RecursiveDict), self.items()))
+
         lkey, _, rkey = key.partition(self.separator)
-
-        if rkey == "":
-            return OrderedDict.__getitem__(self, lkey)
-
         rec_dict: RecursiveDict = OrderedDict.__getitem__(self, lkey)
-        return rec_dict._rec_get(rkey)
+        if rkey == "":
+            return rec_dict
+        else:
+            # Splitted on sep and recursively call getter
+            return rec_dict._rec_get(rkey)
 
     def __setitem__(self, key, value):
         lkey, _, rkey = key.partition(self.separator)
@@ -208,9 +209,10 @@ class RecursiveDict(OrderedDict):
         :return:
         """
         return type(self)(
-            separator=separator,
-            **{key: value if not isinstance(value, RecursiveDict) \
-                    else value.with_separator(separator) for key, value in self.items()
+            separator=separator, **{
+                key: value
+                if not isinstance(value, RecursiveDict)
+                else value.with_separator(separator) for key, value in self.items()
             })
 
 

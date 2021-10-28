@@ -574,58 +574,49 @@ class _RecursiveArguments:
 
     .. seealso::
         :class:`_HasChildrenMixin`,
-        :func:`~neuraxle.base._HasHyperparamsSpace.set_hyperparams_space`,
         :func:`~neuraxle.base._HasHyperparamsSpace.get_hyperparams_space`,
+        :func:`~neuraxle.base._HasHyperparamsSpace.set_hyperparams_space`,
+        :func:`~neuraxle.base._HasHyperparamsSpace.update_hyperparams_space`,
         :func:`~neuraxle.base._HasHyperparams.get_hyperparams`,
         :func:`~neuraxle.base._HasHyperparams.set_hyperparams`,
         :func:`~neuraxle.base._HasHyperparams.update_hyperparams`,
-        :func:`~neuraxle.base._HasHyperparamsSpace.update_hyperparams_space`,
+        :func:`~neuraxle.base._HasConfig.get_config`,
+        :func:`~neuraxle.base._HasConfig.set_config`,
+        :func:`~neuraxle.base._HasConfig.update_config`,
         :func:`~neuraxle.base.BaseTransformer.invalidate`
     """
 
     def __init__(self, ra=None, *args, **kwargs):
+        # TODO: document types more.
         if ra is not None:
             args = ra.args
             kwargs = ra.kwargs
-        self.args = args
-        self.kwargs = kwargs
+        self.args: Union[Any, RecursiveDict] = args
+        self.kwargs: Union[Dict, RecursiveDict] = kwargs
 
     def __getitem__(self, child_step_name: str):
         """
         Return recursive arguments for the given child step name.
-        If child step name is None, return the root values.
+        If child step name is None, return the values at the current root.
 
         :param child_step_name: child step name, or None if we want to get root values.
         :return: recursive argument for the given child step name
         """
-        if child_step_name is None:
-            arguments = list()
-            keyword_arguments = dict()
-            for arg in self.args:
-                if isinstance(arg, RecursiveDict):
-                    arguments.append(arg.get(child_step_name))
-                else:
-                    arguments.append(arg)
-            for key, arg in self.kwargs.items():
-                if isinstance(arg, RecursiveDict):
-                    keyword_arguments[key] = arg.get(child_step_name)
-                else:
-                    keyword_arguments[key] = arg
-            return _RecursiveArguments(*arguments, **keyword_arguments)
-        else:
-            arguments = list()
-            keyword_arguments = dict()
-            for arg in self.args:
-                if isinstance(arg, RecursiveDict):
-                    arguments.append(arg.get(child_step_name))
-                else:
-                    arguments.append(arg)
-            for key, arg in self.kwargs.items():
-                if isinstance(arg, RecursiveDict):
-                    keyword_arguments[key] = arg.get(child_step_name)
-                else:
-                    keyword_arguments[key] = arg
-            return _RecursiveArguments(*arguments, **keyword_arguments)
+        arguments = list()
+        for arg in self.args:
+            if isinstance(arg, RecursiveDict):
+                arguments.append(arg.get(child_step_name))
+            else:
+                arguments.append(arg)
+
+        keyword_arguments = RecursiveDict()
+        for key, arg in self.kwargs.items():
+            if isinstance(arg, RecursiveDict):
+                keyword_arguments[key] = arg.get(child_step_name)
+            else:
+                keyword_arguments[key] = arg
+
+        return _RecursiveArguments(*arguments, **keyword_arguments)
 
     def __iter__(self):
         return self.kwargs
@@ -1365,7 +1356,7 @@ class _HasHyperparamsSpace(ABC):
 
     def _set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> HyperparameterSpace:
         self._invalidate()
-        self.hyperparams_space = hyperparams_space
+        self.hyperparams_space = HyperparameterSpace(hyperparams_space)
         return self.hyperparams_space
 
     def update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> 'BaseTransformer':
@@ -1500,8 +1491,9 @@ class _HasHyperparams(ABC):
 
     def _set_hyperparams(self, hyperparams: HyperparameterSamples) -> HyperparameterSamples:
         self._invalidate()
+        hyperparams = HyperparameterSamples(hyperparams)
         self.hyperparams = hyperparams if len(hyperparams) > 0 else self.hyperparams
-        return self.hyperparams
+        return hyperparams
 
     def update_hyperparams(self, hyperparams: Union[Dict, HyperparameterSamples]) -> 'BaseTransformer':
         """
@@ -1662,7 +1654,7 @@ class _HasConfig(ABC):
 
     def _set_config(self, config: RecursiveDict) -> RecursiveDict:
         self._invalidate()
-        self.config = config
+        self.config = RecursiveDict(config)
         return self.config
 
     def update_config(self, config: Union[Dict, RecursiveDict]) -> 'BaseTransformer':
@@ -2003,7 +1995,6 @@ class _CouldHaveContext:
             # Don't crash in prod context:
             if context.execution_phase != ExecutionPhase.PROD:
                 raise e
-
 
 
 class _HasSetupTeardownLifecycle:
