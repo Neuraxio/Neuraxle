@@ -128,6 +128,12 @@ class RecursiveDict(OrderedDict):
         """
         return arg, False
 
+    def get(self, key):
+        try:
+            return self[key]
+        except KeyError:
+            return self.same_class_new_instance()
+
     def __getitem__(self, key):
         return self._rec_get(key)
 
@@ -137,7 +143,7 @@ class RecursiveDict(OrderedDict):
         None returns every non-recursive elements.
         """
         if key is None:
-            return dict(filter(lambda x: not isinstance(x[1], RecursiveDict), self.items()))
+            return self.get_root_leaf_data()
 
         lkey, _, rkey = key.partition(self.separator)
         rec_dict: RecursiveDict = OrderedDict.__getitem__(self, lkey)
@@ -146,6 +152,14 @@ class RecursiveDict(OrderedDict):
         else:
             # Splitted on sep and recursively call getter
             return rec_dict._rec_get(rkey)
+
+    def get_root_leaf_data(self) -> dict:
+        """
+        Returns a dictionary of all the non-recursive elements.
+        That is, all the elements that are not RecursiveDict in the
+        current root OrderedDict.
+        """
+        return dict(filter(lambda x: not isinstance(x[1], RecursiveDict), self.items()))
 
     def __setitem__(self, key, value):
         lkey, _, rkey = key.partition(self.separator)
@@ -164,12 +178,6 @@ class RecursiveDict(OrderedDict):
             return True
         except KeyError:
             return False
-
-    def get(self, key):
-        try:
-            return self[key]
-        except KeyError:
-            return self.same_class_new_instance()
 
     def iter_flat(self, pre_key="", values_only=False):
         """

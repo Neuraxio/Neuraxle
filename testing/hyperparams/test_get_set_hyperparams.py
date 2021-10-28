@@ -1,6 +1,6 @@
 from neuraxle.base import MetaStep, NonTransformableMixin
 from neuraxle.hyperparams.distributions import Boolean, RandInt
-from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
+from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace, RecursiveDict
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from testing.test_pipeline import SomeStep
@@ -199,6 +199,41 @@ def test_pipeline_should_set_hyperparams():
     assert p.hyperparams['hp'] == 1
     assert p[0].hyperparams['hp'] == 2
     assert p[1].hyperparams['hp'] == 3
+
+
+def test_pipeline_should_get_set_config():
+    p = Pipeline([
+        SomeStep().set_name('step_1').set_config({'c2': 2}),
+        SomeStep().set_name('step_2')
+    ])
+
+    p.update_config({
+        'c1': 1,
+        'step_2__c3': 3
+    })
+    remade_config: RecursiveDict = p.get_config()
+
+    assert isinstance(remade_config, RecursiveDict)
+    assert remade_config['c1'] == 1
+    assert remade_config['step_1']['c2'] == 2
+    assert remade_config['step_2']['c3'] == 3
+
+
+def test_pipeline_should_not_set_hyperparams_for_unexisting_step():
+    p = Pipeline([
+        SomeStep().set_name('step_1'),
+        SomeStep().set_name('step_2')
+    ])
+
+    try:
+        p.set_hyperparams({
+            'hp': 1,
+            'step_3__hp': 2
+        })
+    except KeyError:
+        assert True
+    else:
+        assert False, "Should raise KeyError on step_3 that doesn't exist."
 
 
 def test_pipeline_should_get_hyperparams():

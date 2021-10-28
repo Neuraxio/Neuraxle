@@ -572,6 +572,17 @@ class _RecursiveArguments:
     This class is used by :func:`~neuraxle.base.BaseStep.apply`, and :class:`_HasChildrenMixin`
     to pass the right arguments to steps with children.
 
+    Two types of arguments:
+    - args: arguments that are not named
+    - kwargs: arguments that are named
+
+    For the values of both args and kwargs, we use either values or recursive values:
+    - value is not RecursiveDict: the value is replicated and passed to each sub step.
+    - value is RecursiveDict: the value is sliced accordingly and decomposed into the next levels.
+
+    As a shorthand, if another _RecursiveArguments (ra) is passed as an argument, it is used almost as is
+    to merge different ways of using ra: using a past ra, or else some args.
+
     .. seealso::
         :class:`_HasChildrenMixin`,
         :func:`~neuraxle.base._HasHyperparamsSpace.get_hyperparams_space`,
@@ -587,7 +598,6 @@ class _RecursiveArguments:
     """
 
     def __init__(self, ra=None, *args, **kwargs):
-        # TODO: document types more.
         if ra is not None:
             args = ra.args
             kwargs = ra.kwargs
@@ -618,8 +628,14 @@ class _RecursiveArguments:
 
         return _RecursiveArguments(*arguments, **keyword_arguments)
 
-    def __iter__(self):
-        return self.kwargs
+    def keys(self):
+        """
+        Return the keys of the recursive arguments.
+        They exclude unnamed arguments.
+
+        :return: recursive arguments keys
+        """
+        return self.kwargs.keys()
 
 
 class _HasRecursiveMethods:
@@ -2342,15 +2358,17 @@ class _HasChildrenMixin(MixinForBaseTransformer):
 
         return results
 
-    def _apply_self(self, method: Union[str, Callable], ra: _RecursiveArguments):
+    def _apply_self(self, method: Union[str, Callable], ra: _RecursiveArguments) -> RecursiveDict:
         terminal_ra: _RecursiveArguments = ra[None]
         self_results: RecursiveDict = BaseStep.apply(self, method=method, ra=terminal_ra)
         return self_results
 
-    def _apply_childrens(self, results: RecursiveDict, method: Union[str, Callable],
-                         ra: _RecursiveArguments) -> RecursiveDict:
+    def _apply_childrens(
+            self, results: RecursiveDict, method: Union[str, Callable], ra: _RecursiveArguments) -> RecursiveDict:
+
         for children in self.get_children():
-            children_results: RecursiveDict = children.apply(method=method, ra=ra[children.get_name()])
+            child_ra: _RecursiveArguments = ra[children.get_name()]
+            children_results: RecursiveDict = children.apply(method=method, ra=child_ra)
             results[children.get_name()] = children_results
 
         return results
