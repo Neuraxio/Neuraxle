@@ -64,7 +64,7 @@ class BaseSaver(ABC):
     @abstractmethod
     def save_step(self, step: 'BaseTransformer', context: 'ExecutionContext') -> 'BaseTransformer':
         """
-        Save step with execution context.
+        Save a step or a step's parts using the execution context.
 
         :param step: step to save
         :param context: execution context
@@ -123,10 +123,10 @@ class JoblibStepSaver(BaseSaver):
         :return: if we can load the step with the given context
         """
         return os.path.exists(
-            self._create_step_path(context, step)
+            self._get_step_path(context, step)
         )
 
-    def _create_step_path(self, context, step):
+    def _get_step_path(self, context, step):
         """
         Create step path for the given context.
 
@@ -146,7 +146,7 @@ class JoblibStepSaver(BaseSaver):
         """
         context.mkdir()
 
-        path = self._create_step_path(context, step)
+        path = self._get_step_path(context, step)
         dump(step, path)
 
         return step
@@ -159,7 +159,7 @@ class JoblibStepSaver(BaseSaver):
         :param context: execution context to load from
         :return:
         """
-        loaded_step = load(self._create_step_path(context, step))
+        loaded_step = load(self._get_step_path(context, step))
 
         # we need to keep the current steps in memory because they have been deleted before saving...
         # the steps that have not been saved yet need to be in memory while loading a truncable steps...
@@ -286,14 +286,15 @@ class ExecutionContext:
         self.execution_phase: ExecutionPhase = phase
         return self
 
-    def set_service_locator(self, services: Dict[Type, object]) -> 'ExecutionContext':
+    def set_service_locator(self, services: Dict['BaseService', object]) -> 'ExecutionContext':
         """
-        Register abstract class type instances.
+        Register abstract class type instances that inherit and implement
+        the class :class:`~neuraxle.base.BaseService`.
 
-        :param services:  instance
+        :param services: A dictionary of concrete services to register.
         :return: self
         """
-        self.services: Dict[Type, object] = services
+        self.services: Dict[BaseService, object] = services
         return self
 
     def register_service(self, service_abstract_class_type: Type, service_instance: object) -> 'ExecutionContext':
@@ -344,7 +345,7 @@ class ExecutionContext:
         """
         return self.execution_mode
 
-    def save(self, full_dump=False):
+    def save(self, full_dump=True):
         """
         Save all unsaved steps in the parents of the execution context using :func:`~neuraxle.base._HasSavers.save`.
         This method is called from a step checkpointer inside a :class:`Checkpoint`.
@@ -566,7 +567,8 @@ class ExecutionContext:
 
 class _RecursiveArguments:
     """
-    This class is used by :func:`~neuraxle.base.BaseStep.apply`, and :class:`_HasChildrenMixin` to pass the right arguments to steps with children.
+    This class is used by :func:`~neuraxle.base.BaseStep.apply`, and :class:`_HasChildrenMixin`
+    to pass the right arguments to steps with children.
 
     .. seealso::
         :class:`_HasChildrenMixin`,
@@ -670,6 +672,55 @@ class _HasRecursiveMethods:
     def apply(self, method: Union[str, Callable], ra: _RecursiveArguments = None, *args, **kwargs) -> RecursiveDict:
         """
         Apply a method to a step and its children.
+
+        Here is an apply usage example to invalidate each steps.
+        This example comes from the saving logic:
+
+        .. code-block:: python
+
+            # preparing to save steps and its nested children:
+            if full_dump:
+                # initialize and invalidate steps to make sure that all steps will be saved
+
+                def _initialize_if_needed(step):
+                    if not step.is_initialized:
+                        step.setup(context=context)
+                    if not step.is_initialized:
+                        raise NotImplementedError(f"The `setup` method of the following class "
+                                                f"failed to set `self.is_initialized` to True: {step.__class__.__name__}.")
+                    return RecursiveDict()
+
+                def _invalidate(step):
+                    step._invalidate()
+                    return RecursiveDict()
+
+                self.apply(method=_initialize_if_needed)
+                self.apply(method=_invalidate)
+
+            # save steps:
+            ...
+
+
+        Here is another example. For instance, when setting the hyperparams space of a step,
+        we use :func:`~neuraxle.base.BaseStep._set_hyperparams_space` to set the hyperparams of the step.
+        The trick is that the space argument :class:`~neuraxle.hyperparams.space.HyperparameterSpace` is a recursive dict.
+        The implementation is the same for setting the hyperparams and config
+        of the step and its children, not only its space.
+        The cool thing is that such hyperparameter spaces are recursive, inheriting from :class:`~neuraxle.hyperparams.space.RecursiveDict`.
+        and applying recursive arguments to the step and its children with the :func:`_HasChildrenMixin.apply` of :class:`_HasChildrenMixin`.
+        Here is the implementation, using apply:
+
+        .. code-block:: python
+
+            def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseTransformer':
+                self.apply(method='_set_hyperparams_space', hyperparams_space=HyperparameterSpace(hyperparams_space))
+                return self
+
+            def _set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> HyperparameterSpace:
+                self._invalidate()
+                self.hyperparams_space = HyperparameterSpace(hyperparams_space)
+                return self.hyperparams_space
+
 
         :param method: method name that need to be called on all steps
         :param ra: recursive arguments
@@ -1082,7 +1133,7 @@ class _FittableStep:
         :param context: execution context
         :return: (data container, execution context)
         """
-        self.invalidate()
+        self._invalidate()
         return data_container, context.push(self)
 
     def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
@@ -1107,7 +1158,7 @@ class _FittableStep:
         :param expected_outputs: expected outputs to fit on
         :return: (fitted self, tranformed data inputs)
         """
-        self.invalidate()
+        self._invalidate()
 
         new_self = self.fit(data_inputs, expected_outputs)
         out = new_self(data_inputs)
@@ -1661,7 +1712,7 @@ class _HasSavers(ABC):
         """
         return self.is_invalidated and self.is_initialized
 
-    def save(self, context: ExecutionContext, full_dump=False) -> 'BaseTransformer':
+    def save(self, context: ExecutionContext, full_dump=True) -> 'BaseTransformer':
         """
         Save step using the execution context to create the directory to save the step into.
         The saving happens by looping through all of the step savers in the reversed order.
@@ -1679,22 +1730,23 @@ class _HasSavers(ABC):
             :class:`BaseSaver`
         """
         context = context.push(self)
+        if not full_dump and not self.should_save():
+            return self
         self.is_invalidated = False
-
-        def _initialize_if_needed(step):
-            if not step.is_initialized:
-                step.setup(context=context)
-            if not step.is_initialized:
-                raise NotImplementedError(f"The `setup` method of the following class "
-                                          f"failed to set `self.is_initialized` to True: {step.__class__.__name__}.")
-            return RecursiveDict()
-
-        def _invalidate(step):
-            step._invalidate()
-            return RecursiveDict()
 
         if full_dump:
             # initialize and invalidate steps to make sure that all steps will be saved
+            def _initialize_if_needed(step):
+                if not step.is_initialized:
+                    step.setup(context=context)
+                if not step.is_initialized:
+                    raise NotImplementedError(f"The `setup` method of the following class "
+                                              f"failed to set `self.is_initialized` to True: {step.__class__.__name__}.")
+                return RecursiveDict()
+
+            def _invalidate(step):
+                step._invalidate()
+                return RecursiveDict()
             self.apply(method=_initialize_if_needed)
             self.apply(method=_invalidate)
 
@@ -1711,7 +1763,7 @@ class _HasSavers(ABC):
 
         return stripped_step
 
-    def load(self, context: ExecutionContext, full_dump=False) -> 'BaseTransformer':
+    def load(self, context: ExecutionContext, full_dump=True) -> 'BaseTransformer':
         """
         Load step using the execution context to create the directory of the saved step.
         Warning:
@@ -1800,7 +1852,7 @@ class _CouldHaveContext:
         :class:`~neuraxle.base._TransformerStep`,
     """
 
-    def with_context(self, context: ExecutionContext):
+    def with_context(self, context: ExecutionContext) -> 'StepWithContext':
         """
         An higher order step to inject a context inside a step.
         A step with a context forces the pipeline to use that context through handler methods.
@@ -1809,10 +1861,12 @@ class _CouldHaveContext:
 
         .. code-block:: python
 
-            context = ExecutionContext(root=tmpdir)
-            context.set_service_locator(ServiceLocator().services) # where services is of type Dict[Type, object]
+            context = ExecutionContext(tmpdir)
+            context.set_service_locator(ServiceLocator().services) # where services is of type Dict[BaseService, object]
 
             p = WithContext(Pipeline([
+                # When the context will be processing the SomeStep,
+                # it will be asserted that the context will be able to access the SomeBaseService
                 SomeStep().with_assertion_has_services(SomeBaseService)
             ]), context)
 
@@ -1956,8 +2010,7 @@ class BaseTransformer(
         if name is None:
             name = self.__class__.__name__
         self.name: str = name
-        self._invalidate()
-
+        self.is_invalidated = False
         self.is_train: bool = True
 
     def invalidate(self) -> 'BaseTransformer':
@@ -2006,7 +2059,7 @@ class BaseTransformer(
         self.is_train = is_train
         return RecursiveDict()
 
-    def set_name(self, name: str):
+    def set_name(self, name: str) -> 'BaseTransformer':
         """
         Set the name of the pipeline step.
 
@@ -2014,10 +2067,9 @@ class BaseTransformer(
         :return: self
 
         .. note::
-            A step name is the same value as the one in the keys of :py:attr:`~neuraxle.pipeline.Pipeline.steps_as_tuple`
+            A step name is in the keys of :py:attr:`~neuraxle.base.TruncableSteps.steps_as_tuple`
         """
         self.name = name
-        self.invalidate()
         return self
 
     def get_name(self) -> str:
@@ -2159,6 +2211,10 @@ class _HasChildrenMixin(MixinForBaseTransformer):
         """
         Apply method to root, and children steps.
         Split the root, and children values inside the arguments of type RecursiveDict.
+
+        This method overrides the :func:`~neuraxle.base._HasRecursiveMethods.apply` method
+        of :class:`~neuraxle.base._HasRecursiveMethods`. Read the documentation of the
+        original method to learn more.
 
         :param method: str or callable function to apply
         :param ra: recursive arguments
@@ -2593,7 +2649,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         _HasChildrenMixin.__init__(self)
         self.warn_step_renaming = not mute_step_renaming_warning
-        self.set_steps(steps_as_tuple)
+        self.set_steps(steps_as_tuple, invalidate=False)
         self.set_savers([TruncableJoblibStepSaver()] + self.savers)
 
     def are_steps_before_index_the_same(self, other: 'TruncableSteps', index: int) -> bool:
@@ -2630,7 +2686,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         new_truncable_steps = saved_pipeline[:index] + self[index:]
         self.set_steps(new_truncable_steps.steps_as_tuple)
 
-    def set_steps(self, steps_as_tuple: NamedTupleList):
+    def set_steps(self, steps_as_tuple: NamedTupleList, invalidate=True):
         """
         Set steps as tuple.
 
@@ -2639,7 +2695,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         """
         steps_as_tuple = self._wrap_non_base_steps(steps_as_tuple)
         self.steps_as_tuple: NamedTupleList = self._patch_missing_names(steps_as_tuple)
-        self._refresh_steps()
+        self._refresh_steps(invalidate=invalidate)
 
     def get_children(self) -> List[BaseStep]:
         """
@@ -2706,7 +2762,6 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
             step = (_name, step)
             names_yet.add(step[0])
             patched.append(step)
-        self._invalidate()
         return patched
 
     def _rename_step(self, step_name, class_name, names_yet: set):
@@ -2724,18 +2779,18 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         while step_name in names_yet:
             step_name = class_name + str(i)
             i += 1
-        self._invalidate()
         return step_name
 
-    def _refresh_steps(self):
+    def _refresh_steps(self, invalidate=True):
         """
         Private method to refresh inner state after having edited ``self.steps_as_tuple``
         (recreate ``self.steps`` from ``self.steps_as_tuple``).
         """
-        self._invalidate()
         self.steps: OrderedDict = OrderedDict(self.steps_as_tuple)
         for name, step in self.items():
             step.name = name
+        if invalidate:
+            self._invalidate()
 
     def should_save(self):
         """
@@ -2931,6 +2986,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         else:
             item = key, self.steps.pop(key)
             self.steps_as_tuple = list(self.steps.items())
+            self._invalidate()
         return item
 
     def popfront(self) -> 'BaseTransformer':
@@ -3510,6 +3566,12 @@ class _WithContextStepSaver(BaseSaver):
 
 
 class StepWithContext(GlobalServiceAssertionExecutorMixin, MetaStep):
+    """
+    A step with context is a step that has an :class:`ExecutionContext` as a pre-registered dependency.
+    This way, it's possible to call the vanilla "fit", "transform", "predict", and other vanilla methods
+    on a step with context, and the handle will be made automatically with the provided context, also
+    wrapping the data into a data container.
+    """
     def __init__(self, wrapped: 'BaseTransformer', context: ExecutionContext, raise_if_not_root: bool = True):
         MetaStep.__init__(self, wrapped=wrapped, savers=[_WithContextStepSaver()])
         GlobalServiceAssertionExecutorMixin.__init__(self)
@@ -3518,9 +3580,7 @@ class StepWithContext(GlobalServiceAssertionExecutorMixin, MetaStep):
 
     def _will_process(
         self, data_container: DataContainer, context: ExecutionContext
-    ) -> (
-            DataContainer, ExecutionContext
-    ):
+    ) -> (DataContainer, ExecutionContext):
         """
         Inject the given context and test service assertions (if any are appliable) before processing the wrapped step.
 
@@ -3533,3 +3593,14 @@ class StepWithContext(GlobalServiceAssertionExecutorMixin, MetaStep):
         data_container, context = GlobalServiceAssertionExecutorMixin._will_process(self, data_container, self.context)
 
         return data_container, context
+
+    def save(self, context: ExecutionContext = None, full_dump=True) -> 'BaseTransformer':
+        """
+        Save the wrapped step with its context with the provided context location.
+
+        :param context: Context to save that would override the registred one in self.context. Optional.
+        :return: saved step with context
+        """
+        if context is None:
+            context = self.context
+        return self.wrapped.save(context, full_dump=full_dump)

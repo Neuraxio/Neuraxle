@@ -50,7 +50,7 @@ class DataContainer:
         * :func:`~neuraxle.base.BaseStep.handle_fit_transform`
         * :func:`~neuraxle.base.BaseStep.handle_fit`
 
-    Most of the time, you won't need to care about the DataContainer because it is the pipeline that manages it.
+    Most of the time, the steps will manage it by themselves.
 
     .. seealso::
         :class:`~neuraxle.base.BaseHasher`,
@@ -118,7 +118,7 @@ class DataContainer:
         return self
 
     def get_ids_summary(self):
-        return ','.join(self.ids)
+        return ','.join([i for i in self.ids if i is not None])
 
     def set_sub_data_containers(self, sub_data_containers: List['DataContainer']):
         """

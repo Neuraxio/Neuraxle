@@ -107,9 +107,8 @@ def test_step_cloner_should_save_sub_steps(tmpdir):
         Pipeline([
             FitCallbackStep(tape),
             MultiplyByN(2)
-        ]),
-        cache_folder_when_no_handle=tmpdir
-    )
+        ])
+    ).with_context(ExecutionContext(tmpdir))
     data_inputs = _create_data((2, 2))
     expected_outputs = _create_data((2, 2))
     p, processed_outputs = p.fit_transform(data_inputs, expected_outputs)

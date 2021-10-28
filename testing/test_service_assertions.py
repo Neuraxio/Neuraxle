@@ -121,22 +121,17 @@ class TestServiceAssertion:
         shutil.rmtree(self.tmpdir, ignore_errors=True)
         shutil.rmtree(self.tmpdir+"_hp", ignore_errors=True)
 
-    def test_step_with_context_saver(self, tmpdir):
+    def test_step_with_context_saver_only_saves_wrapped(self, tmpdir):
         self._setup(tmpdir)
-        context = ExecutionContext(root=self.tmpdir)
-        service = SomeService()
         pipeline_name = 'testname'
-        context.set_service_locator({SomeBaseService: service})
+        context = ExecutionContext(tmpdir).set_service_locator({SomeBaseService: SomeService()})
         p = Pipeline([
             SomeStep().assert_has_services(SomeBaseService)
-        ]).with_context(context=context)
-        p.set_name(pipeline_name)
+        ]).set_name(pipeline_name).with_context(context=context)
+
         p.save(context, full_dump=True)
 
-        p: StepWithContext = ExecutionContext(root=self.tmpdir).load(pipeline_name)
-        assert isinstance(p, StepWithContext)
-
-        p: Pipeline = ExecutionContext(root=self.tmpdir).load(os.path.join(pipeline_name, 'Pipeline'))
+        p: Pipeline = ExecutionContext(tmpdir).load(os.path.join(pipeline_name))
         assert isinstance(p, Pipeline)
 
     def test_auto_ml_should_inject_dependencies_properly(self, tmpdir):
