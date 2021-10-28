@@ -91,6 +91,7 @@ class Trial:
             'end_time': self.end_time.strftime(LOGGING_DATETIME_STR_FORMAT) if self.end_time is not None else '',
             'main_metric_name': self.main_metric_name,
             'log': self.log,
+            # TODO: move to val splits?
             'introspection_data': self.introspection_data.to_flat_dict()
         }
 
@@ -393,7 +394,7 @@ class TrialSplit:
             status: 'TRIAL_STATUS' = None,
             error: Exception = None,
             error_traceback: str = None,
-            metrics_results: Dict = None,
+            metrics_results: Dict[str, Any] = None,
             start_time: datetime.datetime = None,
             end_time: datetime.datetime = None,
             pipeline: BaseStep = None,
@@ -409,7 +410,7 @@ class TrialSplit:
         self.error_traceback: str = error_traceback
         if metrics_results is None:
             metrics_results = {}
-        self.metrics_results: Dict = metrics_results
+        self.metrics_results: Dict[str, Any] = metrics_results
         self.end_time: datetime.datetime = end_time
         self.start_time: datetime.datetime = start_time
         self.pipeline: BaseStep = pipeline
@@ -573,8 +574,7 @@ class TrialSplit:
         for score in validation_values:
             if score > best_score and higher_score_is_better:
                 best_score = score
-
-            if score < best_score and not higher_score_is_better:
+            elif score < best_score and not higher_score_is_better:
                 best_score = score
 
         if best_score == validation_values[-1]:

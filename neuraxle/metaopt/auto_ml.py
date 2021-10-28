@@ -505,7 +505,7 @@ class Trainer:
         :return: executed trial
 
         """
-        assert not (context is None)  # TODO: change order of arguments so that context isn't an optional argument
+        assert context is not None  # TODO: change order of arguments so that context isn't an optional argument
 
         validation_splits: List[
             Tuple[DataContainer, DataContainer]] = self.validation_split_function.split_data_container(
@@ -695,6 +695,22 @@ class BaseControllerLoop:
         """
         for i in range(self.n_trials):
             yield i
+
+    def loop(self, context: ExecutionContext):
+        """
+        Loop over all trials.
+
+        :param context: execution context
+        :return:
+        """
+        for i in self._get_next():
+            try:
+                yield self.trainer.train(i, context)
+            except Exception as e:
+                if self.continue_loop_on_error:
+                    context.logger.error('error {}'.format(e))
+                else:
+                    raise e
 
 
 class DefaultLoop(BaseControllerLoop):
