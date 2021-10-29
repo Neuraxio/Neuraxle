@@ -42,7 +42,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from enum import Enum
-from typing import List, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Dict, Tuple, Type
+from typing import List, Set, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Dict, Tuple, Type
 
 from joblib import dump, load
 
@@ -628,14 +628,26 @@ class _RecursiveArguments:
 
         return _RecursiveArguments(*arguments, **keyword_arguments)
 
-    def keys(self):
+    def children_names(self) -> List[str]:
         """
-        Return the keys of the recursive arguments.
-        They exclude unnamed arguments.
+        Return the names of the children steps.
 
-        :return: recursive arguments keys
+        :return: list of children step names
         """
-        return self.kwargs.keys()
+        children_names: List[str] = []
+        argvals = (list(self.args) + list(self.kwargs.values()))
+        # Checking if any of the arguments (v) is a RecursiveDict and if so,
+        # take all it's children names (keys) for childs who are also
+        # RecursiveDict for being themselves steps:
+        return set(sum([
+            list([
+                k
+                for (k, vv) in v.items()
+                if isinstance(vv, RecursiveDict)
+            ])
+            for v in argvals
+            if isinstance(v, RecursiveDict)
+        ], []))
 
 
 class _HasRecursiveMethods:
@@ -741,8 +753,7 @@ class _HasRecursiveMethods:
             :class:`_RecursiveArguments`,
             :class:`_HasChildrenMixin`
         """
-        if ra is None:
-            ra = _RecursiveArguments(*args, **kwargs)
+        ra = _RecursiveArguments(ra, *args, **kwargs)
 
         kargs = ra.args
 
@@ -2353,6 +2364,8 @@ class _HasChildrenMixin(MixinForBaseTransformer):
         :return:
         """
         ra: _RecursiveArguments = _RecursiveArguments(ra=ra, *args, **kwargs)
+        self._validate_children_exists(ra)
+
         results: RecursiveDict = self._apply_self(method=method, ra=ra)
         results: RecursiveDict = self._apply_childrens(results=results, method=method, ra=ra)
 
@@ -2365,22 +2378,38 @@ class _HasChildrenMixin(MixinForBaseTransformer):
 
     def _apply_childrens(
             self, results: RecursiveDict, method: Union[str, Callable], ra: _RecursiveArguments) -> RecursiveDict:
-
         for children in self.get_children():
             child_ra: _RecursiveArguments = ra[children.get_name()]
             children_results: RecursiveDict = children.apply(method=method, ra=child_ra)
             results[children.get_name()] = children_results
-
         return results
+
+    def _validate_children_exists(self, ra):
+        """
+        Validate that the provided childrens are in self, and if not, raise an error.
+        """
+        children_names: Set[str] = set(self.get_children_names())
+        ra_children_names: Set[str] = ra.children_names()
+        unknown_names: Set[str] = ra_children_names - children_names
+        if len(unknown_names) > 0:
+            raise KeyError(f'{unknown_names} not children of {self.name}. Available childrens are: {children_names}.')
 
     @abstractmethod
     def get_children(self) -> List[BaseStep]:
         """
         Get the list of all the childs for that step.
 
-        :return:
+        :return: every child step
         """
         pass
+
+    def get_children_names(self) -> List[str]:
+        """
+        Get the list of all the childs names for that step.
+
+        :return: every child step name
+        """
+        return [child.get_name() for child in self.get_children()]
 
 
 class MetaStepMixin(_HasChildrenMixin):
