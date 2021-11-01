@@ -32,6 +32,7 @@ and :class:`~neuraxle.union.FeatureUnion`.
 
 
 """
+import matplotlib.pyplot as plt
 # %%
 # Data exploration on the Bike Sharing Demand dataset
 # ---------------------------------------------------
@@ -39,20 +40,19 @@ and :class:`~neuraxle.union.FeatureUnion`.
 # We start by loading the data from the OpenML repository.
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.kernel_approximation import Nystroem
-from sklearn.linear_model import RidgeCV
-from sklearn.preprocessing import PolynomialFeatures, SplineTransformer, FunctionTransformer, \
-    MinMaxScaler, OneHotEncoder, OrdinalEncoder
-from sklearn.model_selection import cross_validate, TimeSeriesSplit
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.datasets import fetch_openml
-
 from neuraxle.base import Identity, MetaStep
 from neuraxle.pipeline import Pipeline
-from neuraxle.union import FeatureUnion
 from neuraxle.steps.column_transformer import ColumnTransformer
+from neuraxle.union import FeatureUnion
 
+from sklearn.datasets import fetch_openml
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.kernel_approximation import Nystroem
+from sklearn.linear_model import RidgeCV
+from sklearn.model_selection import TimeSeriesSplit, cross_validate
+from sklearn.preprocessing import (FunctionTransformer, MinMaxScaler,
+                                   OneHotEncoder, OrdinalEncoder,
+                                   PolynomialFeatures, SplineTransformer)
 
 bike_sharing = fetch_openml("Bike_Sharing_Demand", version=2, as_frame=True)
 df = bike_sharing.frame
