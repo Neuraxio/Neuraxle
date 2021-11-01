@@ -213,13 +213,6 @@ X.iloc[train_4]
 # we only try the default hyper-parameters for this model:
 
 
-categorical_columns_int = [list(X.columns).index(col) for col in [
-    "weather",
-    "season",
-    "holiday",
-    "workingday",
-]]
-non_categorical_columns_int = [i for i in range(len(X.columns)) if i not in categorical_columns_int]
 categorical_columns = [
     "weather",
     "season",
