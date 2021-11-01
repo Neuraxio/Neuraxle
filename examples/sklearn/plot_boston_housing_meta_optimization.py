@@ -28,7 +28,6 @@ performed to find the best possible combination of hyperparameters by sampling r
 """
 
 import numpy as np
-from py._path.local import LocalPath
 from sklearn.cluster import KMeans
 from sklearn.datasets import load_boston
 from sklearn.decomposition import PCA, FastICA
@@ -48,7 +47,7 @@ from neuraxle.steps.sklearn import SKLearnWrapper
 from neuraxle.union import AddFeatures, ModelStacking
 
 
-def main(tmpdir: LocalPath):
+def main(tmpdir):
     boston = load_boston()
     X, y = shuffle(boston.data, boston.target, random_state=13)
     X = X.astype(np.float32)

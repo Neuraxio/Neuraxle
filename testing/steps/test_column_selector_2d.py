@@ -45,15 +45,6 @@ def test_column_selector_2d_should_select_list_of_indexes(column_selector_2d_cla
     assert np.array_equal(outputs, data_inputs[..., :3])
 
 
-@pytest.mark.parametrize('column_selector_2d_class', [ColumnSelector2D, NumpyColumnSelector2D])
-def test_column_selector_2d_should_throw_exception_on_unsupported_type(column_selector_2d_class):
-    step = column_selector_2d_class('unsupported')
-    data_inputs, expected_outputs = _create_data_source((20, 20))
-
-    with pytest.raises(ValueError):
-        step.transform(data_inputs)
-
-
 def test_column_selector_nd_should_transform_with_column_selector_2d():
     step = ColumnsSelectorND(0, n_dimension=2)
     data_inputs, expected_outputs = _create_data_source((20, 20))
