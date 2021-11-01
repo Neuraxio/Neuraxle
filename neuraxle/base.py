@@ -1621,9 +1621,10 @@ class _HasHyperparams(ABC):
         self.set_hyperparams(HyperparameterSamples(params))
         return self.hyperparams
 
-    def get_params(self) -> dict:
+    def get_params(self, deep=False) -> dict:
         """
         Get step hyperparameters as a flat primitive dict.
+        The "deep" parameter is ignored.
 
         Example :
 
@@ -2352,7 +2353,9 @@ class BaseTransformer(
 
 
 def _sklearn_to_neuraxle_step(step) -> BaseTransformer:
-    if hasattr(step, '_get_param_names') and hasattr(step, '_more_tags') \
+    if step is None:
+        step = Identity()
+    elif hasattr(step, '_get_param_names') and hasattr(step, '_more_tags') \
             and hasattr(step, '_check_n_features') and hasattr(step, '_validate_data'):
         import neuraxle.steps.sklearn
         step = neuraxle.steps.sklearn.SKLearnWrapper(step)

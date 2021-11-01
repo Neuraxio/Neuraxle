@@ -74,3 +74,8 @@ def test_boston_housing_meta_optimization(tmpdir: LocalPath):
 def test_boston_housing_regression_with_model_stacking():
     from examples.sklearn.plot_boston_housing_regression_with_model_stacking import main
     main()
+
+
+def test_cyclical_feature_engineering():
+    from examples.sklearn.plot_cyclical_feature_engineering import predictions
+    print(predictions)
