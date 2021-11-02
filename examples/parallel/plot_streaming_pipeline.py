@@ -7,12 +7,12 @@ The pipeline steps' parallelism here will be obvious.
 
 The pipeline has two steps:
 1. Preprocessing: the step that process the data simply sleeps.
-2. Model: the model simply multiplies the data by two. 
+2. Model: the model simply multiplies the data by two.
 
 This can be used with scikit-learn as well to transform things in parallel,
 and any other library such as tensorflow.
 
-Pipelines benchmarked: 
+Pipelines benchmarked:
 1. We first use a classical pipeline and evaluate the time.
 2. Then we use a minibatched pipeline and we evaluate the time.
 3. Then we use a parallel pipeline and we evaluate the time.
@@ -70,16 +70,16 @@ def main():
     time_vanilla_pipeline, output_classical = eval_run_time(p)
     print(f"Classical 'Pipeline' execution time: {time_vanilla_pipeline} seconds.")
 
-    # Classical minibatch pipeline - minibatch size 10:
+    # Classical minibatch pipeline - minibatch size 25:
     p = MiniBatchSequentialPipeline(preprocessing_and_model_steps,
-                                    batch_size=10)
+                                    batch_size=25)
     time_minibatch_pipeline, output_minibatch = eval_run_time(p)
     print(f"Minibatched 'MiniBatchSequentialPipeline' execution time: {time_minibatch_pipeline} seconds.")
 
-    # Parallel pipeline - minibatch size 10 with 16 parallel workers per step that
+    # Parallel pipeline - minibatch size 25 with 4 parallel workers per step that
     # have a max queue size of 10 batches between preprocessing and the model:
     p = SequentialQueuedPipeline(preprocessing_and_model_steps,
-                                 n_workers_per_step=16, max_queue_size=10, batch_size=10)
+                                 n_workers_per_step=4, max_queue_size=10, batch_size=25)
     time_parallel_pipeline, output_parallel = eval_run_time(p)
     print(f"Parallel 'SequentialQueuedPipeline' execution time: {time_parallel_pipeline} seconds.")
 

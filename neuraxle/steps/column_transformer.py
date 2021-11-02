@@ -34,13 +34,24 @@ from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEach
 from neuraxle.union import FeatureUnion
 
-ColumnSelectionType = Union[int, Iterable[int], slice]
+ColumnSelectionType = Union[int, Iterable[int], str, Iterable[str], slice]
 ColumnChooserTupleList = List[Tuple[ColumnSelectionType, BaseTransformer]]
 
 
 class ColumnSelector2D(BaseTransformer):
     """
     A ColumnSelector2D selects column in a sequence.
+
+    It can be used to select:
+
+    - a single column,
+    - a range of columns,
+    - a slice of columns,
+    - a list of columns.
+
+    The columns are expected to be integers.
+    A special case is a string, which will be used as
+    a pandas DataFrame column name.
     """
 
     def __init__(self, columns_selection: ColumnSelectionType):
@@ -62,11 +73,16 @@ class ColumnSelector2D(BaseTransformer):
         if isinstance(self.columns_selection, slice):
             ret = list(map(itemgetter(self.columns_selection), data_inputs))
         elif isinstance(self.columns_selection, list):
-            columns = [
-                list(map(itemgetter(i), data_inputs))
-                for i in self.columns_selection
-            ]
-            ret = list(zip(*columns))
+            if 'DataFrame' in str(type(data_inputs)):
+                ret = data_inputs.loc[:, self.columns_selection]
+            else:
+                columns = [
+                    list(map(itemgetter(i), data_inputs))
+                    for i in self.columns_selection
+                ]
+                ret = list(zip(*columns))
+        elif isinstance(self.columns_selection, str):
+            ret = data_inputs.loc[:, [self.columns_selection]].values
         elif self.columns_selection is None:
             ret = data_inputs
         else:
@@ -127,7 +143,7 @@ class ColumnsSelectorND(MetaStep):
     n_dimension must therefore be greater or equal to 2.
     """
 
-    def __init__(self, columns_selection, n_dimension=3):
+    def __init__(self, columns_selection, n_dimension=2):
         assert n_dimension >= 2
         col_selector: ColumnSelector2D = ColumnSelector2D(columns_selection=columns_selection)
         for _ in range(max(0, n_dimension - 2)):

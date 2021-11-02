@@ -25,6 +25,7 @@ for the transformers.
     limitations under the License.
 
 """
+import time
 import warnings
 from abc import abstractmethod
 from multiprocessing import Queue
@@ -202,8 +203,8 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
         :type context: ExecutionContext
         :return:
         """
-        thread_safe_context = context
         thread_safe_self = self
+        thread_safe_context = context
         parallel_call = Thread
 
         if self.use_processes:
@@ -279,9 +280,10 @@ def worker_function(queue_worker: QueueWorker, context: ExecutionContext, use_sa
                 task: QueuedPipelineTask = queue_worker.get_task()
                 data_container = step.handle_transform(task.data_container, context)
                 queue_worker.notify_step(data_container)
-
             except Exception as err:
                 queue_worker.notify_step(err)
+            finally:
+                time.sleep(0.005)
     except Exception as err:
         queue_worker.notify_step(err)
 
