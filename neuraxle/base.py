@@ -1998,7 +1998,7 @@ class _CouldHaveContext:
             self._assert(context.has_service(service_assertion),
                          'Missing Service {0}'.format(service_assertion.__name__))
 
-    def _assert(self, condition: bool, message: str, context: ExecutionContext = None):
+    def _assert(self, condition: bool, err_message: str, context: ExecutionContext = None):
         """
         Assert that the ``condition`` is true.
         If not, raise an exception with the ``message``.
@@ -2007,14 +2007,29 @@ class _CouldHaveContext:
         the exception will not be raised and only logged.
 
         :param condition: condition to assert
-        :param message: message to log and raise if the condition is false
+        :param err_message: message to log and raise if the condition is false
+        :param context: execution context to log the exception, and not raise it if in ``PROD`` mode.
+        """
+        return self._assert_equals(condition, True, err_message, context)
+
+    def _assert_equals(self, a: Any, b: Any, err_message: str, context: ExecutionContext):
+        """
+        Assert that the ``condition`` is true.
+        If not, raise an exception with the ``message``.
+        The exception will be logged with the logger in the ``context``.
+        If the ``context`` is in :class:`ExecutionPhase` ``.PROD``,
+        the exception will not be raised and only logged.
+
+        :param a: element to compare to b with `==`
+        :param b: element to compare to a with `==`
+        :param err_message: message to log and raise if the condition is false
         :param context: execution context to log the exception, and not raise it if in ``PROD`` mode.
         """
         if context is None:
             context = ExecutionContext()
 
         try:
-            assert condition, message
+            assert a == b, err_message
         except AssertionError as e:
             # log the error in the context's logger
             context.logger.exception(e)
@@ -3294,9 +3309,10 @@ class TransformHandlerOnlyMixin(MixinForBaseTransformer):
 class HandleOnlyMixin(MixinForBaseTransformer):
     """
     A pipeline step that only requires the implementation of handler methods :
-        - _transform_data_container
-        - _fit_transform_data_container
+
         - _fit_data_container
+        - _transform_data_container
+        - _fit_transform_data_container (by default, will call the above fit and then transform)
 
     If forbids only implementing fit or transform or fit_transform without the handles. So it forces the handles.
 
@@ -3318,10 +3334,26 @@ class HandleOnlyMixin(MixinForBaseTransformer):
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         raise NotImplementedError('Must implement _transform_data_container in {0}'.format(self.name))
 
-    @abstractmethod
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
-            ('BaseTransformer', DataContainer):
-        raise NotImplementedError('Must implement _fit_transform_data_container in {0}'.format(self.name))
+    def _fit_transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> ('BaseTransformer', DataContainer):
+        """
+        Fit and transform data container with the given execution context. Will do: 
+
+        .. code-block:: python
+
+            data_container, context = self._fit_data_container(data_container, context)
+            data_container = self._transform_data_container(data_container, context)
+            return self, data_container
+
+
+        :param data_container: data container
+        :param context: execution context
+        :return: transformed data container
+        """
+        data_container, context = self._fit_data_container(data_container, context)
+        data_container = self._transform_data_container(data_container, context)
+        return self, data_container
 
     def transform(self, data_inputs) -> 'HandleOnlyMixin':
         raise Exception(
@@ -3571,8 +3603,9 @@ class AssertionMixin(ForceHandleMixin):
 
 
 class WillProcessAssertionMixin(AssertionMixin):
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
-            DataContainer, ExecutionContext):
+    def _will_process(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> (DataContainer, ExecutionContext):
         """
         Calls self._assert_at_lifecycle(data_container, context).
         """
@@ -3583,8 +3616,9 @@ class WillProcessAssertionMixin(AssertionMixin):
 
 
 class DidProcessAssertionMixin(AssertionMixin):
-    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> (
-            DataContainer, ExecutionContext):
+    def _did_process(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> (DataContainer, ExecutionContext):
         """
         Calls self._assert_at_lifecycle(data_container,context)
         """
@@ -3597,17 +3631,21 @@ class DidProcessAssertionMixin(AssertionMixin):
 class AssertExpectedOutputIsNoneMixin(WillProcessAssertionMixin):
     def _assert_at_lifecycle(self, data_container: DataContainer, context: ExecutionContext):
         eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
-        if not eo_empty:
-            raise AssertionError(
-                f"Expected datacontainer.expected_outputs to be a `None` or a list of `None`. Received {data_container.expected_outputs}.")
+        self._assert(
+            eo_empty,
+            f"Expected datacontainer.expected_outputs to be a `None` or a list of `None`. Received {data_container.expected_outputs}.",
+            context
+        )
 
 
 class AssertExpectedOutputIsNotNoneMixin(WillProcessAssertionMixin):
     def _assert_at_lifecycle(self, data_container: DataContainer, context: ExecutionContext):
         eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
-        if eo_empty:
-            raise AssertionError(
-                f"Expected datacontainer.expected_outputs to not be a `None` or a list of `None`. Received {data_container.expected_outputs}.")
+        self._assert(
+            not eo_empty,
+            f"Expected datacontainer.expected_outputs to not be a `None` nor a list of `None`. Received {data_container.expected_outputs}.",
+            context
+        )
 
 
 class AssertExpectedOutputIsNoneStep(AssertExpectedOutputIsNoneMixin, Identity):
@@ -3650,12 +3688,16 @@ class LocalServiceAssertionWrapper(WillProcessAssertionMixin, MetaStep):
         :param context: The ExecutionContext for which we test the presence of service.
         """
         for service_type in self.service_assertions:
-            self._assert(
-                context.has_service(service_abstract_class_type=service_type),
+            err_message = (
                 f"Expected context to have service of type {service_type.__name__} but it did not. "
                 f"Please register the service {service_type.__name__} inside the ExecutionContext. "
                 f'You can do so by calling register_service, or set_services on any step. '
                 f'There is also the option to register all services inside the ExecutionContext'
+            )
+            self._assert(
+                context.has_service(service_abstract_class_type=service_type),
+                err_message,
+                context
             )
 
 

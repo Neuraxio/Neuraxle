@@ -68,7 +68,8 @@ def test_logger():
     # Then
     assert os.path.exists(file_path)
     with open(file_path) as f:
-        l = f.read()
+        log = f.read()
+    assert "fit call - logging call # 0" in log
 
     # Teardown
     file_handler.close()

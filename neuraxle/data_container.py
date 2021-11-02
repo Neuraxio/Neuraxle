@@ -26,7 +26,7 @@ Classes for containing the data that flows throught the pipeline steps.
 import copy
 import math
 from operator import attrgetter
-from typing import Any, Iterable, List, Tuple, Union
+from typing import Any, Callable, Iterable, List, Tuple, Union
 
 import numpy as np
 
@@ -73,12 +73,12 @@ class DataContainer:
             else:
                 ids = str(0)
 
-        self.ids = ids
+        self.ids: Iterable = ids
 
-        if expected_outputs is None and isinstance(data_inputs, Iterable):
-            self.expected_outputs = [None] * len(data_inputs)
+        if expected_outputs is None and (hasattr(data_inputs, '__len__') or hasattr(data_inputs, '__iter__')):
+            self.expected_outputs: Iterable = [None] * len(data_inputs)
         else:
-            self.expected_outputs = expected_outputs
+            self.expected_outputs: Iterable = expected_outputs
 
         if sub_data_containers is None:
             sub_data_containers = []
@@ -109,7 +109,7 @@ class DataContainer:
 
     def set_ids(self, ids: List[str]):
         """
-        Set current ids.
+        Set ids.
 
         :param ids: data inputs
         :return: self
@@ -120,7 +120,7 @@ class DataContainer:
     def get_ids_summary(self):
         return ','.join([i for i in self.ids if i is not None])
 
-    def set_sub_data_containers(self, sub_data_containers: List['DataContainer']):
+    def set_sub_data_containers(self, sub_data_containers: List['DataContainer']) -> 'DataContainer':
         """
         Set sub data containers
         :return: self
@@ -224,9 +224,9 @@ class DataContainer:
             sub_data_containers=[(name, data_container.copy()) for name, data_container in self.sub_data_containers]
         )
 
-    def add_sub_data_container(self, name: str, data_container: 'DataContainer'):
+    def add_sub_data_container(self, name: str, data_container: 'DataContainer') -> 'DataContainer':
         """
-        Get sub data container if item is str, otherwise get a zip of current ids, data inputs, and expected outputs.
+        Get sub data container if item is str, otherwise get a zip of ids, data inputs, and expected outputs.
 
         :type name: sub data container name
         :type data_container: sub data container
@@ -235,7 +235,7 @@ class DataContainer:
         self.sub_data_containers.append((name, data_container))
         return self
 
-    def get_sub_data_container_names(self):
+    def get_sub_data_container_names(self) -> List[str]:
         """
         Get sub data container names.
 
@@ -262,11 +262,11 @@ class DataContainer:
     def __getitem__(self, item: Union[str, int]):
         """
         If item is a string, then get then sub container with the same name as item in the list of sub data containers.
-        If item is an int, then return a tuple of (current id, data input, expected output) for the given item index.
+        If item is an int, then return a tuple of (id, data input, expected output) for the given item index.
 
         :param item: sub data container str, or item index as int
         :type item: Union[str, int]
-        :return: data container, or tuple of current ids, data inputs, expected outputs.
+        :return: data container, or tuple of ids, data inputs, expected outputs.
         :rtype: Union[DataContainer, Tuple]
         """
         if isinstance(item, str):
@@ -282,38 +282,47 @@ class DataContainer:
 
             return ids, self.data_inputs[item], self.expected_outputs[item]
 
-    def tolist(self):
-        ids = self.ids
-        data_inputs = self.data_inputs
-        expected_outputs = self.expected_outputs
+    def tolist(self) -> 'DataContainer':
+        def pandas_tonp(df):
+            if 'DataFrame' in str(type(df)) or 'Series' in str(type(df)):
+                return df.values.tolist()
+            else:
+                return df
 
-        if isinstance(self.ids, np.ndarray):
-            ids = self.ids.tolist()
+        def ndarr_tolist(ndarr):
+            if isinstance(ndarr, np.ndarray):
+                return ndarr.tolist()
+            else:
+                return ndarr
 
-        if isinstance(self.data_inputs, np.ndarray):
-            data_inputs = self.data_inputs.tolist()
-
-        if isinstance(self.expected_outputs, np.ndarray):
-            expected_outputs = self.expected_outputs.tolist()
-
-        self.set_ids(ids)
-        self.set_data_inputs(data_inputs)
-        self.set_expected_outputs(expected_outputs)
-
+        self.apply_conversion_func(pandas_tonp)
+        self.apply_conversion_func(ndarr_tolist)
         return self
 
-    def tolistshallow(self):
-        self.set_ids(list(self.ids))
-        self.set_data_inputs(list(self.data_inputs))
-        self.set_expected_outputs(list(self.expected_outputs))
+    def tolistshallow(self) -> 'DataContainer':
+        return self.apply_conversion_func(list)
 
+    def to_numpy(self) -> 'DataContainer':
+        return self.apply_conversion_func(np.array)
+
+    def apply_conversion_func(self, conversion_function: Callable[[Any], Any]) -> 'DataContainer':
+        """
+        Apply conversion function to data inputs, expected outputs, and ids,
+        and set the new values in self. Returns self.
+        Conversion function must be able to handle None values.
+        """
+        self.set_ids(conversion_function(self.ids))
+        self.set_data_inputs(conversion_function(self.data_inputs))
+        self.set_expected_outputs(conversion_function(self.expected_outputs))
         return self
 
-    def to_numpy(self):
-        self.set_ids(np.array(self.ids))
-        self.set_data_inputs(np.array(self.data_inputs))
-        self.set_expected_outputs(np.array(self.expected_outputs))
-        return self
+    def unpack(self) -> Tuple[Iterable[Any], Iterable[Any], Iterable[Any]]:
+        """
+        Unpack to a tuples of (ids, data input, expected output).
+
+        :return: tuple of ids, data inputs, expected outputs
+        """
+        return self.ids, self.data_inputs, self.expected_outputs
 
     def __iter__(self):
         """
@@ -473,7 +482,7 @@ class ListDataContainer(DataContainer):
         """
         Append a new data input to the DataContainer.
 
-        :param _id: current id for the data input
+        :param _id: id for the data input
         :type _id: str
         :param data_input: data input
         :param expected_output: expected output
@@ -511,7 +520,7 @@ class ListDataContainer(DataContainer):
 
     def concat(self, data_container: DataContainer):
         """
-        Concat the given data container to the current data container.
+        Concat the given data container to the data container.
 
         :param data_container: data container
         :type data_container: DataContainer
