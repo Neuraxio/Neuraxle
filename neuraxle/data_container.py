@@ -26,21 +26,27 @@ Classes for containing the data that flows throught the pipeline steps.
 import copy
 import math
 from operator import attrgetter
-from typing import Any, Callable, Iterable, List, Tuple, Union
+from typing import Any, Callable, Generic, Iterable, List, Optional, Tuple, TypeVar, Union, Iterator
 
 import numpy as np
 
+
 NamedDataContainerTuple = Tuple[str, 'DataContainer']
+IDT = TypeVar('IDT', bound=Iterable)  # Ids Type that is often a list of things
+DIT = TypeVar('DIT', bound=Iterable)  # Data Inputs Type that is often a list of things
+EOT = TypeVar('EOT', bound=Iterable)  # Expected Outputs Type that is often a list of things
 
 
 class AbsentValuesNullObject:
     """
-    This object, when passed to the default_value_data_inputs argument of the DataContainer.batch method, will return the minibatched data containers such that the last batch won't have the full batch_size if it was incomplete with trailing None values at the end.
+    This object, when passed to the default_value_data_inputs argument of the DataContainer.batch method,
+    will return the minibatched data containers such that the last batch won't have the full batch_size
+    if it was incomplete with trailing None values at the end.
     """
     pass
 
 
-class DataContainer:
+class DataContainer(Generic[IDT, DIT, EOT]):
     """
     DataContainer class to store data inputs, expected outputs, and ids together.
     can create checkpoints for a set of hyperparameters.
@@ -60,12 +66,12 @@ class DataContainer:
 
     def __init__(
             self,
-            data_inputs: Iterable,
-            ids=None,
-            expected_outputs: Any = None,
+            data_inputs: DIT,
+            ids: Optional[IDT] = None,
+            expected_outputs: Optional[EOT] = None,
             sub_data_containers: List['NamedDataContainerTuple'] = None
     ):
-        self.data_inputs: Iterable = data_inputs
+        self.data_inputs: DIT = data_inputs
 
         if ids is None:
             if hasattr(data_inputs, '__len__') or hasattr(data_inputs, '__iter__'):
@@ -73,19 +79,19 @@ class DataContainer:
             else:
                 ids = str(0)
 
-        self.ids: Iterable = ids
+        self.ids: IDT = ids
 
         if expected_outputs is None and (hasattr(data_inputs, '__len__') or hasattr(data_inputs, '__iter__')):
-            self.expected_outputs: Iterable = [None] * len(data_inputs)
+            self.expected_outputs: EOT = [None] * len(data_inputs)
         else:
-            self.expected_outputs: Iterable = expected_outputs
+            self.expected_outputs: EOT = expected_outputs
 
         if sub_data_containers is None:
             sub_data_containers = []
 
         self.sub_data_containers: List[NamedDataContainerTuple] = sub_data_containers
 
-    def set_data_inputs(self, data_inputs: Iterable):
+    def set_data_inputs(self, data_inputs: DIT) -> 'DataContainer':
         """
         Set data inputs.
 
@@ -96,7 +102,7 @@ class DataContainer:
         self.data_inputs = data_inputs
         return self
 
-    def set_expected_outputs(self, expected_outputs: Iterable):
+    def set_expected_outputs(self, expected_outputs: EOT) -> 'DataContainer':
         """
         Set expected outputs.
 
@@ -107,7 +113,7 @@ class DataContainer:
         self.expected_outputs = expected_outputs
         return self
 
-    def set_ids(self, ids: List[str]):
+    def set_ids(self, ids: IDT) -> 'DataContainer':
         """
         Set ids.
 
@@ -117,7 +123,7 @@ class DataContainer:
         self.ids = ids
         return self
 
-    def get_ids_summary(self):
+    def get_ids_summary(self) -> str:
         return ','.join([i for i in self.ids if i is not None])
 
     def set_sub_data_containers(self, sub_data_containers: List['DataContainer']) -> 'DataContainer':
@@ -134,7 +140,7 @@ class DataContainer:
             keep_incomplete_batch: bool = True,
             default_value_data_inputs=None,
             default_value_expected_outputs=None
-    ) -> Iterable['DataContainer']:
+    ) -> Iterable['DataContainer[IDT, DIT, EOT]']:
         """
         Yields minibatches extracted from looping on the DataContainer's content with a batch_size and a certain behavior for the last batch when the batch_size is uneven with the total size.
 
@@ -184,13 +190,12 @@ class DataContainer:
         for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
         to trim absent values from the batch
         :return: an iterator of DataContainer
-        :rtype: Iterable[DataContainer]
 
         .. seealso::
             :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
         """
         for i in range(0, len(self.data_inputs), batch_size):
-            data_container = DataContainer(
+            data_container: DataContainer[IDT, DIT, EOT] = DataContainer(
                 ids=self.ids[i:i + batch_size],
                 data_inputs=self.data_inputs[i:i + batch_size],
                 expected_outputs=self.expected_outputs[i:i + batch_size]
@@ -216,7 +221,7 @@ class DataContainer:
         else:
             return math.floor(len(self.data_inputs) / batch_size)
 
-    def copy(self):
+    def copy(self) -> 'DataContainer[IDT, DIT, EOT]':
         return DataContainer(
             data_inputs=self.data_inputs,
             ids=self.ids,
@@ -243,7 +248,7 @@ class DataContainer:
         """
         return [name for name, _ in self.sub_data_containers]
 
-    def __contains__(self, item):
+    def __contains__(self, item: str) -> bool:
         """
         return true if sub container name is in the sub data containers.
 
@@ -259,7 +264,7 @@ class DataContainer:
         else:
             raise NotImplementedError('DataContainer.__contains__ not implemented for this type: {}'.format(type(item)))
 
-    def __getitem__(self, item: Union[str, int]):
+    def __getitem__(self, item: Union[str, int]) -> Union['DataContainer', Tuple[IDT, DIT, EOT]]:
         """
         If item is a string, then get then sub container with the same name as item in the list of sub data containers.
         If item is an int, then return a tuple of (id, data input, expected output) for the given item index.
@@ -282,7 +287,7 @@ class DataContainer:
 
             return ids, self.data_inputs[item], self.expected_outputs[item]
 
-    def tolist(self) -> 'DataContainer':
+    def tolist(self) -> 'DataContainer[List, List, List]':
         def pandas_tonp(df):
             if 'DataFrame' in str(type(df)) or 'Series' in str(type(df)):
                 return df.values.tolist()
@@ -299,10 +304,10 @@ class DataContainer:
         self.apply_conversion_func(ndarr_tolist)
         return self
 
-    def tolistshallow(self) -> 'DataContainer':
+    def tolistshallow(self) -> 'DataContainer[List, List, List]':
         return self.apply_conversion_func(list)
 
-    def to_numpy(self) -> 'DataContainer':
+    def to_numpy(self) -> 'DataContainer[np.ndarray, np.ndarray, np.ndarray]':
         return self.apply_conversion_func(np.array)
 
     def apply_conversion_func(self, conversion_function: Callable[[Any], Any]) -> 'DataContainer':
@@ -316,7 +321,7 @@ class DataContainer:
         self.set_expected_outputs(conversion_function(self.expected_outputs))
         return self
 
-    def unpack(self) -> Tuple[Iterable[Any], Iterable[Any], Iterable[Any]]:
+    def unpack(self) -> Tuple[Iterable[IDT], Iterable[DIT], Iterable[EOT]]:
         """
         Unpack to a tuples of (ids, data input, expected output).
 
@@ -324,14 +329,14 @@ class DataContainer:
         """
         return self.ids, self.data_inputs, self.expected_outputs
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Tuple[IDT, DIT, EOT]]:
         """
         Iter method returns a zip of all of the ids, data_inputs, and expected_outputs in the data container.
 
         :return: iterator of tuples containing ids, data_inputs, and expected outputs
         :rtype: Iterator[Tuple]
         """
-        ids = self.ids
+        ids: IDT = self.ids
         if self.ids is None:
             ids = [None] * len(self.data_inputs)
 

@@ -19,10 +19,12 @@ Tests for Pipelines
 
 """
 
+from typing import Generic
 import numpy as np
 import pytest
 
-from neuraxle.base import ExecutionContext, NonTransformableMixin, BaseStep, BaseTransformer, _FittableStep
+from neuraxle.base import (_FittableStep, _HasChildrenMixin, BaseStep, BaseTransformer,
+                           ExecutionContext, NonTransformableMixin)
 from neuraxle.hyperparams.distributions import RandInt, LogUniform
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.pipeline import Pipeline
@@ -429,3 +431,11 @@ def test_pipeline_setup_incrementally():
                   some_step2])
 
     p.fit_transform(None, None)
+
+
+def test_subtyping_of_pipeline_works_correctly():
+    p: Pipeline[Identity] = Pipeline([Identity(), Identity()])
+
+    assert issubclass(Pipeline, Generic)
+    assert isinstance(p, _HasChildrenMixin)
+    assert isinstance(p[-1], Identity)

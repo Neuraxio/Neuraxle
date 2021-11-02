@@ -655,7 +655,7 @@ class _HasChildrenMixin(MixinForBaseService, Generic[BaseServiceT]):
             raise KeyError(f'{unknown_names} not children of {self.name}. Available childrens are: {children_names}.')
 
     @abstractmethod
-    def get_children(self) -> List[BaseService]:
+    def get_children(self) -> List[BaseServiceT]:
         """
         Get the list of all the childs for that step or service.
 
@@ -741,7 +741,7 @@ class ExecutionContext(_HasChildrenMixin, BaseService):
             execution_mode: ExecutionMode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM,
             stripped_saver: BaseSaver = None,
             parents: List['BaseStep'] = None,
-            services: Dict[Type['BaseService'], 'BaseService'] = None,
+            services: Dict[Type['BaseServiceT'], 'BaseServiceT'] = None,
     ):
 
         self.execution_mode = execution_mode
@@ -772,8 +772,11 @@ class ExecutionContext(_HasChildrenMixin, BaseService):
         self.trail: Trail = trail
 
         if services is None:
-            services: Dict[Type['BaseService'], BaseService] = dict()
-        self.services: Dict[Type['BaseService'], BaseService] = services
+            services: Dict[Type['BaseServiceT'], BaseServiceT] = dict()
+        self.services: Dict[Type['BaseServiceT'], BaseServiceT] = services
+
+    def get_children(self) -> List[BaseServiceT]:
+        return list(self.services.values())
 
     @property
     def logger(self) -> logging.Logger:
@@ -795,7 +798,7 @@ class ExecutionContext(_HasChildrenMixin, BaseService):
         self.execution_phase: ExecutionPhase = phase
         return self
 
-    def set_service_locator(self, services: Dict[Type['BaseService'], 'BaseService']) -> 'ExecutionContext':
+    def set_service_locator(self, services: Dict[Type['BaseServiceT'], 'BaseServiceT']) -> 'ExecutionContext':
         """
         Register abstract class type instances that inherit and implement
         the class :class:`~neuraxle.base.BaseService`.
@@ -803,11 +806,11 @@ class ExecutionContext(_HasChildrenMixin, BaseService):
         :param services: A dictionary of concrete services to register.
         :return: self
         """
-        self.services: Dict[Type['BaseService'], 'BaseService'] = services
+        self.services: Dict[Type['BaseServiceT'], 'BaseServiceT'] = services
         return self
 
     def register_service(
-        self, service_abstract_class_type: Type['BaseService'], service_instance: 'BaseService'
+        self, service_abstract_class_type: Type['BaseServiceT'], service_instance: 'BaseServiceT'
     ) -> 'ExecutionContext':
         """
         Register base class instance inside the services.
@@ -819,7 +822,7 @@ class ExecutionContext(_HasChildrenMixin, BaseService):
         self.services[service_abstract_class_type] = service_instance
         return self
 
-    def get_service(self, service_abstract_class_type: Type['BaseService']) -> object:
+    def get_service(self, service_abstract_class_type: Type['BaseServiceT']) -> object:
         """
         Get the registered instance for the given abstract class :class:`~neuraxle.base.BaseService` type.
         It is common to use service types as keys in the services dictionary.
@@ -829,7 +832,7 @@ class ExecutionContext(_HasChildrenMixin, BaseService):
         """
         return self.services[service_abstract_class_type]
 
-    def get_services(self) -> Dict[Type['BaseService'], 'BaseService']:
+    def get_services(self) -> Dict[Type['BaseServiceT'], 'BaseServiceT']:
         """
         Get the registered instances in the services.
 
@@ -837,7 +840,7 @@ class ExecutionContext(_HasChildrenMixin, BaseService):
         """
         return self.services
 
-    def has_service(self, service_abstract_class_type: Type['BaseService']) -> bool:
+    def has_service(self, service_abstract_class_type: Type['BaseServiceT']) -> bool:
         """
         Return a bool indicating if the service has been registered.
 
@@ -1002,7 +1005,7 @@ class ExecutionContext(_HasChildrenMixin, BaseService):
         """
         return self.get_path(is_absolute=False)
 
-    def get_names(self):
+    def get_names(self) -> List[str]:
         """
         Returns a list of the parent names.
 
@@ -2542,15 +2545,15 @@ class MetaStepMixin(_HasChildrenMixin):
         :class:`~neuraxle.steps.loop.StepClonerForEachDataInput`
     """
 
-    def __init__(self, wrapped: BaseTransformer = None, savers: List[BaseSaver] = None):
+    def __init__(self, wrapped: BaseServiceT = None, savers: List[BaseSaver] = None):
         if savers is None:
             savers = []
         MixinForBaseTransformer.__init__(self)
-        self.wrapped: BaseTransformer = _sklearn_to_neuraxle_step(wrapped)
+        self.wrapped: BaseServiceT = _sklearn_to_neuraxle_step(wrapped)
         savers.append(MetaStepJoblibStepSaver())
         self.savers.extend(savers)
 
-    def set_step(self, step: BaseTransformer) -> BaseStep:
+    def set_step(self, step: BaseServiceT) -> BaseServiceT:
         """
         Set wrapped step to the given step.
 
@@ -2558,10 +2561,10 @@ class MetaStepMixin(_HasChildrenMixin):
         :return: self
         """
         self._invalidate()
-        self.wrapped: BaseTransformer = _sklearn_to_neuraxle_step(step)
+        self.wrapped: BaseServiceT = _sklearn_to_neuraxle_step(step)
         return self
 
-    def get_step(self) -> BaseStep:
+    def get_step(self) -> BaseServiceT:
         """
         Get wrapped step
 
@@ -2611,7 +2614,7 @@ class MetaStepMixin(_HasChildrenMixin):
         data_inputs = self.wrapped.inverse_transform(processed_outputs)
         return data_inputs
 
-    def get_children(self) -> List[BaseStep]:
+    def get_children(self) -> List[BaseServiceT]:
         """
         Get the list of all the childs for that step.
         :class:`_HasChildrenMixin` calls this method to apply methods to all of the childs for that step.
@@ -2623,7 +2626,7 @@ class MetaStepMixin(_HasChildrenMixin):
         """
         return [self.wrapped]
 
-    def get_step_by_name(self, name):
+    def get_step_by_name(self, name) -> BaseService:
         if self.name == name:
             return self
         if self.wrapped.name == name:
@@ -2720,7 +2723,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
         return step
 
 
-NamedTupleList = List[Union[Tuple[str, BaseTransformer], BaseTransformer]]
+NamedTupleList = List[Union[Tuple[str, BaseTransformerT], BaseTransformerT]]
 
 
 class NonFittableMixin(MixinForBaseTransformer):
