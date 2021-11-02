@@ -37,6 +37,22 @@ from neuraxle.base import BaseStep, NonTransformableMixin, ExecutionContext, Met
 from neuraxle.data_container import DataContainer
 
 
+class AssertFalseStep(HandleOnlyMixin, BaseStep):
+    """
+    Asserts that the input is False using self._assert(False, ..., context)
+    """
+
+    def __init__(self, message: str = "This step should not fit nor transform."):
+        BaseStep.__init__(self)
+        self.message: str = message
+
+    def _transform_data_container(self, data_container, context):
+        self._assert(False, self.message, context)
+
+    def _fit_data_container(self, data_container, context):
+        self._assert(False, self.message, context)
+
+
 class BaseCallbackStep(BaseStep, ABC):
     """Base class for callback steps."""
 

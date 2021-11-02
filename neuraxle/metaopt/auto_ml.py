@@ -48,7 +48,7 @@ from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpac
 from neuraxle.metaopt.callbacks import BaseCallback, CallbackList, ScoringCallback
 from neuraxle.metaopt.observable import _Observable, _Observer
 from neuraxle.metaopt.validation import BaseCrossValidationWrapper
-from neuraxle.metaopt.trial import Trial, TrialSplit, TRIAL_STATUS, Trials
+from neuraxle.metaopt.trial import Trial, TrialSplit, TrialStatus, Trials
 from neuraxle.logging.warnings import warn_deprecated_class, warn_deprecated_arg
 
 
@@ -94,7 +94,7 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         self.hyperparameter_selection_strategy = hyperparameter_selection_strategy
 
     @abstractmethod
-    def load_all_trials(self, status: 'TRIAL_STATUS') -> 'Trials':
+    def load_all_trials(self, status: 'TrialStatus') -> 'Trials':
         """
         Load all hyperparameter trials with their corresponding score.
         Sorted by creation date.
@@ -129,7 +129,7 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
 
         :return: best hyperparams.
         """
-        trials = self.load_all_trials(status=TRIAL_STATUS.SUCCESS)
+        trials = self.load_all_trials(status=TrialStatus.SUCCESS)
         best_hyperparams = HyperparameterSamples(trials.get_best_hyperparams())
         return best_hyperparams
 
@@ -230,7 +230,7 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
 
         self.trials = Trials()
 
-    def load_all_trials(self, status: 'TRIAL_STATUS' = None) -> 'Trials':
+    def load_all_trials(self, status: 'TrialStatus' = None) -> 'Trials':
         """
         Load all trials with the given status.
 
@@ -302,17 +302,17 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         self._remove_previous_trial_state_json()
 
         trial_path_func = {
-            TRIAL_STATUS.SUCCESS: self._get_successful_trial_json_file_path,
-            TRIAL_STATUS.FAILED: self._get_failed_trial_json_file_path,
-            TRIAL_STATUS.STARTED: self._get_ongoing_trial_json_file_path,
-            TRIAL_STATUS.PLANNED: self._get_new_trial_json_file_path
+            TrialStatus.SUCCESS: self._get_successful_trial_json_file_path,
+            TrialStatus.FAILED: self._get_failed_trial_json_file_path,
+            TrialStatus.RUNNING: self._get_ongoing_trial_json_file_path,
+            TrialStatus.PLANNED: self._get_new_trial_json_file_path
         }
         trial_file_path = trial_path_func[trial.status](trial)
 
         with open(trial_file_path, 'w+') as outfile:
             json.dump(trial.to_json(), outfile)
 
-        if trial.status in (TRIAL_STATUS.SUCCESS, TRIAL_STATUS.FAILED):
+        if trial.status in (TrialStatus.SUCCESS, TrialStatus.FAILED):
             self.json_path_remove_on_update = None
         else:
             self.json_path_remove_on_update = trial_file_path
@@ -332,7 +332,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
         return trial
 
-    def load_all_trials(self, status: 'TRIAL_STATUS' = None) -> 'Trials':
+    def load_all_trials(self, status: 'TrialStatus' = None) -> 'Trials':
         """
         Load all hyperparameter trials with their corresponding score.
         Reads all the saved trial json files, sorted by creation date.
@@ -924,7 +924,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         try:
             auto_ml_data = AutoMLContainer(
                 trial_number=trial_number,
-                trials=self.hyperparams_repository.load_all_trials(TRIAL_STATUS.SUCCESS),
+                trials=self.hyperparams_repository.load_all_trials(TrialStatus.SUCCESS),
                 hyperparameter_space=self.pipeline.get_hyperparams_space(),
                 main_scoring_metric_name=self.trainer.get_main_metric_name()
             )

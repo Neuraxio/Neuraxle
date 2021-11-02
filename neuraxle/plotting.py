@@ -38,7 +38,7 @@ from neuraxle.metaopt.auto_ml import HyperparamsRepository
 from neuraxle.hyperparams.distributions import *
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.observable import _Observer, T
-from neuraxle.metaopt.trial import Trial, TRIAL_STATUS, Trials
+from neuraxle.metaopt.trial import Trial, TrialStatus, Trials
 
 DISCRETE_NUM_BINS = 40
 CONTINUOUS_NUM_BINS = 1000
@@ -214,7 +214,7 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
         :return:
         """
         repo = value
-        trials: Trials = repo.load_all_trials(TRIAL_STATUS.SUCCESS)
+        trials: Trials = repo.load_all_trials(TrialStatus.SUCCESS)
         if not self.plot_all_trials_on_complete:
             return
         if len(trials) == 0:

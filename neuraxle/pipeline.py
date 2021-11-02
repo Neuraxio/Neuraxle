@@ -82,10 +82,8 @@ class Pipeline(BasePipeline):
         :class:`~neuraxle.distributed.streaming.SequentialQueuedPipeline`
     """
 
-    def __init__(self, steps: NamedTupleList, cache_folder=None):
+    def __init__(self, steps: NamedTupleList):
         BasePipeline.__init__(self, steps=steps)
-        warn_deprecated_arg(self, "cache_folder", None, cache_folder, None,
-                            "Pipeline(...).with_context(ExecutionContext(cache_folder))")
 
     def fit(self, data_inputs, expected_outputs=None) -> 'Pipeline':
         """
@@ -207,8 +205,8 @@ class Pipeline(BasePipeline):
         self.set_steps(new_steps_as_tuple)
         return self, data_container
 
-    def _inverse_transform_data_container(self, data_container: DataContainer,
-                                          context: ExecutionContext) -> DataContainer:
+    def _inverse_transform_data_container(
+            self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
         After transforming all data inputs, and obtaining a prediction, we can inverse transform the processed outputs
         """
@@ -337,10 +335,9 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             keep_incomplete_batch: bool = None,
             default_value_data_inputs=AbsentValuesNullObject(),
             default_value_expected_outputs=None,
-            cache_folder=None,
             mute_joiner_batch_size_warning: bool = True
     ):
-        Pipeline.__init__(self, steps=steps, cache_folder=cache_folder)
+        Pipeline.__init__(self, steps=steps)
         ForceHandleMixin.__init__(self)
         self.default_value_data_inputs = default_value_data_inputs
         self.default_value_expected_outputs = default_value_expected_outputs

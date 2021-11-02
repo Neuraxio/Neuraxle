@@ -52,27 +52,27 @@ def test_nested_pipeline_fit_transform_should_save_some_fitted_pipeline_steps(tm
     p.save()
 
     assert np.array_equal(outputs, EXPECTED_OUTPUTS)
-    not_saved_paths = [create_some_step_path(tmpdir, step_no=0), create_some_step_path(tmpdir, step_no=1),
-                       create_some_step_path(tmpdir, step_no=2)]
-    for path in not_saved_paths:
-        assert not os.path.exists(path)
-    saved_paths = [create_root_path(tmpdir), create_pipeline2_path(tmpdir)]
+    saved_paths = [
+        create_root_path(tmpdir), create_pipeline2_path(tmpdir),
+        create_some_step_path(tmpdir, step_no=0), create_some_step_path(tmpdir, step_no=1),
+        create_some_step_path(tmpdir, step_no=2)
+    ]
     for path in saved_paths:
-        assert os.path.exists(path)
+        assert os.path.exists(path), path
 
 
 def test_pipeline_transform_should_not_save_steps(tmpdir: LocalPath):
     p: StepWithContext = create_pipeline(tmpdir)
 
     outputs = p.transform(np.array(range(10)))
-    p.wrapped.save(ExecutionContext(tmpdir))
+    p.wrapped.save(ExecutionContext(tmpdir), full_dump=False)
 
     assert np.array_equal(outputs, EXPECTED_OUTPUTS)
     not_saved_paths = [
         create_root_path(tmpdir), create_pipeline2_path(tmpdir), create_some_step_path(tmpdir, step_no=0),
         create_some_step_path(tmpdir, step_no=1), create_some_step_path(tmpdir, step_no=2)]
     for path in not_saved_paths:
-        assert not os.path.exists(path)
+        assert not os.path.exists(path), path
 
 
 def test_pipeline_fit_should_save_all_fitted_pipeline_steps(tmpdir: LocalPath):
@@ -81,13 +81,13 @@ def test_pipeline_fit_should_save_all_fitted_pipeline_steps(tmpdir: LocalPath):
     p = p.fit(np.array(range(10)), np.array(range(10)))
     p.save()
 
-    not_saved_paths = [create_some_step_path(tmpdir, step_no=0), create_some_step_path(tmpdir, step_no=1),
-                       create_some_step_path(tmpdir, step_no=2)]
-    for path in not_saved_paths:
-        assert not os.path.exists(path)
-    saved_paths = [create_root_path(tmpdir), create_pipeline2_path(tmpdir)]
+    saved_paths = [
+        create_root_path(tmpdir), create_pipeline2_path(tmpdir),
+        create_some_step_path(tmpdir, step_no=0), create_some_step_path(tmpdir, step_no=1),
+        create_some_step_path(tmpdir, step_no=2)
+    ]
     for path in saved_paths:
-        assert os.path.exists(path)
+        assert os.path.exists(path), path
 
 
 def test_pipeline_fit_transform_should_load_all_pipeline_steps(tmpdir: LocalPath):

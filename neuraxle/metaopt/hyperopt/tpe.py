@@ -14,7 +14,7 @@ from neuraxle.hyperparams.distributions import DistributionMixture, PriorityChoi
 from neuraxle.hyperparams.scipy_distributions import Choice, LogNormal, LogUniform, Quantized
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.auto_ml import BaseHyperparameterSelectionStrategy, RandomSearchHyperparameterSelectionStrategy, \
-    TRIAL_STATUS
+    TrialStatus
 from neuraxle.metaopt.trial import Trials
 
 _LOG_DISTRIBUTION = (LogNormal, LogUniform)
@@ -62,7 +62,7 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
             return self.initial_auto_ml_algo.find_next_best_hyperparams(auto_ml_container)
 
         # Keep only success trials
-        success_trials: Trials = auto_ml_container.trials.filter(TRIAL_STATUS.SUCCESS)
+        success_trials: Trials = auto_ml_container.trials.filter(TrialStatus.SUCCESS)
 
         # Split trials into good and bad using quantile threshold.
         good_trials, bad_trials = success_trials.split_good_and_bad_trials(

@@ -405,16 +405,18 @@ class ChooseOneStepOf(FeatureUnion):
         })
 
     def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, dict]):
-        """
-        Set chosen step hyperparams.
-
-        :param hyperparams: hyperparams
-        :type hyperparams: HyperparameterSamples
-        :return:
-        """
         super().set_hyperparams(hyperparams)
         self._update_optional_hyperparams()
+        return self
 
+    def _set_hyperparams(self, hyperparams: HyperparameterSamples) -> HyperparameterSamples:
+        ret = super()._set_hyperparams(hyperparams)
+        self._update_optional_hyperparams()
+        return ret
+
+    def update_hyperparams(self, hyperparams: Union[Dict, HyperparameterSamples]) -> 'BaseTransformer':
+        super().update_hyperparams(hyperparams)
+        self._update_optional_hyperparams()
         return self
 
     def _update_hyperparams(self, hyperparams: Union[HyperparameterSamples, dict]):
@@ -425,9 +427,9 @@ class ChooseOneStepOf(FeatureUnion):
         :type hyperparams: HyperparameterSamples
         :return:
         """
-        super()._update_hyperparams(hyperparams)
+        ret = super()._update_hyperparams(hyperparams)
         self._update_optional_hyperparams()
-        return self.hyperparams
+        return ret
 
     def _update_optional_hyperparams(self):
         step_names = list(self.keys())

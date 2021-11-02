@@ -23,19 +23,20 @@ from typing import Callable
 import numpy as np
 import pytest
 
-from neuraxle.base import ExecutionContext, Identity
+from neuraxle.base import ExecutionContext, Identity, StepWithContext
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import TapeCallbackFunction, FitTransformCallbackStep
 from neuraxle.steps.caching import JoblibValueCachingWrapper
 
 
 class PipelineTestCase:
-    def __init__(self, tape, data_inputs, expected_outputs, steps, expected_tape):
-        self.steps = steps
-        self.expected_outputs = expected_outputs
-        self.expected_tape = expected_tape
-        self.data_inputs = data_inputs
+    def __init__(self, tape, data_inputs, expected_outputs, steps, expected_tape_fit, expected_tape_transform):
         self.tape = tape
+        self.data_inputs = data_inputs
+        self.expected_outputs = expected_outputs
+        self.steps = steps
+        self.expected_tape_fit = expected_tape_fit
+        self.expected_tape_transform = expected_tape_transform
 
 
 def create_test_cases():
@@ -54,6 +55,7 @@ def create_test_cases():
                 ("b", FitTransformCallbackStep(tape.callback, tape_fit.callback, ["2"])),
                 ("c", FitTransformCallbackStep(tape.callback, tape_fit.callback, ["3"]))
             ],
+            ["1", "2", "3"],
             ["1", "2", "3"])
         return tape_without_checkpoint_test_arguments
 
@@ -70,6 +72,7 @@ def create_test_cases():
                 ("c", FitTransformCallbackStep(tape2.callback, tape2_fit.callback, ["2"])),
                 ("d", FitTransformCallbackStep(tape2.callback, tape2_fit.callback, ["3"]))
             ],
+            ["1", "2", "3"],
             ["1", "2", "3"])
         return tape_checkpoint_not_saved_test_arguments
 
@@ -85,6 +88,7 @@ def create_test_cases():
                 ("b", FitTransformCallbackStep(tape3.callback, tape3_fit.callback, ["2"])),
                 ("c", FitTransformCallbackStep(tape3.callback, tape3_fit.callback, ["3"]))
             ],
+            ["1", "2", "3"],
             ["2", "3"])
         return tape_checkpoint_saved_after_first_step_test_arguments
 
@@ -100,6 +104,7 @@ def create_test_cases():
                 ("b", JoblibValueCachingWrapper(FitTransformCallbackStep(tape4.callback, tape4_fit.callback, ["2"]))),
                 ("c", FitTransformCallbackStep(tape4.callback, tape4_fit.callback, ["3"]))
             ],
+            ["1", "2", "3"],
             ["1", "3"])
         return tape_checkpoint_saved_after_second_step_test_arguments
 
@@ -115,6 +120,7 @@ def create_test_cases():
                 ("b", FitTransformCallbackStep(tape5.callback, tape5_fit.callback, ["2"])),
                 ("c", JoblibValueCachingWrapper(FitTransformCallbackStep(tape5.callback, tape5_fit.callback, ["3"])))
             ],
+            ["1", "2", "3"],
             ["1", "2"])
         return tape_checkpoint_saved_after_last_step_test_arguments
 
@@ -135,6 +141,7 @@ def create_test_cases():
                 ("c", FitTransformCallbackStep(tape6.callback, tape6_fit.callback, ["3"])),
                 ("d", FitTransformCallbackStep(tape6.callback, tape6_fit.callback, ["4"])),
             ],
+            ["1", "2", "3", "4"],
             ["3", "4"])
         return tape_checkpoint_saved_inside_subpipeline_last_step
 
@@ -152,6 +159,7 @@ def create_test_cases():
                 ("d", JoblibValueCachingWrapper(FitTransformCallbackStep(tape10.callback, tape10_fit.callback, ["4"]))),
                 ("e", FitTransformCallbackStep(tape10.callback, tape10_fit.callback, ["5"]))
             ],
+            ["1", "2", "3", "4", "5"],
             ["1", "3", "5"])
         return tape_saved_checkpoint_after_another_saved_checkpoint
 
@@ -168,6 +176,7 @@ def create_test_cases():
                 ("c", FitTransformCallbackStep(tape11.callback, tape11_fit.callback, ["3"])),
                 ("d", JoblibValueCachingWrapper(Identity()))
             ],
+            ["1", "2", "3", None],
             ["1", "2", "3"])
         return tape_multiple_checkpoint_in_a_row
 
@@ -191,8 +200,8 @@ def test_should_fit_transform_each_steps(test_case: Callable, tmpdir):
     actual_pipeline, actual_data_inputs = pipeline.fit_transform(test_case.data_inputs, test_case.expected_outputs)
 
     actual_tape = test_case.tape.get_name_tape()
-    assert isinstance(actual_pipeline, Pipeline)
-    assert actual_tape == test_case.expected_tape
+    assert isinstance(actual_pipeline, StepWithContext)
+    assert actual_tape == [f for f in test_case.expected_tape_fit if f is not None]
     assert np.array_equal(actual_data_inputs, test_case.data_inputs)
 
 
@@ -204,8 +213,8 @@ def test_should_fit_each_steps(test_case: Callable, tmpdir):
     actual_pipeline = pipeline.fit(test_case.data_inputs, test_case.expected_outputs)
 
     actual_tape = test_case.tape.get_name_tape()
-    assert isinstance(actual_pipeline, Pipeline)
-    assert actual_tape == test_case.expected_tape[:-1]
+    assert isinstance(actual_pipeline, StepWithContext)
+    assert actual_tape == test_case.expected_tape_fit[:-1]
 
 
 @pytest.mark.parametrize("test_case", create_test_cases())
@@ -216,5 +225,5 @@ def test_should_transform_each_steps(test_case: Callable, tmpdir):
     actual_data_inputs = pipeline.transform(test_case.data_inputs)
 
     actual_tape = test_case.tape.get_name_tape()
-    assert actual_tape == test_case.expected_tape
+    assert actual_tape == test_case.expected_tape_transform
     assert np.array_equal(actual_data_inputs, test_case.data_inputs)

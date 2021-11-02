@@ -25,7 +25,9 @@ HYPE_SAMPLE = HyperparameterSamples({
 
 
 class SomeMetaStep(NonTransformableMixin, MetaStep):
-    pass
+    def __init__(self, wrapped):
+        MetaStep.__init__(self, wrapped)
+        NonTransformableMixin.__init__(self)
 
 
 class SomeStepInverseTransform(SomeStep):

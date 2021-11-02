@@ -28,7 +28,7 @@ T = TypeVar('T')
 
 class _Observable(Generic[T]):
     """
-    This class is used to implement the Observer design pattern. 
+    This class is used to implement the Observer design pattern.
     The _Observable class is a subject that is being observed by the _Observer class.
     The type T is the type of the value that will be observed.
 

@@ -42,7 +42,8 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from enum import Enum
-from typing import List, Set, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Dict, Tuple, Type
+from typing import List, Set, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Dict, Tuple, \
+    Type, TypeVar, Generic
 
 from joblib import dump, load
 
@@ -195,7 +196,508 @@ class ExecutionPhase(Enum):
     PROD = "production"
 
 
-class ExecutionContext:
+class MixinForBaseService:
+    """
+    Any steps/transformers within a pipeline that inherits of this class should implement BaseStep/BaseTransformer and
+    initialize it before any mixin. This class checks that its the case at initialization.
+    """
+
+    def __init__(self):
+        self._ensure_basetransformer_init_called()
+
+    def _ensure_basetransformer_init_called(self):
+        """
+        Assert that BaseTransformer's init method has been called.
+        """
+        assert isinstance(self, BaseService), f"This class should be of type BaseService."
+        if not all(map(lambda x: hasattr(self, x), ('setup', 'apply', 'get_config', 'set_config', '_teardown'))):
+            raise RuntimeError('Please initialize Mixins in the good order. This Mixin should be initialized after '
+                               'BaseService.')
+
+
+class _RecursiveArguments:
+    """
+    This class is used by :func:`~neuraxle.base.BaseStep.apply`, and :class:`_HasChildrenMixin`
+    to pass the right arguments to steps with children.
+
+    Two types of arguments:
+    - args: arguments that are not named
+    - kwargs: arguments that are named
+
+    For the values of both args and kwargs, we use either values or recursive values:
+    - value is not RecursiveDict: the value is replicated and passed to each sub step.
+    - value is RecursiveDict: the value is sliced accordingly and decomposed into the next levels.
+
+    As a shorthand, if another _RecursiveArguments (ra) is passed as an argument, it is used almost as is
+    to merge different ways of using ra: using a past ra, or else some args.
+
+    .. seealso::
+        :class:`_HasChildrenMixin`,
+        :func:`~neuraxle.base._HasHyperparamsSpace.get_hyperparams_space`,
+        :func:`~neuraxle.base._HasHyperparamsSpace.set_hyperparams_space`,
+        :func:`~neuraxle.base._HasHyperparamsSpace.update_hyperparams_space`,
+        :func:`~neuraxle.base._HasHyperparams.get_hyperparams`,
+        :func:`~neuraxle.base._HasHyperparams.set_hyperparams`,
+        :func:`~neuraxle.base._HasHyperparams.update_hyperparams`,
+        :func:`~neuraxle.base._HasConfig.get_config`,
+        :func:`~neuraxle.base._HasConfig.set_config`,
+        :func:`~neuraxle.base._HasConfig.update_config`,
+        :func:`~neuraxle.base.BaseTransformer.invalidate`
+    """
+
+    def __init__(self, ra=None, *args, **kwargs):
+        if ra is not None:
+            args = ra.args
+            kwargs = ra.kwargs
+        self.args: Union[Any, RecursiveDict] = args
+        self.kwargs: Union[Dict, RecursiveDict] = kwargs
+
+    def __getitem__(self, child_step_name: str):
+        """
+        Return recursive arguments for the given child step name.
+        If child step name is None, return the values at the current root.
+
+        :param child_step_name: child step name, or None if we want to get root values.
+        :return: recursive argument for the given child step name
+        """
+        arguments = list()
+        for arg in self.args:
+            if isinstance(arg, RecursiveDict):
+                arguments.append(arg.get(child_step_name))
+            else:
+                arguments.append(arg)
+
+        keyword_arguments = RecursiveDict()
+        for key, arg in self.kwargs.items():
+            if isinstance(arg, RecursiveDict):
+                keyword_arguments[key] = arg.get(child_step_name)
+            else:
+                keyword_arguments[key] = arg
+
+        return _RecursiveArguments(*arguments, **keyword_arguments)
+
+    def children_names(self) -> List[str]:
+        """
+        Return the names of the children steps.
+
+        :return: list of children step names
+        """
+        argvals = (list(self.args) + list(self.kwargs.values()))
+        # Checking if any of the arguments (v) is a RecursiveDict and if so,
+        # take all it's children names (keys) for childs who are also
+        # RecursiveDict for being themselves steps:
+        return set(sum([
+            list([
+                k
+                for (k, vv) in v.items()
+                if isinstance(vv, RecursiveDict)
+            ])
+            for v in argvals
+            if isinstance(v, RecursiveDict)
+        ], []))
+
+
+class _HasRecursiveMethods:
+    """
+    An internal class to represent a step that has recursive methods.
+    The apply :func:`apply` function is used to apply a method to a step and its children.
+
+
+    Example usage :
+
+
+    .. code-block:: python
+
+        class _HasHyperparams:
+            # ...
+            def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]) -> HyperparameterSamples:
+                self.apply(method='_set_hyperparams', hyperparams=HyperparameterSamples(hyperparams))
+                return self
+
+            def _set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]) -> HyperparameterSamples:
+                self._invalidate()
+                hyperparams = HyperparameterSamples(hyperparams)
+                self.hyperparams = hyperparams if len(hyperparams) > 0 else self.hyperparams
+                return self.hyperparams
+
+        pipeline = Pipeline([
+            SomeStep()
+        ])
+
+        pipeline.set_hyperparams(HyperparameterSamples({
+            'learning_rate': 0.1,
+            'SomeStep__learning_rate': 0.05
+        }))
+
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`BaseTransformer`,
+        :class:`_HasChildrenMixin`
+        :class:`_RecursiveArguments`
+    """
+
+    def __init__(self, name: str = None):
+        if name is None:
+            name = self.__class__.__name__
+        self.name: str = name
+
+    def set_name(self, name: str) -> 'BaseService':
+        """
+        Set the name of the service.
+
+        :param name: a string.
+        :return: self
+
+        .. note::
+            A step name is in the keys of :py:attr:`~neuraxle.base.TruncableSteps.steps_as_tuple`
+        """
+        self.name = name
+        return self
+
+    def get_name(self) -> str:
+        """
+        Get the name of the service.
+
+        :return: the name, a string.
+
+        .. note:: A step name is the same value as the one in the keys of :class:`Pipeline`.steps_as_tuple
+        """
+        return self.name
+
+    def apply(self, method: Union[str, Callable], ra: _RecursiveArguments = None, *args, **kwargs) -> RecursiveDict:
+        """
+        Apply a method to a step and its children.
+
+        Here is an apply usage example to invalidate each steps.
+        This example comes from the saving logic:
+
+        .. code-block:: python
+
+            # preparing to save steps and its nested children:
+            if full_dump:
+                # initialize and invalidate steps to make sure that all steps will be saved
+
+                def _initialize_if_needed(step):
+                    if not step.is_initialized:
+                        step.setup(context=context)
+                    if not step.is_initialized:
+                        raise NotImplementedError(f"The `setup` method of the following class "
+                                                f"failed to set `self.is_initialized` to True: {step.__class__.__name__}.")
+                    return RecursiveDict()
+
+                def _invalidate(step):
+                    step._invalidate()
+                    return RecursiveDict()
+
+                self.apply(method=_initialize_if_needed)
+                self.apply(method=_invalidate)
+
+            # save steps:
+            ...
+
+
+        Here is another example. For instance, when setting the hyperparams space of a step,
+        we use :func:`~neuraxle.base.BaseStep._set_hyperparams_space` to set the hyperparams of the step.
+        The trick is that the space argument :class:`~neuraxle.hyperparams.space.HyperparameterSpace` is a recursive dict.
+        The implementation is the same for setting the hyperparams and config
+        of the step and its children, not only its space.
+        The cool thing is that such hyperparameter spaces are recursive, inheriting from :class:`~neuraxle.hyperparams.space.RecursiveDict`.
+        and applying recursive arguments to the step and its children with the :func:`_HasChildrenMixin.apply` of :class:`_HasChildrenMixin`.
+        Here is the implementation, using apply:
+
+        .. code-block:: python
+
+            def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseTransformer':
+                self.apply(method='_set_hyperparams_space', hyperparams_space=HyperparameterSpace(hyperparams_space))
+                return self
+
+            def _set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> HyperparameterSpace:
+                self._invalidate()
+                self.hyperparams_space = HyperparameterSpace(hyperparams_space)
+                return self.hyperparams_space
+
+
+        :param method: method name that need to be called on all steps
+        :param ra: recursive arguments
+        :param args: any additional arguments to be passed to the method
+        :param kwargs: any additional positional arguments to be passed to the method
+        :return: method outputs, or None if no method has been applied
+
+        .. seealso::
+            :class:`_RecursiveArguments`,
+            :class:`_HasChildrenMixin`
+        """
+        ra = _RecursiveArguments(ra, *args, **kwargs)
+
+        kargs = ra.args
+
+        def _return_empty(*args, **kwargs):
+            return RecursiveDict()
+
+        _method = _return_empty
+        if isinstance(method, str) and hasattr(self, method) and callable(getattr(self, method)):
+            _method = getattr(self, method)
+
+        if not isinstance(method, str):
+            _method = method
+            kargs = [self] + list(kargs)
+
+        try:
+            results = _method(*kargs, **ra.kwargs)
+            if not isinstance(results, RecursiveDict):
+                raise ValueError(
+                    'Method {} must return a RecursiveDict because it is applied recursively.'.format(method))
+            return results
+        except Exception as err:
+            print('{}: Failed to apply method {}.'.format(self.name, method))
+            print(traceback.format_stack())
+            raise err
+
+
+class _HasConfig(ABC):
+    """
+    An internal class to represent a step that has config params.
+    This is useful to store the config of a step.
+
+    A config :class:`~neuraxle.hyperparams.space.RecursiveDict` config
+    attribute is used when you don't want to use a
+    :class:`~neuraxle.hyperparams.space.HyperparameterSamples` attribute.
+    The reason sometimes is that you don't want to tune your config, whereas
+    hyperparameters are used to tune your step in the AutoML
+    from hyperparameter spaces, such as using hyperopt.
+
+    A good example of a config parameter would be the number of threads,
+    or an API key loaded from the OS' environment variables, since they won't
+    be tuned but are changeable from the outside.
+
+    Thus, this class looks a lot like :class:`~neuraxle.base._HasHyperparams`
+    and :class:`~neuraxle.hyperparams.space.HyperparameterSpace`.
+
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`BaseTransformer`,
+        :class:`~neuraxle.base._HasHyperparams`,
+        :class:`~neuraxle.base._HasHyperparamsSpace`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
+        :class:`~neuraxle.hyperparams.space.RecursiveDict`
+    """
+
+    def __init__(self, config: Union[Dict, RecursiveDict] = None):
+        if config is None:
+            config = dict()
+        self.config: RecursiveDict = RecursiveDict(config)
+
+    def set_config(self, config: Union[Dict, RecursiveDict]) -> 'BaseTransformer':
+        """
+        Set step config. See :func:`~neuraxle.base._HasHyperparams.set_hyperparams`
+        for more usage examples and documentation, it works the same way.
+        """
+        if not isinstance(config, RecursiveDict):
+            config = RecursiveDict(config)
+        self.apply(method='_set_config', config=config)
+        return self
+
+    def _set_config(self, config: RecursiveDict) -> RecursiveDict:
+        self._invalidate()
+        self.config = RecursiveDict(config)
+        return self.config
+
+    def update_config(self, config: Union[Dict, RecursiveDict]) -> 'BaseTransformer':
+        """
+        Update the step config variables without removing the already-set config variables.
+        This method is similar to :func:`~neuraxle.base._HasHyperparams.update_hyperparams`.
+        Refer to it for more documentation and usage examples, it works the same way.
+        """
+        if not isinstance(config, RecursiveDict):
+            config = RecursiveDict(config)
+        self.apply(method='_update_config', config=config)
+        return self
+
+    def _update_config(self, config: RecursiveDict) -> RecursiveDict:
+        self._invalidate()
+        self.config.update(config)
+        return self.config
+
+    def get_config(self) -> RecursiveDict:
+        """
+        Get step config. Refer to :func:`~neuraxle.base._HasHyperparams.get_hyperparams`
+        for more documentation and usage examples, it works the same way.
+        """
+        results: RecursiveDict = self.apply(method='_get_config')
+        return results
+
+    def _get_config(self) -> RecursiveDict:
+        return self.config
+
+
+class _HasSetupTeardownLifecycle:
+    """
+    Step that has a setup and a teardown lifecycle methods.
+
+    .. note:: All heavy initialization logic should be done inside the *setup* method (e.g.: things inside GPU), and NOT in the constructor of your steps.
+
+    """
+
+    def __init__(self):
+        self.is_initialized = False
+
+    def setup(self, context: 'ExecutionContext' = None) -> 'BaseTransformer':
+        """
+        Initialize the step before it runs. Only from here and not before that heavy things should be created
+        (e.g.: things inside GPU), and NOT in the constructor.
+
+        .. warning::
+            The setup method is called once for each step when handle_fit, handle_fit_transform or handle_transform is called.
+            The setup method is executed only if is self.is_initialized is False
+            A setup function should set the self.is_initialized to True when called.
+
+        :param context: execution context
+        :return: self
+        """
+        self.is_initialized = True
+        return self
+
+    def _teardown(self) -> 'BaseTransformer':
+        """
+        Teardown step after program execution. Inverse of setup, and it should clear memory.
+        Override this method if you need to clear memory.
+
+        :return: self
+        """
+        self.is_initialized = False
+        return RecursiveDict()
+
+    def __del__(self):
+        try:
+            self._teardown()
+        except Exception:
+            print(traceback.format_exc())
+
+
+class BaseService(
+    _HasSetupTeardownLifecycle,
+    _HasConfig,
+    _HasRecursiveMethods,
+    ABC
+):
+    """
+    Base class for all services registred into the :class:`ExecutionContext`.
+
+    .. seealso::
+        :class:`ExecutionContext`,
+        :class:`BaseTransformer`,
+        :class:`BaseStep`,
+    """
+
+    def __init__(self, config: Union[Dict, RecursiveDict] = None, name: str = None):
+        _HasRecursiveMethods.__init__(self, name=name)
+        _HasConfig.__init__(self, config=config)
+        _HasSetupTeardownLifecycle.__init__(self)
+
+
+BaseServiceT = TypeVar('BaseServiceT', bound=BaseService)
+
+
+class _HasChildrenMixin(MixinForBaseService, Generic[BaseServiceT]):
+    """
+    Mixin to add behavior to the steps that have children (sub steps).
+
+    .. seealso::
+        :class:`MixinForBaseTransformer`
+        :class:`~neuraxle.base.MetaStepMixin`,
+        :class:`~neuraxle.base.TruncableSteps`
+    """
+
+    def apply(self, method: Union[str, Callable], ra: _RecursiveArguments = None, *args, **kwargs) -> RecursiveDict:
+        """
+        Apply method to root, and children steps.
+        Split the root, and children values inside the arguments of type RecursiveDict.
+
+        This method overrides the :func:`~neuraxle.base._HasRecursiveMethods.apply` method
+        of :class:`~neuraxle.base._HasRecursiveMethods`. Read the documentation of the
+        original method to learn more.
+
+        :param method: str or callable function to apply
+        :param ra: recursive arguments
+        :return:
+        """
+        ra: _RecursiveArguments = _RecursiveArguments(ra=ra, *args, **kwargs)
+        self._validate_children_exists(ra)
+
+        results: RecursiveDict = self._apply_self(method=method, ra=ra)
+        results: RecursiveDict = self._apply_childrens(results=results, method=method, ra=ra)
+
+        return results
+
+    def _apply_self(self, method: Union[str, Callable], ra: _RecursiveArguments) -> RecursiveDict:
+        terminal_ra: _RecursiveArguments = ra[None]
+        self_results: RecursiveDict = BaseStep.apply(self, method=method, ra=terminal_ra)
+        return self_results
+
+    def _apply_childrens(
+            self, results: RecursiveDict, method: Union[str, Callable], ra: _RecursiveArguments) -> RecursiveDict:
+        for children in self.get_children():
+            child_ra: _RecursiveArguments = ra[children.get_name()]
+            children_results: RecursiveDict = children.apply(method=method, ra=child_ra)
+            results[children.get_name()] = children_results
+        return results
+
+    def _validate_children_exists(self, ra):
+        """
+        Validate that the provided childrens are in self, and if not, raise an error.
+        """
+        children_names: Set[str] = set(self.get_children_names())
+        ra_children_names: Set[str] = ra.children_names()
+        unknown_names: Set[str] = ra_children_names - children_names
+        if len(unknown_names) > 0:
+            raise KeyError(f'{unknown_names} not children of {self.name}. Available childrens are: {children_names}.')
+
+    @abstractmethod
+    def get_children(self) -> List[BaseService]:
+        """
+        Get the list of all the childs for that step or service.
+
+        :return: every child step
+        """
+        pass
+
+    def get_children_names(self) -> List[str]:
+        """
+        Get the list of all the childs names for that step.
+
+        :return: every child step name
+        """
+        return [child.get_name() for child in self.get_children()]
+
+
+class Trail(BaseService):
+    """
+    This is like a news feed for pipelines where you post (log) info.
+    Trail is a step that can be used to store the status, metrics, logs,
+    and other information of the execution of the current run.
+
+    Concrete implementations of this object may interact with repositories.
+
+    # log_metric(metric_name, metric_value)
+    # log(message)
+    """
+
+    def __init__(self, logger: logging.Logger = None):
+        BaseService.__init__(self)
+        if logger is None:
+            logger = logging.getLogger()
+        self.logger = logger
+
+    def log_metric(self, metric_name: str, metric_value: float):
+        self.logger.info(f'{metric_name}: {metric_value}')
+
+    def log(self, message: str, level: int = logging.INFO):
+        self.logger.log(level, message)
+
+
+class ExecutionContext(_HasChildrenMixin, BaseService):
     """
     Execution context object containing all of the pipeline hierarchy steps.
     First item in execution context parents is root, second is nested, and so on. This is like a stack.
@@ -234,12 +736,12 @@ class ExecutionContext:
     def __init__(
             self,
             root: str = None,
+            trail: Trail = None,
             execution_phase: ExecutionPhase = ExecutionPhase.UNSPECIFIED,
             execution_mode: ExecutionMode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM,
             stripped_saver: BaseSaver = None,
             parents: List['BaseStep'] = None,
             services: Dict[Type['BaseService'], 'BaseService'] = None,
-            logger: logging.Logger = None
     ):
 
         self.execution_mode = execution_mode
@@ -265,13 +767,20 @@ class ExecutionContext:
             )
         self.root: str = root
 
+        if trail is None:
+            trail = Trail()
+        self.trail: Trail = trail
+
         if services is None:
             services: Dict[Type['BaseService'], BaseService] = dict()
         self.services: Dict[Type['BaseService'], BaseService] = services
 
-        if logger is None:
-            logger = logging.getLogger()
-        self.logger = logger
+    @property
+    def logger(self) -> logging.Logger:
+        """
+        Logger for the execution context is stocked in the trail and depend on it.
+        """
+        return self.trail.logger
 
     def get_new_cache_folder(self) -> str:
         return os.path.join(tempfile.gettempdir(), 'neuraxle-cache')
@@ -418,21 +927,21 @@ class ExecutionContext:
         """
         return ExecutionContext(
             root=self.root,
+            trail=self.trail,
             execution_mode=self.execution_mode,
             execution_phase=self.execution_phase,
             parents=self.parents + [step],
             services=self.services,
-            logger=self.logger
         )
 
     def copy(self):
         return ExecutionContext(
             root=self.root,
+            trail=self.trail,
             execution_mode=self.execution_mode,
             execution_phase=self.execution_phase,
             parents=copy(self.parents),
             services=self.services,
-            logger=self.logger
         )
 
     def thread_safe(self):
@@ -557,7 +1066,7 @@ class ExecutionContext:
             parents=parents
         )
 
-    def flush_cache_root():
+    def flush_cache_root(self):
         shutil.rmtree(self.root)
 
     def flush_cache_local(self):
@@ -565,219 +1074,6 @@ class ExecutionContext:
 
     def __len__(self):
         return len(self.parents)
-
-
-class _RecursiveArguments:
-    """
-    This class is used by :func:`~neuraxle.base.BaseStep.apply`, and :class:`_HasChildrenMixin`
-    to pass the right arguments to steps with children.
-
-    Two types of arguments:
-    - args: arguments that are not named
-    - kwargs: arguments that are named
-
-    For the values of both args and kwargs, we use either values or recursive values:
-    - value is not RecursiveDict: the value is replicated and passed to each sub step.
-    - value is RecursiveDict: the value is sliced accordingly and decomposed into the next levels.
-
-    As a shorthand, if another _RecursiveArguments (ra) is passed as an argument, it is used almost as is
-    to merge different ways of using ra: using a past ra, or else some args.
-
-    .. seealso::
-        :class:`_HasChildrenMixin`,
-        :func:`~neuraxle.base._HasHyperparamsSpace.get_hyperparams_space`,
-        :func:`~neuraxle.base._HasHyperparamsSpace.set_hyperparams_space`,
-        :func:`~neuraxle.base._HasHyperparamsSpace.update_hyperparams_space`,
-        :func:`~neuraxle.base._HasHyperparams.get_hyperparams`,
-        :func:`~neuraxle.base._HasHyperparams.set_hyperparams`,
-        :func:`~neuraxle.base._HasHyperparams.update_hyperparams`,
-        :func:`~neuraxle.base._HasConfig.get_config`,
-        :func:`~neuraxle.base._HasConfig.set_config`,
-        :func:`~neuraxle.base._HasConfig.update_config`,
-        :func:`~neuraxle.base.BaseTransformer.invalidate`
-    """
-
-    def __init__(self, ra=None, *args, **kwargs):
-        if ra is not None:
-            args = ra.args
-            kwargs = ra.kwargs
-        self.args: Union[Any, RecursiveDict] = args
-        self.kwargs: Union[Dict, RecursiveDict] = kwargs
-
-    def __getitem__(self, child_step_name: str):
-        """
-        Return recursive arguments for the given child step name.
-        If child step name is None, return the values at the current root.
-
-        :param child_step_name: child step name, or None if we want to get root values.
-        :return: recursive argument for the given child step name
-        """
-        arguments = list()
-        for arg in self.args:
-            if isinstance(arg, RecursiveDict):
-                arguments.append(arg.get(child_step_name))
-            else:
-                arguments.append(arg)
-
-        keyword_arguments = RecursiveDict()
-        for key, arg in self.kwargs.items():
-            if isinstance(arg, RecursiveDict):
-                keyword_arguments[key] = arg.get(child_step_name)
-            else:
-                keyword_arguments[key] = arg
-
-        return _RecursiveArguments(*arguments, **keyword_arguments)
-
-    def children_names(self) -> List[str]:
-        """
-        Return the names of the children steps.
-
-        :return: list of children step names
-        """
-        children_names: List[str] = []
-        argvals = (list(self.args) + list(self.kwargs.values()))
-        # Checking if any of the arguments (v) is a RecursiveDict and if so,
-        # take all it's children names (keys) for childs who are also
-        # RecursiveDict for being themselves steps:
-        return set(sum([
-            list([
-                k
-                for (k, vv) in v.items()
-                if isinstance(vv, RecursiveDict)
-            ])
-            for v in argvals
-            if isinstance(v, RecursiveDict)
-        ], []))
-
-
-class _HasRecursiveMethods:
-    """
-    An internal class to represent a step that has recursive methods.
-    The apply :func:`apply` function is used to apply a method to a step and its children.
-
-
-    Example usage :
-
-
-    .. code-block:: python
-
-        class _HasHyperparams:
-            # ...
-            def set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]) -> HyperparameterSamples:
-                self.apply(method='_set_hyperparams', hyperparams=HyperparameterSamples(hyperparams))
-                return self
-
-            def _set_hyperparams(self, hyperparams: Union[HyperparameterSamples, Dict]) -> HyperparameterSamples:
-                self._invalidate()
-                hyperparams = HyperparameterSamples(hyperparams)
-                self.hyperparams = hyperparams if len(hyperparams) > 0 else self.hyperparams
-                return self.hyperparams
-
-        pipeline = Pipeline([
-            SomeStep()
-        ])
-
-        pipeline.set_hyperparams(HyperparameterSamples({
-            'learning_rate': 0.1,
-            'SomeStep__learning_rate': 0.05
-        }))
-
-
-    .. seealso::
-        :class:`BaseStep`,
-        :class:`BaseTransformer`,
-        :class:`_HasChildrenMixin`
-        :class:`_RecursiveArguments`
-    """
-
-    def apply(self, method: Union[str, Callable], ra: _RecursiveArguments = None, *args, **kwargs) -> RecursiveDict:
-        """
-        Apply a method to a step and its children.
-
-        Here is an apply usage example to invalidate each steps.
-        This example comes from the saving logic:
-
-        .. code-block:: python
-
-            # preparing to save steps and its nested children:
-            if full_dump:
-                # initialize and invalidate steps to make sure that all steps will be saved
-
-                def _initialize_if_needed(step):
-                    if not step.is_initialized:
-                        step.setup(context=context)
-                    if not step.is_initialized:
-                        raise NotImplementedError(f"The `setup` method of the following class "
-                                                f"failed to set `self.is_initialized` to True: {step.__class__.__name__}.")
-                    return RecursiveDict()
-
-                def _invalidate(step):
-                    step._invalidate()
-                    return RecursiveDict()
-
-                self.apply(method=_initialize_if_needed)
-                self.apply(method=_invalidate)
-
-            # save steps:
-            ...
-
-
-        Here is another example. For instance, when setting the hyperparams space of a step,
-        we use :func:`~neuraxle.base.BaseStep._set_hyperparams_space` to set the hyperparams of the step.
-        The trick is that the space argument :class:`~neuraxle.hyperparams.space.HyperparameterSpace` is a recursive dict.
-        The implementation is the same for setting the hyperparams and config
-        of the step and its children, not only its space.
-        The cool thing is that such hyperparameter spaces are recursive, inheriting from :class:`~neuraxle.hyperparams.space.RecursiveDict`.
-        and applying recursive arguments to the step and its children with the :func:`_HasChildrenMixin.apply` of :class:`_HasChildrenMixin`.
-        Here is the implementation, using apply:
-
-        .. code-block:: python
-
-            def set_hyperparams_space(self, hyperparams_space: HyperparameterSpace) -> 'BaseTransformer':
-                self.apply(method='_set_hyperparams_space', hyperparams_space=HyperparameterSpace(hyperparams_space))
-                return self
-
-            def _set_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> HyperparameterSpace:
-                self._invalidate()
-                self.hyperparams_space = HyperparameterSpace(hyperparams_space)
-                return self.hyperparams_space
-
-
-        :param method: method name that need to be called on all steps
-        :param ra: recursive arguments
-        :param args: any additional arguments to be passed to the method
-        :param kwargs: any additional positional arguments to be passed to the method
-        :return: method outputs, or None if no method has been applied
-
-        .. seealso::
-            :class:`_RecursiveArguments`,
-            :class:`_HasChildrenMixin`
-        """
-        ra = _RecursiveArguments(ra, *args, **kwargs)
-
-        kargs = ra.args
-
-        def _return_empty(*args, **kwargs):
-            return RecursiveDict()
-
-        _method = _return_empty
-        if isinstance(method, str) and hasattr(self, method) and callable(getattr(self, method)):
-            _method = getattr(self, method)
-
-        if not isinstance(method, str):
-            _method = method
-            kargs = [self] + list(kargs)
-
-        try:
-            results = _method(*kargs, **ra.kwargs)
-            if not isinstance(results, RecursiveDict):
-                raise ValueError(
-                    'Method {} must return a RecursiveDict because it is applied recursively.'.format(method))
-            return results
-        except Exception as err:
-            print('{}: Failed to apply method {}.'.format(self.name, method))
-            print(traceback.format_stack())
-            raise err
 
 
 class _TransformerStep(ABC):
@@ -801,8 +1097,9 @@ class _TransformerStep(ABC):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
-            DataContainer, ExecutionContext):
+    def _will_process(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> (DataContainer, ExecutionContext):
         """
         Apply side effects before any step method.
         :param data_container: data container
@@ -1635,84 +1932,6 @@ class _HasHyperparams(ABC):
         return results.to_flat_dict()
 
 
-class _HasConfig(ABC):
-    """
-    An internal class to represent a step that has config params.
-    This is useful to store the config of a step.
-
-    A config :class:`~neuraxle.hyperparams.space.RecursiveDict` config
-    attribute is used when you don't want to use a
-    :class:`~neuraxle.hyperparams.space.HyperparameterSamples` attribute.
-    The reason sometimes is that you don't want to tune your config, whereas
-    hyperparameters are used to tune your step in the AutoML
-    from hyperparameter spaces, such as using hyperopt.
-
-    A good example of a config parameter would be the number of threads,
-    or an API key loaded from the OS' environment variables, since they won't
-    be tuned but are changeable from the outside.
-
-    Thus, this class looks a lot like :class:`~neuraxle.base._HasHyperparams`
-    and :class:`~neuraxle.hyperparams.space.HyperparameterSpace`.
-
-    .. seealso::
-        :class:`BaseStep`,
-        :class:`BaseTransformer`,
-        :class:`~neuraxle.base._HasHyperparams`,
-        :class:`~neuraxle.base._HasHyperparamsSpace`,
-        :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`~neuraxle.hyperparams.space.RecursiveDict`
-    """
-
-    def __init__(self, config: Union[Dict, RecursiveDict] = None):
-        if config is None:
-            config = dict()
-
-        self.config: RecursiveDict = RecursiveDict(config)
-
-    def set_config(self, config: Union[Dict, RecursiveDict]) -> 'BaseTransformer':
-        """
-        Set step config. See :func:`~neuraxle.base._HasHyperparams.set_hyperparams`
-        for more usage examples and documentation, it works the same way.
-        """
-        if not isinstance(config, RecursiveDict):
-            config = RecursiveDict(config)
-        self.apply(method='_set_config', config=config)
-        return self
-
-    def _set_config(self, config: RecursiveDict) -> RecursiveDict:
-        self._invalidate()
-        self.config = RecursiveDict(config)
-        return self.config
-
-    def update_config(self, config: Union[Dict, RecursiveDict]) -> 'BaseTransformer':
-        """
-        Update the step config variables without removing the already-set config variables.
-        This method is similar to :func:`~neuraxle.base._HasHyperparams.update_hyperparams`.
-        Refer to it for more documentation and usage examples, it works the same way.
-        """
-        if not isinstance(config, RecursiveDict):
-            config = RecursiveDict(config)
-        self.apply(method='_update_config', config=config)
-        return self
-
-    def _update_config(self, config: RecursiveDict) -> RecursiveDict:
-        self._invalidate()
-        self.config.update(config)
-        return self.config
-
-    def get_config(self) -> RecursiveDict:
-        """
-        Get step config. Refer to :func:`~neuraxle.base._HasHyperparams.get_hyperparams`
-        for more documentation and usage examples, it works the same way.
-        """
-        results: RecursiveDict = self.apply(method='_get_config')
-        return results
-
-    def _get_config(self) -> RecursiveDict:
-        return self.config
-
-
 class _HasSavers(ABC):
     """
     An internal class to represent a step that can be saved.
@@ -1750,6 +1969,34 @@ class _HasSavers(ABC):
         if savers is None:
             savers = []
         self.savers: List[BaseSaver] = savers
+        self.is_invalidated = False
+
+    def invalidate(self) -> 'BaseTransformer':
+        """
+        Invalidate a step, and all of its children. Invalidating a step makes it eligible to be saved again.
+
+        A step is invalidated when any of the following things happen :
+            * an hyperparameter has changed func: `~neuraxle.base._HasHyperparams.set_hyperparams`
+            * an hyperparameter space has changed func: `~neuraxle.base._HasHyperparamsSpace.set_hyperparams_space`
+            * a call to the fit method func:`~neuraxle.base._FittableStep.handle_fit`
+            * a call to the fit_transform method func:`~neuraxle.base._FittableStep.handle_fit_transform`
+            * the step name has changed func:`~neuraxle.base.BaseStep.set_name`
+
+        :return: self
+
+        .. note::
+            This is a recursive method used in :class:̀_HasChildrenMixin`.
+
+        .. seealso::
+            :func:`~neuraxle.base._HasRecursiveMethods.apply`,
+            :func:`~neuraxle.base._HasChildrenMixin._apply`
+        """
+        self.apply(method='_invalidate')
+        return self
+
+    def _invalidate(self):
+        self.is_invalidated = True
+        return RecursiveDict()
 
     def get_savers(self) -> List[BaseSaver]:
         """
@@ -2040,75 +2287,13 @@ class _CouldHaveContext:
                 raise e
 
 
-class _HasSetupTeardownLifecycle:
-    """
-    Step that has a setup and a teardown lifecycle methods.
-
-    .. note:: All heavy initialization logic should be done inside the *setup* method (e.g.: things inside GPU), and NOT in the constructor of your steps.
-
-    """
-
-    def __init__(self):
-        self.is_initialized = False
-
-    def setup(self, context: ExecutionContext = None) -> 'BaseTransformer':
-        """
-        Initialize the step before it runs. Only from here and not before that heavy things should be created
-        (e.g.: things inside GPU), and NOT in the constructor.
-
-        .. warning::
-            The setup method is called once for each step when handle_fit, handle_fit_transform or handle_transform is called.
-            The setup method is executed only if is self.is_initialized is False
-            A setup function should set the self.is_initialized to True when called.
-
-        :param context: execution context
-        :return: self
-        """
-        self.is_initialized = True
-        return self
-
-    def _teardown(self) -> 'BaseTransformer':
-        """
-        Teardown step after program execution. Inverse of setup, and it should clear memory.
-        Override this method if you need to clear memory.
-
-        :return: self
-        """
-        self.is_initialized = False
-        return RecursiveDict()
-
-    def __del__(self):
-        try:
-            self._teardown()
-        except Exception:
-            print(traceback.format_exc())
-
-
-class BaseService(
-    _HasSetupTeardownLifecycle,
-    _HasConfig,
-    ABC
-):
-    """
-    Base class for all services registred into the :class:`ExecutionContext`.
-
-    .. seealso::
-        :class:`ExecutionContext`,
-
-
-    """
-    pass
-
-
 class BaseTransformer(
     _CouldHaveContext,
-    _HasSetupTeardownLifecycle,
+    _HasSavers,
+    _TransformerStep,
     _HasHyperparamsSpace,
     _HasHyperparams,
-    _HasConfig,
-    _HasSavers,
-    _HasRecursiveMethods,
-    _TransformerStep,
+    BaseService,
     ABC
 ):
     """
@@ -2153,51 +2338,18 @@ class BaseTransformer(
             self,
             hyperparams: HyperparameterSamples = None,
             hyperparams_space: HyperparameterSpace = None,
-            config: RecursiveDict = None,
+            config: Union[Dict, RecursiveDict] = None,
             name: str = None,
             savers: List[BaseSaver] = None,
     ):
-        _TransformerStep.__init__(self)
-        _HasRecursiveMethods.__init__(self)
+        BaseService.__init__(self, config=config, name=name)
         _HasHyperparams.__init__(self, hyperparams=hyperparams)
         _HasHyperparamsSpace.__init__(self, hyperparams_space=hyperparams_space)
-        _HasConfig.__init__(self, config)
+        _TransformerStep.__init__(self)
         _HasSavers.__init__(self, savers=savers)
-        _HasSetupTeardownLifecycle.__init__(self)
         _CouldHaveContext.__init__(self)
 
-        if name is None:
-            name = self.__class__.__name__
-        self.name: str = name
-        self.is_invalidated = False
         self.is_train: bool = True
-
-    def invalidate(self) -> 'BaseTransformer':
-        """
-        Invalidate a step, and all of its children. Invalidating a step makes it eligible to be saved again.
-
-        A step is invalidated when any of the following things happen :
-            * an hyperparameter has changed func: `~neuraxle.base._HasHyperparams.set_hyperparams`
-            * an hyperparameter space has changed func: `~neuraxle.base._HasHyperparamsSpace.set_hyperparams_space`
-            * a call to the fit method func:`~neuraxle.base._FittableStep.handle_fit`
-            * a call to the fit_transform method func:`~neuraxle.base._FittableStep.handle_fit_transform`
-            * the step name has changed func:`~neuraxle.base.BaseStep.set_name`
-
-        :return: self
-
-        .. note::
-            This is a recursive method used in :class:̀_HasChildrenMixin`.
-
-        .. seealso::
-            :func:`~neuraxle.base._HasRecursiveMethods.apply`,
-            :func:`~neuraxle.base._HasChildrenMixin._apply`
-        """
-        self.apply(method='_invalidate')
-        return self
-
-    def _invalidate(self):
-        self.is_invalidated = True
-        return RecursiveDict()
 
     def set_train(self, is_train: bool = True):
         """
@@ -2217,29 +2369,6 @@ class BaseTransformer(
     def _set_train(self, is_train) -> RecursiveDict:
         self.is_train = is_train
         return RecursiveDict()
-
-    def set_name(self, name: str) -> 'BaseTransformer':
-        """
-        Set the name of the pipeline step.
-
-        :param name: a string.
-        :return: self
-
-        .. note::
-            A step name is in the keys of :py:attr:`~neuraxle.base.TruncableSteps.steps_as_tuple`
-        """
-        self.name = name
-        return self
-
-    def get_name(self) -> str:
-        """
-        Get the name of the pipeline step.
-
-        :return: the name, a string.
-
-        .. note:: A step name is the same value as the one in the keys of :class:`Pipeline`.steps_as_tuple
-        """
-        return self.name
 
     def get_step_by_name(self, name):
         if self.name == name:
@@ -2283,6 +2412,9 @@ def _sklearn_to_neuraxle_step(step) -> BaseTransformer:
         step = neuraxle.steps.sklearn.SKLearnWrapper(step)
         step.set_name(step.get_wrapped_sklearn_predictor().__class__.__name__)
     return step
+
+
+BaseTransformerT = TypeVar('BaseTransformerT', bound=BaseTransformer)
 
 
 class BaseStep(_FittableStep, BaseTransformer, ABC):
@@ -2339,6 +2471,9 @@ class BaseStep(_FittableStep, BaseTransformer, ABC):
     pass
 
 
+BaseStepT = TypeVar('BaseStepT', bound=BaseStep)
+
+
 class MixinForBaseTransformer:
     """
     Any steps/transformers within a pipeline that inherits of this class should implement BaseStep/BaseTransformer and
@@ -2356,78 +2491,6 @@ class MixinForBaseTransformer:
         if not all(map(lambda x: hasattr(self, x), ('name', 'savers', 'is_initialized', 'is_train', 'is_invalidated'))):
             raise RuntimeError('Please initialize Mixins in the good order. This Mixin should be initialized after '
                                'BaseTransformer.')
-
-
-class _HasChildrenMixin(MixinForBaseTransformer):
-    """
-    Mixin to add behavior to the steps that have children (sub steps).
-
-    .. seealso::
-        :class:`MixinForBaseTransformer`
-        :class:`~neuraxle.base.MetaStepMixin`,
-        :class:`~neuraxle.base.TruncableSteps`
-    """
-
-    def apply(self, method: Union[str, Callable], ra: _RecursiveArguments = None, *args, **kwargs) -> RecursiveDict:
-        """
-        Apply method to root, and children steps.
-        Split the root, and children values inside the arguments of type RecursiveDict.
-
-        This method overrides the :func:`~neuraxle.base._HasRecursiveMethods.apply` method
-        of :class:`~neuraxle.base._HasRecursiveMethods`. Read the documentation of the
-        original method to learn more.
-
-        :param method: str or callable function to apply
-        :param ra: recursive arguments
-        :return:
-        """
-        ra: _RecursiveArguments = _RecursiveArguments(ra=ra, *args, **kwargs)
-        self._validate_children_exists(ra)
-
-        results: RecursiveDict = self._apply_self(method=method, ra=ra)
-        results: RecursiveDict = self._apply_childrens(results=results, method=method, ra=ra)
-
-        return results
-
-    def _apply_self(self, method: Union[str, Callable], ra: _RecursiveArguments) -> RecursiveDict:
-        terminal_ra: _RecursiveArguments = ra[None]
-        self_results: RecursiveDict = BaseStep.apply(self, method=method, ra=terminal_ra)
-        return self_results
-
-    def _apply_childrens(
-            self, results: RecursiveDict, method: Union[str, Callable], ra: _RecursiveArguments) -> RecursiveDict:
-        for children in self.get_children():
-            child_ra: _RecursiveArguments = ra[children.get_name()]
-            children_results: RecursiveDict = children.apply(method=method, ra=child_ra)
-            results[children.get_name()] = children_results
-        return results
-
-    def _validate_children_exists(self, ra):
-        """
-        Validate that the provided childrens are in self, and if not, raise an error.
-        """
-        children_names: Set[str] = set(self.get_children_names())
-        ra_children_names: Set[str] = ra.children_names()
-        unknown_names: Set[str] = ra_children_names - children_names
-        if len(unknown_names) > 0:
-            raise KeyError(f'{unknown_names} not children of {self.name}. Available childrens are: {children_names}.')
-
-    @abstractmethod
-    def get_children(self) -> List[BaseStep]:
-        """
-        Get the list of all the childs for that step.
-
-        :return: every child step
-        """
-        pass
-
-    def get_children_names(self) -> List[str]:
-        """
-        Get the list of all the childs names for that step.
-
-        :return: every child step name
-        """
-        return [child.get_name() for child in self.get_children()]
 
 
 class MetaStepMixin(_HasChildrenMixin):

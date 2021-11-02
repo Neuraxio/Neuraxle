@@ -361,7 +361,6 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
     :param default_value_expected_outputs: expected_outputs default fill value
     for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
     to trim absent values from the batch
-    :param cache_folder: cache_folder if its at the root of the pipeline
 
     .. seealso::
         :class:`QueueWorker`,
@@ -382,7 +381,6 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             keep_incomplete_batch: bool = True,
             default_value_data_inputs: Union[Any, AbsentValuesNullObject] = None,
             default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = None,
-            cache_folder: str = None,
     ):
         if data_joiner is None:
             data_joiner = NumpyConcatenateOuterBatch()
@@ -401,7 +399,6 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         MiniBatchSequentialPipeline.__init__(
             self,
             steps=self._initialize_steps_as_tuple(steps),
-            cache_folder=cache_folder,
             batch_size=batch_size,
             keep_incomplete_batch=keep_incomplete_batch,
             default_value_data_inputs=default_value_data_inputs,
