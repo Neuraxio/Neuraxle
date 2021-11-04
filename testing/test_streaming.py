@@ -192,16 +192,14 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_max_queue_size():
     assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
 
 
-@pytest.mark.parametrize("use_processes", [False, True])
-@pytest.mark.parametrize("use_savers", [False, True])
-def test_parallel_queued_parallelize_correctly(tmpdir, use_processes, use_savers):
+def test_parallel_queued_parallelize_correctly(tmpdir):
     sleep_time = 0.01
     p = SequentialQueuedPipeline([
         ('1', 2, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
         ('2', 2, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
         ('3', 2, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
         ('4', 2, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]))
-    ], batch_size=10, use_processes=use_processes, use_savers=use_savers).with_context(ExecutionContext(tmpdir))
+    ], batch_size=10, use_processes=False, use_savers=False).with_context(ExecutionContext(tmpdir))
 
     a = time.time()
     outputs_streaming = p.transform(list(range(100)))

@@ -1,14 +1,12 @@
 import math
-from abc import abstractmethod, ABC
-from typing import Optional, List, Any
+from abc import ABC, abstractmethod
 
 import numpy as np
-from scipy.integrate import quad
+from neuraxle.hyperparams.distributions import (
+    ContinuousHyperparameterDistribution, DiscreteHyperparameterDistribution,
+    LogSpaceDistributionMixin)
 from scipy.special import factorial
-from scipy.stats import rv_continuous, norm, rv_discrete, rv_histogram, truncnorm, randint
-
-from neuraxle.hyperparams.distributions import HyperparameterDistribution, WrappedHyperparameterDistributions, \
-    DiscreteHyperparameterDistribution, ContinuousHyperparameterDistrbution
+from scipy.stats import rv_continuous, rv_discrete, rv_histogram
 
 
 def scipy_method(func):
@@ -75,8 +73,8 @@ class ScipyDistributionWrapper(ABC):
     def entropy(self, *args, **kwargs):
         """
         Differential entropy of the RV.
-        
-        :return: 
+
+        :return:
         """
         return self.scipy_distribution.entropy(*args, **kwargs, **self.scipy_distribution_arguments)
 
@@ -107,7 +105,7 @@ class ScipyDistributionWrapper(ABC):
     def fit_loc_scale(self, data, *args):
         """
         Estimate loc and scale parameters from data using 1 st and 2 nd moments. 
-        
+
         :param data: 
         :return: 
         """
@@ -287,14 +285,14 @@ class ScipyDistributionWrapper(ABC):
         return self.scipy_distribution
 
 
-class ScipyContinuousDistributionWrapper(ScipyDistributionWrapper, HyperparameterDistribution):
+class ScipyContinuousDistributionWrapper(ScipyDistributionWrapper, ContinuousHyperparameterDistribution):
     def __init__(self, scipy_distribution, null_default_value=None, **kwargs):
         ScipyDistributionWrapper.__init__(
             self,
             scipy_distribution=scipy_distribution,
             **kwargs
         )
-        ContinuousHyperparameterDistrbution.__init__(self, null_default_value=null_default_value)
+        ContinuousHyperparameterDistribution.__init__(self, null_default_value=null_default_value)
 
 
 class ScipyDiscreteDistributionWrapper(ScipyDistributionWrapper, DiscreteHyperparameterDistribution):
@@ -305,6 +303,13 @@ class ScipyDiscreteDistributionWrapper(ScipyDistributionWrapper, DiscreteHyperpa
             **kwargs
         )
         DiscreteHyperparameterDistribution.__init__(self, null_default_value=null_default_value)
+
+    def values(self):
+        if not hasattr(self, "precomp"):
+            self.precomp = list(sorted(list(set(
+                self.rvs() for _ in range(5000)
+            ))))
+        return self.precomp
 
 
 class BaseCustomDiscreteScipyDistribution(ScipyDiscreteDistributionWrapper):
@@ -359,102 +364,15 @@ class BaseCustomContinuousScipyDistribution(ScipyContinuousDistributionWrapper):
         pass
 
 
-class RandInt(ScipyDiscreteDistributionWrapper):
-    """
-    Rand int scipy distribution. Check out `scipy.stats.randint for more info <https://docs.scipy.org/doc/scipy-0.15.1/reference/generated/scipy.stats.randint.html>`_
-    """
-
-    def __init__(self, min_included: int, max_included: int, **kwargs):
-        self.min_included = min_included
-        self.max_included = max_included
-        kwargs.update(low=min_included, high=max_included)
-
-        super().__init__(
-            scipy_distribution=randint,
-            **kwargs,
-        )
-
-    def min(self):
-        return self.min_included
-
-    def mean(self, *args, **kwargs):
-        return (self.min_included + self.max_included) / 2
-
-    def median(self, *args, **kwargs):
-        return self.mean()
-
-    def max(self):
-        return self.max_included
-
-
-class Uniform(BaseCustomContinuousScipyDistribution):
-    """
-    Get a uniform distribution.
-
-    .. seealso::
-        :class:`UniformScipyDistribution`,
-        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
-        :class:`HyperparameterDistribution`,
-        :class:`ScipyDistributionWrapper`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`neuraxle.base.BaseStep`
-    """
-
-    def __init__(self, min_included: float, max_included: float, null_default_value=None):
-        """
-        Create a random uniform distribution.
-        A random float between the two values somehow inclusively will be returned.
-
-        :param min_included: minimum integer, included.
-        :type min_included: float
-        :param max_included: maximum integer, might be included - for more info, see `examples <https://docs.python.org/2/library/random.html#random.uniform>`__
-        :type max_included: float
-        :param null_default_value: null default value for distribution. if None, take the min_included
-        :type null_default_value: int
-        """
-        if null_default_value is None:
-            null_default_value = min_included
-
-        self.min_included: float = min_included
-        self.max_included: float = max_included
-
-        super().__init__(
-            name='uniform',
-            min_included=min_included,
-            max_included=max_included,
-            null_default_value=null_default_value
-        )
-
-    def _pdf(self, x):
-        """
-        Calculate the Uniform probability distribution value at position `x`.
-
-        :param x: value where the probability distribution function is evaluated.
-        :return: value of the probability distribution function.
-        """
-        if self.min_included == self.max_included and (x == self.min_included):
-            return 1.
-
-        if (x >= self.min_included) and (x <= self.max_included):
-            return 1 / (self.max_included - self.min_included)
-
-        # Manage case where it is outside the probability distribution function.
-        return 0.
-
-
-class LogUniform(BaseCustomContinuousScipyDistribution):
+class ScipyLogUniform(LogSpaceDistributionMixin, BaseCustomContinuousScipyDistribution):
     """
     Get a LogUniform distribution.
 
+    Refer to: :class:`scipy.stats.loguniform`.
+
     .. seealso::
-        :class:`LogUniformScipyDistribution`,
         :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
-        :class:`HyperparameterDistribution`,
         :class:`ScipyDistributionWrapper`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`neuraxle.base.BaseStep`
     """
 
     def __init__(self, min_included: float, max_included: float, null_default_value=None):
@@ -500,88 +418,9 @@ class LogUniform(BaseCustomContinuousScipyDistribution):
         return 0.
 
 
-class Normal(BaseCustomContinuousScipyDistribution):
+class StdMeanLogNormal(LogSpaceDistributionMixin, BaseCustomContinuousScipyDistribution):
     """
-    LogNormal distribution that wraps a `continuous scipy distribution <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_continuous.html#scipy.stats.rv_continuous>`_
-
-    Example usage :
-
-    .. code-block:: python
-
-        distribution = LogNormal(
-            min_included=0,
-            max_included=10,
-            null_default_value=0.0
-        )
-
-        assert 0.0 <= distribution.rvs() <= 10.0
-        assert distribution.pdf(10) < 0.001
-        assert distribution.pdf(0) < 0.42
-        assert 0.55 > distribution.cdf(5.0) > 0.45
-        assert distribution.cdf(0) == 0.0
-
-
-    .. seealso::
-        :class:`LogNormalScipyDistribution`,
-        :func:`~neuraxle.base.BaseStep.set_hyperparams_space`,
-        :class:`HyperparameterDistribution`,
-        :class:`ScipyDistributionWrapper`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`neuraxle.base.BaseStep`
-    """
-
-    def __init__(
-            self,
-            mean: float,
-            std: float,
-            hard_clip_min: float = None,
-            hard_clip_max: float = None,
-            null_default_value: float = None
-    ):
-        super().__init__(
-            name='normal',
-            min_included=hard_clip_min,
-            max_included=hard_clip_max,
-            null_default_value=null_default_value
-        )
-
-        self.hard_clip_min = hard_clip_min
-        self.hard_clip_max = hard_clip_max
-        self.mean = mean
-        self.std = std
-
-    def _pdf(self, x) -> float:
-        """
-        Calculate the Normal probability distribution value at position `x`.
-        :param x: value where the probability distribution function is evaluated.
-        :return: value of the probability distribution function.
-        """
-
-        if self.hard_clip_min is not None and (x < self.hard_clip_min):
-            return 0.
-
-        if self.hard_clip_max is not None and (x > self.hard_clip_max):
-            return 0.
-
-        if self.hard_clip_min is not None or self.hard_clip_max is not None:
-            a = -np.inf
-            b = np.inf
-
-            if self.hard_clip_min is not None:
-                a = (self.hard_clip_min - self.mean) / self.std
-
-            if self.hard_clip_max is not None:
-                b = (self.hard_clip_max - self.mean) / self.std
-
-            return truncnorm.pdf(x, a=a, b=b, loc=self.mean, scale=self.std)
-
-        return norm.pdf(x, loc=self.mean, scale=self.std)
-
-
-class LogNormal(BaseCustomContinuousScipyDistribution):
-    """
-    Get a normal distribution.
+    Get a normal distribution from std and min.
 
     .. seealso::
         :class:`NormalScipyDistribution`,
@@ -778,261 +617,4 @@ class Histogram(ScipyDistributionWrapper):
             self,
             scipy_distribution=rv_histogram(histogram=histogram, **kwargs)
         )
-        ContinuousHyperparameterDistrbution.__init__(self, null_default_value=null_default_value)
-
-
-class FixedHyperparameter(BaseCustomDiscreteScipyDistribution):
-    """This is an hyperparameter that won't change again, but that is still expressed as a distribution."""
-
-    def __init__(self, value, null_default_value=None):
-        """
-        Create a still hyperparameter
-
-        :param value: what will be returned by calling ``.rvs()``.
-        """
-        self.value = value
-
-        super().__init__(
-            name='fixed',
-            min_included=value,
-            max_included=value,
-            null_default_value=null_default_value
-        )
-
-    def _pdf(self, x):
-        if x == self.value:
-            return 1.
-        return 0.
-
-
-class Boolean(BaseCustomDiscreteScipyDistribution):
-    """Get a random boolean hyperparameter."""
-
-    def __init__(self, proba_is_true: Optional[float] = None, null_default_value=False):
-        """
-        Create a boolean hyperparameter with given probability.
-
-        Boolean distribution is in fact a Bernouilli distribution where given probability
-        set occurance probability of having value 1. (1 - probability) gives occurance probability of having value 0.
-
-        :param proba: a float corresponding to proportion of 1 over 0.
-        :type proba: float
-        :param null_default_value: default value for distribution
-        :type null_default_value: default choice value. if None, default choice value will be the first choice
-        """
-        if proba_is_true is None:
-            proba_is_true = 0.5
-
-        if not (0 <= proba_is_true <= 1):
-            raise ValueError("Probability must be between 0 and 1 (inclusively).")
-
-        self.proba_is_true = proba_is_true
-
-        super().__init__(
-            name='boolean',
-            min_included=0,
-            max_included=1,
-            null_default_value=null_default_value
-        )
-
-    def _pmf(self, x):
-        """
-        Calculate the boolean probability mass function value at position `x`.
-        :param x: value where the probability mass function is evaluated.
-        :return: value of the probability mass function.
-        """
-        if (x is True) or (x == 1):
-            return self.proba_is_true
-
-        if (x is False) or (x == 0):
-            return 1 - self.proba_is_true
-
-        return 0.
-
-
-def get_index_in_list_with_bool(choice_list: List[Any], value: Any) -> int:
-    for choice_index, choice in enumerate(choice_list):
-        if choice == value and not isinstance(choice, bool) and not isinstance(value, bool):
-            index = choice_index
-            return index
-
-        if choice is value:
-            index = choice_index
-            return index
-
-    raise ValueError("{} is not in list".format(value))
-
-
-class Choice(BaseCustomDiscreteScipyDistribution):
-    """Get a random value from a choice list of possible value for this hyperparameter.
-
-    When narrowed, the choice will only collapse to a single element when narrowed enough.
-    For example, if there are 4 items in the list, only at a narrowing value of 0.25 that
-    the first item will be kept alone.
-    """
-
-    def __init__(self, choice_list: List, probas: Optional[List[float]] = None, null_default_value=None):
-        """
-        Create a random choice hyperparameter from the given list.
-
-        :param choice_list: a list of values to sample from.
-        :type choice_list: List
-        :param null_default_value: default value for distribution
-        :type null_default_value: default choice value. if None, default choice value will be the first choice
-        """
-        self.choice_list = choice_list
-
-        if probas is None:
-            probas = [1 / len(self.choice_list) for _ in self.choice_list]
-
-        # Normalize probas juste in case sum is not equal to one.
-        self.probas = np.array(probas) / np.sum(probas)
-
-        if null_default_value is None:
-            null_default_value = choice_list[0]
-        elif null_default_value in choice_list:
-            null_default_value = null_default_value
-        else:
-            raise ValueError(
-                'invalid default value {0} not in choice list : {1}'.format(null_default_value, choice_list))
-
-        super().__init__(
-            name='choice',
-            min_included=0,
-            max_included=len(choice_list) - 1,
-            null_default_value=null_default_value
-        )
-
-    def probabilities(self):
-        return self.probas
-
-    def values(self):
-        return self.choice_list
-
-    def rvs(self, *args, **kwargs):
-        sample_choice_index = super().rvs(*args, **kwargs)
-        if isinstance(sample_choice_index, np.ndarray):
-            return [self.choice_list[int(i)] for i in sample_choice_index]
-        return self.choice_list[int(sample_choice_index)]
-
-    def pdf(self, x, *args, **kwargs):
-        choice_index = [str(choice) for choice in self.choice_list].index(str(x))
-        return self.scipy_distribution.pmf(choice_index, *args, **kwargs, **self.scipy_distribution_arguments)
-
-    def cdf(self, x, *args, **kwargs):
-        try:
-            index = [str(choice) for choice in self.choice_list].index(str(x))
-        except ValueError:
-            raise ValueError(
-                "Item not found in list. Make sure the item is in the choice list and a correct method  __eq__ is defined for all item in the list.")
-        except (NotImplementedError, NotImplemented):
-            raise ValueError("A correct method for __eq__ should be defined for all item in the list.")
-        except AttributeError:
-            raise ValueError("choice_list param should be a list.")
-        else:
-            probas = np.array(self.probas)
-            return np.sum(probas[0:index + 1])
-
-    def mean(self):
-        """
-        Calculate mean value (also called esperance) of the random variable.
-        :return: mean value of the random variable.
-        """
-        choice_index = np.arange(0, len(self), 1)
-        probas = np.array(self.probas)
-        mean = np.sum(choice_index * probas)
-        return mean
-
-    def var(self):
-        """
-        Calculate variance value of the random variable.
-        :return: variance value of the random variable.
-        """
-        choice_index = np.arange(0, len(self), 1)
-        probas = np.array(self.probas)
-        mean = np.sum(choice_index * probas)
-        second_moment = np.sum(choice_index ** 2 * probas)
-        var = second_moment - mean ** 2
-        return var
-
-    def min(self):
-        return 0
-
-    def max(self):
-        return len(self.choice_list) - 1
-
-    def std(self):
-        return np.std([i for i, _ in enumerate(self.choice_list)])
-
-    def pmf(self, x):
-        """
-        Calculate the choice probability mass function value at position `x`.
-
-        :param x: value where the probability mass function is evaluated.
-        :return: value of the probability mass function.
-        """
-        if len(self.choice_list) - 1 >= x[-1] >= 0:
-            return sum([self.probas[int(i)] for i in x])
-        else:
-            return 0.
-
-    def _pmf(self, x):
-        """
-        Calculate the choice probability mass function value at position `x`.
-
-        :param x: value where the probability mass function is evaluated.
-        :return: value of the probability mass function.
-        """
-        if len(self.choice_list) - 1 >= x[-1] >= 0:
-            return sum([self.probas[int(i)] for i in x])
-        else:
-            return 0.
-
-    def __len__(self):
-        return len(self.choice_list)
-
-
-class Quantized(WrappedHyperparameterDistributions, BaseCustomContinuousScipyDistribution):
-    """A quantized wrapper for another distribution: will round() the rvs number."""
-
-    def __init__(self, hd: HyperparameterDistribution = None, hds: List[HyperparameterDistribution] = None,
-                 null_default_value=None):
-        WrappedHyperparameterDistributions.__init__(
-            self,
-            hd=hd,
-            hds=hds,
-            null_default_value=null_default_value
-        )
-
-        hd_min = self.hd.min()
-        if np.isneginf(hd_min):
-            min_included = hd_min
-        else:
-            min_included = round(hd_min)
-
-        hd_max = self.hd.max()
-        if np.isposinf(hd_max):
-            max_included = hd_max
-        else:
-            max_included = round(hd_max)
-
-        BaseCustomContinuousScipyDistribution.__init__(
-            self,
-            name='quantized',
-            min_included=min_included,
-            max_included=max_included,
-            null_default_value=self.null_default_value,
-            is_continuous=True
-        )
-
-    def _pdf(self, x):
-        """
-        Calculate the Quantized probability mass function value at position `x` of a continuous distribution.
-        :param x: value where the probability mass function is evaluated.
-        :return: value of the probability mass function.
-        """
-        # In order to calculate the pdf for any quantized distribution,
-        # we have to perform the integral from x-0.5 to x+0.5 (because of round).
-        if isinstance(x, int) or (isinstance(x, float) and x.is_integer()):
-            return quad(self.hd.pdf, x - 0.5, x + 0.5)[0]
-        return 0.
+        ContinuousHyperparameterDistribution.__init__(self, null_default_value=null_default_value)

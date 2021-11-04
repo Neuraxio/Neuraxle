@@ -41,6 +41,7 @@ time that other batches are being preprocessed, using queues.
 """
 import time
 import numpy as np
+from neuraxle.base import ExecutionContext
 
 from neuraxle.distributed.streaming import SequentialQueuedPipeline
 from neuraxle.pipeline import BasePipeline, Pipeline, MiniBatchSequentialPipeline
@@ -50,7 +51,7 @@ from neuraxle.steps.numpy import MultiplyByN
 
 
 def eval_run_time(pipeline: BasePipeline):
-    pipeline.setup()
+    pipeline.setup(ExecutionContext())
     a = time.time()
     output = pipeline.transform(list(range(100)))
     b = time.time()

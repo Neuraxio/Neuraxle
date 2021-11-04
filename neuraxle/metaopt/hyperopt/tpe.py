@@ -11,7 +11,7 @@ import numpy as np
 
 from neuraxle.hyperparams.distributions import DistributionMixture, PriorityChoice, DiscreteHyperparameterDistribution, \
     HyperparameterDistribution
-from neuraxle.hyperparams.scipy_distributions import Choice, LogNormal, LogUniform, Quantized
+from neuraxle.hyperparams.distributions import Choice, LogNormal, LogUniform, Quantized
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.auto_ml import BaseHyperparameterSelectionStrategy, RandomSearchHyperparameterSelectionStrategy, \
     TrialStatus

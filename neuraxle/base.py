@@ -1719,7 +1719,6 @@ class _HasHyperparamsSpace(MixinForBaseService):
         """
         if not isinstance(hyperparams_space, HyperparameterSpace):
             hyperparams_space = HyperparameterSpace(hyperparams_space)
-        self._validate_hyperparams_space(hyperparams_space)
         self.apply(method='_set_hyperparams_space', hyperparams_space=hyperparams_space)
         return self
 
@@ -1727,17 +1726,6 @@ class _HasHyperparamsSpace(MixinForBaseService):
         self._invalidate()
         self.hyperparams_space = HyperparameterSpace(hyperparams_space)
         return self.hyperparams_space
-
-    def _validate_hyperparams_space(self, hyperparams_space: HyperparameterSpace):
-        """
-        Validate hyperparameters space.
-        """
-        for key, hp_space in hyperparams_space.iter_flat():
-            self._assert(
-                isinstance(hp_space, HyperparameterDistribution),
-                f"Hyperparameter space must be a dict of hyperparameter distributions. "
-                f"got {hp_space} of type {type(hp_space)} instead, for key {key}."
-            )
 
     def update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> 'BaseTransformer':
         """
@@ -1772,7 +1760,6 @@ class _HasHyperparamsSpace(MixinForBaseService):
         """
         if not isinstance(hyperparams_space, HyperparameterSpace):
             hyperparams_space = HyperparameterSpace(hyperparams_space)
-        self._validate_hyperparams_space(hyperparams_space)
         self.apply(method='_update_hyperparams_space', hyperparams_space=hyperparams_space)
         return self
 

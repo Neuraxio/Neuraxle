@@ -67,7 +67,7 @@ from copy import deepcopy
 from scipy.stats import rv_continuous, rv_discrete
 from scipy.stats._distn_infrastructure import rv_generic
 
-from neuraxle.hyperparams.distributions import HyperparameterDistribution
+from neuraxle.hyperparams.distributions import FixedHyperparameter, HyperparameterDistribution
 from neuraxle.hyperparams.scipy_distributions import ScipyDiscreteDistributionWrapper, \
     ScipyContinuousDistributionWrapper
 
@@ -192,11 +192,11 @@ class RecursiveDict(OrderedDict):
                 else:
                     yield (pre_key + k, v)
 
-    def to_flat_dict(self) -> dict:
+    def to_flat_dict(self) -> OrderedDict:
         """
-        Returns a dictionary with no recursively nested elements, i.e. {flattened_key -> value}.
+        Returns an OrderedDict with no recursively nested elements, i.e. {flattened_key: value}.
         """
-        return dict(self.iter_flat())
+        return OrderedDict(self.iter_flat())
 
     def to_nested_dict(self) -> dict:
         """
@@ -253,14 +253,22 @@ class HyperparameterSpace(RecursiveDict):
     def _patch_arg(self, arg):
         """
         Override of the RecursiveDict's default _patch_arg(arg) method.
+
+        :param arg: arg to patch if needed.
+        :return: (patched_arg, did_patch)
         """
+        did_patch = False
         if hasattr(arg, 'dist') and isinstance(arg.dist, rv_generic):
-            if isinstance(arg.dist, rv_discrete):
-                return ScipyDiscreteDistributionWrapper(arg), True
             if isinstance(arg.dist, rv_continuous):
-                return ScipyContinuousDistributionWrapper(arg), True
-        else:
-            return arg, False
+                arg, did_patch = ScipyContinuousDistributionWrapper(arg), True
+            elif isinstance(arg.dist, rv_discrete):
+                arg, did_patch = ScipyDiscreteDistributionWrapper(arg), True
+        assert isinstance(arg, HyperparameterDistribution), (
+            f"Hyperparameter space's distributions must be a dict of `HyperparameterDistributions`. "
+            f"got `{arg}` of type `{type(arg)}` instead. You might consider using a "
+            f"{FixedHyperparameter.__name__} class like {FixedHyperparameter}({arg}) to have a fixed value."
+        )
+        return arg, did_patch
 
     def rvs(self) -> 'HyperparameterSamples':
         """
