@@ -6,9 +6,10 @@ import numpy as np
 import pytest
 from sklearn.metrics import mean_squared_error
 
-from neuraxle.base import BaseService, Identity, ExecutionContext, ForceHandleMixin, NonFittableMixin, StepWithContext, ForceHandleIdentity, BaseStep
+from neuraxle.base import BaseService, Identity, ExecutionContext, NonFittableMixin, \
+    StepWithContext, ForceHandleIdentity, BaseStep, BaseTransformerT
 from neuraxle.data_container import DataContainer
-from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, EasyAutoML, RandomSearchHyperparameterSelectionStrategy, \
+from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearchHyperparameterSelectionStrategy, \
     ValidationSplitter, HyperparamsJSONRepository
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.pipeline import Pipeline
@@ -23,6 +24,14 @@ class SomeBaseService(BaseService):
 class SomeService(SomeBaseService):
     def service_method(self, data):
         self.data = data
+
+
+class AnotherService(BaseService):
+    def __init__(self):
+        super().__init__()
+
+    def _setup(self, context: 'ExecutionContext' = None) -> BaseTransformerT:
+        return BaseService._setup(self, context=context)
 
 
 class SomeStep(ForceHandleIdentity):
@@ -245,3 +254,35 @@ class TestServiceAssertion:
 
         service = context.get_service(SomeBaseService)
         assert np.array_equal(service.data, data_inputs)
+
+
+def test_context_can_access_services_to_initialize_them_from_apply_method(tmpdir):
+    data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expected_outputs = data_inputs * 2
+
+    cx = ExecutionContext(tmpdir, services={
+        SomeBaseService: SomeService(),
+        AnotherService: AnotherService()
+    })
+    p = Pipeline([
+        Identity().assert_has_services(AnotherService),
+        SomeStep().assert_has_services_at_execution(SomeBaseService),
+    ]).with_context(context=cx)
+
+    for i in cx.services.values():
+        assert isinstance(i, BaseService)
+        assert i.is_initialized == False
+        assert i.get_config().to_flat_dict() == dict()
+
+    p.fit(data_inputs, expected_outputs)
+
+    service = cx.get_service(SomeBaseService)
+    assert np.array_equal(service.data, data_inputs)
+
+    for i in cx.services.values():
+        assert i.is_initialized == False
+        assert i.get_config().to_flat_dict() == dict()
+
+    cx.setup(cx)
+    for i in cx.services.values():
+        assert i.is_initialized == True

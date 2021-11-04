@@ -1,3 +1,5 @@
+from textwrap import wrap
+import typing
 import numpy as np
 import pytest
 from sklearn.decomposition import PCA
@@ -16,16 +18,18 @@ from neuraxle.steps.data import DataShuffler
 from neuraxle.steps.sklearn import SKLearnWrapper
 
 
-def test_typable_mixin_can_be_typed(tmpdir):
-    class MyService(NonFittableMixin, NonTransformableMixin, MixinForBaseService, BaseStep):
+def test_typable_mixin_can_hold_type_annotation(tmpdir):
+    # Testing the type annotation "MetaStep[MyService]":
+    wrapped_service: MetaStep[Identity] = MetaStep(Identity())
 
-        def __init__(self):
-            BaseStep.__init__(self)
-            MixinForBaseService.__init__(self)
-            NonTransformableMixin.__init__(self)
-            NonFittableMixin.__init__(self)
+    g: typing.Generic = wrapped_service.__orig_bases__[-1]
+    assert isinstance(wrapped_service.get_step(), g.__parameters__[0].__bound__)
+    bt: typing.TypeVar = typing.get_args(g)[0]
+    assert isinstance(wrapped_service.get_step(), bt.__bound__)
 
-    MyService()
+    assert isinstance(wrapped_service.get_step(), Identity)
+    assert isinstance(wrapped_service.get_step(), NonFittableMixin)
+    assert isinstance(wrapped_service.get_step(), BaseService)
 
 
 @pytest.mark.skip(reason="Not implemented yet")

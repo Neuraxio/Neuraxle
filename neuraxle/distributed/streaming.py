@@ -36,6 +36,7 @@ from typing import Dict, Tuple, List, Union, Iterable, Any
 from neuraxle.base import NamedTupleList, ExecutionContext, MetaStep, BaseSaver, _FittableStep, \
     BaseTransformer, NonFittableMixin, MixinForBaseTransformer
 from neuraxle.data_container import DataContainer, ListDataContainer, AbsentValuesNullObject
+from neuraxle.hyperparams.space import RecursiveDict
 from neuraxle.pipeline import MiniBatchSequentialPipeline, Joiner, Pipeline
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
@@ -488,10 +489,10 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :param context: execution context
         :return:
         """
-        self.setup(context=context)
+        self._setup(context=context)
         return data_container, context
 
-    def setup(self, context: ExecutionContext = None) -> 'BaseTransformer':
+    def _setup(self, context: ExecutionContext = None) -> 'BaseTransformer':
         """
         Connect the queued workers together so that the data can correctly flow through the pipeline.
 
@@ -501,8 +502,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         """
         if not self.is_initialized:
             self.connect_queued_pipeline()
-        super().setup(context=context)
-        return self
+        super()._setup(context=context)
+        return RecursiveDict()
 
     def fit_transform_data_container(
             self, data_container: DataContainer, context: ExecutionContext) -> (Pipeline, DataContainer):

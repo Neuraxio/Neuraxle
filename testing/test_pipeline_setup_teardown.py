@@ -1,8 +1,10 @@
 from typing import Any
 
-
-from neuraxle.base import NamedTupleList, BaseStep, ExecutionContext
+import pytest
+from neuraxle.base import (BaseService, BaseStep, ExecutionContext, Identity,
+                           MetaStep, NamedTupleList, _HasChildrenMixin)
 from neuraxle.pipeline import Pipeline
+
 from testing.test_pipeline import SomeStep
 
 
@@ -13,7 +15,7 @@ class SomePipeline(Pipeline):
 
     def teardown(self) -> 'BaseStep':
         self.teared_down = True
-        return self
+        return Pipeline.teardown(self)
 
 
 class SomeException(BaseStep):
@@ -31,10 +33,6 @@ class SomeStepSetup(SomeStep):
     def __init__(self):
         SomeStep.__init__(self)
         self.called_with = None
-
-    def setup(self, context: ExecutionContext = None) -> 'BaseStep':
-        self.is_initialized = True
-        return self
 
 
 def test_fit_transform_should_setup_pipeline_and_steps():
@@ -78,3 +76,36 @@ def test_fit_should_setup_pipeline_and_steps():
 
     assert p.is_initialized
     assert step_setup.is_initialized
+
+
+class SomeService(BaseService):
+    pass
+
+
+@pytest.mark.parametrize('base_service', [
+    Identity(),
+    MetaStep(Identity()),
+    SomePipeline([SomeStepSetup()]),
+    ExecutionContext(),
+    ExecutionContext().set_service_locator({
+        Identity: Identity(),
+        SomeService: SomeService()
+    }),
+    ExecutionContext().set_service_locator({
+        Pipeline: Pipeline([SomeStepSetup()])
+    })
+])
+def test_that_steps_are_setuppeable(base_service: BaseService, tmpdir):
+    assert not base_service.is_initialized
+    _verify_subservices(base_service, False)
+    base_service.setup(ExecutionContext(tmpdir))
+    _verify_subservices(base_service, True)
+    base_service.teardown()
+    _verify_subservices(base_service, False)
+
+
+def _verify_subservices(sub_service, is_initialized: bool):
+    assert sub_service.is_initialized == is_initialized
+    if isinstance(sub_service, _HasChildrenMixin):
+        for child in sub_service.get_children():
+            _verify_subservices(child, is_initialized)

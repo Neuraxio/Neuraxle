@@ -432,7 +432,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         index_start = 0
 
         for sub_pipeline in sub_pipelines:
-            sub_pipeline.setup(context=context)
+            sub_pipeline._setup(context=context)
 
             barrier = sub_pipeline[-1]
             sub_pipeline, data_container = barrier.join_fit_transform(
@@ -462,7 +462,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         index_start = 0
 
         for sub_pipeline in sub_pipelines:
-            sub_pipeline.setup(context=context)
+            sub_pipeline._setup(context=context)
 
             barrier = sub_pipeline[-1]
             sub_pipeline, data_container = barrier.join_fit_transform(

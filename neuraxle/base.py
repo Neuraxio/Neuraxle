@@ -203,9 +203,9 @@ class MixinForBaseService:
     """
 
     def __init__(self):
-        self._ensure_basetransformer_init_called()
+        self._ensure_baseservice_init_called()
 
-    def _ensure_basetransformer_init_called(self):
+    def _ensure_baseservice_init_called(self):
         """
         Assert that BaseTransformer's init method has been called.
         """
@@ -245,12 +245,24 @@ class _RecursiveArguments:
         :func:`~neuraxle.base.BaseTransformer.invalidate`
     """
 
-    def __init__(self, ra=None, *args, **kwargs):
+    def __init__(
+        self,
+        ra=None,
+        args: Union[List[Any], List[RecursiveDict]] = None,
+        kwargs: Union[Dict[str, Any], RecursiveDict] = None,
+        current_level: int = 0
+    ):
         if ra is not None:
             args = ra.args
             kwargs = ra.kwargs
-        self.args: Union[Any, RecursiveDict] = args
-        self.kwargs: Union[Dict, RecursiveDict] = kwargs
+        if args is None:
+            args = list()
+        if kwargs is None:
+            kwargs = dict()
+
+        self.args: Union[List[Any], List[RecursiveDict]] = args
+        self.kwargs: Union[Dict[str, Any], RecursiveDict] = kwargs
+        self.current_level: int = current_level
 
     def __getitem__(self, child_step_name: str):
         """
@@ -274,7 +286,9 @@ class _RecursiveArguments:
             else:
                 keyword_arguments[key] = arg
 
-        return _RecursiveArguments(*arguments, **keyword_arguments)
+        next_level = self.current_level + 1
+
+        return _RecursiveArguments(None, arguments, keyword_arguments, next_level)
 
     def children_names(self) -> List[str]:
         """
@@ -380,7 +394,7 @@ class _HasRecursiveMethods:
 
                 def _initialize_if_needed(step):
                     if not step.is_initialized:
-                        step.setup(context=context)
+                        step._setup(context=context)
                     if not step.is_initialized:
                         raise NotImplementedError(f"The `setup` method of the following class "
                                                 f"failed to set `self.is_initialized` to True: {step.__class__.__name__}.")
@@ -428,7 +442,7 @@ class _HasRecursiveMethods:
             :class:`_RecursiveArguments`,
             :class:`_HasChildrenMixin`
         """
-        ra = _RecursiveArguments(ra, *args, **kwargs)
+        ra = _RecursiveArguments(ra, args, kwargs)
 
         kargs = ra.args
 
@@ -543,23 +557,43 @@ class _HasSetupTeardownLifecycle:
     def __init__(self):
         self.is_initialized = False
 
-    def setup(self, context: 'ExecutionContext' = None) -> 'BaseTransformer':
+    def setup(self, context: 'ExecutionContext') -> 'BaseTransformer':
         """
         Initialize the step before it runs. Only from here and not before that heavy things should be created
         (e.g.: things inside GPU), and NOT in the constructor.
 
+        The _setup method is executed only if is self.is_initialized is False
+        A setup function should set the self.is_initialized to True when called.
+
         .. warning::
-            The setup method is called once for each step when handle_fit, handle_fit_transform or handle_transform is called.
-            The setup method is executed only if is self.is_initialized is False
-            A setup function should set the self.is_initialized to True when called.
+            This setup method sets up the whole hierarchy of nested steps with children.
+            If you want to setup progressively, use only self._setup() instead.
+            The _setup method is called once for each step when
+            handle_fit, handle_fit_transform or handle_transform is called.
 
         :param context: execution context
         :return: self
         """
-        self.is_initialized = True
+        self.apply("_setup", context=context)
         return self
 
-    def _teardown(self) -> 'BaseTransformer':
+    def _setup(self, context: 'ExecutionContext' = None) -> 'BaseServiceT':
+        """
+        Internal method to setup the step. May be used by :class:`~neuraxle.pipeline.Pipeline`
+        to setup the pipeline progressively instead of all at once.
+        """
+        self.is_initialized = True
+        return RecursiveDict()
+
+    def teardown(self) -> 'BaseTransformer':
+        """
+        Applies _teardown on the step and, if applicable, its children.
+        :return: self
+        """
+        self.apply("_teardown")
+        return self
+
+    def _teardown(self) -> 'BaseServiceT':
         """
         Teardown step after program execution. Inverse of setup, and it should clear memory.
         Override this method if you need to clear memory.
@@ -623,7 +657,7 @@ class _HasChildrenMixin(MixinForBaseService, Generic[BaseServiceT]):
         :param ra: recursive arguments
         :return:
         """
-        ra: _RecursiveArguments = _RecursiveArguments(ra=ra, *args, **kwargs)
+        ra: _RecursiveArguments = _RecursiveArguments(ra, args, kwargs)
         self._validate_children_exists(ra)
 
         results: RecursiveDict = self._apply_self(method=method, ra=ra)
@@ -638,10 +672,19 @@ class _HasChildrenMixin(MixinForBaseService, Generic[BaseServiceT]):
 
     def _apply_childrens(
             self, results: RecursiveDict, method: Union[str, Callable], ra: _RecursiveArguments) -> RecursiveDict:
-        for children in self.get_children():
-            child_ra: _RecursiveArguments = ra[children.get_name()]
-            children_results: RecursiveDict = children.apply(method=method, ra=child_ra)
-            results[children.get_name()] = children_results
+
+        children: List[BaseServiceT] = self.get_children()
+        # Add context to the children steps if we are at the level 0:
+        if ra.current_level == 0:
+            cx: ExecutionContext = [c for c in list(ra.args) + list(ra.kwargs.values())
+                                    if isinstance(c, ExecutionContext)]
+            if len(cx) > 0:
+                children.append(cx[0])
+
+        for child in self.get_children():
+            child_ra: _RecursiveArguments = ra[child.get_name()]
+            children_results: RecursiveDict = child.apply(method=method, ra=child_ra)
+            results[child.get_name()] = children_results
         return results
 
     def _validate_children_exists(self, ra):
@@ -743,6 +786,8 @@ class ExecutionContext(_HasChildrenMixin, BaseService):
             parents: List['BaseStep'] = None,
             services: Dict[Type['BaseServiceT'], 'BaseServiceT'] = None,
     ):
+        BaseService.__init__(self)
+        _HasChildrenMixin.__init__(self)
 
         self.execution_mode = execution_mode
         self.execution_phase = execution_phase
@@ -813,7 +858,8 @@ class ExecutionContext(_HasChildrenMixin, BaseService):
         self, service_abstract_class_type: Type['BaseServiceT'], service_instance: 'BaseServiceT'
     ) -> 'ExecutionContext':
         """
-        Register base class instance inside the services.
+        Register base class instance inside the services. This is useful to register services.
+        Make sure the service is an instance of the class :class:`~neuraxle.base.BaseService`.
 
         :param service_abstract_class_type: base type
         :param service_instance:  instance
@@ -1079,7 +1125,7 @@ class ExecutionContext(_HasChildrenMixin, BaseService):
         return len(self.parents)
 
 
-class _TransformerStep(ABC):
+class _TransformerStep(MixinForBaseService):
     """
     An internal class to represent a step that can be transformed, or inverse transformed.
     See :class:`BaseTransformer`, for the complete transformer step that can be used inside a :class:`neuraxle.pipeline.Pipeline`.
@@ -1120,7 +1166,7 @@ class _TransformerStep(ABC):
         :return: transformed data container
         """
         if not self.is_initialized:
-            self.setup(context)
+            self._setup(context)
 
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_transform_data_container(data_container, context)
@@ -1202,7 +1248,7 @@ class _TransformerStep(ABC):
             :class:`~neuraxle.pipeline.Pipeline`
         """
         if not self.is_initialized:
-            self.setup(context)
+            self._setup(context)
 
         self._did_process(data_container, context)
         return self
@@ -1283,7 +1329,7 @@ class _TransformerStep(ABC):
             :class:`~neuraxle.pipeline.Pipeline`
         """
         if not self.is_initialized:
-            self.setup(context)
+            self._setup(context)
 
         data_container, context = self._will_process(data_container, context)
         data_container = self._inverse_transform_data_container(data_container, context)
@@ -1317,16 +1363,8 @@ class _TransformerStep(ABC):
         """
         raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
 
-    def teardown(self) -> 'BaseTransformer':
-        """
-        Applies _teardown on the step and, if applicable, its children.
-        :return: self
-        """
-        self.apply("_teardown")
-        return self
 
-
-class _FittableStep:
+class _FittableStep(MixinForBaseService):
     """
     An internal class to represent a step that can be fitted.
     See :class:`BaseStep`, for a complete step that can be transformed, and fitted inside a :class:`neuraxle.pipeline.Pipeline`.
@@ -1346,7 +1384,7 @@ class _FittableStep:
         :return: tuple(fitted pipeline, data_container)
         """
         if not self.is_initialized:
-            self.setup(context)
+            self._setup(context)
 
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit(data_container, context)
@@ -1432,7 +1470,7 @@ class _FittableStep:
         :return: tuple(fitted pipeline, data_container)
         """
         if not self.is_initialized:
-            self.setup(context)
+            self._setup(context)
 
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit_transform(data_container, context)
@@ -1496,7 +1534,7 @@ class _FittableStep:
         return data_container
 
 
-class _CustomHandlerMethods:
+class _CustomHandlerMethods(MixinForBaseService):
     """
     A class to represent a step that needs to add special behavior on top of the normal handler methods.
     It allows the step to apply side effects before calling the real handler method.
@@ -1529,7 +1567,7 @@ class _CustomHandlerMethods:
             :class:`~neuraxle.base.ExecutionContext`
         """
         if not self.is_initialized:
-            self.setup(context)
+            self._setup(context)
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit(data_container, context)
 
@@ -1557,7 +1595,7 @@ class _CustomHandlerMethods:
             :class:`~neuraxle.base.ExecutionContext`
         """
         if not self.is_initialized:
-            self.setup(context)
+            self._setup(context)
 
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit_transform(data_container, context)
@@ -1585,7 +1623,7 @@ class _CustomHandlerMethods:
             :class:`~neuraxle.base.ExecutionContext`
         """
         if not self.is_initialized:
-            self.setup(context)
+            self._setup(context)
 
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_transform_data_container(data_container, context)
@@ -1631,7 +1669,7 @@ class _CustomHandlerMethods:
         raise NotImplementedError()
 
 
-class _HasHyperparamsSpace(ABC):
+class _HasHyperparamsSpace(MixinForBaseService):
     """
     An internal class to represent a step that has hyperparameter spaces of type :class:`~neuraxle.hyperparams.space.HyperparameterSpace`.
     See :class:`BaseStep`, for a complete step that can be transformed, and fitted inside a :class:`neuraxle.pipeline.Pipeline`.
@@ -1752,7 +1790,7 @@ class _HasHyperparamsSpace(ABC):
         return self.hyperparams_space
 
 
-class _HasHyperparams(ABC):
+class _HasHyperparams(MixinForBaseService):
     """
     An internal class to represent a step that has hyperparameters of type :class:`~neuraxle.hyperparams.space.HyperparameterSamples`.
     See :class:`BaseStep`, for a complete step that can be transformed, and fitted inside a :class:`neuraxle.pipeline.Pipeline`.
@@ -1935,7 +1973,7 @@ class _HasHyperparams(ABC):
         return results.to_flat_dict()
 
 
-class _HasSavers(ABC):
+class _HasSavers(MixinForBaseService):
     """
     An internal class to represent a step that can be saved.
     A step with savers is saved using its list of savers.
@@ -2077,20 +2115,8 @@ class _HasSavers(ABC):
         self.is_invalidated = False
 
         if full_dump:
-            # initialize and invalidate steps to make sure that all steps will be saved
-            def _initialize_if_needed(step):
-                if not step.is_initialized:
-                    step.setup(context=context)
-                if not step.is_initialized:
-                    raise NotImplementedError(f"The `setup` method of the following class "
-                                              f"failed to set `self.is_initialized` to True: {step.__class__.__name__}.")
-                return RecursiveDict()
-
-            def _invalidate(step):
-                step._invalidate()
-                return RecursiveDict()
-            self.apply(method=_initialize_if_needed)
-            self.apply(method=_invalidate)
+            self.setup(context=context)
+            self.invalidate()
 
         context.mkdir()
         stripped_step = copy(self)
@@ -2148,7 +2174,7 @@ class _HasSavers(ABC):
         return loaded_self
 
 
-class _CouldHaveContext:
+class _CouldHaveContext(MixinForBaseService):
     """
     Step that can have a context.
     It has "has service assertions" to ensure that the context has registered all the necessary services.
@@ -2496,7 +2522,7 @@ class MixinForBaseTransformer:
                                'BaseTransformer.')
 
 
-class MetaStepMixin(_HasChildrenMixin):
+class MetaStepMixin(MixinForBaseTransformer, _HasChildrenMixin):
     """
     A class to represent a step that wraps another step. It can be used for many things.
     For example, :class:`~neuraxle.steps.loop.ForEachDataInput` adds a loop before any calls to the wrapped step :
@@ -2548,6 +2574,7 @@ class MetaStepMixin(_HasChildrenMixin):
     def __init__(self, wrapped: BaseServiceT = None, savers: List[BaseSaver] = None):
         if savers is None:
             savers = []
+        _HasChildrenMixin.__init__(self)
         MixinForBaseTransformer.__init__(self)
         self.wrapped: BaseServiceT = _sklearn_to_neuraxle_step(wrapped)
         savers.append(MetaStepJoblibStepSaver())
