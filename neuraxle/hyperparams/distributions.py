@@ -26,22 +26,19 @@ the distribution.
 
 """
 
-import copy
 import math
-import sys
-from abc import abstractmethod, ABCMeta
-from typing import List, Tuple, Union, Any, Optional
+from abc import ABCMeta, abstractmethod
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 from scipy.integrate import quad
-from scipy.stats import norm
-from scipy.stats import truncnorm
+from scipy.stats import norm, truncnorm
 
 
 class HyperparameterDistribution(metaclass=ABCMeta):
     """Base class for other hyperparameter distributions."""
 
-    def __init__(self, null_default_value, is_continuous: bool=True):
+    def __init__(self, null_default_value, is_continuous: bool = True):
         """
         Create a HyperparameterDistribution. This method should still be called with super if it gets overriden.
         """

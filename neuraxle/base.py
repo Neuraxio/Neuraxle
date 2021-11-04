@@ -33,8 +33,8 @@ classes needed to compose other base classes.
 import inspect
 import logging
 import os
-import shutil
 import pprint
+import shutil
 import tempfile
 import traceback
 import warnings
@@ -42,13 +42,16 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from enum import Enum
-from typing import List, Set, Union, Any, Iterable, KeysView, ItemsView, ValuesView, Callable, Dict, Tuple, \
-    Type, TypeVar, Generic
+from typing import (Any, Callable, Dict, Generic, ItemsView, Iterable,
+                    KeysView, List, Set, Tuple, Type, TypeVar, Union,
+                    ValuesView)
 
 from joblib import dump, load
 
 from neuraxle.data_container import DataContainer
-from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
+from neuraxle.hyperparams.distributions import HyperparameterDistribution
+from neuraxle.hyperparams.space import (HyperparameterSamples,
+                                        HyperparameterSpace, RecursiveDict)
 from neuraxle.logging.warnings import warn_deprecated_arg
 
 
@@ -1716,6 +1719,7 @@ class _HasHyperparamsSpace(MixinForBaseService):
         """
         if not isinstance(hyperparams_space, HyperparameterSpace):
             hyperparams_space = HyperparameterSpace(hyperparams_space)
+        self._validate_hyperparams_space(hyperparams_space)
         self.apply(method='_set_hyperparams_space', hyperparams_space=hyperparams_space)
         return self
 
@@ -1723,6 +1727,17 @@ class _HasHyperparamsSpace(MixinForBaseService):
         self._invalidate()
         self.hyperparams_space = HyperparameterSpace(hyperparams_space)
         return self.hyperparams_space
+
+    def _validate_hyperparams_space(self, hyperparams_space: HyperparameterSpace):
+        """
+        Validate hyperparameters space.
+        """
+        for key, hp_space in hyperparams_space.iter_flat():
+            self._assert(
+                isinstance(hp_space, HyperparameterDistribution),
+                f"Hyperparameter space must be a dict of hyperparameter distributions. "
+                f"got {hp_space} of type {type(hp_space)} instead, for key {key}."
+            )
 
     def update_hyperparams_space(self, hyperparams_space: Union[Dict, HyperparameterSpace]) -> 'BaseTransformer':
         """
@@ -1757,6 +1772,7 @@ class _HasHyperparamsSpace(MixinForBaseService):
         """
         if not isinstance(hyperparams_space, HyperparameterSpace):
             hyperparams_space = HyperparameterSpace(hyperparams_space)
+        self._validate_hyperparams_space(hyperparams_space)
         self.apply(method='_update_hyperparams_space', hyperparams_space=hyperparams_space)
         return self
 
