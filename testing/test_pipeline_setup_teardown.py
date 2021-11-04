@@ -3,6 +3,7 @@ from typing import Any
 import pytest
 from neuraxle.base import (BaseService, BaseStep, ExecutionContext, Identity,
                            MetaStep, NamedTupleList, _HasChildrenMixin)
+from neuraxle.hyperparams.space import RecursiveDict
 from neuraxle.pipeline import Pipeline
 
 from testing.test_pipeline import SomeStep
@@ -85,6 +86,27 @@ class SomeService(BaseService):
 @pytest.mark.parametrize('base_service', [
     Identity(),
     MetaStep(Identity()),
+    SomePipeline([SomeStepSetup()])
+])
+def test_that_steps_are_setuppeable(base_service: BaseService, tmpdir):
+    assert not base_service.is_initialized
+    _verify_subservices_initialization(base_service, False)
+    base_service.setup(ExecutionContext(tmpdir))
+    _verify_subservices_initialization(base_service, True)
+    base_service.teardown()
+    _verify_subservices_initialization(base_service, False)
+
+
+def _verify_subservices_initialization(sub_service, is_initialized: bool):
+    assert sub_service.is_initialized == is_initialized
+    if isinstance(sub_service, _HasChildrenMixin):
+        for child in sub_service.get_children():
+            _verify_subservices_initialization(child, is_initialized)
+
+
+@pytest.mark.parametrize('base_service', [
+    Identity(),
+    MetaStep(Identity()),
     SomePipeline([SomeStepSetup()]),
     ExecutionContext(),
     ExecutionContext().set_service_locator({
@@ -95,17 +117,15 @@ class SomeService(BaseService):
         Pipeline: Pipeline([SomeStepSetup()])
     })
 ])
-def test_that_steps_are_setuppeable(base_service: BaseService, tmpdir):
-    assert not base_service.is_initialized
-    _verify_subservices(base_service, False)
-    base_service.setup(ExecutionContext(tmpdir))
-    _verify_subservices(base_service, True)
-    base_service.teardown()
-    _verify_subservices(base_service, False)
+def test_that_steps_are_applyable_with_name(base_service: BaseService, tmpdir):
+
+    names = base_service.apply(lambda self: RecursiveDict({"name": self.get_name()}))
+
+    _verify_subservices_names(base_service, names)
 
 
-def _verify_subservices(sub_service, is_initialized: bool):
-    assert sub_service.is_initialized == is_initialized
+def _verify_subservices_names(sub_service, sub_service_name: RecursiveDict):
+    assert sub_service.name == sub_service_name["name"], f"Not equal: {sub_service.name} != {sub_service_name['name']}."
     if isinstance(sub_service, _HasChildrenMixin):
         for child in sub_service.get_children():
-            _verify_subservices(child, is_initialized)
+            _verify_subservices_names(child, sub_service_name[child.name])

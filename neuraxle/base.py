@@ -212,10 +212,11 @@ class MixinForBaseService:
         """
         Assert that BaseTransformer's init method has been called.
         """
-        assert isinstance(self, BaseService), f"This class should be of type BaseService."
-        if not all(map(lambda x: hasattr(self, x), ('setup', 'apply', 'get_config', 'set_config', '_teardown'))):
-            raise RuntimeError('Please initialize Mixins in the good order. This Mixin should be initialized after '
-                               'BaseService.')
+        assert isinstance(self, BaseService), "This class should be of type BaseService."
+        if not all(map(lambda x: hasattr(self, x), ('apply', 'get_config', 'set_config'))):
+            raise RuntimeError(
+                f'Please initialize Mixins in the good order. The present Mixin should be initialized after BaseService. Got: {inspect.getmro(self.__class__)}'
+            )
 
 
 class _RecursiveArguments:
@@ -549,72 +550,7 @@ class _HasConfig(ABC):
         return self.config
 
 
-class _HasSetupTeardownLifecycle:
-    """
-    Step that has a setup and a teardown lifecycle methods.
-
-    .. note:: All heavy initialization logic should be done inside the *setup* method (e.g.: things inside GPU), and NOT in the constructor of your steps.
-
-    """
-
-    def __init__(self):
-        self.is_initialized = False
-
-    def setup(self, context: 'ExecutionContext') -> 'BaseTransformer':
-        """
-        Initialize the step before it runs. Only from here and not before that heavy things should be created
-        (e.g.: things inside GPU), and NOT in the constructor.
-
-        The _setup method is executed only if is self.is_initialized is False
-        A setup function should set the self.is_initialized to True when called.
-
-        .. warning::
-            This setup method sets up the whole hierarchy of nested steps with children.
-            If you want to setup progressively, use only self._setup() instead.
-            The _setup method is called once for each step when
-            handle_fit, handle_fit_transform or handle_transform is called.
-
-        :param context: execution context
-        :return: self
-        """
-        self.apply("_setup", context=context)
-        return self
-
-    def _setup(self, context: 'ExecutionContext' = None) -> 'BaseServiceT':
-        """
-        Internal method to setup the step. May be used by :class:`~neuraxle.pipeline.Pipeline`
-        to setup the pipeline progressively instead of all at once.
-        """
-        self.is_initialized = True
-        return RecursiveDict()
-
-    def teardown(self) -> 'BaseTransformer':
-        """
-        Applies _teardown on the step and, if applicable, its children.
-        :return: self
-        """
-        self.apply("_teardown")
-        return self
-
-    def _teardown(self) -> 'BaseServiceT':
-        """
-        Teardown step after program execution. Inverse of setup, and it should clear memory.
-        Override this method if you need to clear memory.
-
-        :return: self
-        """
-        self.is_initialized = False
-        return RecursiveDict()
-
-    def __del__(self):
-        try:
-            self._teardown()
-        except Exception:
-            print(traceback.format_exc())
-
-
 class BaseService(
-    _HasSetupTeardownLifecycle,
     _HasConfig,
     _HasRecursiveMethods,
     ABC
@@ -631,7 +567,6 @@ class BaseService(
     def __init__(self, config: Union[Dict, RecursiveDict] = None, name: str = None):
         _HasRecursiveMethods.__init__(self, name=name)
         _HasConfig.__init__(self, config=config)
-        _HasSetupTeardownLifecycle.__init__(self)
 
 
 BaseServiceT = TypeVar('BaseServiceT', bound=BaseService)
@@ -718,6 +653,186 @@ class _HasChildrenMixin(MixinForBaseService, Generic[BaseServiceT]):
         return [child.get_name() for child in self.get_children()]
 
 
+class MetaServiceMixin(_HasChildrenMixin):
+    """
+    A mixin for services containing other services
+    """
+
+    def __init__(self, wrapped: BaseServiceT):
+        _HasChildrenMixin.__init__(self)
+        self.wrapped: BaseServiceT = wrapped
+
+    def set_step(self, step: BaseServiceT) -> BaseServiceT:
+        """
+        Set wrapped step to the given step.
+
+        :param step: new wrapped step
+        :return: self
+        """
+        self._invalidate()
+        self.wrapped: BaseServiceT = _sklearn_to_neuraxle_step(step)
+        return self
+
+    def get_step(self) -> BaseServiceT:
+        """
+        Get wrapped step
+
+        :return: self.wrapped
+        """
+        return self.wrapped
+
+    def get_children(self) -> List[BaseServiceT]:
+        """
+        Get the list of all the childs for that step.
+        :class:`_HasChildrenMixin` calls this method to apply methods to all of the childs for that step.
+
+        :return: list of child steps
+
+        .. seealso::
+            :class:`_HasChildrenMixin`
+        """
+        return [self.wrapped]
+
+    def get_step_by_name(self, name) -> BaseServiceT:
+        if self.name == name:
+            return self
+        if self.wrapped.name == name:
+            return self.wrapped
+        return self.wrapped.get_step_by_name(name)
+
+    def _repr(self, level=0, verbose=False) -> str:
+        output = self.__class__.__name__ + "("
+        output += self.wrapped._repr(level=level + 1, verbose=verbose) + ", name='" + self.name + "'"
+        if verbose:
+            output += ", hyperparameters=" + pprint.pformat(self.hyperparams)
+        output += ")"
+        return output
+
+
+class MetaService(MetaServiceMixin, BaseService):
+    """
+    A service containing other services.
+    """
+
+    def __init__(
+            self,
+            wrapped: BaseServiceT = None,
+            config: RecursiveDict = None,
+            name: str = None
+    ):
+        BaseService.__init__(
+            self,
+            config=config,
+            name=name,
+        )
+        MetaServiceMixin.__init__(self, wrapped=wrapped)
+
+
+NamedServiceList = List[Union[Tuple[str, BaseServiceT], BaseServiceT]]
+
+
+class TruncableServiceMixin(_HasChildrenMixin):
+
+    def __init__(self, services: Dict[Type['BaseServiceT'], 'BaseServiceT']):
+        _HasChildrenMixin.__init__(self)
+        self.set_services(services)
+
+    def set_services(self, services: Dict[Type['BaseServiceT'], 'BaseServiceT']):
+        for t, service in services.items():
+            self._validate_service_type(t, service)
+        self.services: Dict[Type['BaseServiceT'], 'BaseServiceT'] = services
+        return self
+
+    def _validate_service_type(self, t: Type[BaseServiceT], service: BaseServiceT):
+        if not (isinstance(service, t) and isinstance(service, BaseService)):
+            warnings.warn(f'Service {service} is not an instance of {t} or {BaseService}, but it should.')
+
+    def register_service(
+        self, service_abstract_class_type: Type['BaseServiceT'], service_instance: 'BaseServiceT'
+    ) -> 'ExecutionContext':
+        """
+        Register base class instance inside the services. This is useful to register services.
+        Make sure the service is an instance of the class :class:`~neuraxle.base.BaseService`.
+
+        :param service_abstract_class_type: base type
+        :param service_instance:  instance
+        :return: self
+        """
+        self._validate_service_type(service_abstract_class_type, service_instance)
+        self[service_abstract_class_type] = service_instance
+        return self
+
+    def get_services(self) -> Dict[Type['BaseServiceT'], 'BaseServiceT']:
+        """
+        Get the registered instances in the services.
+
+        :return: self
+        """
+        return self.services
+
+    def get_service(self, service_abstract_class_type: Type['BaseServiceT']) -> object:
+        """
+        Get the registered instance for the given abstract class :class:`~neuraxle.base.BaseService` type.
+        It is common to use service types as keys in the services dictionary.
+
+        :param service_abstract_class_type: service type
+        :return: self
+        """
+        return self[service_abstract_class_type]
+
+    def has_service(self, service_abstract_class_type: Type['BaseServiceT']) -> bool:
+        """
+        Return a bool indicating if the service has been registered.
+
+        :param service_abstract_class_type: base type
+        :return: if the service registered or not
+        """
+        return service_abstract_class_type in self.services
+
+    def get_children(self) -> List[BaseServiceT]:
+        """
+        Get the list of all the childs for that step.
+        :class:`_HasChildrenMixin` calls this method to apply methods to all of the childs for that step.
+
+        :return: list of child steps
+
+        .. seealso::
+            :class:`_HasChildrenMixin`
+        """
+        return self.services.values()
+
+    def __getitem__(self, service_abstract_class_type: Type['BaseServiceT']) -> 'BaseServiceT':
+        """
+        Get the service from its base type key (or string equivalent of this key).
+            
+        :param service_abstract_class_type: base type
+        :return: service
+        """
+        services = self.services
+        if isinstance(service_abstract_class_type, str):
+            services = {k.__name__: v for k, v in services.items()}
+        return services[service_abstract_class_type]
+
+    def __setitem__(self, service_abstract_class_type: Type['BaseServiceT'], service_instance: 'BaseServiceT'):
+        """
+        Set the service in the services dictionary.
+            
+        :param service_abstract_class_type: base type that is a type of :class:`~neuraxle.base.BaseService`
+        :param service_instance: instance that is an instance of :class:`~neuraxle.base.BaseService`
+        :return: self
+        """
+        self._validate_service_type(service_abstract_class_type, service_instance)
+        self.services[service_abstract_class_type] = service_instance
+        return self
+
+
+class TruncableService(TruncableServiceMixin, BaseService):
+
+    def __init__(self, services: Dict[Type['BaseServiceT'], 'BaseServiceT'] = None):
+        BaseService.__init__(self)
+        TruncableServiceMixin.__init__(self, services)
+
+
 class Trail(BaseService):
     """
     This is like a news feed for pipelines where you post (log) info.
@@ -743,7 +858,7 @@ class Trail(BaseService):
         self.logger.log(level, message)
 
 
-class ExecutionContext(_HasChildrenMixin, BaseService):
+class ExecutionContext(TruncableService):
     """
     Execution context object containing all of the pipeline hierarchy steps.
     First item in execution context parents is root, second is nested, and so on. This is like a stack.
@@ -789,15 +904,18 @@ class ExecutionContext(_HasChildrenMixin, BaseService):
             parents: List['BaseStep'] = None,
             services: Dict[Type['BaseServiceT'], 'BaseServiceT'] = None,
     ):
-        BaseService.__init__(self)
-        _HasChildrenMixin.__init__(self)
+        if trail is None:
+            trail = Trail()
+        if services is None:
+            services = dict()
+        services[Trail] = trail
+        TruncableService.__init__(self, services=services)
 
         self.execution_mode = execution_mode
         self.execution_phase = execution_phase
 
         if stripped_saver is None:
             stripped_saver: BaseSaver = JoblibStepSaver()
-
         self.stripped_saver = stripped_saver
 
         if parents is None:
@@ -815,23 +933,19 @@ class ExecutionContext(_HasChildrenMixin, BaseService):
             )
         self.root: str = root
 
-        if trail is None:
-            trail = Trail()
-        self.trail: Trail = trail
-
-        if services is None:
-            services: Dict[Type['BaseServiceT'], BaseServiceT] = dict()
-        self.services: Dict[Type['BaseServiceT'], BaseServiceT] = services
-
-    def get_children(self) -> List[BaseServiceT]:
-        return list(self.services.values())
-
     @property
     def logger(self) -> logging.Logger:
         """
-        Logger for the execution context is stocked in the trail and depend on it.
+        Logger for the execution context is stocked in the trail and you should probably use the trail.
         """
         return self.trail.logger
+
+    @property
+    def trail(self) -> Trail:
+        """
+        Trail is a service that is used to log information about the execution of the pipeline.
+        """
+        return self.services[Trail]
 
     def get_new_cache_folder(self) -> str:
         return os.path.join(tempfile.gettempdir(), 'neuraxle-cache')
@@ -854,52 +968,13 @@ class ExecutionContext(_HasChildrenMixin, BaseService):
         :param services: A dictionary of concrete services to register.
         :return: self
         """
-        self.services: Dict[Type['BaseServiceT'], 'BaseServiceT'] = services
+        if Trail not in services:
+            services[Trail] = self.trail
+        self.set_services(services)
         return self
-
-    def register_service(
-        self, service_abstract_class_type: Type['BaseServiceT'], service_instance: 'BaseServiceT'
-    ) -> 'ExecutionContext':
-        """
-        Register base class instance inside the services. This is useful to register services.
-        Make sure the service is an instance of the class :class:`~neuraxle.base.BaseService`.
-
-        :param service_abstract_class_type: base type
-        :param service_instance:  instance
-        :return: self
-        """
-        self.services[service_abstract_class_type] = service_instance
-        return self
-
-    def get_service(self, service_abstract_class_type: Type['BaseServiceT']) -> object:
-        """
-        Get the registered instance for the given abstract class :class:`~neuraxle.base.BaseService` type.
-        It is common to use service types as keys in the services dictionary.
-
-        :param service_abstract_class_type: service type
-        :return: self
-        """
-        return self.services[service_abstract_class_type]
-
-    def get_services(self) -> Dict[Type['BaseServiceT'], 'BaseServiceT']:
-        """
-        Get the registered instances in the services.
-
-        :return: self
-        """
-        return self.services
-
-    def has_service(self, service_abstract_class_type: Type['BaseServiceT']) -> bool:
-        """
-        Return a bool indicating if the service has been registered.
-
-        :param service_abstract_class_type: base type
-        :return: if the service registered or not
-        """
-        return service_abstract_class_type in self.services
 
     def set_logger(self, logger):
-        self.logger = logger
+        self.trail.logger = logger
         return self
 
     def get_execution_mode(self) -> ExecutionMode:
@@ -1126,6 +1201,70 @@ class ExecutionContext(_HasChildrenMixin, BaseService):
 
     def __len__(self):
         return len(self.parents)
+
+
+class _HasSetupTeardownLifecycle(MixinForBaseService):
+    """
+    Step that has a setup and a teardown lifecycle methods.
+
+    .. note:: All heavy initialization logic should be done inside the *setup* method (e.g.: things inside GPU), and NOT in the constructor of your steps.
+
+    """
+
+    def __init__(self):
+        self.is_initialized = False
+
+    def setup(self, context: 'ExecutionContext') -> 'BaseTransformer':
+        """
+        Initialize the step before it runs. Only from here and not before that heavy things should be created
+        (e.g.: things inside GPU), and NOT in the constructor.
+
+        The _setup method is executed only if is self.is_initialized is False
+        A setup function should set the self.is_initialized to True when called.
+
+        .. warning::
+            This setup method sets up the whole hierarchy of nested steps with children.
+            If you want to setup progressively, use only self._setup() instead.
+            The _setup method is called once for each step when
+            handle_fit, handle_fit_transform or handle_transform is called.
+
+        :param context: execution context
+        :return: self
+        """
+        self.apply("_setup", context=context)
+        return self
+
+    def _setup(self, context: 'ExecutionContext' = None) -> 'BaseTransformer':
+        """
+        Internal method to setup the step. May be used by :class:`~neuraxle.pipeline.Pipeline`
+        to setup the pipeline progressively instead of all at once.
+        """
+        self.is_initialized = True
+        return RecursiveDict()
+
+    def teardown(self) -> 'BaseTransformer':
+        """
+        Applies _teardown on the step and, if applicable, its children.
+        :return: self
+        """
+        self.apply("_teardown")
+        return self
+
+    def _teardown(self) -> 'BaseTransformer':
+        """
+        Teardown step after program execution. Inverse of setup, and it should clear memory.
+        Override this method if you need to clear memory.
+
+        :return: self
+        """
+        self.is_initialized = False
+        return RecursiveDict()
+
+    def __del__(self):
+        try:
+            self._teardown()
+        except Exception:
+            print(traceback.format_exc())
 
 
 class _TransformerStep(MixinForBaseService):
@@ -2325,6 +2464,7 @@ class BaseTransformer(
     _TransformerStep,
     _HasHyperparamsSpace,
     _HasHyperparams,
+    _HasSetupTeardownLifecycle,
     BaseService,
     ABC
 ):
@@ -2375,6 +2515,7 @@ class BaseTransformer(
             savers: List[BaseSaver] = None,
     ):
         BaseService.__init__(self, config=config, name=name)
+        _HasSetupTeardownLifecycle.__init__(self)
         _HasHyperparams.__init__(self, hyperparams=hyperparams)
         _HasHyperparamsSpace.__init__(self, hyperparams_space=hyperparams_space)
         _TransformerStep.__init__(self)
@@ -2519,13 +2660,17 @@ class MixinForBaseTransformer:
         """
         Assert that BaseTransformer's init method has been called.
         """
-        assert isinstance(self, BaseTransformer)
-        if not all(map(lambda x: hasattr(self, x), ('name', 'savers', 'is_initialized', 'is_train', 'is_invalidated'))):
-            raise RuntimeError('Please initialize Mixins in the good order. This Mixin should be initialized after '
-                               'BaseTransformer.')
+        assert isinstance(self, BaseTransformer), "This class should be of type BaseTransformer."
+        if not all(map(
+            lambda x: hasattr(self, x),
+            ('name', 'savers', 'is_initialized', 'is_train', 'is_invalidated', 'setup', '_teardown')
+        )):
+            raise RuntimeError(
+                f'Please initialize Mixins in the good order. The present Mixin should be initialized after BaseTransformer. Got: {inspect.getmro(self.__class__)}'
+            )
 
 
-class MetaStepMixin(MixinForBaseTransformer, _HasChildrenMixin):
+class MetaStepMixin(MixinForBaseTransformer, MetaServiceMixin):
     """
     A class to represent a step that wraps another step. It can be used for many things.
     For example, :class:`~neuraxle.steps.loop.ForEachDataInput` adds a loop before any calls to the wrapped step :
@@ -2577,30 +2722,11 @@ class MetaStepMixin(MixinForBaseTransformer, _HasChildrenMixin):
     def __init__(self, wrapped: BaseServiceT = None, savers: List[BaseSaver] = None):
         if savers is None:
             savers = []
-        _HasChildrenMixin.__init__(self)
+        wrapped = _sklearn_to_neuraxle_step(wrapped)
+        MetaServiceMixin.__init__(self, wrapped)
         MixinForBaseTransformer.__init__(self)
-        self.wrapped: BaseServiceT = _sklearn_to_neuraxle_step(wrapped)
         savers.append(MetaStepJoblibStepSaver())
         self.savers.extend(savers)
-
-    def set_step(self, step: BaseServiceT) -> BaseServiceT:
-        """
-        Set wrapped step to the given step.
-
-        :param step: new wrapped step
-        :return: self
-        """
-        self._invalidate()
-        self.wrapped: BaseServiceT = _sklearn_to_neuraxle_step(step)
-        return self
-
-    def get_step(self) -> BaseServiceT:
-        """
-        Get wrapped step
-
-        :return: self.wrapped
-        """
-        return self.wrapped
 
     def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext):
         new_self, data_container = super().handle_fit_transform(data_container, context)
@@ -2644,38 +2770,11 @@ class MetaStepMixin(MixinForBaseTransformer, _HasChildrenMixin):
         data_inputs = self.wrapped.inverse_transform(processed_outputs)
         return data_inputs
 
-    def get_children(self) -> List[BaseServiceT]:
-        """
-        Get the list of all the childs for that step.
-        :class:`_HasChildrenMixin` calls this method to apply methods to all of the childs for that step.
-
-        :return: list of child steps
-
-        .. seealso::
-            :class:`_HasChildrenMixin`
-        """
-        return [self.wrapped]
-
-    def get_step_by_name(self, name) -> BaseService:
-        if self.name == name:
-            return self
-        if self.wrapped.name == name:
-            return self.wrapped
-        return self.wrapped.get_step_by_name(name)
-
-    def _repr(self, level=0, verbose=False) -> str:
-        output = self.__class__.__name__ + "("
-        output += self.wrapped._repr(level=level + 1, verbose=verbose) + ", name='" + self.name + "'"
-        if verbose:
-            output += ", hyperparameters=" + pprint.pformat(self.hyperparams)
-        output += ")"
-        return output
-
 
 class MetaStep(MetaStepMixin, BaseStep):
     def __init__(
             self,
-            wrapped: BaseTransformer = None,
+            wrapped: BaseServiceT = None,
             hyperparams: HyperparameterSamples = None,
             hyperparams_space: HyperparameterSpace = None,
             name: str = None,
@@ -2703,9 +2802,9 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
         """
         Save MetaStepMixin.
 
-        #. Save wrapped step.
-        #. Strip wrapped step form the meta step mixin.
-        #. Save meta step with wrapped step savers.
+        # . Save wrapped step.
+        # . Strip wrapped step form the meta step mixin.
+        # . Save meta step with wrapped step savers.
 
         :param step: meta step to save
         :param context: execution context
@@ -2732,8 +2831,8 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
         """
         Load MetaStepMixin.
 
-        #. Loop through all of the sub steps savers, and only load the sub steps that have been saved.
-        #. Refresh steps
+        # . Loop through all of the sub steps savers, and only load the sub steps that have been saved.
+        # . Refresh steps
 
         :param step: step to load
         :param context: execution context
@@ -2848,9 +2947,9 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
 
     def save_step(self, step: 'TruncableSteps', context: ExecutionContext):
         """
-        #. Loop through all the steps, and save the ones that need to be saved.
-        #. Add a new property called sub step savers inside truncable steps to be able to load sub steps when loading.
-        #. Strip steps from truncable steps at the end.
+        # . Loop through all the steps, and save the ones that need to be saved.
+        # . Add a new property called sub step savers inside truncable steps to be able to load sub steps when loading.
+        # . Strip steps from truncable steps at the end.
 
         :param step: step to save
         :param context: execution context
@@ -2877,8 +2976,8 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
 
     def load_step(self, step: 'TruncableSteps', context: ExecutionContext) -> 'TruncableSteps':
         """
-        #. Loop through all of the sub steps savers, and only load the sub steps that have been saved.
-        #. Refresh steps
+        # . Loop through all of the sub steps savers, and only load the sub steps that have been saved.
+        # . Refresh steps
 
         :param step: step to load
         :param context: execution context
@@ -2903,67 +3002,21 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         return step
 
 
-class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
+class TruncableStepsMixin(_HasChildrenMixin):
     """
-    Step that contains multiple steps. :class:`Pipeline` inherits form this class.
-    It is possible to truncate this step * :func:`~neuraxle.base.TruncableSteps.__getitem__`
-
-    * self.steps contains the actual steps
-    * self.steps_as_tuple contains a list of tuple of step name, and step
-
-    .. seealso::
-        :class:`~neuraxle.pipeline.Pipeline`,
-        :class:`~neuraxle.union.FeatureUnion`
+    A mixin for services that can be truncated.
     """
 
     def __init__(
-            self,
-            steps_as_tuple: NamedTupleList,
-            hyperparams: HyperparameterSamples = dict(),
-            hyperparams_space: HyperparameterSpace = dict(),
-            mute_step_renaming_warning: bool = True,
+        self,
+        steps_as_tuple: NamedServiceList,
+        mute_step_renaming_warning: bool = True,
     ):
-        BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
         _HasChildrenMixin.__init__(self)
         self.warn_step_renaming = not mute_step_renaming_warning
         self.set_steps(steps_as_tuple, invalidate=False)
-        self.set_savers([TruncableJoblibStepSaver()] + self.savers)
 
-    def are_steps_before_index_the_same(self, other: 'TruncableSteps', index: int) -> bool:
-        """
-        Returns true if self.steps before index are the same as other.steps before index.
-
-        :param other: other truncable steps to compare
-        :param index: max step index to compare
-
-        :return: bool
-        """
-        steps_before_index = self[:index]
-        for current_index, (step_name, step) in enumerate(steps_before_index):
-            source_current_step = inspect.getsource(step.__class__)
-            source_cached_step = inspect.getsource(other[current_index].__class__)
-
-            if source_current_step != source_cached_step:
-                return False
-
-        return True
-
-    def _load_saved_pipeline_steps_before_index(self, saved_pipeline: 'TruncableSteps', index: int):
-        """
-        Load the cached pipeline steps
-        before the index into the current steps
-
-        :param saved_pipeline: saved pipeline
-        :param index: step index
-        :return:
-        """
-        self.set_hyperparams(saved_pipeline.get_hyperparams())
-        self.set_hyperparams_space(saved_pipeline.get_hyperparams_space())
-
-        new_truncable_steps = saved_pipeline[:index] + self[index:]
-        self.set_steps(new_truncable_steps.steps_as_tuple)
-
-    def set_steps(self, steps_as_tuple: NamedTupleList, invalidate=True):
+    def set_steps(self, steps_as_tuple: NamedServiceList, invalidate=True):
         """
         Set steps as tuple.
 
@@ -2974,7 +3027,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         self.steps_as_tuple: NamedTupleList = self._patch_missing_names(steps_as_tuple)
         self._refresh_steps(invalidate=invalidate)
 
-    def get_children(self) -> List[BaseStep]:
+    def get_children(self) -> List[BaseServiceT]:
         """
         Get the list of sub step inside the step with children.
 
@@ -2990,7 +3043,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
 
         return None
 
-    def _wrap_non_base_steps(self, steps_as_tuple: List) -> NamedTupleList:
+    def _wrap_non_base_steps(self, steps_as_tuple: List) -> NamedServiceList:
         """
         If some steps are not of type BaseStep, we'll try to make them of this type. For instance, sklearn objects
         will be wrapped by a SKLearnWrapper here.
@@ -3015,7 +3068,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
             wrapped.append((class_name, step))
         return wrapped
 
-    def _patch_missing_names(self, steps_as_tuple: NamedTupleList) -> NamedTupleList:
+    def _patch_missing_names(self, steps_as_tuple: NamedServiceList) -> NamedServiceList:
         """
         Make sure that each sub step has a unique name, and add a name to the sub steps that don't have one already.
 
@@ -3069,23 +3122,6 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         if invalidate:
             self._invalidate()
 
-    def should_save(self):
-        """
-        Returns if the step needs to be saved or not.
-
-        :return: If self or any of his sub steps should be saved, returns True.
-
-        .. seealso::
-            :class:`TruncableJoblibStepSaver`
-        """
-        if super().should_save():
-            return True
-
-        for _, step in self.items():
-            if step.should_save():
-                return True
-        return False
-
     def _step_index_to_name(self, step_index):
         if step_index == len(self.items()):
             return None
@@ -3093,7 +3129,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         name, _ = self.steps_as_tuple[step_index]
         return name
 
-    def __setitem__(self, key: Union[slice, int, str], new_step: BaseStep):
+    def __setitem__(self, key: Union[slice, int, str], new_step: BaseServiceT):
         """
         Set one step with a key, and a value.
 
@@ -3114,7 +3150,7 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
                 'type {0} not supported yet in TruncableSteps.__setitem__, please implement it if you need it'.format(
                     type(key)))
 
-    def __getitem__(self, key: Union[slice, int, str]):
+    def __getitem__(self, key: Union[slice, int, str]) -> Union[BaseServiceT, List[BaseServiceT]]:
         """
         Truncate self with a slice, an index or a step name.
 
@@ -3196,16 +3232,6 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
 
             return self.steps[key]
 
-    def __add__(self, other: 'TruncableSteps') -> 'TruncableSteps':
-        """
-        Concatenate the given truncable steps to self.
-
-        :param other: other truncable steps
-        :return: new truncable steps with concatenated steps
-        """
-        self.set_steps(self.steps_as_tuple + other.steps_as_tuple)
-        return self
-
     def items(self) -> ItemsView:
         """
         Returns all of the steps as tuples items (step_name, step).
@@ -3229,6 +3255,56 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         :return: all of the steps
         """
         return self.steps.values()
+
+    def __contains__(self, item):
+        """
+        Check wheter the ``item`` key or value (or key value tuple pair) is found in self.
+
+        :param item: The key or value to check if is in self's keys or values.
+        :return: True or False
+        """
+        return item in self.steps.keys() or item in self.steps.values() or item in self.items()
+
+    def __iter__(self):
+        """
+        Iterate through the steps.
+
+        :return: iter(self.steps_as_tuple)
+        """
+        return iter(self.steps_as_tuple)
+
+    def __len__(self):
+        """
+        Return the number of contained steps.
+
+        :return: len(self.steps_as_tuple)
+        """
+        return len(self.steps_as_tuple)
+
+
+class TruncableSteps(TruncableStepsMixin, BaseStep, ABC):
+    """
+    Step that contains multiple steps. :class:`Pipeline` inherits form this class.
+    It is possible to truncate this step * :func:`~neuraxle.base.TruncableSteps.__getitem__`
+
+    * self.steps contains the actual steps
+    * self.steps_as_tuple contains a list of tuple of step name, and step
+
+    .. seealso::
+        :class:`~neuraxle.pipeline.Pipeline`,
+        :class:`~neuraxle.union.FeatureUnion`
+    """
+
+    def __init__(
+            self,
+            steps_as_tuple: NamedTupleList,
+            hyperparams: HyperparameterSamples = dict(),
+            hyperparams_space: HyperparameterSpace = dict(),
+            mute_step_renaming_warning: bool = True,
+    ):
+        BaseStep.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
+        TruncableStepsMixin.__init__(self, steps_as_tuple, mute_step_renaming_warning=mute_step_renaming_warning)
+        self.set_savers([TruncableJoblibStepSaver()] + self.savers)
 
     def append(self, item: Tuple[str, 'BaseTransformer']) -> 'TruncableSteps':
         """
@@ -3284,31 +3360,6 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
         self._refresh_steps()
         return item
 
-    def __contains__(self, item):
-        """
-        Check wheter the ``item`` key or value (or key value tuple pair) is found in self.
-
-        :param item: The key or value to check if is in self's keys or values.
-        :return: True or False
-        """
-        return item in self.steps.keys() or item in self.steps.values() or item in self.items()
-
-    def __iter__(self):
-        """
-        Iterate through the steps.
-
-        :return: iter(self.steps_as_tuple)
-        """
-        return iter(self.steps_as_tuple)
-
-    def __len__(self):
-        """
-        Return the number of contained steps.
-
-        :return: len(self.steps_as_tuple)
-        """
-        return len(self.steps_as_tuple)
-
     def split(self, step_type: type) -> List['TruncableSteps']:
         """
         Split truncable steps by a step class name.
@@ -3333,15 +3384,41 @@ class TruncableSteps(_HasChildrenMixin, BaseStep, ABC):
 
         return sub_pipelines
 
-    def ends_with(self, step_type: type):
+    def ends_with(self, step_type: Type):
         """
         Returns true if truncable steps end with a step of the given type.
 
         :param step_type: step type
-
         :return: if truncable steps ends with the given step type
         """
         return isinstance(self[-1], step_type)
+
+    def should_save(self):
+        """
+        Returns if the step needs to be saved or not.
+
+        :return: If self or any of his sub steps should be saved, returns True.
+
+        .. seealso::
+            :class:`TruncableJoblibStepSaver`
+        """
+        if super().should_save():
+            return True
+
+        for _, step in self.items():
+            if step.should_save():
+                return True
+        return False
+
+    def __add__(self, other: 'TruncableSteps') -> 'TruncableSteps':
+        """
+        Concatenate the given truncable steps to self.
+
+        :param other: other truncable steps
+        :return: new truncable steps with concatenated steps
+        """
+        self.set_steps(self.steps_as_tuple + other.steps_as_tuple)
+        return self
 
     def _repr(self, level=0, verbose=False) -> str:
         tab0 = "    " * level

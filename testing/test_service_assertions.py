@@ -256,7 +256,7 @@ class TestServiceAssertion:
         assert np.array_equal(service.data, data_inputs)
 
 
-def test_context_can_access_services_to_initialize_them_from_apply_method(tmpdir):
+def test_context_can_access_services_from_apply_method(tmpdir):
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     expected_outputs = data_inputs * 2
 
@@ -271,7 +271,6 @@ def test_context_can_access_services_to_initialize_them_from_apply_method(tmpdir
 
     for i in cx.services.values():
         assert isinstance(i, BaseService)
-        assert i.is_initialized == False
         assert i.get_config().to_flat_dict() == dict()
 
     p.fit(data_inputs, expected_outputs)
@@ -280,9 +279,4 @@ def test_context_can_access_services_to_initialize_them_from_apply_method(tmpdir
     assert np.array_equal(service.data, data_inputs)
 
     for i in cx.services.values():
-        assert i.is_initialized == False
         assert i.get_config().to_flat_dict() == dict()
-
-    cx.setup(cx)
-    for i in cx.services.values():
-        assert i.is_initialized == True
