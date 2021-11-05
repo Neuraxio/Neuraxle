@@ -9,6 +9,8 @@ from neuraxle.steps.misc import HandleCallbackStep, TapeCallbackFunction
 
 
 def test_expand_dim_transform():
+    di = np.array(range(10))
+    eo = [None] * 10
     handle_fit_callback = TapeCallbackFunction()
     handle_transform_callback = TapeCallbackFunction()
     handle_fit_transform_callback = TapeCallbackFunction()
@@ -22,17 +24,17 @@ def test_expand_dim_transform():
         )
     ])
 
-    outputs = p.transform(np.array(range(10)))
+    outputs = p.transform(di)
 
-    assert np.array_equal(outputs, np.array(range(10)))
+    assert np.array_equal(outputs, di)
     assert handle_fit_callback.data == []
     assert np.array_equal(
-        np.array(handle_transform_callback.data[0][0].data_inputs),
-        np.array([np.array(range(10))])
+        np.array(handle_transform_callback.data[0][0].di),
+        np.array([di])
     )
     assert np.array_equal(
-        np.array(handle_transform_callback.data[0][0].expected_outputs),
-        np.array([[None] * 10])
+        np.array(handle_transform_callback.data[0][0].eo),
+        np.array([eo])
     )
     assert handle_fit_transform_callback.data == []
 

@@ -48,48 +48,193 @@ class AbsentValuesNullObject:
 
 class DataContainer(Generic[IDT, DIT, EOT]):
     """
-    DataContainer class to store data inputs, expected outputs, and ids together.
-    can create checkpoints for a set of hyperparameters.
+    DataContainer (dact) class to store IDs (ids), data inputs (di), and expected outputs (eo) together.
+    In some dacts, you could have only ids and data inputs, and in other dacts you could have only expected outputs,
+    or you could have all if you want, such as when your :class:`~neuraxle.pipeline.Pipeline` is used to train a model
+    in a certain :class:`~neuraxle.base.ExecutionMode` within a certain :class:`~neuraxle.base.ExecutionContext`.
 
-    The DataContainer object is passed to all of the :class:`BaseStep` handle methods :
+    You can use typing for your dact, and create a dact, such as:
+
+    .. code-block:: python
+
+        from typing import List
+        from neuraxle.data_container import DataContainer as DACT
+
+        dact: DACT[List[str], List[int], List[float]] = DACT(
+            ids=['a', 'b', 'c'],
+            data_inputs=[1, 2, 3],
+            expected_outputs=[1.0, 2.0, 3.0]
+        )
+
+
+    This is because the DataContainer inherits from the :class:`~typing.Generic` type
+    as ``class DataContainer(Generic[IDT, DIT, EOT]): ...``.
+
+    The DataContainer object is passed to all of the :class:`~neuraxle.base.BaseStep` 's handle methods :
         * :func:`~neuraxle.base.BaseStep.handle_transform`
         * :func:`~neuraxle.base.BaseStep.handle_fit_transform`
         * :func:`~neuraxle.base.BaseStep.handle_fit`
 
-    Most of the time, the steps will manage it by themselves.
+    Most of the time, the steps will manage it in the handler methods.
 
     .. seealso::
-        :class:`~neuraxle.base.BaseHasher`,
         :class:`~neuraxle.base.BaseStep`,
         :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
     """
 
     def __init__(
             self,
-            data_inputs: DIT,
+            data_inputs: Optional[DIT] = None,
             ids: Optional[IDT] = None,
             expected_outputs: Optional[EOT] = None,
-            sub_data_containers: List['NamedDataContainerTuple'] = None
+            sub_data_containers: List['NamedDataContainerTuple'] = None,
+            *,
+            di: Optional[DIT] = None,
+            eo: Optional[EOT] = None,
+
     ):
-        self.data_inputs: DIT = data_inputs
+        """
+        Create a DataContainer[IDT, DIT, EOT] object from specified ids, di, and eo.
 
-        if ids is None:
-            if hasattr(data_inputs, '__len__') or hasattr(data_inputs, '__iter__'):
-                ids = [str(c) for c in range(len(data_inputs))]
-            else:
-                ids = str(0)
+        :param ids: ids that are iterable. If None, will put a range of integers of data_inputs length. Often a list of integers.
+        :param di: same as ``data_inputs``, but shorter.
+        :param eo: same as ``expected_outputs``, but shorter.
+        :param data_inputs: data inputs that are iterable. Can use di instead.
+        :param expected_outputs: expected outputs that are iterable. If None, will put a list of None of data_inputs length.
+        :param sub_data_containers: sub data containers.
+        """
+        self._ids: IDT = ids
+        self.data_inputs: DIT = data_inputs if di is None else di
+        self.expected_outputs: EOT = expected_outputs if eo is None else eo
+        self.sub_data_containers: List[NamedDataContainerTuple] = sub_data_containers or []
 
-        self.ids: IDT = ids
+    @property
+    def ids(self) -> IDT:
+        """
+        Get ids.
 
-        if expected_outputs is None and (hasattr(data_inputs, '__len__') or hasattr(data_inputs, '__iter__')):
-            self.expected_outputs: EOT = [None] * len(data_inputs)
-        else:
-            self.expected_outputs: EOT = expected_outputs
+        If the ids are None, the following IDs will be returned:
 
-        if sub_data_containers is None:
-            sub_data_containers = []
+        - If the data_inputs is a :class:`~pandas.DataFrame`, will return the index of the DF.
+        - Else if the ids are None, will return a range of integers of data_inputs length.
+        - Else if the data_inputs aren't iterable, will return a range of integers of expected_outputs length.
 
-        self.sub_data_containers: List[NamedDataContainerTuple] = sub_data_containers
+        :return: ids
+        :rtype: Iterable
+        """
+        if self._ids is None:
+            if hasattr(self.di, 'index') and hasattr(self.di.index, 'values'):
+                # This is a pd.DataFrame:
+                return self.di.index.values
+            if hasattr(self.di, '__len__') or hasattr(self.di, '__iter__'):
+                return [i for i in range(len(self.di))]
+            if hasattr(self.eo, '__len__') or hasattr(self.eo, '__iter__'):
+                return [i for i in range(len(self.eo))]
+        return self._ids
+
+    @ids.setter
+    def ids(self, ids: IDT):
+        """
+        Set ids.
+
+        :param ids: ids, often a list of integers.
+        :type ids: Iterable
+        """
+        self._ids = ids
+
+    @property
+    def di(self) -> DIT:
+        """
+        Get data inputs.
+
+        :return: data inputs
+        :rtype: Iterable
+        """
+        return self.data_inputs
+
+    @di.setter
+    def di(self, di: DIT):
+        """
+        Set data inputs.
+
+        :param di: data inputs
+        :type di: Iterable
+        """
+        self.data_inputs = di
+
+    @property
+    def eo(self) -> EOT:
+        """
+        Get expected outputs.
+
+        If the expected outputs are None, will return a list of None of data_inputs length.
+
+        :return: expected outputs
+        :rtype: Iterable
+        """
+        if self.expected_outputs is None and (
+            hasattr(self.data_inputs, '__len__') or hasattr(self.data_inputs, '__iter__')
+        ):
+            return [None] * len(self.data_inputs)
+        return self.expected_outputs
+
+    @eo.setter
+    def eo(self, eo: EOT):
+        """
+        Set expected outputs.
+
+        :param eo: expected outputs
+        :type eo: Iterable
+        """
+        self.expected_outputs = eo
+
+    @property
+    def sdact(self) -> List['NamedDataContainerTuple']:
+        """
+        Get sub data containers.
+
+        :return: sub data containers
+        :rtype: List[Tuple[str, DataContainer]]
+        """
+        return self.sub_data_containers
+
+    @staticmethod
+    def from_di(data_inputs: DIT) -> 'DataContainer[IDT, DIT, List[None]]':
+        """
+        Create a DataContainer (dact) from data inputs (di).
+        """
+        return DataContainer(
+            ids=None,
+            di=data_inputs,
+            eo=None
+        )
+
+    @staticmethod
+    def from_eo(expected_outputs: EOT) -> 'DataContainer[List[None], List[None], EOT]':
+        """
+        Create a DataContainer (dact) from expected outputs (eo).
+        """
+        return DataContainer(
+            ids=None,
+            di=None,
+            eo=expected_outputs
+        )
+
+    def without_di(self) -> 'DataContainer[IDT, List[None], EOT]':
+        return self.copy().set_data_inputs(None)
+
+    def without_eo(self) -> 'DataContainer[IDT, DIT, List[None]]':
+        return self.copy().set_expected_outputs(None)
+
+    def set_ids(self, ids: IDT) -> 'DataContainer':
+        """
+        Set ids.
+
+        :param ids: data inputs' ids. Often a range of integers.
+        :return: self
+        """
+        self.ids = ids
+        return self
 
     def set_data_inputs(self, data_inputs: DIT) -> 'DataContainer':
         """
@@ -110,21 +255,30 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         :type expected_outputs: Iterable
         :return: self
         """
-        self.expected_outputs = expected_outputs
-        return self
-
-    def set_ids(self, ids: IDT) -> 'DataContainer':
-        """
-        Set ids.
-
-        :param ids: data inputs
-        :return: self
-        """
-        self.ids = ids
+        self.expected_outputs: EOT = expected_outputs
         return self
 
     def get_ids_summary(self) -> str:
-        return ','.join([i for i in self.ids if i is not None])
+        return ','.join([str(i) for i in self.ids if i is not None])
+
+    def add_sub_data_container(self, name: str, data_container: 'DataContainer') -> 'DataContainer':
+        """
+        Get sub data container if item is str, otherwise get a zip of ids, data inputs, and expected outputs.
+
+        :type name: sub data container name
+        :type data_container: sub data container
+        :return: self
+        """
+        self.sub_data_containers.append((name, data_container))
+        return self
+
+    def get_sub_data_container_names(self) -> List[str]:
+        """
+        Get sub data container names.
+
+        :return: list of names
+        """
+        return [name for name, _ in self.sub_data_containers]
 
     def set_sub_data_containers(self, sub_data_containers: List['DataContainer']) -> 'DataContainer':
         """
@@ -197,8 +351,8 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         for i in range(0, len(self.data_inputs), batch_size):
             data_container: DataContainer[IDT, DIT, EOT] = DataContainer(
                 ids=self.ids[i:i + batch_size],
-                data_inputs=self.data_inputs[i:i + batch_size],
-                expected_outputs=self.expected_outputs[i:i + batch_size]
+                data_inputs=self.di[i:i + batch_size],
+                expected_outputs=self.eo[i:i + batch_size]
             )
 
             incomplete_batch = len(data_container.data_inputs) < batch_size
@@ -223,37 +377,18 @@ class DataContainer(Generic[IDT, DIT, EOT]):
 
     def copy(self) -> 'DataContainer[IDT, DIT, EOT]':
         return DataContainer(
-            data_inputs=self.data_inputs,
-            ids=self.ids,
-            expected_outputs=self.expected_outputs,
+            ids=self._ids,
+            di=self.data_inputs,
+            eo=self.expected_outputs,
             sub_data_containers=[(name, data_container.copy()) for name, data_container in self.sub_data_containers]
         )
 
-    def add_sub_data_container(self, name: str, data_container: 'DataContainer') -> 'DataContainer':
+    def __contains__(self, item: Union[str, int]) -> bool:
         """
-        Get sub data container if item is str, otherwise get a zip of ids, data inputs, and expected outputs.
+        return true if sub container name is in the sub data containers, or if has ids of the good number.
 
-        :type name: sub data container name
-        :type data_container: sub data container
-        :return: self
-        """
-        self.sub_data_containers.append((name, data_container))
-        return self
-
-    def get_sub_data_container_names(self) -> List[str]:
-        """
-        Get sub data container names.
-
-        :return: list of names
-        """
-        return [name for name, _ in self.sub_data_containers]
-
-    def __contains__(self, item: str) -> bool:
-        """
-        return true if sub container name is in the sub data containers.
-
+        :param item: sub container name if string, id if int.
         :return: contains
-        :rtype: bool
         """
         if isinstance(item, str):
             contains = False
@@ -262,7 +397,11 @@ class DataContainer(Generic[IDT, DIT, EOT]):
                     contains = True
             return contains
         else:
-            raise NotImplementedError('DataContainer.__contains__ not implemented for this type: {}'.format(type(item)))
+            if item in self.ids:
+                return True
+            else:
+                return False
+        raise NotImplementedError('DataContainer.__contains__ not implemented for this type: {}'.format(type(item)))
 
     def __getitem__(self, item: Union[str, int]) -> Union['DataContainer', Tuple[IDT, DIT, EOT]]:
         """
@@ -327,7 +466,7 @@ class DataContainer(Generic[IDT, DIT, EOT]):
 
         :return: tuple of ids, data inputs, expected outputs
         """
-        return self.ids, self.data_inputs, self.expected_outputs
+        return self.ids, self.di, self.eo
 
     def __iter__(self) -> Iterator[Tuple[IDT, DIT, EOT]]:
         """
@@ -336,15 +475,7 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         :return: iterator of tuples containing ids, data_inputs, and expected outputs
         :rtype: Iterator[Tuple]
         """
-        ids: IDT = self.ids
-        if self.ids is None:
-            ids = [None] * len(self.data_inputs)
-
-        expected_outputs = self.expected_outputs
-        if self.expected_outputs is None:
-            expected_outputs = [None] * len(self.data_inputs)
-
-        return zip(ids, self.data_inputs, expected_outputs)
+        return zip(self.ids, self.di, self.eo)
 
     def __repr__(self):
         return str(self)
@@ -354,6 +485,9 @@ class DataContainer(Generic[IDT, DIT, EOT]):
 
     def __len__(self):
         return len(self.data_inputs)
+
+
+DACT = DataContainer
 
 
 class ExpandedDataContainer(DataContainer):
@@ -367,9 +501,9 @@ class ExpandedDataContainer(DataContainer):
     def __init__(self, data_inputs, ids, expected_outputs, old_ids):
         DataContainer.__init__(
             self,
-            data_inputs=data_inputs,
             ids=ids,
-            expected_outputs=expected_outputs,
+            di=data_inputs,
+            eo=expected_outputs,
         )
 
         self.old_ids = old_ids
@@ -386,9 +520,9 @@ class ExpandedDataContainer(DataContainer):
                 'Invalid Expanded Data Container. Please create ExpandedDataContainer with ExpandedDataContainer.create_from(data_container) method.')
 
         return DataContainer(
-            data_inputs=self.data_inputs[0],
+            data_inputs=self.di[0],
             ids=self.old_ids,
-            expected_outputs=self.expected_outputs[0],
+            expected_outputs=self.eo[0],
             sub_data_containers=self.sub_data_containers
         )
 
@@ -403,9 +537,9 @@ class ExpandedDataContainer(DataContainer):
         :rtype: ExpandedDataContainer
         """
         return ExpandedDataContainer(
-            data_inputs=[data_container.data_inputs],
             ids=[data_container.get_ids_summary()],
-            expected_outputs=[data_container.expected_outputs],
+            data_inputs=[data_container.di],
+            expected_outputs=[data_container.eo],
             old_ids=data_container.ids
         )
 
@@ -433,12 +567,12 @@ class ZipDataContainer(DataContainer):
         :rtype: ExpandedDataContainer
         """
 
-        new_data_inputs = tuple(zip(*map(attrgetter("data_inputs"), [data_container] + list(other_data_containers))))
+        new_data_inputs = tuple(zip(*map(attrgetter("di"), [data_container] + list(other_data_containers))))
         if zip_expected_outputs:
             expected_outputs = tuple(
-                zip(*map(attrgetter("expected_outputs"), [data_container] + list(other_data_containers))))
+                zip(*map(attrgetter("eo"), [data_container] + list(other_data_containers))))
         else:
-            expected_outputs = data_container.expected_outputs
+            expected_outputs = data_container.eo
 
         return ZipDataContainer(
             data_inputs=new_data_inputs,
@@ -452,9 +586,9 @@ class ZipDataContainer(DataContainer):
         Concatenate inner features from zipped data inputs.
         Assumes each data_input entry is an iterable of numpy arrays.
         """
-        new_data_inputs = [di[0] for di in self.data_inputs]
+        new_data_inputs = [di[0] for di in self.di]
 
-        for i, data_input in enumerate(self.data_inputs):
+        for i, data_input in enumerate(self.di):
             new_data_inputs[i] = _inner_concatenate_np_array(list(data_input))
 
         self.set_data_inputs(new_data_inputs)
@@ -471,7 +605,13 @@ class ListDataContainer(DataContainer):
 
     def __init__(self, data_inputs: Any, ids=None, expected_outputs: Any = None,
                  sub_data_containers=None):
-        DataContainer.__init__(self, data_inputs, ids, expected_outputs, sub_data_containers)
+        DataContainer.__init__(
+            self,
+            ids=ids,
+            di=data_inputs,
+            eo=expected_outputs,
+            sub_data_containers=sub_data_containers
+        )
         self.tolistshallow()
 
     @staticmethod
@@ -493,7 +633,7 @@ class ListDataContainer(DataContainer):
         :param expected_output: expected output
         :return:
         """
-        self.ids.append(_id)
+        self._ids.append(_id)
         self.data_inputs.append(data_input)
         self.expected_outputs.append(expected_output)
 
@@ -506,7 +646,7 @@ class ListDataContainer(DataContainer):
         :return:
         """
         self.data_inputs.append(other)
-        self.ids.append(other.get_ids_summary())
+        self._ids.append(other.get_ids_summary())
         return self
 
     def append_data_container(self, other: DataContainer) -> 'ListDataContainer':
@@ -517,7 +657,7 @@ class ListDataContainer(DataContainer):
         :type other: DataContainer
         :return:
         """
-        self.ids.append(other.ids)
+        self._ids.append(other._ids)
         self.data_inputs.append(other.data_inputs)
         self.expected_outputs.append(other.expected_outputs)
 
@@ -533,7 +673,7 @@ class ListDataContainer(DataContainer):
         """
         data_container.tolistshallow()
 
-        self.ids.extend(data_container.ids)
+        self._ids.extend(data_container._ids)
         self.data_inputs.extend(data_container.data_inputs)
         self.expected_outputs.extend(data_container.expected_outputs)
 
@@ -572,12 +712,12 @@ def _pad_incomplete_batch(
             batch_size=batch_size
         ),
         data_inputs=_pad_data(
-            data_container.data_inputs,
+            data_container.di,
             default_value=default_value_data_inputs,
             batch_size=batch_size
         ),
         expected_outputs=_pad_data(
-            data_container.expected_outputs,
+            data_container.eo,
             default_value=default_value_expected_outputs,
             batch_size=batch_size
         )

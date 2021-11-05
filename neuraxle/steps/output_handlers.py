@@ -33,7 +33,7 @@ from neuraxle.data_container import DataContainer
 
 class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
     """
-    Transform expected output wrapper step that can sends the expected_outputs to the wrapped step
+    A step that can sends the expected_outputs to the wrapped step
     so that it can transform the expected outputs.
     """
 
@@ -53,8 +53,8 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         """
         new_expected_outputs_data_container = self.wrapped.handle_transform(
             DataContainer(
-                data_inputs=data_container.expected_outputs,
                 ids=data_container.ids,
+                data_inputs=data_container.eo,
                 expected_outputs=None
             ),
             context
@@ -63,8 +63,9 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
 
         return data_container
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            BaseStep, DataContainer):
+    def _fit_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> (BaseStep, DataContainer):
         """
         Handle fit by passing expected outputs to the wrapped step fit method.
 
@@ -133,15 +134,17 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         return data_container
 
     def _set_expected_outputs(
-            self, data_container: DataContainer, new_expected_outputs_data_container: DataContainer) -> DataContainer:
-        if len(data_container.data_inputs) != len(data_container.expected_outputs):
+            self, data_container: DataContainer, new_expected_outputs_data_container: DataContainer
+    ) -> DataContainer:
+
+        if len(data_container) != len(new_expected_outputs_data_container):
             raise AssertionError(
-                'OutputTransformerWrapper: Found different len for data inputs, and expected outputs. '
+                'OutputTransformerWrapper: Found different len for old data inputs, and expected outputs to reinsert. '
                 'Please return the same the same amount of data inputs, and expected outputs, '
                 'or otherwise create your own handler methods to do more funky things.')
 
         data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
-        data_container.set_ids(new_expected_outputs_data_container.ids)
+        data_container.set_ids(new_expected_outputs_data_container._ids)
 
         return data_container
 

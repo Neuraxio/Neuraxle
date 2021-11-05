@@ -34,13 +34,13 @@ from neuraxle.base import MetaStep, BaseStep, ExecutionContext
 from neuraxle.data_container import DataContainer
 
 
-class BaseDataInputsValueHasher(ABC):
+class BaseValueHasher(ABC):
     @abstractmethod
     def hash(self, data_input):
         raise NotImplementedError()
 
 
-class DataInputStrValueHasher(BaseDataInputsValueHasher):
+class StrValueHasher(BaseValueHasher):
     """
     Hashes the data inputs by converting them to a string
     and then using hashlib.blake2s (:func:`hashlib.blake2s`).
@@ -53,22 +53,28 @@ class DataInputStrValueHasher(BaseDataInputsValueHasher):
         return m.hexdigest()
 
 
-class ValueCachingWrapper(MetaStep):
+class TransformDIValueCachingWrapper(MetaStep):
     """
     Value caching wrapper wraps a step to cache the values.
+
+    This class only operates on calls to transform.
+    It does not check ids of the data inputs, nor the expected_outpts:
+    only the data inputs are checked.
+
+    It also flushes cache when the wrapped step is fitted.
     """
 
     def __init__(
             self,
             wrapped: BaseStep,
             cache_folder: str = None,
-            value_hasher: BaseDataInputsValueHasher = None,
+            value_hasher: BaseValueHasher = None,
     ):
         MetaStep.__init__(self, wrapped)
         self.value_hasher = value_hasher
 
         if self.value_hasher is None:
-            self.value_hasher = DataInputStrValueHasher()
+            self.value_hasher = StrValueHasher()
 
         if cache_folder is None:
             cache_folder = os.path.join(ExecutionContext().push(self).get_path(), "cache")
@@ -124,7 +130,7 @@ class ValueCachingWrapper(MetaStep):
         :return: iterable
         """
         outputs = []
-        for current_id, data_input, expected_output in data_container:
+        for _, data_input, _ in data_container:
             if self.contains_cache_for(data_input):
                 outputs.extend(self.read_cache(data_input))
             else:
@@ -136,7 +142,7 @@ class ValueCachingWrapper(MetaStep):
     @abstractmethod
     def create_checkpoint_path(self) -> str:
         """
-        Create checkpoint path.
+        Create checkpoint path only if it does not exists.
 
         :return: checkpoint path
         """
@@ -198,12 +204,21 @@ class ValueCachingWrapper(MetaStep):
         raise NotImplementedError()
 
 
-class JoblibValueCachingWrapper(ValueCachingWrapper):
+class JoblibTransformDIValueCachingWrapper(TransformDIValueCachingWrapper):
     """
     Value Caching Wrapper class that caches the wrapped step transformed data inputs using python ``joblib`` library.
+
+    It only saves and loads to cache the data inputs upon a handled transformation call.
+    It also flushes cache when the wrapped step is fitted.
+
+    .. seealso::
+        :class:`TransformDIValueCachingWrapper`
     """
 
     def create_checkpoint_path(self) -> str:
+        """
+        Create checkpoint path only if it does not exists.
+        """
         if not os.path.exists(self.value_caching_folder):
             os.makedirs(self.value_caching_folder)
 

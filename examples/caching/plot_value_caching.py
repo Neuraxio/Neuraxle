@@ -28,7 +28,7 @@ import time
 import numpy as np
 
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.caching import JoblibValueCachingWrapper
+from neuraxle.steps.caching import JoblibTransformDIValueCachingWrapper
 from neuraxle.steps.loop import ForEach
 from neuraxle.steps.misc import Sleep
 from neuraxle.steps.numpy import MultiplyByN
@@ -45,7 +45,7 @@ def main():
     a = time.time()
     for i in range(5):
         p = Pipeline([
-            JoblibValueCachingWrapper(
+            JoblibTransformDIValueCachingWrapper(
                 ForEach(Pipeline([Sleep(sleep_time=sleep_time), MultiplyByN(2)])),
                 cache_folder=value_caching_folder
             )

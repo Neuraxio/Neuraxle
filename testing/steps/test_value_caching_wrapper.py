@@ -3,7 +3,7 @@ import numpy as np
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import TapeCallbackFunction, \
     FitTransformCallbackStep
-from neuraxle.steps.caching import JoblibValueCachingWrapper
+from neuraxle.steps.caching import JoblibTransformDIValueCachingWrapper
 
 EXPECTED_OUTPUTS = [0.0, 0.0, 0.6931471805599453, 0.6931471805599453]
 
@@ -18,7 +18,7 @@ def test_transform_should_use_cache(tmpdir):
     tape_transform = TapeCallbackFunction()
     tape_fit = TapeCallbackFunction()
     p = Pipeline([
-        JoblibValueCachingWrapper(
+        JoblibTransformDIValueCachingWrapper(
             LogFitTransformCallbackStep(
                 tape_transform,
                 tape_fit,
@@ -38,7 +38,7 @@ def test_fit_transform_should_fit_then_use_cache(tmpdir):
     tape_transform = TapeCallbackFunction()
     tape_fit = TapeCallbackFunction()
     p = Pipeline([
-        JoblibValueCachingWrapper(
+        JoblibTransformDIValueCachingWrapper(
             LogFitTransformCallbackStep(
                 tape_transform,
                 tape_fit,
@@ -57,7 +57,7 @@ def test_fit_transform_should_fit_then_use_cache(tmpdir):
 def test_should_flush_cache_on_every_fit(tmpdir):
     tape_transform = TapeCallbackFunction()
     tape_fit = TapeCallbackFunction()
-    wrapper = JoblibValueCachingWrapper(
+    wrapper = JoblibTransformDIValueCachingWrapper(
         LogFitTransformCallbackStep(
             tape_transform,
             tape_fit,

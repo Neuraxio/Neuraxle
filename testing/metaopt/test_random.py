@@ -23,9 +23,8 @@ import math
 import numpy as np
 from neuraxle.metaopt.validation import WalkForwardTimeSeriesCrossValidationWrapper, AnchoredWalkForwardTimeSeriesCrossValidationWrapper
 
-classic_walforward_parameters = {
+classic_walforward_parameters = [
     # (training_size, validation_size, padding_between_training_and_validation, drop_remainder)
-
     # Pair 1:
     (9, 3, 1, False),
     # Pair 2:
@@ -38,14 +37,18 @@ classic_walforward_parameters = {
     (5, 2, 3, True),
     # Pair 5 (Default Parameters):
     (2, None, 0, False),
-}
+]
 
 
-@pytest.mark.parametrize("training_window_size, validation_window_size, "
-                         "padding_between_training_and_validation, drop_remainder",
-                         classic_walforward_parameters)
-def test_classic_walkforward_crossvalidation_split(training_window_size: int, validation_window_size: int,
-                                                   padding_between_training_and_validation: int, drop_remainder: bool):
+@pytest.mark.parametrize(
+    "training_window_size, validation_window_size, padding_between_training_and_validation, drop_remainder",
+    classic_walforward_parameters)
+def test_classic_walkforward_crossvalidation_split(
+    training_window_size: int,
+    validation_window_size: int,
+    padding_between_training_and_validation: int,
+    drop_remainder: bool
+):
     # Arrange
     # set random seed
     np.random.seed(10)
@@ -128,9 +131,8 @@ def test_classic_walkforward_crossvalidation_split(training_window_size: int, va
         assert validation_expected_outputs[-1].shape == (batch_size, remainder_size, features_size)
 
 
-anchored_walforward_parameters = {
+anchored_walforward_parameters = [
     # (minimum_training_size, validation_window_size, padding_between_training_and_validation, drop_remainder)
-
     # Pair 1:
     (9, 3, 1, False),
     # Pair 2:
@@ -143,14 +145,18 @@ anchored_walforward_parameters = {
     (5, 2, 3, True),
     # Pair 5 (Default Parameters):
     (2, None, 0, False),
-}
+]
 
 
 @pytest.mark.parametrize(
     "minimum_training_size, validation_window_size, padding_between_training_and_validation, drop_remainder",
     anchored_walforward_parameters)
-def test_anchored_walkforward_crossvalidation_split(minimum_training_size: int, validation_window_size: int,
-                                                    padding_between_training_and_validation: int, drop_remainder: bool):
+def test_anchored_walkforward_crossvalidation_split(
+        minimum_training_size: int,
+        validation_window_size: int,
+        padding_between_training_and_validation: int,
+        drop_remainder: bool
+):
     # Arrange
     # set random seed
     np.random.seed(10)

@@ -165,9 +165,9 @@ def test_loguniform():
 
 
 def _test_loguniform(hd):
-    samples = hd.rvs_many(size=100)
+    samples = hd.rvs_many(size=200)
     samples_mean = np.abs(np.mean(samples))
-    assert samples_mean < 1.15  # if it was just uniform, this assert would break.
+    assert samples_mean < 1.5  # if it was just uniform, this assert would break.
     assert min(samples) >= 0.001
     assert max(samples) <= 10.0
     assert hd.pdf(0.0001) == 0.

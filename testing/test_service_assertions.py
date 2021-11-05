@@ -162,7 +162,7 @@ class TestServiceAssertion:
 
     def teardown(self):
         shutil.rmtree(self.tmpdir, ignore_errors=True)
-        shutil.rmtree(self.tmpdir+"_hp", ignore_errors=True)
+        shutil.rmtree(self.tmpdir + "_hp", ignore_errors=True)
 
     def test_step_with_context_saver_only_saves_wrapped(self, tmpdir):
         self._setup(tmpdir)

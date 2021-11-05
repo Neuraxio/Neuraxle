@@ -4,18 +4,23 @@ from neuraxle.data_container import DataContainer, ListDataContainer
 
 
 def test_data_container_iter_method_should_iterate_with_none_ids():
-    data_container = DataContainer(data_inputs=np.array(list(range(100))),
-                                   expected_outputs=np.array(list(range(100, 200)))).set_ids(None)
+    data_container = DataContainer(
+        di=np.array(list(range(100))),
+        eo=np.array(list(range(100, 200)))
+    ).set_ids(None)
 
     for i, (_id, data_input, expected_outputs) in enumerate(data_container):
-        assert _id is None
+        assert _id == i
         assert data_input == i
         assert expected_outputs == i + 100
 
 
 def test_data_container_iter_method_should_iterate_with_none_expected_outputs():
-    data_container = DataContainer(ids=[str(i) for i in range(100)], data_inputs=np.array(list(range(100))),
-                                   expected_outputs=None)
+    data_container = DataContainer(
+        ids=[str(i) for i in range(100)],
+        data_inputs=np.array(list(range(100))),
+        expected_outputs=None
+    )
 
     for i, (_, data_input, expected_outputs) in enumerate(data_container):
         assert data_input == i
@@ -23,14 +28,17 @@ def test_data_container_iter_method_should_iterate_with_none_expected_outputs():
 
 
 def test_data_container_len_method_should_return_data_inputs_len():
-    data_container = DataContainer(ids=None, data_inputs=np.array(list(range(100))), expected_outputs=None)
+    data_container = DataContainer.from_di(np.array(list(range(100))))
 
     assert len(data_container) == 100
 
 
 def test_data_container_should_iterate_through_data_using_minibatches():
-    data_container = DataContainer(ids=[str(i) for i in range(100)], data_inputs=np.array(list(range(100))),
-                                   expected_outputs=np.array(list(range(100, 200))))
+    data_container = DataContainer(
+        ids=[str(i) for i in range(100)],
+        data_inputs=np.array(list(range(100))),
+        expected_outputs=np.array(list(range(100, 200)))
+    )
 
     batches = []
     for b in data_container.minibatches(batch_size=10):

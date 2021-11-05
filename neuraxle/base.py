@@ -30,6 +30,7 @@ classes needed to compose other base classes.
 
 """
 
+import datetime
 import inspect
 import logging
 import os
@@ -948,7 +949,7 @@ class ExecutionContext(TruncableService):
         return self.services[Trail]
 
     def get_new_cache_folder(self) -> str:
-        return os.path.join(tempfile.gettempdir(), 'neuraxle-cache')
+        return os.path.join(tempfile.gettempdir(), 'neuraxle-cache', datetime.datetime.now().strftime("%Y-%m-%d_%Hh%Mm%Ss_%fμs"))
 
     def set_execution_phase(self, phase: ExecutionPhase) -> 'ExecutionContext':
         """
@@ -1339,7 +1340,7 @@ class _TransformerStep(MixinForBaseService):
         :param context: execution context
         :return: data container
         """
-        data_container.set_data_inputs(self(data_container.data_inputs))
+        data_container.di = self(data_container.di)
         return data_container
 
     def __call__(self, *args, **kwargs) -> Any:
@@ -1557,7 +1558,7 @@ class _FittableStep(MixinForBaseService):
         :param context: execution context
         :return: (fitted self, data container)
         """
-        return self.fit(data_container.data_inputs, data_container.expected_outputs)
+        return self.fit(data_container.di, data_container.eo)
 
     def _did_fit(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -1645,7 +1646,7 @@ class _FittableStep(MixinForBaseService):
         :param context: execution context
         :return: (fitted self, data container)
         """
-        new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
+        new_self, out = self.fit_transform(data_container.di, data_container.eo)
         data_container.set_data_inputs(out)
 
         return new_self, data_container

@@ -558,14 +558,18 @@ class SelectNonEmptyDataContainer(TransformHandlerOnlyMixin, BaseTransformer):
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
 
-        data_containers = list(filter(lambda dc: (len(dc.data_inputs) > 0 and len(dc.expected_outputs) > 0),
-                                      data_container.data_inputs))
+        data_containers = list(filter(
+            lambda dc: (len(dc.di) > 0 and len(dc.eo) > 0),
+            data_container.data_inputs
+        ))
         if len(data_containers) == 1:
             return data_containers[0]
         else:
-            return DataContainer(data_inputs=list(map(attrgetter("data_inputs"))),
-                                 expected_outputs=list(map(attrgetter("expected_outputs"))),
-                                 ids=data_container.ids)
+            return DataContainer(
+                ids=data_container.ids,
+                di=list(map(attrgetter("di"))),
+                eo=list(map(attrgetter("eo"))),
+            )
 
 
 class ExpandDim(MetaStep):
