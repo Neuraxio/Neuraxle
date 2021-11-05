@@ -39,7 +39,7 @@ from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEach
 from neuraxle.steps.misc import Sleep
 from neuraxle.steps.numpy import MultiplyByN
-from neuraxle.steps.caching import JoblibValueCachingWrapper
+from neuraxle.steps.caching import JoblibTransformDIValueCachingWrapper
 
 
 def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
@@ -89,7 +89,7 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
 
     pipeline: Pipeline = Pipeline([
         ('multiplication_1', MultiplyByN()),
-        ("value_checkpoints", JoblibValueCachingWrapper(Pipeline([
+        ("value_checkpoints", JoblibTransformDIValueCachingWrapper(Pipeline([
             ('sleep_1', ForEach(Sleep(sleep_time))),
             ('multiplication_2', MultiplyByN()),
         ]))),

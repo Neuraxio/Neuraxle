@@ -43,7 +43,7 @@ from typing import Any, Dict, List, Callable, Iterable, Tuple, Type
 from dataclasses import dataclass, field
 import numpy as np
 
-from neuraxle.base import BaseStep, ExecutionContext, Trail
+from neuraxle.base import BaseStep, ExecutionContext, Flow
 from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
@@ -60,7 +60,7 @@ class TrialStatus(Enum):
     SUCCESS = 'success'
 
 
-class AutoMLTrail(Trail):
+class AutoMLFlow(Flow):
 
     def update(
         self,

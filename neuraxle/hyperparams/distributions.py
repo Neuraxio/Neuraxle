@@ -28,7 +28,7 @@ the distribution.
 
 import math
 from abc import ABCMeta, abstractmethod
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, List, Optional
 
 import numpy as np
 from scipy.integrate import quad
@@ -36,7 +36,16 @@ from scipy.stats import norm, truncnorm
 
 
 class HyperparameterDistribution(metaclass=ABCMeta):
-    """Base class for other hyperparameter distributions."""
+    """
+    Base class for other hyperparameter distributions.
+
+    This is the abstract class of the abstract classes.
+    Please inherit from these mid-level abstract classes:
+
+    - :class:`~neuraxle.hyperparams.distributions.ContinuousHyperparameterDistribution`
+    - :class:`~neuraxle.hyperparams.distributions.DiscreteHyperparameterDistribution`
+    - :class:`~neuraxle.hyperparams.distributions.OrdinalHyperparameterDistribution`
+    """
 
     def __init__(self, null_default_value: Any = None):
         """
@@ -147,8 +156,11 @@ class HyperparameterDistribution(metaclass=ABCMeta):
 
 class ContinuousHyperparameterDistribution(HyperparameterDistribution):
     """
-    TODO docstring
-    TODO replace inheritance
+    Continuous distributions.
+
+    .. seealso::
+        :class:`~neuraxle.hyperparams.distributions.DiscreteHyperparameterDistribution`
+        :class:`~neuraxle.hyperparams.distributions.OrdinalHyperparameterDistribution`
     """
 
     def __init__(self, null_default_value=None):
@@ -160,7 +172,14 @@ class ContinuousHyperparameterDistribution(HyperparameterDistribution):
 
 class DiscreteHyperparameterDistribution(HyperparameterDistribution):
     """
-    TODO docstring
+    Discrete distributions.
+
+    Ineritors will have to implement the following method at least:
+    :func:`DiscreteHyperparameterDistribution.values`.
+
+    .. seealso::
+        :class:`~neuraxle.hyperparams.distributions.ContinuousHyperparameterDistribution`
+        :class:`~neuraxle.hyperparams.distributions.OrdinalHyperparameterDistribution`
     """
 
     def __init__(self, null_default_value=None):
@@ -188,6 +207,10 @@ class OrdinalDiscreteHyperparameterDistribution(DiscreteHyperparameterDistributi
 
     The usage of this class indicates the AutoML wheter it should consider the different
     values like a categorical or a numerical variable.
+
+    .. seealso::
+        :class:`~neuraxle.hyperparams.distributions.ContinuousHyperparameterDistribution`
+        :class:`~neuraxle.hyperparams.distributions.DiscreteHyperparameterDistribution`
     """
 
     def __init__(self, null_default_value=None):

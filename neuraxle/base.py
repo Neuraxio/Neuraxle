@@ -834,16 +834,13 @@ class TruncableService(TruncableServiceMixin, BaseService):
         TruncableServiceMixin.__init__(self, services)
 
 
-class Trail(BaseService):
+class Flow(BaseService):
     """
     This is like a news feed for pipelines where you post (log) info.
-    Trail is a step that can be used to store the status, metrics, logs,
+    Flow is a step that can be used to store the status, metrics, logs,
     and other information of the execution of the current run.
 
     Concrete implementations of this object may interact with repositories.
-
-    # log_metric(metric_name, metric_value)
-    # log(message)
     """
 
     def __init__(self, logger: logging.Logger = None):
@@ -898,18 +895,18 @@ class ExecutionContext(TruncableService):
     def __init__(
             self,
             root: str = None,
-            trail: Trail = None,
+            flow: Flow = None,
             execution_phase: ExecutionPhase = ExecutionPhase.UNSPECIFIED,
             execution_mode: ExecutionMode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM,
             stripped_saver: BaseSaver = None,
             parents: List['BaseStep'] = None,
             services: Dict[Type['BaseServiceT'], 'BaseServiceT'] = None,
     ):
-        if trail is None:
-            trail = Trail()
+        if flow is None:
+            flow = Flow()
         if services is None:
             services = dict()
-        services[Trail] = trail
+        services[Flow] = flow
         TruncableService.__init__(self, services=services)
 
         self.execution_mode = execution_mode
@@ -937,16 +934,16 @@ class ExecutionContext(TruncableService):
     @property
     def logger(self) -> logging.Logger:
         """
-        Logger for the execution context is stocked in the trail and you should probably use the trail.
+        Logger for the execution context is stocked in the flow and you should probably use the flow.
         """
-        return self.trail.logger
+        return self.flow.logger
 
     @property
-    def trail(self) -> Trail:
+    def flow(self) -> Flow:
         """
-        Trail is a service that is used to log information about the execution of the pipeline.
+        Flow is a service that is used to log information about the execution of the pipeline.
         """
-        return self.services[Trail]
+        return self.services[Flow]
 
     def get_new_cache_folder(self) -> str:
         return os.path.join(tempfile.gettempdir(), 'neuraxle-cache', datetime.datetime.now().strftime("%Y-%m-%d_%Hh%Mm%Ss_%fμs"))
@@ -969,13 +966,13 @@ class ExecutionContext(TruncableService):
         :param services: A dictionary of concrete services to register.
         :return: self
         """
-        if Trail not in services:
-            services[Trail] = self.trail
+        if Flow not in services:
+            services[Flow] = self.flow
         self.set_services(services)
         return self
 
     def set_logger(self, logger):
-        self.trail.logger = logger
+        self.flow.logger = logger
         return self
 
     def get_execution_mode(self) -> ExecutionMode:
@@ -1055,7 +1052,7 @@ class ExecutionContext(TruncableService):
         """
         return ExecutionContext(
             root=self.root,
-            trail=self.trail,
+            flow=self.flow,
             execution_mode=self.execution_mode,
             execution_phase=self.execution_phase,
             parents=self.parents + [step],
@@ -1065,7 +1062,7 @@ class ExecutionContext(TruncableService):
     def copy(self):
         return ExecutionContext(
             root=self.root,
-            trail=self.trail,
+            flow=self.flow,
             execution_mode=self.execution_mode,
             execution_phase=self.execution_phase,
             parents=copy(self.parents),

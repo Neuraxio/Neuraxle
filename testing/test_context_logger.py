@@ -6,7 +6,7 @@ import shutil
 import numpy as np
 from sklearn.metrics import mean_squared_error
 
-from neuraxle.base import BaseStep, ExecutionContext, HandleOnlyMixin, Trail
+from neuraxle.base import BaseStep, ExecutionContext, HandleOnlyMixin, Flow
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
@@ -51,7 +51,7 @@ def test_logger(tmpdir):
     file_handler.setLevel('DEBUG')
     logger.addHandler(file_handler)
     logger.setLevel('DEBUG')
-    context = ExecutionContext(tmpdir, trail=Trail(logger=logger))
+    context = ExecutionContext(tmpdir, flow=Flow(logger=logger))
     pipeline = Pipeline([
         MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
             'multiply_by': FixedHyperparameter(2)
