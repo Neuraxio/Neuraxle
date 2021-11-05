@@ -22,11 +22,9 @@ to log info in various folders.
     limitations under the License.
 
 """
-import os
-import shutil
 import logging
+import os
 import sys
-
 
 LOGGER_FORMAT = "[%(asctime)s][%(name)-12s][%(module)-8s][%(lineno)-4d][%(levelname)-8s]: %(message)s"
 LOGGING_DATETIME_STR_FORMAT = '%Y-%m-%d_%H:%M:%S.%f'
@@ -40,9 +38,9 @@ class Logger(object):
     """
     Logging class to log information about the execution of a pipeline in Neuraxle.
     The default logging config is set to INFO level with the following format:
-    
+
     .. code-block:: python
-    
+
         logging.basicConfig(format=LOGGER_FORMAT, datefmt=LOGGING_DATETIME_STR_FORMAT, level=logging.INFO, force=True)
 
     The logging config can be modified and complemented by passing the following parameters:
@@ -77,8 +75,6 @@ class Logger(object):
         self.logger_file = logger_file
         self.logger_format = logger_format
         self.logger_date_format = logger_date_format
-
-    def _initialize_logger(self) -> logging.Logger:
 
         if self.logger is None:
             self.logger = logging.getLogger(logger_name)
@@ -121,7 +117,10 @@ class ContextualLogger(Logger):
     """
 
     def __init__(
-        context: 'ExecutionContext',
+        context: 'ExecutionContext', logger: logging.Logger = None,
+        logger_name: str = "neuraxle", logger_level: int = None, logger_file: str = None,
+        logger_format: str = None, logger_date_format: str = None,
+        trial_number: int = None
     ):
         """
         Initialize the logger.
@@ -135,6 +134,3 @@ class ContextualLogger(Logger):
             logger_format=logger_format, logger_date_format=logger_date_format
         )
         self.trial_number = trial_number
-
-    def _initialize_logger_with_file(self) -> logging.Logger:
-        pass
