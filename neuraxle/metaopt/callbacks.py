@@ -270,12 +270,14 @@ class StepSaverCallback(BaseCallback):
         return False
 
 
-def BestModelCheckpoint():
+class BestModelCheckpoint(IfBestScore):
     """
     Saves the pipeline model in a folder named "best" when the a new best validation score is reached.
     It is important to note that when refit=True, an AutoML loop will overwrite the best model after refitting.
     """
-    return IfBestScore(StepSaverCallback('best'))
+
+    def __init__(self):
+        IfBestScore.__init__(self, StepSaverCallback('best'))
 
 
 class CallbackList(BaseCallback):

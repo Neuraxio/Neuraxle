@@ -23,14 +23,16 @@ Those steps works with NumPy (np) arrays.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-import copy
 from typing import Sequence
 
-import numpy as np
-
-from neuraxle.base import ExecutionContext, ForceHandleMixin, BaseTransformer, NonFittableMixin, BaseStep
+from neuraxle.base import (BaseStep, BaseTransformer, ExecutionContext,
+                           ForceHandleMixin, NonFittableMixin)
 from neuraxle.data_container import DataContainer
-from neuraxle.hyperparams.space import HyperparameterSamples
+from neuraxle.hyperparams.distributions import PriorityChoice
+from neuraxle.hyperparams.space import (HyperparameterSamples,
+                                        HyperparameterSpace)
+
+import numpy as np
 
 
 class NumpyFlattenDatum(BaseTransformer):
@@ -248,7 +250,18 @@ class AddN(BaseTransformer):
     """
 
     def __init__(self, add=1):
-        super().__init__(hyperparams=HyperparameterSamples({'add': add }))
+        super().__init__(hyperparams=HyperparameterSamples({'add': add}))
+
+    def with_hp_range(self, hp_range: range) -> 'AddN':
+        """
+        Specify a range for the hyperparametern "N" to be used as an hyperparameter space.
+
+        :param hp_range: range of the hyperparameter. E.g.: ``range(1, 10)``
+        """
+        self.set_hyperparams_space(HyperparameterSpace({
+            'add': PriorityChoice(list(hp_range))
+        }))
+        return self
 
     def transform(self, data_inputs):
         if not isinstance(data_inputs, np.ndarray):
