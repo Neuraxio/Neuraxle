@@ -8,8 +8,8 @@ from sklearn.metrics import accuracy_score
 
 from neuraxle.base import ExecutionContext
 from neuraxle.data_container import DataContainer
-from neuraxle.metaopt.auto_ml import EasyAutoML, DefaultLoop, HyperparamsJSONRepository, ValidationSplitter, Trainer, RandomSearchHyperparameterSelectionStrategy
-from neuraxle.metaopt.callbacks import MetricCallback
+from neuraxle.metaopt.auto_ml import EasyAutoML, DefaultLoop, HyperparamsJSONRepository, ValidationSplitter, Trainer, RandomSearch
+from neuraxle.metaopt.callbacks import EarlyStoppingCallback, MetricCallback, ScoringCallback
 from neuraxle.pipeline import Pipeline
 from neuraxle.hyperparams.distributions import Choice, RandInt, Boolean, LogUniform
 from neuraxle.hyperparams.space import HyperparameterSpace
@@ -40,7 +40,6 @@ def _create_pipeline():
     ])
 
 
-@pytest.mark.skip(reason="TODO: AutoML Refactor")
 def test_automl_api_entry_point(tmpdir):
     data_inputs, expected_outputs = _create_data_source()
     dact = DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs)
@@ -49,24 +48,17 @@ def test_automl_api_entry_point(tmpdir):
 
     a: EasyAutoML = EasyAutoML(
         pipeline=pipeline,
-        controller_loop=DefaultLoop(
-            trainer=Trainer(
-                validation_splitter=ValidationSplitter(0.20),
-                callbacks=[
-                    MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False),
-                    MetricCallback('accuracy', metric_function=accuracy_score, higher_score_is_better=False),
-                    # EarlyStoppingCallback(max_epochs_without_improvement=3)
-                ],
-                main_metric_name="mse"
-            ),
-            # or `Trainer(...).with_val_set(sdsdfg)`  # TODO: add this `with_val_set` method that would change splitter to PresetValidationSetSplitter(self, val) and override.
-            next_best_prediction_algo=RandomSearchHyperparameterSelectionStrategy(),
-            n_trials=17,
-            n_epochs=11,
-            continue_loop_on_error=True
-        ),
-        hp_repo=HyperparamsJSONRepository(cache_folder=os.path.join(tmpdir, "hp")),
-        start_new_run=True,  # otherwise, pick last run.
+        validation_splitter=ValidationSplitter(0.20),
+        hyperparams_optimizer=RandomSearch(),
+        hyperparams_repository=HyperparamsJSONRepository(cache_folder=os.path.join(tmpdir, "hp")),
+        scoring_callback=ScoringCallback(mean_squared_error),
+        callbacks=[
+            MetricCallback('accuracy', metric_function=accuracy_score, higher_score_is_better=False),
+            EarlyStoppingCallback(max_epochs_without_improvement=3)
+        ],
+        continue_loop_on_error=True,
+        n_trials=17,
+        epochs=11,
         refit_best_trial=True,
     )
 

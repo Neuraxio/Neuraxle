@@ -8,11 +8,11 @@ from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import RandInt, Uniform
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
-from neuraxle.metaopt.auto_ml import (AutoML, DefaultLoop,
-                                      InMemoryHyperparamsRepository, Trainer,
+from neuraxle.metaopt.auto_ml import (AutoML, AutoMLFlow, DefaultLoop,
+                                      InMemoryHyperparamsRepository,
+                                      RandomSearch, Trainer,
                                       ValidationSplitter)
 from neuraxle.metaopt.callbacks import MetricCallback
-from neuraxle.metaopt.trial import AutoMLFlow
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.data import DataShuffler
 from neuraxle.steps.flow import TrainOnlyWrapper
@@ -40,7 +40,7 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
     # This is a large test
     dact = DataContainer(di=list(range(10)), eo=list(range(10, 20)))
     cx = ExecutionContext(root=tmpdir)
-    expected_deep_cx = ExecutionContext(root=tmpdir, flow=AutoMLFlow())
+    expected_deep_cx = ExecutionContext(root=tmpdir)
     assertion_step = StepThatAssertsContextIsSpecified(expected_context=expected_deep_cx)
     automl = AutoML(
         pipeline=Pipeline([
@@ -52,17 +52,16 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
             trainer=Trainer(
                 validation_splitter=ValidationSplitter(test_size=0.2),
                 n_epochs=1,
-                callbacks=[MetricCallback(scoring_function=median_absolute_error)]
+                callbacks=[MetricCallback('MAE', median_absolute_error, True)]
             ),
-            hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(
-                main_metric_name=None,  # if None, pick first metric.
-            ),
+            hyperparams_optimizer=RandomSearch('MAE'),
             n_trials=80,
             n_jobs=10,
         ),
-        hyperparams_repository=InMemoryHyperparamsRepository(
-            project_name="default_project",
-            client_name="default_client",
+        flow=AutoMLFlow(
+            repo=InMemoryHyperparamsRepository(),
+            project_id="default_project",
+            client_id="default_client",
         ),
         start_new_run=True,
         refit_best_trial=True,

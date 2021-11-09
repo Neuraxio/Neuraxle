@@ -192,7 +192,7 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_max_queue_size():
     assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
 
 
-def test_parallel_queued_parallelize_correctly(tmpdir):
+def test_parallel_queued_threads_do_parallelize_sleep_correctly(tmpdir):
     sleep_time = 0.01
     p = SequentialQueuedPipeline([
         ('1', 2, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),

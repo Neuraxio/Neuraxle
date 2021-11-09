@@ -43,6 +43,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy
 from enum import Enum
+from multiprocessing import Lock, Manager, RLock
 from typing import (Any, Callable, Dict, Generic, ItemsView, Iterable,
                     KeysView, List, Set, Tuple, Type, TypeVar, Union,
                     ValuesView)
@@ -53,7 +54,9 @@ from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import HyperparameterDistribution
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
+from neuraxle.logging.logging import LOGGER_FORMAT, LOGGING_DATETIME_STR_FORMAT
 from neuraxle.logging.warnings import warn_deprecated_arg
+from neuraxle.metaopt.data.vanilla import TrialStatus
 
 
 class BaseSaver(ABC):
@@ -805,7 +808,7 @@ class TruncableServiceMixin(_HasChildrenMixin):
     def __getitem__(self, service_abstract_class_type: Type['BaseServiceT']) -> 'BaseServiceT':
         """
         Get the service from its base type key (or string equivalent of this key).
-            
+
         :param service_abstract_class_type: base type
         :return: service
         """
@@ -817,7 +820,7 @@ class TruncableServiceMixin(_HasChildrenMixin):
     def __setitem__(self, service_abstract_class_type: Type['BaseServiceT'], service_instance: 'BaseServiceT'):
         """
         Set the service in the services dictionary.
-            
+
         :param service_abstract_class_type: base type that is a type of :class:`~neuraxle.base.BaseService`
         :param service_instance: instance that is an instance of :class:`~neuraxle.base.BaseService`
         :return: self
@@ -834,6 +837,17 @@ class TruncableService(TruncableServiceMixin, BaseService):
         TruncableServiceMixin.__init__(self, services)
 
 
+def locked_flow_method(log_any_func: Callable[..., Any]) -> Callable:
+    """
+    Locking the flow to prevent race conditions in accessing the flow.
+    """
+
+    def log_any(self, *args, **kwargs):
+        with self._lock:
+            return log_any_func(self, *args, **kwargs)
+    return log_any
+
+
 class Flow(BaseService):
     """
     This is like a news feed for pipelines where you post (log) info.
@@ -843,17 +857,70 @@ class Flow(BaseService):
     Concrete implementations of this object may interact with repositories.
     """
 
-    def __init__(self, logger: logging.Logger = None):
+    def __init__(
+        self,
+        logger: logging.Logger = None,
+    ):
         BaseService.__init__(self)
         if logger is None:
             logger = logging.getLogger()
         self.logger = logger
+        self._lock: RLock = Manager().RLock()
 
-    def log_metric(self, metric_name: str, metric_value: float):
-        self.logger.info(f'{metric_name}: {metric_value}')
-
+    @locked_flow_method
     def log(self, message: str, level: int = logging.INFO):
         self.logger.log(level, message)
+
+    def log_metric(self, metric_name: str, metric_value: float):
+        self.log(f'Metric `{metric_name}`: {metric_value}.')
+
+    def log_model(self, model: 'BaseStep'):
+        self.log(f'Model: {model}')
+
+    def log_status(self, status: TrialStatus):
+        self.log(f'Status: {status}')
+
+    def log_start(self, status: TrialStatus = TrialStatus.PLANNED):
+        self.log('Started!')
+        self.log_status(status)
+
+    def log_end(self, status: TrialStatus = TrialStatus.SUCCESS):
+        self.log('Finished!')
+        self.log_status(status)
+
+    def log_success(self):
+        self.log_end(TrialStatus.SUCCESS)
+        # TODO: log all the following info:
+        #           context.logger.info('success trial {}\nbest score: {} at epoch {}'.format(
+        #               trial_split_description,
+        #               repo_trial_split.get_best_validation_score(),
+        #               repo_trial_split.get_n_epochs_to_best_validation_score()
+        #           ))
+
+    def log_failure(self, exception: Exception):
+        self.log_error(exception)
+        self.log_end(TrialStatus.FAILURE)
+
+    @locked_flow_method
+    def log_error(self, exception: Exception):
+        self.logger.exception(exception)
+
+    def log_aborted(self, status: TrialStatus = TrialStatus.ABORTED):
+        """
+        Probably aborted with CTRL+C
+        """
+        self.log('Aborted!')
+        self.log_status(status)
+
+    def _add_file_to_logger(
+        self,
+        logging_file: str
+    ) -> logging.Logger:
+        os.makedirs(os.path.dirname(logging_file), exist_ok=True)
+        formatter = logging.Formatter(fmt=LOGGER_FORMAT, datefmt=LOGGING_DATETIME_STR_FORMAT)
+        file_handler = logging.FileHandler(filename=logging_file)
+        file_handler.setFormatter(formatter)
+        self.logger.addHandler(file_handler)
 
 
 class ExecutionContext(TruncableService):
@@ -1068,13 +1135,35 @@ class ExecutionContext(TruncableService):
             parents=copy(self.parents),
             services=self.services,
         )
+    
+    def train(self) -> 'ExecutionContext':
+        """
+        Set the execution context to train mode.
+        """
+        new_self = self.copy()
+        new_self.set_execution_phase(ExecutionPhase.TRAIN)
+        return new_self
+    
+    def validation(self) -> 'ExecutionContext':
+        """
+        Set the execution context to train mode.
+        """
+        new_self = self.copy()
+        new_self.set_execution_phase(ExecutionPhase.VALIDATION)
+        return new_self
 
-    def thread_safe(self):
+    def thread_safe(self) -> 'ExecutionContext':
+        """
+        Prepare the context and its services to be thread safe and
+        reduce the current context for parallelization.
+
+        :return: a tuple of the recursive dict to apply within thread, and the thread safe context
+        """
         threaded_context = self.copy()
-        # Not passing parents to threads. We could, but we would need to sanitize some parents:
-        threaded_context.parents = []
         # Must compensate lost parents:
-        threaded_context.root = self.get_path()
+        self.root = self.get_path()
+        # Not passing parents to threads. We could, but we would need to sanitize some parents:
+        self.parents = []
         return threaded_context
 
     def peek(self) -> 'BaseTransformer':
@@ -2448,10 +2537,9 @@ class _CouldHaveContext(MixinForBaseService):
         try:
             assert a == b, err_message
         except AssertionError as e:
-            # log the error in the context's logger
-            context.logger.exception(e)
+            context.flow.log_error(e)
 
-            # Don't crash in prod context:
+            # Don't crash in prod context only:
             if context.execution_phase != ExecutionPhase.PROD:
                 raise e
 

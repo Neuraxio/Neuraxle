@@ -308,16 +308,16 @@ class CallbackList(BaseCallback):
     def __getitem__(self, item):
         return self.callbacks[item]
 
-    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
-             is_finished_and_fitted: bool):
+    def call(self, context: ExecutionContext, epoch: int, tot_epochs: int, input_train: DataContainer,
+             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
+             is_finished_and_fitted: bool = False):
         is_finished_and_fitted = False
         for callback in self.callbacks:
             try:
                 if callback.call(
-                        trial_split=trial_split,
-                        epoch_number=epoch_number,
-                        total_epochs=total_epochs,
+                        trial_split=context,
+                        epoch_number=epoch,
+                        total_epochs=tot_epochs,
                         input_train=input_train,
                         pred_train=pred_train,
                         input_val=input_val,
@@ -328,7 +328,7 @@ class CallbackList(BaseCallback):
                     is_finished_and_fitted = True
             except Exception as _:
                 track = traceback.format_exc()
-                trial_split.trial.logger.error(track)
+                context.trial.logger.error(track)
 
         return is_finished_and_fitted
 

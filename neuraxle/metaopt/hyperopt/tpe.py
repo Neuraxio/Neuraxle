@@ -13,7 +13,7 @@ from neuraxle.hyperparams.distributions import DistributionMixture, PriorityChoi
     HyperparameterDistribution
 from neuraxle.hyperparams.distributions import Choice, LogNormal, LogUniform, Quantized
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
-from neuraxle.metaopt.auto_ml import BaseHyperparameterSelectionStrategy, RandomSearchHyperparameterSelectionStrategy, \
+from neuraxle.metaopt.auto_ml import BaseHyperparameterOptimizer, RandomSearch, \
     TrialStatus
 from neuraxle.metaopt.trial import Trials
 
@@ -21,7 +21,7 @@ _LOG_DISTRIBUTION = (LogNormal, LogUniform)
 _QUANTIZED_DISTRIBUTION = (Quantized,)
 
 
-class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelectionStrategy):
+class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterOptimizer):
     def __init__(
             self,
             number_of_initial_random_step: int = 40,
@@ -33,7 +33,7 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterSelec
             number_recent_trial_at_full_weights: int = 25
     ):
         super().__init__()
-        self.initial_auto_ml_algo: RandomSearchHyperparameterSelectionStrategy = RandomSearchHyperparameterSelectionStrategy()
+        self.initial_auto_ml_algo: RandomSearch = RandomSearch()
         self.number_of_initial_random_step: int = number_of_initial_random_step
         self.quantile_threshold: float = quantile_threshold
         self.number_good_trials_max_cap: int = number_good_trials_max_cap

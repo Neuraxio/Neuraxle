@@ -6,7 +6,8 @@ from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository
 
 from neuraxle.base import Identity
 from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.metaopt.trial import Trial, TrialStatus, Trials
+from neuraxle.metaopt.trial import Trial, Trials
+from neuraxle.metaopt.data.vanilla import TrialStatus
 from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
 
 EXPECTED_ERROR_TRACEBACK = 'NoneType: None\n'

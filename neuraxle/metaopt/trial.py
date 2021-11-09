@@ -12,7 +12,7 @@ Classes are splitted like this for the AutoML:
 - MetricResults
 
 ..
-    Copyright 2019, Neuraxio Inc.
+    Copyright 2021, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ Classes are splitted like this for the AutoML:
 
 
 """
+
 
 from collections import OrderedDict
 import datetime
@@ -47,138 +48,6 @@ from neuraxle.base import BaseStep, ExecutionContext, Flow
 from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
-
-
-class TrialStatus(Enum):
-    """
-    Enum of the possible states of a trial.
-    """
-    PLANNED = 'planned'
-    RUNNING = 'running'
-    ABORTED = 'aborted'  # TODO: consider aborted.
-    FAILED = 'failed'
-    SUCCESS = 'success'
-
-
-class AutoMLFlow(Flow):
-
-    def update(
-        self,
-        project_id: str,
-        client_id: str,
-        run_id: int,
-        trial_id: int,
-        new_val: Any
-    ):
-        # log_start(, status=PLANNED)
-        # log_status(status)
-        # log_metric(metric_name, metric_value)
-        # log_end(status)
-        # log_failure(status, exception)
-        # log_stopped(status)
-        # log(message)
-        pass
-
-
-@dataclass
-class BaseMetadata:
-    # TODO: from json, to json.
-    pass
-
-
-@dataclass
-class ProjectMetadata(BaseMetadata):
-    name: str = ""
-    clients: List['ClientMetadata'] = field(default_factory=list)
-
-
-@dataclass
-class ClientMetadata(BaseMetadata):
-    rounds: List['RoundMetadata'] = field(default_factory=list)
-    main_metric_name: str = None  # By default, the first metric is the main one.  # TODO: make it configurable.
-
-
-class RoundMetadata(BaseMetadata):
-    trials: List['TrialMetadata'] = field(default_factory=list)
-
-
-@dataclass
-class BaseTrialMetadata(BaseMetadata):
-    """
-    Base class for :class:`TrialMetadata` and :class:`TrialSplitMetadata`.
-    """
-    hyperparams: HyperparameterSamples
-    start_time: datetime.datetime = None
-    end_time: datetime.datetime = None
-    log: str = None
-
-
-@dataclass
-class TrialMetadata(BaseTrialMetadata):
-    """
-    Trial object used by AutoML algorithm classes.
-    """
-    trial_number: int = 0
-    status: TrialStatus = TrialStatus.PLANNED
-    validation_splits: List['TrialSplit'] = field(default_factory=list)
-
-
-class TrialSplitMetadata(BaseTrialMetadata):
-    """
-    TrialSplit object used by AutoML algorithm classes.
-    """
-    split_number: int = 0
-    introspection_data: RecursiveDict = None
-    metric_results: OrderedDict[str, 'MetricResultMetadata'] = field(default_factory=OrderedDict)
-
-
-class MetricResultMetadata(BaseMetadata):
-    """
-    MetricResult object used by AutoML algorithm classes.
-    """
-    train_values: List[float] = field(default_factory=list)
-    validation_values: List[float] = field(default_factory=list)
-    higher_score_is_better: bool = True
-
-
-metadata_classes = {
-    ProjectMetadata.__name__: ProjectMetadata,
-    ClientMetadata.__name__: ClientMetadata,
-    RoundMetadata.__name__: RoundMetadata,
-    TrialMetadata.__name__: TrialMetadata,
-    TrialSplitMetadata.__name__: TrialSplitMetadata,
-    RecursiveDict.__name__: RecursiveDict,
-    MetricResultMetadata.__name__: MetricResultMetadata,
-}
-
-
-def object_decoder(obj):
-    if '__type__' in obj and obj['__type__'] in metadata_classes:
-        cls: Type = metadata_classes[obj['__type__']]
-        kwargs = dict(obj)
-        del kwargs['__type__']
-        return cls(**kwargs)
-    return obj
-
-
-class MetadataJSONEncoder(JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        if isinstance(obj, RecursiveDict):
-            return obj.to_flat_dict()
-        elif type(obj) in metadata_classes:
-            return {'__type__': type(obj).__name__, **obj.asdict()}  # TODO: **self.default(obj) ?
-        else:
-            return JSONEncoder.default(self, obj)
-
-
-def to_json(obj: str) -> str:
-    return json.dumps(obj, cls=MetadataJSONEncoder)
-
-
-def from_json(json: str) -> str:
-    return json.loads(json, object_pairs_hook=OrderedDict, object_hook=object_decoder)
 
 
 class Trial:
@@ -292,9 +161,9 @@ class TrialRepo:
 
         if logger is None:
             if self.cache_folder is not None:
-                logger = self._initialize_logger_with_file()
+                logger = self._initialize_logger_with_file(context)
             else:
-                logger = logging.getLogger()
+                logger = context.logger
         self.logger: Logger = logger
 
         self.trial = Trial()  # TODO: do this.
@@ -464,15 +333,9 @@ class TrialRepo:
 
     def _initialize_logger_with_file(self) -> logging.Logger:
 
-        os.makedirs(self.cache_folder, exist_ok=True)
-
         logfile_path = os.path.join(self.cache_folder, f"trial_{self.trial_number}.log")
-        logger_name = f"trial_{self.trial_number}"
-        logger = logging.getLogger(logger_name)
-        formatter = logging.Formatter(fmt=LOGGER_FORMAT, datefmt=DATE_FORMAT)
-        file_handler = logging.FileHandler(filename=logfile_path)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+
+        context.flow._add_file_to_logger(logfile_path)
         return logger
 
     def _free_logger_file(self):

@@ -1,19 +1,24 @@
+import os
+
 import numpy as np
 import pytest
 from joblib import Parallel, delayed
-from neuraxle.metaopt.trial import TrialStatus, Trials
-from sklearn.metrics import mean_squared_error
-
-from neuraxle.hyperparams.distributions import Uniform, LogNormal, Normal, Choice, Quantized, LogUniform
+from neuraxle.hyperparams.distributions import (Choice, LogNormal, LogUniform,
+                                                Normal, Quantized, Uniform)
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import EasyAutoML, InMemoryHyperparamsRepository, AutoML, ValidationSplitter, \
-    RandomSearchHyperparameterSelectionStrategy, BaseHyperparameterSelectionStrategy
+from neuraxle.metaopt.auto_ml import (AutoML, BaseHyperparameterOptimizer,
+                                      EasyAutoML,
+                                      InMemoryHyperparamsRepository,
+                                      RandomSearch, ValidationSplitter)
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
-from neuraxle.metaopt.hyperopt.tpe import TreeParzenEstimatorHyperparameterSelectionStrategy
+from neuraxle.metaopt.data.vanilla import TrialStatus
+from neuraxle.metaopt.hyperopt.tpe import \
+    TreeParzenEstimatorHyperparameterSelectionStrategy
+from neuraxle.metaopt.trial import Trials
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCallbackStep
 from neuraxle.steps.numpy import AddN
-import os
+from sklearn.metrics import mean_squared_error
 
 
 @pytest.mark.skip(reason="TODO: AutoML Refactor")
@@ -99,7 +104,7 @@ def test_tpe(expected_output_mult, pipeline, tmpdir):
         delayed(_test_trial_scores)(
             expected_output_mult,
             pipeline,
-            RandomSearchHyperparameterSelectionStrategy(),
+            RandomSearch(),
             os.path.join(tmpdir, 'random', str(i))
         )
         for i in range(4)
@@ -114,7 +119,7 @@ def test_tpe(expected_output_mult, pipeline, tmpdir):
 def _test_trial_scores(
     expected_output_mult,
     pipeline,
-    hyperparams_optimizer: BaseHyperparameterSelectionStrategy,
+    hyperparams_optimizer: BaseHyperparameterOptimizer,
     tmpdir: str
 ):
     hp_repository: InMemoryHyperparamsRepository = InMemoryHyperparamsRepository(cache_folder=str(tmpdir))
@@ -127,7 +132,7 @@ def _test_trial_scores(
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)],
         n_trials=n_trials,
-        refit_trial=True,
+        refit_best_trial=True,
         epochs=n_epochs,
         hyperparams_repository=hp_repository,
         continue_loop_on_error=False
@@ -139,6 +144,6 @@ def _test_trial_scores(
     auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
-    trials: Trials = hp_repository.load_all_trials(status=TrialStatus.SUCCESS)
+    trials: Trials = hp_repository.load_trials(status=TrialStatus.SUCCESS)
     validation_scores = [t.get_validation_score() for t in trials]
     return validation_scores

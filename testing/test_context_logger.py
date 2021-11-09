@@ -10,7 +10,7 @@ from neuraxle.base import BaseStep, ExecutionContext, HandleOnlyMixin, Flow
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, RandomSearchHyperparameterSelectionStrategy, ValidationSplitter, HyperparamsJSONRepository
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearch, ValidationSplitter, HyperparamsJSONRepository
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import MultiplyByN, NumpyReshape
@@ -94,7 +94,7 @@ class TestTrialLogger:
                 NumpyReshape(new_shape=(-1, 1)),
                 LoggingStep()
             ]),
-            hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+            hyperparams_optimizer=RandomSearch(),
             validation_splitter=ValidationSplitter(0.20),
             scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
             n_trials=n_trials,

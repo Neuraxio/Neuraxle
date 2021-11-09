@@ -9,7 +9,7 @@ from sklearn.metrics import mean_squared_error
 from neuraxle.base import BaseService, Identity, ExecutionContext, NonFittableMixin, \
     StepWithContext, ForceHandleIdentity, BaseStep, BaseTransformerT
 from neuraxle.data_container import DataContainer
-from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearchHyperparameterSelectionStrategy, \
+from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearch, \
     ValidationSplitter, HyperparamsJSONRepository
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.pipeline import Pipeline
@@ -138,15 +138,15 @@ def test_localassert_should_fail_when_services_are_missing_at_exec(tmpdir):
 
 def _make_autoML_loop(tmpdir, p: Pipeline):
     hp_repository = HyperparamsJSONRepository(cache_folder=tmpdir)
-#    hp_repository = InMemoryHyperparamsRepository(cache_folder=str(tmpdir) + "_hp")
+    # hp_repository = InMemoryHyperparamsRepository(cache_folder=str(tmpdir) + "_hp")
     n_epochs = 1
     return EasyAutoML(
         pipeline=p,
-        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        hyperparams_optimizer=RandomSearch(),
         validation_splitter=ValidationSplitter(0.20),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         n_trials=1,
-        refit_trial=True,
+        refit_best_trial=True,
         epochs=n_epochs,
         hyperparams_repository=hp_repository,
         cache_folder_when_no_handle=str(tmpdir),

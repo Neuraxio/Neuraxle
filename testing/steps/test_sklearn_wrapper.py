@@ -9,7 +9,7 @@ from neuraxle.base import ExecutionContext, Identity
 from neuraxle.hyperparams.distributions import RandInt, Uniform
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import KFoldCrossValidationSplitter, EasyAutoML, RandomSearchHyperparameterSelectionStrategy, \
+from neuraxle.metaopt.auto_ml import KFoldCrossValidationSplitter, EasyAutoML, RandomSearch, \
     HyperparamsJSONRepository
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.pipeline import Pipeline
@@ -124,13 +124,13 @@ def _test_within_auto_ml_loop(tmpdir, pipeline):
 
     auto_ml = EasyAutoML(
         pipeline=pipeline,
-        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        hyperparams_optimizer=RandomSearch(),
         validation_splitter=validation_splitter,
         scoring_callback=scoring_callback,
         n_trials=2,
         epochs=1,
         hyperparams_repository=HyperparamsJSONRepository(cache_folder=tmpdir),
-        refit_trial=True,
+        refit_best_trial=True,
         continue_loop_on_error=False)
 
     auto_ml.fit(X_train, Y_train)

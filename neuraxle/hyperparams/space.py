@@ -223,6 +223,9 @@ class RecursiveDict(OrderedDict):
                 else value.with_separator(separator) for key, value in self.items()
             })
 
+    def is_empty(self):
+        return len(self) == 0 or len(self.to_flat_dict()) == 0
+
 
 class HyperparameterSamples(RecursiveDict):
     """

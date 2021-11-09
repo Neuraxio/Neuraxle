@@ -10,7 +10,7 @@ for the transformers.
 
 
 ..
-    Copyright 2019, Neuraxio Inc.
+    Copyright 2021, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ for the transformers.
 import time
 import warnings
 from abc import abstractmethod
-from multiprocessing import Queue
+from multiprocessing import Queue, Lock
 from multiprocessing.context import Process
 from threading import Thread
 from typing import Dict, Tuple, List, Union, Iterable, Any
@@ -206,6 +206,8 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
         """
         thread_safe_self = self
         thread_safe_context = context
+        shared_lock: Lock = context.flow._lock
+        context.flow._lock = None
         parallel_call = Thread
 
         if self.use_processes:
@@ -223,7 +225,7 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
         for _, worker_arguments in zip(range(self.n_workers), self.additional_worker_arguments):
             p = parallel_call(
                 target=worker_function,
-                args=(thread_safe_self, thread_safe_context, self.use_savers, worker_arguments)
+                args=(thread_safe_self, shared_lock, thread_safe_context, self.use_savers, worker_arguments)
             )
             p.daemon = True
             p.start()
@@ -251,7 +253,7 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
         self.observers = []
 
 
-def worker_function(queue_worker: QueueWorker, context: ExecutionContext, use_savers: bool,
+def worker_function(queue_worker: QueueWorker, shared_lock: Lock, context: ExecutionContext, use_savers: bool,
                     additional_worker_arguments):
     """
     Worker function that transforms the items inside the queue of items to process.
@@ -264,6 +266,7 @@ def worker_function(queue_worker: QueueWorker, context: ExecutionContext, use_sa
     """
 
     try:
+        context.flow._lock = shared_lock
         if use_savers:
             saved_queue_worker: QueueWorker = context.load(queue_worker.get_name())
             queue_worker.set_step(saved_queue_worker.get_step())

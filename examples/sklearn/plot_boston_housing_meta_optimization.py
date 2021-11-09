@@ -93,7 +93,7 @@ def main(tmpdir):
     auto_ml = EasyAutoML(
         p,
         validation_splitter=ValidationSplitter(0.20),
-        refit_trial=True,
+        refit_best_trial=True,
         n_trials=10,
         epochs=1,  # 1 epoc here due to using sklearn models that just fit once.
         cache_folder_when_no_handle=str(tmpdir),

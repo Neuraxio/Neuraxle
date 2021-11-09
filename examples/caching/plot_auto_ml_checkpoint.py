@@ -33,7 +33,7 @@ from neuraxle.base import ExecutionContext
 
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearchHyperparameterSelectionStrategy, ValidationSplitter
+from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearch, ValidationSplitter
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEach
@@ -63,11 +63,11 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
     time_a = time.time()
     auto_ml = EasyAutoML(
         pipeline,
-        refit_trial=True,
+        refit_best_trial=True,
         n_trials=n_iter,
         cache_folder_when_no_handle=classic_pipeline_folder,
         validation_splitter=ValidationSplitter(0.2),
-        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        hyperparams_optimizer=RandomSearch(),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
             MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)
@@ -98,11 +98,11 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
     time_a = time.time()
     auto_ml = EasyAutoML(
         pipeline,
-        refit_trial=True,
+        refit_best_trial=True,
         n_trials=n_iter,
         cache_folder_when_no_handle=caching_pipeline_folder,
         validation_splitter=ValidationSplitter(0.2),
-        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        hyperparams_optimizer=RandomSearch(),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
             MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)

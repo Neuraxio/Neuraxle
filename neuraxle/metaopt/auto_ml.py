@@ -5,7 +5,7 @@ Classes used to build any Automatic Machine Learning pipelines.
 Hyperparameter selection strategies are used to optimize the hyperparameters of given pipelines.
 
 ..
-    Copyright 2019, Neuraxio Inc.
+    Copyright 2021, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -38,18 +38,22 @@ import sys
 import time
 import traceback
 from abc import ABC, abstractmethod
-from typing import Callable, List, Union, Tuple
+from typing import Callable, List, Tuple, Union, Any, Optional
 
 import numpy as np
-
-from neuraxle.base import BaseStep, ExecutionContext, ForceHandleMixin, ExecutionPhase, _HasChildrenMixin
-from neuraxle.data_container import DataContainer
-from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
-from neuraxle.metaopt.callbacks import BaseCallback, CallbackList, ScoringCallback
+from neuraxle.base import (BaseService, BaseServiceT, BaseStep, ExecutionContext, ExecutionPhase, Flow,
+                           ForceHandleMixin, _HasChildrenMixin, MetaService, MetaServiceMixin, TruncableService)
+from neuraxle.data_container import DACT as DACT
+from neuraxle.hyperparams.space import (HyperparameterSamples,
+                                        HyperparameterSpace)
+from neuraxle.logging.warnings import (warn_deprecated_arg,
+                                       warn_deprecated_class)
+from neuraxle.metaopt.callbacks import (BaseCallback, CallbackList,
+                                        ScoringCallback)
+from neuraxle.metaopt.data.vanilla import TrialStatus
 from neuraxle.metaopt.observable import _Observable, _Observer
+from neuraxle.metaopt.trial import Trial, Trials, TrialSplit
 from neuraxle.metaopt.validation import BaseCrossValidationWrapper
-from neuraxle.metaopt.trial import Trial, TrialSplit, TrialStatus, Trials
-from neuraxle.logging.warnings import warn_deprecated_class, warn_deprecated_arg
 
 
 class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], ABC):
@@ -68,37 +72,14 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
-    def __init__(
-        self,
-        hyperparameter_selection_strategy: 'BaseHyperparameterSelectionStrategy' = None,
-        cache_folder: str = None,
-        best_retrained_model_folder: str = None,
-    ):
-        super().__init__()
-        if cache_folder is None:
-            cache_folder = os.path.join(f'{self.__class__.__name__}', 'trials')
-        if best_retrained_model_folder is None:
-            best_retrained_model_folder = os.path.join(cache_folder, 'best')
-        self.best_retrained_model_folder = best_retrained_model_folder
-
-        self.hyperparameter_selection_strategy = hyperparameter_selection_strategy
-        self.cache_folder = cache_folder
-
-    def set_strategy(self, hyperparameter_selection_strategy: 'BaseHyperparameterSelectionStrategy'):
-        """
-        Set hyperparameter selection strategy.
-
-        :param hyperparameter_selection_strategy: hyperparameter selection strategy.
-        :return:
-        """
-        self.hyperparameter_selection_strategy = hyperparameter_selection_strategy
-
     @abstractmethod
-    def load_all_trials(self, status: 'TrialStatus') -> 'Trials':
+    def load_trials(self, status: 'TrialStatus' = None) -> 'Trials':
         """
         Load all hyperparameter trials with their corresponding score.
         Sorted by creation date.
+        Filtered by probided status.
 
+        :param status: status to filter trials.
         :return: Trials (hyperparams, scores)
         """
         pass
@@ -123,114 +104,18 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         """
         pass
 
-    def get_best_hyperparams(self) -> HyperparameterSamples:
-        """
-        Get best hyperparams from all of the saved trials.
-
-        :return: best hyperparams.
-        """
-        trials = self.load_all_trials(status=TrialStatus.SUCCESS)
-        best_hyperparams = HyperparameterSamples(trials.get_best_hyperparams())
-        return best_hyperparams
-
-    def _save_best_model(self, step: BaseStep, trial_hash: str):
-        step.set_name(trial_hash).save(ExecutionContext(self.best_retrained_model_folder), full_dump=True)
-
-    def _load_best_model(self, trial_hash: str) -> BaseStep:
-        return ExecutionContext(str(self.best_retrained_model_folder)).load(trial_hash)
-
-    def get_best_model(self) -> BaseStep:
-        """
-        Load the best model saved inside the best retrained model folder.
-
-        :return:
-        """
-        hyperparams: HyperparameterSamples = self.get_best_hyperparams()
-        trial_hash: str = self._get_trial_hash(HyperparameterSamples(hyperparams).to_flat_dict())
-        p: BaseStep = self._load_best_model(trial_hash)
-        return p
-
-    def save_best_model(self, step: BaseStep):
-        """
-        Save the best model inside the best retrained model folder.
-
-        :param step: step to save
-        :return: saved step
-        """
-        hyperparams = step.get_hyperparams().to_flat_dict()
-        trial_hash = self._get_trial_hash(hyperparams)
-        self._save_best_model(step, trial_hash)
-        return step
-
-    def new_trial(self, auto_ml_container) -> Trial:
-        """
-        Create a new trial with the best next hyperparams.
-
-        :param context:
-        :param auto_ml_container: auto ml data container
-        :return: trial
-        """
-        hyperparams = self.hyperparameter_selection_strategy.find_next_best_hyperparams(auto_ml_container)
-
-        trial = Trial(
-            trial_number=auto_ml_container.trial_number,
-            hyperparams=hyperparams,
-            save_trial_function=self.save_trial,
-            cache_folder=self.cache_folder,
-            main_metric_name=auto_ml_container.main_scoring_metric_name
-        )
-        return trial
-
-    def _get_trial_hash(self, hp_dict):
-        """
-        Hash hyperparams with blake2s to create a trial hash.
-
-        :param hp_dict:
-        :return:
-        """
-        current_hyperparameters_hash = hashlib.blake2s(str.encode(str(hp_dict))).hexdigest()
-        return current_hyperparameters_hash
-
 
 class InMemoryHyperparamsRepository(HyperparamsRepository):
     """
     In memory hyperparams repository that can print information about trials.
     Useful for debugging.
-
-    Example usage :
-
-    .. code-block:: python
-
-        InMemoryHyperparamsRepository(
-            hyperparameter_selection_strategy=RandomSearchHyperparameterSelectionStrategy(),
-            print_func=print,
-            cache_folder='cache',
-            best_retrained_model_folder='best'
-        )
-
-    .. seealso::
-        :class:`AutoML`,
-        :class:`Trainer`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
-        :class:`HyperparamsJSONRepository`,
-        :class:`BaseHyperparameterSelectionStrategy`,
-        :class:`RandomSearchHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
-    def __init__(self, hyperparameter_selection_strategy=None, cache_folder: str = None,
-                 best_retrained_model_folder=None):
-        HyperparamsRepository.__init__(
-            self,
-            hyperparameter_selection_strategy=hyperparameter_selection_strategy,
-            cache_folder=cache_folder,
-            best_retrained_model_folder=best_retrained_model_folder
-        )
-        self.cache_folder = cache_folder
+    def __init__(self, pre_made_trials: Optional[Trials] = None):
+        HyperparamsRepository.__init__(self)
+        self.trials: Trials = pre_made_trials if pre_made_trials is not None else Trials()
 
-        self.trials = Trials()
-
-    def load_all_trials(self, status: 'TrialStatus' = None) -> 'Trials':
+    def load_trials(self, status: 'TrialStatus' = None) -> 'Trials':
         """
         Load all trials with the given status.
 
@@ -277,7 +162,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
     def __init__(
             self,
-            hyperparameter_selection_strategy: 'BaseHyperparameterSelectionStrategy' = None,
+            hyperparameter_selection_strategy: 'BaseHyperparameterOptimizer' = None,
             cache_folder=None,
             best_retrained_model_folder=None
     ):
@@ -332,7 +217,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
         return trial
 
-    def load_all_trials(self, status: 'TrialStatus' = None) -> 'Trials':
+    def load_trials(self, status: 'TrialStatus' = None) -> 'Trials':
         """
         Load all hyperparameter trials with their corresponding score.
         Reads all the saved trial json files, sorted by creation date.
@@ -426,7 +311,14 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         # note: this is how you notify observers self.on_next((self, updated_trial))
 
 
-class BaseHyperparameterSelectionStrategy(ABC):
+class BaseHyperparameterOptimizer(ABC):
+
+    def __init__(self, main_metric_name: str = None):
+        """
+        :param main_metric_name: if None, pick first metric from the metrics callback.
+        """
+        self.main_metric_name = main_metric_name
+
     @abstractmethod
     def find_next_best_hyperparams(self, auto_ml_container) -> HyperparameterSamples:
         """
@@ -438,61 +330,58 @@ class BaseHyperparameterSelectionStrategy(ABC):
         raise NotImplementedError()
 
 
-class Trainer:
+class AutoMLFlow(Flow):
+
+    def __init__(self, repo: HyperparamsRepository, logger: logging.Logger = None, **kwargs):
+        super().__init__(logger=logger)
+        self.repo: HyperparamsRepository = repo
+
+    def start_run(self) -> 'TrialFlow':
+        """
+        Start a new run.
+        :return:
+        """
+        raise NotImplementedError("")
+
+    def update(
+        self,
+        project_id: str,
+        client_id: str,
+        run_id: int,
+        trial_id: int,
+        new_val: Any
+    ):
+        raise NotImplementedError("")
+
+
+class TrialFlow(MetaService):
+    def __init__(self, wrapped: Flow):
+        MetaService.__init__(self, wrapped=wrapped)
+
+
+class Trainer(BaseService):
     """
     Class used to train a pipeline using various data splits and callbacks for evaluation purposes.
 
-    Example usage:
-
-    .. code-block:: python
-
-        trainer = Trainer(
-            validation_splitter=ValidationSplitter(test_size=0.15),
-            callbacks=[EarlyStoppingCallback(), MetricCallback("main", mean_squared_error, higher_score_is_better=False)],
-        )
-
-        repo_trial = trainer.train(
-            pipeline=pipeline,
-            data_inputs=data_inputs,
-            expected_outputs=expected_outputs
-        )
-
-
-    .. seealso::
-        :class:`AutoML`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
-        :class:`InMemoryHyperparamsRepository`,
-        :class:`HyperparamsJSONRepository`,
-        :class:`RandomSearchHyperparameterSelectionStrategy`,
+    # TODO: add this `with_val_set` method that would change splitter to PresetValidationSetSplitter(self, val) and override.
     """
 
     def __init__(
             self,
             validation_splitter: 'BaseValidationSplitter',
             callbacks: List[BaseCallback] = None,
-            main_metric_name: str = "main",
-            scoring_callback: ScoringCallback = None,
-            hyperparams_repository: HyperparamsRepository = None,
-            n_epochs: int = None
+            n_epochs: int = 1,
     ):
-        self.validation_split_function = validation_splitter
-        self.callbacks: CallbackList = CallbackList(callbacks).append(scoring_callback) if callbacks is not None else []
-        self.main_metric_name = main_metric_name if scoring_callback is None else scoring_callback.name
-
-        warn_deprecated_arg(
-            self, "scoring_callback", None, scoring_callback, "callbacks", EasyAutoML)
-        warn_deprecated_arg(
-            self, "hyperparams_repository", None, hyperparams_repository, None, EasyAutoML)
-        warn_deprecated_arg(
-            self, "n_epochs", None, n_epochs, None, DefaultLoop)
+        BaseService.__init__(self)
+        self.validation_splitter: BaseValidationSplitter = validation_splitter
+        self.callbacks: CallbackList = CallbackList(callbacks) if callbacks is not None else []
+        self.n_epochs = 1
 
     def train(
         self,
         pipeline: BaseStep,
-        data_inputs,
-        expected_outputs=None,
+        dact: DACT,
         context: ExecutionContext = None,
-        trial_number=0
     ) -> Trial:
         """
         Train pipeline using the validation splitter.
@@ -505,144 +394,42 @@ class Trainer:
         :return: executed trial
 
         """
-        assert context is not None  # TODO: change order of arguments so that context isn't an optional argument
 
-        validation_splits: List[
-            Tuple[DataContainer, DataContainer]] = self.validation_split_function.split_data_container(
-            DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs),
-            context=context
-        )
+        splits: List[Tuple[DACT, DACT]] = self.validation_splitter.split_dact(dact, context=context)
 
-        repo_trial: Trial = Trial(
-            pipeline=pipeline,
-            logger=context.logger,
-            hyperparams=pipeline.get_hyperparams(),
-            main_metric_name=self.get_main_metric_name(),
-            save_trial_function=self.hyperparams_repository.save_trial,
-            trial_number=trial_number
-        )
-
-        self.execute_trial(
-            pipeline=pipeline,
-            repo_trial=repo_trial,
-            context=context,
-            validation_splits=validation_splits,
-            n_trial=1,
-            delete_pipeline_on_completion=False
-        )
-
-        return repo_trial
-
-    def execute_trial(
-            self,
-            pipeline: BaseStep,
-            repo_trial: Trial,
-            context: ExecutionContext,
-            validation_splits: List[Tuple[DataContainer, DataContainer]],
-            n_trial: int,
-            delete_pipeline_on_completion: bool = True
-    ):
-        """
-        Train pipeline using the validation splitter.
-        Track training, and validation metrics for each epoch.
-
-        :param pipeline: pipeline to train on
-        :param trial_number: trial number
-        :param repo_trial: repo trial
-        :param validation_splits: validation splits
-        :param context: execution context
-        :param n_trial: total number of trials that will be executed
-        :param delete_pipeline_on_completion: bool to delete pipeline on completion or not
-        :return: executed trial split
-        """
-        for training_data_container, validation_data_container in validation_splits:
+        for train_dact, val_dact in splits:
             p = copy.deepcopy(pipeline)
-            p.update_hyperparams(repo_trial.hyperparams)
-            repo_trial.set_hyperparams(p.get_hyperparams())
 
-            repo_trial_split: TrialSplit = repo_trial.new_validation_split(
-                pipeline=p,
-                delete_pipeline_on_completion=delete_pipeline_on_completion
-            )
+            with context.flow.log_split():
+                # TODO: this method returns a context manager that takes care of the rest, and which itself has the flow as an attribute.
 
-            with repo_trial_split:
-                trial_split_description = _get_trial_split_description(
-                    repo_trial=repo_trial,
-                    repo_trial_split_number=repo_trial_split.split_number,
-                    validation_splits=validation_splits,
-                    trial_number=repo_trial.trial_number,
-                    n_trial=n_trial
-                )
+                # TODO: failsafe on the mlflow for the clients and projects. Example: no clients and no projects? use the default ones. No split? use a default single split. Log warning if so?
 
-                context.logger.info('fitting trial {}'.format(
-                    trial_split_description
-                ))
+                for i in range(self.epochs):
 
-                repo_trial_split = self.fit_trial_split(
-                    trial_split=repo_trial_split,
-                    train_data_container=training_data_container,
-                    validation_data_container=validation_data_container,
-                    context=context
-                )
+                    with context.flow.log_epoch(i, self.epochs):
+                        # TODO: this method returns a context manager that takes care of the rest, and which itself has the flow as an attribute.
 
-                repo_trial_split.set_success()
+                        p = p.set_train(True)
+                        p = p.handle_fit(train_dact.copy(), context.train())
 
-                context.logger.info('success trial {}\nbest score: {} at epoch {}'.format(
-                    trial_split_description,
-                    repo_trial_split.get_best_validation_score(),
-                    repo_trial_split.get_n_epochs_to_best_validation_score()
-                ))
+                        y_pred_train = p.handle_predict(train_dact.copy(), context.validation())
+                        y_pred_val = p.handle_predict(val_dact.copy(), context.validation())
 
-        return repo_trial_split
+                        if self.callbacks.call(
+                                context=context.copy().set_execution_phase(ExecutionPhase.VALIDATION),
+                                input_train=train_dact,
+                                pred_train=y_pred_train,
+                                input_val=val_dact,
+                                pred_val=y_pred_val,
+                        ):
+                            break
+                            # Saves the metrics with flow split exit.
 
-    def fit_trial_split(
-            self,
-            trial_split: TrialSplit,
-            train_data_container: DataContainer,
-            validation_data_container: DataContainer,
-            context: ExecutionContext
-    ) -> TrialSplit:
-        """
-        Train pipeline using the training data container.
-        Track training, and validation metrics for each epoch.
+                # TODO: log success in the __exit__ method(s).
+                context.flow.log_success()
 
-        :param train_data_container: train data container
-        :param validation_data_container: validation data container
-        :param trial_split: trial to execute
-        :param context: execution context
-
-        :return: executed trial
-        """
-
-        for i in range(self.epochs):
-            context.logger.info('epoch {}/{}'.format(i + 1, self.epochs))
-            trial_split = trial_split.fit_trial_split(train_data_container.copy(),
-                                                      context.copy().set_execution_phase(ExecutionPhase.TRAIN))
-            y_pred_train = trial_split.predict_with_pipeline(train_data_container.copy(),
-                                                             context.copy().set_execution_phase(
-                                                                 ExecutionPhase.VALIDATION))
-            y_pred_val = trial_split.predict_with_pipeline(validation_data_container.copy(),
-                                                           context.copy().set_execution_phase(
-                                                               ExecutionPhase.VALIDATION))
-
-            if self.callbacks.call(
-                    trial_split=trial_split,
-                    epoch_number=i,
-                    total_epochs=self.epochs,
-                    input_train=train_data_container,
-                    pred_train=y_pred_train,
-                    input_val=validation_data_container,
-                    pred_val=y_pred_val,
-                    context=context.copy().set_execution_phase(ExecutionPhase.VALIDATION),
-                    is_finished_and_fitted=False,
-            ):
-                break
-            # Saves the metrics
-            trial_split.save_parent_trial()
-
-        return trial_split
-
-    def refit(self, p: BaseStep, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+    def refit(self, p: BaseStep, data_container: DACT, context: ExecutionContext) -> BaseStep:
         """
         Refit the pipeline on the whole dataset (without any validation technique).
 
@@ -655,39 +442,39 @@ class Trainer:
         context.set_execution_phase(ExecutionPhase.TRAIN)
         for i in range(self.epochs):
             p = p.handle_fit(data_container, context)
-
+            # TODO: log retraing metrics outside of a split by using the split abstraction again but outside split list?
         return p
 
-    def get_main_metric_name(self) -> str:
-        """
-        Get main metric name.
 
-        :return:
-        """
-        return self.callbacks[0].name
-
-
-class BaseControllerLoop:
+class BaseControllerLoop(TruncableService):
 
     def __init__(
         self,
         trainer: Trainer,
-        # # TODO: add this `with_val_set` method that would change splitter to PresetValidationSetSplitter(self, val) and override.
         n_trials: int,
-        n_epochs: int = 1,
-        next_best_prediction_algo: BaseHyperparameterSelectionStrategy = None,
+        hyperparameter_optimizer: BaseHyperparameterOptimizer = None,
         continue_loop_on_error: bool = True
     ):
-        # super().__init__()
+        if hyperparameter_optimizer is None:
+            hyperparameter_optimizer = RandomSearch()
 
-        if next_best_prediction_algo is None:
-            next_best_prediction_algo = RandomSearchHyperparameterSelectionStrategy()
-
-        self.trainer = trainer
-        self.next_best_prediction_algo = next_best_prediction_algo
+        TruncableService.__init__(self, {
+            Trainer: trainer,
+            BaseHyperparameterOptimizer: hyperparameter_optimizer,
+        })
         self.n_trials = n_trials
-        self.n_epochs = n_epochs
-        self.continue_loop_on_error = continue_loop_on_error
+
+        self.error_types_to_raise = (
+            SystemError, SystemExit, EOFError, KeyboardInterrupt) if continue_loop_on_error else (Exception,)
+
+    def run(self, pipeline, dact: DACT, context: ExecutionContext):
+        """
+        Run the controller loop.
+
+        :param context: execution context
+        :return:
+        """
+        raise NotImplementedError("")
 
     def _get_next(self):
         """
@@ -720,15 +507,15 @@ class DefaultLoop(BaseControllerLoop):
         trainer: Trainer,
         n_trials: int,
         n_epochs: int = 1,
-        next_best_prediction_algo: BaseHyperparameterSelectionStrategy = None,
+        hyperparams_optimizer: BaseHyperparameterOptimizer = None,
         continue_loop_on_error: bool = True,
-        n_jobs: int = 1
+        n_jobs: int = 1,
     ):
         super().__init__(trainer, n_trials, n_epochs=n_epochs,
-                         next_best_prediction_algo=next_best_prediction_algo, continue_loop_on_error=continue_loop_on_error)
+                         hyperparameter_optimizer=hyperparams_optimizer, continue_loop_on_error=continue_loop_on_error)
         self.n_jobs = n_jobs
 
-    def loop(self, repo_run, p: BaseStep, data_container: DataContainer, context: ExecutionContext):
+    def loop(self, repo_run, p: BaseStep, data_container: DACT, context: ExecutionContext):
         for i in self._get_next():
 
             # TDA for lock unlock to be all in new_trial().
@@ -806,17 +593,17 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             pipeline: BaseStep,
             controller_loop: BaseControllerLoop,  # HyperbandControllerLoop(), ClusteringParallelFor()
             validation_splitter: 'BaseValidationSplitter',
+            flow: Flow,
             start_new_run: bool = True,  # otherwise, pick last run. TODO: here?
             refit_best_trial: bool = True,
-            hp_repo: HyperparamsRepository = None,
-            hyperparams_optimizer: BaseHyperparameterSelectionStrategy = None,
+            hyperparams_optimizer: BaseHyperparameterOptimizer = None,
             hyperparams_repository: HyperparamsRepository = None,
     ):
         """
         Notes on multiprocess :
               Usage of a multiprocess-safe hyperparams repository is recommended, although it is, most of the time, not necessary.
               Beware of the behaviour of HyperparamsRepository's observers/subscribers.
-              Context instances are not shared between trial but copied. So is the AutoML loop and the DataContainers.
+              Context instances are not shared between trial but copied. So is the AutoML loop and the DACTs.
 
 
         :param pipeline: The pipeline, or BaseStep, which will be use by the AutoMLloop
@@ -833,32 +620,25 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         :param continue_loop_on_error:
         """
         BaseStep.__init__(self)
+        _HasChildrenMixin.__init__(self)
         ForceHandleMixin.__init__(self)
+
+        self.pipeline: BaseStep = pipeline
 
         self.validation_splitter: BaseValidationSplitter = validation_splitter
 
         if hyperparams_optimizer is None:
-            hyperparams_optimizer = RandomSearchHyperparameterSelectionStrategy()
-        self.hyperparameter_optimizer: BaseHyperparameterSelectionStrategy = hyperparams_optimizer
-
-        if hp_repo is None:
-            hp_repo = HyperparamsJSONRepository(hyperparams_optimizer)
-        else:
-            hp_repo.set_strategy(hyperparams_optimizer)
-
-        self.pipeline: BaseStep = pipeline
-
-        self.n_trial: int = n_trials
-        self.hyperparams_repository: HyperparamsRepository = hyperparams_repository
+            hyperparams_optimizer = RandomSearch()
+        self.hyperparameter_optimizer: BaseHyperparameterOptimizer = hyperparams_optimizer
 
         self.refit_best_trial: bool = refit_best_trial
 
-        self.error_types_to_raise = (SystemError, SystemExit, EOFError, KeyboardInterrupt) if continue_loop_on_error \
-            else (Exception,)
+        self.controller_loop: BaseControllerLoop = controller_loop
 
-        self.controller_loop = controller_loop
+    def get_children(self) -> List[BaseServiceT]:
+        return [self.pipeline]
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
+    def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> 'BaseStep':
         """
         Run Auto ML Loop.
         Find the best hyperparams using the hyperparameter optmizer.
@@ -869,7 +649,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
         :return: self
         """
-        validation_splits = self.validation_splitter.split_data_container(
+        validation_splits = self.validation_splitter.split_dact(
             data_container=data_container,
             context=context
         )
@@ -924,7 +704,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         try:
             auto_ml_data = AutoMLContainer(
                 trial_number=trial_number,
-                trials=self.hyperparams_repository.load_all_trials(TrialStatus.SUCCESS),
+                trials=self.hyperparams_repository.load_trials(TrialStatus.SUCCESS),
                 hyperparameter_space=self.pipeline.get_hyperparams_space(),
                 main_scoring_metric_name=self.trainer.get_main_metric_name()
             )
@@ -963,13 +743,13 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             # It is best to do a full collection as that may free up some ram.
             gc.collect()
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
-            ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DACT, context: ExecutionContext) -> \
+            ('BaseStep', DACT):
         raise NotImplementedError("AutoML does not implement method _fit_transform_data_container. Use method such as "
                                   "fit or handle_fit to train models and then use method such as get_best_model to "
                                   "retrieve the model you wish to use for transform")
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
         return self.wrapped.handle_transform(data_container, context)
 
     def _load_virgin_best_model(self) -> BaseStep:
@@ -1012,7 +792,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 def _get_trial_split_description(
         repo_trial: Trial,
         repo_trial_split_number: int,
-        validation_splits: List[Tuple[DataContainer, DataContainer]],
+        validation_splits: List[Tuple[DACT, DACT]],
         trial_number: int,
         n_trial: int
 ):
@@ -1047,13 +827,14 @@ class EasyAutoML(AutoML):
     :param continue_loop_on_error: whether to continue the main optimization loop on error or not
     :return: AutoML objectr ready to use
     """
+
     def __init__(
         self,
         pipeline: BaseStep,
         validation_splitter: 'BaseValidationSplitter',
-        refit_trial: bool,
+        refit_best_trial: bool,
         scoring_callback: ScoringCallback,
-        hyperparams_optimizer: BaseHyperparameterSelectionStrategy = None,
+        hyperparams_optimizer: BaseHyperparameterOptimizer = None,
         hyperparams_repository: HyperparamsRepository = None,
         n_trials: int = 10,
         epochs: int = 1,
@@ -1063,7 +844,6 @@ class EasyAutoML(AutoML):
         continue_loop_on_error=True
     ):
         warn_deprecated_class(self, AutoML)
-
         trainer = Trainer(
             scoring_callback=scoring_callback,
             callbacks=callbacks,
@@ -1074,23 +854,25 @@ class EasyAutoML(AutoML):
             trainer=trainer,
             n_trials=n_trials,
             n_epochs=epochs,
-            next_best_prediction_algo=hyperparams_optimizer,
+            hyperparams_optimizer=hyperparams_optimizer,
             continue_loop_on_error=continue_loop_on_error,
             hyperparams_repository=hyperparams_repository,
             n_jobs=n_jobs
         )
+        flow: Flow = AutoMLFlow(repo=hyperparams_repository)
         assert cache_folder_when_no_handle is None  # TODO: remove this.
 
         AutoML.__init__(
             self,
             pipeline=pipeline,
             controller_loop=controller_loop,
-            refit_best_trial=refit_trial,
-            start_new_run=True
+            flow=flow,
+            refit_best_trial=refit_best_trial,
+            start_new_run=True,
         )
 
 
-class RandomSearchHyperparameterSelectionStrategy(BaseHyperparameterSelectionStrategy):
+class RandomSearch(BaseHyperparameterOptimizer):
     """
     AutoML Hyperparameter Optimizer that randomly samples the space of random variables.
     Please refer to :class:`AutoML` for a usage example.
@@ -1107,8 +889,8 @@ class RandomSearchHyperparameterSelectionStrategy(BaseHyperparameterSelectionStr
         :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
-    def __init__(self):
-        BaseHyperparameterSelectionStrategy.__init__(self)
+    def __init__(self, main_metric_name: str = None):
+        BaseHyperparameterOptimizer.__init__(self, main_metric_name=main_metric_name)
 
     def find_next_best_hyperparams(self, auto_ml_container) -> HyperparameterSamples:
         """
@@ -1121,8 +903,8 @@ class RandomSearchHyperparameterSelectionStrategy(BaseHyperparameterSelectionStr
 
 
 class BaseValidationSplitter(ABC):
-    def split_data_container(self, data_container: DataContainer, context: ExecutionContext) -> List[
-            Tuple[DataContainer, DataContainer]]:
+    def split_dact(self, data_container: DACT, context: ExecutionContext) -> List[
+            Tuple[DACT, DACT]]:
         """
         Wrap a validation split function with a split data container function.
         A validation split function takes two arguments:  data inputs, and expected outputs.
@@ -1136,23 +918,23 @@ class BaseValidationSplitter(ABC):
             context=context
         )
 
-        train_data_container = DataContainer(data_inputs=train_data_inputs,
-                                             ids=train_ids,
-                                             expected_outputs=train_expected_outputs)
-        validation_data_container = DataContainer(data_inputs=validation_data_inputs,
-                                                  ids=validation_ids,
-                                                  expected_outputs=validation_expected_outputs)
+        train_data_container = DACT(data_inputs=train_data_inputs,
+                                    ids=train_ids,
+                                    expected_outputs=train_expected_outputs)
+        validation_data_container = DACT(data_inputs=validation_data_inputs,
+                                         ids=validation_ids,
+                                         expected_outputs=validation_expected_outputs)
 
         splits = []
         for (train_id, train_di, train_eo), (validation_id, validation_di, validation_eo) in zip(
                 train_data_container, validation_data_container):
-            # TODO: use ListDataContainer instead of DataContainer
-            train_data_container_split = DataContainer(
+            # TODO: use ListDACT instead of DACT
+            train_data_container_split = DACT(
                 data_inputs=train_di,
                 expected_outputs=train_eo
             )
 
-            validation_data_container_split = DataContainer(
+            validation_data_container_split = DACT(
                 data_inputs=validation_di,
                 expected_outputs=validation_eo
             )

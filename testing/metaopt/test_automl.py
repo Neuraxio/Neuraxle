@@ -10,7 +10,7 @@ from neuraxle.base import ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import FixedHyperparameter, RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, RandomSearchHyperparameterSelectionStrategy, \
+from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, RandomSearch, \
     HyperparamsJSONRepository, \
     ValidationSplitter, KFoldCrossValidationSplitter, Trainer
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback, EarlyStoppingCallback, BestModelCheckpoint
@@ -33,7 +33,7 @@ def test_automl_early_stopping_callback(tmpdir):
             })),
             NumpyReshape(new_shape=(-1, 1)),
         ]),
-        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        hyperparams_optimizer=RandomSearch(),
         validation_splitter=ValidationSplitter(0.20),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
@@ -74,7 +74,7 @@ def test_automl_savebestmodel_callback(tmpdir):
             linear_model.LinearRegression()
         ]),
         validation_splitter=validation_splitter,
-        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        hyperparams_optimizer=RandomSearch(),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
             BestModelCheckpoint()
@@ -93,7 +93,7 @@ def test_automl_savebestmodel_callback(tmpdir):
     auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
-    trials: Trials = hp_repository.load_all_trials()
+    trials: Trials = hp_repository.load_trials()
     best_trial = trials.get_best_trial()
     best_trial_score = best_trial.get_validation_score()
     best_model = best_trial.get_model('best')
@@ -117,7 +117,7 @@ def test_automl_with_kfold(tmpdir):
             linear_model.LinearRegression()
         ]),
         validation_splitter=ValidationSplitter(0.20),
-        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        hyperparams_optimizer=RandomSearch(),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
             MetricCallback('mse', metric_function=mean_squared_error,
@@ -151,7 +151,7 @@ def test_validation_splitter_should_split_data_properly():
     splitter = ValidationSplitter(test_size=0.2)
 
     # When
-    validation_splits = splitter.split_data_container(
+    validation_splits = splitter.split_dact(
         data_container=DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs),
         context=ExecutionContext()
     )
@@ -182,7 +182,7 @@ def test_kfold_cross_validation_should_split_data_properly():
     splitter = KFoldCrossValidationSplitter(k_fold=4)
 
     # When
-    validation_splits = splitter.split_data_container(
+    validation_splits = splitter.split_dact(
         data_container=DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs),
         context=ExecutionContext()
     )
@@ -244,7 +244,7 @@ def test_kfold_cross_validation_should_split_data_properly_bug():
     splitter = KFoldCrossValidationSplitter(k_fold=2)
 
     # When
-    validation_splits = splitter.split_data_container(data_container, ExecutionContext())
+    validation_splits = splitter.split_dact(data_container, ExecutionContext())
 
     train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 

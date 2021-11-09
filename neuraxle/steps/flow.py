@@ -155,6 +155,7 @@ class TestOnlyWrapper(TrainOrTestOnlyWrapper):
         :class:`TrainOrTestOnlyWrapper`,
         :class:`TrainOnlyWrapper`
     """
+    __test__ = False  # to avoid pytest to run this class as a test class.
 
     def __init__(self, wrapped: BaseStep):
         TrainOrTestOnlyWrapper.__init__(self, wrapped=wrapped, is_train_only=False)
