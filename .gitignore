@@ -46,6 +46,7 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+prof/
 
 # Translations
 *.mo
@@ -109,7 +110,9 @@ venv.bak/
 .vscode
 vandelay-py.js
 
+
 # Other
+.DS_Store
 ___*
 todo.txt
 **cache/**

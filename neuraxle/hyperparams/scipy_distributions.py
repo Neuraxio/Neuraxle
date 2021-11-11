@@ -1,5 +1,6 @@
 import math
 from abc import ABC, abstractmethod
+from typing import List
 
 import numpy as np
 from neuraxle.hyperparams.distributions import (
@@ -11,7 +12,7 @@ from scipy.stats import rv_continuous, rv_discrete, rv_histogram
 
 def scipy_method(func):
     def wrapper(*args, **kwargs):
-        self_in_args = args[0]
+        self_in_args: ScipyDistributionWrapper = args[0]
         self_in_args._override_scipy_methods()
         return func(*args, **kwargs)
 
@@ -44,11 +45,11 @@ class ScipyDistributionWrapper(ABC):
 
     @scipy_method
     def rvs(self, *args, **kwargs) -> float:
-        if kwargs is None:
-            kwargs = dict()
-        kwargs = dict(kwargs)
-        kwargs.update(**self.scipy_distribution_arguments)
-        return self.scipy_distribution.rvs(*args, **kwargs)
+        return self.scipy_distribution.rvs(*args, **kwargs, **self.scipy_distribution_arguments)
+
+    @scipy_method
+    def rvs_many(self, size: int, *args, **kwargs) -> List:
+        return self.scipy_distribution.rvs(size=size, *args, **kwargs, **self.scipy_distribution_arguments)
 
     @scipy_method
     def pdf(self, x, *args, **kwargs) -> float:

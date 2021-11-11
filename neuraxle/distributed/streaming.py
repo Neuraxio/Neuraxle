@@ -28,8 +28,8 @@ for the transformers.
 import time
 import warnings
 from abc import abstractmethod
-from multiprocessing import Queue, Lock
-from multiprocessing.context import Process
+from multiprocessing import Queue, Lock, RLock
+from multiprocessing import Process
 from threading import Thread
 from typing import Dict, Tuple, List, Union, Iterable, Any
 
@@ -204,17 +204,16 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
         :type context: ExecutionContext
         :return:
         """
-        thread_safe_self = self
         thread_safe_context = context
-        shared_lock: Lock = context.flow._lock
-        context.flow._lock = None
+        thread_safe_context.flow.synchroneous()
+        thread_safe_lock: RLock = context.flow._lock
         parallel_call = Thread
-
         if self.use_processes:
             # New process requires trimming the references to other processes
             # when we create many processes: https://stackoverflow.com/a/65749012
-            thread_safe_context = context.thread_safe()
+            thread_safe_lock, thread_safe_context = context.thread_safe()
             parallel_call = Process
+        thread_safe_self = self
 
         if self.use_savers:
             _ = thread_safe_self.save(thread_safe_context, full_dump=True)  # Cannot delete queue worker self.
@@ -225,7 +224,7 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
         for _, worker_arguments in zip(range(self.n_workers), self.additional_worker_arguments):
             p = parallel_call(
                 target=worker_function,
-                args=(thread_safe_self, shared_lock, thread_safe_context, self.use_savers, worker_arguments)
+                args=(thread_safe_self, thread_safe_lock, thread_safe_context, self.use_savers, worker_arguments)
             )
             p.daemon = True
             p.start()
@@ -266,7 +265,7 @@ def worker_function(queue_worker: QueueWorker, shared_lock: Lock, context: Execu
     """
 
     try:
-        context.flow._lock = shared_lock
+        context.restore_lock(shared_lock)
         if use_savers:
             saved_queue_worker: QueueWorker = context.load(queue_worker.get_name())
             queue_worker.set_step(saved_queue_worker.get_step())
@@ -543,25 +542,25 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :type context: ExecutionContext
         :return: data container
         """
-        data_container_batches = data_container.minibatches(
+        joiner = self[-1]
+        n_batches = self.get_n_batches(data_container)
+        joiner.set_n_batches(n_batches)
+
+        # start steps.
+        for step in list(self.values())[:-1]:
+            step.start(context)
+
+        # send batches to input queues and label queue output expected summaries.
+        for batch_i, data_container_batch in enumerate(data_container.minibatches(
             batch_size=self.batch_size,
             keep_incomplete_batch=self.keep_incomplete_batch,
             default_value_data_inputs=self.default_value_data_inputs,
             default_value_expected_outputs=self.default_value_expected_outputs
-        )
+        )):
+            self.send_batch_to_queued_pipeline(batch_index=batch_i, data_container=data_container_batch)
 
-        n_batches = self.get_n_batches(data_container)
-        self[-1].set_n_batches(n_batches)
-
-        for name, step in self[:-1]:
-            step.start(context)
-
-        batch_index = 0
-        for data_container_batch in data_container_batches:
-            self.send_batch_to_queued_pipeline(batch_index=batch_index, data_container=data_container_batch)
-            batch_index += 1
-
-        data_container = self[-1].join(original_data_container=data_container)
+        # join output queues.
+        data_container = joiner.join(original_data_container=data_container)
         return data_container
 
     def _did_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:

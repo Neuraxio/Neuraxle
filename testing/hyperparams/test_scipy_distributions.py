@@ -33,8 +33,9 @@ def test_wrapped_sk_learn_distributions_should_be_able_to_use_sklearn_methods():
     assert np.all(wrapped_sklearn_distribution.ppf([0.0, 0.01, 0.05, 0.1, 1 - 0.10, 1 - 0.05, 1 - 0.01, 1.0], 10))
     assert 8 < wrapped_sklearn_distribution.isf(q=0.5) > 8
     assert wrapped_sklearn_distribution.moment(2) > 50
-    assert wrapped_sklearn_distribution.stats()[0]
-    assert wrapped_sklearn_distribution.stats()[1]
+    stats = wrapped_sklearn_distribution.stats()
+    assert stats[0]
+    assert stats[1]
     assert np.array_equal(wrapped_sklearn_distribution.entropy(), np.array(0.7094692666023363))
     assert wrapped_sklearn_distribution.median()
     assert wrapped_sklearn_distribution.mean() == 5.398942280397029
@@ -159,19 +160,19 @@ def _test_uniform(hd):
 
 
 def test_loguniform():
-    hd = LogUniform(min_included=0.001, max_included=10)
+    hd = ScipyLogUniform(min_included=0.001, max_included=10)
 
     _test_loguniform(hd)
 
 
-def _test_loguniform(hd):
-    samples = hd.rvs_many(size=200)
-    samples_mean = np.abs(np.mean(samples))
-    assert samples_mean < 1.5  # if it was just uniform, this assert would break.
+def _test_loguniform(hd: ScipyLogUniform):
+    samples = hd.rvs_many(size=100)
+    samples_mean = np.mean(samples)
+    assert samples_mean < 1.5
     assert min(samples) >= 0.001
     assert max(samples) <= 10.0
     assert hd.pdf(0.0001) == 0.
-    assert abs(hd.pdf(2) - 0.054286810237906484) < 1e-6
+    assert abs(hd.pdf(2) - 0.054286810237906484) < 2e-6
     assert hd.pdf(10.1) == 0.
     assert hd.cdf(0.0001) == 0.
     assert abs(hd.cdf(2) - (math.log2(2) - math.log2(0.001)) / (math.log2(10) - math.log2(0.001))) < 1e-6
@@ -216,7 +217,7 @@ def test_lognormal():
     _test_lognormal(hd)
 
 
-def _test_lognormal(hd):
+def _test_lognormal(hd: StdMeanLogNormal):
     samples = hd.rvs_many(size=100)
     samples_median = np.median(samples)
     assert -5 < samples_median < 5

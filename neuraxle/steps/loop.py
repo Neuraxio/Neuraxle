@@ -23,15 +23,17 @@ Pipeline Steps For Looping
 
 """
 import copy
-from typing import List, Callable
-from typing import Tuple
+from operator import itemgetter
+from typing import Callable, List, Tuple, ValuesView
 
-import numpy as np
-
-from neuraxle.base import MetaStep, BaseStep, DataContainer, ExecutionContext, \
-    ForceHandleOnlyMixin, ForceHandleMixin, TruncableJoblibStepSaver, NamedTupleList, BaseTransformer, Identity
+from neuraxle.base import (BaseStep, BaseTransformer, DataContainer,
+                           ExecutionContext, ForceHandleMixin,
+                           ForceHandleOnlyMixin, Identity, MetaStep,
+                           NamedTupleList, TruncableJoblibStepSaver)
 from neuraxle.data_container import ListDataContainer
 from neuraxle.steps.flow import ExecuteIf
+
+import numpy as np
 
 
 class ForEach(ForceHandleOnlyMixin, MetaStep):
@@ -300,6 +302,15 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         :return: len(self.steps_as_tuple)
         """
         return len(self.steps_as_tuple)
+
+    def items(self):
+        return copy.copy(self.steps_as_tuple)
+
+    def values(self):
+        return list(map(itemgetter(1), self.steps_as_tuple))
+
+    def keys(self):
+        return list(map(itemgetter(0), self.steps_as_tuple))
 
 
 class FlattenForEach(ForceHandleMixin, MetaStep):

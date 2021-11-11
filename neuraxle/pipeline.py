@@ -93,10 +93,7 @@ class Pipeline(BasePipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        warn_deprecated_arg(self, "handler method", "handle_fit",
-                            "fit", "handle_fit", Tuple[DataContainer, ExecutionContext])
-        return self.fit_data_container(
-            DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs))
+        return self.fit_data_container(DataContainer(di=data_inputs, eo=expected_outputs))
 
     def transform(self, data_inputs: Any):
         """
@@ -105,9 +102,7 @@ class Pipeline(BasePipeline):
         :param data_inputs: the data input to transform
         :return: transformed data inputs
         """
-        warn_deprecated_arg(self, "handler method", "handle_transform",
-                            "transform", "handle_transform", Tuple[DataContainer, ExecutionContext])
-        data_container = self.transform_data_container(DataContainer(data_inputs=data_inputs, ids=None))
+        data_container = self.transform_data_container(DataContainer(di=data_inputs))
         return data_container.data_inputs
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> ('Pipeline', Any):
@@ -118,10 +113,8 @@ class Pipeline(BasePipeline):
         :param expected_outputs: the expected data output to fit on
         :return: the pipeline itself
         """
-        warn_deprecated_arg(self, "handler method", "handle_fit_transform",
-                            "fit_transform", "handle_fit_transform", Tuple[DataContainer, ExecutionContext])
         new_self, data_container = self.fit_transform_data_container(
-            DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs))
+            DataContainer(di=data_inputs, eo=expected_outputs))
         return new_self, data_container.data_inputs
 
     def inverse_transform(self, processed_outputs) -> Any:

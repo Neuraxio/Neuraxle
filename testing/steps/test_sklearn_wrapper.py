@@ -1,20 +1,21 @@
 import numpy as np
 import pytest
-from sklearn.decomposition import PCA
-from sklearn.ensemble import BaggingRegressor, GradientBoostingRegressor
-from sklearn.linear_model import LinearRegression, SGDRegressor, SGDClassifier
-from sklearn.metrics import median_absolute_error
-
-from neuraxle.base import ExecutionContext, Identity
+from neuraxle.base import Identity
 from neuraxle.hyperparams.distributions import RandInt, Uniform
-from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import KFoldCrossValidationSplitter, EasyAutoML, RandomSearch, \
-    HyperparamsJSONRepository
+from neuraxle.hyperparams.space import (HyperparameterSamples,
+                                        HyperparameterSpace)
+from neuraxle.metaopt.auto_ml import (EasyAutoML, HyperparamsJSONRepository,
+                                      KFoldCrossValidationSplitter,
+                                      RandomSearch)
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.data import DataShuffler
+from neuraxle.steps.flow import TrainOnlyWrapper
 from neuraxle.steps.sklearn import SKLearnWrapper
+from sklearn.decomposition import PCA
+from sklearn.ensemble import BaggingRegressor, GradientBoostingRegressor
+from sklearn.linear_model import LinearRegression, SGDClassifier, SGDRegressor
+from sklearn.metrics import median_absolute_error
 
 
 def test_sklearn_wrapper_with_an_invalid_step():
@@ -56,28 +57,33 @@ def test_sklearn_wrapper_fit_transform_with_transform():
 
 
 def test_sklearn_wrapper_transform_partial_fit_with_predict():
-    model = SKLearnWrapper(SGDRegressor(), use_partial_fit=True)
-    p = Pipeline([DataShuffler(), model])
-    data_inputs = np.expand_dims(np.array(list(range(10))), axis=-1)
-    expected_outputs = np.ravel(np.expand_dims(np.array(list(range(10, 20))), axis=-1))
+    model = SKLearnWrapper(SGDRegressor(learning_rate='adaptive', eta0=0.05), use_partial_fit=True)
+    p = Pipeline([TrainOnlyWrapper(DataShuffler()), model])
+    data_inputs = np.expand_dims(np.array(list(range(10))), axis=-1) / 10
+    expected_outputs = np.ravel(np.expand_dims(np.array(list(range(10, 20))), axis=-1)) / 10
 
-    for _ in range(2000):
+    for _ in range(30):
         p = p.fit(data_inputs, expected_outputs)
-    outputs = model.transform(data_inputs)
+    outputs = p.predict(data_inputs)
 
     assert all([np.isclose(a, b, atol=0.1) for a, b in zip(expected_outputs, outputs)])
 
 
-def test_sklearn_wrapper_transform_partial_fit_classifier(tmpdir):
+def test_sklearn_wrapper_transform_partial_fit_classifier():
     data_inputs = np.array([[0, 1], [0, 0], [3, -2], [-1, 1], [-2, 1], [2, 0], [2, -1], [4, -2], [-3, 1], [-1, 0]])
     expected_outputs = np.ravel(np.expand_dims(data_inputs[:, 0] + 2 * data_inputs[:, 1] + 1, axis=-1))
+    data_inputs = data_inputs / (4 + 1)
     classes = np.array([0, 1, 2, 3])
-    model = SKLearnWrapper(SGDClassifier(), use_partial_fit=True, partial_fit_kwargs={'classes': classes})
-    p = Pipeline([DataShuffler(), model]).with_context(ExecutionContext(tmpdir))
+    model = SKLearnWrapper(
+        SGDClassifier(learning_rate='adaptive', eta0=0.05),
+        use_partial_fit=True,
+        partial_fit_kwargs={'classes': classes}
+    )
+    p = Pipeline([TrainOnlyWrapper(DataShuffler()), model])
 
-    for _ in range(2000):
+    for _ in range(30):
         p = p.fit(data_inputs, expected_outputs)
-    outputs = model.transform(data_inputs)
+    outputs = p.predict(data_inputs)
 
     assert outputs.shape == (10,)
     assert len(set(outputs) - set(classes)) == 0

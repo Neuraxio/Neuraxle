@@ -33,6 +33,7 @@ classes needed to compose other base classes.
 import datetime
 import inspect
 import logging
+from operator import attrgetter
 import os
 import pprint
 import shutil
@@ -45,7 +46,7 @@ from copy import copy
 from enum import Enum
 from multiprocessing import Lock, Manager, RLock
 from typing import (Any, Callable, Dict, Generic, ItemsView, Iterable,
-                    KeysView, List, Set, Tuple, Type, TypeVar, Union,
+                    KeysView, List, Optional, Set, Tuple, Type, TypeVar, Union,
                     ValuesView)
 
 from joblib import dump, load
@@ -281,6 +282,7 @@ class _RecursiveArguments:
         :return: recursive argument for the given child step name
         """
         arguments = list()
+
         for arg in self.args:
             if isinstance(arg, RecursiveDict):
                 arguments.append(arg.get(child_step_name))
@@ -386,6 +388,11 @@ class _HasRecursiveMethods:
         .. note:: A step name is the same value as the one in the keys of :class:`Pipeline`.steps_as_tuple
         """
         return self.name
+
+    def get_step_by_name(self, name: str) -> Optional['BaseServiceT']:
+        if self.name == name:
+            return self
+        return None
 
     def apply(self, method: Union[str, Callable], ra: _RecursiveArguments = None, *args, **kwargs) -> RecursiveDict:
         """
@@ -644,7 +651,7 @@ class _HasChildrenMixin(MixinForBaseService, Generic[BaseServiceT]):
         """
         Get the list of all the childs for that step or service.
 
-        :return: every child step
+        :return: every child steps
         """
         pass
 
@@ -652,9 +659,19 @@ class _HasChildrenMixin(MixinForBaseService, Generic[BaseServiceT]):
         """
         Get the list of all the childs names for that step.
 
-        :return: every child step name
+        :return: every child steps' names
         """
         return [child.get_name() for child in self.get_children()]
+
+    def get_step_by_name(self, name: str) -> Optional[BaseServiceT]:
+        if self.name == name:
+            return self
+        # loop in self.get_children() to find the step with the given name:
+        for child in self.get_children():
+            subchild: BaseServiceT = child.get_step_by_name(name)
+            if subchild is not None:
+                return subchild
+        return None
 
 
 class MetaServiceMixin(_HasChildrenMixin):
@@ -697,13 +714,6 @@ class MetaServiceMixin(_HasChildrenMixin):
         """
         return [self.wrapped]
 
-    def get_step_by_name(self, name) -> BaseServiceT:
-        if self.name == name:
-            return self
-        if self.wrapped.name == name:
-            return self.wrapped
-        return self.wrapped.get_step_by_name(name)
-
     def _repr(self, level=0, verbose=False) -> str:
         output = self.__class__.__name__ + "("
         output += self.wrapped._repr(level=level + 1, verbose=verbose) + ", name='" + self.name + "'"
@@ -742,6 +752,7 @@ class TruncableServiceMixin(_HasChildrenMixin):
         self.set_services(services)
 
     def set_services(self, services: Dict[Type['BaseServiceT'], 'BaseServiceT']):
+        services = services or {}
         for t, service in services.items():
             self._validate_service_type(t, service)
         self.services: Dict[Type['BaseServiceT'], 'BaseServiceT'] = services
@@ -837,14 +848,17 @@ class TruncableService(TruncableServiceMixin, BaseService):
         TruncableServiceMixin.__init__(self, services)
 
 
-def locked_flow_method(log_any_func: Callable[..., Any]) -> Callable:
+def synchroneous_flow_method(log_any_func: Callable[..., Any]) -> Callable:
     """
-    Locking the flow to prevent race conditions in accessing the flow.
+    Locking the lock of the flow to prevent race conditions in accessing the flow.
     """
 
     def log_any(self, *args, **kwargs):
-        with self._lock:
+        if self._lock is None:
             return log_any_func(self, *args, **kwargs)
+        else:
+            with self._lock:
+                return log_any_func(self, *args, **kwargs)
     return log_any
 
 
@@ -865,9 +879,17 @@ class Flow(BaseService):
         if logger is None:
             logger = logging.getLogger()
         self.logger = logger
-        self._lock: RLock = Manager().RLock()
+        self._lock: RLock = None
 
-    @locked_flow_method
+    def synchroneous(self) -> 'Flow':
+        """
+        Synchronous flow: Create managed reentrant lock (mutex).
+        """
+        if self._lock is None:
+            self._lock: RLock = Manager().RLock()
+        return self
+
+    @synchroneous_flow_method
     def log(self, message: str, level: int = logging.INFO):
         self.logger.log(level, message)
 
@@ -901,7 +923,7 @@ class Flow(BaseService):
         self.log_error(exception)
         self.log_end(TrialStatus.FAILURE)
 
-    @locked_flow_method
+    @synchroneous_flow_method
     def log_error(self, exception: Exception):
         self.logger.exception(exception)
 
@@ -969,34 +991,13 @@ class ExecutionContext(TruncableService):
             parents: List['BaseStep'] = None,
             services: Dict[Type['BaseServiceT'], 'BaseServiceT'] = None,
     ):
-        if flow is None:
-            flow = Flow()
-        if services is None:
-            services = dict()
-        services[Flow] = flow
         TruncableService.__init__(self, services=services)
-
-        self.execution_mode = execution_mode
-        self.execution_phase = execution_phase
-
-        if stripped_saver is None:
-            stripped_saver: BaseSaver = JoblibStepSaver()
-        self.stripped_saver = stripped_saver
-
-        if parents is None:
-            parents = []
-        self.parents: List[BaseStep] = parents
-
-        if root is None:
-            # TODO: move this to somewhere else.
-            root = self.get_new_cache_folder()
-            warnings.warn(
-                f"`{self.__class__.__name__}` created a new root "
-                f"cache folder located at `{root}` and for pipeline `{str(parents[:1])}`. "
-                f"You might want to consider setting a custom context root path. "
-                f"like `ExecutionContext(root=path)`."
-            )
-        self.root: str = root
+        self.register_service(Flow, flow or Flow())
+        self.execution_phase: ExecutionPhase = execution_phase
+        self.execution_mode: ExecutionMode = execution_mode
+        self.stripped_saver: BaseSaver = stripped_saver or JoblibStepSaver()
+        self.parents: List[BaseStep] = parents or []
+        self.root: str = root or self.get_new_cache_folder()
 
     @property
     def logger(self) -> logging.Logger:
@@ -1135,7 +1136,7 @@ class ExecutionContext(TruncableService):
             parents=copy(self.parents),
             services=self.services,
         )
-    
+
     def train(self) -> 'ExecutionContext':
         """
         Set the execution context to train mode.
@@ -1143,7 +1144,7 @@ class ExecutionContext(TruncableService):
         new_self = self.copy()
         new_self.set_execution_phase(ExecutionPhase.TRAIN)
         return new_self
-    
+
     def validation(self) -> 'ExecutionContext':
         """
         Set the execution context to train mode.
@@ -1152,7 +1153,7 @@ class ExecutionContext(TruncableService):
         new_self.set_execution_phase(ExecutionPhase.VALIDATION)
         return new_self
 
-    def thread_safe(self) -> 'ExecutionContext':
+    def thread_safe(self) -> Tuple[RLock, 'ExecutionContext']:
         """
         Prepare the context and its services to be thread safe and
         reduce the current context for parallelization.
@@ -1164,7 +1165,22 @@ class ExecutionContext(TruncableService):
         self.root = self.get_path()
         # Not passing parents to threads. We could, but we would need to sanitize some parents:
         self.parents = []
-        return threaded_context
+        # enabling synchronized flow:
+        threaded_context.flow.synchroneous()
+        thread_safe_lock: Lock = threaded_context.flow._lock
+        threaded_context.flow._lock = None
+        return thread_safe_lock, threaded_context
+
+    def restore_lock(self, thread_safe_lock: RLock) -> 'ExecutionContext':
+        """
+        Restore the lock of the flow.
+
+        :param thread_safe_lock: lock to restore
+        :return: self
+        """
+        if thread_safe_lock is not None:
+            self.flow._lock = thread_safe_lock
+        return self
 
     def peek(self) -> 'BaseTransformer':
         """
@@ -1197,7 +1213,7 @@ class ExecutionContext(TruncableService):
         :return: current context path
         """
         parents_with_path = [self.root] if is_absolute else []
-        parents_with_path += [p.name for p in self.parents]
+        parents_with_path += self.get_names()
         if len(parents_with_path) == 0:
             return '.' + os.sep
         return os.path.join(*parents_with_path)
@@ -1222,7 +1238,7 @@ class ExecutionContext(TruncableService):
 
         :return: list of parents step names
         """
-        return [p.name for p in self.parents]
+        return list(map(attrgetter('name'), self.parents))
 
     def empty(self):
         """
@@ -1267,11 +1283,7 @@ class ExecutionContext(TruncableService):
             :class:`Identity`
         """
         step_names = self.get_path(False).split(os.sep)
-
-        parents = [
-            Identity(name=name)
-            for name in step_names
-        ]
+        parents = list(map(Identity, step_names))
 
         return ExecutionContext(
             root=self.root,
@@ -2501,8 +2513,10 @@ class _CouldHaveContext(MixinForBaseService):
         or other lifecycle methods like these.
         """
         for service_assertion in self.service_assertions:
-            self._assert(context.has_service(service_assertion),
-                         'Missing Service {0}'.format(service_assertion.__name__))
+            self._assert(
+                context.has_service(service_assertion),
+                'Missing Service {0}'.format(service_assertion.__name__)
+            )
 
     def _assert(self, condition: bool, err_message: str, context: ExecutionContext = None):
         """
@@ -2628,11 +2642,6 @@ class BaseTransformer(
     def _set_train(self, is_train) -> RecursiveDict:
         self.is_train = is_train
         return RecursiveDict()
-
-    def get_step_by_name(self, name):
-        if self.name == name:
-            return self
-        return None
 
     def __str__(self) -> str:
         """
@@ -3044,12 +3053,12 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
 
         # First, save all of the sub steps with the right execution context.
         sub_steps_savers = []
-        for i, (_, sub_step) in enumerate(step):
+        for i, (name, sub_step) in enumerate(step.items()):
             if sub_step.should_save():
-                sub_steps_savers.append((step[i].name, step[i].get_savers()))
+                sub_steps_savers.append((name, sub_step.get_savers()))
                 sub_step.save(context)
             else:
-                sub_steps_savers.append((step[i].name, None))
+                sub_steps_savers.append((name, None))
 
         step.sub_steps_savers = sub_steps_savers
 
@@ -3102,7 +3111,7 @@ class TruncableStepsMixin(_HasChildrenMixin):
         self.warn_step_renaming = not mute_step_renaming_warning
         self.set_steps(steps_as_tuple, invalidate=False)
 
-    def set_steps(self, steps_as_tuple: NamedServiceList, invalidate=True):
+    def set_steps(self, steps_as_tuple: NamedServiceList, invalidate=True) -> 'TruncableStepsMixin':
         """
         Set steps as tuple.
 
@@ -3112,6 +3121,7 @@ class TruncableStepsMixin(_HasChildrenMixin):
         steps_as_tuple = self._wrap_non_base_steps(steps_as_tuple)
         self.steps_as_tuple: NamedTupleList = self._patch_missing_names(steps_as_tuple)
         self._refresh_steps(invalidate=invalidate)
+        return self
 
     def get_children(self) -> List[BaseServiceT]:
         """
@@ -3120,14 +3130,6 @@ class TruncableStepsMixin(_HasChildrenMixin):
         :return: children steps
         """
         return list(self.values())
-
-    def get_step_by_name(self, name):
-        for step in self.values():
-            found_step = step.get_step_by_name(name)
-            if found_step is not None:
-                return found_step
-
-        return None
 
     def _wrap_non_base_steps(self, steps_as_tuple: List) -> NamedServiceList:
         """
@@ -3224,7 +3226,7 @@ class TruncableStepsMixin(_HasChildrenMixin):
         """
         if isinstance(key, str):
             index = 0
-            for step_index, (current_step_name, step) in enumerate(self.steps_as_tuple):
+            for step_index, current_step_name in enumerate(self.keys()):
                 if current_step_name == key:
                     index = step_index
 
@@ -3263,17 +3265,14 @@ class TruncableStepsMixin(_HasChildrenMixin):
         if isinstance(key, slice):
             self_shallow_copy = copy(self)
 
+            start = key.start
+            stop = key.stop
+            step = key.step
             if isinstance(key.start, int):
                 start = self._step_index_to_name(key.start)
-            else:
-                start = key.start
-
             if isinstance(key.stop, int):
                 stop = self._step_index_to_name(key.stop)
-            else:
-                stop = key.stop
 
-            step = key.step
             if step is not None or (start is None and stop is None):
                 raise KeyError("Invalid range: '{}'.".format(key))
             new_steps_as_tuple = []
@@ -3324,7 +3323,7 @@ class TruncableStepsMixin(_HasChildrenMixin):
 
         :return: step items tuple : (step name, step)
         """
-        return self.steps.items()
+        return copy(self.steps_as_tuple)
 
     def keys(self) -> KeysView:
         """
@@ -3448,15 +3447,15 @@ class TruncableSteps(TruncableStepsMixin, BaseStep, ABC):
 
     def split(self, step_type: type) -> List['TruncableSteps']:
         """
-        Split truncable steps by a step class name.
+        Split truncable steps by a step class (type).
 
-        :param step_type: step class type to split from.
+        :param step_type: step class type to split on.
         :return: list of truncable steps containing the splitted steps
         """
         sub_pipelines = []
 
         previous_sub_pipeline_end_index = 0
-        for index, (step_name, step) in enumerate(self.items()):
+        for index, step in enumerate(self.values()):
             if isinstance(step, step_type):
                 sub_pipelines.append(
                     self[previous_sub_pipeline_end_index:index + 1]
@@ -3470,7 +3469,7 @@ class TruncableSteps(TruncableStepsMixin, BaseStep, ABC):
 
         return sub_pipelines
 
-    def ends_with(self, step_type: Type):
+    def ends_with(self, step_type: Type) -> bool:
         """
         Returns true if truncable steps end with a step of the given type.
 
@@ -3491,7 +3490,7 @@ class TruncableSteps(TruncableStepsMixin, BaseStep, ABC):
         if super().should_save():
             return True
 
-        for _, step in self.items():
+        for step in self.values():
             if step.should_save():
                 return True
         return False
@@ -3503,8 +3502,9 @@ class TruncableSteps(TruncableStepsMixin, BaseStep, ABC):
         :param other: other truncable steps
         :return: new truncable steps with concatenated steps
         """
-        self.set_steps(self.steps_as_tuple + other.steps_as_tuple)
-        return self
+        new_self = copy(self)
+        new_self = new_self.set_steps(self.steps_as_tuple + other.steps_as_tuple)
+        return new_self
 
     def _repr(self, level=0, verbose=False) -> str:
         tab0 = "    " * level
@@ -3533,7 +3533,7 @@ class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
         :class:`BaseStep`
     """
 
-    def __init__(self, savers=None, name=None):
+    def __init__(self, name=None, savers=None):
         if savers is None:
             savers = [JoblibStepSaver()]
         BaseStep.__init__(self, name=name, savers=savers)
@@ -3679,8 +3679,7 @@ class ForceHandleMixin(MixinForBaseTransformer):
         :param data_inputs: data inputs
         :return: outputs
         """
-        context, data_container = self._encapsulate_data(
-            data_inputs, expected_outputs=None, execution_mode=ExecutionMode.TRANSFORM)
+        context, data_container = self._encapsulate_data(data_inputs, None, ExecutionMode.TRANSFORM)
 
         data_container = self.handle_transform(data_container, context)
 
@@ -3892,7 +3891,7 @@ class DidProcessAssertionMixin(AssertionMixin):
 
 class AssertExpectedOutputIsNoneMixin(WillProcessAssertionMixin):
     def _assert_at_lifecycle(self, data_container: DataContainer, context: ExecutionContext):
-        eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
+        eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.eo)
         self._assert(
             eo_empty,
             f"Expected datacontainer.expected_outputs to be a `None` or a list of `None`. Received {data_container.expected_outputs}.",
@@ -3902,7 +3901,7 @@ class AssertExpectedOutputIsNoneMixin(WillProcessAssertionMixin):
 
 class AssertExpectedOutputIsNotNoneMixin(WillProcessAssertionMixin):
     def _assert_at_lifecycle(self, data_container: DataContainer, context: ExecutionContext):
-        eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
+        eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.eo)
         self._assert(
             not eo_empty,
             f"Expected datacontainer.expected_outputs to not be a `None` nor a list of `None`. Received {data_container.expected_outputs}.",
