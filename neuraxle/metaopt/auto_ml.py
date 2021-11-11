@@ -162,16 +162,13 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
     def __init__(
             self,
-            hyperparameter_selection_strategy: 'BaseHyperparameterOptimizer' = None,
-            cache_folder=None,
-            best_retrained_model_folder=None
+            cache_folder: str = None,
+            best_retrained_model_folder: str = None
     ):
-        HyperparamsRepository.__init__(
-            self,
-            hyperparameter_selection_strategy=hyperparameter_selection_strategy,
-            cache_folder=cache_folder,
-            best_retrained_model_folder=best_retrained_model_folder
-        )
+        HyperparamsRepository.__init__(self)
+        cache_folder: str = cache_folder if cache_folder is not None else 'json_repo_cache'
+        best_retrained_model_folder: str = (
+            best_retrained_model_folder if best_retrained_model_folder is not None else 'json_repo_best_model')
         self.json_path_remove_on_update = None
 
     def _save_trial(self, trial: 'Trial'):
@@ -506,13 +503,16 @@ class DefaultLoop(BaseControllerLoop):
         self,
         trainer: Trainer,
         n_trials: int,
-        n_epochs: int = 1,
+        n_jobs: int = 1,
         hyperparams_optimizer: BaseHyperparameterOptimizer = None,
         continue_loop_on_error: bool = True,
-        n_jobs: int = 1,
     ):
-        super().__init__(trainer, n_trials, n_epochs=n_epochs,
-                         hyperparameter_optimizer=hyperparams_optimizer, continue_loop_on_error=continue_loop_on_error)
+        super().__init__(
+            trainer,
+            n_trials,
+            hyperparameter_optimizer=hyperparams_optimizer,
+            continue_loop_on_error=continue_loop_on_error
+        )
         self.n_jobs = n_jobs
 
     def loop(self, repo_run, p: BaseStep, data_container: DACT, context: ExecutionContext):
@@ -592,7 +592,6 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             self,
             pipeline: BaseStep,
             controller_loop: BaseControllerLoop,  # HyperbandControllerLoop(), ClusteringParallelFor()
-            validation_splitter: 'BaseValidationSplitter',
             flow: Flow,
             start_new_run: bool = True,  # otherwise, pick last run. TODO: here?
             refit_best_trial: bool = True,
@@ -624,15 +623,8 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         ForceHandleMixin.__init__(self)
 
         self.pipeline: BaseStep = pipeline
-
-        self.validation_splitter: BaseValidationSplitter = validation_splitter
-
-        if hyperparams_optimizer is None:
-            hyperparams_optimizer = RandomSearch()
-        self.hyperparameter_optimizer: BaseHyperparameterOptimizer = hyperparams_optimizer
-
+        self.hyperparameter_optimizer: BaseHyperparameterOptimizer = hyperparams_optimizer or RandomSearch()
         self.refit_best_trial: bool = refit_best_trial
-
         self.controller_loop: BaseControllerLoop = controller_loop
 
     def get_children(self) -> List[BaseServiceT]:
@@ -845,19 +837,16 @@ class EasyAutoML(AutoML):
     ):
         warn_deprecated_class(self, AutoML)
         trainer = Trainer(
-            scoring_callback=scoring_callback,
-            callbacks=callbacks,
+            callbacks=[scoring_callback] + callbacks,
             validation_splitter=validation_splitter,
-            main_metric_name=scoring_callback.name,
+            n_epochs=epochs,
         )
         controller_loop = DefaultLoop(
             trainer=trainer,
             n_trials=n_trials,
-            n_epochs=epochs,
+            n_jobs=n_jobs,
             hyperparams_optimizer=hyperparams_optimizer,
             continue_loop_on_error=continue_loop_on_error,
-            hyperparams_repository=hyperparams_repository,
-            n_jobs=n_jobs
         )
         flow: Flow = AutoMLFlow(repo=hyperparams_repository)
         assert cache_folder_when_no_handle is None  # TODO: remove this.
