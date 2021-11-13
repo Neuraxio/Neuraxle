@@ -329,26 +329,21 @@ class BaseHyperparameterOptimizer(ABC):
 
 class AutoMLFlow(Flow):
 
-    def __init__(self, repo: HyperparamsRepository, logger: logging.Logger = None, **kwargs):
+    def __init__(
+        self,
+        repo: HyperparamsRepository,
+        logger: logging.Logger = None,
+        project_id="default_project",
+        client_id="default_client",
+    ):
         super().__init__(logger=logger)
         self.repo: HyperparamsRepository = repo
+        self.project_id = project_id
+        self.client_id = client_id
 
-    def start_run(self) -> 'TrialFlow':
-        """
-        Start a new run.
-        :return:
-        """
-        raise NotImplementedError("")
-
-    def update(
-        self,
-        project_id: str,
-        client_id: str,
-        run_id: int,
-        trial_id: int,
-        new_val: Any
-    ):
-        raise NotImplementedError("")
+    def log_model(self, model: 'BaseStep'):
+        self.repo.save_best_model(model)
+        return super().log_model(model)
 
 
 class TrialFlow(MetaService):
@@ -372,7 +367,7 @@ class Trainer(BaseService):
         BaseService.__init__(self)
         self.validation_splitter: BaseValidationSplitter = validation_splitter
         self.callbacks: CallbackList = CallbackList(callbacks) if callbacks is not None else []
-        self.n_epochs = 1
+        self.n_epochs = n_epochs
 
     def train(
         self,
@@ -464,7 +459,7 @@ class BaseControllerLoop(TruncableService):
         self.error_types_to_raise = (
             SystemError, SystemExit, EOFError, KeyboardInterrupt) if continue_loop_on_error else (Exception,)
 
-    def run(self, pipeline, dact: DACT, context: ExecutionContext):
+    def start(self, pipeline, dact: DACT, context: ExecutionContext):
         """
         Run the controller loop.
 
@@ -514,6 +509,106 @@ class DefaultLoop(BaseControllerLoop):
             continue_loop_on_error=continue_loop_on_error
         )
         self.n_jobs = n_jobs
+
+    def run(self, pipeline, dact: DACT, context: ExecutionContext):
+
+        if self.n_jobs in (None, 1):
+            # Single Process
+            for trial_number in range(self.n_trial):
+                self._attempt_trial(trial_number, validation_splits, context)
+        else:
+            # Multiprocssing
+            context.logger.info(f"Number of processors available: {multiprocessing.cpu_count()}")
+
+            if isinstance(self.hyperparams_repository, InMemoryHyperparamsRepository):
+                raise ValueError(
+                    "Cannot use InMemoryHyperparamsRepository for multiprocessing, use json-based repository.")
+
+            n_jobs = self.n_jobs
+            if n_jobs <= -1:
+                n_jobs = multiprocessing.cpu_count() + 1 + self.n_jobs
+
+            with multiprocessing.get_context("spawn").Pool(processes=n_jobs) as pool:
+                args = [(self, trial_number, validation_splits, context) for trial_number in range(self.n_trial)]
+                pool.starmap(AutoML._attempt_trial, args)
+
+        context.set_logger(main_logger)
+
+        best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
+
+        context.logger.info(
+            '\nbest hyperparams: {}'.format(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+
+        # Notify HyperparamsRepository subscribers
+        self.hyperparams_repository.notify_complete(value=self.hyperparams_repository)
+
+        self.pipeline = self.refit_best_trial(self.pipeline, data_container, context)
+
+        return self.pipeline
+
+    def refit_best_trial(self, pipeline: BaseStep, data_container: DACT, context: ExecutionContext) -> BaseStep:
+        """
+        Refit the pipeline on the whole dataset (without any validation technique).
+
+        :param pipeline: a virgin pipeline to refit.
+        :param data_container: data container containing all the data to refit on.
+        :param context: execution context containing the flow to operate on and with.
+        :return: fitted pipeline
+        """
+        p: BaseStep = self._load_virgin_model(hyperparams=best_hyperparams)
+        p = self.trainer.refit(
+            p=p,
+            data_container=data_container,
+            context=context.set_execution_phase(ExecutionPhase.TRAIN)
+        )
+
+        context.flow.log_model(p)
+
+        return self
+
+    def _attempt_trial(self, trial_number, validation_splits, context: ExecutionContext):
+
+        try:
+            auto_ml_data = AutoMLContainer(
+                trial_number=trial_number,
+                trials=self.hyperparams_repository.load_trials(TrialStatus.SUCCESS),
+                hyperparameter_space=self.pipeline.get_hyperparams_space(),
+                main_scoring_metric_name=self.trainer.get_main_metric_name()
+            )
+
+            with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
+                repo_trial_split = None
+                context.set_logger(repo_trial.logger)
+                context.logger.info('trial {}/{}'.format(trial_number + 1, self.n_trial))
+
+                repo_trial_split = self.trainer.execute_trial(
+                    pipeline=self.pipeline,
+                    context=context,
+                    repo_trial=repo_trial,
+                    validation_splits=validation_splits,
+                    n_trial=self.n_trial
+                )
+        except self.error_types_to_raise as error:
+            track = traceback.format_exc()
+            repo_trial.set_failed(error)
+            context.logger.critical(track)
+            raise error
+        except Exception:
+            track = traceback.format_exc()
+            repo_trial_split_number = 0 if repo_trial_split is None else repo_trial_split.split_number + 1
+            context.logger.error('failed trial {}'.format(_get_trial_split_description(
+                repo_trial=repo_trial,
+                repo_trial_split_number=repo_trial_split_number,
+                validation_splits=validation_splits,
+                trial_number=trial_number,
+                n_trial=self.n_trial
+            )))
+            context.logger.error(track)
+        finally:
+            repo_trial.update_final_trial_status()
+            # Some heavy objects might have stayed in memory for a while during the execution of our trial;
+            # It is best to do a full collection as that may free up some ram.
+            gc.collect()
 
     def loop(self, repo_run, p: BaseStep, data_container: DACT, context: ExecutionContext):
         for i in self._get_next():
@@ -591,12 +686,10 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
     def __init__(
             self,
             pipeline: BaseStep,
-            controller_loop: BaseControllerLoop,  # HyperbandControllerLoop(), ClusteringParallelFor()
+            loop: BaseControllerLoop,  # HyperbandControllerLoop(), ClusteringParallelFor()
             flow: Flow,
             start_new_run: bool = True,  # otherwise, pick last run. TODO: here?
             refit_best_trial: bool = True,
-            hyperparams_optimizer: BaseHyperparameterOptimizer = None,
-            hyperparams_repository: HyperparamsRepository = None,
     ):
         """
         Notes on multiprocess :
@@ -623,9 +716,10 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         ForceHandleMixin.__init__(self)
 
         self.pipeline: BaseStep = pipeline
-        self.hyperparameter_optimizer: BaseHyperparameterOptimizer = hyperparams_optimizer or RandomSearch()
+        self.loop: BaseControllerLoop = loop
+        self.flow: Flow = flow
+        self.start_new_run: bool = start_new_run
         self.refit_best_trial: bool = refit_best_trial
-        self.controller_loop: BaseControllerLoop = controller_loop
 
     def get_children(self) -> List[BaseServiceT]:
         return [self.pipeline]
@@ -641,108 +735,23 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
         :return: self
         """
-        validation_splits = self.validation_splitter.split_dact(
-            data_container=data_container,
-            context=context
-        )
+        context.patch_flow(self.flow)
+        self.loop.start(self.pipeline, data_container, context)
 
-        # Keeping a reference of the main logger
-        main_logger = context.logger
-
-        if self.n_jobs in (None, 1):
-            # Single Process
-            for trial_number in range(self.n_trial):
-                self._attempt_trial(trial_number, validation_splits, context)
-        else:
-            # Multiprocssing
-            context.logger.info(f"Number of processors available: {multiprocessing.cpu_count()}")
-
-            if isinstance(self.hyperparams_repository, InMemoryHyperparamsRepository):
-                raise ValueError(
-                    "Cannot use InMemoryHyperparamsRepository for multiprocessing, use json-based repository.")
-
-            n_jobs = self.n_jobs
-            if n_jobs <= -1:
-                n_jobs = multiprocessing.cpu_count() + 1 + self.n_jobs
-
-            with multiprocessing.get_context("spawn").Pool(processes=n_jobs) as pool:
-                args = [(self, trial_number, validation_splits, context) for trial_number in range(self.n_trial)]
-                pool.starmap(AutoML._attempt_trial, args)
-
-        context.set_logger(main_logger)
-
-        best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
-
-        context.logger.info(
-            '\nbest hyperparams: {}'.format(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
-
-        # Notify HyperparamsRepository subscribers
-        self.hyperparams_repository.notify_complete(value=self.hyperparams_repository)
-
-        if self.refit_trial:
-            p: BaseStep = self._load_virgin_model(hyperparams=best_hyperparams)
-            p = self.trainer.refit(
-                p=p,
-                data_container=data_container,
-                context=context.set_execution_phase(ExecutionPhase.TRAIN)
-            )
-
-            self.hyperparams_repository.save_best_model(p)
+        if self.refit_best_trial:
+            self.pipeline = self.loop.refit_best_trial(self.pipeline, data_container, context)
 
         return self
 
-    def _attempt_trial(self, trial_number, validation_splits, context: ExecutionContext):
-
-        try:
-            auto_ml_data = AutoMLContainer(
-                trial_number=trial_number,
-                trials=self.hyperparams_repository.load_trials(TrialStatus.SUCCESS),
-                hyperparameter_space=self.pipeline.get_hyperparams_space(),
-                main_scoring_metric_name=self.trainer.get_main_metric_name()
-            )
-
-            with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
-                repo_trial_split = None
-                context.set_logger(repo_trial.logger)
-                context.logger.info('trial {}/{}'.format(trial_number + 1, self.n_trial))
-
-                repo_trial_split = self.trainer.execute_trial(
-                    pipeline=self.pipeline,
-                    context=context,
-                    repo_trial=repo_trial,
-                    validation_splits=validation_splits,
-                    n_trial=self.n_trial
-                )
-        except self.error_types_to_raise as error:
-            track = traceback.format_exc()
-            repo_trial.set_failed(error)
-            context.logger.critical(track)
-            raise error
-        except Exception:
-            track = traceback.format_exc()
-            repo_trial_split_number = 0 if repo_trial_split is None else repo_trial_split.split_number + 1
-            context.logger.error('failed trial {}'.format(_get_trial_split_description(
-                repo_trial=repo_trial,
-                repo_trial_split_number=repo_trial_split_number,
-                validation_splits=validation_splits,
-                trial_number=trial_number,
-                n_trial=self.n_trial
-            )))
-            context.logger.error(track)
-        finally:
-            repo_trial.update_final_trial_status()
-            # Some heavy objects might have stayed in memory for a while during the execution of our trial;
-            # It is best to do a full collection as that may free up some ram.
-            gc.collect()
-
-    def _fit_transform_data_container(self, data_container: DACT, context: ExecutionContext) -> \
-            ('BaseStep', DACT):
+    def _fit_transform_data_container(
+        self, data_container: DACT, context: ExecutionContext
+    ) -> ('BaseStep', DACT):
         raise NotImplementedError("AutoML does not implement method _fit_transform_data_container. Use method such as "
                                   "fit or handle_fit to train models and then use method such as get_best_model to "
                                   "retrieve the model you wish to use for transform")
 
     def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
-        return self.wrapped.handle_transform(data_container, context)
+        return self.pipeline.handle_transform(data_container, context)
 
     def _load_virgin_best_model(self) -> BaseStep:
         """
@@ -771,7 +780,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
         :return:
         """
-        return self.hyperparams_repository.get_best_model()
+        raise NotImplementedError("TODO")
 
     def get_children(self) -> List[BaseStep]:
         return [self.get_best_model()]
@@ -854,7 +863,7 @@ class EasyAutoML(AutoML):
         AutoML.__init__(
             self,
             pipeline=pipeline,
-            controller_loop=controller_loop,
+            loop=controller_loop,
             flow=flow,
             refit_best_trial=refit_best_trial,
             start_new_run=True,

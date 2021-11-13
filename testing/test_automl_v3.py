@@ -48,13 +48,13 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
             AddN().with_hp_range(range(8, 12)),
             assertion_step
         ]),
-        controller_loop=DefaultLoop(
+        loop=DefaultLoop(
             trainer=Trainer(
                 validation_splitter=ValidationSplitter(test_size=0.2),
                 n_epochs=1,
                 callbacks=[MetricCallback('MAE', median_absolute_error, True)]
             ),
-            hyperparams_optimizer=RandomSearch('MAE'),
+            hyperparams_optimizer=RandomSearch(main_metric_name='MAE'),
             n_trials=80,
             n_jobs=10,
         ),
