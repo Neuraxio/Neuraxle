@@ -54,14 +54,14 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
                 n_epochs=1,
                 callbacks=[MetricCallback('MAE', median_absolute_error, True)]
             ),
-            hyperparams_optimizer=RandomSearch(main_metric_name='MAE'),
+            hp_optimizer=RandomSearch(main_metric_name='MAE'),
             n_trials=80,
             n_jobs=10,
         ),
         flow=AutoMLFlow(
             repo=InMemoryHyperparamsRepository(),
-            project_id="default_project",
-            client_id="default_client",
+            project_name="default_project",
+            client_name="default_client",
         ),
         start_new_run=True,
         refit_best_trial=True,

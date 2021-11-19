@@ -13,7 +13,7 @@ from neuraxle.hyperparams.distributions import DistributionMixture, PriorityChoi
     HyperparameterDistribution
 from neuraxle.hyperparams.distributions import Choice, LogNormal, LogUniform, Quantized
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
-from neuraxle.metaopt.auto_ml import BaseHyperparameterOptimizer, RandomSearch, \
+from neuraxle.metaopt.auto_ml import AutoMLFlow, BaseHyperparameterOptimizer, RandomSearch, RoundScope, \
     TrialStatus
 from neuraxle.metaopt.trial import Trials
 
@@ -42,27 +42,24 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterOptim
         self.use_linear_forgetting_weights: bool = use_linear_forgetting_weights
         self.number_recent_trial_at_full_weights: int = number_recent_trial_at_full_weights
 
-    def find_next_best_hyperparams(self, auto_ml_container) -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, round_scope: RoundScope) -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials.
 
-        :param auto_ml_container: trials data container
-        :type auto_ml_container: Trials
+        :param round_scope: round scope
         :return: next best hyperparams
-        :rtype: HyperparameterSamples
         """
         # Flatten hyperparameter space
 
         hyperparams_space_list: List[(str, HyperparameterDistribution)] = list(
-            auto_ml_container.hyperparameter_space.to_flat_dict().items())
+            round_scope.hp_space.to_flat_dict().items())
 
-
-        if auto_ml_container.trial_number < self.number_of_initial_random_step:
+        if round_scope.trial_number < self.number_of_initial_random_step:
             # Perform random search
-            return self.initial_auto_ml_algo.find_next_best_hyperparams(auto_ml_container)
+            return self.initial_auto_ml_algo.find_next_best_hyperparams(round_scope)
 
         # Keep only success trials
-        success_trials: Trials = auto_ml_container.trials.filter(TrialStatus.SUCCESS)
+        success_trials: Trials = round_scope.repo.load_trials(status=TrialStatus.SUCCESS)
 
         # Split trials into good and bad using quantile threshold.
         good_trials, bad_trials = success_trials.split_good_and_bad_trials(

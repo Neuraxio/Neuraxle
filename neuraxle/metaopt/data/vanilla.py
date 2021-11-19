@@ -29,6 +29,7 @@ Classes are splitted like this for the AutoML:
 
 """
 
+from abc import ABC
 import datetime
 import json
 from collections import OrderedDict
@@ -36,7 +37,7 @@ from numbers import Number
 from dataclasses import dataclass, field
 from enum import Enum
 from json.encoder import JSONEncoder
-from typing import Any, Callable, Dict, Iterable, List, Tuple, Type
+from typing import Any, Callable, Dict, Generic, Iterable, List, Tuple, Type, TypeVar
 
 import numpy as np
 from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
@@ -54,26 +55,66 @@ class TrialStatus(Enum):
 
 
 @dataclass
-class BaseMetadata:
+class ScopedLocation:
+    """
+    A location in the metadata tree.
+    """
+    project_name: str = None
+    client_name: str = None
+    round_number: int = None
+    trial_number: int = None
+    split_number: int = None
+    metric_name: str = None
+
+
+SubMetadataT = TypeVar('SubMetadataT', bound='BaseMetadata')
+
+
+@dataclass
+class BaseMetadata(Generic[SubMetadataT], ABC):
     # TODO: from json, to json?
     pass
 
-
-class ProjectMetadata(BaseMetadata):
-    name: str = ""
-    clients: List['ClientMetadata'] = field(default_factory=list)
+    def __getitem__(self, loc: ScopedLocation) -> 'SubMetadataT':
+        raise NotImplementedError("This is an abstract class. Use a concrete class.")
 
 
-class ClientMetadata(BaseMetadata):
+class RootMetadata(BaseMetadata['ProjectMetadata']):
+    projects: OrderedDict[str, 'ProjectMetadata'] = field(default_factory=OrderedDict)
+
+    def __getitem__(self, loc: ScopedLocation) -> 'ProjectMetadata':
+        if loc.project_name is None:
+            return self
+            # TODO: do this behavior for all the other cases.
+        return self.projects[loc.project_name]
+
+
+class ProjectMetadata(BaseMetadata['ClientMetadata']):
+    project_name: str = "default_project"
+    clients: OrderedDict[str, 'ClientMetadata'] = field(default_factory=list)
+
+    def __getitem__(self, loc: ScopedLocation):
+        return self.clients[loc.client_name]
+
+
+class ClientMetadata(BaseMetadata['RoundMetadata']):
+    client_name: str = "default_client"
     rounds: List['RoundMetadata'] = field(default_factory=list)
     main_metric_name: str = None  # By default, the first metric is the main one.  # TODO: make it configurable.
 
+    def __getitem__(self, loc: ScopedLocation):
+        return self.rounds[loc.round_name]
 
-class RoundMetadata(BaseMetadata):
+
+class RoundMetadata(BaseMetadata['TrialMetadata']):
+    round_number: int = 0
     trials: List['TrialMetadata'] = field(default_factory=list)
 
+    def __getitem__(self, loc: ScopedLocation):
+        return self.trials[loc.trial_name]
 
-class BaseTrialMetadata(BaseMetadata):
+
+class BaseTrialMetadataMixin:
     """
     Base class for :class:`TrialMetadata` and :class:`TrialSplitMetadata`.
     """
@@ -83,16 +124,19 @@ class BaseTrialMetadata(BaseMetadata):
     log: str = None
 
 
-class TrialMetadata(BaseTrialMetadata):
+class TrialMetadata(BaseTrialMetadataMixin, BaseMetadata['TrialSplitMetadata']):
     """
     Trial object used by AutoML algorithm classes.
     """
     trial_number: int = 0
     status: TrialStatus = TrialStatus.PLANNED
-    validation_splits: List['TrialSplit'] = field(default_factory=list)
+    validation_splits: List['TrialSplitMetadata'] = field(default_factory=list)
+
+    def __getitem__(self, loc: ScopedLocation):
+        return self.validation_splits[loc.split_name]
 
 
-class TrialSplitMetadata(BaseTrialMetadata):
+class TrialSplitMetadata(BaseTrialMetadataMixin, BaseMetadata['MetricResultMetadata']):
     """
     TrialSplit object used by AutoML algorithm classes.
     """
@@ -100,11 +144,15 @@ class TrialSplitMetadata(BaseTrialMetadata):
     introspection_data: RecursiveDict[str, Number] = None
     metric_results: OrderedDict[str, 'MetricResultMetadata'] = field(default_factory=OrderedDict)
 
+    def __getitem__(self, loc: ScopedLocation):
+        return self.metric_name[loc.metric_name]
 
-class MetricResultMetadata(BaseMetadata):
+
+class MetricResultMetadata(BaseMetadata['NoneType']):
     """
     MetricResult object used by AutoML algorithm classes.
     """
+    metric_name: str = "main"
     train_values: List[float] = field(default_factory=list)
     validation_values: List[float] = field(default_factory=list)
     higher_score_is_better: bool = True

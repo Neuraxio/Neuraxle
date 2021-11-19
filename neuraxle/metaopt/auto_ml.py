@@ -28,21 +28,22 @@ Hyperparameter selection strategies are used to optimize the hyperparameters of 
 import copy
 import gc
 import glob
-import hashlib
 import json
 import logging
 import math
 import multiprocessing
 import os
-import sys
 import time
 import traceback
 from abc import ABC, abstractmethod
-from typing import Callable, List, Tuple, Union, Any, Optional
+from typing import Any, Callable, Iterator, List, Optional, Tuple, Type, Union
 
 import numpy as np
-from neuraxle.base import (BaseService, BaseServiceT, BaseStep, ExecutionContext, ExecutionPhase, Flow,
-                           ForceHandleMixin, _HasChildrenMixin, MetaService, MetaServiceMixin, TruncableService)
+from neuraxle.base import (BaseService, BaseServiceT, BaseStep,
+                           ExecutionContext, ExecutionPhase, Flow,
+                           ForceHandleMixin, MetaService, MetaServiceMixin,
+                           TruncableService, _HasChildrenMixin,
+                           synchroneous_flow_method)
 from neuraxle.data_container import DACT as DACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
@@ -50,7 +51,12 @@ from neuraxle.logging.warnings import (warn_deprecated_arg,
                                        warn_deprecated_class)
 from neuraxle.metaopt.callbacks import (BaseCallback, CallbackList,
                                         ScoringCallback)
-from neuraxle.metaopt.data.vanilla import TrialStatus
+from neuraxle.metaopt.data.vanilla import (BaseMetadata, ClientMetadata,
+                                           MetricResultMetadata,
+                                           ProjectMetadata, RecursiveDict,
+                                           RoundMetadata, ScopedLocation,
+                                           TrialMetadata, TrialSplitMetadata,
+                                           TrialStatus)
 from neuraxle.metaopt.observable import _Observable, _Observer
 from neuraxle.metaopt.trial import Trial, Trials, TrialSplit
 from neuraxle.metaopt.validation import BaseCrossValidationWrapper
@@ -71,6 +77,18 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         :class:`RandomSearchHyperparameterSelectionStrategy`,
         :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
+
+    def get(self, scope: ScopedLocation) -> BaseMetadata:
+        """
+        Get metadata from scope.
+
+        The fetched metadata will be the one that is the last item
+        that is not a None in the provided scope.
+
+        :param scope: scope to get metadata from.
+        :return: metadata from scope.
+        """
+        raise NotImplementedError("Use a concrete class. This is an abstract class.")
 
     @abstractmethod
     def load_trials(self, status: 'TrialStatus' = None) -> 'Trials':
@@ -103,6 +121,75 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         :return:
         """
         pass
+
+    def get_best_hyperparams(self) -> 'HyperparameterSamples':
+        """
+        Get best hyperparams.
+
+        :param status: status to filter trials.
+        :return: best hyperparams.
+        """
+        return self.load_trials(status=TrialStatus.SUCCESS).get_best_hyperparams()
+
+
+class VanillaHyperparamsRepository(HyperparamsRepository):
+    """
+    Hyperparams repository that saves data AutoML-related info.
+    """
+
+    def __init__(
+        self,
+        cache_folder: str
+    ):
+        """
+        :param cache_folder: folder to store trials.
+        :param hyperparams_repo_class: class to use to save hyperparams.
+        :param hyperparams_repo_kwargs: kwargs to pass to hyperparams_repo_class.
+        """
+        super().__init__()
+        self.cache_folder = cache_folder
+
+        # Create a default project and a default client so that
+        # we can start rounds immediately.
+        # TODO: root metadata.
+        self.projects: ProjectMetadata = ProjectMetadata()
+        self.projects.clients.append(ClientMetadata())
+
+    def get(self, scope: ScopedLocation) -> BaseMetadata:
+        """
+        """
+
+        if scope.project_name is None:
+            return None
+        else:
+            proj: ProjectMetadata = self.get_project(scope.project_name)
+
+        if scope.client_name is None:
+            return proj
+        else:
+            client: ClientMetadata = self.get_client(proj, scope.client_name)
+
+        if scope.round_name is None:
+            return client
+        else:
+            round: RoundMetadata = self.get_round(client, scope.round_name)
+
+        if scope.trial_name is None:
+            return round
+        else:
+            trial: TrialMetadata = self.get_trial(round, scope.trial_name)
+
+        if scope.split_name is None:
+            return trial
+        else:
+            split: TrialSplitMetadata = self.get_split(trial, scope.split_name)
+
+        if scope.metric_name is None:
+            return split
+        else:
+            metric: MetricResultMetadata = self.get_metric(split, scope.metric_name)
+
+        return metric
 
 
 class InMemoryHyperparamsRepository(HyperparamsRepository):
@@ -317,12 +404,12 @@ class BaseHyperparameterOptimizer(ABC):
         self.main_metric_name = main_metric_name
 
     @abstractmethod
-    def find_next_best_hyperparams(self, auto_ml_container) -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, round_scope: 'RoundScope') -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials.
 
-        :param auto_ml_container: trials data container
-        :return: next best hyperparams
+        :param round_scope: round scope
+        :return: next hyperparameter samples to train on
         """
         raise NotImplementedError()
 
@@ -333,22 +420,170 @@ class AutoMLFlow(Flow):
         self,
         repo: HyperparamsRepository,
         logger: logging.Logger = None,
-        project_id="default_project",
-        client_id="default_client",
+        loc: ScopedLocation = None,
     ):
         super().__init__(logger=logger)
         self.repo: HyperparamsRepository = repo
-        self.project_id = project_id
-        self.client_id = client_id
+        self.loc: ScopedLocation = loc or ScopedLocation()
+
+        self.synchroneous()
+
+    def with_new_loc(self, loc: ScopedLocation):
+        """
+        Create a new AutoMLFlow with a new ScopedLocation.
+
+        :param loc: ScopedLocation
+        :return: AutoMLFlow
+        """
+        return AutoMLFlow(self.repo, self.logger, loc)
+
+    def copy(self):
+        f = AutoMLFlow(
+            repo=self.repo,
+            logger=self.logger,
+            loc=copy.copy(self.loc)
+        )
+        f._lock = self._lock
+        return f
 
     def log_model(self, model: 'BaseStep'):
-        self.repo.save_best_model(model)
+        # TODO: move to scoped actions below.
+        raise NotImplementedError("")
+        self.repo.save_model(model)
         return super().log_model(model)
 
 
-class TrialFlow(MetaService):
-    def __init__(self, wrapped: Flow):
-        MetaService.__init__(self, wrapped=wrapped)
+class BaseScope(ABC):
+    def __init__(self, context: ExecutionContext):
+        self.context: ExecutionContext = context
+
+    @property
+    def flow(self) -> AutoMLFlow:
+        return self.context.flow
+
+    @property
+    def loc(self) -> ScopedLocation:
+        return self.flow.loc
+
+    @property
+    def repo(self) -> HyperparamsRepository:
+        return self.flow.repo
+
+    def log(self, message: str, level: int = logging.INFO):
+        return self.flow.log(message, level)
+
+
+class ProjectScope(BaseScope):
+    def __enter__(self) -> 'ProjectScope':
+        return self
+
+    def new_client(self) -> 'ClientScope':
+        return ClientScope(self.context)
+
+    def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
+        self.flow.log_error(exc_val)
+
+
+class ClientScope(BaseScope):
+    def __enter__(self) -> 'ClientScope':
+        return self
+
+    def new_round(self, hp_space: HyperparameterSamples) -> 'RoundScope':
+        return RoundScope(self.context, hp_space)
+
+    def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
+        self.flow.log_error(exc_val)
+
+
+class RoundScope(BaseScope):
+    def __init__(self, context: ExecutionContext, hp_space: HyperparameterSpace):
+        super().__init__(context)
+        self.hp_space: HyperparameterSpace = hp_space
+
+    def __enter__(self) -> 'RoundScope':
+        # self.flow.log_
+        self.flow.add_file_to_logger(self.repo.log_path(self.loc))
+        return self
+
+    def new_hyperparametrized_trial(self, hp_optimizer: BaseHyperparameterOptimizer, continue_loop_on_error: bool) -> 'TrialScope':
+        with self.context.flow.synchroneous():
+            new_hps: HyperparameterSamples = hp_optimizer.find_next_best_hyperparams(self)
+            ts = TrialScope(self.context, new_hps, continue_loop_on_error)
+        return ts
+
+        # TODO: def retrain_best_model?
+
+    def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
+        self.flow.log_error(exc_val)
+        flow: AutoMLFlow = self.context.flow
+        self.flow.log_best_hps(flow.repo.get_best_hyperparams())
+        self.flow.log('Finished round hp search!')
+        self.flow.remove_file_from_logger(self.repo.log_path(self.loc))
+
+
+class TrialScope(BaseScope):
+
+    def __init__(self, context: ExecutionContext, repo: HyperparamsRepository, hps: HyperparameterSamples, continue_loop_on_error: bool):
+        super().__init__(context, repo)
+
+        self.hps: HyperparameterSamples = hps
+        self.error_types_to_raise = (
+            SystemError, SystemExit, EOFError, KeyboardInterrupt
+        ) if continue_loop_on_error else (Exception,)
+
+        self.flow.log_planned(hps)
+
+    def __enter__(self) -> 'TrialScope':
+        self.flow.log_start()
+        return self
+
+    def new_trial_split(self) -> 'TrialSplitScope':
+        return TrialSplitScope(self.context, self.repo)
+
+    def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
+        gc.collect()
+        raise NotImplementedError("TODO: log split result with MetricResultMetadata?")
+        self.flow.log_error(exc_val)
+
+
+class TrialSplitScope(BaseScope):
+    def __init__(self, context: ExecutionContext, repo: HyperparamsRepository, n_epochs: int):
+        super().__init__(context, repo)
+        self.n_epochs = n_epochs
+
+    def __enter__(self) -> 'TrialSplitScope':
+        return self
+
+    def new_epoch(self, epoch: int) -> 'EpochScope':
+        return EpochScope(self.context, self.repo, epoch, self.n_epochs)
+
+    def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
+        raise NotImplementedError("TODO: log split result with MetricResultMetadata?")
+
+        if exc_val is None:
+            self.flow.log_success()
+        elif exc_type in self.error_types_to_raise:
+            self.flow.log_failure(exc_val)
+            return False  # re-raise.
+        else:
+            self.flow.log_error(exc_val)
+            self.flow.log_aborted()
+            return True  # don't re-raise.
+
+
+class EpochScope(BaseScope):
+    def __init__(self, context: ExecutionContext, repo: HyperparamsRepository, epoch: int, n_epochs: int):
+        super().__init__(context, repo)
+        self.epoch: int = epoch
+        self.n_epochs: int = n_epochs
+
+    def __enter__(self) -> 'EpochScope':
+        self.flow.log_epoch(self.epoch, self.n_epochs)
+        return self
+
+    def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
+        self.flow.log_error(exc_val)
+        raise NotImplementedError("TODO: log MetricResultMetadata?")
 
 
 class Trainer(BaseService):
@@ -373,7 +608,7 @@ class Trainer(BaseService):
         self,
         pipeline: BaseStep,
         dact: DACT,
-        context: ExecutionContext = None,
+        trial_scope: TrialScope,
     ) -> Trial:
         """
         Train pipeline using the validation splitter.
@@ -387,29 +622,28 @@ class Trainer(BaseService):
 
         """
 
-        splits: List[Tuple[DACT, DACT]] = self.validation_splitter.split_dact(dact, context=context)
+        splits: List[Tuple[DACT, DACT]] = self.validation_splitter.split_dact(dact, context=trial_scope.context)
 
         for train_dact, val_dact in splits:
-            p = copy.deepcopy(pipeline)
+            with trial_scope.new_trial_split(self.n_epochs) as trial_split_scope:
+                trial_split_scope: TrialSplitScope = trial_split_scope  # typing helps
 
-            with context.flow.log_split():
-                # TODO: this method returns a context manager that takes care of the rest, and which itself has the flow as an attribute.
+                # TODO: No split? use a default single split. Log warning if so?
 
-                # TODO: failsafe on the mlflow for the clients and projects. Example: no clients and no projects? use the default ones. No split? use a default single split. Log warning if so?
+                p = pipeline.copy(trial_split_scope.context).set_hyperparams(trial_scope.hps)
 
-                for i in range(self.epochs):
-
-                    with context.flow.log_epoch(i, self.epochs):
-                        # TODO: this method returns a context manager that takes care of the rest, and which itself has the flow as an attribute.
+                for e in range(self.n_epochs):
+                    with trial_split_scope.new_epoch(e) as epoch_scope:
+                        epoch_scope: EpochScope = epoch_scope  # typing helps
 
                         p = p.set_train(True)
-                        p = p.handle_fit(train_dact.copy(), context.train())
+                        p = p.handle_fit(train_dact.copy(), epoch_scope.context.train())
 
-                        y_pred_train = p.handle_predict(train_dact.copy(), context.validation())
-                        y_pred_val = p.handle_predict(val_dact.copy(), context.validation())
+                        y_pred_train = p.handle_predict(train_dact.copy(), epoch_scope.context.validation())
+                        y_pred_val = p.handle_predict(val_dact.copy(), epoch_scope.context.validation())
 
                         if self.callbacks.call(
-                                context=context.copy().set_execution_phase(ExecutionPhase.VALIDATION),
+                                context=epoch_scope.context.validation(),
                                 input_train=train_dact,
                                 pred_train=y_pred_train,
                                 input_val=val_dact,
@@ -419,7 +653,6 @@ class Trainer(BaseService):
                             # Saves the metrics with flow split exit.
 
                 # TODO: log success in the __exit__ method(s).
-                context.flow.log_success()
 
     def refit(self, p: BaseStep, data_container: DACT, context: ExecutionContext) -> BaseStep:
         """
@@ -444,52 +677,57 @@ class BaseControllerLoop(TruncableService):
         self,
         trainer: Trainer,
         n_trials: int,
-        hyperparameter_optimizer: BaseHyperparameterOptimizer = None,
+        hp_optimizer: BaseHyperparameterOptimizer = None,
         continue_loop_on_error: bool = True
     ):
-        if hyperparameter_optimizer is None:
-            hyperparameter_optimizer = RandomSearch()
+        if hp_optimizer is None:
+            hp_optimizer = RandomSearch()
 
         TruncableService.__init__(self, {
             Trainer: trainer,
-            BaseHyperparameterOptimizer: hyperparameter_optimizer,
+            BaseHyperparameterOptimizer: hp_optimizer,
         })
         self.n_trials = n_trials
 
-        self.error_types_to_raise = (
-            SystemError, SystemExit, EOFError, KeyboardInterrupt) if continue_loop_on_error else (Exception,)
+        self.continue_loop_on_error: bool = continue_loop_on_error
 
-    def start(self, pipeline, dact: DACT, context: ExecutionContext):
+    def run(self, pipeline: BaseStep, dact: DACT, context: ExecutionContext):
         """
         Run the controller loop.
 
         :param context: execution context
         :return:
         """
-        raise NotImplementedError("")
+        trainer: Trainer = self[Trainer]
+        hp_space: HyperparameterSpace = pipeline.get_hyperparams_space()
+        # thread_safe_lock, context = context.thread_safe()
 
-    def _get_next(self):
-        """
-        Distributed or parallel for loop like `for i in n_trials`.
-        """
-        for i in range(self.n_trials):
-            yield i
+        # TODO: failsafe on the mlflow for the clients and projects.
+        #           Example: no clients and no projects? use the default ones.
+        with RoundScope(context, hp_space) as round_scope:
+            round_scope: RoundScope
 
-    def loop(self, context: ExecutionContext):
+            for trial_scope in self.loop(round_scope):
+                trial_scope: TrialScope = trial_scope  # typing helps
+                # trial_scope.context.restore_lock(thread_safe_lock)
+
+                trainer.train(pipeline, dact, trial_scope)
+
+    def loop(self, round_scope: RoundScope) -> Iterator[TrialScope]:
         """
         Loop over all trials.
 
+        :param dact: data container that is not yet splitted
         :param context: execution context
         :return:
         """
-        for i in self._get_next():
-            try:
-                yield self.trainer.train(i, context)
-            except Exception as e:
-                if self.continue_loop_on_error:
-                    context.logger.error('error {}'.format(e))
-                else:
-                    raise e
+        hp_optimizer: BaseHyperparameterOptimizer = self[BaseHyperparameterOptimizer]
+
+        for _ in range(self.n_trials):
+            with round_scope.new_hyperparametrized_trial(hp_optimizer, self.continue_loop_on_error) as trial_scope:
+                trial_scope: TrialScope = trial_scope  # typing helps
+
+                yield trial_scope
 
 
 class DefaultLoop(BaseControllerLoop):
@@ -499,18 +737,19 @@ class DefaultLoop(BaseControllerLoop):
         trainer: Trainer,
         n_trials: int,
         n_jobs: int = 1,
-        hyperparams_optimizer: BaseHyperparameterOptimizer = None,
+        hp_optimizer: BaseHyperparameterOptimizer = None,
         continue_loop_on_error: bool = True,
     ):
         super().__init__(
             trainer,
             n_trials,
-            hyperparameter_optimizer=hyperparams_optimizer,
+            hp_optimizer=hp_optimizer,
             continue_loop_on_error=continue_loop_on_error
         )
         self.n_jobs = n_jobs
 
-    def run(self, pipeline, dact: DACT, context: ExecutionContext):
+    def _run(self, pipeline, dact: DACT, context: ExecutionContext):
+        # TODO: what is this method used for?
 
         if self.n_jobs in (None, 1):
             # Single Process
@@ -610,39 +849,6 @@ class DefaultLoop(BaseControllerLoop):
             # It is best to do a full collection as that may free up some ram.
             gc.collect()
 
-    def loop(self, repo_run, p: BaseStep, data_container: DACT, context: ExecutionContext):
-        for i in self._get_next():
-
-            # TDA for lock unlock to be all in new_trial().
-            repo_run.lock()
-            p = self.next_best_prediction_algo.prepare_new_trial(p, repo_run.all_trials())
-            hps = p.get_hyperparams()
-            with repo_run.new_trial(hps) as trial:
-                repo_run.unlock()
-                # assert trial.is_started()
-                # assert not trial.is_finished()
-
-                trial_result: TrialResult = self.trainer.train(
-                    p,
-                    data_container,
-                    context.with_trial(trial),
-                    # this param is for allowing hyperband to easily control the n_epochs in percents...
-                )
-
-                # assert trial.repo_run == repo_run
-                # if isinstance(trial.repo_run.repo, PostGreSQLHPRepo): assert hasattr(trial.repo_run.repo.db.connection)
-                trial.set_finished(p, trial_result)
-
-        _comment = """
-            def _next_best_prediction_algo.prepare_new_trial(p: BaseStep, past_trials_with_scores) -> BaseStep:
-                trial_p = p.copy()
-
-                space = trial_p.get_hyperparam_space()
-                rvs = next_best_prediction_algo.rvs(space, past_trials_with_scores)  # can have NULL scores as well.
-                trial_p.set_hyperparams(rvs)
-                return trial_p
-        """
-
 
 class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
     """
@@ -735,8 +941,9 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
         :return: self
         """
-        context.patch_flow(self.flow)
-        self.loop.start(self.pipeline, data_container, context)
+        context.copy().register_service(Flow, self.flow)
+
+        self.loop.run(self.pipeline, data_container, context)
 
         if self.refit_best_trial:
             self.pipeline = self.loop.refit_best_trial(self.pipeline, data_container, context)
@@ -826,7 +1033,7 @@ class EasyAutoML(AutoML):
     :param cache_folder_when_no_handle: folder to use for caching when no handle is provided
     :param n_jobs: number of jobs to use for parallelization, defaults is None for no parallelization
     :param continue_loop_on_error: whether to continue the main optimization loop on error or not
-    :return: AutoML objectr ready to use
+    :return: AutoML object ready to use
     """
 
     def __init__(
@@ -854,7 +1061,7 @@ class EasyAutoML(AutoML):
             trainer=trainer,
             n_trials=n_trials,
             n_jobs=n_jobs,
-            hyperparams_optimizer=hyperparams_optimizer,
+            hp_optimizer=hyperparams_optimizer,
             continue_loop_on_error=continue_loop_on_error,
         )
         flow: Flow = AutoMLFlow(repo=hyperparams_repository)
@@ -890,14 +1097,14 @@ class RandomSearch(BaseHyperparameterOptimizer):
     def __init__(self, main_metric_name: str = None):
         BaseHyperparameterOptimizer.__init__(self, main_metric_name=main_metric_name)
 
-    def find_next_best_hyperparams(self, auto_ml_container) -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, round_scope: 'RoundScope') -> HyperparameterSamples:
         """
         Randomly sample the next hyperparams to try.
 
-        :param auto_ml_container: trials data container
-        :return: next best hyperparams
+        :param round_scope: round scope
+        :return: next random hyperparams
         """
-        return auto_ml_container.hyperparameter_space.rvs()
+        return round_scope.hp_space.rvs()
 
 
 class BaseValidationSplitter(ABC):

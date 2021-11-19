@@ -721,7 +721,7 @@ class Trials:
         :return:
         """
         if len(self) == 0:
-            raise Exception('Could not get best hyperparams because there were no successful trial.')
+            return HyperparameterSamples()
 
         return self.get_best_trial().hyperparams
 

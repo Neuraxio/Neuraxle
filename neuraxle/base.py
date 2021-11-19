@@ -881,13 +881,21 @@ class Flow(BaseService):
         self.logger = logger
         self._lock: RLock = None
 
-    def synchroneous(self) -> 'Flow':
+    def synchroneous(self) -> RLock:
         """
         Synchronous flow: Create managed reentrant lock (mutex).
         """
         if self._lock is None:
             self._lock: RLock = Manager().RLock()
-        return self
+        return self._lock
+
+    def copy(self) -> 'Flow':
+        """
+        Copy the flow.
+        """
+        copied_self: Flow = copy(self)
+        copied_self._lock = self._lock
+        return copied_self
 
     @synchroneous_flow_method
     def log(self, message: str, level: int = logging.INFO):
@@ -902,9 +910,18 @@ class Flow(BaseService):
     def log_status(self, status: TrialStatus):
         self.log(f'Status: {status}')
 
-    def log_start(self, status: TrialStatus = TrialStatus.PLANNED):
+    def log_planned(self, hps: HyperparameterSamples):
+        self.log('Planned!')
+        self.log_hps(hps)
+        self.log_status(TrialStatus.PLANNED)
+
+    def log_hps(self, hps: HyperparameterSamples):
+        hps_str = pprint.pformat(hps.to_flat_dict(), indent=4)
+        self.log(f'Hyperparameters: {hps_str}')
+
+    def log_start(self):
         self.log('Started!')
-        self.log_status(status)
+        self.log_status(TrialStatus.RUNNING)
 
     def log_end(self, status: TrialStatus = TrialStatus.SUCCESS):
         self.log('Finished!')
@@ -919,13 +936,18 @@ class Flow(BaseService):
         #               repo_trial_split.get_n_epochs_to_best_validation_score()
         #           ))
 
+    def log_best_hps(self, best_hps: HyperparameterSamples):
+        self.log('Best hyperparameters found:')
+        self.log_hps(best_hps)
+
     def log_failure(self, exception: Exception):
         self.log_error(exception)
         self.log_end(TrialStatus.FAILURE)
 
     @synchroneous_flow_method
     def log_error(self, exception: Exception):
-        self.logger.exception(exception)
+        if exception is not None:
+            self.logger.exception(exception)
 
     def log_aborted(self, status: TrialStatus = TrialStatus.ABORTED):
         """
@@ -933,8 +955,16 @@ class Flow(BaseService):
         """
         self.log('Aborted!')
         self.log_status(status)
+        # TODO:
+        # repo_trial_split_number = 0 if repo_trial_split is None else repo_trial_split.split_number + 1
+        # trial_split_description = '{}/{} split {}/{}\nhyperparams: {}'.format(
+        # trial_number + 1,
+        # n_trial,
+        # repo_trial_split_number + 1,
+        # len(validation_splits),
+        # json.dumps(repo_trial.hyperparams, sort_keys=True, indent=4)
 
-    def _add_file_to_logger(
+    def add_file_to_logger(
         self,
         logging_file: str
     ) -> logging.Logger:
@@ -1130,7 +1160,7 @@ class ExecutionContext(TruncableService):
     def copy(self):
         return ExecutionContext(
             root=self.root,
-            flow=self.flow,
+            flow=self.flow.copy(),
             execution_mode=self.execution_mode,
             execution_phase=self.execution_phase,
             parents=copy(self.parents),
@@ -1167,7 +1197,7 @@ class ExecutionContext(TruncableService):
         self.parents = []
         # enabling synchronized flow:
         threaded_context.flow.synchroneous()
-        thread_safe_lock: Lock = threaded_context.flow._lock
+        thread_safe_lock: RLock = threaded_context.flow._lock
         threaded_context.flow._lock = None
         return thread_safe_lock, threaded_context
 
@@ -1312,6 +1342,24 @@ class _HasSetupTeardownLifecycle(MixinForBaseService):
 
     def __init__(self):
         self.is_initialized = False
+
+    def copy(self, context: ExecutionContext = None, deep=True) -> '_HasSavers':
+        """
+        Copy the step.
+
+        :param deep: if True, copy the savers as well
+        :return: a copy of the step
+        """
+        self._assert(
+            not self.is_initialized,
+            "Can't copy an initialized step. "
+            "There could be a way to copy for initialized steps using savers, "
+            "but that is not implemented.",
+            context
+        )
+        if deep:
+            return copy.deepcopy(self)
+        return copy.copy(self)
 
     def setup(self, context: 'ExecutionContext') -> 'BaseTransformer':
         """
