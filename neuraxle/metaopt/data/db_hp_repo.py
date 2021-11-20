@@ -35,7 +35,7 @@ from sqlalchemy.testing.schema import Column
 
 from neuraxle.metaopt.auto_ml import HyperparamsRepository
 
-from neuraxle.metaopt.trial import Trial, Trials
+from neuraxle.metaopt.data.trial import Trial, Trials
 from neuraxle.metaopt.data.vanilla import TrialStatus
 
 

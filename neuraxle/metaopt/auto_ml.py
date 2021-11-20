@@ -51,14 +51,15 @@ from neuraxle.logging.warnings import (warn_deprecated_arg,
                                        warn_deprecated_class)
 from neuraxle.metaopt.callbacks import (BaseCallback, CallbackList,
                                         ScoringCallback)
-from neuraxle.metaopt.data.vanilla import (BaseMetadata, ClientMetadata,
-                                           MetricResultMetadata,
-                                           ProjectMetadata, RecursiveDict,
-                                           RoundMetadata, ScopedLocation,
-                                           TrialMetadata, TrialSplitMetadata,
+from neuraxle.metaopt.data.vanilla import (BaseDataclass, ClientDataclass,
+                                           MetricResultsDataclass,
+                                           ProjectDataclass, RecursiveDict,
+                                           RootMetadata, RoundDataclass,
+                                           ScopedLocation, SubDataclassT,
+                                           TrialDataclass, TrialSplitDataclass,
                                            TrialStatus)
 from neuraxle.metaopt.observable import _Observable, _Observer
-from neuraxle.metaopt.trial import Trial, Trials, TrialSplit
+from neuraxle.metaopt.data.trial import Trial, Trials, TrialSplit
 from neuraxle.metaopt.validation import BaseCrossValidationWrapper
 
 
@@ -70,7 +71,7 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
     .. seealso::
         :class:`AutoML`,
         :class:`Trainer`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
         :class:`InMemoryHyperparamsRepository`,
         :class:`HyperparamsJSONRepository`,
         :class:`BaseHyperparameterSelectionStrategy`,
@@ -78,7 +79,8 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
-    def get(self, scope: ScopedLocation) -> BaseMetadata:
+    @abstractmethod
+    def get(self, scope: ScopedLocation) -> SubDataclassT:
         """
         Get metadata from scope.
 
@@ -90,7 +92,6 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         """
         raise NotImplementedError("Use a concrete class. This is an abstract class.")
 
-    @abstractmethod
     def load_trials(self, status: 'TrialStatus' = None) -> 'Trials':
         """
         Load all hyperparameter trials with their corresponding score.
@@ -100,6 +101,7 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         :param status: status to filter trials.
         :return: Trials (hyperparams, scores)
         """
+        # TODO: delete this method.
         pass
 
     def save_trial(self, trial: 'Trial'):
@@ -112,7 +114,6 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         self._save_trial(trial)
         self.notify_next(value=(self, trial))  # notify a tuple of (repo, trial) to observers
 
-    @abstractmethod
     def _save_trial(self, trial: 'Trial'):
         """
         save trial.
@@ -120,16 +121,29 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
         :param trial: trial to save.
         :return:
         """
+        # TODO: delete this method.
         pass
 
-    def get_best_hyperparams(self) -> 'HyperparameterSamples':
+    def get_best_hyperparams(self, loc: ScopedLocation) -> TrialDataclass:
         """
         Get best hyperparams.
 
         :param status: status to filter trials.
         :return: best hyperparams.
         """
-        return self.load_trials(status=TrialStatus.SUCCESS).get_best_hyperparams()
+        round: RoundDataclass = self.get(ScopedLocation(loc.as_list()[:3]))
+        return round.best_trial
+
+    @abstractmethod
+    def get_logger_path(self, scope: ScopedLocation) -> str:
+        """
+        Get logger path from scope.
+
+        :param scope: scope to get logger path from.
+        :return: logger path with given scope.
+        """
+
+        raise NotImplementedError("Use a concrete class. This is an abstract class.")
 
 
 class VanillaHyperparamsRepository(HyperparamsRepository):
@@ -148,48 +162,50 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
         """
         super().__init__()
         self.cache_folder = cache_folder
+        self.root: RootMetadata = RootMetadata()
 
-        # Create a default project and a default client so that
-        # we can start rounds immediately.
-        # TODO: root metadata.
-        self.projects: ProjectMetadata = ProjectMetadata()
-        self.projects.clients.append(ClientMetadata())
-
-    def get(self, scope: ScopedLocation) -> BaseMetadata:
+    def get(self, scope: ScopedLocation) -> SubDataclassT:
         """
         """
 
         if scope.project_name is None:
             return None
         else:
-            proj: ProjectMetadata = self.get_project(scope.project_name)
+            proj: ProjectDataclass = self.get_project(scope.project_name)
 
         if scope.client_name is None:
             return proj
         else:
-            client: ClientMetadata = self.get_client(proj, scope.client_name)
+            client: ClientDataclass = self.get_client(proj, scope.client_name)
 
         if scope.round_name is None:
             return client
         else:
-            round: RoundMetadata = self.get_round(client, scope.round_name)
+            round: RoundDataclass = self.get_round(client, scope.round_name)
 
         if scope.trial_name is None:
             return round
         else:
-            trial: TrialMetadata = self.get_trial(round, scope.trial_name)
+            trial: TrialDataclass = self.get_trial(round, scope.trial_name)
 
         if scope.split_name is None:
             return trial
         else:
-            split: TrialSplitMetadata = self.get_split(trial, scope.split_name)
+            split: TrialSplitDataclass = self.get_split(trial, scope.split_name)
 
         if scope.metric_name is None:
             return split
         else:
-            metric: MetricResultMetadata = self.get_metric(split, scope.metric_name)
+            metric: MetricResultsDataclass = self.get_metric(split, scope.metric_name)
 
         return metric
+
+    def get_logger_path(self, scope: ScopedLocation) -> str:
+        scoped_path: str = self.get_scoped_path(scope)
+        return os.path.join(scoped_path, 'log.txt')
+
+    def get_scoped_path(self, scope: ScopedLocation) -> str:
+        return os.path.join(self.cache_folder, *scope.as_list())
 
 
 class InMemoryHyperparamsRepository(HyperparamsRepository):
@@ -239,7 +255,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
     .. seealso::
         :class:`AutoML`,
         :class:`Trainer`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
         :class:`InMemoryHyperparamsRepository`,
         :class:`HyperparamsJSONRepository`,
         :class:`BaseHyperparameterSelectionStrategy`,
@@ -502,7 +518,7 @@ class RoundScope(BaseScope):
 
     def __enter__(self) -> 'RoundScope':
         # self.flow.log_
-        self.flow.add_file_to_logger(self.repo.log_path(self.loc))
+        self.flow.add_file_to_logger(self.repo.get_logger_path(self.loc))
         return self
 
     def new_hyperparametrized_trial(self, hp_optimizer: BaseHyperparameterOptimizer, continue_loop_on_error: bool) -> 'TrialScope':
@@ -878,8 +894,8 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         :class:`~neuraxle.base.BaseStep`,
         :class:`~neuraxle.base.ForceHandleOnlyMixin`,
         :class:`Trainer`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
-        :class:`~neuraxle.metaopt.trial.Trials`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
+        :class:`~neuraxle.metaopt.data.trial.Trials`,
         :class:`HyperparamsRepository`,
         :class:`InMemoryHyperparamsRepository`,
         :class:`BaseValidationSplitter`,
@@ -1084,8 +1100,8 @@ class RandomSearch(BaseHyperparameterOptimizer):
 
     .. seealso::
         :class:`Trainer`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
-        :class:`~neuraxle.metaopt.trial.Trials`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
+        :class:`~neuraxle.metaopt.data.trial.Trials`,
         :class:`HyperparamsRepository`,
         :class:`InMemoryHyperparamsRepository`,
         :class:`HyperparamsJSONRepository`,

@@ -15,7 +15,7 @@ from neuraxle.hyperparams.distributions import Choice, LogNormal, LogUniform, Qu
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.auto_ml import AutoMLFlow, BaseHyperparameterOptimizer, RandomSearch, RoundScope, \
     TrialStatus
-from neuraxle.metaopt.trial import Trials
+from neuraxle.metaopt.data.trial import Trials
 
 _LOG_DISTRIBUTION = (LogNormal, LogUniform)
 _QUANTIZED_DISTRIBUTION = (Quantized,)

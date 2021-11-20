@@ -38,7 +38,7 @@ from neuraxle.metaopt.auto_ml import HyperparamsRepository
 from neuraxle.hyperparams.distributions import *
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.observable import _Observer, T
-from neuraxle.metaopt.trial import Trial, Trials
+from neuraxle.metaopt.data.trial import Trial, Trials
 from neuraxle.metaopt.data.vanilla import TrialStatus
 
 DISCRETE_NUM_BINS = 40
@@ -149,8 +149,8 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
 
     .. seealso::
         :class:`~neuraxle.metaopt._Observer`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
-        :class:`~neuraxle.metaopt.trial.Trials`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
+        :class:`~neuraxle.metaopt.data.trial.Trials`,
         :class:`~neuraxle.metaopt.auto_ml.AutoML`,
         :class:`HyperparamsRepository`,
         :class:`HyperparamsJSONRepository`

@@ -14,7 +14,7 @@ from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.metaopt.data.vanilla import TrialStatus
 from neuraxle.metaopt.hyperopt.tpe import \
     TreeParzenEstimatorHyperparameterSelectionStrategy
-from neuraxle.metaopt.trial import Trials
+from neuraxle.metaopt.data.trial import Trials
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCallbackStep
 from neuraxle.steps.numpy import AddN

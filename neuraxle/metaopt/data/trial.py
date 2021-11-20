@@ -30,24 +30,25 @@ Classes are splitted like this for the AutoML:
 """
 
 
-from collections import OrderedDict
 import datetime
 import hashlib
-from json.encoder import JSONEncoder
+import json
 import logging
 import os
 import traceback
-import json
-from enum import Enum
-from logging import FileHandler, Logger
-from typing import Any, Dict, List, Callable, Iterable, Tuple, Type
+from collections import OrderedDict
 from dataclasses import dataclass, field
-import numpy as np
+from enum import Enum
+from json.encoder import JSONEncoder
+from logging import FileHandler, Logger
+from typing import Any, Callable, Dict, Iterable, List, Tuple, Type
 
+import numpy as np
 from neuraxle.base import BaseStep, ExecutionContext, Flow
-from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
+from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
+from neuraxle.metaopt.data.vanilla import TrialDataclass, TrialSplitDataclass
 
 
 class Trial:
@@ -59,79 +60,16 @@ class Trial:
 
     def __init__(
             self,
-            trial_number: int,
-            hyperparams: HyperparameterSamples,
-            main_metric_name: str,
-            status: 'TrialStatus' = None,
-            validation_splits: List['TrialSplit'] = None,
-            error: str = None,
-            error_traceback: str = None,
-            start_time: datetime.datetime = None,
-            end_time: datetime.datetime = None,
-            log: str = None,
-            introspection_data: RecursiveDict = None
+            trial_dataclass: 'TrialDataclass',
     ):
-        self.trial_number = trial_number
+        self.trial_dataclass: TrialDataclass = trial_dataclass
 
-        if status is None:
-            status = TrialStatus.PLANNED
-        if validation_splits is None:
-            validation_splits = []
-
-        self.main_metric_name: str = main_metric_name
-        self.status: TrialStatus = status
-        self.hyperparams: HyperparameterSamples = hyperparams
-        self.validation_splits: List['TrialSplit'] = validation_splits
-        self.error_traceback: str = error_traceback
-        self.error: str = error
-        self.start_time: datetime.datetime = start_time
-        self.end_time: datetime.datetime = end_time
-        self.log: str = log if log is not None else ""
-        self.introspection_data: RecursiveDict = (
-            introspection_data if introspection_data is not None else RecursiveDict())
-
-    def to_json_dict(self) -> dict[str, Any]:
-        return {
-            'trial_number': self.trial_number,
-            'status': self.status.value,
-            'hyperparams': self.hyperparams.to_flat_dict(),
-            'validation_splits': [v.to_json() for v in self.validation_splits],
-            'error': self.error,
-            'error_traceback': self.error_traceback,
-            'start_time': self.start_time.strftime(LOGGING_DATETIME_STR_FORMAT) if self.start_time is not None else '',
-            'end_time': self.end_time.strftime(LOGGING_DATETIME_STR_FORMAT) if self.end_time is not None else '',
-            'main_metric_name': self.main_metric_name,
-            'log': self.log,
-            # TODO: move to val splits?
-            'introspection_data': self.introspection_data.to_flat_dict()
-        }
+    def to_json_dict(self) -> Dict[str, Any]:
+        return self.trial_dataclass.to_json()
 
     @staticmethod
     def from_json_dict(trial_json: Dict) -> 'Trial':
-        trial: Trial = Trial(
-            trial_number=trial_json["trial_number"],
-            main_metric_name=trial_json['main_metric_name'],
-            status=TrialStatus(trial_json['status']),
-            hyperparams=HyperparameterSamples(trial_json['hyperparams']),
-            error=trial_json['error'],
-            error_traceback=trial_json['error_traceback'],
-            start_time=datetime.datetime.strptime(trial_json['start_time'], LOGGING_DATETIME_STR_FORMAT),
-            end_time=datetime.datetime.strptime(trial_json['start_time'], LOGGING_DATETIME_STR_FORMAT),
-            log=trial_json['log'],
-            introspection_data=RecursiveDict(trial_json['introspection_data'])
-        )
-
-        trial.validation_splits = [
-            TrialSplit.from_json(
-                trial=trial,
-                trial_split_json=validation_split_json
-            ) for validation_split_json in trial_json['validation_splits']
-        ]
-
-        return trial
-
-    def __getitem__(self, item) -> 'TrialSplit':
-        return self.validation_splits[item]
+        return Trial(TrialDataclass.from_json(trial_json))
 
 
 class TrialRepo:

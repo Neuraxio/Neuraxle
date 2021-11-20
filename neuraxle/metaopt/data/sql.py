@@ -47,11 +47,11 @@ from neuraxle.base import BaseStep, ExecutionContext, Flow
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
 from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
-from neuraxle.metaopt.data.vanilla import (AutoMLFlow, BaseMetadata,
-                                           ClientMetadata,
-                                           MetricResultMetadata,
-                                           ProjectMetadata, RecursiveDict,
-                                           RoundMetadata, TrialMetadata,
-                                           TrialSplitMetadata, TrialStatus)
+from neuraxle.metaopt.data.vanilla import (AutoMLFlow, BaseDataclass,
+                                           ClientDataclass,
+                                           MetricResultsDataclass,
+                                           ProjectDataclass, RecursiveDict,
+                                           RoundDataclass, TrialDataclass,
+                                           TrialSplitDataclass, TrialStatus)
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, Column, DateTime, Float, Integer, String, Table, MetaData, ForeignKey

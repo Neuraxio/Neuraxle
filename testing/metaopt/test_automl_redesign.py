@@ -8,7 +8,7 @@ from sklearn.metrics import accuracy_score
 
 from neuraxle.base import ExecutionContext
 from neuraxle.data_container import DataContainer
-from neuraxle.metaopt.auto_ml import EasyAutoML, DefaultLoop, HyperparamsJSONRepository, ValidationSplitter, Trainer, RandomSearch
+from neuraxle.metaopt.auto_ml import EasyAutoML, DefaultLoop, VanillaHyperparamsRepository, ValidationSplitter, Trainer, RandomSearch
 from neuraxle.metaopt.callbacks import EarlyStoppingCallback, MetricCallback, ScoringCallback
 from neuraxle.pipeline import Pipeline
 from neuraxle.hyperparams.distributions import Choice, RandInt, Boolean, LogUniform
@@ -50,7 +50,7 @@ def test_automl_api_entry_point(tmpdir):
         pipeline=pipeline,
         validation_splitter=ValidationSplitter(0.20),
         hyperparams_optimizer=RandomSearch(),
-        hyperparams_repository=HyperparamsJSONRepository(cache_folder=os.path.join(tmpdir, "hp")),
+        hyperparams_repository=VanillaHyperparamsRepository(cache_folder=os.path.join(tmpdir, "hp")),
         scoring_callback=ScoringCallback(mean_squared_error),
         callbacks=[
             MetricCallback('accuracy', metric_function=accuracy_score, higher_score_is_better=False),

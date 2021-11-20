@@ -32,7 +32,7 @@ import warnings
 from neuraxle.base import BaseStep, BaseTransformer, ExecutionContext, MixinForBaseTransformer
 from neuraxle.logging.warnings import warn_deprecated_class, warn_deprecated_arg
 from neuraxle.data_container import DataContainer
-from neuraxle.metaopt.trial import TrialSplit
+from neuraxle.metaopt.data.trial import TrialSplit
 
 
 class BaseCallback(ABC):
@@ -48,7 +48,7 @@ class BaseCallback(ABC):
         :class:`StepSaverCallback`,
         :class:`~neuraxle.metaopt.auto_ml.AutoML`,
         :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
         :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
         :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
         :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
@@ -76,7 +76,7 @@ class EarlyStoppingCallback(BaseCallback):
         :class:`StepSaverCallback`,
         :class:`~neuraxle.metaopt.auto_ml.AutoML`,
         :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
         :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
         :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
         :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
@@ -136,7 +136,7 @@ class MetaCallback(BaseCallback):
         :class:`StepSaverCallback`,
         :class:`~neuraxle.metaopt.auto_ml.AutoML`,
         :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
         :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
         :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
         :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
@@ -176,7 +176,7 @@ class IfBestScore(MetaCallback):
         :class:`StepSaverCallback`,
         :class:`~neuraxle.metaopt.auto_ml.AutoML`,
         :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
         :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
         :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
         :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
@@ -215,7 +215,7 @@ class IfLastStep(MetaCallback):
         :class:`StepSaverCallback`,
         :class:`~neuraxle.metaopt.auto_ml.AutoML`,
         :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
         :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
         :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
         :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
@@ -251,7 +251,7 @@ class StepSaverCallback(BaseCallback):
         :class:`BaseCallback`,
         :class:`~neuraxle.metaopt.auto_ml.AutoML`,
         :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
         :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
         :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
         :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
@@ -293,7 +293,7 @@ class CallbackList(BaseCallback):
         :class:`StepSaverCallback`,
         :class:`~neuraxle.metaopt.auto_ml.AutoML`,
         :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
         :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
         :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
         :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
@@ -353,7 +353,7 @@ class MetricCallback(BaseCallback):
         :class:`CallbackList`,
         :class:`~neuraxle.metaopt.auto_ml.AutoML`,
         :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
         :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
         :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
         :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
@@ -413,7 +413,7 @@ class ScoringCallback(MetricCallback):
         :class:`CallbackList`,
         :class:`~neuraxle.metaopt.auto_ml.AutoML`,
         :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.trial.Trial`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
         :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
         :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
         :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,

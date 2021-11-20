@@ -14,7 +14,7 @@ from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, Rand
     HyperparamsJSONRepository, \
     ValidationSplitter, KFoldCrossValidationSplitter, Trainer
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback, EarlyStoppingCallback, BestModelCheckpoint
-from neuraxle.metaopt.trial import Trial, Trials
+from neuraxle.metaopt.data.trial import Trial, Trials
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import MultiplyByN, NumpyReshape
 from neuraxle.steps.sklearn import SKLearnWrapper

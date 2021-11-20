@@ -9,7 +9,7 @@ from neuraxle.hyperparams.distributions import RandInt, Uniform
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
 from neuraxle.metaopt.auto_ml import (AutoML, AutoMLFlow, DefaultLoop,
-                                      InMemoryHyperparamsRepository,
+                                      VanillaHyperparamsRepository,
                                       RandomSearch, Trainer,
                                       ValidationSplitter)
 from neuraxle.metaopt.callbacks import MetricCallback
@@ -59,9 +59,7 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
             n_jobs=10,
         ),
         flow=AutoMLFlow(
-            repo=InMemoryHyperparamsRepository(),
-            project_name="default_project",
-            client_name="default_client",
+            repo=VanillaHyperparamsRepository(tmpdir),
         ),
         start_new_run=True,
         refit_best_trial=True,
