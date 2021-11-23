@@ -54,7 +54,7 @@ class TrialStatus(Enum):
     SUCCESS = 'success'
 
 
-SubDataclassT = TypeVar('SubMetadataT', bound=Optional['BaseMetadata'])
+SubDataclassT = TypeVar('SubDataclassT', bound=Optional['BaseDataclass'])
 ScopedLocationAttr = Union[str, int]
 
 
@@ -123,9 +123,17 @@ class BaseTrialDataclassMixin:
     also must inherit from :class:`BaseMetadata`.
     """
     hyperparams: HyperparameterSamples
-    start_time: datetime.datetime = None
+    status: TrialStatus = TrialStatus.PLANNED
+    created_time: datetime.datetime = field(default_factory=datetime.datetime.now)
+    start_time: datetime.datetime = field(default_factory=datetime.datetime.now)
     end_time: datetime.datetime = None
-    log: str = None
+    log: str = ""
+
+    def end(self, status: TrialStatus, add_to_log: str = "") -> 'BaseTrialDataclassMixin':
+        self.status = status
+        self.end_time = datetime.datetime.now()
+        self.log += add_to_log
+        return self
 
 
 class RootMetadata(BaseDataclass['ProjectDataclass']):
@@ -164,11 +172,12 @@ class RoundDataclass(BaseDataclass['TrialDataclass']):
 
 class TrialDataclass(BaseTrialDataclassMixin, BaseDataclass['TrialSplitDataclass']):
     """
-    Trial object used by AutoML algorithm classes.
+    This class is a data structure most often used under :class:`AutoML` to store information about a trial.
+    This information is itself managed by the :class:`HyperparameterRepository` class
+    and the :class:`Trial` class within the AutoML.
     """
     trial_number: int = 0
     validation_splits: List['TrialSplitDataclass'] = field(default_factory=list)
-    status: TrialStatus = TrialStatus.PLANNED
 
     def get_sublocation(self) -> List['TrialSplitDataclass']:
         return self.validation_splits
@@ -180,7 +189,7 @@ class TrialSplitDataclass(BaseTrialDataclassMixin, BaseDataclass['MetricResultsD
     """
     split_number: int = 0
     metric_results: OrderedDict[str, 'MetricResultsDataclass'] = field(default_factory=OrderedDict)
-    introspection_data: RecursiveDict[str, Number] = None
+    introspection_data: RecursiveDict[str, Number] = field(default_factory=RecursiveDict)
 
     def get_sublocation(self) -> OrderedDict[str, 'MetricResultsDataclass']:
         return self.metric_results

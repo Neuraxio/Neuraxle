@@ -107,9 +107,9 @@ class EarlyStoppingCallback(BaseCallback):
             is_finished_and_fitted: bool
     ):
         if self.metric_name is None:
-            validation_scores = trial_split.get_validation_scores()
+            validation_scores = trial_split.get_val_scores()
         else:
-            validation_scores = trial_split.get_metric_validation_results(self.metric_name)
+            validation_scores = trial_split.get_val_scores(self.metric_name)
 
         if len(validation_scores) > self.n_epochs_without_improvement:
             higher_score_is_better = trial_split.is_higher_score_better()

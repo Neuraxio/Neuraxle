@@ -135,7 +135,7 @@ class InDatabaseHyperparamRepository(HyperparamsRepository):
         raise NotImplementedError()
 
     def _insert_new_trial(self, trial: Trial):
-        trial_hash = self._get_trial_hash(trial.hyperparams)
+        trial_hash = self.get_trial_id(trial.hyperparams)
         return trial_register.insert().value(id=trial_hash, status=TrialStatus.PLANNED)
 
     def new_trial(self, auto_ml_container: 'AutoMLContainer'):

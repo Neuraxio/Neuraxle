@@ -145,6 +145,23 @@ class HyperparamsRepository(_Observable[Tuple['HyperparamsRepository', Trial]], 
 
         raise NotImplementedError("Use a concrete class. This is an abstract class.")
 
+    def _save_model(self, trial: Trial, pipeline: BaseStep, context: ExecutionContext):
+        hyperparams = self.hyperparams.to_flat_dict()
+        # TODO: ???
+        trial_hash = trial.get_trial_id(hyperparams)
+        pipeline.set_name(trial_hash).save(context, full_dump=True)
+
+    def load_model(self, trial: Trial, context: ExecutionContext) -> BaseStep:
+        """
+        Load model in the trial hash folder.
+        """
+        # TODO: glob?
+        trial_hash: str = trial.get_trial_id(self.hyperparams.to_flat_dict)
+        return ExecutionContext.load(
+            context=context,
+            pipeline_name=trial_hash,
+        )
+
 
 class VanillaHyperparamsRepository(HyperparamsRepository):
     """
@@ -360,10 +377,10 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :param trial: trial
         :return: str
         """
-        trial_hash = self._get_trial_hash(trial.hyperparams.to_flat_dict())
+        trial_hash = self.get_trial_id(trial.hyperparams.to_flat_dict())
         return os.path.join(
             self.cache_folder,
-            str(float(trial.get_validation_score())).replace('.', ',') + "_" + trial_hash
+            str(float(trial.get_avg_validation_score())).replace('.', ',') + "_" + trial_hash
         ) + '.json'
 
     def _get_failed_trial_json_file_path(self, trial: 'Trial'):
@@ -373,7 +390,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :param trial: trial
         :return: str
         """
-        trial_hash = self._get_trial_hash(trial.hyperparams.to_flat_dict())
+        trial_hash = self.get_trial_id(trial.hyperparams.to_flat_dict())
         return os.path.join(self.cache_folder, 'FAILED_' + trial_hash) + '.json'
 
     def _get_ongoing_trial_json_file_path(self, trial: 'Trial'):
@@ -381,7 +398,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         Get ongoing trial json path.
         """
         hp_dict = trial.hyperparams.to_flat_dict()
-        current_hyperparameters_hash = self._get_trial_hash(hp_dict)
+        current_hyperparameters_hash = self.get_trial_id(hp_dict)
         return os.path.join(self.cache_folder, "ONGOING_" + current_hyperparameters_hash) + '.json'
 
     def _get_new_trial_json_file_path(self, trial: 'Trial'):
@@ -389,7 +406,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         Get new trial json path.
         """
         hp_dict = trial.hyperparams.to_flat_dict()
-        current_hyperparameters_hash = self._get_trial_hash(hp_dict)
+        current_hyperparameters_hash = self.get_trial_id(hp_dict)
         return os.path.join(self.cache_folder, "NEW_" + current_hyperparameters_hash) + '.json'
 
     def _remove_previous_trial_state_json(self):
@@ -534,7 +551,13 @@ class RoundScope(BaseScope):
         flow: AutoMLFlow = self.context.flow
         self.flow.log_best_hps(flow.repo.get_best_hyperparams())
         self.flow.log('Finished round hp search!')
-        self.flow.remove_file_from_logger(self.repo.log_path(self.loc))
+        self.flow._free_logger_files(self.repo.log_path(self.loc))
+
+    def _free_logger_file(self):
+        """Remove file handlers from logger to free file lock on Windows."""
+        for h in self.logger.handlers:
+            if isinstance(h, FileHandler):
+                self.logger.removeHandler(h)
 
 
 class TrialScope(BaseScope):
@@ -551,6 +574,13 @@ class TrialScope(BaseScope):
 
     def __enter__(self) -> 'TrialScope':
         self.flow.log_start()
+        raise NotImplementedError("TODO: ???")
+
+        self.trial.status = TrialStatus.RUNNING
+        self.logger.info(
+            '\nnew trial: {}'.format(
+                json.dumps(self.hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+        self.save_trial()
         return self
 
     def new_trial_split(self) -> 'TrialSplitScope':
@@ -559,7 +589,18 @@ class TrialScope(BaseScope):
     def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
         gc.collect()
         raise NotImplementedError("TODO: log split result with MetricResultMetadata?")
-        self.flow.log_error(exc_val)
+
+        try:
+            if exc_type is None:
+                self.trial.end(status=TrialStatus.SUCCESS)
+            else:
+                # TODO: if ctrl+c, raise KeyboardInterrupt? log aborted or log failed?
+                self.flow.log_error(exc_val)
+                self.trial.end(status=TrialStatus.FAILED)
+                raise exc_val
+        finally:
+            self.save_trial()
+            self._free_logger_file()
 
 
 class TrialSplitScope(BaseScope):
@@ -567,11 +608,39 @@ class TrialSplitScope(BaseScope):
         super().__init__(context, repo)
         self.n_epochs = n_epochs
 
-    def __enter__(self) -> 'TrialSplitScope':
+    def __enter__(self):
+        """
+        Start trial, and set the trial status to PLANNED.
+        """
+        # TODO: ??
+        self.trial_split.status = TrialStatus.RUNNING
+        self.save_parent_trial()
         return self
 
     def new_epoch(self, epoch: int) -> 'EpochScope':
         return EpochScope(self.context, self.repo, epoch, self.n_epochs)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Stop trial, and save end time.
+
+        :param exc_type:
+        :param exc_val:
+        :param exc_tb:
+        :return:
+        """
+        self.end_time = datetime.datetime.now()
+        if self.delete_pipeline_on_completion:
+            del self.pipeline
+        if exc_type is not None:
+            self.set_failed(exc_val)
+            self.trial_split.end(TrialStatus.FAILED)
+            self.save_parent_trial()
+            return False
+
+        self.trial_split.end(TrialStatus.SUCCESS)
+        self.save_parent_trial()
+        return True
 
     def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
         raise NotImplementedError("TODO: log split result with MetricResultMetadata?")

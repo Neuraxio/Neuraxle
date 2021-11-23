@@ -185,10 +185,10 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
         self._plot_all_trial_main_and_validation_metric_results(repo, trial)
 
     def _plot_all_trial_main_and_validation_metric_results(self, repo, trial):
-        trial_hash = repo._get_trial_hash(trial.hyperparams.to_flat_dict())
+        trial_hash = repo.get_trial_id(trial.hyperparams.to_flat_dict())
         for split_number, split in enumerate(trial.validation_splits):
             for metric_name in split.get_metric_names():
-                train_results = split.get_metric_train_results(metric_name=metric_name)
+                train_results = split.get_train_scores(metric_name=metric_name)
                 validation_results = split.get_metric_validation_results(metric_name=metric_name)
                 if not isinstance(train_results[0], (float, int)):
                     continue # TODO : this is a quick fix for compatibility with other types of metric.
@@ -267,7 +267,7 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
 
     def _plot_all_trials_training_results_for_metric(self, trials, metric_name, cache_folder, split_number):
         for trial in trials:
-            validation_results = trial[split_number].get_metric_train_results(metric_name=metric_name)
+            validation_results = trial[split_number].get_train_scores(metric_name=metric_name)
             plt.plot(validation_results, linewidth=0.5)
 
         plt.ylabel(metric_name)

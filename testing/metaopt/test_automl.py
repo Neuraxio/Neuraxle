@@ -95,7 +95,7 @@ def test_automl_savebestmodel_callback(tmpdir):
     # Then
     trials: Trials = hp_repository.load_trials()
     best_trial = trials.get_best_trial()
-    best_trial_score = best_trial.get_validation_score()
+    best_trial_score = best_trial.get_avg_validation_score()
     best_model = best_trial.get_model('best')
     _, _, _, valid_inputs, valid_outputs, _ = validation_splitter.split(data_inputs=data_inputs, expected_outputs=expected_outputs)
     predicted_output = best_model.predict(*valid_inputs)

@@ -48,31 +48,10 @@ from neuraxle.base import BaseStep, ExecutionContext, Flow
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
 from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
-from neuraxle.metaopt.data.vanilla import TrialDataclass, TrialSplitDataclass
+from neuraxle.metaopt.data.vanilla import MetricResultsDataclass, TrialDataclass, TrialSplitDataclass, TrialStatus
 
 
 class Trial:
-    """
-    This class is a data structure most often used under :class:`AutoML` to store information about a trial.
-    This information is itself managed by the :class:`HyperparameterRepository` class
-    and the :class:`TrialRepo` class within the AutoML.
-    """
-
-    def __init__(
-            self,
-            trial_dataclass: 'TrialDataclass',
-    ):
-        self.trial_dataclass: TrialDataclass = trial_dataclass
-
-    def to_json_dict(self) -> Dict[str, Any]:
-        return self.trial_dataclass.to_json()
-
-    @staticmethod
-    def from_json_dict(trial_json: Dict) -> 'Trial':
-        return Trial(TrialDataclass.from_json(trial_json))
-
-
-class TrialRepo:
     """
     This class is a sub-contextualization of the :class:`HyperparameterRepository`
     class for holding a trial and manipulating it within its context.
@@ -88,56 +67,12 @@ class TrialRepo:
     """
 
     def __init__(
-        self,
-        save_trial_function: Callable,
-        pipeline: BaseStep = None,
-        logger: Logger = None
+            self,
+            trial_dataclass: 'TrialDataclass',
     ):
-        self.save_trial_function: Callable = save_trial_function
+        self._dataclass: TrialDataclass = trial_dataclass
 
-        self.pipeline: BaseStep = pipeline
-
-        if logger is None:
-            if self.cache_folder is not None:
-                logger = self._initialize_logger_with_file(context)
-            else:
-                logger = context.logger
-        self.logger: Logger = logger
-
-        self.trial = Trial()  # TODO: do this.
-
-    def save_trial(self) -> 'Trial':
-        """
-        Update trial with the hyperparams repository.
-
-        :return: The trial
-        """
-        self.save_trial_function(self.trial)
-        return self
-
-    def save_model(self, context: ExecutionContext):
-        """
-        Save fitted model in the trial's folder given from the trial's context.
-        """
-        assert self.cache_folder is not None
-        self._save_model(self.pipeline, context)
-
-    def _save_model(self, pipeline: BaseStep, context: ExecutionContext):
-        hyperparams = self.hyperparams.to_flat_dict()
-        trial_hash = self._get_trial_hash(hyperparams)
-        pipeline.set_name(trial_hash).save(context, full_dump=True)
-
-    def load_model(self, context: ExecutionContext) -> BaseStep:
-        """
-        Load model in the trial hash folder.
-        """
-        trial_hash: str = self._get_trial_hash(self.hyperparams.to_flat_dict)
-        return ExecutionContext.load(
-            context=context,
-            pipeline_name=trial_hash,
-        )
-
-    def new_validation_split(self, pipeline: BaseStep, delete_pipeline_on_completion: bool = True) -> 'TrialSplit':
+    def new_validation_split(self, delete_pipeline_on_completion: bool = True) -> 'TrialSplit':
         """
         Create a new trial split.
         A trial has one split when the validation splitter function is validation split.
@@ -149,64 +84,49 @@ class TrialRepo:
         """
         trial_split: TrialSplit = TrialSplit(
             trial=self,
-            split_number=len(self.validation_splits),
-            main_metric_name=self.main_metric_name,
-            pipeline=pipeline,
+            trial_split_dataclass=TrialSplitDataclass(
+                split_number=len(self.validation_splits)
+            ),
             delete_pipeline_on_completion=delete_pipeline_on_completion
         )
         self.validation_splits.append(trial_split)
 
-        self.save_trial()
+        self.save_trial()  # TODO: remove this line or what?
         return trial_split
 
-    def set_main_metric_name(self, name: str) -> 'Trial':
+    def get_avg_validation_score(self, metric_name: str) -> float:
         """
-        Set trial main metric name.
-
-        :return: self
-        """
-        self.main_metric_name = name
-        return self
-
-    def is_higher_score_better(self) -> bool:
-        """
-        Return True if higher scores are better for the main metric.
-
-        :return: if higher score is better
-        """
-        return self.validation_splits[0].is_higher_score_better()
-
-    def get_validation_score(self) -> float:
-        """
-        Return the best validation score for the main scoring metric.
-        Returns the average score for all validation splits.
+        Returns the average score for all validation splits's
+        best validation score for the specified scoring metric.
 
         :return: validation score
         """
         scores = [
-            validation_split.get_best_validation_score()
-            for validation_split in self.validation_splits if validation_split.is_success()
+            val_split.get_best_validation_score(metric_name)
+            for val_split in self.validation_splits
+            if val_split.is_success()
         ]
-
         score = sum(scores) / len(scores)
-
         return score
 
-    def get_n_epoch_to_best_validation_score(self) -> float:
-        """
-        Return the best validation score for the main scoring metric.
-        Returns the average score for all validation splits.
-
-        :return: validation score
-        """
+    def get_avg_n_epoch_to_best_validation_score(self, metric_name: str) -> float:
+        # TODO: use in flow.log_results:
         n_epochs = [
-            validation_split.get_n_epochs_to_best_validation_score()
-            for validation_split in self.validation_splits if validation_split.is_success()
+            val_split.get_n_epochs_to_best_validation_score(metric_name)
+            for val_split in self.validation_splits if val_split.is_success()
         ]
 
         n_epochs = sum(n_epochs) / len(n_epochs)
 
         return n_epochs
+
+    def get_hyperparams(self) -> RecursiveDict:
+        """
+        Return hyperparams dict.
+
+        :return: hyperparams dict
+        """
+        return self._dataclass.hyperparams
 
     def set_success(self) -> 'Trial':
         """
@@ -214,8 +134,8 @@ class TrialRepo:
 
         :return: self
         """
-        self.status = TrialStatus.SUCCESS
-        self.save_trial()
+        self._dataclass.status = TrialStatus.SUCCESS
+        self.save_trial()  # TODO?
 
         return self
 
@@ -233,7 +153,7 @@ class TrialRepo:
         else:
             self.status = TrialStatus.FAILED
 
-        self.save_trial()
+        self.save_trial()  # TODO?
 
     def set_failed(self, error: Exception) -> 'Trial':
         """
@@ -250,16 +170,7 @@ class TrialRepo:
 
         return self
 
-    def get_trained_pipeline(self, split_number: int = 0):
-        """
-        Get trained pipeline inside the validation splits.
-
-        :param split_number: split number to get trained pipeline from
-        :return:
-        """
-        return self.validation_splits[split_number].get_pipeline()
-
-    def _get_trial_hash(self, hp_dict: Dict):
+    def get_trial_id(self, hp_dict: Dict):
         """
         Hash hyperparams with blake2s to create a trial hash.
 
@@ -267,54 +178,16 @@ class TrialRepo:
         :return:
         """
         current_hyperparameters_hash = hashlib.blake2s(str.encode(str(hp_dict))).hexdigest()
-        return current_hyperparameters_hash
+        return f"{self._dataclass.trial_number}_{current_hyperparameters_hash}"
 
-    def _initialize_logger_with_file(self) -> logging.Logger:
-
-        logfile_path = os.path.join(self.cache_folder, f"trial_{self.trial_number}.log")
-
-        context.flow._add_file_to_logger(logfile_path)
-        return logger
-
-    def _free_logger_file(self):
-        """Remove file handlers from logger to free file lock on Windows."""
-        for h in self.logger.handlers:
-            if isinstance(h, FileHandler):
-                self.logger.removeHandler(h)
-
-    def __enter__(self):
+    def is_higher_score_better(self, metric_name: str) -> bool:
         """
-        Start trial, and set the trial status to PLANNED.
+        Return if the metric is higher score is better.
+
+        :param metric_name: metric name
+        :return: bool
         """
-        self.start_time = datetime.datetime.now()
-        self.status = TrialStatus.RUNNING
-
-        self.logger.info(
-            '\nnew trial: {}'.format(
-                json.dumps(self.hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
-
-        self.save_trial()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """
-        Stop trial, and save end time.
-
-        :param exc_type:
-        :param exc_val:
-        :param exc_tb:
-        :return:
-        """
-        self.end_time = datetime.datetime.now()
-        del self.pipeline
-        if exc_type is not None:
-            self.set_failed(exc_val)
-            self.save_trial()
-            raise exc_val
-
-        self.save_trial()
-        self._free_logger_file()
-        return self
+        return self._dataclass.validation_splits[-1].metric_results[metric_name].higher_score_is_better
 
 
 class TrialSplit:
@@ -332,36 +205,15 @@ class TrialSplit:
     def __init__(
             self,
             trial: Trial,
-            split_number: int,
-            main_metric_name: str,
-            status: 'TrialStatus' = None,
-            error: Exception = None,
-            error_traceback: str = None,
-            metrics_results: Dict[str, Any] = None,
-            start_time: datetime.datetime = None,
-            end_time: datetime.datetime = None,
-            pipeline: BaseStep = None,
+            trial_split_dataclass: TrialSplitDataclass,
             delete_pipeline_on_completion: bool = True
     ):
-        if status is None:
-            status = TrialStatus.PLANNED
-
         self.trial: Trial = trial
-        self.split_number: int = split_number
-        self.status: TrialStatus = status
-        self.error: Exception = error
-        self.error_traceback: str = error_traceback
-        if metrics_results is None:
-            metrics_results = {}
-        self.metrics_results: Dict[str, Any] = metrics_results
-        self.end_time: datetime.datetime = end_time
-        self.start_time: datetime.datetime = start_time
-        self.pipeline: BaseStep = pipeline
-        self.main_metric_name: str = main_metric_name
+        self._dataclass: TrialSplitDataclass = trial_split_dataclass
         self.delete_pipeline_on_completion = delete_pipeline_on_completion
 
     def get_metric_names(self) -> List[str]:
-        return list(self.metrics_results.keys())
+        return list(self._dataclass.metric_results.keys())
 
     def save_parent_trial(self) -> 'TrialSplit':
         """
@@ -369,6 +221,7 @@ class TrialSplit:
 
         :return: self
         """
+        # TODO: repo loc?
         self.trial.save_trial()
         return self
 
@@ -377,40 +230,8 @@ class TrialSplit:
         Saves the pipeline instance the same way a Trial instance would. Will overwrite
         :return:
         """
-        self.trial._save_model(self.pipeline, label)
-
-    def fit_trial_split(self, train_data_container: DataContainer, context: ExecutionContext) -> 'TrialSplit':
-        """
-        Fit the trial split pipeline with the training data container.
-
-        :param train_data_container: training data container
-        :param context: execution context
-        :return: trial split with its fitted pipeline.
-        """
-        self.pipeline.set_train(True)
-        self.pipeline = self.pipeline.handle_fit(train_data_container, context)
-        return self
-
-    def predict_with_pipeline(self, data_container: DataContainer, context: ExecutionContext) -> 'DataContainer':
-        """
-        Predict data with the fitted trial split pipeline.
-
-        :param data_container: data container to predict
-        :param context: execution context
-        :return: predicted data container
-        """
-        return self.pipeline.handle_predict(data_container, context)
-
-    def set_main_metric_name(self, name: str) -> 'TrialSplit':
-        """
-        Set main metric name.
-
-        :param name: main metric name.
-        :return: self
-        """
-        self.main_metric_name = name
-
-        return self
+        # TODO: this is used in callbacks
+        self.trial.save_model(self.pipeline, label)
 
     def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool, log_metric: bool = False):
         """
@@ -421,152 +242,96 @@ class TrialSplit:
         :param higher_score_is_better: if higher score is better or not for this metric
         :return:
         """
-        if name not in self.metrics_results:
-            self.metrics_results[name] = {
-                'train_values': [],
-                'validation_values': [],
-                'higher_score_is_better': higher_score_is_better
-            }
-
-        self.metrics_results[name]['train_values'].append(score)
+        self._create_metric_results_if_not_yet_done(name, higher_score_is_better)
+        self._dataclass.metric_results[name].train_values.append(score)
 
         if log_metric:
+            # TODO: log metric??
             self.trial.logger.info('{} train: {}'.format(name, score))
 
-    def add_metric_results_validation(self, name: str, score: float, higher_score_is_better: bool, log_metric: bool = False):
+    def add_metric_results_validation(
+        self, name: str, score: float, higher_score_is_better: bool, log_metric: bool = False
+    ):
         """
         Add a validation metric result in the metric results dictionary.
+
+        # TODO: Metric
+        # Dataclass argument?
 
         :param name: name of the metric
         :param score: score
         :param higher_score_is_better: if higher score is better or not for this metric
         :return:
         """
-        if name not in self.metrics_results:
-            self.metrics_results[name] = {
-                'train_values': [],
-                'validation_values': [],
-                'higher_score_is_better': higher_score_is_better
-            }
-
-        self.metrics_results[name]['validation_values'].append(score)
+        self._create_metric_results_if_not_yet_done(name, higher_score_is_better)
+        self._dataclass.metric_results[name].validation_values.append(score)
 
         if log_metric:
             self.trial.logger.info('{} validation: {}'.format(name, score))
 
-    def get_validation_scores(self):
+    def _create_metric_results_if_not_yet_done(self, name, higher_score_is_better):
+        if name not in self._dataclass.metric_results:
+            self._dataclass.metric_results[name] = MetricResultsDataclass(
+                metrix_name=name,
+                validation_values=[],
+                train_values=[],
+                higher_score_is_better=higher_score_is_better,
+            )
+
+    def get_train_scores(self, metric_name) -> List[float]:
+        return self._dataclass.metric_results[metric_name].train_values
+
+    def get_val_scores(self, metric_name: str) -> List[float]:
         """
         Return the validation scores for the main scoring metric.
         """
-        return self.metrics_results[self.main_metric_name]['validation_values']
+        return self._dataclass.metric_results[metric_name].validation_values
 
-    def get_final_validation_score(self):
+    def get_final_validation_score(self, metric_name: str) -> float:
         """
         Return the latest validation score for the main scoring metric.
         """
-        return self.metrics_results[self.main_metric_name]['validation_values'][-1]
+        return self.get_val_scores(metric_name)[-1]
 
-    def get_best_validation_score(self):
+    def get_best_validation_score(self, metric_name: str) -> float:
         """
         Return the best validation score for the main scoring metric.
         """
-        higher_score_is_better = self.metrics_results[self.main_metric_name]["higher_score_is_better"]
-        if higher_score_is_better is True:
+        if self.is_higher_score_better(metric_name):
             f = np.max
-        elif higher_score_is_better is False:
+        else:
             f = np.min
 
-        return f(self.metrics_results[self.main_metric_name]['validation_values'])
+        return f(self.get_val_scores(metric_name))
 
-    def get_n_epochs_to_best_validation_score(self):
+    def get_n_epochs_to_best_validation_score(self, metric_name: str) -> int:
         """
         Return the number of epochs
         """
-        higher_score_is_better = self.metrics_results[self.main_metric_name]["higher_score_is_better"]
-        if higher_score_is_better is True:
+        if self.is_higher_score_better(metric_name):
             f = np.argmax
-        elif higher_score_is_better is False:
+        else:
             f = np.argmin
 
-        return f(self.metrics_results[self.main_metric_name]['validation_values'])
+        return f(self.get_val_scores(metric_name))
 
-    def get_pipeline(self):
-        """
-        Return the trained pipeline.
-        """
-        return self.pipeline
-
-    def is_higher_score_better(self) -> bool:
+    def is_higher_score_better(self, metric_name: str) -> bool:
         """
         Return True if higher scores are better for the main metric.
 
         :return:
         """
-        return self.metrics_results[self.main_metric_name]['higher_score_is_better']
+        return self._dataclass.metric_results[metric_name].higher_score_is_better
 
-    def is_new_best_score(self):
+    def is_new_best_score(self, metric_name: str) -> bool:
         """
         Return True if the latest validation score is the new best score.
 
         :return:
         """
-        higher_score_is_better = self.metrics_results[self.main_metric_name]['higher_score_is_better']
-        validation_values = self.metrics_results[self.main_metric_name]['validation_values']
-        best_score = validation_values[0]
-
-        for score in validation_values:
-            if score > best_score and higher_score_is_better:
-                best_score = score
-            elif score < best_score and not higher_score_is_better:
-                best_score = score
-
-        if best_score == validation_values[-1]:
-            return True
-        return False
-
-    def get_metric_validation_results(self, metric_name):
-        return self.metrics_results[metric_name]['validation_values']
-
-    def get_metric_train_results(self, metric_name):
-        return self.metrics_results[metric_name]['train_values']
-
-    def to_json(self) -> dict:
-        """
-        Return the trial in a json format.
-
-        :return:
-        """
-        return {
-            'status': self.status.value,
-            'error': self.error,
-            'metric_results': self.metrics_results,
-            'error_traceback': self.error_traceback,
-            'start_time': self.start_time.strftime(LOGGING_DATETIME_STR_FORMAT) if self.start_time is not None else '',
-            'end_time': self.end_time.strftime(LOGGING_DATETIME_STR_FORMAT) if self.end_time is not None else '',
-            'split_number': self.split_number,
-            'main_metric_name': self.main_metric_name
-        }
-
-    @staticmethod
-    def from_json(trial: 'Trial', trial_split_json: Dict) -> 'TrialSplit':
-        """
-        Create a trial split object from json.
-
-        :param trial: parent trial
-        :param trial_split_json: trial json
-        :return:
-        """
-        return TrialSplit(
-            trial=trial,
-            status=TrialStatus(trial_split_json['status']),
-            error=trial_split_json['error'],
-            error_traceback=trial_split_json['error_traceback'],
-            metrics_results=trial_split_json['metric_results'],
-            start_time=datetime.datetime.strptime(trial_split_json['start_time'], LOGGING_DATETIME_STR_FORMAT),
-            end_time=datetime.datetime.strptime(trial_split_json['end_time'], LOGGING_DATETIME_STR_FORMAT),
-            split_number=trial_split_json['split_number'],
-            main_metric_name=trial_split_json['main_metric_name']
-        )
+        if self.get_best_validation_score(metric_name) in self.get_val_scores()[:-1]:
+            return False
+        return True
 
     def set_success(self) -> 'TrialSplit':
         """
@@ -594,34 +359,6 @@ class TrialSplit:
         self.status = TrialStatus.FAILED
         self.error = str(error)
         self.error_traceback = traceback.format_exc()
-        self.save_parent_trial()
-        return self
-
-    def __enter__(self):
-        """
-        Start trial, and set the trial status to PLANNED.
-        """
-        self.start_time = datetime.datetime.now()
-        self.status = TrialStatus.RUNNING
-        self.save_parent_trial()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """
-        Stop trial, and save end time.
-
-        :param exc_type:
-        :param exc_val:
-        :param exc_tb:
-        :return:
-        """
-        self.end_time = datetime.datetime.now()
-        if self.delete_pipeline_on_completion:
-            del self.pipeline
-        if exc_type is not None:
-            self.set_failed(exc_val)
-            raise exc_val
-
         self.save_parent_trial()
         return self
 
@@ -661,7 +398,7 @@ class Trials:
         if len(self) == 0:
             return HyperparameterSamples()
 
-        return self.get_best_trial().hyperparams
+        return self.get_best_trial().get_hyperparams()
 
     def get_best_trial(self) -> Trial:
         """
@@ -673,7 +410,8 @@ class Trials:
             raise Exception('Could not get best trial because there were no successful trial.')
 
         for trial in self.trials:
-            trial_score = trial.get_validation_score()
+            trial_score = trial.get_avg_validation_score()
+
             if best_score is None or self.trials[-1].is_higher_score_better() == (trial_score > best_score):
                 best_score = trial_score
                 best_trial = trial
@@ -682,6 +420,7 @@ class Trials:
 
     def split_good_and_bad_trials(self, quantile_threshold: float, number_of_good_trials_max_cap: int) -> Tuple[
             'Trials', 'Trials']:
+        # TODO: move to tpe class? Seems wrongly located.
         success_trials: Trials = self.filter(TrialStatus.SUCCESS)
 
         # Split trials into good and bad using quantile threshold.
@@ -709,7 +448,7 @@ class Trials:
 
         return Trials(trials=good_trials), Trials(trials=bad_trials)
 
-    def is_higher_score_better(self) -> bool:
+    def is_higher_score_better(self, metric_name: str) -> bool:
         """
         Return true if higher score is better.
 
@@ -718,7 +457,7 @@ class Trials:
         if len(self) == 0:
             return False
 
-        return self.trials[-1].is_higher_score_better()
+        return self.trials[-1].is_higher_score_better(metric_name)
 
     def append(self, trial: Trial):
         """
@@ -728,6 +467,7 @@ class Trials:
         :return:
         """
         self.trials.append(trial)
+        # TODO: save?
 
     def filter(self, status: 'TrialStatus') -> 'Trials':
         """
@@ -738,7 +478,7 @@ class Trials:
         """
         trials = Trials()
         for trial in self.trials:
-            if trial.status == status:
+            if trial._dataclass.status == status:
                 trials.append(trial)
 
         return trials
@@ -750,13 +490,13 @@ class Trials:
 
     def get_metric_names(self) -> List[str]:
         if len(self) > 0:
-            return self[0].validation_splits[0].get_metric_names()
+            return self[-1]._dataclass.validation_splits[-1].metric_results.keys()
         return []
 
     def __iter__(self) -> Iterable[Trial]:
         return iter(self.trials)
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: int) -> Trial:
         """
         Get trial at the given index.
 
@@ -765,12 +505,12 @@ class Trials:
         """
         return self.trials[item]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.trials)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.__repr__()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         s = "Trials({})".format(str([str(t) for t in self.trials]))
         return s

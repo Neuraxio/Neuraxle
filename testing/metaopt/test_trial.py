@@ -142,7 +142,7 @@ class TestTrials:
         with self.trial:
             self._given_success_trial_validation_split(self.trial, best_score=0.3)
 
-        validation_score = self.trial.get_validation_score()
+        validation_score = self.trial.get_avg_validation_score()
 
         assert validation_score == 0.3
 
@@ -152,7 +152,7 @@ class TestTrials:
             self._given_success_trial_validation_split(self.trial, best_score=0.3)
             self._given_success_trial_validation_split(self.trial, best_score=0.1)
 
-        validation_score = self.trial.get_validation_score()
+        validation_score = self.trial.get_avg_validation_score()
 
         assert validation_score == 0.2
 
@@ -164,7 +164,7 @@ class TestTrials:
             self._given_success_trial_validation_split(self.trial, best_score=0.1)
             self._given_failed_trial_split(self.trial)
 
-        validation_score = self.trial.get_validation_score()
+        validation_score = self.trial.get_avg_validation_score()
 
         assert validation_score == 0.2
 

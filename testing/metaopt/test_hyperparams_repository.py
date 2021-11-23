@@ -16,7 +16,7 @@ def test_hyperparams_repository_should_create_new_trial(tmpdir):
 
     hyperparams_json_repository.create_new_trial(hyperparams)
 
-    trial_hash = hyperparams_json_repository._get_trial_hash(hyperparams.to_flat_dict())
+    trial_hash = hyperparams_json_repository.get_trial_id(hyperparams.to_flat_dict())
     file_name = 'NEW_' + trial_hash + '.json'
     path = os.path.join(tmpdir, file_name)
     with open(path) as f:
@@ -50,7 +50,7 @@ def test_hyperparams_repository_should_save_failed_trial(tmpdir):
 
     hyperparams_json_repository._save_failed_trial_json(hyperparams, Exception('trial failed'))
 
-    trial_hash = hyperparams_json_repository._get_trial_hash(hyperparams.to_flat_dict())
+    trial_hash = hyperparams_json_repository.get_trial_id(hyperparams.to_flat_dict())
     file_name = 'FAILED_' + trial_hash + '.json'
     path = os.path.join(tmpdir, file_name)
     with open(path) as f:
@@ -67,7 +67,7 @@ def test_hyperparams_repository_should_save_success_trial(tmpdir):
 
     hyperparams_json_repository._save_successful_trial_json(hyperparams, FIRST_SCORE_FOR_TRIAL)
 
-    trial_hash = hyperparams_json_repository._get_trial_hash(hyperparams.to_flat_dict())
+    trial_hash = hyperparams_json_repository.get_trial_id(hyperparams.to_flat_dict())
     file_name = str(float(FIRST_SCORE_FOR_TRIAL)).replace('.', ',') + '_' + trial_hash + '.json'
     path = os.path.join(tmpdir, file_name)
     with open(path) as f:
