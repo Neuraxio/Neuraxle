@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 from neuraxle.base import (BaseService, BaseStep, ExecutionContext, Identity,
-                           MetaStep, NamedTupleList, _HasChildrenMixin)
+                           MetaStep, NamedStepsList, _HasChildrenMixin)
 from neuraxle.hyperparams.space import RecursiveDict
 from neuraxle.pipeline import Pipeline
 
@@ -10,7 +10,7 @@ from testing.test_pipeline import SomeStep
 
 
 class SomePipeline(Pipeline):
-    def __init__(self, steps: NamedTupleList):
+    def __init__(self, steps: NamedStepsList):
         Pipeline.__init__(self, steps)
         self.teared_down = False
 

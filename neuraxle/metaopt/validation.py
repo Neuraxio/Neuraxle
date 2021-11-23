@@ -1,10 +1,10 @@
 """
-Random
+Validation
 ====================================
-Meta steps for hyperparameter tuning, such as random search.
+Classes for hyperparameter tuning, such as random search.
 
 ..
-   Copyright 2019, Neuraxio Inc.
+   Copyright 2021, Neuraxio Inc.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -25,16 +25,22 @@ Meta steps for hyperparameter tuning, such as random search.
 """
 import math
 from abc import ABC, abstractmethod
-from typing import List, Callable, Tuple
+from typing import Callable, List, Tuple
 
 import numpy as np
-from sklearn.metrics import r2_score
-
-from neuraxle.base import MetaStep, BaseStep, ExecutionContext, ForceHandleOnlyMixin, EvaluableStepMixin
+from neuraxle.base import (BaseStep, EvaluableStepMixin, ExecutionContext,
+                           ForceHandleOnlyMixin, MetaStep, TrialStatus)
 from neuraxle.data_container import DataContainer
-from neuraxle.hyperparams.space import RecursiveDict
+from neuraxle.data_container import DataContainer as DACT
+from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
+from neuraxle.metaopt.data.trial import RoundScope
+from neuraxle.metaopt.data.vanilla import (BaseHyperparameterOptimizer,
+                                           RoundScope)
 from neuraxle.steps.loop import StepClonerForEachDataInput
-from neuraxle.steps.numpy import NumpyConcatenateOuterBatch, NumpyConcatenateOnAxis, NumpyConcatenateInnerFeatures
+from neuraxle.steps.numpy import (NumpyConcatenateInnerFeatures,
+                                  NumpyConcatenateOnAxis,
+                                  NumpyConcatenateOuterBatch)
+from sklearn.metrics import r2_score
 
 
 class BaseValidation(MetaStep, ABC):
@@ -176,8 +182,9 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
         self.test_size = test_size
         self.scoring_function = scoring_function
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'ValidationSplitWrapper', DataContainer):
+    def _fit_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['ValidationSplitWrapper', DataContainer]:
         """
         Fit using the training split.
         Calculate the scores using the validation split.
@@ -191,8 +198,9 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
         new_self, results_data_container = self._fit_transform_data_container(data_container, context)
         return new_self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _fit_transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['BaseStep', DataContainer]:
         """
         Fit Transform given data inputs without splitting.
 
@@ -603,3 +611,239 @@ class WalkForwardTimeSeriesCrossValidationWrapper(AnchoredWalkForwardTimeSeriesC
             slice = data_inputs[:, a:b]
             splitted_data_inputs.append(slice)
         return splitted_data_inputs
+
+
+class RandomSearch(BaseHyperparameterOptimizer):
+    """
+    AutoML Hyperparameter Optimizer that randomly samples the space of random variables.
+    Please refer to :class:`AutoML` for a usage example.
+
+    .. seealso::
+        :class:`Trainer`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
+        :class:`~neuraxle.metaopt.data.trial.Trials`,
+        :class:`HyperparamsRepository`,
+        :class:`InMemoryHyperparamsRepository`,
+        :class:`HyperparamsJSONRepository`,
+        :class:`BaseHyperparameterSelectionStrategy`,
+        :class:`RandomSearchHyperparameterSelectionStrategy`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+    """
+
+    def __init__(self, main_metric_name: str = None):
+        BaseHyperparameterOptimizer.__init__(self, main_metric_name=main_metric_name)
+
+    def find_next_best_hyperparams(self, round_scope: 'RoundScope') -> HyperparameterSamples:
+        """
+        Randomly sample the next hyperparams to try.
+
+        :param round_scope: round scope
+        :return: next random hyperparams
+        """
+        return round_scope.hp_space.rvs()
+
+
+class BaseValidationSplitter(ABC):
+    def split_dact(self, data_container: DACT, context: ExecutionContext) -> List[
+            Tuple[DACT, DACT]]:
+        """
+        Wrap a validation split function with a split data container function.
+        A validation split function takes two arguments:  data inputs, and expected outputs.
+
+        :param data_container: data container to split
+        :return: a function that returns the pairs of training, and validation data containers for each validation split.
+        """
+        train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids = self.split(
+            data_inputs=data_container.data_inputs,
+            expected_outputs=data_container.expected_outputs,
+            context=context
+        )
+
+        train_data_container = DACT(data_inputs=train_data_inputs,
+                                    ids=train_ids,
+                                    expected_outputs=train_expected_outputs)
+        validation_data_container = DACT(data_inputs=validation_data_inputs,
+                                         ids=validation_ids,
+                                         expected_outputs=validation_expected_outputs)
+
+        splits = []
+        for (train_id, train_di, train_eo), (validation_id, validation_di, validation_eo) in zip(
+                train_data_container, validation_data_container):
+            # TODO: use ListDACT instead of DACT
+            train_data_container_split = DACT(
+                data_inputs=train_di,
+                expected_outputs=train_eo
+            )
+
+            validation_data_container_split = DACT(
+                data_inputs=validation_di,
+                expected_outputs=validation_eo
+            )
+
+            splits.append((train_data_container_split, validation_data_container_split))
+
+        return splits
+
+    @abstractmethod
+    def split(self, data_inputs, ids=None, expected_outputs=None, context: ExecutionContext = None) \
+            -> Tuple[List, List, List, List, List, List]:
+        """
+        Train/Test split data inputs and expected outputs.
+
+        :param data_inputs: data inputs
+        :param ids: id associated with each data entry (optional)
+        :param expected_outputs: expected outputs (optional)
+        :param context: execution context (optional)
+        :return: train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids
+        """
+        pass
+
+
+class KFoldCrossValidationSplitter(BaseValidationSplitter):
+    """
+    Create a function that splits data with K-Fold Cross-Validation resampling.
+
+    .. code-block:: python
+
+        # create a kfold cross validation splitter with 2 kfold
+        kfold_cross_validation_split(0.20)
+
+
+    :param k_fold: number of folds.
+    :return:
+    """
+
+    def __init__(self, k_fold: int):
+        BaseValidationSplitter.__init__(self)
+        self.k_fold = k_fold
+
+    def split(self, data_inputs, ids=None, expected_outputs=None, context: ExecutionContext = None) \
+            -> Tuple[List, List, List, List, List, List]:
+        data_inputs_train, data_inputs_val = kfold_cross_validation_split(
+            data_inputs=data_inputs,
+            k_fold=self.k_fold
+        )
+
+        if ids is not None:
+            ids_train, ids_val = kfold_cross_validation_split(
+                data_inputs=ids,
+                k_fold=self.k_fold
+            )
+        else:
+            ids_train, ids_val = [None] * len(data_inputs_train), [None] * len(data_inputs_val)
+
+        if expected_outputs is not None:
+            expected_outputs_train, expected_outputs_val = kfold_cross_validation_split(
+                data_inputs=expected_outputs,
+                k_fold=self.k_fold
+            )
+        else:
+            expected_outputs_train, expected_outputs_val = [None] * len(data_inputs_train), [None] * len(
+                data_inputs_val)
+
+        return data_inputs_train, expected_outputs_train, ids_train, \
+            data_inputs_val, expected_outputs_val, ids_val
+
+
+def kfold_cross_validation_split(data_inputs, k_fold):
+    splitted_train_data_inputs = []
+    splitted_validation_inputs = []
+
+    step = len(data_inputs) / float(k_fold)
+    for i in range(k_fold):
+        a = int(step * i)
+        b = int(step * (i + 1))
+        if b > len(data_inputs):
+            b = len(data_inputs)
+
+        validation = data_inputs[a:b]
+        train = np.concatenate((data_inputs[:a], data_inputs[b:]), axis=0)
+
+        splitted_validation_inputs.append(validation)
+        splitted_train_data_inputs.append(train)
+
+    return splitted_train_data_inputs, splitted_validation_inputs
+
+
+class ValidationSplitter(BaseValidationSplitter):
+    """
+    Create a function that splits data into a training, and a validation set.
+
+    .. code-block:: python
+
+        # create a validation splitter function with 80% train, and 20% validation
+        validation_splitter(0.20)
+
+
+    :param test_size: test size in float
+    :return:
+    """
+
+    def __init__(self, test_size: float):
+        self.test_size = test_size
+
+    def split(
+        self, data_inputs, ids=None, expected_outputs=None, context: ExecutionContext = None
+    ) -> Tuple[List, List, List, List]:
+        train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids = validation_split(
+            test_size=self.test_size,
+            data_inputs=data_inputs,
+            ids=ids,
+            expected_outputs=expected_outputs
+        )
+
+        return [train_data_inputs], [train_expected_outputs], [train_ids], \
+               [validation_data_inputs], [validation_expected_outputs], [validation_ids]
+
+
+def validation_split(test_size: float, data_inputs, ids=None, expected_outputs=None) \
+        -> Tuple[List, List, List, List, List, List]:
+    """
+    Split data inputs, and expected outputs into a training set, and a validation set.
+
+    :param test_size: test size in float
+    :param data_inputs: data inputs to split
+    :param ids: ids associated with each data entry
+    :param expected_outputs: expected outputs to split
+    :return: train_data_inputs, train_expected_outputs, ids_train, validation_data_inputs, validation_expected_outputs, ids_val
+    """
+    validation_data_inputs = _validation_split(data_inputs, test_size)
+    validation_expected_outputs, ids_val = None, None
+    if expected_outputs is not None:
+        validation_expected_outputs = _validation_split(expected_outputs, test_size)
+    if ids is not None:
+        ids_val = _validation_split(ids, test_size)
+
+    train_data_inputs = _train_split(data_inputs, test_size)
+    train_expected_outputs, ids_train = None, None
+    if expected_outputs is not None:
+        train_expected_outputs = _train_split(expected_outputs, test_size)
+    if ids is not None:
+        ids_train = _train_split(ids, test_size)
+
+    return train_data_inputs, train_expected_outputs, ids_train, \
+        validation_data_inputs, validation_expected_outputs, ids_val
+
+
+def _train_split(data_inputs, test_size) -> List:
+    """
+    Split training set.
+
+    :param data_inputs: data inputs to split
+    :return: train_data_inputs
+    """
+    return data_inputs[0:_get_index_split(data_inputs, test_size)]
+
+
+def _validation_split(data_inputs, test_size) -> List:
+    """
+    Split validation set.
+
+    :param data_inputs: data inputs to split
+    :return: validation_data_inputs
+    """
+    return data_inputs[_get_index_split(data_inputs, test_size):]
+
+
+def _get_index_split(data_inputs, test_size):
+    return math.floor(len(data_inputs) * (1 - test_size))

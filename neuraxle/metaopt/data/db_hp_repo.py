@@ -30,13 +30,13 @@ Classes are splitted like this for the AutoML:
 """
 from typing import List
 
-from sqlalchemy import create_engine, Table, String, MetaData, PickleType, Boolean, DateTime
+from neuraxle.base import TrialStatus
+from neuraxle.data_container import DataContainer as DACT
+from neuraxle.metaopt.data.trial import RoundManager, TrialManager
+from neuraxle.metaopt.data.vanilla import HyperparamsRepository
+from sqlalchemy import (Boolean, DateTime, MetaData, PickleType, String, Table,
+                        create_engine)
 from sqlalchemy.testing.schema import Column
-
-from neuraxle.metaopt.auto_ml import HyperparamsRepository
-
-from neuraxle.metaopt.data.trial import Trial, Trials
-from neuraxle.metaopt.data.vanilla import TrialStatus
 
 
 def get_database_path(user: str, password: str, host: str, dialect: str, driver: str = ''):
@@ -106,7 +106,7 @@ class InDatabaseHyperparamRepository(HyperparamsRepository):
 
         return result[0] if len(result) == 1 else result
 
-    def load_trials(self, status: 'TrialStatus') -> 'Trials':
+    def load_trials(self, status: 'TrialStatus') -> 'RoundManager':
         """
         Load all hyperparameter trials with their corresponding score.
         Sorted by creation date.
@@ -118,14 +118,14 @@ class InDatabaseHyperparamRepository(HyperparamsRepository):
             select = select.where(status=TrialStatus.value)
         res = self._execute(select)
 
-        trials = Trials()
+        trials = RoundManager()
 
         for row in res:
             raise NotImplementedError()
-            trial = Trial()
+            trial = TrialManager()
             trials.append(trial)
 
-    def _save_trial(self, trial: 'Trial'):
+    def _save_trial(self, trial: 'TrialManager'):
         """
         save trial.
 
@@ -134,11 +134,11 @@ class InDatabaseHyperparamRepository(HyperparamsRepository):
         """
         raise NotImplementedError()
 
-    def _insert_new_trial(self, trial: Trial):
+    def _insert_new_trial(self, trial: TrialManager):
         trial_hash = self.get_trial_id(trial.hyperparams)
         return trial_register.insert().value(id=trial_hash, status=TrialStatus.PLANNED)
 
-    def new_trial(self, auto_ml_container: 'AutoMLContainer'):
+    def new_trial(self, auto_ml_container):
         """
         Create a new trial with the best next hyperparams.
 

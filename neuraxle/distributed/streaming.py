@@ -33,7 +33,7 @@ from multiprocessing import Process
 from threading import Thread
 from typing import Dict, Tuple, List, Union, Iterable, Any
 
-from neuraxle.base import NamedTupleList, ExecutionContext, MetaStep, BaseSaver, _FittableStep, \
+from neuraxle.base import NamedStepsList, ExecutionContext, MetaStep, BaseSaver, _FittableStep, \
     BaseTransformer, NonFittableMixin, MixinForBaseTransformer
 from neuraxle.data_container import DataContainer, ListDataContainer, AbsentValuesNullObject
 from neuraxle.hyperparams.space import RecursiveDict
@@ -409,16 +409,15 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         )
         self._refresh_steps()
 
-    def _initialize_steps_as_tuple(self, steps):
+    def _initialize_steps_as_tuple(self, steps: NamedStepsList) -> NamedStepsList:
         """
         Wrap each step by a :class:`QueueWorker` to  allow data to flow in many pipeline steps at once in parallel.
 
         :param steps: (name, n_workers, step)
         :type steps: NameNWorkerStepTupleList
         :return: steps as tuple
-        :rtype: NamedTupleList
         """
-        steps_as_tuple: NamedTupleList = []
+        steps_as_tuple: NamedStepsList = []
         for step in steps:
             queue_worker = self._create_queue_worker(step)
             steps_as_tuple.append((queue_worker.name, queue_worker))

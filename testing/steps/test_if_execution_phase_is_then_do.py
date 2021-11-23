@@ -8,8 +8,6 @@ from neuraxle.steps.flow import IfExecutionPhaseIsThen, ExecutionPhaseSwitch
 from testing.test_forcehandle_mixin import ForceHandleIdentity
 
 
-# TODO : add test for ExecutionPhaseSwitch
-
 class SomeStep(ForceHandleIdentity):
     def __init__(self):
         ForceHandleIdentity.__init__(self)

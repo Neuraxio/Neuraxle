@@ -23,10 +23,11 @@ Some of them are used to track the evolution of the optimization process.
 from abc import abstractmethod
 from typing import Set, TypeVar, Generic
 
-T = TypeVar('T')
+
+BaseDataclassT = TypeVar('BaseDataclassT')
 
 
-class _Observable(Generic[T]):
+class _ObservableRepo(Generic[BaseDataclassT]):
     """
     This class is used to implement the Observer design pattern.
     The _Observable class is a subject that is being observed by the _Observer class.
@@ -46,25 +47,26 @@ class _Observable(Generic[T]):
     A notification is a call to one of the notify_* methods of the _Observable class.
     A notification is a call to one of the update_* methods of the _Observer class.
     """
-    def __init__(self):
-        self._observers: Set[_Observer[T]] = set()
 
-    def subscribe(self, observer: '_Observer[T]'):
+    def __init__(self):
+        self._observers: Set[_ObserverOfRepo[BaseDataclassT]] = set()
+
+    def subscribe(self, observer: '_ObserverOfRepo[BaseDataclassT]'):
         self._observers.add(observer)
 
-    def unsubscribe(self, observer: '_Observer[T]'):
+    def unsubscribe(self, observer: '_ObserverOfRepo[BaseDataclassT]'):
         self._observers.discard(observer)
 
-    def notify_next(self, value: T):
+    def notify_next(self, value: BaseDataclassT):
         for observer in self._observers:
             observer.update_next(value)
 
-    def notify_complete(self, value: T):
+    def notify_complete(self, value: BaseDataclassT):
         for observer in self._observers:
             observer.update_complete(value)
 
 
-class _Observer(Generic[T]):
+class _ObserverOfRepo(Generic[BaseDataclassT]):
     """
     This class is used to implement the Observer design pattern.
     The _Observer class is an observer that is being notified by the _Observable class.
@@ -77,8 +79,8 @@ class _Observer(Generic[T]):
     These methods are called by the _Observable class observing the observer.
     """
     @abstractmethod
-    def update_next(self, value: T):
+    def update_next(self, value: BaseDataclassT):
         pass
 
-    def update_complete(self, value: T):
+    def update_complete(self, value: BaseDataclassT):
         pass

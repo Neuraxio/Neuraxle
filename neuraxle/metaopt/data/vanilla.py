@@ -28,34 +28,30 @@ Classes are splitted like this for the AutoML:
 
 
 """
-
-from abc import ABC, abstractclassmethod, abstractmethod
 import datetime
 import json
+import logging
+from abc import ABC, abstractclassmethod, abstractmethod
 from collections import OrderedDict
-from numbers import Number
 from dataclasses import dataclass, field
 from enum import Enum
 from json.encoder import JSONEncoder
-from typing import Any, Callable, Dict, Generic, Iterable, List, Tuple, Type, TypeVar, Union, Optional
+from numbers import Number
+from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
+                    Sequence, Tuple, Type, TypeVar, Union)
 
 import numpy as np
-from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
-
-
-class TrialStatus(Enum):
-    """
-    Enum of the possible states of a trial.
-    """
-    PLANNED = 'planned'
-    RUNNING = 'running'
-    ABORTED = 'aborted'  # TODO: consider aborted.
-    FAILED = 'failed'
-    SUCCESS = 'success'
+from neuraxle.base import BaseStep, ExecutionContext, Flow, TrialStatus
+from neuraxle.data_container import DataContainer as DACT
+from neuraxle.hyperparams.space import (HyperparameterSamples,
+                                        HyperparameterSpace, RecursiveDict)
+from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
+from neuraxle.metaopt.observable import _ObservableRepo, _ObserverOfRepo
 
 
 SubDataclassT = TypeVar('SubDataclassT', bound=Optional['BaseDataclass'])
 ScopedLocationAttr = Union[str, int]
+Slice = Sequence
 
 
 @dataclass(order=True)
@@ -71,18 +67,35 @@ class ScopedLocation:
     metric_name: str = None
 
     # get the field value from BaseMetadata subclass:
-    def __getitem__(self, key: Type[SubDataclassT]) -> ScopedLocationAttr:
+    def __getitem__(
+        self, key: Union[Type[SubDataclassT], Slice[Type[SubDataclassT]]]
+    ) -> Union[ScopedLocationAttr, 'ScopedLocation']:
         """
-        Get sublocation attr from the provided :class:`BaseMetadata` type.
+        Get sublocation attr from the provided :class:`BaseMetadata` type,
+        or otherwise get a slice of the same type, sliced from a :class:`BaseMetadata` type range of attributes to keep.
         """
-        return {
-            ProjectDataclass: self.project_name,
-            ClientDataclass: self.client_name,
-            RoundDataclass: self.round_number,
-            TrialDataclass: self.trial_number,
-            TrialSplitDataclass: self.split_number,
-            MetricResultsDataclass: self.metric_name,
-        }[key]
+        if isinstance(key, SubDataclassT):
+            return getattr(self, dataclass_2_attr[key])
+
+        elif isinstance(key, slice):
+            if key.stop is None or key.start is not None:
+                raise ValueError("Slice stop must be specified and slice start must be None.")
+
+            idx: SubDataclassT = dataclass_2_attr.keys().index(key.stop) + 1
+            return ScopedLocation(
+                *self.as_list()[:idx]
+            )
+
+        raise ValueError(f"Invalid key type {key.__class__.__name__} for key {key}.")
+
+    def __setitem__(self, key: Type[SubDataclassT], value: ScopedLocationAttr):
+        """
+        Set sublocation attr from the provided :class:`BaseMetadata` type.
+        """
+        if isinstance(key, SubDataclassT):
+            setattr(self, dataclass_2_attr[key], value)
+
+        raise ValueError(f"Invalid key type {key.__class__.__name__} for key {key}.")
 
     def as_list(self) -> List[ScopedLocationAttr]:
         """
@@ -91,14 +104,17 @@ class ScopedLocation:
 
         :return: list of not none scoped location attributes
         """
-        return [i for i in [
-            self.project_name,
-            self.client_name,
-            self.round_number,
-            self.trial_number,
-            self.split_number,
-            self.metric_name,
-        ] if i is not None]
+        _list: List[ScopedLocationAttr] = [
+            getattr(self, attr_name)
+            for attr_name in dataclass_2_attr.values()
+        ]
+        _list_ret = []
+        for i in _list + [None]:
+            if i is not None:
+                _list_ret.append(i)
+            else:
+                break
+        return _list_ret
 
 
 @dataclass(order=True)
@@ -156,7 +172,8 @@ class ProjectDataclass(BaseDataclass['ClientDataclass']):
 class ClientDataclass(BaseDataclass['RoundDataclass']):
     client_name: str = "default_client"
     rounds: List['RoundDataclass'] = field(default_factory=list)
-    main_metric_name: str = None  # By default, the first metric is the main one.  # TODO: make it configurable.
+    # By default, the first metric is the main one.  # TODO: make it configurable, or in round?.
+    main_metric_name: str = None
 
     def get_sublocation(self) -> list['RoundDataclass']:
         return self.rounds
@@ -208,15 +225,25 @@ class MetricResultsDataclass(BaseDataclass[float]):
         return self.validation_values
 
 
-str_2_dataclass = {
-    ProjectDataclass.__name__: ProjectDataclass,
-    ClientDataclass.__name__: ClientDataclass,
-    RoundDataclass.__name__: RoundDataclass,
-    TrialDataclass.__name__: TrialDataclass,
-    TrialSplitDataclass.__name__: TrialSplitDataclass,
-    MetricResultsDataclass.__name__: MetricResultsDataclass,
-    RecursiveDict.__name__: RecursiveDict,
-}
+dataclass_2_attr: OrderedDict[BaseDataclass, str] = OrderedDict([
+    (ProjectDataclass, "project_name"),
+    (ClientDataclass, "client_name"),
+    (RoundDataclass, "round_number"),
+    (TrialDataclass, "trial_number"),
+    (TrialSplitDataclass, "split_number"),
+    (MetricResultsDataclass, "metric_name"),
+])
+
+
+str_2_dataclass: OrderedDict[str, BaseDataclass] = OrderedDict([
+    (ProjectDataclass.__name__, ProjectDataclass),
+    (ClientDataclass.__name__, ClientDataclass),
+    (RoundDataclass.__name__, RoundDataclass),
+    (TrialDataclass.__name__, TrialDataclass),
+    (TrialSplitDataclass.__name__, TrialSplitDataclass),
+    (MetricResultsDataclass.__name__, MetricResultsDataclass),
+    (RecursiveDict.__name__, RecursiveDict),
+])
 
 
 def object_decoder(obj):
@@ -246,3 +273,253 @@ def to_json(obj: str) -> str:
 
 def from_json(json: str) -> str:
     return json.loads(json, object_pairs_hook=OrderedDict, object_hook=object_decoder)
+
+
+class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseDataclass]], ABC):
+    """
+    Hyperparams repository that saves hyperparams, and scores for every AutoML trial.
+    Cache folder can be changed to do different round numbers.
+
+    .. seealso::
+        :class:`AutoML`,
+        :class:`Trainer`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
+        :class:`InMemoryHyperparamsRepository`,
+        :class:`HyperparamsJSONRepository`,
+        :class:`BaseHyperparameterSelectionStrategy`,
+        :class:`RandomSearchHyperparameterSelectionStrategy`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+    """
+
+    @abstractmethod
+    def get(self, scope: ScopedLocation) -> SubDataclassT:
+        """
+        Get metadata from scope.
+
+        The fetched metadata will be the one that is the last item
+        that is not a None in the provided scope.
+
+        :param scope: scope to get metadata from.
+        :return: metadata from scope.
+        """
+        raise NotImplementedError("Use a concrete class. This is an abstract class.")
+
+    def load_trials(self, status: 'TrialStatus' = None) -> 'RoundManager':
+        """
+        Load all hyperparameter trials with their corresponding score.
+        Sorted by creation date.
+        Filtered by probided status.
+
+        :param status: status to filter trials.
+        :return: Trials (hyperparams, scores)
+        """
+        # TODO: delete this method.
+        pass
+
+    def save_trial(self, trial: 'TrialManager'):
+        """
+        Save trial, and notify trial observers.
+
+        :param trial: trial to save.
+        :return:
+        """
+        self._save_trial(trial)
+        self.notify_next(value=(self, trial))  # notify a tuple of (repo, trial) to observers
+
+    def _save_trial(self, trial: 'TrialManager'):
+        """
+        save trial.
+
+        :param trial: trial to save.
+        :return:
+        """
+        # TODO: delete this method.
+        pass
+
+    def get_best_hyperparams(self, loc: ScopedLocation) -> TrialDataclass:
+        """
+        Get best hyperparams.
+
+        :param status: status to filter trials.
+        :return: best hyperparams.
+        """
+        round: RoundDataclass = self.get(ScopedLocation(loc.as_list()[:3]))
+        return round.best_trial
+
+    @abstractmethod
+    def get_logger_path(self, scope: ScopedLocation) -> str:
+        """
+        Get logger path from scope.
+
+        :param scope: scope to get logger path from.
+        :return: logger path with given scope.
+        """
+
+        raise NotImplementedError("Use a concrete class. This is an abstract class.")
+
+    def _save_model(self, trial: TrialManager, pipeline: BaseStep, context: ExecutionContext):
+        hyperparams = self.hyperparams.to_flat_dict()
+        # TODO: ???
+        trial_hash = trial.get_trial_id(hyperparams)
+        pipeline.set_name(trial_hash).save(context, full_dump=True)
+
+    def load_model(self, trial: TrialManager, context: ExecutionContext) -> BaseStep:
+        """
+        Load model in the trial hash folder.
+        """
+        # TODO: glob?
+        trial_hash: str = trial.get_trial_id(self.hyperparams.to_flat_dict)
+        return ExecutionContext.load(
+            context=context,
+            pipeline_name=trial_hash,
+        )
+
+
+class VanillaHyperparamsRepository(HyperparamsRepository):
+    """
+    Hyperparams repository that saves data AutoML-related info.
+    """
+
+    def __init__(
+        self,
+        cache_folder: str
+    ):
+        """
+        :param cache_folder: folder to store trials.
+        :param hyperparams_repo_class: class to use to save hyperparams.
+        :param hyperparams_repo_kwargs: kwargs to pass to hyperparams_repo_class.
+        """
+        super().__init__()
+        self.cache_folder = cache_folder
+        self.root: RootMetadata = RootMetadata()
+
+    def get(self, scope: ScopedLocation) -> SubDataclassT:
+        """
+        """
+
+        if scope.project_name is None:
+            return None
+        else:
+            proj: ProjectDataclass = self.get_project(scope.project_name)
+
+        if scope.client_name is None:
+            return proj
+        else:
+            client: ClientDataclass = self.get_client(proj, scope.client_name)
+
+        if scope.round_name is None:
+            return client
+        else:
+            round: RoundDataclass = self.get_round(client, scope.round_name)
+
+        if scope.trial_name is None:
+            return round
+        else:
+            trial: TrialDataclass = self.get_trial(round, scope.trial_name)
+
+        if scope.split_name is None:
+            return trial
+        else:
+            split: TrialSplitDataclass = self.get_split(trial, scope.split_name)
+
+        if scope.metric_name is None:
+            return split
+        else:
+            metric: MetricResultsDataclass = self.get_metric(split, scope.metric_name)
+
+        return metric
+
+    def get_logger_path(self, scope: ScopedLocation) -> str:
+        scoped_path: str = self.get_scoped_path(scope)
+        return os.path.join(scoped_path, 'log.txt')
+
+    def get_scoped_path(self, scope: ScopedLocation) -> str:
+        return os.path.join(self.cache_folder, *scope.as_list())
+
+
+class InMemoryHyperparamsRepository(HyperparamsRepository):
+    """
+    In memory hyperparams repository that can print information about trials.
+    Useful for debugging.
+    """
+
+    def __init__(self, pre_made_trials: Optional[RoundManager] = None):
+        HyperparamsRepository.__init__(self)
+        self.trials: RoundManager = pre_made_trials if pre_made_trials is not None else RoundManager()
+
+    def load_trials(self, status: 'TrialStatus' = None) -> 'RoundManager':
+        """
+        Load all trials with the given status.
+
+        :param status: trial status
+        :return: list of trials
+        """
+        return self.trials.filter(status)
+
+    def _save_trial(self, trial: 'TrialManager'):
+        """
+        Save trial.
+
+        :param trial: trial to save
+        :return:
+        """
+        self.trials.append(trial)
+
+
+class BaseHyperparameterOptimizer(ABC):
+
+    def __init__(self, main_metric_name: str = None):
+        """
+        :param main_metric_name: if None, pick first metric from the metrics callback.
+        """
+        self.main_metric_name = main_metric_name
+
+    @abstractmethod
+    def find_next_best_hyperparams(self, round_scope) -> HyperparameterSamples:
+        """
+        Find the next best hyperparams using previous trials.
+
+        :param round_scope: round scope
+        :return: next hyperparameter samples to train on
+        """
+        # TODO: revise arguments.
+        raise NotImplementedError()
+
+
+class AutoMLFlow(Flow):
+
+    def __init__(
+        self,
+        repo: HyperparamsRepository,
+        logger: logging.Logger = None,
+        loc: ScopedLocation = None,
+    ):
+        super().__init__(logger=logger)
+        self.repo: HyperparamsRepository = repo
+        self.loc: ScopedLocation = loc or ScopedLocation()
+
+        self.synchroneous()
+
+    def with_new_loc(self, loc: ScopedLocation):
+        """
+        Create a new AutoMLFlow with a new ScopedLocation.
+
+        :param loc: ScopedLocation
+        :return: AutoMLFlow
+        """
+        return AutoMLFlow(self.repo, self.logger, loc)
+
+    def copy(self):
+        f = AutoMLFlow(
+            repo=self.repo,
+            logger=self.logger,
+            loc=copy.copy(self.loc)
+        )
+        f._lock = self._lock
+        return f
+
+    def log_model(self, model: 'BaseStep'):
+        # TODO: move to scoped actions below.
+        raise NotImplementedError("")
+        self.repo.save_model(model)
+        return super().log_model(model)

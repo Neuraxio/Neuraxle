@@ -15,7 +15,7 @@ from neuraxle.hyperparams.distributions import Choice, LogNormal, LogUniform, Qu
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.auto_ml import AutoMLFlow, BaseHyperparameterOptimizer, RandomSearch, RoundScope, \
     TrialStatus
-from neuraxle.metaopt.data.trial import Trials
+from neuraxle.metaopt.data.trial import RoundManager
 
 _LOG_DISTRIBUTION = (LogNormal, LogUniform)
 _QUANTIZED_DISTRIBUTION = (Quantized,)
@@ -59,7 +59,7 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterOptim
             return self.initial_auto_ml_algo.find_next_best_hyperparams(round_scope)
 
         # Keep only success trials
-        success_trials: Trials = round_scope.repo.load_trials(status=TrialStatus.SUCCESS)
+        success_trials: RoundManager = round_scope.repo.load_trials(status=TrialStatus.SUCCESS)
 
         # Split trials into good and bad using quantile threshold.
         good_trials, bad_trials = success_trials.split_good_and_bad_trials(
@@ -113,7 +113,7 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterOptim
         return HyperparameterSamples(best_hyperparams)
 
     def _create_posterior(self, flat_hyperparameter_space_list: List[Tuple[str, HyperparameterDistribution]],
-                          trials: Trials) -> HyperparameterSpace:
+                          trials: RoundManager) -> HyperparameterSpace:
 
         # Loop through all hyperparams
         posterior_distributions = []

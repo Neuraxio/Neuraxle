@@ -742,9 +742,9 @@ class WrappedDiscreteHyperparameterDistribution(DiscreteHyperparameterDistributi
 
 
 class Quantized(WrappedDiscreteHyperparameterDistribution):
-    """A quantized wrapper for another distribution: will round() the rvs number."""
-
-    # TODO: Manage when hds is used.
+    """
+    A quantized wrapper for another distribution: will round() the returned :func:`HyperparameterDistribution.rvs` number.
+    """
 
     def rvs(self) -> int:
         """

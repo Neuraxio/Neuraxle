@@ -61,7 +61,7 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
         flow=AutoMLFlow(
             repo=VanillaHyperparamsRepository(tmpdir),
         ),
-        start_new_run=True,
+        start_new_round=True,
         refit_best_trial=True,
     )
     automl = automl.handle_fit(dact, cx)

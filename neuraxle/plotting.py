@@ -37,9 +37,9 @@ from neuraxle.metaopt.auto_ml import HyperparamsRepository
 
 from neuraxle.hyperparams.distributions import *
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.observable import _Observer, T
-from neuraxle.metaopt.data.trial import Trial, Trials
-from neuraxle.metaopt.data.vanilla import TrialStatus
+from neuraxle.metaopt.observable import _ObserverOfRepo, BaseDataclassT
+from neuraxle.metaopt.data.trial import TrialManager, RoundManager
+from neuraxle.base import TrialStatus
 
 DISCRETE_NUM_BINS = 40
 CONTINUOUS_NUM_BINS = 1000
@@ -113,7 +113,7 @@ def plot_distribution_space(hyperparameter_space: HyperparameterSpace, num_bins=
         plot_pdf_cdf(title, distribution)
 
 
-class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]]):
+class TrialMetricsPlottingObserver(_ObserverOfRepo[Tuple[HyperparamsRepository, TrialManager]]):
     """
     An observer that receives trial updates and plots metric results.
     It can plot individual trials on each update, or upon completion.
@@ -170,7 +170,7 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
         self.plotting_folder_name: str = plotting_folder_name
         self.save: bool = save_plots
 
-    def on_next(self, value: Tuple[HyperparamsRepository, Trial]):
+    def on_next(self, value: Tuple[HyperparamsRepository, TrialManager]):
         """
         Plot updated trial metric results.
 
@@ -215,7 +215,7 @@ class TrialMetricsPlottingObserver(_Observer[Tuple[HyperparamsRepository, Trial]
         :return:
         """
         repo = value
-        trials: Trials = repo.load_trials(TrialStatus.SUCCESS)
+        trials: RoundManager = repo.load_trials(TrialStatus.SUCCESS)
         if not self.plot_all_trials_on_complete:
             return
         if len(trials) == 0:

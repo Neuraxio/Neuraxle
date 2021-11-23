@@ -28,7 +28,7 @@ from abc import ABC, abstractmethod
 from copy import copy
 from typing import Any, Tuple, List, Union
 
-from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, ExecutionContext, ExecutionMode, \
+from neuraxle.base import BaseStep, TruncableSteps, NamedStepsList, ExecutionContext, ExecutionMode, \
     MetaStep, _CustomHandlerMethods, ForceHandleMixin, Identity
 from neuraxle.data_container import DataContainer, ListDataContainer, AbsentValuesNullObject, ZipDataContainer
 from neuraxle.logging.warnings import warn_deprecated_arg
@@ -44,7 +44,7 @@ class BasePipeline(TruncableSteps, ABC):
         :class:`~neuraxle.distributed.streaming.SequentialQueuedPipeline`
     """
 
-    def __init__(self, steps: NamedTupleList):
+    def __init__(self, steps: NamedStepsList):
         TruncableSteps.__init__(self, steps_as_tuple=steps)
 
     @abstractmethod
@@ -82,7 +82,7 @@ class Pipeline(BasePipeline):
         :class:`~neuraxle.distributed.streaming.SequentialQueuedPipeline`
     """
 
-    def __init__(self, steps: NamedTupleList):
+    def __init__(self, steps: NamedStepsList):
         BasePipeline.__init__(self, steps=steps)
 
     def fit(self, data_inputs, expected_outputs=None) -> 'Pipeline':
@@ -156,7 +156,7 @@ class Pipeline(BasePipeline):
         :return: tuple(pipeline, data_container)
         """
         index_last_step = len(self.steps) - 1
-        new_steps_as_tuple: NamedTupleList = []
+        new_steps_as_tuple: NamedStepsList = []
 
         for index, (step_name, step) in enumerate(self.steps_as_tuple):
             if index != index_last_step:
@@ -189,7 +189,7 @@ class Pipeline(BasePipeline):
         :param context: execution context
         :return: tuple(pipeline, data_container)
         """
-        new_steps_as_tuple: NamedTupleList = []
+        new_steps_as_tuple: NamedStepsList = []
 
         for step_name, step in self.steps_as_tuple:
             step, data_container = step.handle_fit_transform(data_container, context)
@@ -323,7 +323,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
 
     def __init__(
             self,
-            steps: NamedTupleList,
+            steps: NamedStepsList,
             batch_size=None,
             keep_incomplete_batch: bool = None,
             default_value_data_inputs=AbsentValuesNullObject(),

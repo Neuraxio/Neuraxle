@@ -171,8 +171,6 @@ def test_input_and_output_transformer_wrapper_should_not_return_a_different_amou
             expected_outputs=expected_outputs
         ), ExecutionContext())
 
-    # TODO: assert the error message is the right one (something about different length of di and eo)
-
 
 def test_input_and_output_transformer_wrapper_should_raise_an_assertion_error_if_ids_have_not_been_resampled_correctly():
     with pytest.raises(AssertionError) as e:

@@ -1,5 +1,5 @@
 """
-Neuraxle's Trial Classes
+Neuraxle's AutoML Scope Manager Classes
 ====================================
 Trial objects used by AutoML algorithm classes.
 
@@ -36,6 +36,7 @@ import json
 import logging
 import os
 import traceback
+from abc import ABC, abstractmethod
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from enum import Enum
@@ -44,14 +45,211 @@ from logging import FileHandler, Logger
 from typing import Any, Callable, Dict, Iterable, List, Tuple, Type
 
 import numpy as np
-from neuraxle.base import BaseStep, ExecutionContext, Flow
-from neuraxle.data_container import DataContainer
-from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
-from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
-from neuraxle.metaopt.data.vanilla import MetricResultsDataclass, TrialDataclass, TrialSplitDataclass, TrialStatus
+from neuraxle.base import BaseStep, ExecutionContext, Flow, TrialStatus
+from neuraxle.data_container import DataContainer as DACT
+from neuraxle.hyperparams.space import (HyperparameterSamples,
+                                        HyperparameterSpace, RecursiveDict)
+from neuraxle.metaopt.data.trial import (RoundManager, TrialManager,
+                                         TrialSplitManager)
+from neuraxle.metaopt.data.vanilla import (AutoMLFlow, BaseDataclass,
+                                           BaseHyperparameterOptimizer,
+                                           ClientDataclass,
+                                           HyperparamsRepository,
+                                           InMemoryHyperparamsRepository,
+                                           MetricResultsDataclass,
+                                           ProjectDataclass, RecursiveDict,
+                                           RootMetadata, RoundDataclass,
+                                           ScopedLocation, SubDataclassT,
+                                           TrialDataclass, TrialSplitDataclass)
 
 
-class Trial:
+class BaseScope(ABC):
+    def __init__(self, context: ExecutionContext):
+        self.context: ExecutionContext = context
+
+    @property
+    def flow(self) -> AutoMLFlow:
+        return self.context.flow
+
+    @property
+    def loc(self) -> ScopedLocation:
+        return self.flow.loc
+
+    @property
+    def repo(self) -> HyperparamsRepository:
+        return self.flow.repo
+
+    def log(self, message: str, level: int = logging.INFO):
+        return self.flow.log(message, level)
+
+
+class ProjectScope(BaseScope):
+    def __enter__(self) -> 'ProjectScope':
+        return self
+
+    def new_client(self) -> 'ClientScope':
+        return ClientScope(self.context)
+
+    def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
+        self.flow.log_error(exc_val)
+
+
+class ClientScope(BaseScope):
+    def __enter__(self) -> 'ClientScope':
+        return self
+
+    def new_round(self, hp_space: HyperparameterSamples) -> 'RoundScope':
+        return RoundScope(self.context, hp_space)
+
+    def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
+        self.flow.log_error(exc_val)
+
+
+class RoundScope(BaseScope):
+    def __init__(self, context: ExecutionContext, hp_space: HyperparameterSpace):
+        super().__init__(context)
+        self.hp_space: HyperparameterSpace = hp_space
+
+    def __enter__(self) -> 'RoundScope':
+        # self.flow.log_
+        self.flow.add_file_to_logger(self.repo.get_logger_path(self.loc))
+        return self
+
+    def new_hyperparametrized_trial(self, hp_optimizer: BaseHyperparameterOptimizer, continue_loop_on_error: bool) -> 'TrialScope':
+        with self.context.flow.synchroneous():
+            new_hps: HyperparameterSamples = hp_optimizer.find_next_best_hyperparams(self)
+            ts = TrialScope(self.context, new_hps, continue_loop_on_error)
+        return ts
+
+        # TODO: def retrain_best_model?
+
+    def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
+        self.flow.log_error(exc_val)
+        flow: AutoMLFlow = self.context.flow
+        self.flow.log_best_hps(flow.repo.get_best_hyperparams())
+        self.flow.log('Finished round hp search!')
+        self.flow._free_logger_files(self.repo.log_path(self.loc))
+
+    def _free_logger_file(self):
+        """Remove file handlers from logger to free file lock on Windows."""
+        for h in self.logger.handlers:
+            if isinstance(h, FileHandler):
+                self.logger.removeHandler(h)
+
+
+class TrialScope(BaseScope):
+
+    def __init__(self, context: ExecutionContext, repo: HyperparamsRepository, hps: HyperparameterSamples, continue_loop_on_error: bool):
+        super().__init__(context, repo)
+
+        self.hps: HyperparameterSamples = hps
+        self.error_types_to_raise = (
+            SystemError, SystemExit, EOFError, KeyboardInterrupt
+        ) if continue_loop_on_error else (Exception,)
+
+        self.flow.log_planned(hps)
+
+    def __enter__(self) -> 'TrialScope':
+        self.flow.log_start()
+        raise NotImplementedError("TODO: ???")
+
+        self.trial.status = TrialStatus.RUNNING
+        self.logger.info(
+            '\nnew trial: {}'.format(
+                json.dumps(self.hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
+        self.save_trial()
+        return self
+
+    def new_trial_split(self) -> 'TrialSplitScope':
+        return TrialSplitScope(self.context, self.repo)
+
+    def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
+        gc.collect()
+        raise NotImplementedError("TODO: log split result with MetricResultMetadata?")
+
+        try:
+            if exc_type is None:
+                self.trial.end(status=TrialStatus.SUCCESS)
+            else:
+                # TODO: if ctrl+c, raise KeyboardInterrupt? log aborted or log failed?
+                self.flow.log_error(exc_val)
+                self.trial.end(status=TrialStatus.FAILED)
+                raise exc_val
+        finally:
+            self.save_trial()
+            self._free_logger_file()
+
+
+class TrialSplitScope(BaseScope):
+    def __init__(self, context: ExecutionContext, repo: HyperparamsRepository, n_epochs: int):
+        super().__init__(context, repo)
+        self.n_epochs = n_epochs
+
+    def __enter__(self):
+        """
+        Start trial, and set the trial status to PLANNED.
+        """
+        # TODO: ??
+        self.trial_split.status = TrialStatus.RUNNING
+        self.save_parent_trial()
+        return self
+
+    def new_epoch(self, epoch: int) -> 'EpochScope':
+        return EpochScope(self.context, self.repo, epoch, self.n_epochs)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Stop trial, and save end time.
+
+        :param exc_type:
+        :param exc_val:
+        :param exc_tb:
+        :return:
+        """
+        self.end_time = datetime.datetime.now()
+        if self.delete_pipeline_on_completion:
+            del self.pipeline
+        if exc_type is not None:
+            self.set_failed(exc_val)
+            self.trial_split.end(TrialStatus.FAILED)
+            self.save_parent_trial()
+            return False
+
+        self.trial_split.end(TrialStatus.SUCCESS)
+        self.save_parent_trial()
+        return True
+
+    def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
+        raise NotImplementedError("TODO: log split result with MetricResultMetadata?")
+
+        if exc_val is None:
+            self.flow.log_success()
+        elif exc_type in self.error_types_to_raise:
+            self.flow.log_failure(exc_val)
+            return False  # re-raise.
+        else:
+            self.flow.log_error(exc_val)
+            self.flow.log_aborted()
+            return True  # don't re-raise.
+
+
+class EpochScope(BaseScope):
+    def __init__(self, context: ExecutionContext, repo: HyperparamsRepository, epoch: int, n_epochs: int):
+        super().__init__(context, repo)
+        self.epoch: int = epoch
+        self.n_epochs: int = n_epochs
+
+    def __enter__(self) -> 'EpochScope':
+        self.flow.log_epoch(self.epoch, self.n_epochs)
+        return self
+
+    def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
+        self.flow.log_error(exc_val)
+        raise NotImplementedError("TODO: log MetricResultMetadata?")
+
+
+
+class TrialManager:
     """
     This class is a sub-contextualization of the :class:`HyperparameterRepository`
     class for holding a trial and manipulating it within its context.
@@ -72,7 +270,7 @@ class Trial:
     ):
         self._dataclass: TrialDataclass = trial_dataclass
 
-    def new_validation_split(self, delete_pipeline_on_completion: bool = True) -> 'TrialSplit':
+    def new_validation_split(self, delete_pipeline_on_completion: bool = True) -> 'TrialSplitManager':
         """
         Create a new trial split.
         A trial has one split when the validation splitter function is validation split.
@@ -82,7 +280,7 @@ class Trial:
         :type pipeline: pipeline to execute
         :return: one trial split
         """
-        trial_split: TrialSplit = TrialSplit(
+        trial_split: TrialSplitManager = TrialSplitManager(
             trial=self,
             trial_split_dataclass=TrialSplitDataclass(
                 split_number=len(self.validation_splits)
@@ -128,7 +326,7 @@ class Trial:
         """
         return self._dataclass.hyperparams
 
-    def set_success(self) -> 'Trial':
+    def set_success(self) -> 'TrialManager':
         """
         Set trial status to success.
 
@@ -155,7 +353,7 @@ class Trial:
 
         self.save_trial()  # TODO?
 
-    def set_failed(self, error: Exception) -> 'Trial':
+    def set_failed(self, error: Exception) -> 'TrialManager':
         """
         Set failed trial with exception.
 
@@ -190,7 +388,7 @@ class Trial:
         return self._dataclass.validation_splits[-1].metric_results[metric_name].higher_score_is_better
 
 
-class TrialSplit:
+class TrialSplitManager:
     """
     One split of a trial.
 
@@ -204,18 +402,18 @@ class TrialSplit:
 
     def __init__(
             self,
-            trial: Trial,
+            trial: TrialManager,
             trial_split_dataclass: TrialSplitDataclass,
             delete_pipeline_on_completion: bool = True
     ):
-        self.trial: Trial = trial
+        self.trial: TrialManager = trial
         self._dataclass: TrialSplitDataclass = trial_split_dataclass
         self.delete_pipeline_on_completion = delete_pipeline_on_completion
 
     def get_metric_names(self) -> List[str]:
         return list(self._dataclass.metric_results.keys())
 
-    def save_parent_trial(self) -> 'TrialSplit':
+    def save_parent_trial(self) -> 'TrialSplitManager':
         """
         Save parent trial.
 
@@ -333,7 +531,7 @@ class TrialSplit:
             return False
         return True
 
-    def set_success(self) -> 'TrialSplit':
+    def set_success(self) -> 'TrialSplitManager':
         """
         Set trial status to success.
 
@@ -349,7 +547,7 @@ class TrialSplit:
         """
         return self.status == TrialStatus.SUCCESS
 
-    def set_failed(self, error: Exception) -> 'TrialSplit':
+    def set_failed(self, error: Exception) -> 'TrialSplitManager':
         """
         Set failed trial with exception.
 
@@ -370,7 +568,7 @@ class TrialSplit:
         return s
 
 
-class Trials:
+class RoundManager:
     """
     Data object containing auto ml trials.
 
@@ -383,11 +581,11 @@ class Trials:
 
     def __init__(
             self,
-            trials: List[Trial] = None
+            trials: List[TrialManager] = None
     ):
         if trials is None:
             trials = []
-        self.trials: List[Trial] = trials
+        self.trials: List[TrialManager] = trials
 
     def get_best_hyperparams(self) -> HyperparameterSamples:
         """
@@ -400,7 +598,7 @@ class Trials:
 
         return self.get_best_trial().get_hyperparams()
 
-    def get_best_trial(self) -> Trial:
+    def get_best_trial(self) -> TrialManager:
         """
         :return: trial with best score from all trials
         """
@@ -419,9 +617,9 @@ class Trials:
         return best_trial
 
     def split_good_and_bad_trials(self, quantile_threshold: float, number_of_good_trials_max_cap: int) -> Tuple[
-            'Trials', 'Trials']:
+            'RoundManager', 'RoundManager']:
         # TODO: move to tpe class? Seems wrongly located.
-        success_trials: Trials = self.filter(TrialStatus.SUCCESS)
+        success_trials: RoundManager = self.filter(TrialStatus.SUCCESS)
 
         # Split trials into good and bad using quantile threshold.
         trials_scores = np.array([trial.get_validation_score() for trial in success_trials])
@@ -446,7 +644,7 @@ class Trials:
             if trial_index in bad_trials_indexes:
                 bad_trials.append(trial)
 
-        return Trials(trials=good_trials), Trials(trials=bad_trials)
+        return RoundManager(trials=good_trials), RoundManager(trials=bad_trials)
 
     def is_higher_score_better(self, metric_name: str) -> bool:
         """
@@ -459,7 +657,7 @@ class Trials:
 
         return self.trials[-1].is_higher_score_better(metric_name)
 
-    def append(self, trial: Trial):
+    def append(self, trial: TrialManager):
         """
         Add a new trial.
 
@@ -469,14 +667,14 @@ class Trials:
         self.trials.append(trial)
         # TODO: save?
 
-    def filter(self, status: 'TrialStatus') -> 'Trials':
+    def filter(self, status: 'TrialStatus') -> 'RoundManager':
         """
         Get all the trials with the given trial status.
 
         :param status: trial status
         :return:
         """
-        trials = Trials()
+        trials = RoundManager()
         for trial in self.trials:
             if trial._dataclass.status == status:
                 trials.append(trial)
@@ -493,10 +691,10 @@ class Trials:
             return self[-1]._dataclass.validation_splits[-1].metric_results.keys()
         return []
 
-    def __iter__(self) -> Iterable[Trial]:
+    def __iter__(self) -> Iterable[TrialManager]:
         return iter(self.trials)
 
-    def __getitem__(self, item: int) -> Trial:
+    def __getitem__(self, item: int) -> TrialManager:
         """
         Get trial at the given index.
 

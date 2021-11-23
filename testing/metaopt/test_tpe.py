@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pytest
 from joblib import Parallel, delayed
+from neuraxle.base import TrialStatus
 from neuraxle.hyperparams.distributions import (Choice, LogNormal, LogUniform,
                                                 Normal, Quantized, Uniform)
 from neuraxle.hyperparams.space import HyperparameterSpace
@@ -11,10 +12,9 @@ from neuraxle.metaopt.auto_ml import (AutoML, BaseHyperparameterOptimizer,
                                       InMemoryHyperparamsRepository,
                                       RandomSearch, ValidationSplitter)
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
-from neuraxle.metaopt.data.vanilla import TrialStatus
+from neuraxle.metaopt.data.trial import RoundManager
 from neuraxle.metaopt.hyperopt.tpe import \
     TreeParzenEstimatorHyperparameterSelectionStrategy
-from neuraxle.metaopt.data.trial import Trials
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCallbackStep
 from neuraxle.steps.numpy import AddN
@@ -144,6 +144,6 @@ def _test_trial_scores(
     auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
-    trials: Trials = hp_repository.load_trials(status=TrialStatus.SUCCESS)
+    trials: RoundManager = hp_repository.load_trials(status=TrialStatus.SUCCESS)
     validation_scores = [t.get_validation_score() for t in trials]
     return validation_scores

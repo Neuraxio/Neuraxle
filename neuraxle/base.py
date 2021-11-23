@@ -33,7 +33,6 @@ classes needed to compose other base classes.
 import datetime
 import inspect
 import logging
-from operator import attrgetter
 import os
 import pprint
 import shutil
@@ -45,6 +44,7 @@ from collections import OrderedDict
 from copy import copy
 from enum import Enum
 from multiprocessing import Lock, Manager, RLock
+from operator import attrgetter
 from typing import (Any, Callable, Dict, Generic, ItemsView, Iterable,
                     KeysView, List, Optional, Set, Tuple, Type, TypeVar, Union,
                     ValuesView)
@@ -57,7 +57,6 @@ from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
 from neuraxle.logging.logging import LOGGER_FORMAT, LOGGING_DATETIME_STR_FORMAT
 from neuraxle.logging.warnings import warn_deprecated_arg
-from neuraxle.metaopt.data.vanilla import TrialStatus
 
 
 class BaseSaver(ABC):
@@ -742,7 +741,7 @@ class MetaService(MetaServiceMixin, BaseService):
         MetaServiceMixin.__init__(self, wrapped=wrapped)
 
 
-NamedServiceList = List[Union[Tuple[str, BaseServiceT], BaseServiceT]]
+NamedServicesList = List[Union[Tuple[str, BaseServiceT], BaseServiceT]]
 
 
 class TruncableServiceMixin(_HasChildrenMixin):
@@ -860,6 +859,17 @@ def synchroneous_flow_method(log_any_func: Callable[..., Any]) -> Callable:
             with self._lock:
                 return log_any_func(self, *args, **kwargs)
     return log_any
+
+
+class TrialStatus(Enum):
+    """
+    Enum of the possible states of a trial.
+    """
+    PLANNED = 'planned'
+    RUNNING = 'running'
+    ABORTED = 'aborted'  # TODO: consider aborted.
+    FAILED = 'failed'
+    SUCCESS = 'success'
 
 
 class Flow(BaseService):
@@ -1437,7 +1447,7 @@ class _TransformerStep(MixinForBaseService):
 
     def _will_process(
         self, data_container: DataContainer, context: ExecutionContext
-    ) -> (DataContainer, ExecutionContext):
+    ) -> Tuple[DataContainer, ExecutionContext]:
         """
         Apply side effects before any step method.
         :param data_container: data container
@@ -1467,8 +1477,9 @@ class _TransformerStep(MixinForBaseService):
 
         return data_container
 
-    def _will_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
-            (DataContainer, ExecutionContext):
+    def _will_transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple[DataContainer, ExecutionContext]:
         """
         Apply side effects before transform.
 
@@ -1501,7 +1512,7 @@ class _TransformerStep(MixinForBaseService):
         :return: transformed data inputs
         """
         raise NotImplementedError(
-            "TODO: Implement this method in {}, or have this class inherit from the NonTransformableMixin.".format(
+            "Implement this method in {}, or have this class inherit from the NonTransformableMixin.".format(
                 self.__class__.__name__))
 
     def _did_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -1650,7 +1661,7 @@ class _TransformerStep(MixinForBaseService):
         :param processed_outputs: processed data inputs
         :return: inverse transformed processed outputs
         """
-        raise NotImplementedError("TODO: Implement this method in {}.".format(self.__class__.__name__))
+        raise NotImplementedError("Implement this method in {}.".format(self.__class__.__name__))
 
 
 class _FittableStep(MixinForBaseService):
@@ -1685,7 +1696,9 @@ class _FittableStep(MixinForBaseService):
 
         return new_self
 
-    def _will_fit(self, data_container: DataContainer, context: ExecutionContext) -> (DataContainer, ExecutionContext):
+    def _will_fit(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple[DataContainer, ExecutionContext]:
         """
         Before fit is called, apply side effects on the step, the data container, or the execution context.
 
@@ -1726,7 +1739,7 @@ class _FittableStep(MixinForBaseService):
         :return: self
         """
         raise NotImplementedError(
-            "TODO: Implement this method in {}, or have this class inherit from the NonFittableMixin.".format(
+            "Implement this method in {}, or have this class inherit from the NonFittableMixin.".format(
                 self.__class__.__name__))
 
     def meta_fit(self, X_train, y_train, metastep: 'MetaStep'):
@@ -2995,7 +3008,7 @@ class MetaStepJoblibStepSaver(JoblibStepSaver):
         return step
 
 
-NamedTupleList = List[Union[Tuple[str, BaseTransformerT], BaseTransformerT]]
+NamedStepsList = List[Union[Tuple[str, BaseTransformerT], BaseTransformerT]]
 
 
 class NonFittableMixin(MixinForBaseTransformer):
@@ -3152,14 +3165,14 @@ class TruncableStepsMixin(_HasChildrenMixin):
 
     def __init__(
         self,
-        steps_as_tuple: NamedServiceList,
+        steps_as_tuple: NamedStepsList,
         mute_step_renaming_warning: bool = True,
     ):
         _HasChildrenMixin.__init__(self)
         self.warn_step_renaming = not mute_step_renaming_warning
         self.set_steps(steps_as_tuple, invalidate=False)
 
-    def set_steps(self, steps_as_tuple: NamedServiceList, invalidate=True) -> 'TruncableStepsMixin':
+    def set_steps(self, steps_as_tuple: NamedStepsList, invalidate=True) -> 'TruncableStepsMixin':
         """
         Set steps as tuple.
 
@@ -3167,7 +3180,7 @@ class TruncableStepsMixin(_HasChildrenMixin):
         :return:
         """
         steps_as_tuple = self._wrap_non_base_steps(steps_as_tuple)
-        self.steps_as_tuple: NamedTupleList = self._patch_missing_names(steps_as_tuple)
+        self.steps_as_tuple: NamedStepsList = self._patch_missing_names(steps_as_tuple)
         self._refresh_steps(invalidate=invalidate)
         return self
 
@@ -3179,16 +3192,14 @@ class TruncableStepsMixin(_HasChildrenMixin):
         """
         return list(self.values())
 
-    def _wrap_non_base_steps(self, steps_as_tuple: List) -> NamedServiceList:
+    def _wrap_non_base_steps(self, steps_as_tuple: NamedStepsList) -> NamedStepsList:
         """
         If some steps are not of type BaseStep, we'll try to make them of this type. For instance, sklearn objects
         will be wrapped by a SKLearnWrapper here.
 
-        :param steps_as_tuple: a list of steps or of named tuples of steps (e.g.: NamedTupleList)
-        :return: a NamedTupleList
+        :param steps_as_tuple: a list of steps or of named tuples of steps (e.g.: NamedStepsList)
+        :return: a NamedStepsList
         """
-        # TODO: document more the type of the `steps as tuple`.
-
         wrapped = []
         for step in steps_as_tuple:
             class_name = None
@@ -3204,12 +3215,12 @@ class TruncableStepsMixin(_HasChildrenMixin):
             wrapped.append((class_name, step))
         return wrapped
 
-    def _patch_missing_names(self, steps_as_tuple: NamedServiceList) -> NamedServiceList:
+    def _patch_missing_names(self, steps_as_tuple: NamedStepsList) -> NamedStepsList:
         """
         Make sure that each sub step has a unique name, and add a name to the sub steps that don't have one already.
 
-        :param steps_as_tuple: a NamedTupleList
-        :return: a NamedTupleList with fixed names
+        :param steps_as_tuple: a NamedStepsList
+        :return: a NamedStepsList with fixed names
         """
         # TODO: document more the type of the `steps as tuple`.
         names_yet = set()
@@ -3430,7 +3441,7 @@ class TruncableSteps(TruncableStepsMixin, BaseStep, ABC):
 
     def __init__(
             self,
-            steps_as_tuple: NamedTupleList,
+            steps_as_tuple: NamedStepsList,
             hyperparams: HyperparameterSamples = dict(),
             hyperparams_space: HyperparameterSpace = dict(),
             mute_step_renaming_warning: bool = True,
@@ -3646,9 +3657,9 @@ class HandleOnlyMixin(MixinForBaseTransformer):
 
     def _fit_transform_data_container(
         self, data_container: DataContainer, context: ExecutionContext
-    ) -> ('BaseTransformer', DataContainer):
+    ) -> Tuple['BaseTransformer', DataContainer]:
         """
-        Fit and transform data container with the given execution context. Will do: 
+        Fit and transform data container with the given execution context. Will do:
 
         .. code-block:: python
 
@@ -3735,7 +3746,8 @@ class ForceHandleMixin(MixinForBaseTransformer):
 
     def fit(self, data_inputs, expected_outputs=None) -> 'HandleOnlyMixin':
         """
-        Using :func:`~neuraxle.base._FittableStep.handle_fit`, fit step with the given data inputs, and expected outputs.
+        Using :func:`~neuraxle.base._FittableStep.handle_fit`, fit step with the 
+        given data inputs, and expected outputs.
 
         :param data_inputs: data inputs
         :return: fitted self
@@ -3745,8 +3757,9 @@ class ForceHandleMixin(MixinForBaseTransformer):
 
         return new_self
 
-    def fit_transform(self, data_inputs, expected_outputs=None) -> \
-            Tuple['HandleOnlyMixin', Iterable]:
+    def fit_transform(
+        self, data_inputs, expected_outputs=None
+    ) -> Tuple['HandleOnlyMixin', Iterable]:
         """
         Using :func:`~neuraxle.base._FittableStep.handle_fit_transform`, fit and transform step with the given data inputs, and expected outputs.
 
@@ -3758,8 +3771,9 @@ class ForceHandleMixin(MixinForBaseTransformer):
 
         return new_self, data_container.data_inputs
 
-    def _encapsulate_data(self, data_inputs, expected_outputs=None, execution_mode=None) -> \
-            Tuple[ExecutionContext, DataContainer]:
+    def _encapsulate_data(
+        self, data_inputs, expected_outputs=None, execution_mode=None
+    ) -> Tuple[ExecutionContext, DataContainer]:
         """
         Encapsulate data with :class:`~neuraxle.data_container.DataContainer`.
 
@@ -3768,7 +3782,8 @@ class ForceHandleMixin(MixinForBaseTransformer):
         :param execution_mode: execution mode
         :return: execution context, data container
         """
-        data_container = DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs)
+        data_container = DataContainer(
+            data_inputs=data_inputs, expected_outputs=expected_outputs)
         context = ExecutionContext(execution_mode=execution_mode)
 
         return context, data_container
@@ -3833,15 +3848,17 @@ class IdentityHandlerMethodsMixin(ForceHandleOnlyMixin):
         :class:`ForceHandleOnlyMixin`
     """
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
-            ('BaseTransformer', DataContainer):
+    def _fit_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['BaseTransformer', DataContainer]:
         return self
 
     def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         return data_container
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
-            ('BaseTransformer', DataContainer):
+    def _fit_transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['BaseTransformer', DataContainer]:
         return self, data_container
 
 
@@ -3914,7 +3931,7 @@ class AssertionMixin(ForceHandleMixin):
 class WillProcessAssertionMixin(AssertionMixin):
     def _will_process(
         self, data_container: DataContainer, context: ExecutionContext
-    ) -> (DataContainer, ExecutionContext):
+    ) -> Tuple[DataContainer, ExecutionContext]:
         """
         Calls self._assert_at_lifecycle(data_container, context).
         """
@@ -3927,7 +3944,7 @@ class WillProcessAssertionMixin(AssertionMixin):
 class DidProcessAssertionMixin(AssertionMixin):
     def _did_process(
         self, data_container: DataContainer, context: ExecutionContext
-    ) -> (DataContainer, ExecutionContext):
+    ) -> Tuple[DataContainer, ExecutionContext]:
         """
         Calls self._assert_at_lifecycle(data_container,context)
         """
@@ -4029,7 +4046,8 @@ class GlobalyRetrievableServiceAssertionWrapper(LocalServiceAssertionWrapper):
 
 class GlobalServiceAssertionExecutorMixin(WillProcessAssertionMixin):
     """
-    Any step which inherit of this class will test globaly retrievable service assertion of itself and all its children on a will_process call.
+    Any step which inherit of this class will test globaly retrievable service
+    assertion of itself and all its children on a will_process call.
     """
 
     def _assert_at_lifecycle(self, data_container: DataContainer, context: ExecutionContext):
@@ -4098,7 +4116,7 @@ class StepWithContext(GlobalServiceAssertionExecutorMixin, MetaStep):
 
     def _will_process(
         self, data_container: DataContainer, context: ExecutionContext
-    ) -> (DataContainer, ExecutionContext):
+    ) -> Tuple[DataContainer, ExecutionContext]:
         """
         Inject the given context and test service assertions (if any are appliable) before processing the wrapped step.
 

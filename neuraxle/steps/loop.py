@@ -29,7 +29,7 @@ from typing import Callable, List, Tuple, ValuesView
 from neuraxle.base import (BaseStep, BaseTransformer, DataContainer,
                            ExecutionContext, ForceHandleMixin,
                            ForceHandleOnlyMixin, Identity, MetaStep,
-                           NamedTupleList, TruncableJoblibStepSaver)
+                           NamedStepsList, TruncableJoblibStepSaver)
 from neuraxle.data_container import ListDataContainer
 from neuraxle.steps.flow import ExecuteIf
 
@@ -184,7 +184,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         ForceHandleOnlyMixin.__init__(self)
         self.savers.append(TruncableJoblibStepSaver())
 
-        self.steps_as_tuple: List[NamedTupleList] = []
+        self.steps_as_tuple: List[NamedStepsList] = []
         self.copy_op = copy_op
 
     def get_children(self) -> List[BaseStep]:
