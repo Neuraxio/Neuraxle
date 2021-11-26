@@ -2,17 +2,18 @@ import typing
 
 import numpy as np
 import pytest
-from neuraxle.base import (BaseService, BaseStep, ExecutionContext, Flow,
-                           HandleOnlyMixin, Identity, MetaStep)
+from neuraxle.base import (BaseService, BaseStep, BaseTransformer,
+                           ExecutionContext, Flow, HandleOnlyMixin, Identity,
+                           MetaStep)
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import RandInt, Uniform
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
-from neuraxle.metaopt.auto_ml import (AutoML, AutoMLFlow, DefaultLoop,
-                                      VanillaHyperparamsRepository,
-                                      RandomSearch, Trainer,
-                                      ValidationSplitter)
+from neuraxle.metaopt.auto_ml import AutoML, DefaultLoop, RandomSearch, Trainer
 from neuraxle.metaopt.callbacks import MetricCallback
+from neuraxle.metaopt.data.vanilla import (AutoMLFlow,
+                                           VanillaHyperparamsRepository)
+from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.data import DataShuffler
 from neuraxle.steps.flow import TrainOnlyWrapper
@@ -30,7 +31,7 @@ class StepThatAssertsContextIsSpecified(HandleOnlyMixin, BaseStep):
         HandleOnlyMixin.__init__(self)
         self.context = expected_context
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseTransformer':
+    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseTransformer:
         # todo: context.flow.get_logs() == same ? Looks like pytest with logger class.
         self._assert_equals(self.context, context, 'Context is not the expected one.', context)
         return super()._fit_data_container(data_container, context)

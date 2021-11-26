@@ -51,15 +51,19 @@ from neuraxle.logging.warnings import (warn_deprecated_arg,
                                        warn_deprecated_class)
 from neuraxle.metaopt.callbacks import (BaseCallback, CallbackList,
                                         ScoringCallback)
-from neuraxle.metaopt.data.trial import (RoundManager, TrialManager,
+from neuraxle.metaopt.data.trial import (RoundManager, RoundScope,
+                                         TrialManager, TrialScope,
                                          TrialSplitManager)
 from neuraxle.metaopt.data.vanilla import (BaseDataclass, ClientDataclass,
+                                           HyperparamsRepository,
                                            MetricResultsDataclass,
                                            ProjectDataclass, RecursiveDict,
                                            RootMetadata, RoundDataclass,
                                            ScopedLocation, SubDataclassT,
                                            TrialDataclass, TrialSplitDataclass)
-from neuraxle.metaopt.validation import BaseCrossValidationWrapper
+from neuraxle.metaopt.validation import (BaseCrossValidationWrapper,
+                                         BaseHyperparameterOptimizer,
+                                         RandomSearch)
 
 
 class Trainer(BaseService):

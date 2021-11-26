@@ -34,8 +34,7 @@ from neuraxle.data_container import DataContainer
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
 from neuraxle.metaopt.data.trial import RoundScope
-from neuraxle.metaopt.data.vanilla import (BaseHyperparameterOptimizer,
-                                           RoundScope)
+from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from neuraxle.steps.numpy import (NumpyConcatenateInnerFeatures,
                                   NumpyConcatenateOnAxis,

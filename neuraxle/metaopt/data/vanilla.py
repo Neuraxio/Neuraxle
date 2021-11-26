@@ -28,9 +28,11 @@ Classes are splitted like this for the AutoML:
 
 
 """
+import copy
 import datetime
 import json
 import logging
+import os
 from abc import ABC, abstractclassmethod, abstractmethod
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -47,7 +49,6 @@ from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
 from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
 from neuraxle.metaopt.observable import _ObservableRepo, _ObserverOfRepo
-
 
 SubDataclassT = TypeVar('SubDataclassT', bound=Optional['BaseDataclass'])
 ScopedLocationAttr = Union[str, int]
@@ -357,13 +358,13 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
 
         raise NotImplementedError("Use a concrete class. This is an abstract class.")
 
-    def _save_model(self, trial: TrialManager, pipeline: BaseStep, context: ExecutionContext):
+    def _save_model(self, trial: 'TrialManager', pipeline: BaseStep, context: ExecutionContext):
         hyperparams = self.hyperparams.to_flat_dict()
         # TODO: ???
         trial_hash = trial.get_trial_id(hyperparams)
         pipeline.set_name(trial_hash).save(context, full_dump=True)
 
-    def load_model(self, trial: TrialManager, context: ExecutionContext) -> BaseStep:
+    def load_model(self, trial: 'TrialManager', context: ExecutionContext) -> BaseStep:
         """
         Load model in the trial hash folder.
         """
@@ -443,7 +444,7 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
     Useful for debugging.
     """
 
-    def __init__(self, pre_made_trials: Optional[RoundManager] = None):
+    def __init__(self, pre_made_trials: Optional['RoundManager'] = None):
         HyperparamsRepository.__init__(self)
         self.trials: RoundManager = pre_made_trials if pre_made_trials is not None else RoundManager()
 
@@ -523,3 +524,44 @@ class AutoMLFlow(Flow):
         raise NotImplementedError("")
         self.repo.save_model(model)
         return super().log_model(model)
+
+
+class AutoMLContext(ExecutionContext):
+
+    def from_context(self, context: ExecutionContext, repo: HyperparamsRepository):
+        """
+        Create a new AutoMLContext from an ExecutionContext.
+
+        :param context: ExecutionContext
+        """
+        new_context = context.copy()
+        # TODO: flow
+        new_context.flow = AutoMLFlow.from_flow(context.flow)
+        
+        # TODO: repo
+        new_context.register_service(HyperparamsRepository, repo)
+
+        # TODO: loc
+        
+
+        return new_context
+
+    # TODO: @property for repo and loc.
+    @property
+    def repo(self):
+        return self.get_service(HyperparamsRepository)
+
+    @property
+    def loc(self):
+        return self.flow.loc
+
+    def push_attr(self, name: Type[SubDataclassT], value: ScopedLocationAttr):
+        """
+        Push a new attribute to the ScopedLocation.
+
+        :param name: attribute name
+        :param value: attribute value
+        """
+        new_self: AutoMLContext = self.copy()
+        new_self.loc[name] = value
+        return new_self

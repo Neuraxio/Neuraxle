@@ -49,8 +49,6 @@ from neuraxle.base import BaseStep, ExecutionContext, Flow, TrialStatus
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
-from neuraxle.metaopt.data.trial import (RoundManager, TrialManager,
-                                         TrialSplitManager)
 from neuraxle.metaopt.data.vanilla import (AutoMLFlow, BaseDataclass,
                                            BaseHyperparameterOptimizer,
                                            ClientDataclass,
@@ -73,11 +71,11 @@ class BaseScope(ABC):
 
     @property
     def loc(self) -> ScopedLocation:
-        return self.flow.loc
+        return self.context.loc
 
     @property
     def repo(self) -> HyperparamsRepository:
-        return self.flow.repo
+        return self.context.repo
 
     def log(self, message: str, level: int = logging.INFO):
         return self.flow.log(message, level)
@@ -126,7 +124,7 @@ class RoundScope(BaseScope):
     def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
         self.flow.log_error(exc_val)
         flow: AutoMLFlow = self.context.flow
-        self.flow.log_best_hps(flow.repo.get_best_hyperparams())
+        self.flow.log_best_hps(flow.repo.get_best_hyperparams(loc=self.loc))
         self.flow.log('Finished round hp search!')
         self.flow._free_logger_files(self.repo.log_path(self.loc))
 
@@ -139,8 +137,8 @@ class RoundScope(BaseScope):
 
 class TrialScope(BaseScope):
 
-    def __init__(self, context: ExecutionContext, repo: HyperparamsRepository, hps: HyperparameterSamples, continue_loop_on_error: bool):
-        super().__init__(context, repo)
+    def __init__(self, context: ExecutionContext, hps: HyperparameterSamples, continue_loop_on_error: bool):
+        super().__init__(context)
 
         self.hps: HyperparameterSamples = hps
         self.error_types_to_raise = (
