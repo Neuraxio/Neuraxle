@@ -23,16 +23,23 @@ Classes for hyperparameter tuning, such as random search.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
+import copy
 import math
+import warnings
 from abc import ABC, abstractmethod
-from typing import Callable, List, Tuple
+from collections import OrderedDict
+from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
+                    Tuple, Type, TypeVar, Union)
 
 import numpy as np
 from neuraxle.base import (BaseStep, EvaluableStepMixin, ExecutionContext,
                            ForceHandleOnlyMixin, MetaStep, TrialStatus)
 from neuraxle.data_container import DataContainer
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
+from neuraxle.hyperparams.distributions import (
+    ContinuousHyperparameterDistribution, DiscreteHyperparameterDistribution)
+from neuraxle.hyperparams.space import (HyperparameterSamples,
+                                        HyperparameterSpace, RecursiveDict)
 from neuraxle.metaopt.data.trial import RoundScope
 from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
 from neuraxle.steps.loop import StepClonerForEachDataInput
@@ -640,6 +647,107 @@ class RandomSearch(BaseHyperparameterOptimizer):
         :return: next random hyperparams
         """
         return round_scope.hp_space.rvs()
+
+
+class GridExplorationSampler(BaseHyperparameterOptimizer):
+    """
+    This hyperparameter space optimizer is similar to a grid search, however, it does
+    try to sample maximally different points in the space to explore it. This space
+    optimizer has a fixed pseudorandom exploration method that makes the sampling
+    reproductible.
+
+    It may be good for space exploration before a TPE or for unit tests.
+    """
+
+    def __init__(self, expected_n_trials: int, main_metric_name: str = None):
+        BaseHyperparameterOptimizer.__init__(self, main_metric_name=main_metric_name)
+        self.expected_n_trials: int = expected_n_trials
+
+        self._i: int = 0
+        self.flat_hp_grid_values: OrderedDict[str, List[Any]] = {}
+        self.flat_hp_grid_lens: List[int] = []
+
+    def find_next_best_hyperparams(self, round_scope: 'RoundScope') -> HyperparameterSamples:
+        """
+        Sample the next hyperparams to try.
+
+        :param round_scope: round scope
+        :return: next hyperparams
+        """
+        if self._i == 0:
+            self._generate_grid(round_scope.hp_space)
+
+        i_grid_keys: List[int] = self._gen_keys_for_grid(self._i)
+        flat_result: OrderedDict[str, Any] = self._acces_keys_for_grid(i_grid_keys)
+        self._i += 1
+        return HyperparameterSamples(flat_result)
+
+    def _generate_grid(self, hp_space: HyperparameterSpace):
+        """
+        Generate the grid of hyperparameters.
+
+        :param hp_space: hyperparameter space
+        """
+        # Start with discrete params:
+        for hp_name, hp_dist in hp_space.to_flat_dict().items():
+            if isinstance(hp_dist, DiscreteHyperparameterDistribution):
+                hp_samples: List[Any] = hp_dist.values()
+
+                reordered_hp_samples: List[Any] = copy.copy(hp_samples)
+                for i, sample in enumerate(hp_samples):
+                    reordered_hp_samples[i] = sample
+
+                self.flat_hp_grid_values[hp_name] = hp_samples
+                self.flat_hp_grid_lens.append(len(hp_samples))
+
+        # Then fill the remaining continous params using the expected_n_trials:
+        remainder: int = max(
+            3,
+            math.ceil(
+                (self.expected_n_trials / sum(self.flat_hp_grid_lens)) / (
+                    len(hp_space.to_flat_dict()) - len(self.flat_hp_grid_lens))
+            )
+        )
+        for hp_name, hp_dist in hp_space.to_flat_dict().items():
+            if isinstance(hp_dist, ContinuousHyperparameterDistribution):
+                hp_samples: List[Any] = [
+                    hp_dist.min(),
+                    hp_dist.max(),
+                    hp_dist.mean(),
+                    hp_dist.mean() + hp_dist.std(),
+                    hp_dist.mean() - hp_dist.std(),
+                    hp_dist.mean() + hp_dist.std() / 2,
+                    hp_dist.mean() - hp_dist.std() / 2,
+                    hp_dist.mean() + hp_dist.std() * 1.5,
+                    hp_dist.mean() - hp_dist.std() * 1.5,
+                    hp_dist.mean() + hp_dist.std() / 4,
+                    hp_dist.mean() - hp_dist.std() / 4,
+                    hp_dist.mean() + hp_dist.std() * 2.5,
+                    hp_dist.mean() - hp_dist.std() * 2.5,
+                ]
+                hp_samples: List[Any] = [x for x in hp_samples[:remainder] if x >= hp_dist.min() and x <= hp_dist.max()]
+
+                self.flat_hp_grid_values[hp_name] = hp_samples
+                self.flat_hp_grid_lens.append(len(hp_samples))
+
+        # Then readjust the expected_n_trials to be a multiple of the number of hyperparameters:
+        _sum = sum(self.flat_hp_grid_lens)
+        if self.expected_n_trials != _sum:
+            warnings.warn(
+                f"Warning: changed {self.__class__.__name__}.expected_n_trials="
+                f"{self.expected_n_trials} to {_sum}."
+            )
+        self.expected_n_trials = _sum
+
+    def _gen_keys_for_grid(self, i: int) -> List[int]:
+        """
+        Generate the keys for the grid.
+
+        :param i: index
+        :return: keys
+        """
+        return [i % len(self.flat_hp_grid_lens)]
+        # self.flat_hp_grid_values[i_grid_keys]
 
 
 class BaseValidationSplitter(ABC):

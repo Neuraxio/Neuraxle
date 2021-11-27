@@ -51,9 +51,9 @@ from neuraxle.logging.warnings import (warn_deprecated_arg,
                                        warn_deprecated_class)
 from neuraxle.metaopt.callbacks import (BaseCallback, CallbackList,
                                         ScoringCallback)
-from neuraxle.metaopt.data.trial import (RoundManager, RoundScope,
+from neuraxle.metaopt.data.trial import (EpochScope, RoundManager, RoundScope,
                                          TrialManager, TrialScope,
-                                         TrialSplitManager)
+                                         TrialSplitManager, TrialSplitScope)
 from neuraxle.metaopt.data.vanilla import (BaseDataclass, ClientDataclass,
                                            HyperparamsRepository,
                                            MetricResultsDataclass,

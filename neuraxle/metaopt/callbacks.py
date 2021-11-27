@@ -26,7 +26,7 @@ Training callback classes.
 
 import traceback
 from abc import ABC, abstractmethod
-from typing import Callable
+from typing import Callable, List
 
 import warnings
 from neuraxle.base import BaseStep, BaseTransformer, ExecutionContext, MixinForBaseTransformer
@@ -302,8 +302,8 @@ class CallbackList(BaseCallback):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def __init__(self, callbacks):
-        self.callbacks = callbacks
+    def __init__(self, callbacks: List[BaseCallback]):
+        self.callbacks: List[BaseCallback] = callbacks
 
     def __getitem__(self, item):
         return self.callbacks[item]

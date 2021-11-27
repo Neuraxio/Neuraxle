@@ -167,7 +167,7 @@ class ContinuousHyperparameterDistribution(HyperparameterDistribution):
         HyperparameterDistribution.__init__(self, null_default_value=null_default_value)
 
     def is_discrete(self) -> bool:
-        return True
+        return False
 
 
 class DiscreteHyperparameterDistribution(HyperparameterDistribution):
@@ -186,7 +186,7 @@ class DiscreteHyperparameterDistribution(HyperparameterDistribution):
         HyperparameterDistribution.__init__(self, null_default_value=null_default_value)
 
     def is_discrete(self) -> bool:
-        return False
+        return True
 
     @abstractmethod
     def values(self) -> List[Any]:

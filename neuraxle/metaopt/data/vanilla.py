@@ -93,10 +93,31 @@ class ScopedLocation:
         """
         Set sublocation attr from the provided :class:`BaseMetadata` type.
         """
-        if isinstance(key, SubDataclassT):
-            setattr(self, dataclass_2_attr[key], value)
+        # Throw value error if the key's type is not yet to be defined:
+        curr_attr_to_set_idx: int = len(self)
+        key_idx: int = dataclass_2_attr.keys().index(key)
+        if curr_attr_to_set_idx != key_idx:
+            raise ValueError(
+                f"{key} is not yet to be defined. Currently, "
+                f"{dataclass_2_attr.keys()[curr_attr_to_set_idx]} is to be set.")
+        key_attr_name: str = dataclass_2_attr[key]
+        setattr(self, key_attr_name, value)
 
-        raise ValueError(f"Invalid key type {key.__class__.__name__} for key {key}.")
+    def pop(self) -> ScopedLocationAttr:
+        """
+        Returns the last `not None` scoped location attribute and remove it from self.
+        """
+        for attr_name in reversed(dataclass_2_attr.values()):
+            attr_value = getattr(self, attr_name)
+            if attr_value is not None:
+                setattr(self, attr_name, None)
+                return attr_value
+
+    def __len__(self) -> int:
+        """
+        Returns the number of not none scoped location attributes.
+        """
+        return len(self.as_list())
 
     def as_list(self) -> List[ScopedLocationAttr]:
         """
@@ -133,6 +154,18 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
     def get_sublocation(self) -> Union[List[SubDataclassT], OrderedDict[str, SubDataclassT]]:
         raise NotImplementedError("Must be implemented in subclasses.")
 
+    @abstractmethod
+    def get_id(self) -> ScopedLocationAttr:
+        """
+        Return the id of the current object, that is also the same attr that
+        the object is located in the metadata ScopedLocation.
+        """
+        if self.__class__ in dataclass_2_attr:
+            attr_name: str = dataclass_2_attr[self.__class__]
+            attr = getattr(self, attr_name)
+            return attr
+        return None
+
 
 class BaseTrialDataclassMixin:
     """
@@ -160,6 +193,9 @@ class RootMetadata(BaseDataclass['ProjectDataclass']):
     def get_sublocation(self) -> OrderedDict[str, 'ProjectDataclass']:
         return self.projects
 
+    def get_id(self) -> ScopedLocationAttr:
+        return None
+
 
 class ProjectDataclass(BaseDataclass['ClientDataclass']):
     project_name: str = "default_project"
@@ -173,7 +209,7 @@ class ProjectDataclass(BaseDataclass['ClientDataclass']):
 class ClientDataclass(BaseDataclass['RoundDataclass']):
     client_name: str = "default_client"
     rounds: List['RoundDataclass'] = field(default_factory=list)
-    # By default, the first metric is the main one.  # TODO: make it configurable, or in round?.
+    # By default, the first metric is the main one.  # TODO: make it configurable, or in round?
     main_metric_name: str = None
 
     def get_sublocation(self) -> list['RoundDataclass']:
@@ -501,6 +537,17 @@ class AutoMLFlow(Flow):
 
         self.synchroneous()
 
+    @staticmethod
+    def from_flow(flow: Flow, repo: HyperparamsRepository) -> 'AutoMLFlow':
+        f = AutoMLFlow(
+            repo=repo,
+            logger=flow.logger,
+            loc=flow.loc,
+        )
+        f._lock = flow._lock  # TODO: lock to be in AutoMLContext instead.
+        f.synchroneous()
+        return f
+
     def with_new_loc(self, loc: ScopedLocation):
         """
         Create a new AutoMLFlow with a new ScopedLocation.
@@ -528,39 +575,39 @@ class AutoMLFlow(Flow):
 
 class AutoMLContext(ExecutionContext):
 
-    def from_context(self, context: ExecutionContext, repo: HyperparamsRepository):
+    @staticmethod
+    def from_context(context: ExecutionContext, repo: HyperparamsRepository) -> 'AutoMLContext':
         """
         Create a new AutoMLContext from an ExecutionContext.
 
         :param context: ExecutionContext
         """
         new_context = context.copy()
-        # TODO: flow
-        new_context.flow = AutoMLFlow.from_flow(context.flow)
-        
-        # TODO: repo
+        # TODO: repo in context or just in flow?
+        new_context.flow = AutoMLFlow.from_flow(context.flow, repo)
         new_context.register_service(HyperparamsRepository, repo)
-
-        # TODO: loc
-        
-
         return new_context
 
-    # TODO: @property for repo and loc.
+    # TODO: @lock in repo.
     @property
-    def repo(self):
+    def lock(self):
+        return self.flow._lock
+
+    @property
+    def repo(self) -> HyperparamsRepository:
         return self.get_service(HyperparamsRepository)
 
     @property
-    def loc(self):
+    def loc(self) -> ScopedLocation:
         return self.flow.loc
 
-    def push_attr(self, name: Type[SubDataclassT], value: ScopedLocationAttr):
+    def push_attr(self, name: Type[SubDataclassT], value: ScopedLocationAttr) -> 'AutoMLContext':
         """
-        Push a new attribute to the ScopedLocation.
+        Push a new attribute into the ScopedLocation.
 
         :param name: attribute name
         :param value: attribute value
+        :return: an AutoMLContext copy with the new loc attribute.
         """
         new_self: AutoMLContext = self.copy()
         new_self.loc[name] = value

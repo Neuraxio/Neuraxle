@@ -49,7 +49,8 @@ from neuraxle.base import BaseStep, ExecutionContext, Flow, TrialStatus
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
-from neuraxle.metaopt.data.vanilla import (AutoMLFlow, BaseDataclass,
+from neuraxle.metaopt.data.vanilla import (AutoMLContext, AutoMLFlow,
+                                           BaseDataclass,
                                            BaseHyperparameterOptimizer,
                                            ClientDataclass,
                                            HyperparamsRepository,
@@ -57,13 +58,14 @@ from neuraxle.metaopt.data.vanilla import (AutoMLFlow, BaseDataclass,
                                            MetricResultsDataclass,
                                            ProjectDataclass, RecursiveDict,
                                            RootMetadata, RoundDataclass,
-                                           ScopedLocation, SubDataclassT,
-                                           TrialDataclass, TrialSplitDataclass)
+                                           ScopedLocation, ScopedLocationAttr,
+                                           SubDataclassT, TrialDataclass,
+                                           TrialSplitDataclass)
 
 
 class BaseScope(ABC):
-    def __init__(self, context: ExecutionContext):
-        self.context: ExecutionContext = context
+    def __init__(self, context: AutoMLContext):
+        self.context: AutoMLContext = context
 
     @property
     def flow(self) -> AutoMLFlow:
@@ -82,21 +84,30 @@ class BaseScope(ABC):
 
 
 class ProjectScope(BaseScope):
+    def __init__(self, context: AutoMLContext, project_name: ScopedLocationAttr):
+        super().__init__(context.push_attr(ProjectDataclass, project_name))
+
     def __enter__(self) -> 'ProjectScope':
         return self
 
-    def new_client(self) -> 'ClientScope':
-        return ClientScope(self.context)
+    def new_client(self, client_name: ScopedLocationAttr) -> 'ClientScope':
+        return ClientScope(self.context, client_name)
 
     def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
         self.flow.log_error(exc_val)
 
 
 class ClientScope(BaseScope):
+
+    def __init__(self, context: AutoMLContext, client_name: ScopedLocationAttr):
+        super().__init__(context.push_attr(ClientDataclass, client_name))
+
     def __enter__(self) -> 'ClientScope':
         return self
 
     def new_round(self, hp_space: HyperparameterSamples) -> 'RoundScope':
+        with self.context.lock:
+            pass
         return RoundScope(self.context, hp_space)
 
     def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
@@ -104,7 +115,7 @@ class ClientScope(BaseScope):
 
 
 class RoundScope(BaseScope):
-    def __init__(self, context: ExecutionContext, hp_space: HyperparameterSpace):
+    def __init__(self, context: AutoMLContext, hp_space: HyperparameterSpace):
         super().__init__(context)
         self.hp_space: HyperparameterSpace = hp_space
 
@@ -114,7 +125,7 @@ class RoundScope(BaseScope):
         return self
 
     def new_hyperparametrized_trial(self, hp_optimizer: BaseHyperparameterOptimizer, continue_loop_on_error: bool) -> 'TrialScope':
-        with self.context.flow.synchroneous():
+        with self.context.lock:
             new_hps: HyperparameterSamples = hp_optimizer.find_next_best_hyperparams(self)
             ts = TrialScope(self.context, new_hps, continue_loop_on_error)
         return ts
@@ -137,7 +148,7 @@ class RoundScope(BaseScope):
 
 class TrialScope(BaseScope):
 
-    def __init__(self, context: ExecutionContext, hps: HyperparameterSamples, continue_loop_on_error: bool):
+    def __init__(self, context: AutoMLContext, hps: HyperparameterSamples, continue_loop_on_error: bool):
         super().__init__(context)
 
         self.hps: HyperparameterSamples = hps
@@ -179,7 +190,7 @@ class TrialScope(BaseScope):
 
 
 class TrialSplitScope(BaseScope):
-    def __init__(self, context: ExecutionContext, repo: HyperparamsRepository, n_epochs: int):
+    def __init__(self, context: AutoMLContext, repo: HyperparamsRepository, n_epochs: int):
         super().__init__(context, repo)
         self.n_epochs = n_epochs
 
@@ -232,7 +243,7 @@ class TrialSplitScope(BaseScope):
 
 
 class EpochScope(BaseScope):
-    def __init__(self, context: ExecutionContext, repo: HyperparamsRepository, epoch: int, n_epochs: int):
+    def __init__(self, context: AutoMLContext, repo: HyperparamsRepository, epoch: int, n_epochs: int):
         super().__init__(context, repo)
         self.epoch: int = epoch
         self.n_epochs: int = n_epochs
