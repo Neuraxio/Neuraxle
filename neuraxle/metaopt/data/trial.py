@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from json.encoder import JSONEncoder
 from logging import FileHandler, Logger
-from typing import Any, Callable, Dict, Iterable, List, Tuple, Type
+from typing import Any, Callable, Dict, Iterable, List, Tuple, Type, Generic, TypeVar, Union, Optional
 
 import numpy as np
 from neuraxle.base import BaseStep, ExecutionContext, Flow, TrialStatus
@@ -150,15 +150,15 @@ class RoundScope(BaseScope):
 
 class TrialScope(BaseScope):
 
-    def __init__(self, context: AutoMLContext, hps: HyperparameterSamples, continue_loop_on_error: bool):
+    def __init__(self, context: AutoMLContext, trial: 'TrialManager', continue_loop_on_error: bool):
         super().__init__(context)
 
-        self.hps: HyperparameterSamples = hps
+        self.trial: TrialManager = trial
         self.error_types_to_raise = (
             SystemError, SystemExit, EOFError, KeyboardInterrupt
         ) if continue_loop_on_error else (Exception,)
 
-        self.flow.log_planned(hps)
+        self.flow.log_planned(trial.get)
 
     def __enter__(self) -> 'TrialScope':
         self.flow.log_start()
@@ -172,7 +172,10 @@ class TrialScope(BaseScope):
         return self
 
     def new_trial_split(self) -> 'TrialSplitScope':
-        return TrialSplitScope(self.context, self.repo)
+        trial_split: TrialSplitManager = self.trial.new_validation_split()
+        self.repo.set(self.loc, trial_split, False)
+        self.repo.set(self.loc.with_dc(trial_split), trial_split, True)
+        return TrialSplitScope(self.context, self.repo, trial_split)
 
     def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
         gc.collect()
@@ -259,7 +262,13 @@ class EpochScope(BaseScope):
         raise NotImplementedError("TODO: log MetricResultMetadata?")
 
 
-class TrialManager:
+class DataclassDomainAggregate(Generic[SubDataclassT]):
+
+    def __init__(self, _dataclass: SubDataclassT):
+        self._dataclass: SubDataclassT = _dataclass
+
+
+class TrialManager(DataclassDomainAggregate[TrialDataclass]):
     """
     This class is a sub-contextualization of the :class:`HyperparameterRepository`
     class for holding a trial and manipulating it within its context.
@@ -273,12 +282,6 @@ class TrialManager:
         :class:`AutoML`,
         :class:`ExecutionContext`
     """
-
-    def __init__(
-            self,
-            trial_dataclass: 'TrialDataclass',
-    ):
-        self._dataclass: TrialDataclass = trial_dataclass
 
     def new_validation_split(self, delete_pipeline_on_completion: bool = True) -> 'TrialSplitManager':
         """

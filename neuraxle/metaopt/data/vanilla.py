@@ -89,6 +89,14 @@ class ScopedLocation:
 
         raise ValueError(f"Invalid key type {key.__class__.__name__} for key {key}.")
 
+    def with_dc(self, dc: SubDataclassT) -> 'ScopedLocation':
+        """
+        Returns a new :class:`ScopedLocation` with the provided :class:`BaseDataclass` type's id added.
+        """
+        self_copy = copy.deepcopy(self)
+        self_copy[dc.__class__] = dc.id
+        return self_copy
+
     def __setitem__(self, key: Type[SubDataclassT], value: ScopedLocationAttr):
         """
         Set sublocation attr from the provided :class:`BaseMetadata` type.
