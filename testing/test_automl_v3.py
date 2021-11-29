@@ -23,7 +23,7 @@ from neuraxle.metaopt.data.vanilla import (AutoMLContext, AutoMLFlow, BaseDatacl
                                            TrialSplitDataclass,
                                            VanillaHyperparamsRepository,
                                            dataclass_2_attr)
-from neuraxle.metaopt.validation import ValidationSplitter
+from neuraxle.metaopt.validation import ValidationSplitter, GridExplorationSampler
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.data import DataShuffler
 from neuraxle.steps.flow import TrainOnlyWrapper
@@ -49,7 +49,7 @@ class StepThatAssertsContextIsSpecified(HandleOnlyMixin, BaseStep):
 
 def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scenario(tmpdir):
     # This is a large test
-    dact = DataContainer(di=list(range(10)), eo=list(range(10, 20)))
+    dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
     cx = ExecutionContext(root=tmpdir)
     expected_deep_cx = ExecutionContext(root=tmpdir)
     assertion_step = StepThatAssertsContextIsSpecified(expected_context=expected_deep_cx)
@@ -88,7 +88,7 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
     dact_valid_x: DACT = DACT(ids=range(10, 20), di=range(10, 20))
     dact_valid_y: DACT = DACT(ids=range(10, 20), di=range(110, 120))
     context = AutoMLContext.from_context(ExecutionContext(), VanillaHyperparamsRepository(tmpdir))
-    hp_optimizer: BaseHyperparameterOptimizer = GridExplorationSampler(main_metric_name='MAE')
+    hp_optimizer: BaseHyperparameterOptimizer = GridExplorationSampler(main_metric_name='MAE', expected_n_trials=1)
     n_epochs = 3
     callbacks = CallbackList([MetricCallback('MAE', median_absolute_error, False)])
     expected_scope = ScopedLocation(
@@ -110,7 +110,7 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
             cs: ClientScope = cs
             with cs.new_round(p.get_hyperparams_space()) as rs:
                 rs: RoundScope = rs
-                with rs.new_hyperparametrized_trial(hp_optimizer) as ts:
+                with rs.new_hyperparametrized_trial(hp_optimizer=hp_optimizer, continue_loop_on_error=False) as ts:
                     ts: TrialScope = ts
                     with ts.new_trial_split() as tss:
                         tss: TrialSplitScope = tss

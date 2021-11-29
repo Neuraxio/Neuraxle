@@ -5,23 +5,36 @@ Code for tree parzen estimator auto ml.
 """
 from collections import Counter
 from operator import itemgetter
-from typing import List, Any, Tuple
+from typing import Any, List, Tuple
 
 import numpy as np
-
-from neuraxle.hyperparams.distributions import DistributionMixture, PriorityChoice, DiscreteHyperparameterDistribution, \
-    HyperparameterDistribution
-from neuraxle.hyperparams.distributions import Choice, LogNormal, LogUniform, Quantized
-from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoMLFlow, BaseHyperparameterOptimizer, RandomSearch, RoundScope, \
-    TrialStatus
+from neuraxle.hyperparams.distributions import (
+    Choice, DiscreteHyperparameterDistribution, DistributionMixture,
+    HyperparameterDistribution, LogNormal, LogUniform, PriorityChoice,
+    Quantized)
+from neuraxle.hyperparams.space import (HyperparameterSamples,
+                                        HyperparameterSpace)
+from neuraxle.metaopt.auto_ml import (BaseHyperparameterOptimizer, RoundScope,
+                                      TrialStatus)
 from neuraxle.metaopt.data.trial import RoundManager
+from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
+from neuraxle.metaopt.validation import GridExplorationSampler
 
 _LOG_DISTRIBUTION = (LogNormal, LogUniform)
 _QUANTIZED_DISTRIBUTION = (Quantized,)
 
 
-class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterOptimizer):
+class TreeParzenEstimator(BaseHyperparameterOptimizer):
+    """
+    This is a Tree Parzen Estimator (TPE) algorithm as found in Hyperopt,
+    that is better than the Random Search algorithm and supports supporting
+    intelligent exploration v.s. exploitation of the search space over time,
+    using Neuraxle hyperparameters.
+
+    Here, the algorithm is modified compared to the original one, as it uses a
+    :class:`neuraxle.metaopt.automl.GridExplorationSampler` instead of a random search
+    to pick the first exploration samples to furthermore explore the space at the beginning.
+    """
     def __init__(
             self,
             number_of_initial_random_step: int = 40,
@@ -33,7 +46,9 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterOptim
             number_recent_trial_at_full_weights: int = 25
     ):
         super().__init__()
-        self.initial_auto_ml_algo: RandomSearch = RandomSearch()
+        self.initial_auto_ml_algo: BaseHyperparameterOptimizer = GridExplorationSampler(
+            expected_n_trials=number_of_initial_random_step)
+
         self.number_of_initial_random_step: int = number_of_initial_random_step
         self.quantile_threshold: float = quantile_threshold
         self.number_good_trials_max_cap: int = number_good_trials_max_cap
@@ -62,7 +77,8 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterOptim
         success_trials: RoundManager = round_scope.repo.load_trials(status=TrialStatus.SUCCESS)
 
         # Split trials into good and bad using quantile threshold.
-        good_trials, bad_trials = success_trials.split_good_and_bad_trials(
+        good_trials, bad_trials = self.split_good_and_bad_trials(
+            success_trials=success_trials,
             quantile_threshold=self.quantile_threshold,
             number_of_good_trials_max_cap=self.number_good_trials_max_cap
         )
@@ -111,6 +127,36 @@ class TreeParzenEstimatorHyperparameterSelectionStrategy(BaseHyperparameterOptim
 
             best_hyperparams.append((hyperparam_key, best_new_hyperparam_value))
         return HyperparameterSamples(best_hyperparams)
+
+    def split_good_and_bad_trials(
+        self, success_trials: RoundManager, quantile_threshold: float, number_of_good_trials_max_cap: int
+    ) -> Tuple['RoundManager', 'RoundManager']:
+        success_trials: RoundManager = success_trials.filter(TrialStatus.SUCCESS)
+
+        # Split trials into good and bad using quantile threshold.
+        trials_scores = np.array([trial.get_validation_score() for trial in success_trials])
+
+        trial_sorted_indexes = np.argsort(trials_scores)
+        if success_trials.is_higher_score_better():
+            trial_sorted_indexes = list(reversed(trial_sorted_indexes))
+
+        # In hyperopt they use this to split, where default_gamma_cap = 25. They clip the max of item they use in the good item.
+        # default_gamma_cap is link to the number of recent_trial_at_full_weight also.
+        # n_below = min(int(np.ceil(gamma * np.sqrt(len(l_vals)))), gamma_cap)
+        n_good = int(min(np.ceil(quantile_threshold * len(trials_scores)), number_of_good_trials_max_cap))
+
+        good_trials_indexes = trial_sorted_indexes[:n_good]
+        bad_trials_indexes = trial_sorted_indexes[n_good:]
+
+        good_trials = []
+        bad_trials = []
+        for trial_index, trial in enumerate(success_trials):
+            if trial_index in good_trials_indexes:
+                good_trials.append(trial)
+            if trial_index in bad_trials_indexes:
+                bad_trials.append(trial)
+
+        return RoundManager(trials=good_trials), RoundManager(trials=bad_trials)
 
     def _create_posterior(self, flat_hyperparameter_space_list: List[Tuple[str, HyperparameterDistribution]],
                           trials: RoundManager) -> HyperparameterSpace:

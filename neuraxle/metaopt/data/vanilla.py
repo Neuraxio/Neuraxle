@@ -95,7 +95,7 @@ class ScopedLocation:
         """
         # Throw value error if the key's type is not yet to be defined:
         curr_attr_to_set_idx: int = len(self)
-        key_idx: int = dataclass_2_attr.keys().index(key)
+        key_idx: int = list(dataclass_2_attr.keys()).index(key)
         if curr_attr_to_set_idx != key_idx:
             raise ValueError(
                 f"{key} is not yet to be defined. Currently, "
@@ -541,11 +541,10 @@ class AutoMLFlow(Flow):
     def from_flow(flow: Flow, repo: HyperparamsRepository) -> 'AutoMLFlow':
         f = AutoMLFlow(
             repo=repo,
-            logger=flow.logger,
-            loc=flow.loc,
+            logger=flow.logger,  # TODO: loc?
+            # loc=flow.loc,
         )
-        f._lock = flow._lock  # TODO: lock to be in AutoMLContext instead.
-        f.synchroneous()
+        f._lock = flow.synchroneous()  # TODO: lock to be in AutoMLContext instead.
         return f
 
     def with_new_loc(self, loc: ScopedLocation):
@@ -582,9 +581,19 @@ class AutoMLContext(ExecutionContext):
 
         :param context: ExecutionContext
         """
-        new_context = context.copy()
+        context = context.copy()
+        flow = AutoMLFlow.from_flow(context.flow, repo)
+
+        new_context = AutoMLContext(
+            root=context.root,
+            flow=AutoMLFlow.from_flow(flow, repo),
+            execution_phase=context.execution_phase,
+            execution_mode=context.execution_mode,
+            stripped_saver=context.stripped_saver,
+            parents=context.parents,
+            services=context.services,
+        )
         # TODO: repo in context or just in flow?
-        new_context.flow = AutoMLFlow.from_flow(context.flow, repo)
         new_context.register_service(HyperparamsRepository, repo)
         return new_context
 
@@ -610,5 +619,5 @@ class AutoMLContext(ExecutionContext):
         :return: an AutoMLContext copy with the new loc attribute.
         """
         new_self: AutoMLContext = self.copy()
-        new_self.loc[name] = value
+        new_self.flow.loc[name] = value
         return new_self

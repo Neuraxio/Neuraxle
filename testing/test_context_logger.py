@@ -1,19 +1,20 @@
 import logging
 import os
-import pytest
 import shutil
 
 import numpy as np
-from sklearn.metrics import mean_squared_error
-
-from neuraxle.base import BaseStep, ExecutionContext, HandleOnlyMixin, Flow
+import pytest
+from neuraxle.base import BaseStep, ExecutionContext, Flow, HandleOnlyMixin
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, RandomSearch, ValidationSplitter, HyperparamsJSONRepository
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearch
 from neuraxle.metaopt.callbacks import ScoringCallback
+from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
+from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import MultiplyByN, NumpyReshape
+from sklearn.metrics import mean_squared_error
 
 
 class LoggingStep(HandleOnlyMixin, BaseStep):

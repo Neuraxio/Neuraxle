@@ -676,15 +676,17 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
         """
         if self._i == 0:
             self._generate_grid(round_scope.hp_space)
-
-        i_grid_keys: List[int] = self._gen_keys_for_grid(self._i)
-        flat_result: OrderedDict[str, Any] = self._acces_keys_for_grid(i_grid_keys)
+        else:
+            self._reshuffle_grid()
         self._i += 1
+
+        i_grid_keys: List[int] = self._gen_keys_for_grid()
+        flat_result: OrderedDict[str, Any] = self[i_grid_keys]
         return HyperparameterSamples(flat_result)
 
     def _generate_grid(self, hp_space: HyperparameterSpace):
         """
-        Generate the grid of hyperparameters.
+        Generate the grid of hyperparameters to pick from.
 
         :param hp_space: hyperparameter space
         """
@@ -693,27 +695,18 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
             if isinstance(hp_dist, DiscreteHyperparameterDistribution):
                 hp_samples: List[Any] = hp_dist.values()
 
-                reordered_hp_samples: List[Any] = copy.copy(hp_samples)
-                for i, sample in enumerate(hp_samples):
-                    reordered_hp_samples[i] = sample
-
-                self.flat_hp_grid_values[hp_name] = hp_samples
-                self.flat_hp_grid_lens.append(len(hp_samples))
+                reordered_hp_samples = self.disorder(hp_samples)
+                self.flat_hp_grid_values[hp_name] = reordered_hp_samples
+                self.flat_hp_grid_lens.append(len(reordered_hp_samples))
 
         # Then fill the remaining continous params using the expected_n_trials:
-        remainder: int = max(
-            3,
-            math.ceil(
-                (self.expected_n_trials / sum(self.flat_hp_grid_lens)) / (
-                    len(hp_space.to_flat_dict()) - len(self.flat_hp_grid_lens))
-            )
-        )
+        remainder: int = max(3, self.expected_n_trials)
         for hp_name, hp_dist in hp_space.to_flat_dict().items():
             if isinstance(hp_dist, ContinuousHyperparameterDistribution):
                 hp_samples: List[Any] = [
+                    hp_dist.mean(),
                     hp_dist.min(),
                     hp_dist.max(),
-                    hp_dist.mean(),
                     hp_dist.mean() + hp_dist.std(),
                     hp_dist.mean() - hp_dist.std(),
                     hp_dist.mean() + hp_dist.std() / 2,
@@ -739,15 +732,52 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
             )
         self.expected_n_trials = _sum
 
-    def _gen_keys_for_grid(self, i: int) -> List[int]:
+    @staticmethod
+    def disorder(x: list, seed: int = 0) -> list:
+        """
+        Shuffle a list to create a pseudo-random order that is interesting.
+        """
+        x = copy.copy(x)
+        for i in reversed(range(len(x))):
+            v = x[i]
+            if (len(x) + i + seed) % 2 and (i + seed) != 0:
+                del x[i]
+                x.insert(1 - (seed % 2), v)
+        return x
+
+    def _gen_keys_for_grid(self) -> List[int]:
         """
         Generate the keys for the grid.
 
         :param i: index
         :return: keys
         """
-        return [i % len(self.flat_hp_grid_lens)]
-        # self.flat_hp_grid_values[i_grid_keys]
+        flat_idx: List[int] = []
+        for _len in self.flat_hp_grid_lens:
+            flat_idx.append(self._i % _len)
+        return flat_idx
+
+    def _reshuffle_grid(self):
+        """
+        Reshuffling with pseudo-random seed the hyperparameters' values:
+        """
+        for seed, (k, v) in enumerate(self.flat_hp_grid_values.items()):
+            if self._i % len(v) == 0:
+                # reshuffling the grid for when it comes to the end of each of its sublist.
+                new_v = self.disorder(v, seed % (self._i + 1) + self._i % (seed + 1))
+                self.flat_hp_grid_values[k] = new_v
+
+    def __getitem__(self, i_grid_keys: List[int]) -> OrderedDict[str, Any]:
+        """
+        Access the keys for the grid.
+
+        :param i_grid_keys: keys
+        :return: hyperparams
+        """
+        flat_result: OrderedDict[str, Any] = OrderedDict()
+        for j, hp_name in enumerate(self.flat_hp_grid_values.keys()):
+            flat_result[hp_name] = self.flat_hp_grid_values[hp_name][i_grid_keys[j]]
+        return flat_result
 
 
 class BaseValidationSplitter(ABC):

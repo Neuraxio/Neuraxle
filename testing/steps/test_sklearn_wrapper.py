@@ -1,13 +1,15 @@
+import json
+
 import numpy as np
 import pytest
 from neuraxle.base import Identity
 from neuraxle.hyperparams.distributions import RandInt, Uniform
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
-from neuraxle.metaopt.auto_ml import (EasyAutoML, HyperparamsJSONRepository,
-                                      KFoldCrossValidationSplitter,
-                                      RandomSearch)
+from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearch
 from neuraxle.metaopt.callbacks import ScoringCallback
+from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
+from neuraxle.metaopt.validation import KFoldCrossValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.data import DataShuffler
 from neuraxle.steps.flow import TrainOnlyWrapper

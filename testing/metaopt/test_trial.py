@@ -1,14 +1,11 @@
 import datetime
-import time
+
 import pytest
-
-from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository
-
-from neuraxle.base import Identity
+from neuraxle.base import Identity, TrialStatus
 from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.metaopt.data.trial import TrialManager, RoundManager
-from neuraxle.base import TrialStatus
 from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
+from neuraxle.metaopt.data.trial import RoundManager, TrialManager
+from neuraxle.metaopt.data.vanilla import InMemoryHyperparamsRepository
 
 EXPECTED_ERROR_TRACEBACK = 'NoneType: None\n'
 

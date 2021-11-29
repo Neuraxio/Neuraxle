@@ -1,23 +1,26 @@
 import numpy as np
 import pytest
+from neuraxle.base import ExecutionContext
+from neuraxle.data_container import DataContainer
+from neuraxle.hyperparams.distributions import FixedHyperparameter, RandInt
+from neuraxle.hyperparams.space import HyperparameterSpace
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearch, Trainer
+from neuraxle.metaopt.callbacks import (BestModelCheckpoint,
+                                        EarlyStoppingCallback, MetricCallback,
+                                        ScoringCallback)
+from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
+from neuraxle.metaopt.data.trial import RoundManager, TrialManager
+from neuraxle.metaopt.data.vanilla import InMemoryHyperparamsRepository
+from neuraxle.metaopt.validation import (KFoldCrossValidationSplitter,
+                                         ValidationSplitter)
+from neuraxle.pipeline import Pipeline
+from neuraxle.steps.numpy import MultiplyByN, NumpyReshape
+from neuraxle.steps.sklearn import SKLearnWrapper
 from sklearn import linear_model
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.metrics import mean_squared_error
 from sklearn.svm import LinearSVC
 from sklearn.utils._testing import ignore_warnings
-
-from neuraxle.base import ExecutionContext
-from neuraxle.data_container import DataContainer
-from neuraxle.hyperparams.distributions import FixedHyperparameter, RandInt
-from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, RandomSearch, \
-    HyperparamsJSONRepository, \
-    ValidationSplitter, KFoldCrossValidationSplitter, Trainer
-from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback, EarlyStoppingCallback, BestModelCheckpoint
-from neuraxle.metaopt.data.trial import TrialManager, RoundManager
-from neuraxle.pipeline import Pipeline
-from neuraxle.steps.numpy import MultiplyByN, NumpyReshape
-from neuraxle.steps.sklearn import SKLearnWrapper
 
 
 @pytest.mark.skip(reason="TODO: AutoML Refactor")

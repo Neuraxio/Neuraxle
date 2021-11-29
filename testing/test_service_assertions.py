@@ -9,8 +9,9 @@ from sklearn.metrics import mean_squared_error
 from neuraxle.base import BaseService, Identity, ExecutionContext, NonFittableMixin, \
     StepWithContext, ForceHandleIdentity, BaseStep, BaseTransformerT
 from neuraxle.data_container import DataContainer
-from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearch, \
-    ValidationSplitter, HyperparamsJSONRepository
+from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearch
+from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
+from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.pipeline import Pipeline
 

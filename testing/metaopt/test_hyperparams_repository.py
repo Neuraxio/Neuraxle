@@ -1,9 +1,9 @@
-import pytest
 import json
 import os
 
+import pytest
 from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.metaopt.auto_ml import HyperparamsJSONRepository
+from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
 
 HYPERPARAMS = {'learning_rate': 0.01}
 FIRST_SCORE_FOR_TRIAL = 1

@@ -8,13 +8,12 @@ from neuraxle.hyperparams.distributions import (Choice, LogNormal, LogUniform,
                                                 Normal, Quantized, Uniform)
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import (AutoML, BaseHyperparameterOptimizer,
-                                      EasyAutoML,
-                                      InMemoryHyperparamsRepository,
-                                      RandomSearch, ValidationSplitter)
+                                      EasyAutoML, RandomSearch)
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.metaopt.data.trial import RoundManager
-from neuraxle.metaopt.hyperopt.tpe import \
-    TreeParzenEstimatorHyperparameterSelectionStrategy
+from neuraxle.metaopt.data.vanilla import InMemoryHyperparamsRepository
+from neuraxle.metaopt.hyperopt.tpe import TreeParzenEstimator
+from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCallbackStep
 from neuraxle.steps.numpy import AddN
@@ -87,7 +86,7 @@ def test_tpe(expected_output_mult, pipeline, tmpdir):
         delayed(_test_trial_scores)(
             expected_output_mult,
             pipeline,
-            TreeParzenEstimatorHyperparameterSelectionStrategy(
+            TreeParzenEstimator(
                 number_of_initial_random_step=5,
                 quantile_threshold=0.3,
                 number_good_trials_max_cap=25,

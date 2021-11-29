@@ -1168,7 +1168,7 @@ class ExecutionContext(TruncableService):
         )
 
     def copy(self):
-        return ExecutionContext(
+        return self.__class__(
             root=self.root,
             flow=self.flow.copy(),
             execution_mode=self.execution_mode,

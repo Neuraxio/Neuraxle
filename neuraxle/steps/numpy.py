@@ -214,8 +214,19 @@ class MultiplyByN(BaseTransformer):
         :class:`~neuraxle.base.BaseStep`
     """
 
-    def __init__(self, multiply_by=1):
-        super().__init__(hyperparams=HyperparameterSamples({ 'multiply_by': multiply_by }))
+    def __init__(self, multiply_by: int = 1):
+        super().__init__(hyperparams=HyperparameterSamples({'multiply_by': multiply_by}))
+
+    def with_hp_range(self, multiply_by_hp_range: range) -> 'MultiplyByN':
+        """
+        Specify a range for the hyperparametern "N" to be used as an hyperparameter space.
+
+        :param hp_range: range of the hyperparameter. E.g.: ``range(1, 10)``
+        """
+        self.set_hyperparams_space(HyperparameterSpace({
+            'multiply_by': PriorityChoice(list(multiply_by_hp_range))
+        }))
+        return self
 
     def transform(self, data_inputs):
         if not isinstance(data_inputs, np.ndarray):

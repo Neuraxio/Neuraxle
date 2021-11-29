@@ -1,21 +1,24 @@
-import pytest
 import os
-import numpy as np
-from sklearn.metrics import mean_squared_error
-from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
 
+import numpy as np
+import pytest
 from neuraxle.base import ExecutionContext
 from neuraxle.data_container import DataContainer
-from neuraxle.metaopt.auto_ml import EasyAutoML, DefaultLoop, VanillaHyperparamsRepository, ValidationSplitter, Trainer, RandomSearch
-from neuraxle.metaopt.callbacks import EarlyStoppingCallback, MetricCallback, ScoringCallback
-from neuraxle.pipeline import Pipeline
-from neuraxle.hyperparams.distributions import Choice, RandInt, Boolean, LogUniform
+from neuraxle.hyperparams.distributions import (Boolean, Choice, LogUniform,
+                                                RandInt)
 from neuraxle.hyperparams.space import HyperparameterSpace
+from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearch
+from neuraxle.metaopt.callbacks import (EarlyStoppingCallback, MetricCallback,
+                                        ScoringCallback)
+from neuraxle.metaopt.data.vanilla import VanillaHyperparamsRepository
+from neuraxle.metaopt.validation import ValidationSplitter
+from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyRavel
 from neuraxle.steps.output_handlers import OutputTransformerWrapper
 from neuraxle.steps.sklearn import SKLearnWrapper
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, mean_squared_error
+from sklearn.preprocessing import StandardScaler
 
 
 def _create_data_source():

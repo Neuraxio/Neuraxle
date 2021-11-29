@@ -124,7 +124,9 @@ class RoundScope(BaseScope):
         self.flow.add_file_to_logger(self.repo.get_logger_path(self.loc))
         return self
 
-    def new_hyperparametrized_trial(self, hp_optimizer: BaseHyperparameterOptimizer, continue_loop_on_error: bool) -> 'TrialScope':
+    def new_hyperparametrized_trial(
+        self, hp_optimizer: BaseHyperparameterOptimizer, continue_loop_on_error: bool
+    ) -> 'TrialScope':
         with self.context.lock:
             new_hps: HyperparameterSamples = hp_optimizer.find_next_best_hyperparams(self)
             ts = TrialScope(self.context, new_hps, continue_loop_on_error)
@@ -255,7 +257,6 @@ class EpochScope(BaseScope):
     def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
         self.flow.log_error(exc_val)
         raise NotImplementedError("TODO: log MetricResultMetadata?")
-
 
 
 class TrialManager:
@@ -578,16 +579,6 @@ class TrialSplitManager:
 
 
 class RoundManager:
-    """
-    Data object containing auto ml trials.
-
-    .. seealso::
-        :class:`RandomSearch`,
-        :class:`HyperparamsRepository`,
-        :class:`MetaStepMixin`,
-        :class:`BaseStep`
-    """
-
     def __init__(
             self,
             trials: List[TrialManager] = None
@@ -624,36 +615,6 @@ class RoundManager:
                 best_trial = trial
 
         return best_trial
-
-    def split_good_and_bad_trials(self, quantile_threshold: float, number_of_good_trials_max_cap: int) -> Tuple[
-            'RoundManager', 'RoundManager']:
-        # TODO: move to tpe class? Seems wrongly located.
-        success_trials: RoundManager = self.filter(TrialStatus.SUCCESS)
-
-        # Split trials into good and bad using quantile threshold.
-        trials_scores = np.array([trial.get_validation_score() for trial in success_trials])
-
-        trial_sorted_indexes = np.argsort(trials_scores)
-        if success_trials.is_higher_score_better():
-            trial_sorted_indexes = list(reversed(trial_sorted_indexes))
-
-        # In hyperopt they use this to split, where default_gamma_cap = 25. They clip the max of item they use in the good item.
-        # default_gamma_cap is link to the number of recent_trial_at_full_weight also.
-        # n_below = min(int(np.ceil(gamma * np.sqrt(len(l_vals)))), gamma_cap)
-        n_good = int(min(np.ceil(quantile_threshold * len(trials_scores)), number_of_good_trials_max_cap))
-
-        good_trials_indexes = trial_sorted_indexes[:n_good]
-        bad_trials_indexes = trial_sorted_indexes[n_good:]
-
-        good_trials = []
-        bad_trials = []
-        for trial_index, trial in enumerate(success_trials):
-            if trial_index in good_trials_indexes:
-                good_trials.append(trial)
-            if trial_index in bad_trials_indexes:
-                bad_trials.append(trial)
-
-        return RoundManager(trials=good_trials), RoundManager(trials=bad_trials)
 
     def is_higher_score_better(self, metric_name: str) -> bool:
         """
