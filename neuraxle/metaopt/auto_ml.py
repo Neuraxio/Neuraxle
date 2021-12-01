@@ -27,23 +27,17 @@ Hyperparameter selection strategies are used to optimize the hyperparameters of 
 
 import copy
 import gc
-import glob
 import json
-import logging
-import math
 import multiprocessing
-import os
-import time
 import traceback
-from abc import ABC, abstractmethod
-from typing import Any, Callable, Iterator, List, Optional, Tuple, Type, Union
+from operator import attrgetter
+from typing import Iterator, List, Tuple, Union
 
 import numpy as np
 from neuraxle.base import (BaseService, BaseServiceT, BaseStep,
                            ExecutionContext, ExecutionPhase, Flow,
-                           ForceHandleMixin, MetaService, MetaServiceMixin,
-                           TrialStatus, TruncableService, _HasChildrenMixin,
-                           synchroneous_flow_method)
+                           ForceHandleMixin, TrialStatus, TruncableService,
+                           _HasChildrenMixin)
 from neuraxle.data_container import DACT as DACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
@@ -51,11 +45,14 @@ from neuraxle.logging.warnings import (warn_deprecated_arg,
                                        warn_deprecated_class)
 from neuraxle.metaopt.callbacks import (BaseCallback, CallbackList,
                                         ScoringCallback)
-from neuraxle.metaopt.data.trial import (EpochScope, RoundManager, RoundScope,
-                                         TrialManager, TrialScope,
-                                         TrialSplitManager, TrialSplitScope)
-from neuraxle.metaopt.data.vanilla import (BaseDataclass, ClientDataclass,
+from neuraxle.metaopt.data.managers import TrialManager
+from neuraxle.metaopt.data.trial import (ClientScope, EpochScope, ProjectScope,
+                                         RoundScope, TrialScope,
+                                         TrialSplitScope)
+from neuraxle.metaopt.data.vanilla import (AutoMLContext, AutoMLFlow, BaseDataclass,
+                                           ClientDataclass,
                                            HyperparamsRepository,
+                                           InMemoryHyperparamsRepository,
                                            MetricResultsDataclass,
                                            ProjectDataclass, RecursiveDict,
                                            RootMetadata, RoundDataclass,
@@ -63,14 +60,15 @@ from neuraxle.metaopt.data.vanilla import (BaseDataclass, ClientDataclass,
                                            TrialDataclass, TrialSplitDataclass)
 from neuraxle.metaopt.validation import (BaseCrossValidationWrapper,
                                          BaseHyperparameterOptimizer,
-                                         RandomSearch)
+                                         BaseValidationSplitter, RandomSearch)
 
 
 class Trainer(BaseService):
     """
     Class used to train a pipeline using various data splits and callbacks for evaluation purposes.
 
-    # TODO: add this `with_val_set` method that would change splitter to PresetValidationSetSplitter(self, val) and override.
+    # TODO: add this `with_val_set` method that would change splitter to
+    # PresetValidationSetSplitter(self, val) and override.
     """
 
     def __init__(
@@ -158,6 +156,7 @@ class BaseControllerLoop(TruncableService):
         trainer: Trainer,
         n_trials: int,
         hp_optimizer: BaseHyperparameterOptimizer = None,
+        start_new_round: bool = True,
         continue_loop_on_error: bool = True
     ):
         if hp_optimizer is None:
@@ -168,10 +167,10 @@ class BaseControllerLoop(TruncableService):
             BaseHyperparameterOptimizer: hp_optimizer,
         })
         self.n_trials = n_trials
-
+        self.start_new_run: bool = start_new_round
         self.continue_loop_on_error: bool = continue_loop_on_error
 
-    def run(self, pipeline: BaseStep, dact: DACT, context: ExecutionContext):
+    def run(self, pipeline: BaseStep, dact: DACT, client: ClientScope):
         """
         Run the controller loop.
 
@@ -182,12 +181,10 @@ class BaseControllerLoop(TruncableService):
         hp_space: HyperparameterSpace = pipeline.get_hyperparams_space()
         # thread_safe_lock, context = context.thread_safe()
 
-        # TODO: failsafe on the mlflow for the clients and projects.
-        #           Example: no clients and no projects? use the default ones.
-        with RoundScope(context, hp_space) as round_scope:
-            round_scope: RoundScope
+        with client.optim_round(hp_space, self.start_new_run) as optim_round:
+            optim_round: RoundScope = optim_round
 
-            for trial_scope in self.loop(round_scope):
+            for trial_scope in self.loop(optim_round):
                 trial_scope: TrialScope = trial_scope  # typing helps
                 # trial_scope.context.restore_lock(thread_safe_lock)
 
@@ -332,53 +329,30 @@ class DefaultLoop(BaseControllerLoop):
 
 class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
     """
-    A step to execute any Automatic Machine Learning Algorithms.
-
-    Example usage :
-
-    .. code-block:: python
-
-        auto_ml = AutoML(
-            pipeline,
-            n_trials=n_iter,
-            validation_split_function=validation_splitter(0.2),
-            hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
-            scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
-            callbacks=[
-                MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)
-            ],
-            refit_trial=True,
-            cache_folder_when_no_handle=str(tmpdir)
-        )
-
-        auto_ml = auto_ml.fit(data_inputs, expected_outputs)
-
-
-    .. seealso::
-        :class:`EasyAutoML`,
-        :class:`Trainer`,
-        :class:`HyperparamsRepository`,
-        :class:`BaseControllerLoop`,
-        :class:`BaseValidationSplitter`,
-        :class:`BaseHyperparameterSelectionStrategy`,
-        :class:`HyperparameterSpace`
-        :class:`BaseScoringCallback`,
-        :class:`Flow`,
+    A step to execute Automated Machine Learning (AutoML) algorithms. This step will
+    automatically split the data into train and validation splits, and execute an
+    hyperparameter optimization on the splits to find the best hyperparameters.
+    
+    The step with the chosen good hyperparameters will be refitted to the full
+    unsplitted data if desired.
     """
 
     def __init__(
             self,
             pipeline: BaseStep,
-            loop: BaseControllerLoop,  # HyperbandControllerLoop(), ClusteringParallelFor()
-            flow: Flow,
-            start_new_round: bool = True,  # otherwise, pick last run. TODO: here?
+            loop: BaseControllerLoop,
+            repo: HyperparamsRepository,
             refit_best_trial: bool = True,
+            project_name: str = None,
+            client_name: str = None,
     ):
         """
-        Notes on multiprocess :
-              Usage of a multiprocess-safe hyperparams repository is recommended, although it is, most of the time, not necessary.
+        .. note::
+              Usage of a multiprocess-safe hyperparams repository is recommended,
+              although it is, most of the time, not necessary.
               Beware of the behaviour of HyperparamsRepository's observers/subscribers.
-              Context instances are not shared between trial but copied. So is the AutoML loop and the DACTs.
+              Context instances are not shared between trial but copied.
+              So is the AutoML loop and the DACTs.
 
         :param pipeline: The pipeline, or BaseStep, which will be use by the AutoMLloop
         :param loop: The loop, or BaseControllerLoop, which will be used by the AutoML loop
@@ -392,9 +366,10 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
         self.pipeline: BaseStep = pipeline
         self.loop: BaseControllerLoop = loop
-        self.flow: Flow = flow
-        self.start_new_run: bool = start_new_round
+        self.repo: HyperparamsRepository = repo
         self.refit_best_trial: bool = refit_best_trial
+        self.project_name: str = project_name or property(attrgetter("name"))
+        self.client_name: str = client_name or property(attrgetter("name"))
 
     def get_children(self) -> List[BaseServiceT]:
         return [self.pipeline]
@@ -412,16 +387,22 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         """
         context.copy().register_service(Flow, self.flow)
 
-        self.loop.run(self.pipeline, data_container, context)
+        automl_context: AutoMLContext = AutoMLContext.from_context(context, repo=self.repo)
+        proj: ProjectMetadata = RootManager.get_project(self.project_name)
+        with ProjectScope(automl_context, self.project_name) as ps:
+            ps: ProjectScope = ps
+            with ps.new_client(self.client_name) as cs:
+                cs: ClientScope = cs
+                self.loop.run(self.pipeline, data_container, cs)
 
-        if self.refit_best_trial:
-            self.pipeline = self.loop.refit_best_trial(self.pipeline, data_container, context)
+                if self.refit_best_trial:
+                    self.pipeline = self.loop.refit_best_trial(self.pipeline, data_container, cs)
 
         return self
 
     def _fit_transform_data_container(
         self, data_container: DACT, context: ExecutionContext
-    ) -> ('BaseStep', DACT):
+    ) -> Tuple['BaseStep', DACT]:
         raise NotImplementedError("AutoML does not implement method _fit_transform_data_container. Use method such as "
                                   "fit or handle_fit to train models and then use method such as get_best_model to "
                                   "retrieve the model you wish to use for transform")
@@ -533,14 +514,13 @@ class EasyAutoML(AutoML):
             hp_optimizer=hyperparams_optimizer,
             continue_loop_on_error=continue_loop_on_error,
         )
-        flow: Flow = AutoMLFlow(repo=hyperparams_repository)
         assert cache_folder_when_no_handle is None  # TODO: remove this.
 
         AutoML.__init__(
             self,
             pipeline=pipeline,
             loop=controller_loop,
-            flow=flow,
+            repo=hyperparams_repository,
             refit_best_trial=refit_best_trial,
             start_new_round=True,
         )

@@ -38,7 +38,7 @@ from neuraxle.metaopt.auto_ml import HyperparamsRepository
 from neuraxle.hyperparams.distributions import *
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.observable import _ObserverOfRepo, BaseDataclassT
-from neuraxle.metaopt.data.trial import TrialManager, RoundManager
+from neuraxle.metaopt.data.managers import TrialManager, RoundManager
 from neuraxle.base import TrialStatus
 
 DISCRETE_NUM_BINS = 40

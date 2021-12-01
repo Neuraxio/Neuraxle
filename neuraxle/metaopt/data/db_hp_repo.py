@@ -32,7 +32,7 @@ from typing import List
 
 from neuraxle.base import TrialStatus
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.metaopt.data.trial import RoundManager, TrialManager
+from neuraxle.metaopt.data.managers import RoundManager, TrialManager
 from neuraxle.metaopt.data.vanilla import HyperparamsRepository
 from sqlalchemy import (Boolean, DateTime, MetaData, PickleType, String, Table,
                         create_engine)

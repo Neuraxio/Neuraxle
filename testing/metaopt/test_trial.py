@@ -4,7 +4,7 @@ import pytest
 from neuraxle.base import Identity, TrialStatus
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
-from neuraxle.metaopt.data.trial import RoundManager, TrialManager
+from neuraxle.metaopt.data.managers import RoundManager, TrialManager
 from neuraxle.metaopt.data.vanilla import InMemoryHyperparamsRepository
 
 EXPECTED_ERROR_TRACEBACK = 'NoneType: None\n'

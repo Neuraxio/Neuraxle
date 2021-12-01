@@ -16,7 +16,7 @@ from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
 from neuraxle.metaopt.auto_ml import (BaseHyperparameterOptimizer, RoundScope,
                                       TrialStatus)
-from neuraxle.metaopt.data.trial import RoundManager
+from neuraxle.metaopt.data.managers import RoundManager
 from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
 from neuraxle.metaopt.validation import GridExplorationSampler
 

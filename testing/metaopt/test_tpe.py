@@ -10,7 +10,7 @@ from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import (AutoML, BaseHyperparameterOptimizer,
                                       EasyAutoML, RandomSearch)
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
-from neuraxle.metaopt.data.trial import RoundManager
+from neuraxle.metaopt.data.managers import RoundManager
 from neuraxle.metaopt.data.vanilla import InMemoryHyperparamsRepository
 from neuraxle.metaopt.hyperopt.tpe import TreeParzenEstimator
 from neuraxle.metaopt.validation import ValidationSplitter

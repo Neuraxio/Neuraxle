@@ -9,7 +9,7 @@ from neuraxle.metaopt.callbacks import (BestModelCheckpoint,
                                         EarlyStoppingCallback, MetricCallback,
                                         ScoringCallback)
 from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
-from neuraxle.metaopt.data.trial import RoundManager, TrialManager
+from neuraxle.metaopt.data.managers import RoundManager, TrialManager
 from neuraxle.metaopt.data.vanilla import InMemoryHyperparamsRepository
 from neuraxle.metaopt.validation import (KFoldCrossValidationSplitter,
                                          ValidationSplitter)

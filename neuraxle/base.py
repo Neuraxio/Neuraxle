@@ -280,7 +280,7 @@ class _RecursiveArguments:
         :param child_step_name: child step name, or None if we want to get root values.
         :return: recursive argument for the given child step name
         """
-        arguments = list()
+        arguments = []
 
         for arg in self.args:
             if isinstance(arg, RecursiveDict):

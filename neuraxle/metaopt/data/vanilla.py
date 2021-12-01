@@ -441,38 +441,10 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
     def get(self, scope: ScopedLocation) -> SubDataclassT:
         """
         """
+        if len(scope) == 0:
+            raise ValueError("Scope must be specific.")
 
-        if scope.project_name is None:
-            return None
-        else:
-            proj: ProjectDataclass = self.get_project(scope.project_name)
-
-        if scope.client_name is None:
-            return proj
-        else:
-            client: ClientDataclass = self.get_client(proj, scope.client_name)
-
-        if scope.round_name is None:
-            return client
-        else:
-            round: RoundDataclass = self.get_round(client, scope.round_name)
-
-        if scope.trial_name is None:
-            return round
-        else:
-            trial: TrialDataclass = self.get_trial(round, scope.trial_name)
-
-        if scope.split_name is None:
-            return trial
-        else:
-            split: TrialSplitDataclass = self.get_split(trial, scope.split_name)
-
-        if scope.metric_name is None:
-            return split
-        else:
-            metric: MetricResultsDataclass = self.get_metric(split, scope.metric_name)
-
-        return metric
+        return self.root[scope]
 
     def get_logger_path(self, scope: ScopedLocation) -> str:
         scoped_path: str = self.get_scoped_path(scope)

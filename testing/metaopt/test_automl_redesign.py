@@ -1,7 +1,6 @@
 import os
 
 import numpy as np
-import pytest
 from neuraxle.base import ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import (Boolean, Choice, LogUniform,

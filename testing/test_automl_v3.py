@@ -1,5 +1,3 @@
-import typing
-
 import numpy as np
 import pytest
 from neuraxle.base import (BaseService, BaseStep, BaseTransformer,
@@ -14,7 +12,8 @@ from neuraxle.metaopt.callbacks import CallbackList, MetricCallback
 from neuraxle.metaopt.data.trial import (ClientScope, EpochScope, ProjectScope,
                                          RoundScope, TrialScope,
                                          TrialSplitScope)
-from neuraxle.metaopt.data.vanilla import (AutoMLContext, AutoMLFlow, BaseDataclass,
+from neuraxle.metaopt.data.vanilla import (AutoMLContext, AutoMLFlow,
+                                           BaseDataclass,
                                            BaseHyperparameterOptimizer,
                                            ClientDataclass,
                                            MetricResultsDataclass,
@@ -23,15 +22,12 @@ from neuraxle.metaopt.data.vanilla import (AutoMLContext, AutoMLFlow, BaseDatacl
                                            TrialSplitDataclass,
                                            VanillaHyperparamsRepository,
                                            dataclass_2_attr)
-from neuraxle.metaopt.validation import ValidationSplitter, GridExplorationSampler
+from neuraxle.metaopt.validation import (GridExplorationSampler,
+                                         ValidationSplitter)
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.data import DataShuffler
 from neuraxle.steps.flow import TrainOnlyWrapper
 from neuraxle.steps.numpy import AddN, MultiplyByN
-from neuraxle.steps.sklearn import SKLearnWrapper
-from sklearn.decomposition import PCA
-from sklearn.ensemble import BaggingRegressor, GradientBoostingRegressor
-from sklearn.linear_model import LinearRegression, SGDClassifier, SGDRegressor
 from sklearn.metrics import median_absolute_error
 
 
@@ -66,13 +62,11 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
                 callbacks=[MetricCallback('MAE', median_absolute_error, True)]
             ),
             hp_optimizer=RandomSearch(main_metric_name='MAE'),
+            start_new_round=True,
             n_trials=80,
             n_jobs=10,
         ),
-        flow=AutoMLFlow(
-            repo=VanillaHyperparamsRepository(tmpdir),
-        ),
-        start_new_round=True,
+        repo=VanillaHyperparamsRepository(tmpdir),
         refit_best_trial=True,
     )
     automl = automl.handle_fit(dact, cx)
@@ -108,7 +102,7 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
         ps: ProjectScope = ps
         with ps.new_client(expected_scope.client_name) as cs:
             cs: ClientScope = cs
-            with cs.new_round(p.get_hyperparams_space()) as rs:
+            with cs.optim_round(p.get_hyperparams_space()) as rs:
                 rs: RoundScope = rs
                 with rs.new_hyperparametrized_trial(hp_optimizer=hp_optimizer, continue_loop_on_error=False) as ts:
                     ts: TrialScope = ts
@@ -139,7 +133,6 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
 
     # dc: MetricResultsDataclass = context.repo.get(ScopedLocation())
     assert len(dc.validation_values) == n_epochs
-
 
 
 def test_two_automl_in_parallel_can_contribute_to_the_same_hp_repository():

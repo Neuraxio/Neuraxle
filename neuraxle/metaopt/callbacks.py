@@ -32,7 +32,7 @@ import warnings
 from neuraxle.base import BaseStep, BaseTransformer, ExecutionContext, MixinForBaseTransformer
 from neuraxle.logging.warnings import warn_deprecated_class, warn_deprecated_arg
 from neuraxle.data_container import DataContainer
-from neuraxle.metaopt.data.trial import TrialSplitManager
+from neuraxle.metaopt.data.managers import TrialSplitManager
 
 
 class BaseCallback(ABC):

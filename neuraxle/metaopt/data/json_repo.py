@@ -39,7 +39,7 @@ from typing import List, Tuple
 
 from neuraxle.base import TrialStatus
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.metaopt.data.trial import RoundManager, TrialManager
+from neuraxle.metaopt.data.managers import RoundManager, TrialManager
 from neuraxle.metaopt.data.vanilla import HyperparamsRepository
 from neuraxle.metaopt.observable import _ObservableRepo
 
