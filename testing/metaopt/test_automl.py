@@ -9,7 +9,7 @@ from neuraxle.metaopt.callbacks import (BestModelCheckpoint,
                                         EarlyStoppingCallback, MetricCallback,
                                         ScoringCallback)
 from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
-from neuraxle.metaopt.data.managers import RoundManager, TrialManager
+from neuraxle.metaopt.data.aggregates import Round, Trial
 from neuraxle.metaopt.data.vanilla import InMemoryHyperparamsRepository
 from neuraxle.metaopt.validation import (KFoldCrossValidationSplitter,
                                          ValidationSplitter)
@@ -96,7 +96,7 @@ def test_automl_savebestmodel_callback(tmpdir):
     auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
-    trials: RoundManager = hp_repository.load_trials()
+    trials: Round = hp_repository.load_trials()
     best_trial = trials.get_best_trial()
     best_trial_score = best_trial.get_avg_validation_score()
     best_model = best_trial.get_model('best')
@@ -345,7 +345,7 @@ def test_trainer_train():
         validation_splitter=ValidationSplitter(test_size=0.20)
     )
 
-    repo_trial: TrialManager = trainer.train(pipeline=p, data_inputs=data_inputs,
+    repo_trial: Trial = trainer.train(pipeline=p, data_inputs=data_inputs,
                                       expected_outputs=expected_outputs, context=ExecutionContext())
 
     trained_pipeline = repo_trial.get_trained_pipeline(split_number=0)

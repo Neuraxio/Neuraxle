@@ -43,11 +43,12 @@ from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
                     Sequence, Tuple, Type, TypeVar, Union)
 
 import numpy as np
-from neuraxle.base import BaseStep, ExecutionContext, Flow, TrialStatus
+from neuraxle.base import (BaseStep, ExecutionContext, Flow, TrialStatus,
+                           synchroneous_flow_method)
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
-from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
+from neuraxle.logging.logging import LOGGER_FORMAT, LOGGING_DATETIME_STR_FORMAT
 from neuraxle.metaopt.observable import _ObservableRepo, _ObserverOfRepo
 
 SubDataclassT = TypeVar('SubDataclassT', bound=Optional['BaseDataclass'])
@@ -91,11 +92,17 @@ class ScopedLocation:
 
     def with_dc(self, dc: SubDataclassT) -> 'ScopedLocation':
         """
-        Returns a new :class:`ScopedLocation` with the provided :class:`BaseDataclass` type's id added.
+        Returns a new :class:`ScopedLocation` with the provided :class:`BaseDataclass` (dc) type's id added.
         """
         self_copy = copy.deepcopy(self)
         self_copy[dc.__class__] = dc.id
         return self_copy
+
+    def with_id(self, _id: ScopedLocationAttr) -> 'ScopedLocation':
+        """
+        Returns a new :class:`ScopedLocation` with the provided id added.
+        """
+        return ScopedLocation(*(self.to_list() + [_id]))
 
     def __setitem__(self, key: Type[SubDataclassT], value: ScopedLocationAttr):
         """
@@ -174,6 +181,36 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
             return attr
         return None
 
+    @abstractmethod
+    def store(self, dc: SubDataclassT) -> 'BaseDataclass':
+        raise NotImplementedError("Must use mixins.")
+
+
+class DataclassHasOrderedDictMixin:
+    def get_sublocation(self) -> OrderedDict[str, SubDataclassT]:
+        raise NotImplementedError("Must be implemented in subclasses.")
+
+    def store(self, dc: SubDataclassT) -> str:
+        self.get_sublocation()[dc.get_id()] = dc
+
+
+class DataclassHasListMixin:
+    def get_sublocation(self) -> List[SubDataclassT]:
+        raise NotImplementedError("Must be implemented in subclasses.")
+
+    def store(self, dc: SubDataclassT) -> int:
+        _id = dc.get_id()
+        if _id == self.get_next_i():
+            self.get_sublocation().append(dc)
+        elif _id < self.get_next_i():
+            self.get_sublocation()[dc.get_id()] = dc
+        else:
+            raise ValueError(f"{dc} has id {dc.get_id()} which is greater than the next id {self.get_next_i()}.")
+        return _id
+
+    def get_next_i(self) -> int:
+        return len(self.get_sublocation())
+
 
 class BaseTrialDataclassMixin:
     """
@@ -194,7 +231,7 @@ class BaseTrialDataclassMixin:
         return self
 
 
-class RootMetadata(BaseDataclass['ProjectDataclass']):
+class RootDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ProjectDataclass']):
     projects: OrderedDict[str, 'ProjectDataclass'] = field(
         default_factory=lambda: OrderedDict({"default_project": ProjectDataclass()}))
 
@@ -205,7 +242,7 @@ class RootMetadata(BaseDataclass['ProjectDataclass']):
         return None
 
 
-class ProjectDataclass(BaseDataclass['ClientDataclass']):
+class ProjectDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ClientDataclass']):
     project_name: str = "default_project"
     clients: OrderedDict[str, 'ClientDataclass'] = field(
         default_factory=lambda: OrderedDict({"default_client": ClientDataclass()}))
@@ -214,7 +251,7 @@ class ProjectDataclass(BaseDataclass['ClientDataclass']):
         return self.clients
 
 
-class ClientDataclass(BaseDataclass['RoundDataclass']):
+class ClientDataclass(DataclassHasListMixin, BaseDataclass['RoundDataclass']):
     client_name: str = "default_client"
     rounds: List['RoundDataclass'] = field(default_factory=list)
     # By default, the first metric is the main one.  # TODO: make it configurable, or in round?
@@ -224,7 +261,7 @@ class ClientDataclass(BaseDataclass['RoundDataclass']):
         return self.rounds
 
 
-class RoundDataclass(BaseDataclass['TrialDataclass']):
+class RoundDataclass(DataclassHasListMixin, BaseDataclass['TrialDataclass']):
     round_number: int = 0
     trials: List['TrialDataclass'] = field(default_factory=list)
 
@@ -232,7 +269,7 @@ class RoundDataclass(BaseDataclass['TrialDataclass']):
         return self.trials
 
 
-class TrialDataclass(BaseTrialDataclassMixin, BaseDataclass['TrialSplitDataclass']):
+class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDataclass['TrialSplitDataclass']):
     """
     This class is a data structure most often used under :class:`AutoML` to store information about a trial.
     This information is itself managed by the :class:`HyperparameterRepository` class
@@ -245,7 +282,7 @@ class TrialDataclass(BaseTrialDataclassMixin, BaseDataclass['TrialSplitDataclass
         return self.validation_splits
 
 
-class TrialSplitDataclass(BaseTrialDataclassMixin, BaseDataclass['MetricResultsDataclass']):
+class TrialSplitDataclass(DataclassHasOrderedDictMixin, BaseTrialDataclassMixin, BaseDataclass['MetricResultsDataclass']):
     """
     TrialSplit object used by AutoML algorithm classes.
     """
@@ -257,12 +294,12 @@ class TrialSplitDataclass(BaseTrialDataclassMixin, BaseDataclass['MetricResultsD
         return self.metric_results
 
 
-class MetricResultsDataclass(BaseDataclass[float]):
+class MetricResultsDataclass(DataclassHasListMixin, BaseDataclass[float]):
     """
     MetricResult object used by AutoML algorithm classes.
     """
     metric_name: str = "main"
-    validation_values: List[float] = field(default_factory=list)
+    validation_values: List[float] = field(default_factory=list)  # one per epoch.
     train_values: List[float] = field(default_factory=list)
     higher_score_is_better: bool = True
 
@@ -436,7 +473,7 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
         """
         super().__init__()
         self.cache_folder = cache_folder
-        self.root: RootMetadata = RootMetadata()
+        self.root: RootDataclass = RootDataclass()
 
     def get(self, scope: ScopedLocation) -> SubDataclassT:
         """
@@ -491,12 +528,16 @@ class BaseHyperparameterOptimizer(ABC):
         """
         self.main_metric_name = main_metric_name
 
-    @abstractmethod
-    def find_next_best_hyperparams(self, round_scope) -> HyperparameterSamples:
-        """
-        Find the next best hyperparams using previous trials.
+    def get_main_metric_name(self) -> str:
+        return self.main_metric_name
 
-        :param round_scope: round scope
+    @abstractmethod
+    def find_next_best_hyperparams(self, round) -> HyperparameterSamples:
+        """
+        Find the next best hyperparams using previous trials, that is the
+        whole :class:`neuraxle.metaopt.data.aggregate.Round`.
+
+        :param round: a :class:`neuraxle.metaopt.data.aggregate.Round`
         :return: next hyperparameter samples to train on
         """
         # TODO: revise arguments.
@@ -551,6 +592,25 @@ class AutoMLFlow(Flow):
         self.repo.save_model(model)
         return super().log_model(model)
 
+    def add_file_handler_to_logger(
+        self,
+        logging_file: str
+    ) -> logging.Logger:
+        os.makedirs(os.path.dirname(logging_file), exist_ok=True)
+        formatter = logging.Formatter(
+            fmt=LOGGER_FORMAT, datefmt=LOGGING_DATETIME_STR_FORMAT)
+        file_handler = logging.FileHandler(filename=logging_file)
+        file_handler.setFormatter(formatter)
+        self.logger.addHandler(file_handler)
+
+    def free_logger_files(self):
+        """
+        Remove file handlers from logger to free file lock on Windows.
+        """
+        for h in self.logger.handlers:
+            if isinstance(h, logging.FileHandler):
+                self.logger.removeHandler(h)
+
 
 class AutoMLContext(ExecutionContext):
 
@@ -580,17 +640,17 @@ class AutoMLContext(ExecutionContext):
     # TODO: @lock in repo.
     @property
     def lock(self):
-        return self.flow._lock
-
-    @property
-    def repo(self) -> HyperparamsRepository:
-        return self.get_service(HyperparamsRepository)
+        return self.flow.synchroneous()
 
     @property
     def loc(self) -> ScopedLocation:
         return self.flow.loc
 
-    def push_attr(self, name: Type[SubDataclassT], value: ScopedLocationAttr) -> 'AutoMLContext':
+    @property
+    def repo(self) -> HyperparamsRepository:
+        return self.get_service(HyperparamsRepository)
+
+    def push_attr(self, subdataclass: SubDataclassT) -> 'AutoMLContext':
         """
         Push a new attribute into the ScopedLocation.
 
@@ -599,5 +659,5 @@ class AutoMLContext(ExecutionContext):
         :return: an AutoMLContext copy with the new loc attribute.
         """
         new_self: AutoMLContext = self.copy()
-        new_self.flow.loc[name] = value
+        new_self.flow.loc = new_self.flow.loc.with_dc(subdataclass)
         return new_self

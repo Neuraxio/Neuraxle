@@ -40,7 +40,7 @@ from neuraxle.hyperparams.distributions import (
     ContinuousHyperparameterDistribution, DiscreteHyperparameterDistribution)
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
-from neuraxle.metaopt.data.trial import RoundScope
+from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from neuraxle.steps.numpy import (NumpyConcatenateInnerFeatures,
@@ -639,7 +639,7 @@ class RandomSearch(BaseHyperparameterOptimizer):
     def __init__(self, main_metric_name: str = None):
         BaseHyperparameterOptimizer.__init__(self, main_metric_name=main_metric_name)
 
-    def find_next_best_hyperparams(self, round_scope: 'RoundScope') -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, round_scope: 'Round') -> HyperparameterSamples:
         """
         Randomly sample the next hyperparams to try.
 
@@ -667,7 +667,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
         self.flat_hp_grid_values: OrderedDict[str, List[Any]] = {}
         self.flat_hp_grid_lens: List[int] = []
 
-    def find_next_best_hyperparams(self, round_scope: 'RoundScope') -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, round_scope: 'Round') -> HyperparameterSamples:
         """
         Sample the next hyperparams to try.
 

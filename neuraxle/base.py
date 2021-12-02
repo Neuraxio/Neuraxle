@@ -55,7 +55,6 @@ from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import HyperparameterDistribution
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
-from neuraxle.logging.logging import LOGGER_FORMAT, LOGGING_DATETIME_STR_FORMAT
 from neuraxle.logging.warnings import warn_deprecated_arg
 
 
@@ -946,8 +945,8 @@ class Flow(BaseService):
         #               repo_trial_split.get_n_epochs_to_best_validation_score()
         #           ))
 
-    def log_best_hps(self, best_hps: HyperparameterSamples):
-        self.log('Best hyperparameters found:')
+    def log_best_hps(self, main_metric_name, best_hps: HyperparameterSamples):
+        self.log(f"Best hyperparameters found for metric '{main_metric_name}':")
         self.log_hps(best_hps)
 
     def log_failure(self, exception: Exception):
@@ -973,16 +972,6 @@ class Flow(BaseService):
         # repo_trial_split_number + 1,
         # len(validation_splits),
         # json.dumps(repo_trial.hyperparams, sort_keys=True, indent=4)
-
-    def add_file_to_logger(
-        self,
-        logging_file: str
-    ) -> logging.Logger:
-        os.makedirs(os.path.dirname(logging_file), exist_ok=True)
-        formatter = logging.Formatter(fmt=LOGGER_FORMAT, datefmt=LOGGING_DATETIME_STR_FORMAT)
-        file_handler = logging.FileHandler(filename=logging_file)
-        file_handler.setFormatter(formatter)
-        self.logger.addHandler(file_handler)
 
 
 class ExecutionContext(TruncableService):

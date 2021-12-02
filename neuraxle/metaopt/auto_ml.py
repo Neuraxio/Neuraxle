@@ -45,17 +45,15 @@ from neuraxle.logging.warnings import (warn_deprecated_arg,
                                        warn_deprecated_class)
 from neuraxle.metaopt.callbacks import (BaseCallback, CallbackList,
                                         ScoringCallback)
-from neuraxle.metaopt.data.managers import TrialManager
-from neuraxle.metaopt.data.trial import (ClientScope, EpochScope, ProjectScope,
-                                         RoundScope, TrialScope,
-                                         TrialSplitScope)
-from neuraxle.metaopt.data.vanilla import (AutoMLContext, AutoMLFlow, BaseDataclass,
-                                           ClientDataclass,
+from neuraxle.metaopt.data.aggregates import (Client, Epoch, Project, Round,
+                                              Trial, TrialSplit)
+from neuraxle.metaopt.data.vanilla import (AutoMLContext, AutoMLFlow,
+                                           BaseDataclass, ClientDataclass,
                                            HyperparamsRepository,
                                            InMemoryHyperparamsRepository,
                                            MetricResultsDataclass,
                                            ProjectDataclass, RecursiveDict,
-                                           RootMetadata, RoundDataclass,
+                                           RootDataclass, RoundDataclass,
                                            ScopedLocation, SubDataclassT,
                                            TrialDataclass, TrialSplitDataclass)
 from neuraxle.metaopt.validation import (BaseCrossValidationWrapper,
@@ -86,8 +84,8 @@ class Trainer(BaseService):
         self,
         pipeline: BaseStep,
         dact: DACT,
-        trial_scope: TrialScope,
-    ) -> TrialManager:
+        trial_scope: Trial,
+    ) -> Trial:
         """
         Train pipeline using the validation splitter.
         Track training, and validation metrics for each epoch.
@@ -104,7 +102,7 @@ class Trainer(BaseService):
 
         for train_dact, val_dact in splits:
             with trial_scope.new_trial_split(self.n_epochs) as trial_split_scope:
-                trial_split_scope: TrialSplitScope = trial_split_scope  # typing helps
+                trial_split_scope: TrialSplit = trial_split_scope  # typing helps
 
                 # TODO: No split? use a default single split. Log warning if so?
 
@@ -112,7 +110,7 @@ class Trainer(BaseService):
 
                 for e in range(self.n_epochs):
                     with trial_split_scope.new_epoch(e) as epoch_scope:
-                        epoch_scope: EpochScope = epoch_scope  # typing helps
+                        epoch_scope: Epoch = epoch_scope  # typing helps
 
                         p = p.set_train(True)
                         p = p.handle_fit(train_dact.copy(), epoch_scope.context.train())
@@ -170,7 +168,7 @@ class BaseControllerLoop(TruncableService):
         self.start_new_run: bool = start_new_round
         self.continue_loop_on_error: bool = continue_loop_on_error
 
-    def run(self, pipeline: BaseStep, dact: DACT, client: ClientScope):
+    def run(self, pipeline: BaseStep, dact: DACT, client: Client):
         """
         Run the controller loop.
 
@@ -182,15 +180,15 @@ class BaseControllerLoop(TruncableService):
         # thread_safe_lock, context = context.thread_safe()
 
         with client.optim_round(hp_space, self.start_new_run) as optim_round:
-            optim_round: RoundScope = optim_round
+            optim_round: Round = optim_round
 
             for trial_scope in self.loop(optim_round):
-                trial_scope: TrialScope = trial_scope  # typing helps
+                trial_scope: Trial = trial_scope  # typing helps
                 # trial_scope.context.restore_lock(thread_safe_lock)
 
                 trainer.train(pipeline, dact, trial_scope)
 
-    def loop(self, round_scope: RoundScope) -> Iterator[TrialScope]:
+    def loop(self, round_scope: Round) -> Iterator[Trial]:
         """
         Loop over all trials.
 
@@ -202,7 +200,7 @@ class BaseControllerLoop(TruncableService):
 
         for _ in range(self.n_trials):
             with round_scope.new_hyperparametrized_trial(hp_optimizer, self.continue_loop_on_error) as trial_scope:
-                trial_scope: TrialScope = trial_scope  # typing helps
+                trial_scope: Trial = trial_scope  # typing helps
 
                 yield trial_scope
 
@@ -388,11 +386,11 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         context.copy().register_service(Flow, self.flow)
 
         automl_context: AutoMLContext = AutoMLContext.from_context(context, repo=self.repo)
-        proj: ProjectMetadata = RootManager.get_project(self.project_name)
-        with ProjectScope(automl_context, self.project_name) as ps:
-            ps: ProjectScope = ps
+        proj: ProjectMetadata = Root.get_project(self.project_name)
+        with Project(automl_context, self.project_name) as ps:
+            ps: Project = ps
             with ps.new_client(self.client_name) as cs:
-                cs: ClientScope = cs
+                cs: Client = cs
                 self.loop.run(self.pipeline, data_container, cs)
 
                 if self.refit_best_trial:
@@ -448,7 +446,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
 
 def _get_trial_split_description(
-        repo_trial: TrialManager,
+        repo_trial: Trial,
         repo_trial_split_number: int,
         validation_splits: List[Tuple[DACT, DACT]],
         trial_number: int,

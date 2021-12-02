@@ -14,11 +14,12 @@ from neuraxle.hyperparams.distributions import (
     Quantized)
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
-from neuraxle.metaopt.auto_ml import (BaseHyperparameterOptimizer, RoundScope,
+from neuraxle.metaopt.auto_ml import (BaseHyperparameterOptimizer, Round,
                                       TrialStatus)
-from neuraxle.metaopt.data.managers import RoundManager
+from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
 from neuraxle.metaopt.validation import GridExplorationSampler
+
 
 _LOG_DISTRIBUTION = (LogNormal, LogUniform)
 _QUANTIZED_DISTRIBUTION = (Quantized,)
@@ -57,7 +58,7 @@ class TreeParzenEstimator(BaseHyperparameterOptimizer):
         self.use_linear_forgetting_weights: bool = use_linear_forgetting_weights
         self.number_recent_trial_at_full_weights: int = number_recent_trial_at_full_weights
 
-    def find_next_best_hyperparams(self, round_scope: RoundScope) -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, round_scope: Round) -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials.
 
@@ -74,7 +75,7 @@ class TreeParzenEstimator(BaseHyperparameterOptimizer):
             return self.initial_auto_ml_algo.find_next_best_hyperparams(round_scope)
 
         # Keep only success trials
-        success_trials: RoundManager = round_scope.repo.load_trials(status=TrialStatus.SUCCESS)
+        success_trials: Round = round_scope.repo.load_trials(status=TrialStatus.SUCCESS)
 
         # Split trials into good and bad using quantile threshold.
         good_trials, bad_trials = self.split_good_and_bad_trials(
@@ -129,9 +130,9 @@ class TreeParzenEstimator(BaseHyperparameterOptimizer):
         return HyperparameterSamples(best_hyperparams)
 
     def split_good_and_bad_trials(
-        self, success_trials: RoundManager, quantile_threshold: float, number_of_good_trials_max_cap: int
-    ) -> Tuple['RoundManager', 'RoundManager']:
-        success_trials: RoundManager = success_trials.filter(TrialStatus.SUCCESS)
+        self, success_trials: Round, quantile_threshold: float, number_of_good_trials_max_cap: int
+    ) -> Tuple['Round', 'Round']:
+        success_trials: Round = success_trials.filter(TrialStatus.SUCCESS)
 
         # Split trials into good and bad using quantile threshold.
         trials_scores = np.array([trial.get_validation_score() for trial in success_trials])
@@ -156,10 +157,10 @@ class TreeParzenEstimator(BaseHyperparameterOptimizer):
             if trial_index in bad_trials_indexes:
                 bad_trials.append(trial)
 
-        return RoundManager(trials=good_trials), RoundManager(trials=bad_trials)
+        return Round(trials=good_trials), Round(trials=bad_trials)
 
     def _create_posterior(self, flat_hyperparameter_space_list: List[Tuple[str, HyperparameterDistribution]],
-                          trials: RoundManager) -> HyperparameterSpace:
+                          trials: Round) -> HyperparameterSpace:
 
         # Loop through all hyperparams
         posterior_distributions = []

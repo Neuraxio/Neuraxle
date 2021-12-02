@@ -32,7 +32,7 @@ from typing import List
 
 from neuraxle.base import TrialStatus
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.metaopt.data.managers import RoundManager, TrialManager
+from neuraxle.metaopt.data.aggregates import Round, Trial
 from neuraxle.metaopt.data.vanilla import HyperparamsRepository
 from sqlalchemy import (Boolean, DateTime, MetaData, PickleType, String, Table,
                         create_engine)
@@ -106,7 +106,7 @@ class InDatabaseHyperparamRepository(HyperparamsRepository):
 
         return result[0] if len(result) == 1 else result
 
-    def load_trials(self, status: 'TrialStatus') -> 'RoundManager':
+    def load_trials(self, status: 'TrialStatus') -> 'Round':
         """
         Load all hyperparameter trials with their corresponding score.
         Sorted by creation date.
@@ -118,14 +118,14 @@ class InDatabaseHyperparamRepository(HyperparamsRepository):
             select = select.where(status=TrialStatus.value)
         res = self._execute(select)
 
-        trials = RoundManager()
+        trials = Round()
 
         for row in res:
             raise NotImplementedError()
-            trial = TrialManager()
+            trial = Trial()
             trials.append(trial)
 
-    def _save_trial(self, trial: 'TrialManager'):
+    def _save_trial(self, trial: 'Trial'):
         """
         save trial.
 
@@ -134,7 +134,7 @@ class InDatabaseHyperparamRepository(HyperparamsRepository):
         """
         raise NotImplementedError()
 
-    def _insert_new_trial(self, trial: TrialManager):
+    def _insert_new_trial(self, trial: Trial):
         trial_hash = self.get_trial_id(trial.hyperparams)
         return trial_register.insert().value(id=trial_hash, status=TrialStatus.PLANNED)
 

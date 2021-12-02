@@ -4,7 +4,7 @@ import pytest
 from neuraxle.base import Identity, TrialStatus
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
-from neuraxle.metaopt.data.managers import RoundManager, TrialManager
+from neuraxle.metaopt.data.aggregates import Round, Trial
 from neuraxle.metaopt.data.vanilla import InMemoryHyperparamsRepository
 
 EXPECTED_ERROR_TRACEBACK = 'NoneType: None\n'
@@ -24,7 +24,7 @@ class TestTrials:
     def setup(self):
         self.hp = HyperparameterSamples({'a': 2})
         self.repo = InMemoryHyperparamsRepository()
-        self.trial = TrialManager(
+        self.trial = Trial(
             trial_number=0,
             save_trial_function=self.repo.save_trial,
             hyperparams=self.hp,
@@ -260,13 +260,13 @@ class TestTrials:
             self._given_success_trial_validation_split(trial_1, best_score=0.2)
 
         hp_trial_2 = HyperparameterSamples({'b': 3})
-        trial_2 = TrialManager(
+        trial_2 = Trial(
             trial_number=1, save_trial_function=self.repo.save_trial,
             hyperparams=hp_trial_2, main_metric_name=MAIN_METRIC_NAME)
         with trial_2:
             self._given_success_trial_validation_split(trial_2, best_score=0.1)
 
-        trials = RoundManager(trials=[trial_1, trial_2])
+        trials = Round(trials=[trial_1, trial_2])
 
         # When
         best_hyperparams = trials.get_best_hyperparams()

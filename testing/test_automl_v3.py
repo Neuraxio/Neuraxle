@@ -9,9 +9,8 @@ from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
 from neuraxle.metaopt.auto_ml import AutoML, DefaultLoop, RandomSearch, Trainer
 from neuraxle.metaopt.callbacks import CallbackList, MetricCallback
-from neuraxle.metaopt.data.trial import (ClientScope, EpochScope, ProjectScope,
-                                         RoundScope, TrialScope,
-                                         TrialSplitScope)
+from neuraxle.metaopt.data.aggregates import (Client, Project, Round,
+                                              Trial, TrialSplit)
 from neuraxle.metaopt.data.vanilla import (AutoMLContext, AutoMLFlow,
                                            BaseDataclass,
                                            BaseHyperparameterOptimizer,
@@ -98,20 +97,19 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
         AddN().with_hp_range(range(99, 103)),
     ])
 
-    with ProjectScope(context, expected_scope.project_name) as ps:
-        ps: ProjectScope = ps
+    with Project(context, expected_scope.project_name) as ps:
+        ps: Project = ps
         with ps.new_client(expected_scope.client_name) as cs:
-            cs: ClientScope = cs
+            cs: Client = cs
             with cs.optim_round(p.get_hyperparams_space()) as rs:
-                rs: RoundScope = rs
+                rs: Round = rs
                 with rs.new_hyperparametrized_trial(hp_optimizer=hp_optimizer, continue_loop_on_error=False) as ts:
-                    ts: TrialScope = ts
+                    ts: Trial = ts
                     with ts.new_trial_split() as tss:
-                        tss: TrialSplitScope = tss
+                        tss: TrialSplit = tss
 
                         for e in range(n_epochs):
-                            with tss.new_epoch() as es:
-                                es: EpochScope = es
+                            with tss.new_epoch() as es:  # TODO: epoch scope?
 
                                 if callbacks.call(
                                     es.context.validation(),

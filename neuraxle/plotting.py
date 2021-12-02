@@ -29,16 +29,17 @@ Utility function for plotting in notebooks.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-from typing import Dict, Callable
+from typing import Dict, Callable, Tuple, Any, List, Optional
 
 import matplotlib.pyplot as plt
 import os
+import numpy as np
 from neuraxle.metaopt.auto_ml import HyperparamsRepository
 
 from neuraxle.hyperparams.distributions import *
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.observable import _ObserverOfRepo, BaseDataclassT
-from neuraxle.metaopt.data.managers import TrialManager, RoundManager
+from neuraxle.metaopt.data.aggregates import Trial, Round
 from neuraxle.base import TrialStatus
 
 DISCRETE_NUM_BINS = 40
@@ -113,7 +114,7 @@ def plot_distribution_space(hyperparameter_space: HyperparameterSpace, num_bins=
         plot_pdf_cdf(title, distribution)
 
 
-class TrialMetricsPlottingObserver(_ObserverOfRepo[Tuple[HyperparamsRepository, TrialManager]]):
+class TrialMetricsPlottingObserver(_ObserverOfRepo[Tuple[HyperparamsRepository, Trial]]):
     """
     An observer that receives trial updates and plots metric results.
     It can plot individual trials on each update, or upon completion.
@@ -170,7 +171,7 @@ class TrialMetricsPlottingObserver(_ObserverOfRepo[Tuple[HyperparamsRepository, 
         self.plotting_folder_name: str = plotting_folder_name
         self.save: bool = save_plots
 
-    def on_next(self, value: Tuple[HyperparamsRepository, TrialManager]):
+    def on_next(self, value: Tuple[HyperparamsRepository, Trial]):
         """
         Plot updated trial metric results.
 
@@ -215,7 +216,7 @@ class TrialMetricsPlottingObserver(_ObserverOfRepo[Tuple[HyperparamsRepository, 
         :return:
         """
         repo = value
-        trials: RoundManager = repo.load_trials(TrialStatus.SUCCESS)
+        trials: Round = repo.load_trials(TrialStatus.SUCCESS)
         if not self.plot_all_trials_on_complete:
             return
         if len(trials) == 0:

@@ -39,7 +39,7 @@ from typing import List, Tuple
 
 from neuraxle.base import TrialStatus
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.metaopt.data.managers import RoundManager, TrialManager
+from neuraxle.metaopt.data.aggregates import Round, Trial
 from neuraxle.metaopt.data.vanilla import HyperparamsRepository
 from neuraxle.metaopt.observable import _ObservableRepo
 
@@ -81,7 +81,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
             best_retrained_model_folder if best_retrained_model_folder is not None else 'json_repo_best_model')
         self.json_path_remove_on_update = None
 
-    def _save_trial(self, trial: 'TrialManager'):
+    def _save_trial(self, trial: 'Trial'):
         """
         Save trial json.
 
@@ -112,19 +112,19 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         # Sleeping to have a valid time difference between files when reloading them to sort them by creation time:
         time.sleep(0.1)
 
-    def new_trial(self, auto_ml_container) -> TrialManager:
+    def new_trial(self, auto_ml_container) -> Trial:
         """
         Create new hyperperams trial json file.
 
         :param auto_ml_container: auto ml container
         :return:
         """
-        trial: TrialManager = HyperparamsRepository.new_trial(self, auto_ml_container)
+        trial: Trial = HyperparamsRepository.new_trial(self, auto_ml_container)
         self._save_trial(trial)
 
         return trial
 
-    def load_trials(self, status: 'TrialStatus' = None) -> 'RoundManager':
+    def load_trials(self, status: 'TrialStatus' = None) -> 'Round':
         """
         Load all hyperparameter trials with their corresponding score.
         Reads all the saved trial json files, sorted by creation date.
@@ -132,7 +132,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :param status: (optional) filter to select only trials with this status.
         :return: (hyperparams, scores)
         """
-        trials = RoundManager()
+        trials = Round()
 
         files = glob.glob(os.path.join(self.cache_folder, '*.json'))
 
@@ -152,7 +152,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
                     continue
 
             if status is None or trial_json['status'] == status.value:
-                trials.append(TrialManager.from_json(
+                trials.append(Trial.from_json(
                     update_trial_function=self.save_trial,
                     trial_json=trial_json,
                     cache_folder=self.cache_folder
@@ -160,7 +160,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
 
         return trials
 
-    def _get_successful_trial_json_file_path(self, trial: 'TrialManager') -> str:
+    def _get_successful_trial_json_file_path(self, trial: 'Trial') -> str:
         """
         Get the json path for the given successful trial.
 
@@ -173,7 +173,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
             str(float(trial.get_avg_validation_score())).replace('.', ',') + "_" + trial_hash
         ) + '.json'
 
-    def _get_failed_trial_json_file_path(self, trial: 'TrialManager'):
+    def _get_failed_trial_json_file_path(self, trial: 'Trial'):
         """
         Get the json path for the given failed trial.
 
@@ -183,7 +183,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         trial_hash = self.get_trial_id(trial.hyperparams.to_flat_dict())
         return os.path.join(self.cache_folder, 'FAILED_' + trial_hash) + '.json'
 
-    def _get_ongoing_trial_json_file_path(self, trial: 'TrialManager'):
+    def _get_ongoing_trial_json_file_path(self, trial: 'Trial'):
         """
         Get ongoing trial json path.
         """
@@ -191,7 +191,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         current_hyperparameters_hash = self.get_trial_id(hp_dict)
         return os.path.join(self.cache_folder, "ONGOING_" + current_hyperparameters_hash) + '.json'
 
-    def _get_new_trial_json_file_path(self, trial: 'TrialManager'):
+    def _get_new_trial_json_file_path(self, trial: 'Trial'):
         """
         Get new trial json path.
         """
@@ -204,7 +204,7 @@ class HyperparamsJSONRepository(HyperparamsRepository):
             os.remove(self.json_path_remove_on_update)
 
     def subscribe_to_cache_folder_changes(self, refresh_interval_in_seconds: int,
-                                          observer: _ObservableRepo[Tuple[HyperparamsRepository, TrialManager]]):
+                                          observer: _ObservableRepo[Tuple[HyperparamsRepository, Trial]]):
         """
         Every refresh_interval_in_seconds
 

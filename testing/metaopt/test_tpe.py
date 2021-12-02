@@ -10,7 +10,7 @@ from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import (AutoML, BaseHyperparameterOptimizer,
                                       EasyAutoML, RandomSearch)
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
-from neuraxle.metaopt.data.managers import RoundManager
+from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.vanilla import InMemoryHyperparamsRepository
 from neuraxle.metaopt.hyperopt.tpe import TreeParzenEstimator
 from neuraxle.metaopt.validation import ValidationSplitter
@@ -143,6 +143,6 @@ def _test_trial_scores(
     auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
-    trials: RoundManager = hp_repository.load_trials(status=TrialStatus.SUCCESS)
+    trials: Round = hp_repository.load_trials(status=TrialStatus.SUCCESS)
     validation_scores = [t.get_validation_score() for t in trials]
     return validation_scores

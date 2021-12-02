@@ -32,7 +32,7 @@ import warnings
 from neuraxle.base import BaseStep, BaseTransformer, ExecutionContext, MixinForBaseTransformer
 from neuraxle.logging.warnings import warn_deprecated_class, warn_deprecated_arg
 from neuraxle.data_container import DataContainer
-from neuraxle.metaopt.data.managers import TrialSplitManager
+from neuraxle.metaopt.data.aggregates import TrialSplit
 
 
 class BaseCallback(ABC):
@@ -58,7 +58,7 @@ class BaseCallback(ABC):
     """
 
     @abstractmethod
-    def call(self, trial_split: TrialSplitManager, epoch_number: int, total_epochs: int, input_train: DataContainer,
+    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
              is_finished_and_fitted: bool):
         pass
@@ -96,7 +96,7 @@ class EarlyStoppingCallback(BaseCallback):
 
     def call(
             self,
-            trial_split: TrialSplitManager,
+            trial_split: TrialSplit,
             epoch_number: int,
             total_epochs: int,
             input_train: DataContainer,
@@ -151,7 +151,7 @@ class MetaCallback(BaseCallback):
     @abstractmethod
     def call(
             self,
-            trial_split: TrialSplitManager,
+            trial_split: TrialSplit,
             epoch_number: int,
             total_epochs: int,
             input_train: DataContainer,
@@ -185,7 +185,7 @@ class IfBestScore(MetaCallback):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def call(self, trial_split: TrialSplitManager, epoch_number: int, total_epochs: int, input_train: DataContainer,
+    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
              is_finished_and_fitted: bool):
         if trial_split.is_new_best_score():
@@ -224,7 +224,7 @@ class IfLastStep(MetaCallback):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def call(self, trial_split: TrialSplitManager, epoch_number: int, total_epochs: int, input_train: DataContainer,
+    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
              is_finished_and_fitted: bool):
         if epoch_number == total_epochs - 1 or is_finished_and_fitted:
@@ -263,7 +263,7 @@ class StepSaverCallback(BaseCallback):
         BaseCallback.__init__(self)
         self.label = label
 
-    def call(self, trial_split: TrialSplitManager, epoch_number: int, total_epochs: int, input_train: DataContainer,
+    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
              is_finished_and_fitted: bool):
         trial_split.save_model(self.label)
@@ -370,7 +370,7 @@ class MetricCallback(BaseCallback):
         self.log_metrics = log_metrics
         self.pass_context_to_metric_function = pass_context_to_metric_function
 
-    def call(self, trial_split: TrialSplitManager, epoch_number: int, total_epochs: int, input_train: DataContainer,
+    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
              pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
              is_finished_and_fitted: bool):
 
