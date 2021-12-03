@@ -420,6 +420,14 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
         with self.context.lock:
             self.refresh(False)
 
+            # TODO: check if we need to delete pipeline here?
+            # TODO: active record design pattern such that the dataobjects are the ones containing the repo and saving themselves / finding themselves. Clean Code P.101.
+            #     Active record should probably have a weakref of the repo since it doesn<t want to save the repo into itself.
+            #     Active record should have its own location integrated into itself!!! When creating a subdataclass, pass the parent into ctor to have a weakref of the parent as well. Pickling to remove refs.
+            #     Active record<s loc should not be known to the callers.
+
+            #     TODO: FIND A WAY TO SAVE THE REPO INTO THE DATACLASS. And hide it from the rest. Where does the flow goes as well?
+
             # Get new split loc:
             split_id: int = self._dataclass.get_next_i()
             split_id = max(0, split_id - 1)
