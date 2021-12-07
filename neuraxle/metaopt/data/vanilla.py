@@ -52,8 +52,13 @@ from neuraxle.logging.logging import LOGGER_FORMAT, LOGGING_DATETIME_STR_FORMAT
 from neuraxle.metaopt.observable import _ObservableRepo, _ObserverOfRepo
 
 SubDataclassT = TypeVar('SubDataclassT', bound=Optional['BaseDataclass'])
+ScopedLocationAttrInt = int
+ScopedLocationAttrStr = str
 ScopedLocationAttr = Union[str, int]
 Slice = Sequence
+
+DEFAULT_PROJECT: ScopedLocationAttrStr = "default_project"
+DEFAULT_CLIENT: ScopedLocationAttrStr = "default_client"
 
 
 @dataclass(order=True)
@@ -61,41 +66,46 @@ class ScopedLocation:
     """
     A location in the metadata tree.
     """
-    project_name: str = None
-    client_name: str = None
-    round_number: int = None
-    trial_number: int = None
-    split_number: int = None
-    metric_name: str = None
+    project_name: ScopedLocationAttrStr = None
+    client_name: ScopedLocationAttrStr = None
+    round_number: ScopedLocationAttrInt = None
+    trial_number: ScopedLocationAttrInt = None
+    split_number: ScopedLocationAttrInt = None
+    metric_name: ScopedLocationAttrStr = None
 
     # get the field value from BaseMetadata subclass:
     def __getitem__(
-        self, key: Union[Type[SubDataclassT], Slice[Type[SubDataclassT]]]
+        self, key: Union[Type['BaseDataclass'], Slice[Type['BaseDataclass']]]
     ) -> Union[ScopedLocationAttr, 'ScopedLocation']:
         """
         Get sublocation attr from the provided :class:`BaseMetadata` type,
         or otherwise get a slice of the same type, sliced from a :class:`BaseMetadata` type range of attributes to keep.
         """
-        if isinstance(key, SubDataclassT):
+        if key is None:
+            return None
+
+        if key in dataclass_2_attr.keys():
             return getattr(self, dataclass_2_attr[key])
 
-        elif isinstance(key, slice):
+        if isinstance(key, slice):
             if key.stop is None or key.start is not None:
                 raise ValueError("Slice stop must be specified and slice start must be None.")
 
-            idx: SubDataclassT = dataclass_2_attr.keys().index(key.stop) + 1
+            idx: BaseDataclass = dataclass_2_attr.keys().index(key.stop) + 1
             return ScopedLocation(
                 *self.as_list()[:idx]
             )
 
         raise ValueError(f"Invalid key type {key.__class__.__name__} for key {key}.")
 
-    def with_dc(self, dc: SubDataclassT) -> 'ScopedLocation':
+    def with_dc(self, dc: 'BaseDataclass') -> 'ScopedLocation':
         """
         Returns a new :class:`ScopedLocation` with the provided :class:`BaseDataclass` (dc) type's id added.
         """
+        if isinstance(dc, RootDataclass):
+            return ScopedLocation()
         self_copy = copy.deepcopy(self)
-        self_copy[dc.__class__] = dc.id
+        self_copy[dc.__class__] = dc.get_id()
         return self_copy
 
     def with_id(self, _id: ScopedLocationAttr) -> 'ScopedLocation':
@@ -104,7 +114,7 @@ class ScopedLocation:
         """
         return ScopedLocation(*(self.to_list() + [_id]))
 
-    def __setitem__(self, key: Type[SubDataclassT], value: ScopedLocationAttr):
+    def __setitem__(self, key: Type['BaseDataclass'], value: ScopedLocationAttr):
         """
         Set sublocation attr from the provided :class:`BaseMetadata` type.
         """
@@ -159,11 +169,12 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
     # TODO: from json, to json?
 
     def __getitem__(self, loc: ScopedLocation) -> 'SubDataclassT':
-        located_attr: ScopedLocationAttr = loc[self.__class__]
-        if located_attr is None:
+        subdataklass: Type[SubDataclassT] = dataclass_2_subdataclass[self.__class__]
+        located_sub_attr: ScopedLocationAttr = loc[subdataklass]
+        if located_sub_attr is None:
             return self
         last_self_attr = self.get_sublocation()
-        return last_self_attr[located_attr][loc]
+        return last_self_attr[located_sub_attr][loc]
 
     @abstractmethod
     def get_sublocation(self) -> Union[List[SubDataclassT], OrderedDict[str, SubDataclassT]]:
@@ -185,20 +196,32 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
     def store(self, dc: SubDataclassT) -> 'BaseDataclass':
         raise NotImplementedError("Must use mixins.")
 
+    @abstractmethod
+    def shallow(self) -> 'BaseDataclass':
+        raise NotImplementedError("Must use mixins.")
+
 
 class DataclassHasOrderedDictMixin:
-    def get_sublocation(self) -> OrderedDict[str, SubDataclassT]:
+    def get_sublocation(self) -> OrderedDict[ScopedLocationAttrStr, SubDataclassT]:
         raise NotImplementedError("Must be implemented in subclasses.")
 
-    def store(self, dc: SubDataclassT) -> str:
+    def store(self, dc: SubDataclassT) -> ScopedLocationAttrStr:
         self.get_sublocation()[dc.get_id()] = dc
+        return dc.get_id()
+
+    def shallow(self) -> 'BaseDataclass':
+        self_copy = copy.deepcopy(self)
+        subself = self_copy.get_sublocation()
+        for k in subself.keys():
+            subself[k] = None
+        return self_copy
 
 
 class DataclassHasListMixin:
     def get_sublocation(self) -> List[SubDataclassT]:
         raise NotImplementedError("Must be implemented in subclasses.")
 
-    def store(self, dc: SubDataclassT) -> int:
+    def store(self, dc: SubDataclassT) -> ScopedLocationAttrInt:
         _id = dc.get_id()
         if _id == self.get_next_i():
             self.get_sublocation().append(dc)
@@ -208,7 +231,14 @@ class DataclassHasListMixin:
             raise ValueError(f"{dc} has id {dc.get_id()} which is greater than the next id {self.get_next_i()}.")
         return _id
 
-    def get_next_i(self) -> int:
+    def shallow(self) -> 'BaseDataclass':
+        self_copy = copy.deepcopy(self)
+        subself = self_copy.get_sublocation()
+        for k in range(len(subself)):
+            subself[k] = None
+        return self_copy
+
+    def get_next_i(self) -> ScopedLocationAttrInt:
         return len(self.get_sublocation())
 
 
@@ -233,7 +263,7 @@ class BaseTrialDataclassMixin:
 
 class RootDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ProjectDataclass']):
     projects: OrderedDict[str, 'ProjectDataclass'] = field(
-        default_factory=lambda: OrderedDict({"default_project": ProjectDataclass()}))
+        default_factory=lambda: OrderedDict({DEFAULT_PROJECT: ProjectDataclass()}))
 
     def get_sublocation(self) -> OrderedDict[str, 'ProjectDataclass']:
         return self.projects
@@ -243,16 +273,16 @@ class RootDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ProjectDataclas
 
 
 class ProjectDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ClientDataclass']):
-    project_name: str = "default_project"
+    project_name: str = DEFAULT_PROJECT
     clients: OrderedDict[str, 'ClientDataclass'] = field(
-        default_factory=lambda: OrderedDict({"default_client": ClientDataclass()}))
+        default_factory=lambda: OrderedDict({DEFAULT_CLIENT: ClientDataclass()}))
 
     def get_sublocation(self) -> OrderedDict[str, 'ClientDataclass']:
         return self.clients
 
 
 class ClientDataclass(DataclassHasListMixin, BaseDataclass['RoundDataclass']):
-    client_name: str = "default_client"
+    client_name: ScopedLocationAttrStr = DEFAULT_CLIENT
     rounds: List['RoundDataclass'] = field(default_factory=list)
     # By default, the first metric is the main one.  # TODO: make it configurable, or in round?
     main_metric_name: str = None
@@ -262,7 +292,7 @@ class ClientDataclass(DataclassHasListMixin, BaseDataclass['RoundDataclass']):
 
 
 class RoundDataclass(DataclassHasListMixin, BaseDataclass['TrialDataclass']):
-    round_number: int = 0
+    round_number: ScopedLocationAttrInt = 0
     trials: List['TrialDataclass'] = field(default_factory=list)
 
     def get_sublocation(self) -> List['TrialDataclass']:
@@ -275,7 +305,7 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
     This information is itself managed by the :class:`HyperparameterRepository` class
     and the :class:`Trial` class within the AutoML.
     """
-    trial_number: int = 0
+    trial_number: ScopedLocationAttrInt = 0
     validation_splits: List['TrialSplitDataclass'] = field(default_factory=list)
 
     def get_sublocation(self) -> List['TrialSplitDataclass']:
@@ -286,9 +316,9 @@ class TrialSplitDataclass(DataclassHasOrderedDictMixin, BaseTrialDataclassMixin,
     """
     TrialSplit object used by AutoML algorithm classes.
     """
-    split_number: int = 0
+    split_number: ScopedLocationAttrInt = 0
     metric_results: OrderedDict[str, 'MetricResultsDataclass'] = field(default_factory=OrderedDict)
-    introspection_data: RecursiveDict[str, Number] = field(default_factory=RecursiveDict)
+    # introspection_data: RecursiveDict[str, Number] = field(default_factory=RecursiveDict)
 
     def get_sublocation(self) -> OrderedDict[str, 'MetricResultsDataclass']:
         return self.metric_results
@@ -298,7 +328,7 @@ class MetricResultsDataclass(DataclassHasListMixin, BaseDataclass[float]):
     """
     MetricResult object used by AutoML algorithm classes.
     """
-    metric_name: str = "main"
+    metric_name: ScopedLocationAttrStr = "main"
     validation_values: List[float] = field(default_factory=list)  # one per epoch.
     train_values: List[float] = field(default_factory=list)
     higher_score_is_better: bool = True
@@ -316,6 +346,16 @@ dataclass_2_attr: OrderedDict[BaseDataclass, str] = OrderedDict([
     (MetricResultsDataclass, "metric_name"),
 ])
 
+
+dataclass_2_subdataclass: OrderedDict[BaseDataclass, SubDataclassT] = OrderedDict([
+    (RootDataclass, ProjectDataclass),
+    (ProjectDataclass, ClientDataclass),
+    (ClientDataclass, RoundDataclass),
+    (RoundDataclass, TrialDataclass),
+    (TrialDataclass, TrialSplitDataclass),
+    (TrialSplitDataclass, MetricResultsDataclass),
+    (MetricResultsDataclass, None),
+])
 
 str_2_dataclass: OrderedDict[str, BaseDataclass] = OrderedDict([
     (ProjectDataclass.__name__, ProjectDataclass),
@@ -374,7 +414,7 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
     """
 
     @abstractmethod
-    def get(self, scope: ScopedLocation) -> SubDataclassT:
+    def get(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
         """
         Get metadata from scope.
 
@@ -475,13 +515,11 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
         self.cache_folder = cache_folder
         self.root: RootDataclass = RootDataclass()
 
-    def get(self, scope: ScopedLocation) -> SubDataclassT:
-        """
-        """
-        if len(scope) == 0:
-            raise ValueError("Scope must be specific.")
-
-        return self.root[scope]
+    def get(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
+        ret: BaseDataclass = copy.deepcopy(self.root[scope])
+        if not deep:
+            ret = ret.shallow()
+        return ret
 
     def get_logger_path(self, scope: ScopedLocation) -> str:
         scoped_path: str = self.get_scoped_path(scope)
@@ -497,11 +535,11 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
     Useful for debugging.
     """
 
-    def __init__(self, pre_made_trials: Optional['RoundManager'] = None):
+    def __init__(self, pre_made_trials: Optional['Round'] = None):
         HyperparamsRepository.__init__(self)
-        self.trials: RoundManager = pre_made_trials if pre_made_trials is not None else RoundManager()
+        self.trials: Round = pre_made_trials if pre_made_trials is not None else Round()
 
-    def load_trials(self, status: 'TrialStatus' = None) -> 'RoundManager':
+    def load_trials(self, status: 'TrialStatus' = None) -> 'Round':
         """
         Load all trials with the given status.
 
@@ -510,7 +548,7 @@ class InMemoryHyperparamsRepository(HyperparamsRepository):
         """
         return self.trials.filter(status)
 
-    def _save_trial(self, trial: 'TrialManager'):
+    def _save_trial(self, trial: 'Trial'):
         """
         Save trial.
 

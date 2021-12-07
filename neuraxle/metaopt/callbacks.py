@@ -308,9 +308,12 @@ class CallbackList(BaseCallback):
     def __getitem__(self, item):
         return self.callbacks[item]
 
-    def call(self, context: ExecutionContext, epoch: int, tot_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer,
-             is_finished_and_fitted: bool = False):
+    def call(
+        self, context: ExecutionContext, epoch: int, tot_epochs: int,
+        input_train: DataContainer, pred_train: DataContainer,
+        input_val: DataContainer, pred_val: DataContainer,
+        is_finished_and_fitted: bool = False
+    ):
         is_finished_and_fitted = False
         for callback in self.callbacks:
             try:

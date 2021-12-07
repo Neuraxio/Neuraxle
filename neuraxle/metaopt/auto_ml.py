@@ -45,7 +45,7 @@ from neuraxle.logging.warnings import (warn_deprecated_arg,
                                        warn_deprecated_class)
 from neuraxle.metaopt.callbacks import (BaseCallback, CallbackList,
                                         ScoringCallback)
-from neuraxle.metaopt.data.aggregates import (Client, Epoch, Project, Round,
+from neuraxle.metaopt.data.aggregates import (Client, Project, Round,
                                               Trial, TrialSplit)
 from neuraxle.metaopt.data.vanilla import (AutoMLContext, AutoMLFlow,
                                            BaseDataclass, ClientDataclass,
@@ -511,6 +511,7 @@ class EasyAutoML(AutoML):
             n_jobs=n_jobs,
             hp_optimizer=hyperparams_optimizer,
             continue_loop_on_error=continue_loop_on_error,
+            start_new_round=True,
         )
         assert cache_folder_when_no_handle is None  # TODO: remove this.
 
@@ -520,5 +521,4 @@ class EasyAutoML(AutoML):
             loop=controller_loop,
             repo=hyperparams_repository,
             refit_best_trial=refit_best_trial,
-            start_new_round=True,
         )

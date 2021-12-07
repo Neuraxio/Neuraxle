@@ -932,6 +932,9 @@ class Flow(BaseService):
         self.log('Started!')
         self.log_status(TrialStatus.RUNNING)
 
+    def log_epoch(self, epoch: int, n_epochs: int):
+        self.log(f'Epoch {epoch}/{n_epochs}.')
+
     def log_end(self, status: TrialStatus = TrialStatus.SUCCESS):
         self.log('Finished!')
         self.log_status(status)

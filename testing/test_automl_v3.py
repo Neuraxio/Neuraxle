@@ -8,17 +8,18 @@ from neuraxle.hyperparams.distributions import RandInt, Uniform
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
 from neuraxle.metaopt.auto_ml import AutoML, DefaultLoop, RandomSearch, Trainer
-from neuraxle.metaopt.callbacks import CallbackList, MetricCallback
-from neuraxle.metaopt.data.aggregates import (Client, Project, Round,
+from neuraxle.metaopt.callbacks import (CallbackList, EarlyStoppingCallback,
+                                        MetricCallback)
+from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
                                               Trial, TrialSplit)
-from neuraxle.metaopt.data.vanilla import (AutoMLContext, AutoMLFlow,
+from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT, AutoMLContext, AutoMLFlow,
                                            BaseDataclass,
                                            BaseHyperparameterOptimizer,
                                            ClientDataclass,
                                            MetricResultsDataclass,
-                                           ProjectDataclass, RoundDataclass,
-                                           ScopedLocation, TrialDataclass,
-                                           TrialSplitDataclass,
+                                           ProjectDataclass, RootDataclass,
+                                           RoundDataclass, ScopedLocation,
+                                           TrialDataclass, TrialSplitDataclass,
                                            VanillaHyperparamsRepository,
                                            dataclass_2_attr)
 from neuraxle.metaopt.validation import (GridExplorationSampler,
@@ -61,9 +62,9 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
                 callbacks=[MetricCallback('MAE', median_absolute_error, True)]
             ),
             hp_optimizer=RandomSearch(main_metric_name='MAE'),
-            start_new_round=True,
             n_trials=80,
             n_jobs=10,
+            start_new_round=True,
         ),
         repo=VanillaHyperparamsRepository(tmpdir),
         refit_best_trial=True,
@@ -76,17 +77,18 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
 
 
 def test_scoped_cascade_does_the_right_logging(tmpdir):
-    dact_train_x: DACT = DACT(ids=range(0, 10), di=range(0, 10))
-    dact_train_y: DACT = DACT(ids=range(0, 10), di=range(100, 110))
-    dact_valid_x: DACT = DACT(ids=range(10, 20), di=range(10, 20))
-    dact_valid_y: DACT = DACT(ids=range(10, 20), di=range(110, 120))
-    context = AutoMLContext.from_context(ExecutionContext(), VanillaHyperparamsRepository(tmpdir))
-    hp_optimizer: BaseHyperparameterOptimizer = GridExplorationSampler(main_metric_name='MAE', expected_n_trials=1)
+    dact_train: DACT = DACT(ids=range(0, 10), di=range(0, 10), eo=range(100, 110))
+    dact_valid: DACT = DACT(ids=range(10, 20), di=range(10, 20), eo=range(110, 120))
+    hp_optimizer: BaseHyperparameterOptimizer = GridExplorationSampler(
+        main_metric_name='MAE', expected_n_trials=1)
     n_epochs = 3
-    callbacks = CallbackList([MetricCallback('MAE', median_absolute_error, False)])
+    callbacks = CallbackList([
+        MetricCallback('MAE', median_absolute_error, False),
+        EarlyStoppingCallback(1, 'MAE')
+    ])
     expected_scope = ScopedLocation(
-        project_name='some_test_project',
-        client_name='some_test_client',
+        project_name=DEFAULT_PROJECT,
+        client_name=DEFAULT_CLIENT,
         round_number=1,
         trial_number=1,
         split_number=1,
@@ -96,41 +98,44 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
         MultiplyByN().with_hp_range(range(1, 3)),
         AddN().with_hp_range(range(99, 103)),
     ])
+    hps: HyperparameterSpace = p.get_hyperparams_space()
+    root: Root = Root.vanilla(ExecutionContext())
 
-    with Project(context, expected_scope.project_name) as ps:
+    with root.default_project() as ps:
         ps: Project = ps
-        with ps.new_client(expected_scope.client_name) as cs:
+        with ps.default_client() as cs:
             cs: Client = cs
-            with cs.optim_round(p.get_hyperparams_space()) as rs:
-                rs: Round = rs
-                with rs.new_hyperparametrized_trial(hp_optimizer=hp_optimizer, continue_loop_on_error=False) as ts:
+            with cs.new_round() as rs:
+                rs: Round = rs.with_optimizer(hp_optimizer=hp_optimizer, hps=hps)
+                with rs.new_rvs_trial() as ts:
                     ts: Trial = ts
-                    with ts.new_trial_split() as tss:
+                    with ts.new_split(continue_loop_on_error=False) as tss:
                         tss: TrialSplit = tss
 
-                        for e in range(n_epochs):
-                            with tss.new_epoch() as es:  # TODO: epoch scope?
+                        for _ in range(n_epochs):
+                            tss = tss.next_epoch()
 
-                                if callbacks.call(
-                                    es.context.validation(),
-                                    e, n_epochs,
-                                    dact_train_x, dact_train_y,
-                                    dact_valid_x, dact_valid_y,
-                                ):
-                                    break
+                            p, dact_pred_train = p.handle_fit_transform(
+                                dact_train, tss.train_context())
+                            p, dact_pred_val = p.handle_predict(
+                                dact_valid.without_eo(), tss.validation_context())
 
-    for dataclass_type in dataclass_2_attr.keys():
-        dc: BaseDataclass = context.repo.get(expected_scope[ProjectDataclass])
-        assert isinstance(dc, dataclass_2_attr)
-        assert dc.get_id() == expected_scope[dataclass_type]
+                            if callbacks.call(
+                                tss,
+                                dact_train, dact_pred_train,
+                                dact_valid, dact_pred_val,
+                            ):
+                                break
 
-        if dataclass_type == MetricResultsDataclass:
+    for dc_type in dataclass_2_attr.keys():
+        dc: BaseDataclass = root.repo.get(expected_scope[:dc_type])
+        assert isinstance(dc, dc_type)
+        assert dc.get_id() == expected_scope[dc_type]
+
+        if dc_type == MetricResultsDataclass:
             assert len(dc.get_sublocation()) == n_epochs
         else:
             assert len(dc.get_sublocation()) == 1
-
-    # dc: MetricResultsDataclass = context.repo.get(ScopedLocation())
-    assert len(dc.validation_values) == n_epochs
 
 
 def test_two_automl_in_parallel_can_contribute_to_the_same_hp_repository():

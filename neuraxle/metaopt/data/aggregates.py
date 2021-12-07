@@ -36,7 +36,7 @@ Classes are splitted like this for the AutoML:
 
 """
 
-
+import gc
 import copy
 import datetime
 import hashlib
@@ -55,12 +55,12 @@ from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
                     Tuple, Type, TypeVar, Union)
 
 import numpy as np
-from neuraxle.base import (BaseStep, ExecutionContext, Flow, TrialStatus,
-                           synchroneous_flow_method)
+from neuraxle.base import (_HasChildrenMixin, BaseStep, ExecutionContext, Flow,
+                           synchroneous_flow_method, TrialStatus)
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
-from neuraxle.metaopt.data.vanilla import (AutoMLContext, AutoMLFlow,
+from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT, AutoMLContext, AutoMLFlow,
                                            BaseDataclass,
                                            BaseHyperparameterOptimizer,
                                            ClientDataclass,
@@ -71,7 +71,7 @@ from neuraxle.metaopt.data.vanilla import (AutoMLContext, AutoMLFlow,
                                            RootDataclass, RoundDataclass,
                                            ScopedLocation, ScopedLocationAttr,
                                            SubDataclassT, TrialDataclass,
-                                           TrialSplitDataclass)
+                                           TrialSplitDataclass, VanillaHyperparamsRepository)
 
 SubAggregateT = TypeVar('SubAggregateT', bound=Optional['BaseAggregate'])
 # TODO: there are probably errors where the subtype is used where the base type should be used instead. Check this typing error. Might be bad with constructors. Will be checked in unit tests?
@@ -116,8 +116,8 @@ class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
         return _subdataklass
 
     def refresh(self, deep: bool = True):
-        with self.context.lock():
-            self._dataclass = self.repo.get(self.context.location, deep=deep)
+        with self.context.lock:
+            self._dataclass = self.repo.get(self.loc, deep=deep)
         self.is_deep = deep
 
     def save(self, deep: bool = True):
@@ -127,17 +127,20 @@ class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
                 f"is not already deep. You might want to use self.refresh(deep=True) at "
                 f"some point to refresh self before saving deeply then.")
 
-        with self.context.lock():
+        with self.context.lock:
             self.repo.save(self.loc, self._dataclass, deep=deep)
 
     def save_subaggregate(self, subagg: SubAggregateT, deep=False):
         self._dataclass.store(subagg._dataclass)
-        with self.context.lock():
+        with self.context.lock:
             self.save(deep=False)
             subagg.save(deep=deep)
 
     @contextmanager
     def managed_subresource(self, *args, **kwds) -> SubAggregateT:
+        return self._managed_subresource(*args, **kwds)
+
+    def _managed_subresource(self, *args, **kwds) -> SubAggregateT:
         resource = None
         e: Exception = None
         try:
@@ -146,7 +149,7 @@ class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
         except Exception as exc:
             e = exc
         finally:
-            return self._release_sub_resource(resource, e)
+            return self._release_managed_subresource(resource, e)
 
     @abstractmethod
     def _acquire_managed_subresource(self, *args, **kwds) -> SubAggregateT:
@@ -203,9 +206,27 @@ class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
 class Root(BaseAggregate['Project', RootDataclass]):
 
     @staticmethod
-    def from_repo(context: AutoMLContext) -> 'Root':
-        _dataclass: RootDataclass = context.repo.get(ScopedLocation())
-        return Root(_dataclass, context)
+    def from_repo(context: ExecutionContext, repo: HyperparamsRepository) -> 'Root':
+        _dataclass: RootDataclass = repo.get(ScopedLocation())
+        automl_context: AutoMLContext = AutoMLContext.from_context(context, repo)
+        return Root(_dataclass, automl_context)
+
+    @staticmethod
+    def vanilla(context: ExecutionContext = None) -> 'Root':
+        if context is None:
+            context = ExecutionContext()
+        vanilla_repo: HyperparamsRepository = VanillaHyperparamsRepository(
+            os.path.join(context.get_path(), "hyperparams"))
+        return Root.from_repo(context, vanilla_repo)
+
+    @contextmanager
+    def get_project(self, name: str) -> 'Project':
+        # TODO: new project should be created if it does not exist?
+        return self._managed_subresource(project_name=name)
+
+    @contextmanager
+    def default_project(self) -> 'Project':
+        return self._managed_subresource(project_name=DEFAULT_PROJECT)
 
     def _acquire_managed_subresource(self, project_name: str) -> 'Project':
         super()._acquire_managed_subresource(project_name)
@@ -213,14 +234,31 @@ class Root(BaseAggregate['Project', RootDataclass]):
 
 class Project(BaseAggregate['Client', ProjectDataclass]):
 
-    def _acquire_managed_subresource(self, client_name: str) -> 'Project':
+    @contextmanager
+    def get_client(self, name: str) -> 'Client':
+        # TODO: new client should be created if it does not exist?
+        return self._managed_subresource(client_name=name)
+
+    @contextmanager
+    def default_client(self) -> 'Client':
+        return self._managed_subresource(client_name=DEFAULT_CLIENT)
+
+    def _acquire_managed_subresource(self, client_name: str) -> 'Client':
         client_loc = self.loc.with_id(client_name)
         super()._acquire_managed_subresource(client_loc)
 
 
 class Client(BaseAggregate['Round', ClientDataclass]):
 
-    def _acquire_managed_subresource(self, hps: HyperparameterSpace, new_round=True) -> 'Project':
+    @contextmanager
+    def new_round(self, hps: HyperparameterSpace) -> 'Round':
+        return self._managed_subresource(hps=hps, new_round=True)
+
+    @contextmanager
+    def resume_last_round(self, hps: HyperparameterSpace) -> 'Round':
+        return self._managed_subresource(hps=hps, new_round=False)
+
+    def _acquire_managed_subresource(self, new_round=True) -> 'Round':
         with self.context.lock:
             self.refresh(False)
 
@@ -233,7 +271,7 @@ class Client(BaseAggregate['Round', ClientDataclass]):
 
             # Get round to return:
             _round_dataclass: RoundDataclass = self.repo.get(round_loc)
-            subagg: Round = Round(_round_dataclass, self.context).with_optimizer(hps)
+            subagg: Round = Round(_round_dataclass, self.context)
 
             if new_round or round_loc == 0:
                 self.save_subaggregate(subagg, deep=True)
@@ -249,14 +287,22 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
         self.hps: HyperparameterSpace = hps
         return self
 
+    @contextmanager
+    def new_rvs_trial(self) -> 'Trial':
+        return self._managed_subresource(new_trial=True)
+
+    @contextmanager
+    def last_trial(self) -> 'Trial':
+        return self._managed_subresource(new_trial=False)
+
     @property
-    def trials(self) -> List['Trial']:
+    def _trials(self) -> List['Trial']:
         return [Trial(t, self.context) for t in self._dataclass.get_sublocation()]
 
-    def _acquire_managed_subresource(self, new_trial=True) -> 'Round':
+    def _acquire_managed_subresource(self, new_trial=True) -> 'Trial':
         with self.context.lock:
             self.refresh(False)
-            self.context.flow.add_file_handler_to_logger(
+            self.flow.add_file_handler_to_logger(
                 self.repo.get_logger_path(self.loc))
 
             # Get new trial loc:
@@ -270,7 +316,7 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
             _trial_dataclass: TrialDataclass = self.repo.get(trial_loc)
             new_hps: HyperparameterSamples = self.hp_optimizer.find_next_best_hyperparams(self)
             _trial_dataclass.hyperparams(new_hps)
-            self.context.flow.log_planned(new_hps)
+            self.flow.log_planned(new_hps)
             subagg: Trial = Trial(_trial_dataclass, self.context)
 
             if new_trial or trial_loc == 0:
@@ -323,7 +369,7 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
         if len(self) == 0:
             raise Exception('Could not get best trial because there were no successful trial.')
 
-        for trial in self.trials:
+        for trial in self._trials:
             trial_score = trial.get_avg_validation_score()
 
             if best_score is None or self.is_higher_score_better() == (trial_score > best_score):
@@ -350,7 +396,7 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
             setattr(
                 self,
                 is_higher_score_better_attr,
-                self.trials[-1].is_higher_score_better(metric_name)
+                self._trials[-1].is_higher_score_better(metric_name)
             )
         return getattr(self, is_higher_score_better_attr)
 
@@ -370,22 +416,22 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
         :param status: trial status
         :return:
         """
-        _round: Round = self.copy().without_context()
+        _round_copy: Round = self.copy().without_context()
         _trials: List[TrialDataclass] = [
             sdc
             for sdc in self._dataclass.trials
             if sdc.get_status() == status
         ]
-        _round._dataclass.trials = _trials
+        _round_copy._dataclass.trials = _trials
 
-        return _round
+        return _round_copy
 
     def copy(self) -> 'Round':
         return Round(copy.deepcopy(self._dataclass), self.context.copy())
 
     def get_number_of_split(self):
         if len(self) > 0:
-            return len(self[0].validation_splits)
+            return len(self[0]._validation_splits)
         return 0
 
     def get_metric_names(self) -> List[str]:
@@ -409,9 +455,17 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
         :class:`ExecutionContext`
     """
 
-    def _acquire_managed_subresource(
-        self, continue_loop_on_error: bool, delete_pipeline_on_completion: bool
-    ) -> SubAggregateT:
+    @contextmanager
+    def new_split(self, continue_loop_on_error: bool) -> 'TrialSplit':
+        return self._acquire_managed_subresource(
+            continue_loop_on_error=continue_loop_on_error)
+
+    @property
+    def _validation_splits(self) -> List['TrialSplit']:
+        # TODO: if is not deep: self.refresh(True)?
+        return [TrialSplit(s, self.context) for s in self._dataclass.validation_splits]
+
+    def _acquire_managed_subresource(self, continue_loop_on_error: bool) -> 'TrialSplit':
 
         self.error_types_to_raise = (
             SystemError, SystemExit, EOFError, KeyboardInterrupt
@@ -420,7 +474,6 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
         with self.context.lock:
             self.refresh(False)
 
-            # TODO: check if we need to delete pipeline here?
             # TODO: active record design pattern such that the dataobjects are the ones containing the repo and saving themselves / finding themselves. Clean Code P.101.
             #     Active record should probably have a weakref of the repo since it doesn<t want to save the repo into itself.
             #     Active record should have its own location integrated into itself!!! When creating a subdataclass, pass the parent into ctor to have a weakref of the parent as well. Pickling to remove refs.
@@ -431,60 +484,39 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
             # Get new split loc:
             split_id: int = self._dataclass.get_next_i()
             split_id = max(0, split_id - 1)
+            if split_id == 0:
+                self.flow.log_start()
             split_loc = self.loc.with_id(split_id)
 
             # Get split to return:
             _split_dataclass: TrialSplitDataclass = self.repo.get(split_loc)
             subagg: TrialSplit = TrialSplit(_split_dataclass, self.context)
+            # TODO: logger loc and file for context.push_attr?
 
             self.save_subaggregate(subagg, deep=True)
             return subagg
 
-        # return super()._acquire_managed_subresource(*args, **kwds)
-
-        trial_split: TrialSplit = TrialSplit(_trial_dataclass, self.context)
-
-        # trial_split_dataclass=TrialSplitDataclass(split_number=len(self.validation_splits))
-        self.validation_splits.append(trial_split)
-
-        self.save_trial()  # TODO: remove this line or what?
-        return trial_split
-
     def _release_managed_subresource(self, resource: 'TrialSplit', e: Exception = None) -> Optional[Exception]:
+        gc.collect()
+        handled_error = True
 
         with self.context.lock:
             self.refresh(False)
-            
-            if e is not None:
-                if e.__class__ in self.error_types_to_raise:
+            self.save_subaggregate(resource, deep=True)
+
+            if e is None:
+                self.flow.log_success()
+            else:
+                if isinstance(e, SystemExit):
+                    self.flow.log_aborted()
+                else:
                     self.flow.log_failure(e)
-                    self.save_trial()
-                    return e
 
-            self.save(False)
-        return False
+                if any((isinstance(e, c) for c in self.error_types_to_raise)):
+                    handled_error = False
 
-    def new_validation_split(self, delete_pipeline_on_completion: bool = True) -> 'TrialSplit':
-        """
-        Create a new trial split.
-        A trial has one split when the validation splitter function is validation split.
-        A trial has one or many split when the validation splitter function is kfold_cross_validation_split.
-
-        :param delete_pipeline_on_completion: bool to delete pipeline on completion or not
-        :type pipeline: pipeline to execute
-        :return: one trial split
-        """
-        trial_split: TrialSplit = TrialSplit(
-            trial=self,
-            trial_split_dataclass=TrialSplitDataclass(
-                split_number=len(self.validation_splits)
-            ),
-            delete_pipeline_on_completion=delete_pipeline_on_completion
-        )
-        self.validation_splits.append(trial_split)
-
-        self.save_trial()  # TODO: remove this line or what?
-        return trial_split
+            self.save_subaggregate(resource)
+        return handled_error
 
     def get_avg_validation_score(self, metric_name: str) -> float:
         """
@@ -495,7 +527,7 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
         """
         scores = [
             val_split.get_best_validation_score(metric_name)
-            for val_split in self.validation_splits
+            for val_split in self._validation_splits
             if val_split.is_success()
         ]
         return sum(scores) / len(scores)
@@ -504,7 +536,7 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
         # TODO: use in flow.log_results:
         n_epochs = [
             val_split.get_n_epochs_to_best_validation_score(metric_name)
-            for val_split in self.validation_splits if val_split.is_success()
+            for val_split in self._validation_splits if val_split.is_success()
         ]
 
         n_epochs = sum(n_epochs) / len(n_epochs)
@@ -535,7 +567,7 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
         Set trial status to success.
         """
         success = True
-        for validation_split in self.validation_splits:
+        for validation_split in self._validation_splits:
             if not validation_split.is_success():
                 success = False
 
@@ -590,10 +622,47 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
         :class:`DataContainer`
     """
 
+    def __init__(self, _dataclass: SubDataclassT, context: AutoMLContext):
+        super().__init__(_dataclass, context, is_deep=True)
+        self.epoch: int = 0
+        self.n_epochs: int = None
+
+    def with_n_epochs(self, n_epochs: int) -> 'TrialSplit':
+        self.n_epochs: int = n_epochs
+
+    def next_epoch(self) -> int:
+        """
+        Increment epoch. Returns the new epoch id.
+        Epochs are 1-indexed like lengths: first epoch is 1, second is 2, etc.
+        """
+        if self.n_epochs is None:
+            raise ValueError("self.n_epochs is not set. Please call self.with_n_epochs(n_epochs) first.")
+        # TODO: lock?
+        if self.epoch == 0:
+            self.flow.log_start()
+        self.epoch: int = self._dataclass.get_next_i()
+        self.flow.log_epoch(self.epoch, self.n_epochs)
+        return self.epoch
+
+    def _acquire_managed_subresource(self, epoch: int, n_epochs: int) -> 'MetricResults':
+        """
+        Epoch is zero-indexed.
+        """
+        # Should use self.metric_result instead:
+        raise NotImplementedError("Please use self.metric_results instead.")
+
     @property
     def metric_results(self) -> Dict[str, 'MetricResults']:
-        # TODO: use this.
-        return [MetricResults(mr) for mr in self._dataclass]
+        return {
+            metric_name: MetricResults(mr, self.context).at_epoch(self.epoch, self.n_epochs)
+            for metric_name, mr in self._dataclass.metric_results.items()
+        }
+
+    def train_context(self) -> 'AutoMLContext':
+        return self.context.train()
+
+    def validation_context(self) -> 'AutoMLContext':
+        return self.context.validation()
 
     def get_metric_names(self) -> List[str]:
         return list(self._dataclass.metric_results.keys())
@@ -704,7 +773,7 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
 
         :return: self
         """
-        self.status = TrialStatus.SUCCESS
+        self._dataclass.status = TrialStatus.SUCCESS
         self.save_parent_trial()
         return self
 
@@ -712,7 +781,7 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
         """
         Set trial status to success.
         """
-        return self.status == TrialStatus.SUCCESS
+        return self._dataclass.status == TrialStatus.SUCCESS
 
     def set_failed(self, error: Exception) -> 'TrialSplit':
         """
@@ -721,7 +790,7 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
         :param error: catched exception
         :return: self
         """
-        self.status = TrialStatus.FAILED
+        self._dataclass.status = TrialStatus.FAILED
         self.error = str(error)
         self.error_traceback = traceback.format_exc()
         self.save_parent_trial()
@@ -736,3 +805,21 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
 
 class MetricResults(BaseAggregate[None, MetricResultsDataclass]):
     pass
+    # TODO: logging at each epoch.
+    # TODO: epoch class and epoch location.
+    # TODO: this will be used for the Epoch to save the MetricResults with the _acquire_managed_subresource.
+
+    def at_epoch(self, epoch: int, n_epochs: int) -> 'MetricResults':
+        """
+        Return the metric results for a specific epoch.
+        """
+        self.epoch: int = epoch
+        self.n_epochs: int = n_epochs
+        return self
+
+
+_ = """
+    def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
+        self.flow.log_error(exc_val)
+        raise NotImplementedError("TODO: log MetricResultMetadata?")
+"""

@@ -45,7 +45,7 @@ class TestTrials:
         with self.trial.new_validation_split(Identity()) as trial_split:
             trial_split.set_success()
 
-        assert self.trial.validation_splits[0] == trial_split
+        assert self.trial._validation_splits[0] == trial_split
 
     @pytest.mark.skip(reason="TODO: AutoML Refactor")
     def test_trial_split_is_new_best_score_should_return_true_with_one_score(self):
