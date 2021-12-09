@@ -128,7 +128,7 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
                                 break
 
     for dc_type in dataclass_2_attr.keys():
-        dc: BaseDataclass = root.repo.get(expected_scope[:dc_type])
+        dc: BaseDataclass = root.repo.load(expected_scope[:dc_type])
         assert isinstance(dc, dc_type)
         assert dc.get_id() == expected_scope[dc_type]
 

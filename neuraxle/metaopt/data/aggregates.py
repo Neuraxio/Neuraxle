@@ -46,7 +46,6 @@ import os
 import traceback
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
 from json.encoder import JSONEncoder
@@ -107,17 +106,19 @@ class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
 
     @property
     def subaggregate(self) -> Type[SubAggregateT]:
-        _subklass: Type[SubAggregateT] = self.__orig_class__.__args__[0]
-        return _subklass
+        return aggregate_2_subaggregate[self.__class__]
+
+    @property
+    def dataclass(self) -> Type[BaseDataclass]:
+        return aggregate_2_dataclass[self.__class__]
 
     @property
     def subdataclass(self) -> Type[SubDataclassT]:
-        _subdataklass: Type[SubAggregateT] = self.__orig_class__.__args__[1]
-        return _subdataklass
+        return aggregate_2_dataclass[self.__class__]
 
     def refresh(self, deep: bool = True):
         with self.context.lock:
-            self._dataclass = self.repo.get(self.loc, deep=deep)
+            self._dataclass = self.repo.load(self.loc, deep=deep)
         self.is_deep = deep
 
     def save(self, deep: bool = True):
@@ -128,7 +129,7 @@ class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
                 f"some point to refresh self before saving deeply then.")
 
         with self.context.lock:
-            self.repo.save(self.loc, self._dataclass, deep=deep)
+            self.repo.save(self._dataclass, self.loc, deep=deep)
 
     def save_subaggregate(self, subagg: SubAggregateT, deep=False):
         self._dataclass.store(subagg._dataclass)
@@ -136,20 +137,22 @@ class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
             self.save(deep=False)
             subagg.save(deep=deep)
 
-    @contextmanager
+    def __enter__(self) -> SubAggregateT:
+        return self._managed_resource
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        handled_err: bool = self._release_managed_subresource(self._managed_resource, exc_val)
+        return handled_err
+
+    # @contextmanager
     def managed_subresource(self, *args, **kwds) -> SubAggregateT:
-        return self._managed_subresource(*args, **kwds)
+        self._managed_subresource(*args, **kwds)
+        return self
 
     def _managed_subresource(self, *args, **kwds) -> SubAggregateT:
-        resource = None
-        e: Exception = None
-        try:
-            resource = self._acquire_managed_subresource(*args, **kwds)
-            yield resource
-        except Exception as exc:
-            e = exc
-        finally:
-            return self._release_managed_subresource(resource, e)
+        self._managed_resource: SubAggregateT = self._acquire_managed_subresource(
+            *args, **kwds)
+        return self
 
     @abstractmethod
     def _acquire_managed_subresource(self, *args, **kwds) -> SubAggregateT:
@@ -160,7 +163,7 @@ class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
         # Create subaggregate:
         with self.context.lock:
             self.refresh(False)
-            subdataclass: SubDataclassT = self.repo.get(*args, **kwds)
+            subdataclass: SubDataclassT = self.repo.load(*args, **kwds)
             _subklass: Type[SubAggregateT] = self.subaggregate(subdataclass, self.context)
             subagg: SubAggregateT = _subklass(subdataclass, self.context)
             self.save_subaggregate(subagg, deep=True)
@@ -205,9 +208,18 @@ class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
 
 class Root(BaseAggregate['Project', RootDataclass]):
 
+    def save(self, deep: bool = False):
+        if deep:
+            for p in self.projects:
+                p.save(deep=True)
+
+    @property
+    def projects(self) -> List['Project']:
+        return list(self)
+
     @staticmethod
     def from_repo(context: ExecutionContext, repo: HyperparamsRepository) -> 'Root':
-        _dataclass: RootDataclass = repo.get(ScopedLocation())
+        _dataclass: RootDataclass = repo.load(ScopedLocation())
         automl_context: AutoMLContext = AutoMLContext.from_context(context, repo)
         return Root(_dataclass, automl_context)
 
@@ -219,44 +231,49 @@ class Root(BaseAggregate['Project', RootDataclass]):
             os.path.join(context.get_path(), "hyperparams"))
         return Root.from_repo(context, vanilla_repo)
 
-    @contextmanager
-    def get_project(self, name: str) -> 'Project':
+    # @contextmanager
+    def get_project(self, name: str) -> 'Root':
         # TODO: new project should be created if it does not exist?
-        return self._managed_subresource(project_name=name)
+        self._managed_subresource(project_name=name)
+        return self
 
-    @contextmanager
-    def default_project(self) -> 'Project':
-        return self._managed_subresource(project_name=DEFAULT_PROJECT)
+    # @contextmanager
+    def default_project(self) -> 'Root':
+        self._managed_subresource(project_name=DEFAULT_PROJECT)
+        return self
 
     def _acquire_managed_subresource(self, project_name: str) -> 'Project':
-        super()._acquire_managed_subresource(project_name)
+        project_loc: ScopedLocation = self.loc.with_id(project_name)
+        super()._acquire_managed_subresource(project_loc)
 
 
 class Project(BaseAggregate['Client', ProjectDataclass]):
 
-    @contextmanager
-    def get_client(self, name: str) -> 'Client':
+    # @contextmanager
+    def get_client(self, name: str) -> 'Project':
         # TODO: new client should be created if it does not exist?
-        return self._managed_subresource(client_name=name)
+        self._managed_subresource(client_name=name)
+        return self
 
-    @contextmanager
-    def default_client(self) -> 'Client':
-        return self._managed_subresource(client_name=DEFAULT_CLIENT)
+    # @contextmanager
+    def default_client(self) -> 'Project':
+        self._managed_subresource(client_name=DEFAULT_CLIENT)
+        return self
 
     def _acquire_managed_subresource(self, client_name: str) -> 'Client':
-        client_loc = self.loc.with_id(client_name)
+        client_loc: ScopedLocation = self.loc.with_id(client_name)
         super()._acquire_managed_subresource(client_loc)
 
 
 class Client(BaseAggregate['Round', ClientDataclass]):
 
-    @contextmanager
-    def new_round(self, hps: HyperparameterSpace) -> 'Round':
-        return self._managed_subresource(hps=hps, new_round=True)
+    def new_round(self, hps: HyperparameterSpace) -> 'Client':
+        self._managed_subresource(hps=hps, new_round=True)
+        return self
 
-    @contextmanager
-    def resume_last_round(self, hps: HyperparameterSpace) -> 'Round':
-        return self._managed_subresource(hps=hps, new_round=False)
+    def resume_last_round(self, hps: HyperparameterSpace) -> 'Client':
+        self._managed_subresource(hps=hps, new_round=False)
+        return self
 
     def _acquire_managed_subresource(self, new_round=True) -> 'Round':
         with self.context.lock:
@@ -270,7 +287,7 @@ class Client(BaseAggregate['Round', ClientDataclass]):
             round_loc = self.loc.with_id(round_id)
 
             # Get round to return:
-            _round_dataclass: RoundDataclass = self.repo.get(round_loc)
+            _round_dataclass: RoundDataclass = self.repo.load(round_loc)
             subagg: Round = Round(_round_dataclass, self.context)
 
             if new_round or round_loc == 0:
@@ -287,13 +304,15 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
         self.hps: HyperparameterSpace = hps
         return self
 
-    @contextmanager
-    def new_rvs_trial(self) -> 'Trial':
-        return self._managed_subresource(new_trial=True)
+    # @contextmanager
+    def new_rvs_trial(self) -> 'Round':
+        self._managed_subresource(new_trial=True)
+        return self
 
-    @contextmanager
-    def last_trial(self) -> 'Trial':
-        return self._managed_subresource(new_trial=False)
+    # @contextmanager
+    def last_trial(self) -> 'Round':
+        self._managed_subresource(new_trial=False)
+        return self
 
     @property
     def _trials(self) -> List['Trial']:
@@ -303,7 +322,7 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
         with self.context.lock:
             self.refresh(False)
             self.flow.add_file_handler_to_logger(
-                self.repo.get_logger_path(self.loc))
+                self.repo.get_scoped_logger_path(self.loc))
 
             # Get new trial loc:
             trial_id: int = self._dataclass.get_next_i()
@@ -313,7 +332,7 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
             trial_loc = self.loc.with_id(trial_id)
 
             # Get trial to return:
-            _trial_dataclass: TrialDataclass = self.repo.get(trial_loc)
+            _trial_dataclass: TrialDataclass = self.repo.load(trial_loc)
             new_hps: HyperparameterSamples = self.hp_optimizer.find_next_best_hyperparams(self)
             _trial_dataclass.hyperparams(new_hps)
             self.flow.log_planned(new_hps)
@@ -455,10 +474,11 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
         :class:`ExecutionContext`
     """
 
-    @contextmanager
-    def new_split(self, continue_loop_on_error: bool) -> 'TrialSplit':
-        return self._acquire_managed_subresource(
+    # @contextmanager
+    def new_split(self, continue_loop_on_error: bool) -> 'Trial':
+        self._acquire_managed_subresource(
             continue_loop_on_error=continue_loop_on_error)
+        return self
 
     @property
     def _validation_splits(self) -> List['TrialSplit']:
@@ -489,7 +509,7 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
             split_loc = self.loc.with_id(split_id)
 
             # Get split to return:
-            _split_dataclass: TrialSplitDataclass = self.repo.get(split_loc)
+            _split_dataclass: TrialSplitDataclass = self.repo.load(split_loc)
             subagg: TrialSplit = TrialSplit(_split_dataclass, self.context)
             # TODO: logger loc and file for context.push_attr?
 
@@ -629,6 +649,7 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
 
     def with_n_epochs(self, n_epochs: int) -> 'TrialSplit':
         self.n_epochs: int = n_epochs
+        return self
 
     def next_epoch(self) -> int:
         """
@@ -817,9 +838,27 @@ class MetricResults(BaseAggregate[None, MetricResultsDataclass]):
         self.n_epochs: int = n_epochs
         return self
 
+    _ = """
+        def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
+            self.flow.log_error(exc_val)
+            raise NotImplementedError("TODO: log MetricResultMetadata?")
+    """
 
-_ = """
-    def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
-        self.flow.log_error(exc_val)
-        raise NotImplementedError("TODO: log MetricResultMetadata?")
-"""
+
+aggregate_2_subaggregate = OrderedDict([
+    (Root, Client),
+    (Client, Project),
+    (Project, Trial),
+    (Trial, TrialSplit),
+    (TrialSplit, MetricResults),
+    (MetricResults, MetricResults),
+])
+
+aggregate_2_dataclass: OrderedDict[BaseDataclass, str] = OrderedDict([
+    (Root, RootDataclass),
+    (Client, ClientDataclass),
+    (Project, ProjectDataclass),
+    (Trial, TrialDataclass),
+    (TrialSplit, TrialSplitDataclass),
+    (MetricResults, MetricResultsDataclass),
+])

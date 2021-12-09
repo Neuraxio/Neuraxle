@@ -33,7 +33,7 @@ import datetime
 import json
 import logging
 import os
-from abc import ABC, abstractclassmethod, abstractmethod
+from abc import ABC, abstractclassmethod, abstractmethod, abstractproperty
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from enum import Enum
@@ -84,6 +84,9 @@ class ScopedLocation:
         if key is None:
             return None
 
+        if isinstance(key, BaseDataclass):
+            return getattr(self, key._id_attr_name)
+
         if key in dataclass_2_attr.keys():
             return getattr(self, dataclass_2_attr[key])
 
@@ -112,7 +115,7 @@ class ScopedLocation:
         """
         Returns a new :class:`ScopedLocation` with the provided id added.
         """
-        return ScopedLocation(*(self.to_list() + [_id]))
+        return ScopedLocation(*(self.as_list() + [_id]))
 
     def __setitem__(self, key: Type['BaseDataclass'], value: ScopedLocationAttr):
         """
@@ -124,8 +127,8 @@ class ScopedLocation:
         if curr_attr_to_set_idx != key_idx:
             raise ValueError(
                 f"{key} is not yet to be defined. Currently, "
-                f"{dataclass_2_attr.keys()[curr_attr_to_set_idx]} is to be set.")
-        key_attr_name: str = dataclass_2_attr[key]
+                f"{dataclass_2_attr.keys()[curr_attr_to_set_idx]} is the next to be set.")
+        key_attr_name: str = key._id_attr_name
         setattr(self, key_attr_name, value)
 
     def pop(self) -> ScopedLocationAttr:
@@ -137,6 +140,12 @@ class ScopedLocation:
             if attr_value is not None:
                 setattr(self, attr_name, None)
                 return attr_value
+
+    def popped(self) -> 'ScopedLocation':
+        """
+        Returns a new :class:`ScopedLocation` with the last `not None` scoped location attribute removed.
+        """
+        return ScopedLocation(*self.to_list()[:-1])
 
     def __len__(self) -> int:
         """
@@ -163,10 +172,41 @@ class ScopedLocation:
                 break
         return _list_ret
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({', '.join(self.as_list())})"
+
+    def __str__(self) -> str:
+        return self.__repr__()
+
 
 @dataclass(order=True)
 class BaseDataclass(Generic[SubDataclassT], ABC):
     # TODO: from json, to json?
+
+    @abstractproperty
+    def _id_attr_name(self) -> str:
+        raise NotImplementedError("Must be implemented in subclasses.")
+
+    @abstractproperty
+    def _sublocation_attr_name(self) -> str:
+        raise NotImplementedError("Must be implemented in subclasses.")
+
+    def get_id(self) -> ScopedLocationAttr:
+        return getattr(self, self._id_attr_name)
+
+    def set_id(self, _id: ScopedLocationAttr) -> None:
+        setattr(self, self._id_attr_name, _id)
+
+    def get_sublocation(self) -> Union[List[SubDataclassT], OrderedDict[str, SubDataclassT]]:
+        return getattr(self, self._sublocation_attr_name)
+
+    def set_sublocation(self, sublocation: Union[List[SubDataclassT], OrderedDict[str, SubDataclassT]]) -> None:
+        setattr(self, self._sublocation_attr_name, sublocation)
+
+    def set_sublocation_item(self, subdataclass: SubDataclassT) -> ScopedLocationAttr:
+        _id = subdataclass.get_id()
+        self.get_sublocation()[_id] = subdataclass
+        return _id
 
     def __getitem__(self, loc: ScopedLocation) -> 'SubDataclassT':
         subdataklass: Type[SubDataclassT] = dataclass_2_subdataclass[self.__class__]
@@ -176,21 +216,8 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
         last_self_attr = self.get_sublocation()
         return last_self_attr[located_sub_attr][loc]
 
-    @abstractmethod
-    def get_sublocation(self) -> Union[List[SubDataclassT], OrderedDict[str, SubDataclassT]]:
-        raise NotImplementedError("Must be implemented in subclasses.")
-
-    @abstractmethod
-    def get_id(self) -> ScopedLocationAttr:
-        """
-        Return the id of the current object, that is also the same attr that
-        the object is located in the metadata ScopedLocation.
-        """
-        if self.__class__ in dataclass_2_attr:
-            attr_name: str = dataclass_2_attr[self.__class__]
-            attr = getattr(self, attr_name)
-            return attr
-        return None
+    def __len__(self) -> int:
+        return len(self.get_sublocation())
 
     @abstractmethod
     def store(self, dc: SubDataclassT) -> 'BaseDataclass':
@@ -201,25 +228,33 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
         raise NotImplementedError("Must use mixins.")
 
 
+@dataclass(order=True)
 class DataclassHasOrderedDictMixin:
     def get_sublocation(self) -> OrderedDict[ScopedLocationAttrStr, SubDataclassT]:
-        raise NotImplementedError("Must be implemented in subclasses.")
+        return getattr(self, self._sublocation_attr_name)
+
+    def set_sublocation(self, sublocation: OrderedDict[ScopedLocationAttrStr, SubDataclassT]) -> None:
+        setattr(self, self._sublocation_attr_name, sublocation)
 
     def store(self, dc: SubDataclassT) -> ScopedLocationAttrStr:
         self.get_sublocation()[dc.get_id()] = dc
         return dc.get_id()
 
     def shallow(self) -> 'BaseDataclass':
-        self_copy = copy.deepcopy(self)
-        subself = self_copy.get_sublocation()
-        for k in subself.keys():
-            subself[k] = None
-        return self_copy
+        self_copy = copy.copy(self)
+        new_sublocation = [None for _ in range(len(self))]
+        self_copy.set_sublocation(new_sublocation)
+        # Deep copy only after trimming sublocations.
+        return copy.deepcopy(self_copy)
 
 
+@dataclass(order=True)
 class DataclassHasListMixin:
     def get_sublocation(self) -> List[SubDataclassT]:
-        raise NotImplementedError("Must be implemented in subclasses.")
+        return getattr(self, self._sublocation_attr_name)
+
+    def set_sublocation(self, sublocation: List[SubDataclassT]) -> None:
+        setattr(self, self._sublocation_attr_name, sublocation)
 
     def store(self, dc: SubDataclassT) -> ScopedLocationAttrInt:
         _id = dc.get_id()
@@ -242,6 +277,7 @@ class DataclassHasListMixin:
         return len(self.get_sublocation())
 
 
+@dataclass(order=True)
 class BaseTrialDataclassMixin:
     """
     Mixin class for :class:`TrialMetadata` and :class:`TrialSplitMetadata` that
@@ -261,44 +297,78 @@ class BaseTrialDataclassMixin:
         return self
 
 
+@dataclass(order=True)
 class RootDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ProjectDataclass']):
     projects: OrderedDict[str, 'ProjectDataclass'] = field(
         default_factory=lambda: OrderedDict({DEFAULT_PROJECT: ProjectDataclass()}))
 
-    def get_sublocation(self) -> OrderedDict[str, 'ProjectDataclass']:
-        return self.projects
+    @property
+    def _id_attr_name(self) -> str:
+        return None
+
+    @property
+    def _sublocation_attr_name(self) -> str:
+        return "projects"
 
     def get_id(self) -> ScopedLocationAttr:
         return None
 
 
+@dataclass(order=True)
 class ProjectDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ClientDataclass']):
     project_name: str = DEFAULT_PROJECT
     clients: OrderedDict[str, 'ClientDataclass'] = field(
         default_factory=lambda: OrderedDict({DEFAULT_CLIENT: ClientDataclass()}))
 
-    def get_sublocation(self) -> OrderedDict[str, 'ClientDataclass']:
-        return self.clients
+    @property
+    def _id_attr_name(self) -> str:
+        return "project_name"
+
+    @property
+    def _sublocation_attr_name(self) -> str:
+        return "clients"
+
+    def get_id(self) -> ScopedLocationAttrStr:
+        return self.project_name
 
 
+@dataclass(order=True)
 class ClientDataclass(DataclassHasListMixin, BaseDataclass['RoundDataclass']):
     client_name: ScopedLocationAttrStr = DEFAULT_CLIENT
     rounds: List['RoundDataclass'] = field(default_factory=list)
     # By default, the first metric is the main one.  # TODO: make it configurable, or in round?
     main_metric_name: str = None
 
-    def get_sublocation(self) -> list['RoundDataclass']:
-        return self.rounds
+    @property
+    def _id_attr_name(self) -> str:
+        return "client_name"
+
+    @property
+    def _sublocation_attr_name(self) -> str:
+        return "rounds"
+
+    def get_id(self) -> ScopedLocationAttrStr:
+        return self.client_name
 
 
+@dataclass(order=True)
 class RoundDataclass(DataclassHasListMixin, BaseDataclass['TrialDataclass']):
     round_number: ScopedLocationAttrInt = 0
     trials: List['TrialDataclass'] = field(default_factory=list)
 
-    def get_sublocation(self) -> List['TrialDataclass']:
-        return self.trials
+    @property
+    def _id_attr_name(self) -> str:
+        return "round_number"
+
+    @property
+    def _sublocation_attr_name(self) -> str:
+        return "trials"
+
+    def get_id(self) -> ScopedLocationAttrInt:
+        return self.round_number
 
 
+@dataclass(order=True)
 class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDataclass['TrialSplitDataclass']):
     """
     This class is a data structure most often used under :class:`AutoML` to store information about a trial.
@@ -308,10 +378,19 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
     trial_number: ScopedLocationAttrInt = 0
     validation_splits: List['TrialSplitDataclass'] = field(default_factory=list)
 
-    def get_sublocation(self) -> List['TrialSplitDataclass']:
-        return self.validation_splits
+    @property
+    def _id_attr_name(self) -> str:
+        return "trial_number"
+
+    @property
+    def _sublocation_attr_name(self) -> str:
+        return "validaiton_splits"
+
+    def get_id(self) -> ScopedLocationAttrInt:
+        return self.trial_number
 
 
+@dataclass(order=True)
 class TrialSplitDataclass(DataclassHasOrderedDictMixin, BaseTrialDataclassMixin, BaseDataclass['MetricResultsDataclass']):
     """
     TrialSplit object used by AutoML algorithm classes.
@@ -320,10 +399,19 @@ class TrialSplitDataclass(DataclassHasOrderedDictMixin, BaseTrialDataclassMixin,
     metric_results: OrderedDict[str, 'MetricResultsDataclass'] = field(default_factory=OrderedDict)
     # introspection_data: RecursiveDict[str, Number] = field(default_factory=RecursiveDict)
 
-    def get_sublocation(self) -> OrderedDict[str, 'MetricResultsDataclass']:
-        return self.metric_results
+    @property
+    def _id_attr_name(self) -> str:
+        return "split_number"
+
+    @property
+    def _sublocation_attr_name(self) -> str:
+        return "metric_results"
+
+    def get_id(self) -> ScopedLocationAttrInt:
+        return self.split_number
 
 
+@dataclass(order=True)
 class MetricResultsDataclass(DataclassHasListMixin, BaseDataclass[float]):
     """
     MetricResult object used by AutoML algorithm classes.
@@ -333,8 +421,16 @@ class MetricResultsDataclass(DataclassHasListMixin, BaseDataclass[float]):
     train_values: List[float] = field(default_factory=list)
     higher_score_is_better: bool = True
 
-    def get_sublocation(self) -> list[float]:
-        return self.validation_values
+    @property
+    def _id_attr_name(self) -> str:
+        return "metric_name"
+
+    @property
+    def _sublocation_attr_name(self) -> str:
+        return "validation_values"
+
+    def get_id(self) -> ScopedLocationAttrStr:
+        return self.metric_name
 
 
 dataclass_2_attr: OrderedDict[BaseDataclass, str] = OrderedDict([
@@ -414,7 +510,7 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
     """
 
     @abstractmethod
-    def get(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
+    def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
         """
         Get metadata from scope.
 
@@ -423,6 +519,17 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
 
         :param scope: scope to get metadata from.
         :return: metadata from scope.
+        """
+        raise NotImplementedError("Use a concrete class. This is an abstract class.")
+
+    @abstractmethod
+    def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> None:
+        """
+        Save metadata to scope.
+
+        :param metadata: metadata to save.
+        :param scope: scope to save metadata to.
+        :param deep: if True, save metadata's sublocations recursively.
         """
         raise NotImplementedError("Use a concrete class. This is an abstract class.")
 
@@ -465,11 +572,11 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
         :param status: status to filter trials.
         :return: best hyperparams.
         """
-        round: RoundDataclass = self.get(ScopedLocation(loc.as_list()[:3]))
+        round: RoundDataclass = self.load(ScopedLocation(loc.as_list()[:3]))
         return round.best_trial
 
     @abstractmethod
-    def get_logger_path(self, scope: ScopedLocation) -> str:
+    def get_scoped_logger_path(self, scope: ScopedLocation) -> str:
         """
         Get logger path from scope.
 
@@ -512,16 +619,40 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
         :param hyperparams_repo_kwargs: kwargs to pass to hyperparams_repo_class.
         """
         super().__init__()
-        self.cache_folder = cache_folder
+        self.cache_folder = os.path.join(cache_folder, self.__class__.__name__)
         self.root: RootDataclass = RootDataclass()
 
-    def get(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
-        ret: BaseDataclass = copy.deepcopy(self.root[scope])
+    def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
+        ret: BaseDataclass = self.root[scope]
         if not deep:
             ret = ret.shallow()
-        return ret
+        return copy.deepcopy(ret)
 
-    def get_logger_path(self, scope: ScopedLocation) -> str:
+    def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> None:
+        _dataclass: SubDataclassT = copy.deepcopy(_dataclass)
+        _id_from_scope: ScopedLocationAttr = scope[_dataclass.__class__]
+        scope = scope[:_dataclass.__class__]  # Sanitizing scope to dtype loc.
+
+        if _id_from_scope is not None:
+            if _id_from_scope != _dataclass.get_id():
+                raise ValueError(
+                    f"The scope `{scope}` with {_dataclass.__class__.__name__} id `{_id_from_scope}` does not match the provided dataclass id `{_dataclass.get_id()}` for `{_dataclass}`."
+                )
+            scope.pop()
+            # else check if the scope is at least of the good class length:
+        elif len(scope) != dataclass_2_attr.keys().index(_dataclass.__class__):
+            raise ValueError(
+                f"The scope `{scope}` is not of the good length for dataclass type `{_dataclass.__class__.__name__}`."
+            )
+
+        if not deep:
+            # Reassign saved sublocation to new dataclass:
+            prev_dc: SubDataclassT = self.get(scope.with_dc(_dataclass), deep=True)
+            _dataclass.set_sublocation(prev_dc.get_sublocation())
+
+        self.root[scope].set_sublocation_item(_dataclass)
+
+    def get_scoped_logger_path(self, scope: ScopedLocation) -> str:
         scoped_path: str = self.get_scoped_path(scope)
         return os.path.join(scoped_path, 'log.txt')
 
