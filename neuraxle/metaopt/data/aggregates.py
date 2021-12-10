@@ -46,7 +46,6 @@ import os
 import traceback
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from dataclasses import dataclass, field
 from enum import Enum
 from json.encoder import JSONEncoder
 from logging import FileHandler, Logger
@@ -114,7 +113,7 @@ class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
 
     @property
     def subdataclass(self) -> Type[SubDataclassT]:
-        return aggregate_2_dataclass[self.__class__]
+        return aggregate_2_dataclass[aggregate_2_subaggregate[self.__class__]]
 
     def refresh(self, deep: bool = True):
         with self.context.lock:
@@ -164,8 +163,7 @@ class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
         with self.context.lock:
             self.refresh(False)
             subdataclass: SubDataclassT = self.repo.load(*args, **kwds)
-            _subklass: Type[SubAggregateT] = self.subaggregate(subdataclass, self.context)
-            subagg: SubAggregateT = _subklass(subdataclass, self.context)
+            subagg: SubAggregateT = self.subaggregate(subdataclass, self.context)
             self.save_subaggregate(subagg, deep=True)
             return subagg
 
@@ -187,7 +185,7 @@ class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
     def __iter__(self) -> Iterable[SubAggregateT]:
         return iter((
             self.subaggregate(subdataclass, self.context)
-            for subdataclass in self._dataclass.get_sublocation()
+            for subdataclass in self._dataclass.get_sublocation_values()
         ))
 
     def __getitem__(self, item: int) -> 'Trial':
@@ -197,7 +195,7 @@ class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
         :param item: trial index
         :return:
         """
-        return self.subaggregate()(self._dataclass.get_sublocation()[item], self.context)
+        return self.subaggregate(self._dataclass.get_sublocation()[item], self.context)
 
     def __str__(self) -> str:
         return self.__repr__()

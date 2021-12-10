@@ -21,7 +21,7 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT, Auto
                                            RoundDataclass, ScopedLocation,
                                            TrialDataclass, TrialSplitDataclass,
                                            VanillaHyperparamsRepository,
-                                           dataclass_2_attr)
+                                           dataclass_2_id_attr)
 from neuraxle.metaopt.validation import (GridExplorationSampler,
                                          ValidationSplitter)
 from neuraxle.pipeline import Pipeline
@@ -127,7 +127,7 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
                             ):
                                 break
 
-    for dc_type in dataclass_2_attr.keys():
+    for dc_type in dataclass_2_id_attr.keys():
         dc: BaseDataclass = root.repo.load(expected_scope[:dc_type])
         assert isinstance(dc, dc_type)
         assert dc.get_id() == expected_scope[dc_type]
