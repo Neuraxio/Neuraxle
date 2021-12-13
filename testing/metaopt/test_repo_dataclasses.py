@@ -99,7 +99,7 @@ def test_dataclass_getters(
     dataclass_type: Type[BaseDataclass],
 ):
     sliced_scope = SOME_FULL_SCOPED_LOCATION[:dataclass_type]
-    assert (scope_slice_len == 0 and sliced_scope is None) or len(sliced_scope) == scope_slice_len
+    assert len(sliced_scope) == scope_slice_len
 
     sliced_scope = SOME_FULL_SCOPED_LOCATION[:scope_slice_len]
     assert len(sliced_scope) == scope_slice_len

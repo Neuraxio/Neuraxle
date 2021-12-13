@@ -82,8 +82,8 @@ class ScopedLocation:
         Get sublocation attr from the provided :class:`BaseMetadata` type,
         or otherwise get a slice of the same type, sliced from a :class:`BaseMetadata` type range of attributes to keep.
         """
-        if key is None or key == RootDataclass:
-            return None
+        if key is None:
+            return ScopedLocation()
 
         if isinstance(key, slice):
             if key.stop is None or key.start is not None:
@@ -92,12 +92,15 @@ class ScopedLocation:
             idx: int = key.stop
             if not isinstance(idx, int):
                 if idx == RootDataclass:
-                    return None
+                    return ScopedLocation()
                 idx: int = list(dataclass_2_id_attr.keys()).index(key.stop) + 1
 
             return ScopedLocation(
                 *self.as_list()[:idx]
             )
+
+        if key == RootDataclass:
+            return None
 
         if isinstance(key, int):
             if key < 0:
@@ -153,7 +156,7 @@ class ScopedLocation:
         """
         Returns a new :class:`ScopedLocation` with the last `not None` scoped location attribute removed.
         """
-        return ScopedLocation(*self.to_list()[:-1])
+        return ScopedLocation(*self.as_list()[:-1])
 
     def __len__(self) -> int:
         """
@@ -221,6 +224,8 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
 
     def __getitem__(self, loc: ScopedLocation) -> 'SubDataclassT':
         subdataklass: Type[SubDataclassT] = dataclass_2_subdataclass[self.__class__]
+        if subdataklass is None:
+            return self
         located_sub_attr: ScopedLocationAttr = loc[subdataklass]
         if located_sub_attr is None:
             return self
@@ -551,7 +556,7 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
         raise NotImplementedError("Use a concrete class. This is an abstract class.")
 
     @abstractmethod
-    def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> None:
+    def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
         """
         Save metadata to scope.
 
@@ -650,14 +655,22 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
         self.cache_folder = os.path.join(cache_folder, self.__class__.__name__)
         self.root: RootDataclass = RootDataclass()
 
+    @staticmethod
+    def from_root(root: RootDataclass, cache_folder: str) -> 'VanillaHyperparamsRepository':
+
+        return VanillaHyperparamsRepository(
+            cache_folder=cache_folder,
+        ).save(root, ScopedLocation(), deep=True)
+
     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
         ret: BaseDataclass = self.root[scope]
         if not deep:
             ret = ret.shallow()
         return copy.deepcopy(ret)
 
-    def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> None:
+    def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'VanillaHyperparamsRepository':
         _dataclass: SubDataclassT = copy.deepcopy(_dataclass)
+
         _id_from_scope: ScopedLocationAttr = scope[_dataclass.__class__]
         scope = scope[:_dataclass.__class__]  # Sanitizing scope to dtype loc.
 
@@ -668,17 +681,25 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
                 )
             scope.pop()
             # else check if the scope is at least of the good class length:
-        elif len(scope) != dataclass_2_id_attr.keys().index(_dataclass.__class__):
+        elif len(scope) != list(dataclass_2_subloc_attr.keys()).index(_dataclass.__class__):
             raise ValueError(
                 f"The scope `{scope}` is not of the good length for dataclass type `{_dataclass.__class__.__name__}`."
             )
 
         if not deep:
             # Reassign saved sublocation to new dataclass:
-            prev_dc: SubDataclassT = self.get(scope.with_dc(_dataclass), deep=True)
+            if isinstance(_dataclass, RootDataclass):
+                prev_dc = self.root
+            else:
+                prev_dc: SubDataclassT = self.load(scope.with_dc(_dataclass), deep=True)
             _dataclass.set_sublocation(prev_dc.get_sublocation())
 
-        self.root[scope].store(_dataclass)
+        if isinstance(_dataclass, RootDataclass):
+            self.root = _dataclass
+        else:
+            self.root[scope].store(_dataclass)
+
+        return self
 
     def get_scoped_logger_path(self, scope: ScopedLocation) -> str:
         scoped_path: str = self.get_scoped_path(scope)
@@ -857,4 +878,15 @@ class AutoMLContext(ExecutionContext):
         """
         new_self: AutoMLContext = self.copy()
         new_self.flow.loc = new_self.flow.loc.with_dc(subdataclass)
+        return new_self
+
+    def push_attrs(self, loc: ScopedLocation) -> 'AutoMLContext':
+        """
+        Push a new ScopedLocation as ScopedLocation.
+
+        :param loc: ScopedLocation
+        :return: an AutoMLContext copy with the new loc attribute.
+        """
+        new_self: AutoMLContext = self.copy()
+        new_self.flow.loc = loc
         return new_self

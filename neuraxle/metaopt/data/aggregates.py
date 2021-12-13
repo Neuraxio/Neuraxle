@@ -815,12 +815,6 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
         self.save_parent_trial()
         return self
 
-    def __str__(self):
-        return self.__repr__()
-
-    def __repr__(self):
-        return "Trial.from_json({})".format(str(self.to_json()))
-
 
 class MetricResults(BaseAggregate[None, MetricResultsDataclass]):
     pass
@@ -835,6 +829,9 @@ class MetricResults(BaseAggregate[None, MetricResultsDataclass]):
         self.epoch: int = epoch
         self.n_epochs: int = n_epochs
         return self
+
+    def __iter__(self) -> Iterable[SubAggregateT]:
+        return self._dataclass.validation_values
 
     _ = """
         def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
@@ -855,6 +852,7 @@ aggregate_2_subaggregate = OrderedDict([
 aggregate_2_dataclass: OrderedDict[BaseDataclass, str] = OrderedDict([
     (Root, RootDataclass),
     (Client, ClientDataclass),
+    (Round, RoundDataclass),
     (Project, ProjectDataclass),
     (Trial, TrialDataclass),
     (TrialSplit, TrialSplitDataclass),
