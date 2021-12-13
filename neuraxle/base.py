@@ -606,10 +606,11 @@ class _HasChildrenMixin(MixinForBaseService, Generic[BaseServiceT]):
         """
         ra: _RecursiveArguments = _RecursiveArguments(ra, args, kwargs)
         self._validate_children_exists(ra)
-
+        # #################################################################
         results: RecursiveDict = self._apply_self(method=method, ra=ra)
+        # #################################################################
         results: RecursiveDict = self._apply_childrens(results=results, method=method, ra=ra)
-
+        # #################################################################
         return results
 
     def _apply_self(self, method: Union[str, Callable], ra: _RecursiveArguments) -> RecursiveDict:
@@ -1461,9 +1462,9 @@ class _TransformerStep(MixinForBaseService):
 
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_transform_data_container(data_container, context)
-
+        # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
         data_container = self._transform_data_container(data_container, context)
-
+        # ////////////////////////////////////////////////////////////////////
         data_container = self._did_transform(data_container, context)
         data_container = self._did_process(data_container, context)
 
@@ -1680,9 +1681,9 @@ class _FittableStep(MixinForBaseService):
 
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit(data_container, context)
-
+        # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
         new_self = self._fit_data_container(data_container, context)
-
+        # ////////////////////////////////////////////////////////////////////
         self._did_fit(data_container, context)
         self._did_process(data_container, context)
 
@@ -1768,9 +1769,9 @@ class _FittableStep(MixinForBaseService):
 
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit_transform(data_container, context)
-
+        # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
         new_self, data_container = self._fit_transform_data_container(data_container, context)
-
+        # ////////////////////////////////////////////////////////////////////
         data_container = self._did_fit_transform(data_container, context)
         data_container = self._did_process(data_container, context)
 
@@ -1862,11 +1863,12 @@ class _CustomHandlerMethods(MixinForBaseService):
         """
         if not self.is_initialized:
             self._setup(context)
+
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit(data_container, context)
-
+        # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
         new_self = self.fit_data_container(data_container, context)
-
+        # ////////////////////////////////////////////////////////////////////
         self._did_fit(data_container, context)
         self._did_process(data_container, context)
 
@@ -1893,9 +1895,9 @@ class _CustomHandlerMethods(MixinForBaseService):
 
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit_transform(data_container, context)
-
+        # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
         new_self, data_container = self.fit_transform_data_container(data_container, context)
-
+        # ////////////////////////////////////////////////////////////////////
         data_container = self._did_fit_transform(data_container, context)
         data_container = self._did_process(data_container, context)
 
@@ -1921,9 +1923,9 @@ class _CustomHandlerMethods(MixinForBaseService):
 
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_transform_data_container(data_container, context)
-
+        # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
         data_container = self.transform_data_container(data_container, context)
-
+        # ////////////////////////////////////////////////////////////////////
         data_container = self._did_transform(data_container, context)
         data_container = self._did_process(data_container, context)
 

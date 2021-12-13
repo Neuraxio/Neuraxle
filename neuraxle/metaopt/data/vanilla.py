@@ -50,6 +50,7 @@ from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
 from neuraxle.logging.logging import LOGGER_FORMAT, LOGGING_DATETIME_STR_FORMAT
 from neuraxle.metaopt.observable import _ObservableRepo, _ObserverOfRepo
+from neuraxle.steps.flow import IfExecutionPhaseIsThen
 
 SubDataclassT = TypeVar('SubDataclassT', bound=Optional['BaseDataclass'])
 ScopedLocationAttrInt = int
@@ -81,23 +82,30 @@ class ScopedLocation:
         Get sublocation attr from the provided :class:`BaseMetadata` type,
         or otherwise get a slice of the same type, sliced from a :class:`BaseMetadata` type range of attributes to keep.
         """
-        if key is None:
+        if key is None or key == RootDataclass:
             return None
-
-        if isinstance(key, BaseDataclass):
-            return getattr(self, key._id_attr_name)
-
-        if key in dataclass_2_id_attr.keys():
-            return getattr(self, dataclass_2_id_attr[key])
 
         if isinstance(key, slice):
             if key.stop is None or key.start is not None:
                 raise ValueError("Slice stop must be specified and slice start must be None.")
 
-            idx: BaseDataclass = dataclass_2_id_attr.keys().index(key.stop) + 1
+            idx: int = key.stop
+            if not isinstance(idx, int):
+                if idx == RootDataclass:
+                    return None
+                idx: int = list(dataclass_2_id_attr.keys()).index(key.stop) + 1
+
             return ScopedLocation(
                 *self.as_list()[:idx]
             )
+
+        if isinstance(key, int):
+            if key < 0:
+                return None
+            key = list(dataclass_2_id_attr.keys())[key]
+
+        if key in dataclass_2_id_attr.keys():
+            return getattr(self, dataclass_2_id_attr[key])
 
         raise ValueError(f"Invalid key type {key.__class__.__name__} for key {key}.")
 
@@ -183,6 +191,13 @@ class ScopedLocation:
 class BaseDataclass(Generic[SubDataclassT], ABC):
     # TODO: from json, to json?
 
+    def __post_init__(self):
+        self._invariant()
+
+    @abstractmethod
+    def _invariant(self):
+        pass
+
     @property
     def _id_attr_name(self) -> str:
         return dataclass_2_id_attr[self.__class__]
@@ -196,6 +211,7 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
 
     def set_id(self, _id: ScopedLocationAttr) -> None:
         setattr(self, self._id_attr_name, _id)
+        self._invariant()
 
     def get_sublocation(self) -> Union[List[SubDataclassT], OrderedDict[str, SubDataclassT]]:
         return getattr(self, dataclass_2_subloc_attr[self.__class__])
@@ -208,8 +224,9 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
         located_sub_attr: ScopedLocationAttr = loc[subdataklass]
         if located_sub_attr is None:
             return self
-        last_self_attr = self.get_sublocation()
-        return last_self_attr[located_sub_attr][loc]
+        subloc: SubDataclassT = self.get_sublocation()[located_sub_attr]
+        sublocs_sublocs: SubDataclassT = subloc[loc]
+        return sublocs_sublocs
 
     def __len__(self) -> int:
         return len(self.get_sublocation())
@@ -229,22 +246,33 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
 
 @dataclass(order=True)
 class DataclassHasOrderedDictMixin:
+
+    def _invariant(self):
+        super()._invariant()
+        if not isinstance(self.get_sublocation(), OrderedDict):
+            raise ValueError(f"{self.__class__.__name__} must have an OrderedDict as sublocation.")
+        if not all(
+            (isinstance(s, ScopedLocationAttrStr) for s in self.get_sublocation().keys())
+        ):
+            raise ValueError(f"{self.__class__.__name__} must have all sublocation keys as strings.")
+
     def get_sublocation(self) -> OrderedDict[ScopedLocationAttrStr, SubDataclassT]:
         ret = super().get_sublocation()
-        if not isinstance(ret, OrderedDict):
-            raise ValueError(f"{ret} should be an OrderedDict. Inconsistant object.")
         return ret
 
     def set_sublocation(self, sublocation: OrderedDict[ScopedLocationAttrStr, SubDataclassT]) -> None:
-        if not isinstance(sublocation, OrderedDict):
-            raise ValueError(f"{sublocation} should be an OrderedDict. Cannot set.")
         setattr(self, self._sublocation_attr_name, sublocation)
+        self._invariant()
 
     def get_sublocation_values(self) -> List[SubDataclassT]:
         return self.get_sublocation().values()
 
+    # def get_sublocation_item(self, item: ScopedLocationAttrStr) -> SubDataclassT:
+    #     return self.get_sublocation()[item]
+
     def store(self, dc: SubDataclassT) -> ScopedLocationAttrStr:
         self.get_sublocation()[dc.get_id()] = dc
+        self._invariant()
         return dc.get_id()
 
     def shallow(self) -> 'BaseDataclass':
@@ -257,14 +285,24 @@ class DataclassHasOrderedDictMixin:
 
 @dataclass(order=True)
 class DataclassHasListMixin:
+
+    def _invariant(self):
+        super()._invariant()
+        if not isinstance(self.get_sublocation(), List):
+            raise ValueError(f"{self.__class__.__name__} must have a List as sublocation.")
+
     def get_sublocation(self) -> List[SubDataclassT]:
         return super().get_sublocation()
 
     def set_sublocation(self, sublocation: List[SubDataclassT]) -> None:
         setattr(self, self._sublocation_attr_name, sublocation)
+        self._invariant()
 
     def get_sublocation_values(self) -> List[SubDataclassT]:
         return self.get_sublocation()
+
+    # def get_sublocation_item(self, item: ScopedLocationAttrInt) -> SubDataclassT:
+    #     return self.get_sublocation()[item]
 
     def store(self, dc: SubDataclassT) -> ScopedLocationAttrInt:
         _id = dc.get_id()
@@ -274,6 +312,7 @@ class DataclassHasListMixin:
             self.get_sublocation()[dc.get_id()] = dc
         else:
             raise ValueError(f"{dc} has id {dc.get_id()} which is greater than the next id {self.get_next_i()}.")
+        self._invariant()
         return _id
 
     def shallow(self) -> 'BaseDataclass':
@@ -301,7 +340,9 @@ class BaseTrialDataclassMixin:
     log: str = ""
 
     def end(self, status: TrialStatus, add_to_log: str = "") -> 'BaseTrialDataclassMixin':
-        # TODO: use this method.
+        ################################################################################
+        # TODO: use this method. #######################################################
+        ################################################################################
         self.status = status
         self.end_time = datetime.datetime.now()
         self.log += add_to_log
@@ -437,6 +478,18 @@ str_2_dataclass: OrderedDict[str, BaseDataclass] = OrderedDict([
     (MetricResultsDataclass.__name__, MetricResultsDataclass),
     (RecursiveDict.__name__, RecursiveDict),
 ])
+
+
+def as_named_odict(
+    obj: Union[BaseDataclass, List[BaseDataclass]]
+) -> OrderedDict[ScopedLocationAttrStr, BaseDataclass]:
+
+    if isinstance(obj, BaseDataclass):
+        obj = [obj]
+
+    return OrderedDict([
+        (i.get_id(), i) for i in obj
+    ])
 
 
 def object_decoder(obj):
