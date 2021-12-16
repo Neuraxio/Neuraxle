@@ -34,7 +34,7 @@ from threading import Thread
 from typing import Dict, Tuple, List, Union, Iterable, Any
 
 from neuraxle.base import NamedStepsList, ExecutionContext, MetaStep, BaseSaver, _FittableStep, \
-    BaseTransformer, NonFittableMixin, MixinForBaseTransformer
+    BaseTransformer, NonFittableMixin, MixinForBaseTransformer, ContextLock
 from neuraxle.data_container import DataContainer, ListDataContainer, AbsentValuesNullObject
 from neuraxle.hyperparams.space import RecursiveDict
 from neuraxle.pipeline import MiniBatchSequentialPipeline, Joiner, Pipeline
@@ -205,8 +205,7 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
         :return:
         """
         thread_safe_context = context
-        thread_safe_context.flow.synchroneous()
-        thread_safe_lock: RLock = context.flow._lock
+        thread_safe_lock: RLock = context.synchroneous()
         parallel_call = Thread
         if self.use_processes:
             # New process requires trimming the references to other processes

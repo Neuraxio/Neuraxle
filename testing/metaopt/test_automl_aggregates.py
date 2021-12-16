@@ -18,8 +18,7 @@ from neuraxle.metaopt.data.aggregates import (BaseAggregate, Client,
                                               aggregate_2_dataclass,
                                               aggregate_2_subaggregate)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
-                                           AutoMLContext, AutoMLFlow,
-                                           BaseDataclass,
+                                           AutoMLContext, BaseDataclass,
                                            BaseHyperparameterOptimizer,
                                            ClientDataclass,
                                            MetricResultsDataclass,
@@ -138,7 +137,7 @@ def test_aggregates_creation(aggregate_class: Type[BaseAggregate], is_deep):
         dataclass = dataclass.shallow()
     assert dataclass == context.repo.load(scoped_loc, deep=is_deep)
 
-    aggregate = aggregate_class(dataclass, context.push_attrs(scoped_loc.popped()), is_deep=is_deep)
+    aggregate = aggregate_class(dataclass, context.with_loc(scoped_loc.popped()), is_deep=is_deep)
 
     assert True
     aggregate.save(deep=False)

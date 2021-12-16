@@ -12,8 +12,8 @@ from neuraxle.metaopt.callbacks import (CallbackList, EarlyStoppingCallback,
                                         MetricCallback)
 from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
                                               Trial, TrialSplit)
-from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT, AutoMLContext, AutoMLFlow,
-                                           BaseDataclass,
+from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
+                                           AutoMLContext, BaseDataclass,
                                            BaseHyperparameterOptimizer,
                                            ClientDataclass,
                                            MetricResultsDataclass,

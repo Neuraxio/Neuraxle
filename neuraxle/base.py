@@ -29,7 +29,6 @@ classes needed to compose other base classes.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-
 import datetime
 import inspect
 import logging
@@ -39,11 +38,12 @@ import shutil
 import tempfile
 import traceback
 import warnings
+import weakref
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from copy import copy
+from copy import copy, deepcopy
 from enum import Enum
-from multiprocessing import Lock, Manager, RLock
+from multiprocessing import Manager, RLock
 from operator import attrgetter
 from typing import (Any, Callable, Dict, Generic, ItemsView, Iterable,
                     KeysView, List, Optional, Set, Tuple, Type, TypeVar, Union,
@@ -758,6 +758,8 @@ class TruncableServiceMixin(_HasChildrenMixin):
         return self
 
     def _validate_service_type(self, t: Type[BaseServiceT], service: BaseServiceT):
+        if isinstance(t, str):
+            t: Type = object
         if not (isinstance(service, t) and isinstance(service, BaseService)):
             warnings.warn(f'Service {service} is not an instance of {t} or {BaseService}, but it should.')
 
@@ -801,7 +803,9 @@ class TruncableServiceMixin(_HasChildrenMixin):
         :param service_abstract_class_type: base type
         :return: if the service registered or not
         """
-        return service_abstract_class_type in self.services
+        return (service_abstract_class_type in self.services) if service_abstract_class_type.__class__ != str else (
+            service_abstract_class_type in [str(s) for s in self.services.keys()]
+        )
 
     def get_children(self) -> List[BaseServiceT]:
         """
@@ -881,36 +885,27 @@ class Flow(BaseService):
     Concrete implementations of this object may interact with repositories.
     """
 
-    def __init__(
-        self,
-        logger: logging.Logger = None,
-    ):
+    def __init__(self, context: 'ExecutionContext' = None):
         BaseService.__init__(self)
-        if logger is None:
-            logger = logging.getLogger()
-        self.logger = logger
-        self._lock: RLock = None
+        self.context = weakref.proxy(context) if context else None
 
-    def synchroneous(self) -> RLock:
+    def link_context(self, context: 'ExecutionContext') -> 'Flow':
         """
-        Synchronous flow: Create managed reentrant lock (mutex).
+        Link the context to the flow with a weak ref.
         """
-        if self._lock is None:
-            self._lock: RLock = Manager().RLock()
-        return self._lock
+        self.context = weakref.proxy(context)
+        return self
+
+    @property
+    def logger(self) -> logging.Logger:
+        return self.context.logger
 
     def copy(self) -> 'Flow':
         """
         Copy the flow.
         """
-        _lock: RLock = self._lock
-        self._lock = None
-        copied_self: Flow = copy(self)
-        copied_self._lock = _lock
-        self._lock = _lock
-        return copied_self
+        return copy(self)
 
-    @synchroneous_flow_method
     def log(self, message: str, level: int = logging.INFO):
         self.logger.log(level, message)
 
@@ -960,7 +955,6 @@ class Flow(BaseService):
         self.log_error(exception)
         self.log_end(TrialStatus.FAILURE)
 
-    @synchroneous_flow_method
     def log_error(self, exception: Exception):
         if exception is not None:
             self.logger.exception(exception)
@@ -979,6 +973,26 @@ class Flow(BaseService):
         # repo_trial_split_number + 1,
         # len(validation_splits),
         # json.dumps(repo_trial.hyperparams, sort_keys=True, indent=4)
+
+
+class ContextLock(BaseService):
+    """
+    #TODO: move to a parallel package.
+    ContextLock is a service that is used to lock the flow when doing parallel processing.
+    """
+
+    def __init__(self, lock: RLock = None):
+        BaseService.__init__(self)
+        self._lock = lock
+
+    def synchroneous(self):
+        if self._lock is None:
+            self._lock = Manager().RLock()
+        return self._lock
+
+    @property
+    def lock(self):
+        return self._lock
 
 
 class ExecutionContext(TruncableService):
@@ -1018,14 +1032,14 @@ class ExecutionContext(TruncableService):
     """
 
     def __init__(
-            self,
-            root: str = None,
-            flow: Flow = None,
-            execution_phase: ExecutionPhase = ExecutionPhase.UNSPECIFIED,
-            execution_mode: ExecutionMode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM,
-            stripped_saver: BaseSaver = None,
-            parents: List['BaseStep'] = None,
-            services: Dict[Type['BaseServiceT'], 'BaseServiceT'] = None,
+        self,
+        root: str = None,
+        flow: Flow = None,
+        execution_phase: ExecutionPhase = ExecutionPhase.UNSPECIFIED,
+        execution_mode: ExecutionMode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM,
+        stripped_saver: BaseSaver = None,
+        parents: List['BaseStep'] = None,
+        services: Dict[Type['BaseServiceT'], 'BaseServiceT'] = None,
     ):
         TruncableService.__init__(self, services=services)
         self.register_service(Flow, flow or Flow())
@@ -1037,17 +1051,15 @@ class ExecutionContext(TruncableService):
 
     @property
     def logger(self) -> logging.Logger:
-        """
-        Logger for the execution context is stocked in the flow and you should probably use the flow.
-        """
-        return self.flow.logger
+        return logging.getLogger(self.get_identifier(include_step_names=True))
 
     @property
     def flow(self) -> Flow:
         """
         Flow is a service that is used to log information about the execution of the pipeline.
         """
-        return self.services[Flow]
+        f: Flow = self.get_service(Flow)
+        return f.link_context(self)
 
     def get_new_cache_folder(self) -> str:
         return os.path.join(tempfile.gettempdir(), 'neuraxle-cache', datetime.datetime.now().strftime("%Y-%m-%d_%Hh%Mm%Ss_%fμs"))
@@ -1164,18 +1176,22 @@ class ExecutionContext(TruncableService):
         )
 
     def copy(self):
+        possibly_copied_services = {
+            k: (v.copy() if hasattr(v, "copy") else v)
+            for k, v in self.services.items()
+        }
         return self.__class__(
             root=self.root,
             flow=self.flow.copy(),
             execution_mode=self.execution_mode,
             execution_phase=self.execution_phase,
             parents=copy(self.parents),
-            services=self.services,
+            services=possibly_copied_services,
         )
 
     def train(self) -> 'ExecutionContext':
         """
-        Set the execution context to train mode.
+        Set the context's execution phase to train.
         """
         new_self = self.copy()
         new_self.set_execution_phase(ExecutionPhase.TRAIN)
@@ -1183,11 +1199,21 @@ class ExecutionContext(TruncableService):
 
     def validation(self) -> 'ExecutionContext':
         """
-        Set the execution context to train mode.
+        Set the context's execution phase to validation.
         """
         new_self = self.copy()
         new_self.set_execution_phase(ExecutionPhase.VALIDATION)
         return new_self
+
+    def synchroneous(self) -> RLock:
+        """
+        Synchronous context: Create a managed reentrant lock (mutex).
+        """
+        if self.get_service(ContextLock) is None:
+            self.register_service(ContextLock, ContextLock())
+        if isinstance(self.get_service(ContextLock).lock, str):
+            raise RuntimeError(self.get_service(ContextLock))
+        return self.get_service(ContextLock).synchroneous()
 
     def thread_safe(self) -> Tuple[RLock, 'ExecutionContext']:
         """
@@ -1196,27 +1222,36 @@ class ExecutionContext(TruncableService):
 
         :return: a tuple of the recursive dict to apply within thread, and the thread safe context
         """
-        threaded_context = self.copy()
-        # Must compensate lost parents:
-        self.root = self.get_path()
-        # Not passing parents to threads. We could, but we would need to sanitize some parents:
-        self.parents = []
-        # enabling synchronized flow:
-        threaded_context.flow.synchroneous()
-        thread_safe_lock: RLock = threaded_context.flow._lock
-        threaded_context.flow._lock = None
-        return thread_safe_lock, threaded_context
+        # TODO: eventually this will be an apply that returns a recursive dict of managed locks/things?
 
-    def restore_lock(self, thread_safe_lock: RLock) -> 'ExecutionContext':
+        managed_thread_safe_lock: RLock = self.synchroneous()
+
+        threaded_context = self.copy()
+
+        # Not passing parents to threads. Could be refactored.
+        self.parents = []
+        # Compensate lost parents:
+        self.root = self.get_path()
+
+        threaded_context.services[ContextLock]._lock = (
+            "The context is temporarily inconsistent: you must must call "
+            "self.restore_lock(lock) with the lock passed to the thread to "
+            "be fine again. That is the lock that has been returned by "
+            "self.thread_safe()[0] earlier before sending the context to "
+            "the thread."
+        )
+        return managed_thread_safe_lock, threaded_context
+
+    def restore_lock(self, managed_thread_safe_lock: RLock = None) -> 'ExecutionContext':
         """
-        Restore the lock of the flow.
+        Restore the lock from what was returned by self.thread_safe()[0].
 
         :param thread_safe_lock: lock to restore
         :return: self
         """
-        if thread_safe_lock is not None:
-            self.flow._lock = thread_safe_lock
-        return self
+        assert managed_thread_safe_lock is not None, "You must pass the lock returned by self.thread_safe()[0] earlier."
+        self.register_service(ContextLock, ContextLock(managed_thread_safe_lock))
+        return self.synchroneous()
 
     def peek(self) -> 'BaseTransformer':
         """
@@ -1254,19 +1289,20 @@ class ExecutionContext(TruncableService):
             return '.' + os.sep
         return os.path.join(*parents_with_path)
 
-    def get_identifier(self) -> str:
+    def get_identifier(self, include_step_names: bool = True) -> str:
         """
-        Get the name of the current context, that is influenced by its content.
-        That is the equivalent of calling: 
+        Get an identifier depending on the ScopedLocation of the current context.
 
-        .. code-block:: python
+        Example: "neuraxle.default_project.default_client.0" + ".".join(self.get_names())
 
-            context.get_path(is_absolute=False)
-
-
-        :return: current context path, without the root
+        .. seealso::
+            :class:`~neuraxle.metaopt.data.vanilla.ScopedLocation`
         """
-        return self.get_path(is_absolute=False)
+        loc_attrs = self.loc.as_list(stringify=True) if self.loc is not None else []
+        arr = ["neuraxle"] + loc_attrs
+        if include_step_names:
+            arr.extend(self.get_names())
+        return ".".join(arr)
 
     def get_names(self) -> List[str]:
         """

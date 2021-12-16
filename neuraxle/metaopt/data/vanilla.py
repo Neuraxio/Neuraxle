@@ -32,7 +32,6 @@ import copy
 import datetime
 import json
 import logging
-from multiprocessing import RLock
 import os
 from abc import ABC, abstractclassmethod, abstractmethod, abstractproperty
 from collections import OrderedDict
@@ -44,8 +43,8 @@ from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
                     Sequence, Tuple, Type, TypeVar, Union)
 
 import numpy as np
-from neuraxle.base import (BaseStep, ExecutionContext, Flow, TrialStatus,
-                           synchroneous_flow_method)
+from neuraxle.base import (BaseService, BaseStep, ContextLock,
+                           ExecutionContext, Flow, TrialStatus)
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
@@ -105,7 +104,10 @@ class ScopedLocation:
 
         if isinstance(key, int):
             if key < 0:
-                return None
+                if len(self) == 0:
+                    return None
+                else:
+                    return self.as_list()[key]
             key = list(dataclass_2_id_attr.keys())[key]
 
         if key in dataclass_2_id_attr.keys():
@@ -113,13 +115,19 @@ class ScopedLocation:
 
         raise ValueError(f"Invalid key type {key.__class__.__name__} for key {key}.")
 
+    def copy(self) -> 'ScopedLocation':
+        """
+        Returns a copy of the :class:`ScopedLocation`.
+        """
+        return ScopedLocation(*self.as_list())
+
     def with_dc(self, dc: 'BaseDataclass') -> 'ScopedLocation':
         """
         Returns a new :class:`ScopedLocation` with the provided :class:`BaseDataclass` (dc) type's id added.
         """
         if isinstance(dc, RootDataclass):
             return ScopedLocation()
-        self_copy = copy.deepcopy(self)
+        self_copy = self.copy()
         self_copy[dc.__class__] = dc.get_id()
         return self_copy
 
@@ -145,7 +153,7 @@ class ScopedLocation:
 
     def peek(self) -> ScopedLocationAttr:
         """
-        Pop without removing the last element: return the last non-None element.        
+        Pop without removing the last element: return the last non-None element.
         """
         return self.as_list()[-1]
 
@@ -171,11 +179,12 @@ class ScopedLocation:
         """
         return len(self.as_list())
 
-    def as_list(self) -> List[ScopedLocationAttr]:
+    def as_list(self, stringify: bool = False) -> List[ScopedLocationAttr]:
         """
         Returns a list of the scoped location attributes.
         Item that has a value of None are not included in the list.
 
+        :param stringify: If True, the scoped location attributes are converted to strings.
         :return: list of not none scoped location attributes
         """
         _list: List[ScopedLocationAttr] = [
@@ -185,6 +194,8 @@ class ScopedLocation:
         _list_ret = []
         for i in _list + [None]:
             if i is not None:
+                if stringify:
+                    i = str(i)
                 _list_ret.append(i)
             else:
                 break
@@ -553,7 +564,7 @@ def from_json(json: str) -> str:
     return json.loads(json, object_pairs_hook=OrderedDict, object_hook=object_decoder)
 
 
-class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseDataclass]], ABC):
+class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseDataclass]], BaseService):
     """
     Hyperparams repository that saves hyperparams, and scores for every AutoML trial.
     Cache folder can be changed to do different round numbers.
@@ -737,7 +748,7 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
         return os.path.join(scoped_path, 'log.txt')
 
     def get_scoped_path(self, scope: ScopedLocation) -> str:
-        _scope_attrs = [str(i) for i in scope.as_list()]
+        _scope_attrs = scope.as_list(stringify=True)
         return os.path.join(self.cache_folder, *_scope_attrs)
 
 
@@ -794,108 +805,82 @@ class BaseHyperparameterOptimizer(ABC):
         raise NotImplementedError()
 
 
-class AutoMLFlow(Flow):
-
-    def __init__(
-        self,
-        repo: HyperparamsRepository,
-        logger: logging.Logger = None,
-        loc: ScopedLocation = None,
-        lock: RLock = None,
-    ):
-        super().__init__(logger=logger)
-        self.repo: HyperparamsRepository = repo
-        self.loc: ScopedLocation = loc or ScopedLocation()
-
-        self._lock = lock or self.synchroneous()
-
-    @staticmethod
-    def from_flow(flow: Flow, repo: HyperparamsRepository) -> 'AutoMLFlow':
-        f = AutoMLFlow(
-            repo=repo,
-            logger=flow.logger,  # TODO: loc?
-            # loc=flow.loc,
-        )
-        f._lock = flow.synchroneous()  # TODO: lock to be in AutoMLContext instead.
-        return f
-
-    def with_new_loc(self, loc: ScopedLocation):
-        """
-        Create a new AutoMLFlow with a new ScopedLocation.
-
-        :param loc: ScopedLocation
-        :return: AutoMLFlow
-        """
-        return AutoMLFlow(self.repo, self.logger, loc)
-
-    def copy(self):
-        f = AutoMLFlow(
-            repo=self.repo,
-            logger=self.logger,
-            loc=copy.copy(self.loc),
-            lock=self.synchroneous(),
-        )
-        return f
-
-    def log_model(self, model: 'BaseStep'):
-        # TODO: move to scoped actions below.
-        raise NotImplementedError("")
-        self.repo.save_model(model)
-        return super().log_model(model)
-
-    def add_file_handler_to_logger(
-        self,
-        logging_file: str
-    ) -> logging.Logger:
-        os.makedirs(os.path.dirname(logging_file), exist_ok=True)
-        formatter = logging.Formatter(
-            fmt=LOGGER_FORMAT, datefmt=LOGGING_DATETIME_STR_FORMAT)
-        file_handler = logging.FileHandler(filename=logging_file)
-        file_handler.setFormatter(formatter)
-        self.logger.addHandler(file_handler)
-
-    def free_logger_files(self):
-        """
-        Remove file handlers from logger to free file lock on Windows.
-        """
-        for h in self.logger.handlers:
-            if isinstance(h, logging.FileHandler):
-                self.logger.removeHandler(h)
-
-
 class AutoMLContext(ExecutionContext):
 
+    @property
+    def logger_at_scoped_loc(self) -> logging.Logger:
+        return logging.getLogger(self.get_identifier(include_step_names=False))
+
+    def add_scoped_logger_file_handler(self) -> logging.Logger:
+        """
+        Add a file handler to the logger at the current scoped location to capture logs
+        at this scope and below this scope.
+        """
+        logging_file = self.repo.get_scoped_logger_path(self.loc)
+
+        if hasattr(self, "fh"):
+            raise ValueError(
+                f"File handler already added to logger at location `{self.loc}` and at path `{logging_file}`.")
+
+        os.makedirs(os.path.dirname(logging_file), exist_ok=True)
+
+        formatter = logging.Formatter(fmt=LOGGER_FORMAT, datefmt=LOGGING_DATETIME_STR_FORMAT)
+        file_handler = logging.FileHandler(filename=logging_file)
+        file_handler.setFormatter(formatter)
+
+        self.logger_at_scoped_loc.addHandler(file_handler)
+
+        self.fh: logging.FileHandler = file_handler
+
+    def free_scoped_logger_handler_file(self):
+        """
+        Remove file handlers from logger to free file lock (especially on Windows).
+        """
+        if hasattr(self, 'fh'):
+            self.logger_at_scoped_loc.removeHandler(self.fh)
+            self.fh.close()
+            del self.fh
+        else:
+            raise ValueError("No file handler to free.")
+
     @staticmethod
-    def from_context(context: ExecutionContext, repo: HyperparamsRepository) -> 'AutoMLContext':
+    def from_context(
+        context: ExecutionContext = None,
+        repo: HyperparamsRepository = None,
+        loc: ScopedLocation = None
+    ) -> 'AutoMLContext':
         """
         Create a new AutoMLContext from an ExecutionContext.
 
         :param context: ExecutionContext
         """
-        context = context.copy()
-        flow = AutoMLFlow.from_flow(context.flow, repo)
-
-        new_context = AutoMLContext(
-            root=context.root,
-            flow=AutoMLFlow.from_flow(flow, repo),
-            execution_phase=context.execution_phase,
-            execution_mode=context.execution_mode,
-            stripped_saver=context.stripped_saver,
-            parents=context.parents,
-            services=context.services,
+        new_context: AutoMLContext = AutoMLContext.copy(
+            context or AutoMLContext()
         )
-        # TODO: repo in context or just in flow?
-        new_context.register_service(HyperparamsRepository, repo)
+        if not new_context.has_service(HyperparamsRepository):
+            new_context.register_service(
+                HyperparamsRepository,
+                repo or VanillaHyperparamsRepository(new_context.get_path())
+            )
+        if not new_context.has_service(ScopedLocation):
+            new_context.register_service(
+                ScopedLocation,
+                loc or ScopedLocation()
+            )
+        if not new_context.has_service(ContextLock):
+            new_context.register_service(
+                ContextLock,
+                None
+            )
         return new_context
 
-    # TODO: @lock in repo.
     @property
     def lock(self):
-        return self.flow.synchroneous()
+        return self.synchroneous()
 
     @property
     def loc(self) -> ScopedLocation:
-        return self.flow.loc
+        return self.get_service(ScopedLocation)
 
     @property
     def repo(self) -> HyperparamsRepository:
@@ -909,17 +894,15 @@ class AutoMLContext(ExecutionContext):
         :param value: attribute value
         :return: an AutoMLContext copy with the new loc attribute.
         """
-        new_self: AutoMLContext = self.copy()
-        new_self.flow.loc = new_self.flow.loc.with_dc(subdataclass)
-        return new_self
+        return self.with_loc(self.loc.with_dc(subdataclass))
 
-    def push_attrs(self, loc: ScopedLocation) -> 'AutoMLContext':
+    def with_loc(self, loc: ScopedLocation) -> 'AutoMLContext':
         """
-        Push a new ScopedLocation as ScopedLocation.
+        Replace the ScopedLocation by the one provided.
 
         :param loc: ScopedLocation
         :return: an AutoMLContext copy with the new loc attribute.
         """
         new_self: AutoMLContext = self.copy()
-        new_self.flow.loc = loc
+        new_self.register_service(ScopedLocation, loc)
         return new_self

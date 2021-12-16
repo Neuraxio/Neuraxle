@@ -60,8 +60,7 @@ from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
-                                           AutoMLContext, AutoMLFlow,
-                                           BaseDataclass,
+                                           AutoMLContext, BaseDataclass,
                                            BaseHyperparameterOptimizer,
                                            ClientDataclass,
                                            HyperparamsRepository,
@@ -89,14 +88,14 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDa
         _CouldHaveContext.__init__(self)
         self._dataclass: SubDataclassT = _dataclass
         self.context: AutoMLContext = context.push_attr(_dataclass)
-        self.loc: ScopedLocation = copy.copy(context.loc)
+        self.loc: ScopedLocation = self.context.loc.copy()
         self.is_deep = is_deep
 
         self.service_assertions = [Flow, HyperparamsRepository]
         self._invariant()
 
     def _invariant(self):
-        _type: Type[SubDataclassT] = aggregate_2_dataclass[self.__class__]
+        _type: Type[SubDataclassT] = self.dataclass
         self._assert(
             isinstance(self._dataclass, _type),
             f"self._dataclass should be of type {_type.__name__} but is of type "
@@ -113,19 +112,17 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDa
             self.loc.as_list() == self.context.loc.as_list(),
             f"{self.loc} should be equal to {self.context.loc}", self.context)
         self._assert(
-            self.loc.as_list()[-1] == self._dataclass.get_id(),
+            self.loc[-1] == self._dataclass.get_id(),
             f"{self.loc}'s last attr should be equal to self._dataclass.get_id() "
             f"and the id is {self._dataclass.get_id()}", self.context)
-        self._assert(
-            dataclass_2_id_attr[self.dataclass] == self._dataclass._id_attr_name,
-            f"_dataclass attr is not as expected: {dataclass_2_id_attr[self.dataclass]} != {self._dataclass._id_attr_name} "
-        )
 
         self._assert_at_lifecycle(self.context)
 
     def without_context(self) -> 'BaseAggregate':
         """
-        Return a copy of this aggregate without the context. Useful for initializing a temporary aggregate, such as a filtered or reduced aggregate without all its subaggregates
+        Return a copy of this aggregate without the context.
+        Useful for initializing a temporary aggregate,
+        such as a filtered or reduced aggregate without all its subaggregates
         to disallow saving the reduced aggregate.
         """
         self_copy = copy.copy(self)
@@ -133,7 +130,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDa
         return self_copy
 
     @property
-    def flow(self) -> AutoMLFlow:
+    def flow(self) -> Flow:
         return self.context.flow
 
     @property
@@ -156,6 +153,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDa
         with self.context.lock:
             self._dataclass = self.repo.load(self.loc, deep=deep)
         self.is_deep = deep
+        self._invariant()
 
     def save(self, deep: bool = True):
         if deep and deep != self.is_deep:
@@ -164,6 +162,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDa
                 f"is not already deep. You might want to use self.refresh(deep=True) at "
                 f"some point to refresh self before saving deeply then.")
 
+        self._invariant()
         with self.context.lock:
             self.repo.save(self._dataclass, self.loc, deep=deep)
 
@@ -174,18 +173,24 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDa
             subagg.save(deep=deep)
 
     def __enter__(self) -> SubAggregateT:
+        # self.context.free_scoped_logger_handler_file()
+        self._managed_resource.context.add_scoped_logger_file_handler()
+
         return self._managed_resource
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self._managed_resource.context.free_scoped_logger_handler_file()
+        # self.context.add_scoped_logger_file_handler()
+
         handled_err: bool = self._release_managed_subresource(self._managed_resource, exc_val)
         return handled_err
 
-    # @contextmanager
     def managed_subresource(self, *args, **kwds) -> SubAggregateT:
         self._managed_subresource(*args, **kwds)
         return self
 
     def _managed_subresource(self, *args, **kwds) -> SubAggregateT:
+        self._invariant()
         self._managed_resource: SubAggregateT = self._acquire_managed_subresource(
             *args, **kwds)
         return self
@@ -273,13 +278,11 @@ class Root(BaseAggregate['Project', RootDataclass]):
             os.path.join(context.get_path(), "hyperparams"))
         return Root.from_repo(context, vanilla_repo)
 
-    # @contextmanager
     def get_project(self, name: str) -> 'Root':
         # TODO: new project should be created if it does not exist?
         self._managed_subresource(project_name=name)
         return self
 
-    # @contextmanager
     def default_project(self) -> 'Root':
         self._managed_subresource(project_name=DEFAULT_PROJECT)
         return self
@@ -291,13 +294,11 @@ class Root(BaseAggregate['Project', RootDataclass]):
 
 class Project(BaseAggregate['Client', ProjectDataclass]):
 
-    # @contextmanager
     def get_client(self, name: str) -> 'Project':
         # TODO: new client should be created if it does not exist?
         self._managed_subresource(client_name=name)
         return self
 
-    # @contextmanager
     def default_client(self) -> 'Project':
         self._managed_subresource(client_name=DEFAULT_CLIENT)
         return self
@@ -329,11 +330,10 @@ class Client(BaseAggregate['Round', ClientDataclass]):
             round_loc: ScopedLocation = self.loc.with_id(round_id)
 
             # Get round to return:
-            _round_dataclass: RoundDataclass = self.repo.load(round_loc)
-            subagg: Round = Round(_round_dataclass, self.context)
+            _round_dataclass: RoundDataclass = self.repo.load(round_loc, deep=True)
+            subagg: Round = Round(_round_dataclass, self.context, is_deep=True)
 
             if new_round or round_loc == 0:
-                subagg.is_deep = True  # New rounds are always deep
                 self.save_subaggregate(subagg, deep=True)
             return subagg
 
@@ -347,12 +347,10 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
         self.hps: HyperparameterSpace = hps
         return self
 
-    # @contextmanager
     def new_rvs_trial(self) -> 'Round':
         self._managed_subresource(new_trial=True)
         return self
 
-    # @contextmanager
     def last_trial(self) -> 'Round':
         self._managed_subresource(new_trial=False)
         return self
@@ -364,8 +362,7 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
     def _acquire_managed_subresource(self, new_trial=True) -> 'Trial':
         with self.context.lock:
             self.refresh(False)
-            self.flow.add_file_handler_to_logger(
-                self.repo.get_scoped_logger_path(self.loc))
+            # self.context.add_scoped_logger_file_handler()
 
             # Get new trial loc:
             trial_id: int = self._dataclass.get_next_i()
@@ -375,14 +372,13 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
             trial_loc = self.loc.with_id(trial_id)
 
             # Get trial to return:
-            _trial_dataclass: TrialDataclass = self.repo.load(trial_loc)
+            _trial_dataclass: TrialDataclass = self.repo.load(trial_loc, deep=True)
             new_hps: HyperparameterSamples = self.hp_optimizer.find_next_best_hyperparams(self)
             _trial_dataclass.hyperparams = new_hps
             self.flow.log_planned(new_hps)
-            subagg: Trial = Trial(_trial_dataclass, self.context)
+            subagg: Trial = Trial(_trial_dataclass, self.context, is_deep=True)
 
             if new_trial or trial_loc == 0:
-                subagg.is_deep = True  # New trials are always deep
                 self.save_subaggregate(subagg, deep=True)
             return subagg
 
@@ -410,7 +406,7 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
             self.save(False)
         return False
 
-    def get_best_hyperparams(self) -> HyperparameterSamples:
+    def get_best_hyperparams(self, main_metric_name: str) -> HyperparameterSamples:
         """
         Get best hyperparams from all trials.
 
@@ -419,11 +415,11 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
         self.refresh(True)  # TODO: is this too long to perform?
 
         if len(self) == 0:
-            return HyperparameterSamples()
+            return HyperparameterSamples(main_metric_name)
 
         return self.get_best_trial().get_hyperparams()
 
-    def get_best_trial(self) -> Optional['Trial']:
+    def get_best_trial(self, main_metric_name: str) -> Optional['Trial']:
         """
         :return: trial with best score from all trials
         """
@@ -433,9 +429,12 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
             raise Exception('Could not get best trial because there were no successful trial.')
 
         for trial in self._trials:
-            trial_score = trial.get_avg_validation_score()
+            trial_score = trial.get_avg_validation_score(main_metric_name)
 
-            if best_score is None or self.is_higher_score_better() == (trial_score > best_score):
+            _has_better_score = best_score is None or self.is_higher_score_better(
+                main_metric_name) == (trial_score > best_score)
+
+            if _has_better_score:
                 best_score = trial_score
                 best_trial = trial
 
@@ -518,7 +517,6 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
         :class:`ExecutionContext`
     """
 
-    # @contextmanager
     def new_split(self, continue_loop_on_error: bool) -> 'Trial':
         self._acquire_managed_subresource(
             continue_loop_on_error=continue_loop_on_error)
@@ -537,6 +535,7 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
 
         with self.context.lock:
             self.refresh(False)
+            # self.context.add_scoped_logger_file_handler()
 
             # TODO: active record design pattern such that the dataobjects are the ones containing the repo and saving themselves / finding themselves. Clean Code P.101.
             #     Active record should probably have a weakref of the repo since it doesn<t want to save the repo into itself.
@@ -554,7 +553,7 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
 
             # Get split to return:
             _split_dataclass: TrialSplitDataclass = self.repo.load(split_loc)
-            subagg: TrialSplit = TrialSplit(_split_dataclass, self.context)
+            subagg: TrialSplit = TrialSplit(_split_dataclass, self.context, is_deep=True)
             # TODO: logger loc and file for context.push_attr?
 
             self.save_subaggregate(subagg, deep=True)
@@ -566,6 +565,8 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
 
         with self.context.lock:
             self.refresh(False)
+            # self.context.free_scoped_logger_handler_file()
+
             self.save_subaggregate(resource, deep=True)
 
             if e is None:

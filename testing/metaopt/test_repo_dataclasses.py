@@ -1,3 +1,4 @@
+import copy
 import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
@@ -16,8 +17,7 @@ from neuraxle.metaopt.callbacks import (CallbackList, EarlyStoppingCallback,
 from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
                                               Trial, TrialSplit)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
-                                           AutoMLContext, AutoMLFlow,
-                                           BaseDataclass,
+                                           AutoMLContext, BaseDataclass,
                                            BaseHyperparameterOptimizer,
                                            ClientDataclass,
                                            MetricResultsDataclass,
@@ -108,7 +108,7 @@ def test_dataclass_getters(
 
     assert isinstance(dc, dataclass_type)
     assert dc.get_id() == expected_dataclass.get_id()
-    assert dc.get_id() == SOME_FULL_SCOPED_LOCATION[scope_slice_len - 1]
+    assert dc.get_id() == sliced_scope[scope_slice_len - 1]
     assert dc.get_id() == SOME_FULL_SCOPED_LOCATION[dataclass_type]
     assert dc == expected_dataclass
 
@@ -127,3 +127,74 @@ def test_base_empty_default_dataclass_getters(
 
     assert isinstance(dc, dataclass_type)
     assert dc.get_id() == scope.as_list()[-1]
+
+
+def test_auto_ml_context_loc_stays_the_same():
+    context = ExecutionContext()
+    context = AutoMLContext.from_context(
+        context, VanillaHyperparamsRepository(context.get_path()))
+
+    c0 = context.push_attr(RootDataclass())
+    c1 = c0.push_attr(ProjectDataclass(project_name=DEFAULT_PROJECT))
+    c2 = c1.push_attr(ClientDataclass(client_name=DEFAULT_CLIENT))
+
+    assert c0.loc.as_list() == []
+    assert c1.loc.as_list() == [DEFAULT_PROJECT]
+    assert c2.loc.as_list() == [DEFAULT_PROJECT, DEFAULT_CLIENT]
+
+
+def test_context_changes_independently_once_copied():
+    cx = ExecutionContext()
+    cx = AutoMLContext.from_context()
+
+    copied_cx: AutoMLContext = cx.copy().push_attr(
+        ProjectDataclass(project_name=DEFAULT_PROJECT))
+
+    assert copied_cx.loc.as_list() == [DEFAULT_PROJECT]
+    assert cx.loc.as_list() == []
+
+
+@pytest.mark.parametrize("cp", [copy.copy, copy.deepcopy])
+def test_scoped_location_can_copy_and_change(cp):
+    sl = ScopedLocation(DEFAULT_PROJECT, DEFAULT_CLIENT, 0, 0, 0, SOME_METRIC_NAME)
+
+    sl_copy = cp(sl)
+    sl_copy.pop()
+    sl_copy.pop()
+
+    assert sl_copy != sl
+    assert len(sl_copy) == len(sl) - 2
+
+
+def test_logger_level_works_with_multiple_levels():
+    c0 = AutoMLContext.from_context()
+
+    try:
+        c0.add_scoped_logger_file_handler()
+        c0.flow.log("c0.flow.log: begin")
+
+        c1 = c0.push_attr(ProjectDataclass(project_name=DEFAULT_PROJECT))
+        try:
+            c1.add_scoped_logger_file_handler()
+            c1.flow.log("c1.flow.log: begin")
+
+            c1.flow.log("c1.flow.log: some work being done from within c1")
+
+            c1.flow.log("c1.flow.log: end")
+        finally:
+            c1.free_scoped_logger_handler_file()
+
+        c0.flow.log("c0.flow.log: end")
+    finally:
+        c0.free_scoped_logger_handler_file()
+
+    with open(c0.repo.get_scoped_logger_path(ScopedLocation()), "r") as f:
+        l0 = "\n\r".join(f.readlines())
+    with open(c1.repo.get_scoped_logger_path(ScopedLocation(DEFAULT_PROJECT)), "r") as f:
+        l1 = "\n\r".join(f.readlines())
+
+    assert l0 != l1
+    assert len(l0) > len(l1)
+    assert "c0" not in l1
+    assert "c1" in l0
+    assert c1.loc != c0.loc

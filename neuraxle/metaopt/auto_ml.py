@@ -45,10 +45,10 @@ from neuraxle.logging.warnings import (warn_deprecated_arg,
                                        warn_deprecated_class)
 from neuraxle.metaopt.callbacks import (BaseCallback, CallbackList,
                                         ScoringCallback)
-from neuraxle.metaopt.data.aggregates import (Client, Project, Round,
-                                              Trial, TrialSplit)
-from neuraxle.metaopt.data.vanilla import (AutoMLContext, AutoMLFlow,
-                                           BaseDataclass, ClientDataclass,
+from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round, Trial,
+                                              TrialSplit)
+from neuraxle.metaopt.data.vanilla import (AutoMLContext, BaseDataclass,
+                                           ClientDataclass,
                                            HyperparamsRepository,
                                            InMemoryHyperparamsRepository,
                                            MetricResultsDataclass,
@@ -330,7 +330,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
     A step to execute Automated Machine Learning (AutoML) algorithms. This step will
     automatically split the data into train and validation splits, and execute an
     hyperparameter optimization on the splits to find the best hyperparameters.
-    
+
     The step with the chosen good hyperparameters will be refitted to the full
     unsplitted data if desired.
     """
@@ -383,18 +383,18 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
         :return: self
         """
-        context.copy().register_service(Flow, self.flow)
-
         automl_context: AutoMLContext = AutoMLContext.from_context(context, repo=self.repo)
-        proj: ProjectMetadata = Root.get_project(self.project_name)
-        with Project(automl_context, self.project_name) as ps:
+
+        with Root.get_project(self.project_name) as ps:
             ps: Project = ps
-            with ps.new_client(self.client_name) as cs:
+            with ps.get_client(self.client_name) as cs:
                 cs: Client = cs
+
                 self.loop.run(self.pipeline, data_container, cs)
 
                 if self.refit_best_trial:
-                    self.pipeline = self.loop.refit_best_trial(self.pipeline, data_container, cs)
+                    self.pipeline = self.loop.refit_best_trial(
+                        self.pipeline, data_container, cs)
 
         return self
 
