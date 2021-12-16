@@ -29,9 +29,11 @@ ForceHandleMixin as demonstrated here. Handler methods are useful when :
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-import numpy as np
+from typing import Tuple
 
-from neuraxle.base import BaseStep, DataContainer, ExecutionContext, ForceHandleMixin
+import numpy as np
+from neuraxle.base import (BaseStep, DataContainer, ExecutionContext,
+                           ForceHandleMixin)
 
 
 class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
@@ -69,9 +71,7 @@ class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
 
     def _fit_transform_data_container(
         self, data_container: DataContainer, context: ExecutionContext
-    ) -> (
-        BaseStep, DataContainer
-    ):
+    ) -> Tuple[BaseStep, DataContainer]:
         """
         Change the shape of the data container.
         and/or

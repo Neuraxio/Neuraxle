@@ -1774,28 +1774,9 @@ class _FittableStep(MixinForBaseService):
             "Implement this method in {}, or have this class inherit from the NonFittableMixin.".format(
                 self.__class__.__name__))
 
-    def meta_fit(self, X_train, y_train, metastep: 'MetaStep'):
-        """
-        Uses a meta optimization technique (AutoML) to find the best hyperparameters in the given
-        hyperparameter space.
-
-        Usage: ``p = p.meta_fit(X_train, y_train, metastep=RandomSearch(n_iter=10, scoring_function=r2_score, higher_score_is_better=True))``
-
-        Call ``.mutate(new_method="inverse_transform", method_to_assign_to="transform")``, and the
-        current estimator will become
-
-        :param X_train: data_inputs.
-        :param y_train: expected_outputs.
-        :param metastep: a metastep, that is, a step that can sift through the hyperparameter space of another estimator.
-        :return: your best self.
-        """
-        metastep.set_step(self)
-        metastep = metastep.fit(X_train, y_train)
-        best_step = metastep.get_best_model()
-        return best_step
-
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> \
-            ('BaseStep', DataContainer):
+    def handle_fit_transform(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['BaseStep', DataContainer]:
         """
         Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base._FittableStep.fit_transform`.
 
@@ -1816,8 +1797,9 @@ class _FittableStep(MixinForBaseService):
 
         return new_self, data_container
 
-    def _will_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> (
-            DataContainer, ExecutionContext):
+    def _will_fit_transform(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple[DataContainer, ExecutionContext]:
         """
         Apply side effects before fit_transform is called.
 
@@ -1828,8 +1810,9 @@ class _FittableStep(MixinForBaseService):
         self._invalidate()
         return data_container, context.push(self)
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
-            ('BaseStep', DataContainer):
+    def _fit_transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['BaseStep', DataContainer]:
         """
         Fit transform data container.
 
@@ -1842,7 +1825,9 @@ class _FittableStep(MixinForBaseService):
 
         return new_self, data_container
 
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+    def fit_transform(
+        self, data_inputs, expected_outputs=None
+    ) -> Tuple['BaseStep', Any]:
         """
         Fit, and transform step with the given data inputs, and expected outputs.
 

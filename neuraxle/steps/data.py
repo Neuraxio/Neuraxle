@@ -21,9 +21,10 @@ You can find here steps that take action on data.
 """
 import random
 from operator import attrgetter
-from typing import Iterable, List
+from typing import Iterable, List, Tuple
 
-from neuraxle.base import BaseStep, MetaStep, ExecutionContext, ForceHandleOnlyMixin, BaseTransformer
+from neuraxle.base import (BaseStep, BaseTransformer, ExecutionContext,
+                           ForceHandleOnlyMixin, MetaStep)
 from neuraxle.data_container import DataContainer, _inner_concatenate_np_array
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import TrainOnlyWrapper
@@ -105,7 +106,7 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStep):
         self.repeat_in_test_mode = repeat_in_test_mode
         self.epochs = epochs
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> Tuple['BaseStep', DataContainer]:
         """
         Fit transform wrapped step self.epochs times using wrapped step handle fit transform method.
 
@@ -123,7 +124,7 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStep):
         self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
         return self, data_container
 
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Iterable):
+    def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['BaseStep', Iterable]:
         """
         Fit transform wrapped step self.epochs times.
 
@@ -233,8 +234,9 @@ class InnerConcatenateDataContainer(ForceHandleOnlyMixin, BaseTransformer):
 
         self.data_sources = sub_data_container_names
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-    'BaseTransformer', DataContainer):
+    def _fit_transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['BaseTransformer', DataContainer]:
         """
         Merge sub data containers into the current data container.
 

@@ -41,8 +41,10 @@ from testing.metaopt.test_repo_dataclasses import (SOME_FULL_SCOPED_LOCATION,
 
 
 def test_scoped_cascade_does_the_right_logging(tmpdir):
-    dact_train: DACT = DACT(ids=range(0, 10), di=range(0, 10), eo=range(100, 110))
-    dact_valid: DACT = DACT(ids=range(10, 20), di=range(10, 20), eo=range(110, 120))
+    dact_train: DACT = DACT(
+        ids=list(range(0, 10)), di=list(range(0, 10)), eo=list(range(100, 110)))
+    dact_valid: DACT = DACT(
+        ids=list(range(10, 20)), di=list(range(10, 20)), eo=list(range(110, 120)))
     hp_optimizer: BaseHyperparameterOptimizer = GridExplorationSampler(
         main_metric_name='MAE', expected_n_trials=1)
     n_epochs = 3
@@ -53,9 +55,9 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
     expected_scope = ScopedLocation(
         project_name=DEFAULT_PROJECT,
         client_name=DEFAULT_CLIENT,
-        round_number=1,
-        trial_number=1,
-        split_number=1,
+        round_number=0,
+        trial_number=0,
+        split_number=0,
         metric_name='MAE',
     )
     p = Pipeline([
@@ -74,14 +76,14 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
                 with rs.new_rvs_trial() as ts:
                     ts: Trial = ts
                     with ts.new_split(continue_loop_on_error=False) as tss:
-                        tss: TrialSplit = tss
+                        tss: TrialSplit = tss.with_n_epochs(n_epochs)
 
                         for _ in range(n_epochs):
-                            tss = tss.next_epoch()
+                            tss.next_epoch()
 
                             p, dact_pred_train = p.handle_fit_transform(
                                 dact_train, tss.train_context())
-                            p, dact_pred_val = p.handle_predict(
+                            dact_pred_val = p.handle_predict(
                                 dact_valid.without_eo(), tss.validation_context())
 
                             if callbacks.call(

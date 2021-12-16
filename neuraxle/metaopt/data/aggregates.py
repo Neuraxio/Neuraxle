@@ -174,6 +174,9 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDa
 
     def __enter__(self) -> SubAggregateT:
         # self.context.free_scoped_logger_handler_file()
+        self._invariant()
+        self._managed_resource._invariant()
+
         self._managed_resource.context.add_scoped_logger_file_handler()
 
         return self._managed_resource
@@ -395,13 +398,12 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
             if e is not None:
                 self.flow.log_error(e)
 
-            self.flow.log_best_hps(
-                self.hp_optimizer.get_main_metric_name(),
-                self.get_best_hyperparams()
-            )
+            # TODO: do this:
+            # self.flow.log_best_hps(
+            #     self.hp_optimizer.get_main_metric_name(),
+            #     self.get_best_hyperparams()
+            # )
             self.flow.log('Finished round hp search!')
-
-            self.flow.free_logger_files()
 
             self.save(False)
         return False
@@ -518,8 +520,7 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
     """
 
     def new_split(self, continue_loop_on_error: bool) -> 'Trial':
-        self._acquire_managed_subresource(
-            continue_loop_on_error=continue_loop_on_error)
+        self._managed_subresource(continue_loop_on_error=continue_loop_on_error)
         return self
 
     @property
@@ -580,7 +581,7 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
                 if any((isinstance(e, c) for c in self.error_types_to_raise)):
                     handled_error = False
 
-            self.save_subaggregate(resource)
+            self.save_subaggregate(resource, deep=True)
         return handled_error
 
     def get_avg_validation_score(self, metric_name: str) -> float:
@@ -706,7 +707,7 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
         # TODO: lock?
         if self.epoch == 0:
             self.flow.log_start()
-        self.epoch: int = self._dataclass.get_next_i()
+        self.epoch: int = self.epoch + 1
         self.flow.log_epoch(self.epoch, self.n_epochs)
         return self.epoch
 
@@ -743,14 +744,17 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
         :return:
         """
         with self.context.lock:
-            self.refresh(deep=True)
+            if not self.is_deep:
+                self.refresh(deep=True)
+                # TODO: refresh here???
             self._create_metric_results_if_not_yet_done(name, higher_score_is_better)
             self._dataclass.metric_results[name].train_values.append(score)
 
             if log_metric:
                 # TODO: log metric??
                 self.trial.logger.info('{} train: {}'.format(name, score))
-            self.save(deep=True)
+            # self.save(deep=True)
+            self.save_subaggregate(self._dataclass.metric_results[name])
 
     def add_metric_results_validation(
         self, name: str, score: float, higher_score_is_better: bool, log_metric: bool = False
@@ -767,13 +771,16 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
         :return:
         """
         with self.context.lock:
-            self.refresh(deep=True)
+            if not self.is_deep:
+                self.refresh(deep=True)
+                # TODO: refresh here???
             self._create_metric_results_if_not_yet_done(name, higher_score_is_better)
             self._dataclass.metric_results[name].validation_values.append(score)
 
             if log_metric:
                 self.trial.logger.info('{} validation: {}'.format(name, score))
-            self.save(deep=True)
+            # self.save(deep=True)
+            self.save_subaggregate(self._dataclass.metric_results[name])
 
     def _create_metric_results_if_not_yet_done(self, name, higher_score_is_better):
         if name not in self._dataclass.metric_results:

@@ -25,9 +25,10 @@ You can find here output handlers steps that changes especially the data outputs
 """
 import copy
 from abc import ABC
-from typing import List
+from typing import List, Tuple
 
-from neuraxle.base import ExecutionContext, BaseStep, MetaStep, ForceHandleOnlyMixin, MixinForBaseTransformer
+from neuraxle.base import (BaseStep, ExecutionContext, ForceHandleOnlyMixin,
+                           MetaStep, MixinForBaseTransformer)
 from neuraxle.data_container import DataContainer
 
 
@@ -65,7 +66,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
 
     def _fit_data_container(
         self, data_container: DataContainer, context: ExecutionContext
-    ) -> (BaseStep, DataContainer):
+    ) -> Tuple[BaseStep, DataContainer]:
         """
         Handle fit by passing expected outputs to the wrapped step fit method.
 
@@ -231,7 +232,9 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
 
         return self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (BaseStep, DataContainer):
+    def _fit_transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple[BaseStep, DataContainer]:
         """
         Handle fit transform by passing the data inputs, and the expected outputs to the wrapped step fit method.
         Update the expected outputs with the outputs.

@@ -480,8 +480,9 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
         return name, n_workers, additional_arguments, max_queue_size, actual_step
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
-    DataContainer, ExecutionContext):
+    def _will_process(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple[DataContainer, ExecutionContext]:
         """
         Setup streaming pipeline before any handler methods.
 
@@ -506,7 +507,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         return RecursiveDict()
 
     def fit_transform_data_container(
-            self, data_container: DataContainer, context: ExecutionContext) -> (Pipeline, DataContainer):
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple[Pipeline, DataContainer]:
         """
         Fit transform sequentially if any step is fittable. Otherwise transform in parallel.
 

@@ -215,7 +215,7 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
 
     def _fit_transform_data_container(
         self, data_container: DataContainer, context: ExecutionContext
-    ) -> (BaseStep, DataContainer):
+    ) -> Tuple[BaseStep, DataContainer]:
         fitted_steps_data_containers = []
         for i, (ids, data_inputs, expected_outputs) in enumerate(data_container):
             fitted_step_data_container = self[i].handle_fit_transform(

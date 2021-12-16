@@ -481,7 +481,14 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         return str(self)
 
     def __str__(self):
-        return self.__class__.__name__ + "(ids=" + repr(list(self.ids)) + ")"
+        len_di = ("<of len=" + str(len(self.di)) + ">") if hasattr(self.di, "__len__") else ""
+        len_eo = ("<of len=" + str(len(self.eo)) + ">") if hasattr(self.eo, "__len__") else ""
+        return (
+            f"{self.__class__.__name__}("
+            f"ids={repr(list(self.ids))}, "
+            f"di={type(self.di)}{len_di}, "
+            f"eo={type(self.eo)}{len_eo})"
+        )
 
     def __len__(self):
         return len(self.data_inputs)

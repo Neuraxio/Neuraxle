@@ -705,7 +705,7 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
             ret: BaseDataclass = self.root[scope]
             if not deep:
                 ret = ret.shallow()
-        except KeyError as e:
+        except KeyError as _:
             ret: BaseDataclass = scope.new_dataclass_from_id()
 
         return copy.deepcopy(ret)

@@ -37,13 +37,19 @@ control logic to the flow of data into the steps:
 
 """
 from operator import attrgetter
-from typing import Union, Optional as OptionalType, Dict, Callable
+from typing import Callable, Dict
+from typing import Optional as OptionalType
+from typing import Tuple, Union
 
-from neuraxle.base import BaseStep, MetaStep, DataContainer, ExecutionContext, TruncableSteps, \
-    HandleOnlyMixin, TransformHandlerOnlyMixin, ForceHandleOnlyMixin, BaseTransformer, NonFittableMixin, ExecutionPhase
+from neuraxle.base import (BaseStep, BaseTransformer, DataContainer,
+                           ExecutionContext, ExecutionPhase,
+                           ForceHandleOnlyMixin, HandleOnlyMixin, MetaStep,
+                           NonFittableMixin, TransformHandlerOnlyMixin,
+                           TruncableSteps)
 from neuraxle.data_container import ExpandedDataContainer
 from neuraxle.hyperparams.distributions import Boolean, Choice
-from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
+from neuraxle.hyperparams.space import (HyperparameterSamples,
+                                        HyperparameterSpace)
 from neuraxle.steps.numpy import NumpyConcatenateOnAxisIfNotEmpty
 from neuraxle.union import FeatureUnion
 
@@ -93,7 +99,7 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStep):
 
     def _fit_transform_data_container(
         self, data_container: DataContainer, context: ExecutionContext
-    ) -> (BaseStep, DataContainer):
+    ) -> Tuple[BaseStep, DataContainer]:
         """
         :param data_container: data container
         :param context: execution context
@@ -673,7 +679,7 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
 
     def _fit_transform_data_container(
         self, data_container: DataContainer, context: ExecutionContext
-    ) -> (BaseStep, DataContainer):
+    ) -> Tuple[BaseStep, DataContainer]:
         """
         According to the idiom of `(1, 2, reversed(1))`, we do this, in order:
 

@@ -42,47 +42,23 @@ class BaseCallback(ABC):
 
     .. seealso::
         :class:`MetaCallback`,
-        :class:`EarlyStoppingCallback`,
-        :class:`IfBestScore`,
-        :class:`IfLastStep`,
-        :class:`StepSaverCallback`,
         :class:`~neuraxle.metaopt.auto_ml.AutoML`,
         :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.data.trial.Trial`,
-        :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.metaopt.auto_ml.RandomSearchHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.base.HyperparameterSamples`,
-        :class:`~neuraxle.data_container.DataContainer`
     """
 
     @abstractmethod
-    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
-             is_finished_and_fitted: bool):
+    def call(
+        self, trial_split: TrialSplit,
+        input_train: DataContainer, pred_train: DataContainer,
+        input_val: DataContainer, pred_val: DataContainer,
+        is_finished_and_fitted: bool = False
+    ) -> bool:
         pass
 
 
 class EarlyStoppingCallback(BaseCallback):
     """
     Perform early stopping when there is multiple epochs in a row that didn't improve the performance of the model.
-
-    .. seealso::
-        :class:`BaseCallback`,
-        :class:`MetaCallback`,
-        :class:`IfBestScore`,
-        :class:`IfLastStep`,
-        :class:`StepSaverCallback`,
-        :class:`~neuraxle.metaopt.auto_ml.AutoML`,
-        :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.data.trial.Trial`,
-        :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.metaopt.auto_ml.RandomSearchHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.base.HyperparameterSamples`,
-        :class:`~neuraxle.data_container.DataContainer`
     """
 
     def __init__(self, max_epochs_without_improvement, metric_name=None):
@@ -95,17 +71,11 @@ class EarlyStoppingCallback(BaseCallback):
         self.metric_name = None
 
     def call(
-            self,
-            trial_split: TrialSplit,
-            epoch_number: int,
-            total_epochs: int,
-            input_train: DataContainer,
-            pred_train: DataContainer,
-            input_val: DataContainer,
-            pred_val: DataContainer,
-            context: ExecutionContext,
-            is_finished_and_fitted: bool
-    ):
+        self, trial_split: TrialSplit,
+        input_train: DataContainer, pred_train: DataContainer,
+        input_val: DataContainer, pred_val: DataContainer,
+        is_finished_and_fitted: bool = False
+    ) -> bool:
         if self.metric_name is None:
             validation_scores = trial_split.get_val_scores()
         else:
@@ -134,15 +104,6 @@ class MetaCallback(BaseCallback):
         :class:`IfBestScore`,
         :class:`IfLastStep`,
         :class:`StepSaverCallback`,
-        :class:`~neuraxle.metaopt.auto_ml.AutoML`,
-        :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.data.trial.Trial`,
-        :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.metaopt.auto_ml.RandomSearchHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.base.HyperparameterSamples`,
-        :class:`~neuraxle.data_container.DataContainer`
     """
 
     def __init__(self, wrapped_callback: BaseCallback):
@@ -150,18 +111,19 @@ class MetaCallback(BaseCallback):
 
     @abstractmethod
     def call(
-            self,
-            trial_split: TrialSplit,
-            epoch_number: int,
-            total_epochs: int,
-            input_train: DataContainer,
-            pred_train: DataContainer,
-            input_val: DataContainer,
-            pred_val: DataContainer,
-            context: ExecutionContext,
-            is_finished_and_fitted: bool
-    ):
-        pass
+        self, trial_split: TrialSplit,
+        input_train: DataContainer, pred_train: DataContainer,
+        input_val: DataContainer, pred_val: DataContainer,
+        is_finished_and_fitted: bool = False
+    ) -> bool:
+        return self.wrapped_callback.call(
+            trial_split,
+            input_train,
+            pred_train,
+            input_val,
+            pred_val,
+            is_finished_and_fitted
+        )
 
 
 class IfBestScore(MetaCallback):
@@ -169,36 +131,21 @@ class IfBestScore(MetaCallback):
     Meta callback that only execute when the trial is a new best score.
 
     .. seealso::
-        :class:`BaseCallback`,
         :class:`MetaCallback`,
-        :class:`IfBestScore`,
-        :class:`IfLastStep`,
-        :class:`StepSaverCallback`,
-        :class:`~neuraxle.metaopt.auto_ml.AutoML`,
-        :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.data.trial.Trial`,
-        :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.metaopt.auto_ml.RandomSearchHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.base.HyperparameterSamples`,
-        :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
-             is_finished_and_fitted: bool):
+    def call(
+        self, trial_split: TrialSplit,
+        input_train: DataContainer, pred_train: DataContainer,
+        input_val: DataContainer, pred_val: DataContainer,
+        is_finished_and_fitted: bool = False
+    ) -> bool:
         if trial_split.is_new_best_score():
             if self.wrapped_callback.call(
-                    trial_split,
-                    epoch_number,
-                    total_epochs,
-                    input_train,
-                    pred_train,
-                    input_val,
-                    pred_val,
-                    context,
-                    is_finished_and_fitted
+                self, trial_split,
+                input_train, pred_train,
+                input_val, pred_val,
+                is_finished_and_fitted
             ):
                 return True
         return False
@@ -209,34 +156,20 @@ class IfLastStep(MetaCallback):
     Meta callback that only execute when the training is finished or fitted, or when it is the last epoch.
 
     .. seealso::
-        :class:`BaseCallback`,
         :class:`MetaCallback`,
-        :class:`IfBestScore`,
-        :class:`StepSaverCallback`,
-        :class:`~neuraxle.metaopt.auto_ml.AutoML`,
-        :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.data.trial.Trial`,
-        :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.metaopt.auto_ml.RandomSearchHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.base.HyperparameterSamples`,
-        :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
-             is_finished_and_fitted: bool):
-        if epoch_number == total_epochs - 1 or is_finished_and_fitted:
+    def call(
+        self, trial_split: TrialSplit,
+        input_train: DataContainer, pred_train: DataContainer,
+        input_val: DataContainer, pred_val: DataContainer,
+        is_finished_and_fitted: bool = False
+    ) -> bool:
+        if trial_split.epoch == trial_split.n_epochs or is_finished_and_fitted:
             self.wrapped_callback.call(
-                trial_split,
-                epoch_number,
-                total_epochs,
-                input_train,
-                pred_train,
-                input_val,
-                pred_val,
-                context,
+                self, trial_split,
+                input_train, pred_train,
+                input_val, pred_val,
                 is_finished_and_fitted
             )
             return True
@@ -251,21 +184,18 @@ class StepSaverCallback(BaseCallback):
         :class:`BaseCallback`,
         :class:`~neuraxle.metaopt.auto_ml.AutoML`,
         :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.data.trial.Trial`,
-        :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.metaopt.auto_ml.RandomSearchHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.base.HyperparameterSamples`,
     """
 
     def __init__(self, label):
         BaseCallback.__init__(self)
         self.label = label
 
-    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
-             is_finished_and_fitted: bool):
+    def call(
+        self, trial_split: TrialSplit,
+        input_train: DataContainer, pred_train: DataContainer,
+        input_val: DataContainer, pred_val: DataContainer,
+        is_finished_and_fitted: bool = False
+    ) -> bool:
         trial_split.save_model(self.label)
         return False
 
@@ -285,21 +215,9 @@ class CallbackList(BaseCallback):
     Callback list that be executed.
 
     .. seealso::
-        :class:`BaseCallback`,
-        :class:`MetaCallback`,
-        :class:`EarlyStoppingCallback`,
-        :class:`IfBestScore`,
-        :class:`IfLastStep`,
-        :class:`StepSaverCallback`,
         :class:`~neuraxle.metaopt.auto_ml.AutoML`,
         :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.data.trial.Trial`,
-        :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.metaopt.auto_ml.RandomSearchHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.base.HyperparameterSamples`,
-        :class:`~neuraxle.data_container.DataContainer`
+        :class:`BaseCallback`,
     """
 
     def __init__(self, callbacks: List[BaseCallback]):
@@ -309,29 +227,23 @@ class CallbackList(BaseCallback):
         return self.callbacks[item]
 
     def call(
-        self, context: ExecutionContext, epoch: int, tot_epochs: int,
+        self, trial_split: TrialSplit,
         input_train: DataContainer, pred_train: DataContainer,
         input_val: DataContainer, pred_val: DataContainer,
         is_finished_and_fitted: bool = False
-    ):
+    ) -> bool:
         is_finished_and_fitted = False
         for callback in self.callbacks:
             try:
                 if callback.call(
-                        trial_split=context,
-                        epoch_number=epoch,
-                        total_epochs=tot_epochs,
-                        input_train=input_train,
-                        pred_train=pred_train,
-                        input_val=input_val,
-                        pred_val=pred_val,
-                        context=context,
-                        is_finished_and_fitted=is_finished_and_fitted
+                    trial_split=trial_split,
+                    input_train=input_train, pred_train=pred_train,
+                    input_val=input_val, pred_val=pred_val,
+                    is_finished_and_fitted=is_finished_and_fitted
                 ):
                     is_finished_and_fitted = True
-            except Exception as _:
-                track = traceback.format_exc()
-                context.trial.logger.error(track)
+            except Exception as e:
+                trial_split.context.flow.log_error(e)
 
         return is_finished_and_fitted
 
@@ -354,35 +266,41 @@ class MetricCallback(BaseCallback):
         :class:`IfLastStep`,
         :class:`StepSaverCallback`,
         :class:`CallbackList`,
-        :class:`~neuraxle.metaopt.auto_ml.AutoML`,
-        :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.data.trial.Trial`,
-        :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.metaopt.auto_ml.RandomSearchHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.base.HyperparameterSamples`,
-        :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def __init__(self, name: str, metric_function: Callable, higher_score_is_better: bool, log_metrics=True,
-                 pass_context_to_metric_function: bool = False):
+    def __init__(
+        self,
+        name: str, metric_function: Callable, higher_score_is_better: bool,
+        log_metrics=True, pass_context_to_metric_function: bool = False
+    ):
         self.name = name
         self.metric_function = metric_function
         self.higher_score_is_better = higher_score_is_better
         self.log_metrics = log_metrics
         self.pass_context_to_metric_function = pass_context_to_metric_function
 
-    def call(self, trial_split: TrialSplit, epoch_number: int, total_epochs: int, input_train: DataContainer,
-             pred_train: DataContainer, input_val: DataContainer, pred_val: DataContainer, context: ExecutionContext,
-             is_finished_and_fitted: bool):
+    def call(
+        self, trial_split: TrialSplit,
+        input_train: DataContainer, pred_train: DataContainer,
+        input_val: DataContainer, pred_val: DataContainer,
+        is_finished_and_fitted: bool = False
+    ) -> bool:
 
         if self.pass_context_to_metric_function:
-            train_score = self.metric_function(pred_train.expected_outputs, pred_train.data_inputs, context=context)
-            validation_score = self.metric_function(pred_val.expected_outputs, pred_val.data_inputs, context=context)
+            train_score = self.metric_function(
+                pred_train.expected_outputs, pred_train.data_inputs,
+                context=trial_split.validation_context()
+            )
+            validation_score = self.metric_function(
+                pred_val.expected_outputs, pred_val.data_inputs,
+                context=trial_split.validation_context()
+            )
+
         else:
-            train_score = self.metric_function(pred_train.expected_outputs, pred_train.data_inputs)
-            validation_score = self.metric_function(pred_val.expected_outputs, pred_val.data_inputs)
+            train_score = self.metric_function(
+                pred_train.expected_outputs, pred_train.data_inputs)
+            validation_score = self.metric_function(
+                pred_val.expected_outputs, pred_val.data_inputs)
 
         trial_split.add_metric_results_train(
             name=self.name,
@@ -407,26 +325,14 @@ class ScoringCallback(MetricCallback):
     Adds the results into the trial repository.
 
     .. seealso::
-        :class:`BaseCallback`,
-        :class:`MetaCallback`,
-        :class:`EarlyStoppingCallback`,
-        :class:`IfBestScore`,
-        :class:`IfLastStep`,
-        :class:`StepSaverCallback`,
-        :class:`CallbackList`,
-        :class:`~neuraxle.metaopt.auto_ml.AutoML`,
-        :class:`~neuraxle.metaopt.auto_ml.Trainer`,
-        :class:`~neuraxle.metaopt.data.trial.Trial`,
-        :class:`~neuraxle.metaopt.auto_ml.InMemoryHyperparamsRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.HyperparamsJSONRepository`,
-        :class:`~neuraxle.metaopt.auto_ml.BaseHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.metaopt.auto_ml.RandomSearchHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.base.HyperparameterSamples`,
-        :class:`~neuraxle.data_container.DataContainer`
+        :class:`MetricCallback`,
     """
 
-    def __init__(self, metric_function: Callable, name='main', higher_score_is_better: bool = True,
-                 log_metrics: bool = True, pass_context_to_metric_function: bool = False):
+    def __init__(
+        self,
+        metric_function: Callable, name='main', higher_score_is_better: bool = True,
+        log_metrics: bool = True, pass_context_to_metric_function: bool = False
+    ):
         MetricCallback.__init__(
             self,
             name=name,

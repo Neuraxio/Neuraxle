@@ -25,12 +25,11 @@ Pipeline Steps For Caching
 import hashlib
 import os
 import shutil
-from abc import abstractmethod, ABC
-from typing import Iterable, Any
+from abc import ABC, abstractmethod
+from typing import Any, Iterable, Tuple
 
 import joblib
-
-from neuraxle.base import MetaStep, BaseStep, ExecutionContext
+from neuraxle.base import BaseStep, ExecutionContext, MetaStep
 from neuraxle.data_container import DataContainer
 
 
@@ -82,7 +81,7 @@ class TransformDIValueCachingWrapper(MetaStep):
 
     def _fit_transform_data_container(
         self, data_container: DataContainer, context: ExecutionContext
-    ) -> (BaseStep, DataContainer):
+    ) -> Tuple[BaseStep, DataContainer]:
         """
         Fit transform data container.
 

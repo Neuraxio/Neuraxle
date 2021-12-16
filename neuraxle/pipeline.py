@@ -26,11 +26,14 @@ This is the core of Neuraxle's pipelines. You can chain steps to call them one a
 import warnings
 from abc import ABC, abstractmethod
 from copy import copy
-from typing import Any, Tuple, List, Union
+from typing import Any, List, Tuple, Union
 
-from neuraxle.base import BaseStep, TruncableSteps, NamedStepsList, ExecutionContext, ExecutionMode, \
-    MetaStep, _CustomHandlerMethods, ForceHandleMixin, Identity
-from neuraxle.data_container import DataContainer, ListDataContainer, AbsentValuesNullObject, ZipDataContainer
+from neuraxle.base import (BaseStep, ExecutionContext, ExecutionMode,
+                           ForceHandleMixin, Identity, MetaStep,
+                           NamedStepsList, TruncableSteps,
+                           _CustomHandlerMethods)
+from neuraxle.data_container import (AbsentValuesNullObject, DataContainer,
+                                     ListDataContainer, ZipDataContainer)
 from neuraxle.logging.warnings import warn_deprecated_arg
 
 
@@ -56,7 +59,7 @@ class BasePipeline(TruncableSteps, ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BasePipeline', Any):
+    def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['BasePipeline', Any]:
         raise NotImplementedError()
 
 
@@ -105,7 +108,7 @@ class Pipeline(BasePipeline):
         data_container = self.transform_data_container(DataContainer(di=data_inputs))
         return data_container.data_inputs
 
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('Pipeline', Any):
+    def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['Pipeline', Any]:
         """
         After loading the last checkpoint, fit transform each pipeline steps
 
@@ -181,7 +184,7 @@ class Pipeline(BasePipeline):
 
     def _fit_transform_data_container(
         self, data_container: DataContainer, context: ExecutionContext
-    ) -> ('Pipeline', DataContainer):
+    ) -> Tuple['Pipeline', DataContainer]:
         """
         After loading the last checkpoint, fit transform each pipeline steps
 

@@ -379,7 +379,7 @@ class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
 
         return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
 
-    def train_split(self, data_inputs, expected_outputs) -> (List, List):
+    def train_split(self, data_inputs, expected_outputs) -> Tuple[List, List]:
         train_data_inputs = []
         train_expected_outputs = []
         data_inputs = np.array(data_inputs)
@@ -402,7 +402,7 @@ class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
 
         return train_data_inputs, train_expected_outputs
 
-    def validation_split(self, data_inputs, expected_outputs=None) -> (List, List):
+    def validation_split(self, data_inputs, expected_outputs=None) -> Tuple[List, List]:
         splitted_data_inputs = self._split(data_inputs)
         if expected_outputs is not None:
             splitted_expected_outputs = self._split(expected_outputs)
@@ -484,7 +484,7 @@ class AnchoredWalkForwardTimeSeriesCrossValidationWrapper(BaseCrossValidationWra
 
         return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
 
-    def train_split(self, data_inputs, expected_outputs=None) -> (List, List):
+    def train_split(self, data_inputs, expected_outputs=None) -> Tuple[List, List]:
         """
         Split the data into train inputs, train expected outputs
 

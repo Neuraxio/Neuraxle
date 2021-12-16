@@ -24,10 +24,13 @@ This module contains steps to perform various feature unions and model stacking,
 
 """
 
+from typing import Tuple
+
 from joblib import Parallel, delayed
 
-from neuraxle.base import BaseStep, TruncableSteps, NamedStepsList, Identity, ExecutionContext, DataContainer, \
-    ForceHandleOnlyMixin, BaseTransformer, NonFittableMixin
+from neuraxle.base import (BaseStep, BaseTransformer, DataContainer,
+                           ExecutionContext, ForceHandleOnlyMixin, Identity,
+                           NamedStepsList, NonFittableMixin, TruncableSteps)
 from neuraxle.data_container import ZipDataContainer
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
@@ -273,7 +276,7 @@ class ModelStacking(FeatureUnion):
         super().__init__(steps_as_tuple=steps_as_tuple, **kwargs)
         self.judge: BaseStep = judge  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
 
-    def _did_fit_transform(self, data_container, context) -> ('BaseStep', DataContainer):
+    def _did_fit_transform(self, data_container, context) -> Tuple['BaseStep', DataContainer]:
         data_container = super()._did_fit_transform(data_container, context)
 
         fitted_judge, data_container = self.judge.handle_fit_transform(data_container, context)
