@@ -675,7 +675,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
         :return: next hyperparams
         """
         if self._i == 0:
-            self._generate_grid(round_scope.hp_space)
+            self._generate_grid(round_scope.hps)
         else:
             self._reshuffle_grid()
         self._i += 1

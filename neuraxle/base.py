@@ -903,8 +903,11 @@ class Flow(BaseService):
         """
         Copy the flow.
         """
+        _lock: RLock = self._lock
+        self._lock = None
         copied_self: Flow = copy(self)
-        copied_self._lock = self._lock
+        copied_self._lock = _lock
+        self._lock = _lock
         return copied_self
 
     @synchroneous_flow_method
@@ -2608,9 +2611,9 @@ class _CouldHaveContext(MixinForBaseService):
         except AssertionError as e:
             context.flow.log_error(e)
 
-            # Don't crash in prod context only:
+            # Crash when not in production context:
             if context.execution_phase != ExecutionPhase.PROD:
-                raise e
+                raise e  # A base service or base step assertion failed.
 
 
 class BaseTransformer(

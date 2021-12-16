@@ -32,6 +32,7 @@ import copy
 import datetime
 import json
 import logging
+from multiprocessing import RLock
 import os
 from abc import ABC, abstractclassmethod, abstractmethod, abstractproperty
 from collections import OrderedDict
@@ -138,9 +139,15 @@ class ScopedLocation:
         if curr_attr_to_set_idx != key_idx:
             raise ValueError(
                 f"{key} is not yet to be defined. Currently, "
-                f"{dataclass_2_id_attr.keys()[curr_attr_to_set_idx]} is the next to be set.")
+                f"{(dataclass_2_id_attr.keys())[curr_attr_to_set_idx]} is the next to be set.")
         key_attr_name: str = dataclass_2_id_attr[key]
         setattr(self, key_attr_name, value)
+
+    def peek(self) -> ScopedLocationAttr:
+        """
+        Pop without removing the last element: return the last non-None element.        
+        """
+        return self.as_list()[-1]
 
     def pop(self) -> ScopedLocationAttr:
         """
@@ -183,8 +190,17 @@ class ScopedLocation:
                 break
         return _list_ret
 
+    def new_dataclass_from_id(self):
+        """
+        Creates a new :class:`BaseDataclass` of the right type with
+        just the provided ID filled.
+        """
+        _list = self.as_list()
+        dataklass: Type[BaseDataclass] = list(dataclass_2_id_attr.keys())[len(_list) - 1]
+        return dataklass(_list[-1])
+
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({', '.join(self.as_list())})"
+        return f"{self.__class__.__name__}({repr(self.as_list())[1:-1]})"
 
     def __str__(self) -> str:
         return self.__repr__()
@@ -229,6 +245,8 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
         located_sub_attr: ScopedLocationAttr = loc[subdataklass]
         if located_sub_attr is None:
             return self
+        if located_sub_attr not in self.get_sublocation_keys():
+            raise KeyError(f"Item at loc={loc} is not in {self.shallow()}.")
         subloc: SubDataclassT = self.get_sublocation()[located_sub_attr]
         sublocs_sublocs: SubDataclassT = subloc[loc]
         return sublocs_sublocs
@@ -248,6 +266,10 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
     def get_sublocation_values(self) -> List[SubDataclassT]:
         raise NotImplementedError("Must use mixins.")
 
+    @abstractmethod
+    def get_sublocation_keys(self) -> List[ScopedLocationAttr]:
+        raise NotImplementedError("Must use mixins.")
+
 
 @dataclass(order=True)
 class DataclassHasOrderedDictMixin:
@@ -260,6 +282,11 @@ class DataclassHasOrderedDictMixin:
             (isinstance(s, ScopedLocationAttrStr) for s in self.get_sublocation().keys())
         ):
             raise ValueError(f"{self.__class__.__name__} must have all sublocation keys as strings.")
+        subdataklass: Type[SubDataclassT] = dataclass_2_subdataclass[self.__class__]
+        if not all(
+            (isinstance(s, subdataklass) for s in self.get_sublocation().values() if s is not None)
+        ):
+            raise ValueError(f"{self.__class__.__name__} must have all sublocation values as {subdataklass.__name__}.")
 
     def get_sublocation(self) -> OrderedDict[ScopedLocationAttrStr, SubDataclassT]:
         ret = super().get_sublocation()
@@ -270,10 +297,10 @@ class DataclassHasOrderedDictMixin:
         self._invariant()
 
     def get_sublocation_values(self) -> List[SubDataclassT]:
-        return self.get_sublocation().values()
+        return list(self.get_sublocation().values())
 
-    # def get_sublocation_item(self, item: ScopedLocationAttrStr) -> SubDataclassT:
-    #     return self.get_sublocation()[item]
+    def get_sublocation_keys(self) -> List[ScopedLocationAttrStr]:
+        return list(self.get_sublocation().keys())
 
     def store(self, dc: SubDataclassT) -> ScopedLocationAttrStr:
         self.get_sublocation()[dc.get_id()] = dc
@@ -306,8 +333,8 @@ class DataclassHasListMixin:
     def get_sublocation_values(self) -> List[SubDataclassT]:
         return self.get_sublocation()
 
-    # def get_sublocation_item(self, item: ScopedLocationAttrInt) -> SubDataclassT:
-    #     return self.get_sublocation()[item]
+    def get_sublocation_keys(self) -> List[ScopedLocationAttrInt]:
+        return list(range(len(self)))
 
     def store(self, dc: SubDataclassT) -> ScopedLocationAttrInt:
         _id = dc.get_id()
@@ -663,9 +690,13 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
         ).save(root, ScopedLocation(), deep=True)
 
     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
-        ret: BaseDataclass = self.root[scope]
-        if not deep:
-            ret = ret.shallow()
+        try:
+            ret: BaseDataclass = self.root[scope]
+            if not deep:
+                ret = ret.shallow()
+        except KeyError as e:
+            ret: BaseDataclass = scope.new_dataclass_from_id()
+
         return copy.deepcopy(ret)
 
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'VanillaHyperparamsRepository':
@@ -706,7 +737,8 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
         return os.path.join(scoped_path, 'log.txt')
 
     def get_scoped_path(self, scope: ScopedLocation) -> str:
-        return os.path.join(self.cache_folder, *scope.as_list())
+        _scope_attrs = [str(i) for i in scope.as_list()]
+        return os.path.join(self.cache_folder, *_scope_attrs)
 
 
 class InMemoryHyperparamsRepository(HyperparamsRepository):
@@ -769,12 +801,13 @@ class AutoMLFlow(Flow):
         repo: HyperparamsRepository,
         logger: logging.Logger = None,
         loc: ScopedLocation = None,
+        lock: RLock = None,
     ):
         super().__init__(logger=logger)
         self.repo: HyperparamsRepository = repo
         self.loc: ScopedLocation = loc or ScopedLocation()
 
-        self.synchroneous()
+        self._lock = lock or self.synchroneous()
 
     @staticmethod
     def from_flow(flow: Flow, repo: HyperparamsRepository) -> 'AutoMLFlow':
@@ -799,9 +832,9 @@ class AutoMLFlow(Flow):
         f = AutoMLFlow(
             repo=self.repo,
             logger=self.logger,
-            loc=copy.copy(self.loc)
+            loc=copy.copy(self.loc),
+            lock=self.synchroneous(),
         )
-        f._lock = self._lock
         return f
 
     def log_model(self, model: 'BaseStep'):

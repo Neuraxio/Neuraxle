@@ -36,9 +36,9 @@ Classes are splitted like this for the AutoML:
 
 """
 
-import gc
 import copy
 import datetime
+import gc
 import hashlib
 import json
 import logging
@@ -53,12 +53,14 @@ from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
                     Tuple, Type, TypeVar, Union)
 
 import numpy as np
-from neuraxle.base import (_HasChildrenMixin, BaseStep, ExecutionContext, Flow,
-                           synchroneous_flow_method, TrialStatus)
+from neuraxle.base import (BaseService, BaseStep, ExecutionContext, Flow,
+                           TrialStatus, _CouldHaveContext, _HasChildrenMixin,
+                           synchroneous_flow_method)
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
-from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT, AutoMLContext, AutoMLFlow,
+from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
+                                           AutoMLContext, AutoMLFlow,
                                            BaseDataclass,
                                            BaseHyperparameterOptimizer,
                                            ClientDataclass,
@@ -69,22 +71,57 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT, Auto
                                            RootDataclass, RoundDataclass,
                                            ScopedLocation, ScopedLocationAttr,
                                            SubDataclassT, TrialDataclass,
-                                           TrialSplitDataclass, VanillaHyperparamsRepository)
+                                           TrialSplitDataclass,
+                                           VanillaHyperparamsRepository,
+                                           dataclass_2_id_attr)
 
 SubAggregateT = TypeVar('SubAggregateT', bound=Optional['BaseAggregate'])
 # TODO: there are probably errors where the subtype is used where the base type should be used instead. Check this typing error. Might be bad with constructors. Will be checked in unit tests?
 
 
-class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
+class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDataclassT]):
     """
     Base class for aggregated objects using the repo and the dataclasses to manipulate them.
     """
 
     def __init__(self, _dataclass: SubDataclassT, context: AutoMLContext, is_deep=False):
+        BaseService.__init__(self)
+        _CouldHaveContext.__init__(self)
         self._dataclass: SubDataclassT = _dataclass
         self.context: AutoMLContext = context.push_attr(_dataclass)
         self.loc: ScopedLocation = copy.copy(context.loc)
         self.is_deep = is_deep
+
+        self.service_assertions = [Flow, HyperparamsRepository]
+        self._invariant()
+
+    def _invariant(self):
+        _type: Type[SubDataclassT] = aggregate_2_dataclass[self.__class__]
+        self._assert(
+            isinstance(self._dataclass, _type),
+            f"self._dataclass should be of type {_type.__name__} but is of type "
+            f"{self._dataclass.__class__.__name__}", self.context)
+        self._assert(
+            isinstance(self.context, AutoMLContext),
+            f"self.context should be of type AutoMLContext but is of type "
+            f"{self.context.__class__.__name__}", self.context)
+        self._assert(
+            isinstance(self.loc, ScopedLocation),
+            f"self.loc should be of type ScopedLocation but is of type "
+            f"{self.loc.__class__.__name__}", self.context)
+        self._assert(
+            self.loc.as_list() == self.context.loc.as_list(),
+            f"{self.loc} should be equal to {self.context.loc}", self.context)
+        self._assert(
+            self.loc.as_list()[-1] == self._dataclass.get_id(),
+            f"{self.loc}'s last attr should be equal to self._dataclass.get_id() "
+            f"and the id is {self._dataclass.get_id()}", self.context)
+        self._assert(
+            dataclass_2_id_attr[self.dataclass] == self._dataclass._id_attr_name,
+            f"_dataclass attr is not as expected: {dataclass_2_id_attr[self.dataclass]} != {self._dataclass._id_attr_name} "
+        )
+
+        self._assert_at_lifecycle(self.context)
 
     def without_context(self) -> 'BaseAggregate':
         """
@@ -164,7 +201,7 @@ class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
             self.refresh(False)
             subdataclass: SubDataclassT = self.repo.load(*args, **kwds)
             subagg: SubAggregateT = self.subaggregate(subdataclass, self.context)
-            self.save_subaggregate(subagg, deep=True)
+            self.save_subaggregate(subagg, deep=False)
             return subagg
 
     def _release_managed_subresource(self, resource: SubAggregateT, e: Exception = None) -> Optional[Exception]:
@@ -186,6 +223,7 @@ class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
         return iter((
             self.subaggregate(subdataclass, self.context)
             for subdataclass in self._dataclass.get_sublocation_values()
+            if subdataclass is not None
         ))
 
     def __getitem__(self, item: int) -> 'Trial':
@@ -201,7 +239,13 @@ class BaseAggregate(Generic[SubAggregateT, SubDataclassT]):
         return self.__repr__()
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({str([str(t) for t in self.__iter__()])})"
+        if self.is_deep:
+            prefix = ""
+            subobjs = str([str(t) for t in self.__iter__()])
+        else:
+            prefix = "<shallow>"
+            subobjs = f"{self._dataclass.get_sublocation()}>"
+        return f"{self.__class__.__name__}{prefix}({subobjs})"
 
 
 class Root(BaseAggregate['Project', RootDataclass]):
@@ -209,7 +253,7 @@ class Root(BaseAggregate['Project', RootDataclass]):
     def save(self, deep: bool = False):
         if deep:
             for p in self.projects:
-                p.save(deep=True)
+                p.save(deep=p.is_deep)
 
     @property
     def projects(self) -> List['Project']:
@@ -242,7 +286,7 @@ class Root(BaseAggregate['Project', RootDataclass]):
 
     def _acquire_managed_subresource(self, project_name: str) -> 'Project':
         project_loc: ScopedLocation = self.loc.with_id(project_name)
-        super()._acquire_managed_subresource(project_loc)
+        return super()._acquire_managed_subresource(project_loc)
 
 
 class Project(BaseAggregate['Client', ProjectDataclass]):
@@ -260,20 +304,20 @@ class Project(BaseAggregate['Client', ProjectDataclass]):
 
     def _acquire_managed_subresource(self, client_name: str) -> 'Client':
         client_loc: ScopedLocation = self.loc.with_id(client_name)
-        super()._acquire_managed_subresource(client_loc)
+        return super()._acquire_managed_subresource(client_loc)
 
 
 class Client(BaseAggregate['Round', ClientDataclass]):
 
-    def new_round(self, hps: HyperparameterSpace) -> 'Client':
-        self._managed_subresource(hps=hps, new_round=True)
+    def new_round(self) -> 'Client':
+        self._managed_subresource(new_round=True)
         return self
 
-    def resume_last_round(self, hps: HyperparameterSpace) -> 'Client':
-        self._managed_subresource(hps=hps, new_round=False)
+    def resume_last_round(self) -> 'Client':
+        self._managed_subresource(new_round=False)
         return self
 
-    def _acquire_managed_subresource(self, new_round=True) -> 'Round':
+    def _acquire_managed_subresource(self, new_round: bool = True) -> 'Round':
         with self.context.lock:
             self.refresh(False)
 
@@ -282,13 +326,14 @@ class Client(BaseAggregate['Round', ClientDataclass]):
             if not new_round:
                 # Try get last round:
                 round_id = max(0, round_id - 1)
-            round_loc = self.loc.with_id(round_id)
+            round_loc: ScopedLocation = self.loc.with_id(round_id)
 
             # Get round to return:
             _round_dataclass: RoundDataclass = self.repo.load(round_loc)
             subagg: Round = Round(_round_dataclass, self.context)
 
             if new_round or round_loc == 0:
+                subagg.is_deep = True  # New rounds are always deep
                 self.save_subaggregate(subagg, deep=True)
             return subagg
 
@@ -332,11 +377,12 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
             # Get trial to return:
             _trial_dataclass: TrialDataclass = self.repo.load(trial_loc)
             new_hps: HyperparameterSamples = self.hp_optimizer.find_next_best_hyperparams(self)
-            _trial_dataclass.hyperparams(new_hps)
+            _trial_dataclass.hyperparams = new_hps
             self.flow.log_planned(new_hps)
             subagg: Trial = Trial(_trial_dataclass, self.context)
 
             if new_trial or trial_loc == 0:
+                subagg.is_deep = True  # New trials are always deep
                 self.save_subaggregate(subagg, deep=True)
             return subagg
 
@@ -640,8 +686,8 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
         :class:`DataContainer`
     """
 
-    def __init__(self, _dataclass: SubDataclassT, context: AutoMLContext):
-        super().__init__(_dataclass, context, is_deep=True)
+    def __init__(self, _dataclass: SubDataclassT, context: AutoMLContext, is_deep=False):
+        super().__init__(_dataclass, context, is_deep=is_deep)
         self.epoch: int = 0
         self.n_epochs: int = None
 
@@ -695,12 +741,15 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
         :param higher_score_is_better: if higher score is better or not for this metric
         :return:
         """
-        self._create_metric_results_if_not_yet_done(name, higher_score_is_better)
-        self._dataclass.metric_results[name].train_values.append(score)
+        with self.context.lock:
+            self.refresh(deep=True)
+            self._create_metric_results_if_not_yet_done(name, higher_score_is_better)
+            self._dataclass.metric_results[name].train_values.append(score)
 
-        if log_metric:
-            # TODO: log metric??
-            self.trial.logger.info('{} train: {}'.format(name, score))
+            if log_metric:
+                # TODO: log metric??
+                self.trial.logger.info('{} train: {}'.format(name, score))
+            self.save(deep=True)
 
     def add_metric_results_validation(
         self, name: str, score: float, higher_score_is_better: bool, log_metric: bool = False
@@ -716,11 +765,14 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
         :param higher_score_is_better: if higher score is better or not for this metric
         :return:
         """
-        self._create_metric_results_if_not_yet_done(name, higher_score_is_better)
-        self._dataclass.metric_results[name].validation_values.append(score)
+        with self.context.lock:
+            self.refresh(deep=True)
+            self._create_metric_results_if_not_yet_done(name, higher_score_is_better)
+            self._dataclass.metric_results[name].validation_values.append(score)
 
-        if log_metric:
-            self.trial.logger.info('{} validation: {}'.format(name, score))
+            if log_metric:
+                self.trial.logger.info('{} validation: {}'.format(name, score))
+            self.save(deep=True)
 
     def _create_metric_results_if_not_yet_done(self, name, higher_score_is_better):
         if name not in self._dataclass.metric_results:
@@ -822,6 +874,9 @@ class MetricResults(BaseAggregate[None, MetricResultsDataclass]):
     # TODO: epoch class and epoch location.
     # TODO: this will be used for the Epoch to save the MetricResults with the _acquire_managed_subresource.
 
+    def _acquire_managed_subresource(self, *args, **kwds) -> SubAggregateT:
+        return copy.copy(self).at_epoch(*args, **kwds)
+
     def at_epoch(self, epoch: int, n_epochs: int) -> 'MetricResults':
         """
         Return the metric results for a specific epoch.
@@ -840,16 +895,17 @@ class MetricResults(BaseAggregate[None, MetricResultsDataclass]):
     """
 
 
-aggregate_2_subaggregate = OrderedDict([
-    (Root, Client),
-    (Client, Project),
-    (Project, Trial),
+aggregate_2_subaggregate: OrderedDict[BaseAggregate, BaseAggregate] = OrderedDict([
+    (Root, Project),
+    (Project, Client),
+    (Client, Round),
+    (Round, Trial),
     (Trial, TrialSplit),
     (TrialSplit, MetricResults),
     (MetricResults, MetricResults),
 ])
 
-aggregate_2_dataclass: OrderedDict[BaseDataclass, str] = OrderedDict([
+aggregate_2_dataclass: OrderedDict[BaseAggregate, BaseDataclass] = OrderedDict([
     (Root, RootDataclass),
     (Client, ClientDataclass),
     (Round, RoundDataclass),

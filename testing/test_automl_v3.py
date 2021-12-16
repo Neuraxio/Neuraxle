@@ -76,68 +76,6 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
     assert np.array_equal(predicted.di, np.array(range(10, 20)))
 
 
-def test_scoped_cascade_does_the_right_logging(tmpdir):
-    dact_train: DACT = DACT(ids=range(0, 10), di=range(0, 10), eo=range(100, 110))
-    dact_valid: DACT = DACT(ids=range(10, 20), di=range(10, 20), eo=range(110, 120))
-    hp_optimizer: BaseHyperparameterOptimizer = GridExplorationSampler(
-        main_metric_name='MAE', expected_n_trials=1)
-    n_epochs = 3
-    callbacks = CallbackList([
-        MetricCallback('MAE', median_absolute_error, False),
-        EarlyStoppingCallback(1, 'MAE')
-    ])
-    expected_scope = ScopedLocation(
-        project_name=DEFAULT_PROJECT,
-        client_name=DEFAULT_CLIENT,
-        round_number=1,
-        trial_number=1,
-        split_number=1,
-        metric_name='MAE',
-    )
-    p = Pipeline([
-        MultiplyByN().with_hp_range(range(1, 3)),
-        AddN().with_hp_range(range(99, 103)),
-    ])
-    hps: HyperparameterSpace = p.get_hyperparams_space()
-    root: Root = Root.vanilla(ExecutionContext())
-
-    with root.default_project() as ps:
-        ps: Project = ps
-        with ps.default_client() as cs:
-            cs: Client = cs
-            with cs.new_round() as rs:
-                rs: Round = rs.with_optimizer(hp_optimizer=hp_optimizer, hps=hps)
-                with rs.new_rvs_trial() as ts:
-                    ts: Trial = ts
-                    with ts.new_split(continue_loop_on_error=False) as tss:
-                        tss: TrialSplit = tss
-
-                        for _ in range(n_epochs):
-                            tss = tss.next_epoch()
-
-                            p, dact_pred_train = p.handle_fit_transform(
-                                dact_train, tss.train_context())
-                            p, dact_pred_val = p.handle_predict(
-                                dact_valid.without_eo(), tss.validation_context())
-
-                            if callbacks.call(
-                                tss,
-                                dact_train, dact_pred_train,
-                                dact_valid, dact_pred_val,
-                            ):
-                                break
-
-    for dc_type in dataclass_2_id_attr.keys():
-        dc: BaseDataclass = root.repo.load(expected_scope[:dc_type])
-        assert isinstance(dc, dc_type)
-        assert dc.get_id() == expected_scope[dc_type]
-
-        if dc_type == MetricResultsDataclass:
-            assert len(dc.get_sublocation()) == n_epochs
-        else:
-            assert len(dc.get_sublocation()) == 1
-
-
 def test_two_automl_in_parallel_can_contribute_to_the_same_hp_repository():
     # This is a large test
     pass
