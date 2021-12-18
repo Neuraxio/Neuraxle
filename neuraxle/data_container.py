@@ -226,6 +226,12 @@ class DataContainer(Generic[IDT, DIT, EOT]):
     def without_eo(self) -> 'DataContainer[IDT, DIT, List[None]]':
         return self.copy().set_expected_outputs(None)
 
+    def with_di(self, di: DIT) -> 'DataContainer[IDT, DIT, EOT]':
+        return self.copy().set_data_inputs(di)
+
+    def with_eo(self, eo: EOT) -> 'DataContainer[IDT, DIT, EOT]':
+        return self.copy().set_expected_outputs(eo)
+
     def set_ids(self, ids: IDT) -> 'DataContainer':
         """
         Set ids.

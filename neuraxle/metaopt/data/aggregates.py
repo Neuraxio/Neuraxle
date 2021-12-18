@@ -75,7 +75,33 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            dataclass_2_id_attr)
 
 SubAggregateT = TypeVar('SubAggregateT', bound=Optional['BaseAggregate'])
-# TODO: there are probably errors where the subtype is used where the base type should be used instead. Check this typing error. Might be bad with constructors. Will be checked in unit tests?
+
+
+def _with_method_as_context_manager(func: Callable[['BaseAggregate'], SubAggregateT]):
+    """
+
+    .. note::
+        This is a method to be used as a context manager.
+        This will sync items with the repos.
+        Example:
+
+    .. code-block:: python
+        with obj.func() as managed_context:
+            # obj.__enter__() is called
+            managed_context.do_something()
+        # obj.__exit__() is called
+
+    .. seealso::
+        :class:`neuraxle.metaopt.data.aggregates.BaseAggregate`
+        :func:`neuraxle.metaopt.data.aggregates.BaseAggregate.__enter__`
+        :func:`neuraxle.metaopt.data.aggregates.BaseAggregate.__exit__`
+        :class:`neuraxle.metaopt.auto_ml.Trainer`
+        :func:`neuraxle.metaopt.auto_ml.Trainer.train`
+
+    """
+    # Also add the docstring of `_with_method_as_context_manager' to the docstring of the `func`:
+    func.__doc__ = (func.__doc__ or "") + _with_method_as_context_manager.__doc__
+    return func
 
 
 class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDataclassT]):
@@ -188,6 +214,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDa
         handled_err: bool = self._release_managed_subresource(self._managed_resource, exc_val)
         return handled_err
 
+    @_with_method_as_context_manager
     def managed_subresource(self, *args, **kwds) -> SubAggregateT:
         self._managed_subresource(*args, **kwds)
         return self
@@ -281,11 +308,13 @@ class Root(BaseAggregate['Project', RootDataclass]):
             os.path.join(context.get_path(), "hyperparams"))
         return Root.from_repo(context, vanilla_repo)
 
+    @_with_method_as_context_manager
     def get_project(self, name: str) -> 'Root':
         # TODO: new project should be created if it does not exist?
         self._managed_subresource(project_name=name)
         return self
 
+    @_with_method_as_context_manager
     def default_project(self) -> 'Root':
         self._managed_subresource(project_name=DEFAULT_PROJECT)
         return self
@@ -297,11 +326,13 @@ class Root(BaseAggregate['Project', RootDataclass]):
 
 class Project(BaseAggregate['Client', ProjectDataclass]):
 
+    @_with_method_as_context_manager
     def get_client(self, name: str) -> 'Project':
         # TODO: new client should be created if it does not exist?
         self._managed_subresource(client_name=name)
         return self
 
+    @_with_method_as_context_manager
     def default_client(self) -> 'Project':
         self._managed_subresource(client_name=DEFAULT_CLIENT)
         return self
@@ -313,10 +344,12 @@ class Project(BaseAggregate['Client', ProjectDataclass]):
 
 class Client(BaseAggregate['Round', ClientDataclass]):
 
+    @_with_method_as_context_manager
     def new_round(self) -> 'Client':
         self._managed_subresource(new_round=True)
         return self
 
+    @_with_method_as_context_manager
     def resume_last_round(self) -> 'Client':
         self._managed_subresource(new_round=False)
         return self
@@ -350,10 +383,12 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
         self.hps: HyperparameterSpace = hps
         return self
 
+    @_with_method_as_context_manager
     def new_rvs_trial(self) -> 'Round':
         self._managed_subresource(new_trial=True)
         return self
 
+    @_with_method_as_context_manager
     def last_trial(self) -> 'Round':
         self._managed_subresource(new_trial=False)
         return self
@@ -519,6 +554,7 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
         :class:`ExecutionContext`
     """
 
+    @_with_method_as_context_manager
     def new_split(self, continue_loop_on_error: bool) -> 'Trial':
         self._managed_subresource(continue_loop_on_error=continue_loop_on_error)
         return self
@@ -537,13 +573,6 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
         with self.context.lock:
             self.refresh(False)
             # self.context.add_scoped_logger_file_handler()
-
-            # TODO: active record design pattern such that the dataobjects are the ones containing the repo and saving themselves / finding themselves. Clean Code P.101.
-            #     Active record should probably have a weakref of the repo since it doesn<t want to save the repo into itself.
-            #     Active record should have its own location integrated into itself!!! When creating a subdataclass, pass the parent into ctor to have a weakref of the parent as well. Pickling to remove refs.
-            #     Active record<s loc should not be known to the callers.
-
-            #     TODO: FIND A WAY TO SAVE THE REPO INTO THE DATACLASS. And hide it from the rest. Where does the flow goes as well?
 
             # Get new split loc:
             split_id: int = self._dataclass.get_next_i()
@@ -693,6 +722,13 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
         self.epoch: int = 0
         self.n_epochs: int = None
 
+    def _invariant(self):
+        self._assert(
+            self.is_deep,
+            f"self.is_deep should always be set to True for "
+            f"{self.__class__.__name__}", self.context)
+        super()._invariant()
+
     def with_n_epochs(self, n_epochs: int) -> 'TrialSplit':
         self.n_epochs: int = n_epochs
         return self
@@ -704,26 +740,64 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
         """
         if self.n_epochs is None:
             raise ValueError("self.n_epochs is not set. Please call self.with_n_epochs(n_epochs) first.")
-        # TODO: lock?
         if self.epoch == 0:
             self.flow.log_start()
         self.epoch: int = self.epoch + 1
         self.flow.log_epoch(self.epoch, self.n_epochs)
         return self.epoch
 
-    def _acquire_managed_subresource(self, epoch: int, n_epochs: int) -> 'MetricResults':
-        """
-        Epoch is zero-indexed.
-        """
-        # Should use self.metric_result instead:
-        raise NotImplementedError("Please use self.metric_results instead.")
-
     @property
     def metric_results(self) -> Dict[str, 'MetricResults']:
         return {
-            metric_name: MetricResults(mr, self.context).at_epoch(self.epoch, self.n_epochs)
+            metric_name: MetricResults(mr, self.context)  # .at_epoch(self.epoch, self.n_epochs)
             for metric_name, mr in self._dataclass.metric_results.items()
         }
+
+    def metric_result(self, metric_name: str) -> 'MetricResults':
+        """
+        Get a metric result not managed with a "with" statement.
+        """
+        mr: MetricResultsDataclass = self._dataclass.get_sublocation()[metric_name]
+        return MetricResults(mr, self.context)
+
+    @_with_method_as_context_manager
+    def managed_metric(self, metric_name: str, higher_score_is_better: bool) -> 'TrialSplit':
+        """
+        To be used as a with statement to get the managed metric.
+        """
+        self._managed_subresource(metric_name=metric_name, higher_score_is_better=higher_score_is_better)
+        return self
+
+    def _acquire_managed_subresource(self, metric_name: str, higher_score_is_better: bool) -> 'MetricResults':
+        with self.context.lock:
+            self.refresh(False or not self.is_deep)  # Deep refresh when shallow.
+
+            subdataclass: MetricResultsDataclass = self._create_or_get_metric_results(
+                metric_name, higher_score_is_better)
+
+            subagg: MetricResults = self.subaggregate(subdataclass, self.context, is_deep=True)
+            return subagg
+
+    def _create_or_get_metric_results(self, name, higher_score_is_better):
+        if name not in self._dataclass.metric_results:
+            self._dataclass.metric_results[name] = MetricResultsDataclass(
+                metric_name=name,
+                validation_values=[],
+                train_values=[],
+                higher_score_is_better=higher_score_is_better,
+            )
+        return self._dataclass.metric_results[name]
+
+    def _release_managed_subresource(self, resource: 'MetricResults', e: Exception = None) -> Optional[Exception]:
+        # TODO: func return type??
+
+        handled_error = True
+        with self.context.lock:
+            if e is not None:
+                handled_error = False
+                self.context.flow.log_error(e)
+            self.save_subaggregate(resource, deep=True)
+        return handled_error
 
     def train_context(self) -> 'AutoMLContext':
         return self.context.train()
@@ -733,118 +807,6 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
 
     def get_metric_names(self) -> List[str]:
         return list(self._dataclass.metric_results.keys())
-
-    def add_metric_results_train(self, name: str, score: float, higher_score_is_better: bool, log_metric: bool = False):
-        """
-        Add a train metric result in the metric results dictionary.
-
-        :param name: name of the metric
-        :param score: score
-        :param higher_score_is_better: if higher score is better or not for this metric
-        :return:
-        """
-        with self.context.lock:
-            if not self.is_deep:
-                self.refresh(deep=True)
-                # TODO: refresh here???
-            self._create_metric_results_if_not_yet_done(name, higher_score_is_better)
-            self._dataclass.metric_results[name].train_values.append(score)
-
-            if log_metric:
-                # TODO: log metric??
-                self.trial.logger.info('{} train: {}'.format(name, score))
-            # self.save(deep=True)
-            self.save_subaggregate(self._dataclass.metric_results[name])
-
-    def add_metric_results_validation(
-        self, name: str, score: float, higher_score_is_better: bool, log_metric: bool = False
-    ):
-        """
-        Add a validation metric result in the metric results dictionary.
-
-        # TODO: Metric
-        # Dataclass argument?
-
-        :param name: name of the metric
-        :param score: score
-        :param higher_score_is_better: if higher score is better or not for this metric
-        :return:
-        """
-        with self.context.lock:
-            if not self.is_deep:
-                self.refresh(deep=True)
-                # TODO: refresh here???
-            self._create_metric_results_if_not_yet_done(name, higher_score_is_better)
-            self._dataclass.metric_results[name].validation_values.append(score)
-
-            if log_metric:
-                self.trial.logger.info('{} validation: {}'.format(name, score))
-            # self.save(deep=True)
-            self.save_subaggregate(self._dataclass.metric_results[name])
-
-    def _create_metric_results_if_not_yet_done(self, name, higher_score_is_better):
-        if name not in self._dataclass.metric_results:
-            self._dataclass.metric_results[name] = MetricResultsDataclass(
-                metrix_name=name,
-                validation_values=[],
-                train_values=[],
-                higher_score_is_better=higher_score_is_better,
-            )
-
-    def get_train_scores(self, metric_name) -> List[float]:
-        return self._dataclass.metric_results[metric_name].train_values
-
-    def get_val_scores(self, metric_name: str) -> List[float]:
-        """
-        Return the validation scores for the main scoring metric.
-        """
-        return self._dataclass.metric_results[metric_name].validation_values
-
-    def get_final_validation_score(self, metric_name: str) -> float:
-        """
-        Return the latest validation score for the main scoring metric.
-        """
-        return self.get_val_scores(metric_name)[-1]
-
-    def get_best_validation_score(self, metric_name: str) -> float:
-        """
-        Return the best validation score for the main scoring metric.
-        """
-        if self.is_higher_score_better(metric_name):
-            f = np.max
-        else:
-            f = np.min
-
-        return f(self.get_val_scores(metric_name))
-
-    def get_n_epochs_to_best_validation_score(self, metric_name: str) -> int:
-        """
-        Return the number of epochs
-        """
-        if self.is_higher_score_better(metric_name):
-            f = np.argmax
-        else:
-            f = np.argmin
-
-        return f(self.get_val_scores(metric_name))
-
-    def is_higher_score_better(self, metric_name: str) -> bool:
-        """
-        Return True if higher scores are better for the main metric.
-
-        :return:
-        """
-        return self._dataclass.metric_results[metric_name].higher_score_is_better
-
-    def is_new_best_score(self, metric_name: str) -> bool:
-        """
-        Return True if the latest validation score is the new best score.
-
-        :return:
-        """
-        if self.get_best_validation_score(metric_name) in self.get_val_scores()[:-1]:
-            return False
-        return True
 
     def set_success(self) -> 'TrialSplit':
         """
@@ -877,30 +839,106 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
 
 
 class MetricResults(BaseAggregate[None, MetricResultsDataclass]):
-    pass
-    # TODO: logging at each epoch.
-    # TODO: epoch class and epoch location.
-    # TODO: this will be used for the Epoch to save the MetricResults with the _acquire_managed_subresource.
+
+    def _invariant(self):
+        self._assert(
+            self.is_deep,
+            f"self.is_deep should always be set to True for "
+            f"{self.__class__.__name__}", self.context)
+        super()._invariant()
 
     def _acquire_managed_subresource(self, *args, **kwds) -> SubAggregateT:
-        return copy.copy(self).at_epoch(*args, **kwds)
+        # TODO: epoch class and epoch location?
+        raise NotImplementedError("MetricResults has no subresource to manage as a terminal resource.")
 
-    def at_epoch(self, epoch: int, n_epochs: int) -> 'MetricResults':
-        """
-        Return the metric results for a specific epoch.
-        """
-        self.epoch: int = epoch
-        self.n_epochs: int = n_epochs
-        return self
+    @property
+    def name(self) -> str:
+        return self._dataclass.metric_name
 
-    def __iter__(self) -> Iterable[SubAggregateT]:
+    def add_train_result(self, score: float):
+        """
+        Add a train metric result.
+
+        :param name: name of the metric
+        :param score: the value to be logged
+        :param higher_score_is_better: wheter or not a higher score is better for this metric
+        """
+        self._dataclass.train_values.append(score)
+        self.flow.log_train_metric(self.name, score)
+        self.save(True)
+
+    def add_valid_result(self, score: float):
+        """
+        Add a validation metric result.
+
+        :param name: name of the metric
+        :param score: the value to be logged
+        :param higher_score_is_better: wheter or not a higher score is better for this metric
+        """
+        self._dataclass.validation_values.append(score)
+        self.flow.log_valid_metric(self.name, score)
+        self.save(True)
+
+    def get_train_scores(self) -> List[float]:
+        return self._dataclass.train_values
+
+    def get_valid_scores(self) -> List[float]:
+        """
+        Return the validation scores for the given scoring metric.
+        """
         return self._dataclass.validation_values
 
-    _ = """
-        def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: traceback):
-            self.flow.log_error(exc_val)
-            raise NotImplementedError("TODO: log MetricResultMetadata?")
-    """
+    def get_final_validation_score(self) -> float:
+        """
+        Return the latest validation score for the given scoring metric.
+        """
+        return self.get_valid_scores()[-1]
+
+    def get_best_validation_score(self) -> float:
+        """
+        Return the best validation score for the given scoring metric.
+        """
+        if self.is_higher_score_better():
+            f = np.max
+        else:
+            f = np.min
+
+        return f(self.get_valid_scores())
+
+    def get_n_epochs_to_best_validation_score(self) -> int:
+        """
+        Return the number of epochs
+        """
+        if self.is_higher_score_better():
+            f = np.argmax
+        else:
+            f = np.argmin
+
+        return f(self.get_valid_scores())
+
+    def is_higher_score_better(self) -> bool:
+        """
+        Return True if higher scores are better for the main metric.
+
+        :return:
+        """
+        return self._dataclass.higher_score_is_better
+
+    def is_new_best_score(self) -> bool:
+        """
+        Return True if the latest validation score is the new best score.
+
+        :return:
+        """
+        if self.get_best_validation_score() in self.get_valid_scores()[:-1]:
+            return False
+        return True
+
+    def __iter__(self) -> Iterable[SubAggregateT]:
+        """
+        Loop over validation values.
+        """
+        return self._dataclass.validation_values
 
 
 aggregate_2_subaggregate: OrderedDict[BaseAggregate, BaseAggregate] = OrderedDict([

@@ -547,6 +547,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         joiner.set_n_batches(n_batches)
 
         # start steps.
+        context.synchroneous()
         for step in list(self.values())[:-1]:
             step.start(context)
 

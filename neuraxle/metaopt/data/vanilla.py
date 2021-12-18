@@ -870,7 +870,7 @@ class AutoMLContext(ExecutionContext):
         if not new_context.has_service(ContextLock):
             new_context.register_service(
                 ContextLock,
-                None
+                ContextLock()
             )
         return new_context
 

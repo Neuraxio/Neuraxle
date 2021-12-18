@@ -5,13 +5,15 @@ import pytest
 from neuraxle.base import (BaseService, BaseStep, BaseTransformer,
                            ExecutionContext, Flow, HandleOnlyMixin, Identity,
                            MetaStep)
+from neuraxle.data_container import IDT
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import RandInt, Uniform
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
 from neuraxle.metaopt.auto_ml import AutoML, DefaultLoop, RandomSearch, Trainer
-from neuraxle.metaopt.callbacks import (CallbackList, EarlyStoppingCallback,
-                                        MetricCallback)
+from neuraxle.metaopt.callbacks import (ARG_X_INPUTTED, ARG_Y_EXPECTED,
+                                        ARG_Y_PREDICTD, CallbackList,
+                                        EarlyStoppingCallback, MetricCallback)
 from neuraxle.metaopt.data.aggregates import (BaseAggregate, Client,
                                               MetricResults, Project, Root,
                                               Round, Trial, TrialSplit,
@@ -41,9 +43,9 @@ from testing.metaopt.test_repo_dataclasses import (SOME_FULL_SCOPED_LOCATION,
 
 
 def test_scoped_cascade_does_the_right_logging(tmpdir):
-    dact_train: DACT = DACT(
+    dact_train: DACT[IDT, ARG_X_INPUTTED, ARG_Y_PREDICTD] = DACT(
         ids=list(range(0, 10)), di=list(range(0, 10)), eo=list(range(100, 110)))
-    dact_valid: DACT = DACT(
+    dact_valid: DACT[IDT, ARG_X_INPUTTED, ARG_Y_PREDICTD] = DACT(
         ids=list(range(10, 20)), di=list(range(10, 20)), eo=list(range(110, 120)))
     hp_optimizer: BaseHyperparameterOptimizer = GridExplorationSampler(
         main_metric_name='MAE', expected_n_trials=1)
@@ -79,17 +81,18 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
                         tss: TrialSplit = tss.with_n_epochs(n_epochs)
 
                         for _ in range(n_epochs):
-                            tss.next_epoch()
+                            e = tss.next_epoch()
 
-                            p, dact_pred_train = p.handle_fit_transform(
+                            p, eval_dact_train = p.handle_fit_transform(
                                 dact_train, tss.train_context())
-                            dact_pred_val = p.handle_predict(
+                            eval_dact_valid = p.handle_predict(
                                 dact_valid.without_eo(), tss.validation_context())
 
                             if callbacks.call(
                                 tss,
-                                dact_train, dact_pred_train,
-                                dact_valid, dact_pred_val,
+                                eval_dact_train.with_eo(dact_train.eo),
+                                eval_dact_valid.with_eo(dact_valid.eo),
+                                e == n_epochs
                             ):
                                 break
 

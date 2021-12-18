@@ -25,14 +25,24 @@ Training callback classes.
 """
 
 import traceback
-from abc import ABC, abstractmethod
-from typing import Callable, List
-
 import warnings
-from neuraxle.base import BaseStep, BaseTransformer, ExecutionContext, MixinForBaseTransformer
-from neuraxle.logging.warnings import warn_deprecated_class, warn_deprecated_arg
-from neuraxle.data_container import DataContainer
-from neuraxle.metaopt.data.aggregates import TrialSplit
+from abc import ABC, abstractmethod
+from typing import Callable, Union, List, Optional
+
+from neuraxle.base import (BaseStep, BaseTransformer, ExecutionContext,
+                           MixinForBaseTransformer)
+from neuraxle.data_container import IDT, DIT, EOT
+from neuraxle.data_container import DataContainer as DACT
+from neuraxle.logging.warnings import (warn_deprecated_arg,
+                                       warn_deprecated_class)
+from neuraxle.metaopt.data.aggregates import TrialSplit, MetricResults
+
+
+ARG_X_INPUTTED = DIT
+ARG_Y_EXPECTED = EOT
+ARG_Y_PREDICTD = DIT
+OPTIONAL_ARG_CONTEXT = Optional[ExecutionContext]
+RETURNS_SCORE = float
 
 
 class BaseCallback(ABC):
@@ -48,9 +58,10 @@ class BaseCallback(ABC):
 
     @abstractmethod
     def call(
-        self, trial_split: TrialSplit,
-        input_train: DataContainer, pred_train: DataContainer,
-        input_val: DataContainer, pred_val: DataContainer,
+        self,
+        trial_split: TrialSplit,
+        dact_train: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
+        dact_valid: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
         is_finished_and_fitted: bool = False
     ) -> bool:
         pass
@@ -71,15 +82,16 @@ class EarlyStoppingCallback(BaseCallback):
         self.metric_name = None
 
     def call(
-        self, trial_split: TrialSplit,
-        input_train: DataContainer, pred_train: DataContainer,
-        input_val: DataContainer, pred_val: DataContainer,
+        self,
+        trial_split: TrialSplit,
+        dact_train: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
+        dact_valid: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
         is_finished_and_fitted: bool = False
     ) -> bool:
         if self.metric_name is None:
-            validation_scores = trial_split.get_val_scores()
+            validation_scores = trial_split.get_valid_scores()
         else:
-            validation_scores = trial_split.get_val_scores(self.metric_name)
+            validation_scores = trial_split.get_valid_scores(self.metric_name)
 
         if len(validation_scores) > self.n_epochs_without_improvement:
             higher_score_is_better = trial_split.is_higher_score_better()
@@ -111,17 +123,16 @@ class MetaCallback(BaseCallback):
 
     @abstractmethod
     def call(
-        self, trial_split: TrialSplit,
-        input_train: DataContainer, pred_train: DataContainer,
-        input_val: DataContainer, pred_val: DataContainer,
+        self,
+        trial_split: TrialSplit,
+        dact_train: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
+        dact_valid: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
         is_finished_and_fitted: bool = False
     ) -> bool:
         return self.wrapped_callback.call(
             trial_split,
-            input_train,
-            pred_train,
-            input_val,
-            pred_val,
+            dact_train,
+            dact_valid,
             is_finished_and_fitted
         )
 
@@ -135,19 +146,20 @@ class IfBestScore(MetaCallback):
     """
 
     def call(
-        self, trial_split: TrialSplit,
-        input_train: DataContainer, pred_train: DataContainer,
-        input_val: DataContainer, pred_val: DataContainer,
+        self,
+        trial_split: TrialSplit,
+        dact_train: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
+        dact_valid: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
         is_finished_and_fitted: bool = False
     ) -> bool:
         if trial_split.is_new_best_score():
-            if self.wrapped_callback.call(
-                self, trial_split,
-                input_train, pred_train,
-                input_val, pred_val,
+            return self.wrapped_callback.call(
+                self,
+                trial_split,
+                dact_train,
+                dact_valid,
                 is_finished_and_fitted
-            ):
-                return True
+            )
         return False
 
 
@@ -160,16 +172,18 @@ class IfLastStep(MetaCallback):
     """
 
     def call(
-        self, trial_split: TrialSplit,
-        input_train: DataContainer, pred_train: DataContainer,
-        input_val: DataContainer, pred_val: DataContainer,
+        self,
+        trial_split: TrialSplit,
+        dact_train: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
+        dact_valid: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
         is_finished_and_fitted: bool = False
     ) -> bool:
         if trial_split.epoch == trial_split.n_epochs or is_finished_and_fitted:
             self.wrapped_callback.call(
-                self, trial_split,
-                input_train, pred_train,
-                input_val, pred_val,
+                self,
+                trial_split,
+                dact_train,
+                dact_valid,
                 is_finished_and_fitted
             )
             return True
@@ -191,9 +205,10 @@ class StepSaverCallback(BaseCallback):
         self.label = label
 
     def call(
-        self, trial_split: TrialSplit,
-        input_train: DataContainer, pred_train: DataContainer,
-        input_val: DataContainer, pred_val: DataContainer,
+        self,
+        trial_split: TrialSplit,
+        dact_train: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
+        dact_valid: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
         is_finished_and_fitted: bool = False
     ) -> bool:
         trial_split.save_model(self.label)
@@ -227,18 +242,18 @@ class CallbackList(BaseCallback):
         return self.callbacks[item]
 
     def call(
-        self, trial_split: TrialSplit,
-        input_train: DataContainer, pred_train: DataContainer,
-        input_val: DataContainer, pred_val: DataContainer,
+        self,
+        trial_split: TrialSplit,
+        dact_train: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
+        dact_valid: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
         is_finished_and_fitted: bool = False
     ) -> bool:
-        is_finished_and_fitted = False
         for callback in self.callbacks:
             try:
                 if callback.call(
                     trial_split=trial_split,
-                    input_train=input_train, pred_train=pred_train,
-                    input_val=input_val, pred_val=pred_val,
+                    dact_train=dact_train,
+                    dact_valid=dact_valid,
                     is_finished_and_fitted=is_finished_and_fitted
                 ):
                     is_finished_and_fitted = True
@@ -270,53 +285,43 @@ class MetricCallback(BaseCallback):
 
     def __init__(
         self,
-        name: str, metric_function: Callable, higher_score_is_better: bool,
-        log_metrics=True, pass_context_to_metric_function: bool = False
+        name: str,
+        metric_function: Callable[[ARG_Y_EXPECTED, ARG_Y_PREDICTD, OPTIONAL_ARG_CONTEXT], RETURNS_SCORE],
+        higher_score_is_better: bool,
+        log_metrics=True,
+        pass_context_to_metric_function: bool = False
     ):
+        # TODO: make a dictionnary somewhere to store predefined metrics.
         self.name = name
-        self.metric_function = metric_function
+        self.metric_function: Callable[
+            [ARG_Y_EXPECTED, ARG_Y_PREDICTD, OPTIONAL_ARG_CONTEXT], RETURNS_SCORE] = metric_function
         self.higher_score_is_better = higher_score_is_better
         self.log_metrics = log_metrics
         self.pass_context_to_metric_function = pass_context_to_metric_function
 
     def call(
-        self, trial_split: TrialSplit,
-        input_train: DataContainer, pred_train: DataContainer,
-        input_val: DataContainer, pred_val: DataContainer,
+        self,
+        trial_split: TrialSplit,
+        dact_train: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
+        dact_valid: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
         is_finished_and_fitted: bool = False
     ) -> bool:
+        f = self.metric_function
 
         if self.pass_context_to_metric_function:
-            train_score = self.metric_function(
-                pred_train.expected_outputs, pred_train.data_inputs,
-                context=trial_split.validation_context()
-            )
-            validation_score = self.metric_function(
-                pred_val.expected_outputs, pred_val.data_inputs,
-                context=trial_split.validation_context()
-            )
-
+            train_score: float = f(dact_train.eo, dact_train.di, trial_split.validation_context())
+            valid_score: float = f(dact_valid.eo, dact_valid.di, trial_split.validation_context())
         else:
-            train_score = self.metric_function(
-                pred_train.expected_outputs, pred_train.data_inputs)
-            validation_score = self.metric_function(
-                pred_val.expected_outputs, pred_val.data_inputs)
+            train_score: float = f(dact_train.eo, dact_train.di)
+            valid_score: float = f(dact_valid.eo, dact_valid.di)
 
-        trial_split.add_metric_results_train(
-            name=self.name,
-            score=train_score,
-            higher_score_is_better=self.higher_score_is_better,
-            log_metric=self.log_metrics
-        )
+        with trial_split.managed_metric(self.name, self.higher_score_is_better) as metric:
+            metric: MetricResults = metric  # just a typing comment here for convenience.
 
-        trial_split.add_metric_results_validation(
-            name=self.name,
-            score=validation_score,
-            higher_score_is_better=self.higher_score_is_better,
-            log_metric=self.log_metrics
-        )
+            metric.add_train_result(train_score)
+            metric.add_valid_result(valid_score)
 
-        return False
+        return is_finished_and_fitted
 
 
 class ScoringCallback(MetricCallback):
@@ -330,8 +335,11 @@ class ScoringCallback(MetricCallback):
 
     def __init__(
         self,
-        metric_function: Callable, name='main', higher_score_is_better: bool = True,
-        log_metrics: bool = True, pass_context_to_metric_function: bool = False
+        metric_function: Callable[[ARG_Y_EXPECTED, ARG_Y_PREDICTD, OPTIONAL_ARG_CONTEXT], RETURNS_SCORE],
+        name='main',
+        higher_score_is_better: bool = True,
+        log_metrics: bool = True,
+        pass_context_to_metric_function: bool = False
     ):
         MetricCallback.__init__(
             self,

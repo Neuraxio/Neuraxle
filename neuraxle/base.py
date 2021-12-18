@@ -794,6 +794,11 @@ class TruncableServiceMixin(_HasChildrenMixin):
         :param service_abstract_class_type: service type
         :return: self
         """
+        services = self.services
+        if not self.has_service(service_abstract_class_type) and not isinstance(service_abstract_class_type, str):
+            service_abstract_class_type = service_abstract_class_type.__class__.__name__
+        if isinstance(service_abstract_class_type, str):
+            services = {k.__name__: v for k, v in services.items()}
         return self[service_abstract_class_type]
 
     def has_service(self, service_abstract_class_type: Type['BaseServiceT']) -> bool:
@@ -909,8 +914,17 @@ class Flow(BaseService):
     def log(self, message: str, level: int = logging.INFO):
         self.logger.log(level, message)
 
-    def log_metric(self, metric_name: str, metric_value: float):
-        self.log(f'Metric `{metric_name}`: {metric_value}.')
+    def log_train_metric(self, metric_name: str, metric_value: float):
+        """
+        Log training metric
+        """
+        self.log(f'Train Metric `{metric_name}`: {metric_value}')
+
+    def log_valid_metric(self, metric_name: str, metric_value: float):
+        """
+        Log validation metric
+        """
+        self.log(f'Valid Metric `{metric_name}`: {metric_value}')
 
     def log_model(self, model: 'BaseStep'):
         self.log(f'Model: {model}')
@@ -990,6 +1004,9 @@ class ContextLock(BaseService):
             self._lock = Manager().RLock()
         return self._lock
 
+    def copy(self):
+        return ContextLock(self._lock)
+
     @property
     def lock(self):
         return self._lock
@@ -1061,7 +1078,8 @@ class ExecutionContext(TruncableService):
         f: Flow = self.get_service(Flow)
         return f.link_context(self)
 
-    def get_new_cache_folder(self) -> str:
+    @staticmethod
+    def get_new_cache_folder() -> str:
         return os.path.join(tempfile.gettempdir(), 'neuraxle-cache', datetime.datetime.now().strftime("%Y-%m-%d_%Hh%Mm%Ss_%fμs"))
 
     def set_execution_phase(self, phase: ExecutionPhase) -> 'ExecutionContext':
@@ -1209,10 +1227,10 @@ class ExecutionContext(TruncableService):
         """
         Synchronous context: Create a managed reentrant lock (mutex).
         """
-        if self.get_service(ContextLock) is None:
+        if not self.has_service(ContextLock):
             self.register_service(ContextLock, ContextLock())
         if isinstance(self.get_service(ContextLock).lock, str):
-            raise RuntimeError(self.get_service(ContextLock))
+            raise RuntimeError(self.get_service(ContextLock).lock)
         return self.get_service(ContextLock).synchroneous()
 
     def thread_safe(self) -> Tuple[RLock, 'ExecutionContext']:
@@ -1229,9 +1247,9 @@ class ExecutionContext(TruncableService):
         threaded_context = self.copy()
 
         # Not passing parents to threads. Could be refactored.
-        self.parents = []
+        threaded_context.parents = []
         # Compensate lost parents:
-        self.root = self.get_path()
+        threaded_context.root = self.get_path()
 
         threaded_context.services[ContextLock]._lock = (
             "The context is temporarily inconsistent: you must must call "
@@ -1298,7 +1316,8 @@ class ExecutionContext(TruncableService):
         .. seealso::
             :class:`~neuraxle.metaopt.data.vanilla.ScopedLocation`
         """
-        loc_attrs = self.loc.as_list(stringify=True) if self.loc is not None else []
+        loc_attrs = self.get_service("ScopedLocation").as_list(
+            stringify=True) if self.has_service("ScopedLocation") else []
         arr = ["neuraxle"] + loc_attrs
         if include_step_names:
             arr.extend(self.get_names())
