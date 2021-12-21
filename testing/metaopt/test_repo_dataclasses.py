@@ -43,7 +43,6 @@ BASE_TRIAL_ARGS = {
     "created_time": datetime.datetime.now(),
     "start_time": datetime.datetime.now() + datetime.timedelta(minutes=1),
     "end_time": datetime.datetime.now() + datetime.timedelta(days=1),
-    "log": "some_log",
 }
 
 SOME_METRIC_RESULTS_DATACLASS = MetricResultsDataclass(
@@ -198,3 +197,11 @@ def test_logger_level_works_with_multiple_levels():
     assert "c1" in l0
     assert "c1" in l1
     assert c1.loc != c0.loc
+
+
+@pytest.mark.parametrize("dataclass_type", list(dataclass_2_id_attr.keys()))
+def test_dataclass_id_attr_get_set(dataclass_type):
+    _id = 9000
+    dc = dataclass_type().set_id(_id)
+
+    assert dc.get_id() == _id

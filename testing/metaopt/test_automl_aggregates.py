@@ -77,16 +77,18 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
                 rs: Round = rs.with_optimizer(hp_optimizer=hp_optimizer, hps=hps)
                 with rs.new_rvs_trial() as ts:
                     ts: Trial = ts
-                    with ts.new_split(continue_loop_on_error=False) as tss:
+                    with ts.new_validation_split(continue_loop_on_error=False) as tss:
                         tss: TrialSplit = tss.with_n_epochs(n_epochs)
 
                         for _ in range(n_epochs):
                             e = tss.next_epoch()
 
                             p, eval_dact_train = p.handle_fit_transform(
-                                dact_train, tss.train_context())
+                                dact_train,
+                                tss.train_context())
                             eval_dact_valid = p.handle_predict(
-                                dact_valid.without_eo(), tss.validation_context())
+                                dact_valid.without_eo(),
+                                tss.validation_context())
 
                             if callbacks.call(
                                 tss,

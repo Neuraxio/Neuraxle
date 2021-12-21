@@ -35,7 +35,7 @@ import logging
 import os
 from abc import ABC, abstractclassmethod, abstractmethod, abstractproperty
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from enum import Enum
 from json.encoder import JSONEncoder
 from numbers import Number
@@ -81,6 +81,7 @@ class ScopedLocation:
         """
         Get sublocation attr from the provided :class:`BaseMetadata` type,
         or otherwise get a slice of the same type, sliced from a :class:`BaseMetadata` type range of attributes to keep.
+        If the key is a slice, the end loc is kept as inclusive.
         """
         if key is None:
             return ScopedLocation()
@@ -208,7 +209,8 @@ class ScopedLocation:
         """
         _list = self.as_list()
         dataklass: Type[BaseDataclass] = list(dataclass_2_id_attr.keys())[len(_list) - 1]
-        return dataklass(_list[-1])
+
+        return dataklass().set_id(_list[-1])
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({repr(self.as_list())[1:-1]})"
@@ -239,15 +241,17 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
     def get_id(self) -> ScopedLocationAttr:
         return getattr(self, self._id_attr_name)
 
-    def set_id(self, _id: ScopedLocationAttr) -> None:
+    def set_id(self, _id: ScopedLocationAttr) -> 'BaseDataclass':
         setattr(self, self._id_attr_name, _id)
         self._invariant()
+        return self
 
     def get_sublocation(self) -> Union[List[SubDataclassT], OrderedDict[str, SubDataclassT]]:
         return getattr(self, dataclass_2_subloc_attr[self.__class__])
 
-    def set_sublocation(self, sublocation: Union[List[SubDataclassT], OrderedDict[str, SubDataclassT]]) -> None:
+    def set_sublocation(self, sublocation: Union[List[SubDataclassT], OrderedDict[str, SubDataclassT]]) -> 'BaseDataclass':
         setattr(self, dataclass_2_subloc_attr[self.__class__], sublocation)
+        return self
 
     def __getitem__(self, loc: ScopedLocation) -> 'SubDataclassT':
         subdataklass: Type[SubDataclassT] = dataclass_2_subdataclass[self.__class__]
@@ -375,20 +379,29 @@ class BaseTrialDataclassMixin:
     Mixin class for :class:`TrialMetadata` and :class:`TrialSplitMetadata` that
     also must inherit from :class:`BaseMetadata`.
     """
-    hyperparams: HyperparameterSamples
+    hyperparams: HyperparameterSamples = field(default_factory=lambda: HyperparameterSamples())
     status: TrialStatus = TrialStatus.PLANNED
     created_time: datetime.datetime = field(default_factory=datetime.datetime.now)
     start_time: datetime.datetime = field(default_factory=datetime.datetime.now)
     end_time: datetime.datetime = None
-    log: str = ""
 
-    def end(self, status: TrialStatus, add_to_log: str = "") -> 'BaseTrialDataclassMixin':
-        ################################################################################
-        # TODO: use this method. #######################################################
-        ################################################################################
+    def _invariant(self):
+        super()._invariant()
+        if not isinstance(self.hyperparams, HyperparameterSamples):
+            raise ValueError(
+                f"{self.__class__.__name__} must have a HyperparameterSamples as "
+                f"hyperparams. Got self.hyperparams={self.hyperparams}.")
+
+    def start(self) -> 'BaseTrialDataclassMixin':
+        self.status = TrialStatus.RUNNING
+        self.start_time = datetime.datetime.now()
+        self._invariant()
+        return self
+
+    def end(self, status: TrialStatus) -> 'BaseTrialDataclassMixin':
         self.status = status
         self.end_time = datetime.datetime.now()
-        self.log += add_to_log
+        self._invariant()
         return self
 
 
@@ -418,9 +431,6 @@ class ProjectDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ClientDatacl
     clients: OrderedDict[str, 'ClientDataclass'] = field(
         default_factory=lambda: OrderedDict({DEFAULT_CLIENT: ClientDataclass()}))
 
-    def get_id(self) -> ScopedLocationAttrStr:
-        return self.project_name
-
 
 @dataclass(order=True)
 class ClientDataclass(DataclassHasListMixin, BaseDataclass['RoundDataclass']):
@@ -429,17 +439,11 @@ class ClientDataclass(DataclassHasListMixin, BaseDataclass['RoundDataclass']):
     # By default, the first metric is the main one.  # TODO: make it configurable, or in round?
     main_metric_name: str = None
 
-    def get_id(self) -> ScopedLocationAttrStr:
-        return self.client_name
-
 
 @dataclass(order=True)
 class RoundDataclass(DataclassHasListMixin, BaseDataclass['TrialDataclass']):
     round_number: ScopedLocationAttrInt = 0
     trials: List['TrialDataclass'] = field(default_factory=list)
-
-    def get_id(self) -> ScopedLocationAttrInt:
-        return self.round_number
 
 
 @dataclass(order=True)
@@ -452,9 +456,6 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
     trial_number: ScopedLocationAttrInt = 0
     validation_splits: List['TrialSplitDataclass'] = field(default_factory=list)
 
-    def get_id(self) -> ScopedLocationAttrInt:
-        return self.trial_number
-
 
 @dataclass(order=True)
 class TrialSplitDataclass(DataclassHasOrderedDictMixin, BaseTrialDataclassMixin, BaseDataclass['MetricResultsDataclass']):
@@ -464,9 +465,6 @@ class TrialSplitDataclass(DataclassHasOrderedDictMixin, BaseTrialDataclassMixin,
     split_number: ScopedLocationAttrInt = 0
     metric_results: OrderedDict[str, 'MetricResultsDataclass'] = field(default_factory=OrderedDict)
     # introspection_data: RecursiveDict[str, Number] = field(default_factory=RecursiveDict)
-
-    def get_id(self) -> ScopedLocationAttrInt:
-        return self.split_number
 
 
 @dataclass(order=True)
@@ -478,9 +476,6 @@ class MetricResultsDataclass(DataclassHasListMixin, BaseDataclass[float]):
     validation_values: List[float] = field(default_factory=list)  # one per epoch.
     train_values: List[float] = field(default_factory=list)
     higher_score_is_better: bool = True
-
-    def get_id(self) -> ScopedLocationAttrStr:
-        return self.metric_name
 
 
 dataclass_2_id_attr: OrderedDict[BaseDataclass, str] = OrderedDict([
@@ -548,10 +543,17 @@ class MetadataJSONEncoder(JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
+        if isinstance(obj, TrialStatus):
+            return obj.value
         if isinstance(obj, RecursiveDict):
             return obj.to_flat_dict()
-        elif type(obj) in str_2_dataclass:
-            return {'__type__': type(obj).__name__, **obj.asdict()}  # TODO: **self.default(obj) ?
+        if isinstance(obj, BaseDataclass):
+            _dict = {
+                k: self.default(v)
+                for k, v in asdict(obj).items()
+                if v is not None
+            }
+            return {'__type__': type(obj).__name__, **_dict}
         else:
             return JSONEncoder.default(self, obj)
 

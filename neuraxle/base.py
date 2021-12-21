@@ -978,12 +978,13 @@ class Flow(BaseService):
         if exception is not None:
             self.logger.exception(exception)
 
-    def log_aborted(self, status: TrialStatus = TrialStatus.ABORTED):
+    def log_aborted(self, exception: Exception):
         """
         Probably aborted with CTRL+C
         """
         self.log('Aborted!')
-        self.log_status(status)
+        self.log_error(exception)
+        self.log_status(TrialStatus.ABORTED)
         # TODO:
         # repo_trial_split_number = 0 if repo_trial_split is None else repo_trial_split.split_number + 1
         # trial_split_description = '{}/{} split {}/{}\nhyperparams: {}'.format(
