@@ -56,7 +56,7 @@ from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import HyperparameterDistribution
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
-from neuraxle.logging.logging import NEURAXLE_ROOT_LOGGER_NAME, NeuraxleLogger
+from neuraxle.logging.logging import NEURAXLE_LOGGER_NAME, NeuraxleLogger
 from neuraxle.logging.warnings import warn_deprecated_arg
 
 
@@ -743,44 +743,43 @@ class MetaService(MetaServiceMixin, BaseService):
         MetaServiceMixin.__init__(self, wrapped=wrapped)
 
 
+ServiceName = Union[str, Type[BaseServiceT]]
 NamedServicesList = List[Union[Tuple[str, BaseServiceT], BaseServiceT]]
 
 
 class TruncableServiceMixin(_HasChildrenMixin):
 
-    def __init__(self, services: Dict[Type['BaseServiceT'], 'BaseServiceT']):
+    def __init__(self, services: Dict[ServiceName, 'BaseServiceT']):
         _HasChildrenMixin.__init__(self)
         self.set_services(services)
 
-    def set_services(self, services: Dict[Type['BaseServiceT'], 'BaseServiceT']):
+    def set_services(self, services: Dict[ServiceName, 'BaseServiceT']):
         services = services or {}
-        for t, service in services.items():
-            self._validate_service_type(t, service)
-        self.services: Dict[Type['BaseServiceT'], 'BaseServiceT'] = services
+        services = {self._sanitize_service_name(k): v for k, v in services.items()}
+        self.services: Dict[str, 'BaseServiceT'] = services
         return self
 
-    def _validate_service_type(self, t: Type[BaseServiceT], service: BaseServiceT):
-        if isinstance(t, str):
-            t: Type = object
-        if not (isinstance(service, t) and isinstance(service, BaseService)):
-            warnings.warn(f'Service {service} is not an instance of {t} or {BaseService}, but it should.')
+    def _sanitize_service_name(self, service_name: ServiceName) -> str:
+        if isinstance(service_name, str):
+            return service_name
+        return service_name.__name__  # is a class / type
 
     def register_service(
-        self, service_abstract_class_type: Type['BaseServiceT'], service_instance: 'BaseServiceT'
+        self, service_type: ServiceName, service_instance: 'BaseServiceT'
     ) -> 'ExecutionContext':
         """
         Register base class instance inside the services. This is useful to register services.
         Make sure the service is an instance of the class :class:`~neuraxle.base.BaseService`.
 
-        :param service_abstract_class_type: base type
+        :param service_type: base type
         :param service_instance:  instance
         :return: self
         """
-        self._validate_service_type(service_abstract_class_type, service_instance)
-        self[service_abstract_class_type] = service_instance
+        service_type: str = self._sanitize_service_name(service_type)
+        self[service_type] = service_instance
         return self
 
-    def get_services(self) -> Dict[Type['BaseServiceT'], 'BaseServiceT']:
+    def get_services(self) -> Dict[ServiceName, 'BaseServiceT']:
         """
         Get the registered instances in the services.
 
@@ -788,31 +787,25 @@ class TruncableServiceMixin(_HasChildrenMixin):
         """
         return self.services
 
-    def get_service(self, service_abstract_class_type: Type['BaseServiceT']) -> object:
+    def get_service(self, service_type: ServiceName) -> object:
         """
         Get the registered instance for the given abstract class :class:`~neuraxle.base.BaseService` type.
         It is common to use service types as keys in the services dictionary.
 
-        :param service_abstract_class_type: service type
+        :param service_type: service type
         :return: self
         """
-        services = self.services
-        if not self.has_service(service_abstract_class_type) and not isinstance(service_abstract_class_type, str):
-            service_abstract_class_type = service_abstract_class_type.__class__.__name__
-        if isinstance(service_abstract_class_type, str):
-            services = {k.__name__: v for k, v in services.items()}
-        return self[service_abstract_class_type]
+        service_type: str = self._sanitize_service_name(service_type)
+        return self[service_type]
 
-    def has_service(self, service_abstract_class_type: Type['BaseServiceT']) -> bool:
+    def has_service(self, service_type: ServiceName) -> bool:
         """
         Return a bool indicating if the service has been registered.
 
-        :param service_abstract_class_type: base type
+        :param service_type: base type
         :return: if the service registered or not
         """
-        return (service_abstract_class_type in self.services) if service_abstract_class_type.__class__ != str else (
-            str(service_abstract_class_type) in [str(s) for s in self.services.keys()]
-        )
+        return service_type in self
 
     def get_children(self) -> List[BaseServiceT]:
         """
@@ -826,28 +819,35 @@ class TruncableServiceMixin(_HasChildrenMixin):
         """
         return self.services.values()
 
-    def __getitem__(self, service_abstract_class_type: Type['BaseServiceT']) -> 'BaseServiceT':
+    def __contains__(self, item: ServiceName) -> bool:
+        """
+        Return a bool indicating if the service has been registered.
+
+        :param item: base type
+        :return: if the service registered or not
+        """
+        return self._sanitize_service_name(item) in self.services
+
+    def __getitem__(self, service_type: ServiceName) -> 'BaseServiceT':
         """
         Get the service from its base type key (or string equivalent of this key).
 
-        :param service_abstract_class_type: base type
+        :param service_type: base type
         :return: service
         """
-        services = self.services
-        if isinstance(service_abstract_class_type, str):
-            services = {k.__name__: v for k, v in services.items()}
-        return services[service_abstract_class_type]
+        service_type: str = self._sanitize_service_name(service_type)
+        return self.services[service_type]
 
-    def __setitem__(self, service_abstract_class_type: Type['BaseServiceT'], service_instance: 'BaseServiceT'):
+    def __setitem__(self, service_type: ServiceName, service_instance: 'BaseServiceT'):
         """
         Set the service in the services dictionary.
 
-        :param service_abstract_class_type: base type that is a type of :class:`~neuraxle.base.BaseService`
+        :param service_type: base type that is a type of :class:`~neuraxle.base.BaseService`
         :param service_instance: instance that is an instance of :class:`~neuraxle.base.BaseService`
         :return: self
         """
-        self._validate_service_type(service_abstract_class_type, service_instance)
-        self.services[service_abstract_class_type] = service_instance
+        service_type: str = self._sanitize_service_name(service_type)
+        self.services[service_type] = service_instance
         return self
 
 
@@ -876,11 +876,11 @@ class TrialStatus(Enum):
     """
     Enum of the possible states of a trial.
     """
-    PLANNED = 'planned'
-    RUNNING = 'running'
-    ABORTED = 'aborted'  # TODO: consider aborted.
-    FAILED = 'failed'
-    SUCCESS = 'success'
+    PLANNED = 'PLANNED'
+    RUNNING = 'RUNNING'
+    ABORTED = 'ABORTED'
+    FAILED = 'FAILED'
+    SUCCESS = 'SUCCESS'
 
 
 class Flow(BaseService):
@@ -1061,7 +1061,7 @@ class ExecutionContext(TruncableService):
         execution_mode: ExecutionMode = ExecutionMode.FIT_OR_FIT_TRANSFORM_OR_TRANSFORM,
         stripped_saver: BaseSaver = None,
         parents: List['BaseStep'] = None,
-        services: Dict[Type['BaseServiceT'], 'BaseServiceT'] = None,
+        services: Dict[ServiceName, 'BaseServiceT'] = None,
     ):
         TruncableService.__init__(self, services=services)
         self.register_service(Flow, flow or Flow())
@@ -1097,7 +1097,7 @@ class ExecutionContext(TruncableService):
         self.execution_phase: ExecutionPhase = phase
         return self
 
-    def set_service_locator(self, services: Dict[Type['BaseServiceT'], 'BaseServiceT']) -> 'ExecutionContext':
+    def set_service_locator(self, services: Dict[ServiceName, 'BaseServiceT']) -> 'ExecutionContext':
         """
         Register abstract class type instances that inherit and implement
         the class :class:`~neuraxle.base.BaseService`.
@@ -1252,7 +1252,7 @@ class ExecutionContext(TruncableService):
         # Compensate lost parents:
         threaded_context.root = self.get_path()
 
-        threaded_context.services[ContextLock]._lock = (
+        threaded_context.get_service(ContextLock)._lock = (
             "The context is temporarily inconsistent: you must must call "
             "self.restore_lock(lock) with the lock passed to the thread to "
             "be fine again. That is the lock that has been returned by "
@@ -1319,7 +1319,7 @@ class ExecutionContext(TruncableService):
         """
         loc_attrs = self.get_service("ScopedLocation").as_list(
             stringify=True) if self.has_service("ScopedLocation") else []
-        arr = [NEURAXLE_ROOT_LOGGER_NAME] + loc_attrs
+        arr = [NEURAXLE_LOGGER_NAME] + loc_attrs
         if include_step_names:
             arr.extend(self.get_names())
         return ".".join(arr)
@@ -4061,7 +4061,7 @@ class LocalServiceAssertionWrapper(WillProcessAssertionMixin, MetaStep):
                 f'There is also the option to register all services inside the ExecutionContext'
             )
             self._assert(
-                context.has_service(service_abstract_class_type=service_type),
+                context.has_service(service_type=service_type),
                 err_message,
                 context
             )

@@ -110,7 +110,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDa
     """
 
     def __init__(self, _dataclass: SubDataclassT, context: AutoMLContext, is_deep=False):
-        BaseService.__init__(self)
+        BaseService.__init__(self, name=f"{self.__class__.__name__}_{_dataclass.get_id()}")
         _CouldHaveContext.__init__(self)
         self._dataclass: SubDataclassT = _dataclass
         self.context: AutoMLContext = context.push_attr(_dataclass)
@@ -600,7 +600,7 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
             if e is None:
                 self.flow.log_success()
             else:
-                if isinstance(e, SystemExit):
+                if isinstance(e, SystemExit) or isinstance(e, KeyboardInterrupt):
                     self.flow.log_aborted()
                 else:
                     self.flow.log_failure(e)
@@ -851,7 +851,7 @@ class MetricResults(BaseAggregate[None, MetricResultsDataclass]):
         raise NotImplementedError("MetricResults has no subresource to manage as a terminal resource.")
 
     @property
-    def name(self) -> str:
+    def metric_name(self) -> str:
         return self._dataclass.metric_name
 
     def add_train_result(self, score: float):
@@ -863,7 +863,7 @@ class MetricResults(BaseAggregate[None, MetricResultsDataclass]):
         :param higher_score_is_better: wheter or not a higher score is better for this metric
         """
         self._dataclass.train_values.append(score)
-        self.flow.log_train_metric(self.name, score)
+        self.flow.log_train_metric(self.metric_name, score)
         self.save(True)
 
     def add_valid_result(self, score: float):
@@ -875,7 +875,7 @@ class MetricResults(BaseAggregate[None, MetricResultsDataclass]):
         :param higher_score_is_better: wheter or not a higher score is better for this metric
         """
         self._dataclass.validation_values.append(score)
-        self.flow.log_valid_metric(self.name, score)
+        self.flow.log_valid_metric(self.metric_name, score)
         self.save(True)
 
     def get_train_scores(self) -> List[float]:

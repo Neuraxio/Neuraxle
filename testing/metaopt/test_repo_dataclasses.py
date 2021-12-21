@@ -188,15 +188,13 @@ def test_logger_level_works_with_multiple_levels():
     finally:
         c0.free_scoped_logger_file_handler()
 
-    # with open(c0.repo.get_scoped_logger_path(ScopedLocation()), "r") as f:
-    #     l0 = "\n\r".join(f.readlines())
-    # with open(c1.repo.get_scoped_logger_path(ScopedLocation(DEFAULT_PROJECT)), "r") as f:
-    #     l1 = "\n\r".join(f.readlines())
     l0 = c0.read_scoped_logger_file()
     l1 = c1.read_scoped_logger_file()
 
     assert l0 != l1
     assert len(l0) > len(l1)
+    assert "c0" in l0
     assert "c0" not in l1
     assert "c1" in l0
+    assert "c1" in l1
     assert c1.loc != c0.loc

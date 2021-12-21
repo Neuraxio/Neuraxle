@@ -126,6 +126,12 @@ def test_ensure_consistent_subtypes_lozenge(_type: BaseAggregate):
     assert _subdataclass_dataclass == _subdataclass_agg
 
 
+cant_be_shallow_aggs = [
+    TrialSplit,
+    MetricResults,
+]
+
+
 @pytest.mark.parametrize("aggregate_class", list(aggregate_2_subaggregate.keys()))
 @pytest.mark.parametrize("is_deep", [True, False])
 def test_aggregates_creation(aggregate_class: Type[BaseAggregate], is_deep):
@@ -142,10 +148,17 @@ def test_aggregates_creation(aggregate_class: Type[BaseAggregate], is_deep):
         dataclass = dataclass.shallow()
     assert dataclass == context.repo.load(scoped_loc, deep=is_deep)
 
-    aggregate = aggregate_class(dataclass, context.with_loc(scoped_loc.popped()), is_deep=is_deep)
+    if aggregate_class in cant_be_shallow_aggs and not is_deep:
+        with pytest.raises(AssertionError):
 
-    assert True
-    aggregate.save(deep=False)
-    assert aggregate._dataclass == dataclass
-    assert aggregate._dataclass == context.repo.load(scoped_loc, deep=is_deep)
-    assert isinstance(aggregate, aggregate_class)
+            aggregate = aggregate_class(dataclass, context.with_loc(
+                scoped_loc.popped()), is_deep=is_deep)
+    else:
+        if True:
+            aggregate = aggregate_class(dataclass, context.with_loc(
+                scoped_loc.popped()), is_deep=is_deep)
+
+        aggregate.save(deep=False)
+        assert aggregate._dataclass == dataclass
+        assert aggregate._dataclass == context.repo.load(scoped_loc, deep=is_deep)
+        assert isinstance(aggregate, aggregate_class)

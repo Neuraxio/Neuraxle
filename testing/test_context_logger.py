@@ -9,7 +9,7 @@ from neuraxle.base import (BaseStep, ExecutionContext, Flow, HandleOnlyMixin,
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.logging.logging import NeuraxleLogger, NEURAXLE_ROOT_LOGGER_NAME
+from neuraxle.logging.logging import NeuraxleLogger, NEURAXLE_LOGGER_NAME
 from neuraxle.metaopt.auto_ml import AutoML, RandomSearch
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
@@ -148,8 +148,8 @@ def test_automl_context_loc_pushes_identifier():
 
     c1 = cx.push_attr(ProjectDataclass(DEFAULT_PROJECT))
 
-    assert cx.get_identifier() == NEURAXLE_ROOT_LOGGER_NAME
-    assert c1.get_identifier() == f"{NEURAXLE_ROOT_LOGGER_NAME}.{DEFAULT_PROJECT}"
+    assert cx.get_identifier() == NEURAXLE_LOGGER_NAME
+    assert c1.get_identifier() == f"{NEURAXLE_LOGGER_NAME}.{DEFAULT_PROJECT}"
 
 
 def test_root_neuraxle_logger_logs_to_string():
@@ -161,16 +161,20 @@ def test_root_neuraxle_logger_logs_to_string():
 
 
 def test_automl_neuraxle_logger_logs_to_repo_file():
-    cx: AutoMLContext = AutoMLContext.from_context().from_identifier(ExecutionContext().get_identifier())
+    cx: AutoMLContext = AutoMLContext.from_context()
 
     try:
         cx.add_scoped_logger_file_handler()
 
-        cx.flow.log_end(TrialStatus.SUCCESS)
+        cx.flow.log_status(TrialStatus.RUNNING)
     finally:
         cx.free_scoped_logger_file_handler()
+    cx.flow.log_end(TrialStatus.ABORTED)
 
-    assert os.path.exists(cx.repo.get_scoped_logger_path())
+    assert os.path.exists(cx.repo.get_scoped_logger_path(cx.loc))
+    f = cx.read_scoped_logger_file()
+    assert str(TrialStatus.RUNNING) in f
+    assert str(TrialStatus.ABORTED) not in f
 
 
 def test_sub_root_neuraxle_loggers_logs_to_string():
