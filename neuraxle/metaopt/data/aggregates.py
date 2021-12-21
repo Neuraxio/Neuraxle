@@ -184,7 +184,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDa
     def save(self, deep: bool = True):
         if deep and deep != self.is_deep:
             raise ValueError(
-                f"Cannot save {str(self)} with self.is_deep=False when self "
+                f"Cannot save {str(self)} with deep=True when self "
                 f"is not already deep. You might want to use self.refresh(deep=True) at "
                 f"some point to refresh self before saving deeply then.")
 
@@ -208,7 +208,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDa
         return self._managed_resource
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._managed_resource.context.free_scoped_logger_handler_file()
+        self._managed_resource.context.free_scoped_logger_file_handler()
         # self.context.add_scoped_logger_file_handler()
 
         handled_err: bool = self._release_managed_subresource(self._managed_resource, exc_val)
@@ -597,8 +597,6 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
             self.refresh(False)
             # self.context.free_scoped_logger_handler_file()
 
-            self.save_subaggregate(resource, deep=True)
-
             if e is None:
                 self.flow.log_success()
             else:
@@ -611,6 +609,7 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
                     handled_error = False
 
             self.save_subaggregate(resource, deep=True)
+
         return handled_error
 
     def get_avg_validation_score(self, metric_name: str) -> float:
@@ -770,7 +769,7 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
 
     def _acquire_managed_subresource(self, metric_name: str, higher_score_is_better: bool) -> 'MetricResults':
         with self.context.lock:
-            self.refresh(False or not self.is_deep)  # Deep refresh when shallow.
+            self.refresh(True)
 
             subdataclass: MetricResultsDataclass = self._create_or_get_metric_results(
                 metric_name, higher_score_is_better)

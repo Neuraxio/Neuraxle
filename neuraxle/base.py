@@ -35,6 +35,7 @@ import logging
 import os
 import pprint
 import shutil
+import sys
 import tempfile
 import traceback
 import warnings
@@ -55,6 +56,7 @@ from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import HyperparameterDistribution
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
+from neuraxle.logging.logging import NEURAXLE_ROOT_LOGGER_NAME, NeuraxleLogger
 from neuraxle.logging.warnings import warn_deprecated_arg
 
 
@@ -809,7 +811,7 @@ class TruncableServiceMixin(_HasChildrenMixin):
         :return: if the service registered or not
         """
         return (service_abstract_class_type in self.services) if service_abstract_class_type.__class__ != str else (
-            service_abstract_class_type in [str(s) for s in self.services.keys()]
+            str(service_abstract_class_type) in [str(s) for s in self.services.keys()]
         )
 
     def get_children(self) -> List[BaseServiceT]:
@@ -902,7 +904,7 @@ class Flow(BaseService):
         return self
 
     @property
-    def logger(self) -> logging.Logger:
+    def logger(self) -> NeuraxleLogger:
         return self.context.logger
 
     def copy(self) -> 'Flow':
@@ -911,8 +913,11 @@ class Flow(BaseService):
         """
         return copy(self)
 
-    def log(self, message: str, level: int = logging.INFO):
-        self.logger.log(level, message)
+    def log(self, message: str, level: int = logging.INFO, stacklevel=4):
+        if sys.version_info.major <= 3 and sys.version_info.minor <= 7:
+            self.logger.log(level, message)
+        else:
+            self.logger.log(level, message, stacklevel=stacklevel)
 
     def log_train_metric(self, metric_name: str, metric_value: float):
         """
@@ -1067,8 +1072,8 @@ class ExecutionContext(TruncableService):
         self.root: str = root or self.get_new_cache_folder()
 
     @property
-    def logger(self) -> logging.Logger:
-        return logging.getLogger(self.get_identifier(include_step_names=True))
+    def logger(self) -> NeuraxleLogger:
+        return NeuraxleLogger.from_identifier(self.get_identifier(include_step_names=True))
 
     @property
     def flow(self) -> Flow:
@@ -1103,10 +1108,6 @@ class ExecutionContext(TruncableService):
         if Flow not in services:
             services[Flow] = self.flow
         self.set_services(services)
-        return self
-
-    def set_logger(self, logger):
-        self.flow.logger = logger
         return self
 
     def get_execution_mode(self) -> ExecutionMode:
@@ -1318,7 +1319,7 @@ class ExecutionContext(TruncableService):
         """
         loc_attrs = self.get_service("ScopedLocation").as_list(
             stringify=True) if self.has_service("ScopedLocation") else []
-        arr = ["neuraxle"] + loc_attrs
+        arr = [NEURAXLE_ROOT_LOGGER_NAME] + loc_attrs
         if include_step_names:
             arr.extend(self.get_names())
         return ".".join(arr)
@@ -1604,8 +1605,9 @@ class _TransformerStep(MixinForBaseService):
         self._did_process(data_container, context)
         return self
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> \
-            ('BaseTransformer', DataContainer):
+    def handle_fit_transform(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['BaseTransformer', DataContainer]:
         """
         Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base._FittableStep.fit_transform`.
 
@@ -1917,8 +1919,9 @@ class _CustomHandlerMethods(MixinForBaseService):
 
         return new_self
 
-    def handle_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> \
-            ('BaseStep', DataContainer):
+    def handle_fit_transform(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['BaseStep', DataContainer]:
         """
         Handle fit_transform with a custom handler method for fitting, and transforming the data container.
         The custom method to override is fit_transform_data_container.

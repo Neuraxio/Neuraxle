@@ -23,7 +23,7 @@ Those steps works with NumPy (np) arrays.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-from typing import Sequence
+from typing import Sequence, Tuple
 
 from neuraxle.base import (BaseStep, BaseTransformer, ExecutionContext,
                            ForceHandleMixin, NonFittableMixin)
@@ -389,8 +389,9 @@ class ToNumpy(ForceHandleMixin, BaseTransformer):
         BaseTransformer.__init__(self)
         ForceHandleMixin.__init__(self)
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
-            DataContainer, ExecutionContext):
+    def _will_process(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple[DataContainer, ExecutionContext]:
         return data_container.to_numpy(), context
 
 

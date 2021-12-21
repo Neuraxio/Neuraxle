@@ -115,7 +115,6 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStep):
         :param context: execution context
         :type context: ExecutionContext
         :return: (fitted self, data container)
-        :rtype: (BaseStep, DataContainer)
         """
         if self._should_repeat():
             for _ in range(self.epochs - 1):
@@ -149,7 +148,6 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStep):
         :param context: execution context
         :type context: ExecutionContext
         :return: (fitted self, data container)
-        :rtype: (BaseStep, DataContainer)
         """
 
         if self._should_repeat():

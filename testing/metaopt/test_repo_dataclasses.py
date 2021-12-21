@@ -182,16 +182,18 @@ def test_logger_level_works_with_multiple_levels():
 
             c1.flow.log("c1.flow.log: end")
         finally:
-            c1.free_scoped_logger_handler_file()
+            c1.free_scoped_logger_file_handler()
 
         c0.flow.log("c0.flow.log: end")
     finally:
-        c0.free_scoped_logger_handler_file()
+        c0.free_scoped_logger_file_handler()
 
-    with open(c0.repo.get_scoped_logger_path(ScopedLocation()), "r") as f:
-        l0 = "\n\r".join(f.readlines())
-    with open(c1.repo.get_scoped_logger_path(ScopedLocation(DEFAULT_PROJECT)), "r") as f:
-        l1 = "\n\r".join(f.readlines())
+    # with open(c0.repo.get_scoped_logger_path(ScopedLocation()), "r") as f:
+    #     l0 = "\n\r".join(f.readlines())
+    # with open(c1.repo.get_scoped_logger_path(ScopedLocation(DEFAULT_PROJECT)), "r") as f:
+    #     l1 = "\n\r".join(f.readlines())
+    l0 = c0.read_scoped_logger_file()
+    l1 = c1.read_scoped_logger_file()
 
     assert l0 != l1
     assert len(l0) > len(l1)

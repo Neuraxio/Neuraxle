@@ -194,7 +194,6 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         Get sub data containers.
 
         :return: sub data containers
-        :rtype: List[Tuple[str, DataContainer]]
         """
         return self.sub_data_containers
 

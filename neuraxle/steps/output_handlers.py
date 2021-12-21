@@ -74,7 +74,6 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         :type context: ExecutionContext
         :param data_container: data container to fit on
         :return: self, data container
-        :rtype: (BaseStep, DataContainer)
         """
         self.wrapped = self.wrapped.handle_fit(
             DataContainer(
@@ -87,8 +86,9 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
 
         return self, data_container
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            BaseStep, DataContainer):
+    def _fit_transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple[BaseStep, DataContainer]:
         """
         Handle fit transform by passing expected outputs to the wrapped step fit method.
         Update the expected outputs with the outputs.
@@ -97,7 +97,6 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         :type context: ExecutionContext
         :param data_container: data container to fit on
         :return: self, data container
-        :rtype: (BaseStep, DataContainer)
         """
         self.wrapped, new_expected_outputs_data_container = self.wrapped.handle_fit_transform(
             DataContainer(
@@ -207,8 +206,9 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
 
         return output_data_container
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            BaseStep, DataContainer):
+    def _fit_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple[BaseStep, DataContainer]:
         """
         Handle fit by passing the data inputs, and the expected outputs to the wrapped step fit method.
 
@@ -216,7 +216,6 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         :type context: ExecutionContext
         :param data_container: data container to fit on
         :return: self, data container
-        :rtype: (BaseStep, DataContainer)
         """
         self.wrapped = self.wrapped.handle_fit(
             DataContainer(
@@ -243,7 +242,6 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         :type context: ExecutionContext
         :param data_container: data container to fit on
         :return: self, data container
-        :rtype: (BaseStep, DataContainer)
         """
         self.wrapped, output_data_container = self.wrapped.handle_fit_transform(
             DataContainer(
@@ -309,7 +307,9 @@ class InputAndOutputTransformerMixin(_DidProcessInputOutputHandlerMixin):
         data_container.set_expected_outputs(expected_outputs=None)
         return new_self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['BaseStep', DataContainer]:
         """
         Handle transform by fitting the step,
         and updating the data inputs, and expected outputs inside the data container.

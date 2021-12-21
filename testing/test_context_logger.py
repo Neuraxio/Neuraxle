@@ -4,13 +4,16 @@ import shutil
 
 import numpy as np
 import pytest
-from neuraxle.base import BaseStep, ExecutionContext, Flow, HandleOnlyMixin
+from neuraxle.base import (BaseStep, ExecutionContext, Flow, HandleOnlyMixin,
+                           Identity, TrialStatus)
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
+from neuraxle.logging.logging import NeuraxleLogger, NEURAXLE_ROOT_LOGGER_NAME
 from neuraxle.metaopt.auto_ml import AutoML, RandomSearch
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
+from neuraxle.metaopt.data.vanilla import DEFAULT_PROJECT, AutoMLContext, ProjectDataclass, ScopedLocation
 from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import MultiplyByN, NumpyReshape
@@ -123,3 +126,77 @@ class TestTrialLogger:
             with open(f, 'r') as f:
                 log = f.readlines()
                 assert len(log) == 36
+
+
+def test_automl_context_has_loc():
+    cx = AutoMLContext.from_context()
+
+    assert cx.loc is not None
+
+
+def test_automl_context_pushes_loc_attr():
+    cx = AutoMLContext.from_context()
+
+    c1 = cx.push_attr(ProjectDataclass(DEFAULT_PROJECT))
+
+    assert cx.loc == ScopedLocation()
+    assert c1.loc == ScopedLocation(DEFAULT_PROJECT)
+
+
+def test_automl_context_loc_pushes_identifier():
+    cx = AutoMLContext.from_context()
+
+    c1 = cx.push_attr(ProjectDataclass(DEFAULT_PROJECT))
+
+    assert cx.get_identifier() == NEURAXLE_ROOT_LOGGER_NAME
+    assert c1.get_identifier() == f"{NEURAXLE_ROOT_LOGGER_NAME}.{DEFAULT_PROJECT}"
+
+
+def test_root_neuraxle_logger_logs_to_string():
+    nxl: NeuraxleLogger = NeuraxleLogger.from_identifier(ExecutionContext().get_identifier())
+
+    nxl.info("This is a test.")
+
+    assert "This is a test." in nxl.get_string_history()
+
+
+def test_automl_neuraxle_logger_logs_to_repo_file():
+    cx: AutoMLContext = AutoMLContext.from_context().from_identifier(ExecutionContext().get_identifier())
+
+    try:
+        cx.add_scoped_logger_file_handler()
+
+        cx.flow.log_end(TrialStatus.SUCCESS)
+    finally:
+        cx.free_scoped_logger_file_handler()
+
+    assert os.path.exists(cx.repo.get_scoped_logger_path())
+
+
+def test_sub_root_neuraxle_loggers_logs_to_string():
+    str_r = "Testing root."
+    str_a = "Testing a."
+    str_b = "Testing b."
+    cx = ExecutionContext()
+    nxl_r: NeuraxleLogger = NeuraxleLogger.from_identifier(
+        cx.get_identifier())
+    nxl_a: NeuraxleLogger = NeuraxleLogger.from_identifier(
+        cx.push(Identity(name="a")).get_identifier())
+    nxl_b: NeuraxleLogger = NeuraxleLogger.from_identifier(
+        cx.push(Identity(name="b")).get_identifier())
+
+    nxl_r.info(str_r)
+    nxl_a.info(str_a)
+    nxl_b.info(str_b)
+
+    assert str_r in nxl_r.get_string_history()
+    assert str_r not in nxl_a.get_string_history()
+    assert str_r not in nxl_b.get_string_history()
+
+    assert str_a in nxl_r.get_string_history()
+    assert str_a in nxl_a.get_string_history()
+    assert str_a not in nxl_b.get_string_history()
+
+    assert str_b in nxl_r.get_string_history()
+    assert str_b not in nxl_a.get_string_history()
+    assert str_b in nxl_b.get_string_history()

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Tuple
 
 import pytest
 from neuraxle.base import (BaseService, BaseStep, ExecutionContext, Identity,
@@ -20,13 +20,13 @@ class SomePipeline(Pipeline):
 
 
 class SomeException(BaseStep):
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+    def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['BaseStep', Any]:
         raise Exception()
 
-    def fit(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+    def fit(self, data_inputs, expected_outputs=None) -> Tuple['BaseStep', Any]:
         raise Exception()
 
-    def transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+    def transform(self, data_inputs, expected_outputs=None) -> Tuple['BaseStep', Any]:
         raise Exception()
 
 

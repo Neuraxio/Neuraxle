@@ -198,7 +198,9 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         wrapped.extend(cloned_children)
         return wrapped
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _will_process(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['BaseStep', DataContainer]:
         data_container, context = super()._will_process(data_container, context)
 
         if len(self.steps_as_tuple) != len(data_container.data_inputs):
@@ -232,8 +234,9 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
 
         return self, output_data_container
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _fit_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['BaseStep', DataContainer]:
         fitted_steps = []
         for i, (ids, data_inputs, expected_outputs) in enumerate(data_container):
             fitted_step = self[i].handle_fit(
@@ -246,8 +249,9 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
 
         return self
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['BaseStep', DataContainer]:
         transform_results = []
         for i, (ids, data_inputs, expected_outputs) in enumerate(data_container):
             transform_result = self[i].handle_transform(
@@ -345,14 +349,13 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
 
     def _will_process(
         self, data_container: DataContainer, context: ExecutionContext
-    ) -> (BaseTransformer, DataContainer):
+    ) -> Tuple['BaseStep', DataContainer]:
         """
         Flatten data container before any processing is done on the wrapped step.
 
         :param data_container: data container to flatten
         :param context: execution context
         :return: (data container, execution context)
-        :rtype: ('BaseTransformer', DataContainer)
         """
         data_container, context = super()._will_process(data_container, context)
 

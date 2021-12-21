@@ -48,7 +48,7 @@ from neuraxle.base import (BaseService, BaseStep, ContextLock,
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
-from neuraxle.logging.logging import LOGGER_FORMAT, LOGGING_DATETIME_STR_FORMAT
+from neuraxle.logging.logging import LOGGER_FORMAT, LOGGING_DATETIME_STR_FORMAT, NeuraxleLogger
 from neuraxle.metaopt.observable import _ObservableRepo, _ObserverOfRepo
 from neuraxle.steps.flow import IfExecutionPhaseIsThen
 
@@ -808,40 +808,28 @@ class BaseHyperparameterOptimizer(ABC):
 class AutoMLContext(ExecutionContext):
 
     @property
-    def logger_at_scoped_loc(self) -> logging.Logger:
+    def logger_at_scoped_loc(self) -> NeuraxleLogger:
         return logging.getLogger(self.get_identifier(include_step_names=False))
 
-    def add_scoped_logger_file_handler(self) -> logging.Logger:
+    def add_scoped_logger_file_handler(self) -> NeuraxleLogger:
         """
         Add a file handler to the logger at the current scoped location to capture logs
         at this scope and below this scope.
         """
         logging_file = self.repo.get_scoped_logger_path(self.loc)
-
-        if hasattr(self, "fh"):
-            raise ValueError(
-                f"File handler already added to logger at location `{self.loc}` and at path `{logging_file}`.")
-
         os.makedirs(os.path.dirname(logging_file), exist_ok=True)
+        self.logger_at_scoped_loc.with_file_handler(logging_file)
 
-        formatter = logging.Formatter(fmt=LOGGER_FORMAT, datefmt=LOGGING_DATETIME_STR_FORMAT)
-        file_handler = logging.FileHandler(filename=logging_file)
-        file_handler.setFormatter(formatter)
-
-        self.logger_at_scoped_loc.addHandler(file_handler)
-
-        self.fh: logging.FileHandler = file_handler
-
-    def free_scoped_logger_handler_file(self):
+    def free_scoped_logger_file_handler(self):
         """
         Remove file handlers from logger to free file lock (especially on Windows).
         """
-        if hasattr(self, 'fh'):
-            self.logger_at_scoped_loc.removeHandler(self.fh)
-            self.fh.close()
-            del self.fh
-        else:
-            raise ValueError("No file handler to free.")
+        self.logger_at_scoped_loc.without_file_handler()
+
+    def read_scoped_logger_file(self) -> str:
+        with open(self.repo.get_scoped_logger_path(self.loc), "r") as f:
+            l: str = "".join(f.readlines())
+        return l
 
     @staticmethod
     def from_context(

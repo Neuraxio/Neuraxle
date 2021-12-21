@@ -246,8 +246,6 @@ class DefaultLoop(BaseControllerLoop):
                 args = [(self, trial_number, validation_splits, context) for trial_number in range(self.n_trial)]
                 pool.starmap(AutoML._attempt_trial, args)
 
-        context.set_logger(main_logger)
-
         best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
 
         context.logger.info(

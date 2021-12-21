@@ -25,7 +25,7 @@ Those steps works with scikit-learn (sklearn) transformers and estimators.
 """
 import functools
 import inspect
-from typing import Any
+from typing import Any, Tuple
 
 from sklearn.base import BaseEstimator
 from sklearn.ensemble import BaseEnsemble
@@ -79,7 +79,7 @@ class SKLearnWrapper(BaseStep):
             if isinstance(params[name], BaseEstimator):
                 del params[name]
 
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+    def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['BaseStep', Any]:
         if hasattr(self.wrapped_sklearn_predictor, 'fit_transform'):
             if expected_outputs is None or len(inspect.getfullargspec(self.wrapped_sklearn_predictor.fit).args) < 3:
                 out = self._sklearn_fit_transform_without_expected_outputs(data_inputs)

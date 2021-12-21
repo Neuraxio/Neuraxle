@@ -243,13 +243,15 @@ class ExecutionPhaseSwitch(HandleOnlyMixin, TruncableSteps):
         step = self._get_step(context).handle_fit(data_container, context)
         return self._set_step(context, step)
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
-            ('BaseTransformer', DataContainer):
+    def _fit_transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['BaseTransformer', DataContainer]:
         step, data_container = self._get_step(context).handle_fit_transform(data_container, context)
         return self._set_step(context, step), data_container
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> \
-            ('BaseTransformer', DataContainer):
+    def _transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['BaseTransformer', DataContainer]:
         return self._get_step(context).handle_transform(data_container, context)
 
 
@@ -293,8 +295,9 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
         self.nullified_return_value = nullified_return_value
         self.nullify_hyperparams = nullify_hyperparams
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _fit_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['BaseTransformer', DataContainer]:
         """
         Nullify wrapped step hyperparams, and don't fit the wrapped step.
 
@@ -310,8 +313,9 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
 
         return self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> (
-            'BaseStep', DataContainer):
+    def _fit_transform_data_container(
+        self, data_container: DataContainer, context: ExecutionContext
+    ) -> Tuple['BaseTransformer', DataContainer]:
         """
         Nullify wrapped step hyperparams, and don't fit_transform the wrapped step.
 
