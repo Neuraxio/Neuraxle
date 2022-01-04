@@ -972,7 +972,7 @@ class Flow(BaseService):
 
     def log_failure(self, exception: Exception):
         self.log_error(exception)
-        self.log_end(TrialStatus.FAILURE)
+        self.log_end(TrialStatus.FAILED)
 
     def log_error(self, exception: Exception):
         if exception is not None:

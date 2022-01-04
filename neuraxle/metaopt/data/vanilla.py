@@ -35,7 +35,7 @@ import logging
 import os
 from abc import ABC, abstractclassmethod, abstractmethod, abstractproperty
 from collections import OrderedDict
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, fields, asdict
 from enum import Enum
 from json.encoder import JSONEncoder
 from numbers import Number
@@ -148,7 +148,7 @@ class ScopedLocation:
         if curr_attr_to_set_idx != key_idx:
             raise ValueError(
                 f"{key} is not yet to be defined. Currently, "
-                f"{(dataclass_2_id_attr.keys())[curr_attr_to_set_idx]} is the next to be set.")
+                f"{list(dataclass_2_id_attr.keys())[curr_attr_to_set_idx]} is the next to be set.")
         key_attr_name: str = dataclass_2_id_attr[key]
         setattr(self, key_attr_name, value)
 
@@ -224,11 +224,42 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
     # TODO: from json, to json?
 
     def __post_init__(self):
-        self._invariant()
+        self._validate()
 
-    @abstractmethod
-    def _invariant(self):
-        pass
+    def _validate(self):
+        for k, v in zip(self.get_sublocation_keys(), self.get_sublocation_values()):
+            if isinstance(v, dict) and '__type__' in v:
+                assert v['__type__'] == dataclass_2_subdataclass[self.__class__].__name__
+                v: SubDataclassT = BaseDataclass.from_dict(v)
+                assert v.get_id() == k
+                self.store(v)
+
+        subdataklass: Type[SubDataclassT] = dataclass_2_subdataclass[self.__class__]
+        if subdataklass is not None and not all(
+            (isinstance(s, subdataklass) for s in self.get_sublocation_values() if s is not None)
+        ):
+            raise ValueError(f"{self.__class__.__name__} must have all sublocation values as {subdataklass.__name__}.")
+
+    @staticmethod
+    def from_dict(_dict: Dict[str, Any]) -> 'BaseDataclass':
+        if '__type__' not in _dict:
+            raise ValueError("Dict must have a __type__ key.")
+        _dict: dict = copy.copy(_dict)
+        _type_str: str = _dict.pop('__type__')
+        _klass: type = str_2_dataclass[_type_str]
+
+        return _klass(**_dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        _dict = OrderedDict()
+        _dict['__type__'] = self.__class__.__name__
+        for _field in fields(self):
+            _attr = getattr(self, _field.name)
+            if _attr is not None:
+                if isinstance(_attr, BaseDataclass):
+                    _attr = _attr.to_dict()
+                _dict[_field.name] = _attr
+        return _dict
 
     @property
     def _id_attr_name(self) -> str:
@@ -243,7 +274,7 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
 
     def set_id(self, _id: ScopedLocationAttr) -> 'BaseDataclass':
         setattr(self, self._id_attr_name, _id)
-        self._invariant()
+        self._validate()
         return self
 
     def get_sublocation(self) -> Union[List[SubDataclassT], OrderedDict[str, SubDataclassT]]:
@@ -289,19 +320,14 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
 @dataclass(order=True)
 class DataclassHasOrderedDictMixin:
 
-    def _invariant(self):
-        super()._invariant()
+    def _validate(self):
+        super()._validate()
         if not isinstance(self.get_sublocation(), OrderedDict):
             raise ValueError(f"{self.__class__.__name__} must have an OrderedDict as sublocation.")
         if not all(
-            (isinstance(s, ScopedLocationAttrStr) for s in self.get_sublocation().keys())
+            (isinstance(s, ScopedLocationAttrStr) for s in self.get_sublocation_keys())
         ):
             raise ValueError(f"{self.__class__.__name__} must have all sublocation keys as strings.")
-        subdataklass: Type[SubDataclassT] = dataclass_2_subdataclass[self.__class__]
-        if not all(
-            (isinstance(s, subdataklass) for s in self.get_sublocation().values() if s is not None)
-        ):
-            raise ValueError(f"{self.__class__.__name__} must have all sublocation values as {subdataklass.__name__}.")
 
     def get_sublocation(self) -> OrderedDict[ScopedLocationAttrStr, SubDataclassT]:
         ret = super().get_sublocation()
@@ -309,7 +335,7 @@ class DataclassHasOrderedDictMixin:
 
     def set_sublocation(self, sublocation: OrderedDict[ScopedLocationAttrStr, SubDataclassT]) -> None:
         setattr(self, self._sublocation_attr_name, sublocation)
-        self._invariant()
+        self._validate()
 
     def get_sublocation_values(self) -> List[SubDataclassT]:
         return list(self.get_sublocation().values())
@@ -319,7 +345,7 @@ class DataclassHasOrderedDictMixin:
 
     def store(self, dc: SubDataclassT) -> ScopedLocationAttrStr:
         self.get_sublocation()[dc.get_id()] = dc
-        self._invariant()
+        self._validate()
         return dc.get_id()
 
     def shallow(self) -> 'BaseDataclass':
@@ -333,8 +359,8 @@ class DataclassHasOrderedDictMixin:
 @dataclass(order=True)
 class DataclassHasListMixin:
 
-    def _invariant(self):
-        super()._invariant()
+    def _validate(self):
+        super()._validate()
         if not isinstance(self.get_sublocation(), List):
             raise ValueError(f"{self.__class__.__name__} must have a List as sublocation.")
 
@@ -343,7 +369,7 @@ class DataclassHasListMixin:
 
     def set_sublocation(self, sublocation: List[SubDataclassT]) -> None:
         setattr(self, self._sublocation_attr_name, sublocation)
-        self._invariant()
+        self._validate()
 
     def get_sublocation_values(self) -> List[SubDataclassT]:
         return self.get_sublocation()
@@ -359,7 +385,7 @@ class DataclassHasListMixin:
             self.get_sublocation()[dc.get_id()] = dc
         else:
             raise ValueError(f"{dc} has id {dc.get_id()} which is greater than the next id {self.get_next_i()}.")
-        self._invariant()
+        self._validate()
         return _id
 
     def shallow(self) -> 'BaseDataclass':
@@ -384,24 +410,36 @@ class BaseTrialDataclassMixin:
     created_time: datetime.datetime = field(default_factory=datetime.datetime.now)
     start_time: datetime.datetime = field(default_factory=datetime.datetime.now)
     end_time: datetime.datetime = None
+    # error: str = None
+    # error_traceback: str = None
+    # logs: List[str] = field(default_factory=list)
 
-    def _invariant(self):
-        super()._invariant()
+    def _validate(self):
+        super()._validate()
         if not isinstance(self.hyperparams, HyperparameterSamples):
-            raise ValueError(
-                f"{self.__class__.__name__} must have a HyperparameterSamples as "
-                f"hyperparams. Got self.hyperparams={self.hyperparams}.")
+            self.hyperparams = HyperparameterSamples(self.hyperparams)
+        self._validate_date_attr("created_time")
+        self._validate_date_attr("start_time")
+        self._validate_date_attr("end_time")
+        if not isinstance(self.status, TrialStatus):
+            self.status = TrialStatus(self.status)
+
+    def _validate_date_attr(self, attr_name) -> None:
+        attr_value = getattr(self, attr_name)
+        if attr_value is not None and not isinstance(attr_value, datetime.datetime):
+            attr_value = datetime.datetime.strptime(attr_value, LOGGING_DATETIME_STR_FORMAT)
+            setattr(self, attr_name, attr_value)
 
     def start(self) -> 'BaseTrialDataclassMixin':
         self.status = TrialStatus.RUNNING
         self.start_time = datetime.datetime.now()
-        self._invariant()
+        self._validate()
         return self
 
     def end(self, status: TrialStatus) -> 'BaseTrialDataclassMixin':
         self.status = status
         self.end_time = datetime.datetime.now()
-        self._invariant()
+        self._validate()
         return self
 
 
@@ -508,6 +546,7 @@ dataclass_2_subdataclass: OrderedDict[BaseDataclass, SubDataclassT] = OrderedDic
 ])
 
 str_2_dataclass: OrderedDict[str, BaseDataclass] = OrderedDict([
+    (RootDataclass.__name__, RootDataclass),
     (ProjectDataclass.__name__, ProjectDataclass),
     (ClientDataclass.__name__, ClientDataclass),
     (RoundDataclass.__name__, RoundDataclass),
@@ -532,10 +571,11 @@ def as_named_odict(
 
 def object_decoder(obj):
     if '__type__' in obj and obj['__type__'] in str_2_dataclass:
-        cls: Type = str_2_dataclass[obj['__type__']]
-        kwargs = dict(obj)
-        del kwargs['__type__']
-        return cls(**kwargs)
+        # cls: Type = str_2_dataclass[obj['__type__']]
+        return BaseDataclass.from_dict(obj)
+        # kwargs = dict(obj)
+        # del kwargs['__type__']
+        # return cls(**kwargs)
     return obj
 
 
@@ -547,23 +587,19 @@ class MetadataJSONEncoder(JSONEncoder):
             return obj.value
         if isinstance(obj, RecursiveDict):
             return obj.to_flat_dict()
+        if isinstance(obj, datetime.datetime):
+            return obj.strftime(LOGGING_DATETIME_STR_FORMAT)
         if isinstance(obj, BaseDataclass):
-            _dict = {
-                k: self.default(v)
-                for k, v in asdict(obj).items()
-                if v is not None
-            }
-            return {'__type__': type(obj).__name__, **_dict}
-        else:
-            return JSONEncoder.default(self, obj)
+            return obj.to_dict()
+        return JSONEncoder.encode(self, obj)
 
 
 def to_json(obj: str) -> str:
     return json.dumps(obj, cls=MetadataJSONEncoder)
 
 
-def from_json(json: str) -> str:
-    return json.loads(json, object_pairs_hook=OrderedDict, object_hook=object_decoder)
+def from_json(_json: str) -> str:
+    return json.loads(_json, object_pairs_hook=OrderedDict, object_hook=object_decoder)
 
 
 class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseDataclass]], BaseService):

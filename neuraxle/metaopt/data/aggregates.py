@@ -261,7 +261,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDa
         :param item: trial index
         :return:
         """
-        return self.subaggregate(self._dataclass.get_sublocation()[item], self.context)
+        return self.subaggregate(self._dataclass.get_sublocation()[item], self.context, self.is_deep)
 
     def __str__(self) -> str:
         return self.__repr__()
@@ -457,7 +457,7 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
 
         if len(self) == 0:
             return HyperparameterSamples(main_metric_name)
-        return self.get_best_trial().get_hyperparams()
+        return self.get_best_trial(main_metric_name).get_hyperparams()
 
     def get_best_trial(self, main_metric_name: str) -> Optional['Trial']:
         """
@@ -471,8 +471,11 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
         for trial in self._trials:
             trial_score = trial.get_avg_validation_score(main_metric_name)
 
-            _has_better_score = best_score is None or self.is_higher_score_better(
-                main_metric_name) == (trial_score > best_score)
+            _has_better_score = best_score is None or (
+                trial_score is not None and (
+                    self.is_higher_score_better(main_metric_name) == (trial_score > best_score)
+                )
+            )
 
             if _has_better_score:
                 best_score = trial_score
@@ -610,10 +613,17 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
 
                 if any((isinstance(e, c) for c in self.error_types_to_raise)):
                     handled_error = False
+                    self.set_failed(e)
 
             self.save_subaggregate(resource, deep=True)
 
         return handled_error
+
+    def is_success(self):
+        """
+        Set trial status to success.
+        """
+        return self._dataclass.status == TrialStatus.SUCCESS
 
     def get_avg_validation_score(self, metric_name: str) -> float:
         """
@@ -622,12 +632,13 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
 
         :return: validation score
         """
-        scores = [
-            val_split.get_best_validation_score(metric_name)
-            for val_split in self._validation_splits
-            if val_split.is_success()
-        ]
-        return sum(scores) / len(scores)
+        if self.is_success():
+            scores = [
+                val_split[metric_name].get_best_validation_score()
+                for val_split in self._validation_splits
+                if val_split.is_success() and metric_name in val_split.get_metric_names()
+            ]
+            return sum(scores) / len(scores)
 
     def get_avg_n_epoch_to_best_validation_score(self, metric_name: str) -> float:
         # TODO: use in flow.log_results:

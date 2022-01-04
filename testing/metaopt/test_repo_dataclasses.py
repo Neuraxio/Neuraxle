@@ -25,7 +25,8 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            RoundDataclass, ScopedLocation,
                                            TrialDataclass, TrialSplitDataclass,
                                            VanillaHyperparamsRepository,
-                                           as_named_odict, dataclass_2_id_attr)
+                                           as_named_odict, dataclass_2_id_attr,
+                                           from_json, to_json)
 from neuraxle.metaopt.validation import (GridExplorationSampler,
                                          ValidationSplitter)
 from neuraxle.pipeline import Pipeline
@@ -39,10 +40,6 @@ SOME_METRIC_NAME = 'MAE'
 
 BASE_TRIAL_ARGS = {
     "hyperparams": HyperparameterSamples(),
-    "status": TrialStatus.RUNNING,
-    "created_time": datetime.datetime.now(),
-    "start_time": datetime.datetime.now() + datetime.timedelta(minutes=1),
-    "end_time": datetime.datetime.now() + datetime.timedelta(days=1),
 }
 
 SOME_METRIC_RESULTS_DATACLASS = MetricResultsDataclass(
@@ -55,12 +52,12 @@ SOME_TRIAL_SPLIT_DATACLASS = TrialSplitDataclass(
     split_number=0,
     metric_results=as_named_odict(SOME_METRIC_RESULTS_DATACLASS),
     **BASE_TRIAL_ARGS,
-).end(TrialStatus.SUCCESS)
+).start().end(TrialStatus.SUCCESS)
 SOME_TRIAL_DATACLASS = TrialDataclass(
     trial_number=0,
     validation_splits=[SOME_TRIAL_SPLIT_DATACLASS],
     **BASE_TRIAL_ARGS,
-).end(TrialStatus.SUCCESS)
+).start().end(TrialStatus.SUCCESS)
 SOME_ROUND_DATACLASS = RoundDataclass(
     round_number=0,
     trials=[SOME_TRIAL_DATACLASS],
@@ -205,3 +202,25 @@ def test_dataclass_id_attr_get_set(dataclass_type):
     dc = dataclass_type().set_id(_id)
 
     assert dc.get_id() == _id
+
+
+def test_dataclass_from_dict_to_dict():
+    root: RootDataclass = SOME_ROOT_DATACLASS
+
+    root_as_dict = root.to_dict()
+    root_restored = RootDataclass.from_dict(root_as_dict)
+
+    assert SOME_METRIC_RESULTS_DATACLASS == root_restored[SOME_FULL_SCOPED_LOCATION]
+    assert root == root_restored
+
+
+def test_dataclass_from_json_to_json():
+    root: RootDataclass = SOME_ROOT_DATACLASS
+
+    root_as_dict = root.to_dict()
+    root_as_json = to_json(root_as_dict)
+    root_restored_dict = from_json(root_as_json)
+    root_restored_dc = RootDataclass.from_dict(root_restored_dict)
+
+    assert SOME_METRIC_RESULTS_DATACLASS == root_restored_dc[SOME_FULL_SCOPED_LOCATION]
+    assert root == root_restored_dc
