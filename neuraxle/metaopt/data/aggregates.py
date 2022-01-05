@@ -541,7 +541,7 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
 
     def get_metric_names(self) -> List[str]:
         if len(self) > 0:
-            return self[-1]._dataclass.validation_splits[-1].metric_results.keys()
+            return list(self[-1]._dataclass.validation_splits[-1].metric_results.keys())
         return []
 
 

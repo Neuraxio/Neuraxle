@@ -749,6 +749,9 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
         return copy.deepcopy(ret)
 
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'VanillaHyperparamsRepository':
+        if not isinstance(_dataclass, BaseDataclass):
+            raise ValueError(f"Was expecting a dataclass. Got `{_dataclass.__class__.__name__}`.")
+
         _dataclass: SubDataclassT = copy.deepcopy(_dataclass)
 
         _id_from_scope: ScopedLocationAttr = scope[_dataclass.__class__]
