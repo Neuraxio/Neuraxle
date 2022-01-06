@@ -389,6 +389,24 @@ class _HasRecursiveMethods:
         """
         return self.name
 
+    def getattr(self, attr_name: str) -> RecursiveDict:
+        """
+        Get an attribute of the service or step, if it exists, returned as a :class:`RecursiveDict`.
+
+        :param attr_name: the name of the attribute to get in each step or service.
+        :return: A RecursiveDict with terminal leafs like ``RecursiveDict({attr_name: getattr(self, attr_name)})``.
+        """
+        return self.apply(method='_getattr', attr_name=attr_name)
+
+    def _getattr(self, attr_name: str) -> RecursiveDict[str, str]:
+        """
+        Get an attribute if it exists, as a RecursiveDict({attr_name: getattr(self, attr_name)}).
+        """
+        if hasattr(self, attr_name):
+            return RecursiveDict({attr_name: getattr(self, attr_name)})
+        else:
+            return RecursiveDict()
+
     def get_step_by_name(self, name: str) -> Optional['BaseServiceT']:
         if self.name == name:
             return self
@@ -529,7 +547,6 @@ class _HasConfig(ABC):
         return self
 
     def _set_config(self, config: RecursiveDict) -> RecursiveDict:
-        self._invalidate()
         self.config = RecursiveDict(config)
         return self.config
 
@@ -545,7 +562,6 @@ class _HasConfig(ABC):
         return self
 
     def _update_config(self, config: RecursiveDict) -> RecursiveDict:
-        self._invalidate()
         self.config.update(config)
         return self.config
 
@@ -1312,6 +1328,12 @@ class ExecutionContext(TruncableService):
     def get_identifier(self, include_step_names: bool = True) -> str:
         """
         Get an identifier depending on the ScopedLocation of the current context.
+
+        Useful for logging. Example:
+
+        .. code-block:: python
+                context = ExecutionContext(tmpdir)
+                logger = logging.getLogger(context.get_identifier())
 
         Example: "neuraxle.default_project.default_client.0" + ".".join(self.get_names())
 

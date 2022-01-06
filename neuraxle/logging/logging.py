@@ -82,7 +82,8 @@ class NeuraxleLogger(logging.Logger):
         self.without_file_handler()
 
         file_handler = logging.FileHandler(file_path)
-        self._add_partial_handler(f"file_handler:{file_path}", file_handler)
+        file_handler.setLevel('DEBUG')
+        self._add_partial_handler(f"file_handler:{file_path}", file_handler, level=logging.DEBUG)
 
         LOGGER_FILE_HANDLERS[self.name] = file_handler
         return self

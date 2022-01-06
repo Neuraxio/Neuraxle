@@ -35,7 +35,7 @@ import logging
 import os
 from abc import ABC, abstractclassmethod, abstractmethod, abstractproperty
 from collections import OrderedDict
-from dataclasses import dataclass, field, fields, asdict
+from dataclasses import asdict, dataclass, field, fields
 from enum import Enum
 from json.encoder import JSONEncoder
 from numbers import Number
@@ -43,12 +43,16 @@ from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
                     Sequence, Tuple, Type, TypeVar, Union)
 
 import numpy as np
+
+from neuraxle.logging.warnings import RaiseDeprecatedClass
 from neuraxle.base import (BaseService, BaseStep, ContextLock,
                            ExecutionContext, Flow, TrialStatus)
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
-from neuraxle.logging.logging import LOGGER_FORMAT, LOGGING_DATETIME_STR_FORMAT, NeuraxleLogger
+from neuraxle.logging.logging import (LOGGER_FORMAT,
+                                      LOGGING_DATETIME_STR_FORMAT,
+                                      NeuraxleLogger)
 from neuraxle.metaopt.observable import _ObservableRepo, _ObserverOfRepo
 from neuraxle.steps.flow import IfExecutionPhaseIsThen
 
@@ -63,7 +67,7 @@ DEFAULT_CLIENT: ScopedLocationAttrStr = "default_client"
 
 
 @dataclass(order=True)
-class ScopedLocation:
+class ScopedLocation(BaseService):
     """
     A location in the metadata tree.
     """
@@ -73,6 +77,9 @@ class ScopedLocation:
     trial_number: ScopedLocationAttrInt = None
     split_number: ScopedLocationAttrInt = None
     metric_name: ScopedLocationAttrStr = None
+
+    def __post_init__(self):
+        BaseService.__init__(self)
 
     # get the field value from BaseMetadata subclass:
     def __getitem__(
@@ -727,7 +734,8 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
         :param hyperparams_repo_class: class to use to save hyperparams.
         :param hyperparams_repo_kwargs: kwargs to pass to hyperparams_repo_class.
         """
-        super().__init__()
+        BaseService.__init__(self)
+        HyperparamsRepository.__init__(self)
         self.cache_folder = os.path.join(cache_folder, self.__class__.__name__)
         self.root: RootDataclass = RootDataclass()
 
@@ -793,33 +801,14 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
         return os.path.join(self.cache_folder, *_scope_attrs)
 
 
-class InMemoryHyperparamsRepository(HyperparamsRepository):
+class InMemoryHyperparamsRepository(RaiseDeprecatedClass, HyperparamsRepository):
     """
     In memory hyperparams repository that can print information about trials.
     Useful for debugging.
     """
 
-    def __init__(self, pre_made_trials: Optional['Round'] = None):
-        HyperparamsRepository.__init__(self)
-        self.trials: Round = pre_made_trials if pre_made_trials is not None else Round()
-
-    def load_trials(self, status: 'TrialStatus' = None) -> 'Round':
-        """
-        Load all trials with the given status.
-
-        :param status: trial status
-        :return: list of trials
-        """
-        return self.trials.filter(status)
-
-    def _save_trial(self, trial: 'Trial'):
-        """
-        Save trial.
-
-        :param trial: trial to save
-        :return:
-        """
-        self.trials.append(trial)
+    def __init__(self, *kargs, **kwargs):
+        RaiseDeprecatedClass.__init__(self, replacement_class=VanillaHyperparamsRepository)
 
 
 class BaseHyperparameterOptimizer(ABC):

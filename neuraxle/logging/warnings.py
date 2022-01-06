@@ -25,31 +25,46 @@ using changed. Warnings will be printed using the methods here.
 import warnings
 
 
-SILENCE_WARNING = False
+SILENCE_DEPRECATION_WARNING = False
 
 
-def silence_all_warnings():
+def silence_all_deprecation_warnings():
     """
-    Turn off all of the neuraxle.logging.warnings
+    Turn off all of the neuraxle.logging.warnings for deprecations.
     """
-    global SILENCE_WARNING
-    SILENCE_WARNING = True
+    global SILENCE_DEPRECATION_WARNING
+    SILENCE_DEPRECATION_WARNING = True
 
 
-def warn_deprecated_class(self, replacement_class: type):
-    global SILENCE_WARNING
-    if not SILENCE_WARNING and replacement_class is not None:
+def warn_deprecated_class(self, replacement_class: type = None):
+    global SILENCE_DEPRECATION_WARNING
+    if not SILENCE_DEPRECATION_WARNING and replacement_class is not None:
         warnings.warn(
-            f"The class `{self.__class__.__name__}` is deprecated. "
-            f"Please consider using the class `{replacement_class.__name__}` instead. " if replacement_class.__name__ is not None else ""
-            f"{_deact_msg_instructions()}"
+            _deprecated_class_msg(replacement_class) + _deact_msg_instructions()
         )
     return self
 
 
+class RaiseDeprecatedClass:
+    def __init__(self, replacement_class: type = None) -> None:
+        raise_deprecated_class(replacement_class)
+
+
+def raise_deprecated_class(replacement_class: type = None):
+    raise DeprecationWarning(_deprecated_class_msg(replacement_class))
+
+
+def _deprecated_class_msg(self, replacement_class: type = None) -> str:
+    return (
+        f"The class `{self.__class__.__name__}` is deprecated."
+        f" Please consider using the class `{replacement_class.__name__}` instead. " if (
+            hasattr(replacement_class, "__name__") and replacement_class.__name__ is not None) else ""
+    )
+
+
 def warn_deprecated_arg(self, arg_name, default_value, value, replacement_argument_name, replacement_class: type = None):
-    global SILENCE_WARNING
-    if not SILENCE_WARNING and default_value != value:
+    global SILENCE_DEPRECATION_WARNING
+    if not SILENCE_DEPRECATION_WARNING and default_value != value:
         if type(replacement_class) is type:
             replacement_class = replacement_class.__name__
         warnings.warn(
@@ -64,6 +79,6 @@ def warn_deprecated_arg(self, arg_name, default_value, value, replacement_argume
 
 def _deact_msg_instructions() -> str:
     return (
-        "If you want to disable these warnings, "
-        "call `neuraxle.logging.warnings.silence_all_warnings()`."
+        " If you want to disable these warnings,"
+        " call `neuraxle.logging.warnings.silence_all_deprecation_warnings()`."
     )
