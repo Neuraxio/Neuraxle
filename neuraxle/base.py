@@ -919,6 +919,14 @@ class Flow(BaseService):
         self.context = weakref.proxy(context)
         return self
 
+    def unlink_context(self) -> 'Flow':
+        """
+        Unlink the context from the flow.
+        """
+        del self.context
+        self.context = None
+        return self
+
     @property
     def logger(self) -> NeuraxleLogger:
         return self.context.logger
@@ -1249,6 +1257,7 @@ class ExecutionContext(TruncableService):
             self.register_service(ContextLock, ContextLock())
         if isinstance(self.get_service(ContextLock).lock, str):
             raise RuntimeError(self.get_service(ContextLock).lock)
+        self.flow.link_context(self)
         return self.get_service(ContextLock).synchroneous()
 
     def thread_safe(self) -> Tuple[RLock, 'ExecutionContext']:
@@ -1263,6 +1272,8 @@ class ExecutionContext(TruncableService):
         managed_thread_safe_lock: RLock = self.synchroneous()
 
         threaded_context = self.copy()
+        self.flow.unlink_context()
+        threaded_context.flow.unlink_context()
 
         # Not passing parents to threads. Could be refactored.
         threaded_context.parents = []

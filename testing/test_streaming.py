@@ -328,14 +328,17 @@ def test_queued_pipeline_saving(tmpdir, use_processes, use_savers):
     assert len(p[3].wrapped.fit_callback_function.data) == 20
 
 
-def test_queued_pipeline_with_savers(tmpdir):
+@pytest.mark.parametrize("use_processes", [False, True])
+def test_queued_pipeline_with_savers(tmpdir, use_processes: bool):
     # Given
     p = ParallelQueuedFeatureUnion([
         ('1', MultiplyByN(2)),
         ('2', MultiplyByN(2)),
         ('3', MultiplyByN(2)),
         ('4', MultiplyByN(2)),
-    ], n_workers_per_step=1, max_queue_size=10, batch_size=10, use_savers=True).with_context(ExecutionContext(tmpdir))
+    ], n_workers_per_step=1, max_queue_size=10, batch_size=10,
+        use_savers=True, use_processes=use_processes
+    ).with_context(ExecutionContext(tmpdir))
 
     # When
     outputs = p.transform(list(range(100)))

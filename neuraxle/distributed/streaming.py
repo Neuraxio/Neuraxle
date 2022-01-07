@@ -204,6 +204,10 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
         :type context: ExecutionContext
         :return:
         """
+        if self.use_savers:
+            _ = self.save(context, full_dump=True)  # Cannot delete queue worker self.
+            del self.wrapped  # queue is deleted
+
         thread_safe_context = context
         thread_safe_lock: RLock = context.synchroneous()
         parallel_call = Thread
@@ -212,18 +216,12 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
             # when we create many processes: https://stackoverflow.com/a/65749012
             thread_safe_lock, thread_safe_context = context.thread_safe()
             parallel_call = Process
-        thread_safe_self = self
-
-        if self.use_savers:
-            _ = thread_safe_self.save(thread_safe_context, full_dump=True)  # Cannot delete queue worker self.
-            del thread_safe_self.wrapped
-            # del thread_safe_self.queue
 
         self.workers = []
         for _, worker_arguments in zip(range(self.n_workers), self.additional_worker_arguments):
             p = parallel_call(
                 target=worker_function,
-                args=(thread_safe_self, thread_safe_lock, thread_safe_context, self.use_savers, worker_arguments)
+                args=(self, thread_safe_lock, thread_safe_context, self.use_savers, worker_arguments)
             )
             p.daemon = True
             p.start()
