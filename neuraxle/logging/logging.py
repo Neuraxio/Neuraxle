@@ -25,7 +25,7 @@ to log info in various folders.
 import logging
 import sys
 from io import StringIO
-from typing import IO, Dict, Optional
+from typing import IO, Dict, List, Optional
 
 LOGGER_FORMAT = "[%(asctime)s][%(levelname)-8s][%(name)-8s][%(module)-1s.py:%(lineno)-1d]: %(message)s"
 LOGGING_DATETIME_STR_FORMAT = '%Y-%m-%d_%H:%M:%S.%f'
@@ -99,6 +99,14 @@ class NeuraxleLogger(logging.Logger):
             self.removeHandler(LOGGER_FILE_HANDLERS[self.name])
             del LOGGER_FILE_HANDLERS[self.name]
         return self
+
+    def read_log_file(self) -> List[str]:
+        if self.name not in LOGGER_FILE_HANDLERS:
+            raise ValueError(
+                f"No file handler for logger named `{self.name}`. Perhaps you forgot to call "
+                f"`self.with_file_handler`, or removed the file handler?")
+        with open(LOGGER_FILE_HANDLERS[self.name].baseFilename, 'r') as f:
+            return f.readlines()
 
     def with_std_handlers(self) -> 'NeuraxleLogger':
         self._add_stream_handler("errr_handler", sys.stderr, logging.WARN)

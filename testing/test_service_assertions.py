@@ -4,16 +4,17 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 import pytest
-from sklearn.metrics import mean_squared_error
-
-from neuraxle.base import BaseService, Identity, ExecutionContext, NonFittableMixin, \
-    StepWithContext, ForceHandleIdentity, BaseStep, BaseTransformerT
+from neuraxle.base import (BaseService, BaseStep, BaseTransformerT,
+                           ExecutionContext, ForceHandleIdentity, Identity,
+                           NonFittableMixin, StepWithContext)
 from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearch
+from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
 from neuraxle.metaopt.validation import ValidationSplitter
-from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.pipeline import Pipeline
+from sklearn.metrics import mean_squared_error
 
 
 class SomeBaseService(BaseService):
@@ -114,13 +115,13 @@ def test_with_context_should_fail_at_init_when_services_are_missing(tmpdir):
 def test_localassert_should_assert_dependencies_properly_at_exec(tmpdir):
     data_inputs = np.array([0, 1, 2, 3])
     context = ExecutionContext(root=tmpdir)
-    p = Pipeline([
-        RegisterServiceDynamically(),
+    RegisterServiceDynamically().handle_transform(DACT(data_inputs), context)
+    p = Pipeline([Pipeline([
         SomeStep().assert_has_services_at_execution(SomeBaseService)
-    ]).with_context(context=context)
+    ])]).with_context(context=context)
 
-    p.transform(data_inputs=data_inputs)
-    service = context.get_service(SomeBaseService)
+    p.transform(data_inputs)
+    service = p.context.get_service(SomeBaseService)
     assert np.array_equal(service.data, data_inputs)
 
 

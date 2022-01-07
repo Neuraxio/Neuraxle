@@ -438,9 +438,10 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
             self.save_subaggregate(resource, deep=resource.is_deep)
 
             self.flow.log('Finished round hp search!')
+            main_metric_name = self.hp_optimizer.get_main_metric_name()
             self.flow.log_best_hps(
-                self.hp_optimizer.get_main_metric_name(),
-                self.get_best_hyperparams()
+                main_metric_name,
+                self.get_best_hyperparams(main_metric_name)
             )
 
             self.save(False)

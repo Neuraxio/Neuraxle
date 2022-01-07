@@ -808,7 +808,11 @@ class InMemoryHyperparamsRepository(RaiseDeprecatedClass, HyperparamsRepository)
     """
 
     def __init__(self, *kargs, **kwargs):
-        RaiseDeprecatedClass.__init__(self, replacement_class=VanillaHyperparamsRepository)
+        RaiseDeprecatedClass.__init__(
+            self,
+            replacement_class=VanillaHyperparamsRepository,
+            since_version="0.7.0",
+        )
 
 
 class BaseHyperparameterOptimizer(ABC):

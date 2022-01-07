@@ -22,7 +22,7 @@ from neuraxle.steps.numpy import AddN, MultiplyByN, NumpyReshape
 from sklearn.metrics import mean_squared_error
 
 
-class FitTransformLoggingStep(HandleOnlyMixin, BaseStep):
+class FitTransformCounterLoggingStep(HandleOnlyMixin, BaseStep):
     def __init__(self):
         BaseStep.__init__(self)
         HandleOnlyMixin.__init__(self)
@@ -45,7 +45,7 @@ class FitTransformLoggingStep(HandleOnlyMixin, BaseStep):
         self.logging_call_counter += 1
 
 
-def test_logger(tmpdir):
+def test_context_logger_log_file(tmpdir):
     # Setup
     file_path = os.path.join(tmpdir, "test.log")
     if os.path.exists(file_path):
@@ -53,31 +53,29 @@ def test_logger(tmpdir):
     try:
 
         # Given
-        context = ExecutionContext(tmpdir)
-        context.logger.with_file_handler(file_path)
+        cx = ExecutionContext(tmpdir)
+        cx.logger.with_file_handler(file_path)
         pipeline = Pipeline([
             MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
                 'multiply_by': FixedHyperparameter(2)
             })),
             NumpyReshape(new_shape=(-1, 1)),
-            FitTransformLoggingStep()
+            FitTransformCounterLoggingStep()
         ])
 
         # When
-        data_container = DataContainer(
+        dact = DataContainer(
             data_inputs=np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
         )
-        pipeline.handle_fit(data_container, context)
+        pipeline.handle_fit(dact, cx)
 
         # Then
-        assert os.path.exists(file_path)
-        with open(file_path) as f:
-            log = f.read()
+        log = ''.join(cx.logger.read_log_file())
         assert "fit call - logging call # 0" in log
 
     # Teardown
     finally:
-        context.logger.without_file_handler()
+        cx.logger.without_file_handler()
         os.remove(file_path)
 
 
@@ -96,7 +94,7 @@ class TestTrialLogger:
                     'multiply_by': FixedHyperparameter(2)
                 })),
                 NumpyReshape(new_shape=(-1, 1)),
-                FitTransformLoggingStep()
+                FitTransformCounterLoggingStep()
             ]),
             hyperparams_optimizer=RandomSearch(),
             validation_splitter=ValidationSplitter(0.20),
@@ -120,6 +118,7 @@ class TestTrialLogger:
         assert len(file_paths) == n_trials
 
         for f in file_paths:
+            # TODO: cx.copy().with_sublocation(...).logger.read_log_file()
             assert os.path.exists(f)
 
         for f in file_paths:
