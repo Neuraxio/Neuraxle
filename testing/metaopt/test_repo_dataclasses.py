@@ -16,10 +16,11 @@ from neuraxle.metaopt.callbacks import (CallbackList, EarlyStoppingCallback,
                                         MetricCallback)
 from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
                                               Trial, TrialSplit)
+from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            AutoMLContext, BaseDataclass,
                                            BaseHyperparameterOptimizer,
-                                           ClientDataclass,
+                                           ClientDataclass, HyperparamsRepository,
                                            MetricResultsDataclass,
                                            ProjectDataclass, RootDataclass,
                                            RoundDataclass, ScopedLocation,
@@ -34,13 +35,11 @@ from neuraxle.steps.data import DataShuffler
 from neuraxle.steps.flow import TrainOnlyWrapper
 from neuraxle.steps.numpy import AddN, MultiplyByN
 from sklearn.metrics import median_absolute_error
+from testing.test_step_saving import ROOT
 
 SOME_METRIC_NAME = 'MAE'
+HYPERPARAMS = {'learning_rate': 0.01}
 
-
-BASE_TRIAL_ARGS = {
-    "hyperparams": HyperparameterSamples(),
-}
 
 SOME_METRIC_RESULTS_DATACLASS = MetricResultsDataclass(
     metric_name=SOME_METRIC_NAME,
@@ -48,16 +47,18 @@ SOME_METRIC_RESULTS_DATACLASS = MetricResultsDataclass(
     train_values=[2, 1, 0],
     higher_score_is_better=False,
 )
+SOME_TRIAL_DATACLASS = TrialDataclass(
+    trial_number=0,
+    hyperparams=HYPERPARAMS,
+).start()
 SOME_TRIAL_SPLIT_DATACLASS = TrialSplitDataclass(
     split_number=0,
     metric_results=as_named_odict(SOME_METRIC_RESULTS_DATACLASS),
-    **BASE_TRIAL_ARGS,
-).start().end(TrialStatus.SUCCESS)
-SOME_TRIAL_DATACLASS = TrialDataclass(
-    trial_number=0,
-    validation_splits=[SOME_TRIAL_SPLIT_DATACLASS],
-    **BASE_TRIAL_ARGS,
-).start().end(TrialStatus.SUCCESS)
+    hyperparams=HYPERPARAMS,
+).start()
+SOME_TRIAL_SPLIT_DATACLASS.end(TrialStatus.SUCCESS)
+SOME_TRIAL_DATACLASS.store(SOME_TRIAL_SPLIT_DATACLASS)
+SOME_TRIAL_DATACLASS.end(TrialStatus.SUCCESS)
 SOME_ROUND_DATACLASS = RoundDataclass(
     round_number=0,
     trials=[SOME_TRIAL_DATACLASS],
@@ -79,21 +80,21 @@ SOME_FULL_SCOPED_LOCATION: ScopedLocation = ScopedLocation(
     DEFAULT_PROJECT, DEFAULT_CLIENT, 0, 0, 0, SOME_METRIC_NAME
 )
 
+ALL_DATACLASSES = [
+    SOME_ROOT_DATACLASS,
+    SOME_PROJECT_DATACLASS,
+    SOME_CLIENT_DATACLASS,
+    SOME_ROUND_DATACLASS,
+    SOME_TRIAL_DATACLASS,
+    SOME_TRIAL_SPLIT_DATACLASS,
+    SOME_METRIC_RESULTS_DATACLASS,
+]
 
-@pytest.mark.parametrize("scope_slice_len, expected_dataclass, dataclass_type", [
-    (0, SOME_ROOT_DATACLASS, RootDataclass),
-    (1, SOME_PROJECT_DATACLASS, ProjectDataclass),
-    (2, SOME_CLIENT_DATACLASS, ClientDataclass),
-    (3, SOME_ROUND_DATACLASS, RoundDataclass),
-    (4, SOME_TRIAL_DATACLASS, TrialDataclass),
-    (5, SOME_TRIAL_SPLIT_DATACLASS, TrialSplitDataclass),
-    (6, SOME_METRIC_RESULTS_DATACLASS, MetricResultsDataclass),
-])
-def test_dataclass_getters(
-    scope_slice_len: int,
-    expected_dataclass: BaseDataclass,
-    dataclass_type: Type[BaseDataclass],
-):
+
+@pytest.mark.parametrize("scope_slice_len", list(range(len(ALL_DATACLASSES))))
+def test_dataclass_getters(scope_slice_len: int):
+    expected_dataclass: BaseDataclass = ALL_DATACLASSES[scope_slice_len]
+    dataclass_type: Type[BaseDataclass] = expected_dataclass.__class__
     sliced_scope = SOME_FULL_SCOPED_LOCATION[:dataclass_type]
     assert len(sliced_scope) == scope_slice_len
 
@@ -224,3 +225,78 @@ def test_dataclass_from_json_to_json():
 
     assert SOME_METRIC_RESULTS_DATACLASS == root_restored_dc[SOME_FULL_SCOPED_LOCATION]
     assert root == root_restored_dc
+
+
+def test_hyperparams_repository_has_default_client_project():
+    cx = AutoMLContext.from_context()
+    loc: ScopedLocation = ScopedLocation.default().with_dc(SOME_ROUND_DATACLASS)
+
+    restored_client = cx.repo.load(loc.popped(), deep=True)
+    restored_project = cx.repo.load(loc.popped().popped(), deep=True)
+
+    cx.repo.save(copy.deepcopy(SOME_ROUND_DATACLASS), scope=loc, deep=True)
+    restored_round = cx.repo.load(loc, deep=True)
+
+    assert restored_round == SOME_ROUND_DATACLASS
+    assert restored_project.shallow() == SOME_PROJECT_DATACLASS.shallow()
+    assert restored_client.get_id() == SOME_CLIENT_DATACLASS.get_id()
+
+
+def vanilla_repo_ctor(tmpdir) -> AutoMLContext:
+    return AutoMLContext.from_context(ExecutionContext())
+
+
+def json_repo_ctor(tmpdir) -> AutoMLContext:
+    # TODO: add this function to REPO_CTORS
+    return AutoMLContext.from_context(ExecutionContext(), repo=HyperparamsJSONRepository(tmpdir))
+
+
+REPO_CTORS = [vanilla_repo_ctor]
+
+
+@pytest.mark.parametrize('repo_ctor', REPO_CTORS)
+@pytest.mark.parametrize('_dataclass', ALL_DATACLASSES)
+def test_hyperparams_repository_loads_stored_scoped_info(
+    tmpdir, repo_ctor: Callable[[str], AutoMLContext], _dataclass: BaseDataclass
+):
+    loc: ScopedLocation = SOME_FULL_SCOPED_LOCATION.at_dc(_dataclass)
+    cx: AutoMLContext = repo_ctor(tmpdir).with_loc(loc)
+    repo: HyperparamsRepository = cx.repo
+    repo.save(copy.deepcopy(SOME_ROOT_DATACLASS), scope=loc, deep=True)
+
+    restored_dataclass_deep = repo.load(loc, deep=True)
+    restored_dataclass_shallow = repo.load(loc, deep=False)
+
+    assert restored_dataclass_deep == _dataclass
+    assert restored_dataclass_shallow == _dataclass.shallow()
+
+
+@pytest.mark.parametrize('repo_ctor', REPO_CTORS)
+@pytest.mark.parametrize('_dataclass', ALL_DATACLASSES[1:])
+def test_hyperparams_repository_saves_subsequent_data(
+    tmpdir, repo_ctor: Callable[[str], AutoMLContext], _dataclass: BaseDataclass
+):
+    loc: ScopedLocation = SOME_FULL_SCOPED_LOCATION.at_dc(_dataclass)
+    cx: AutoMLContext = repo_ctor(tmpdir).with_loc(loc)
+    repo: HyperparamsRepository = cx.repo
+    repo.save(copy.deepcopy(SOME_ROOT_DATACLASS), scope=loc, deep=True)
+    old_id = _dataclass.get_id()
+    new_id = old_id + 1 if isinstance(old_id, int) else old_id + "_next"
+    new_dataclass = copy.deepcopy(_dataclass).set_id(new_id)
+    new_loc = loc.popped().with_dc(new_dataclass)
+
+    repo.save(new_dataclass, scope=new_loc, deep=False)
+
+    restored_dataclass_empty = repo.load(new_loc, deep=True)
+    assert restored_dataclass_empty == new_dataclass.empty()
+
+    restored_dataclass_empty = repo.load(new_loc, deep=False)
+    assert restored_dataclass_empty == new_dataclass.empty()
+
+    repo.save(new_dataclass, scope=new_loc, deep=True)
+
+    restored_dataclass_shallow = repo.load(new_loc, deep=False)
+    assert restored_dataclass_shallow == new_dataclass.shallow()
+
+    restored_dataclass_deep = repo.load(new_loc, deep=True)
+    assert restored_dataclass_deep == new_dataclass

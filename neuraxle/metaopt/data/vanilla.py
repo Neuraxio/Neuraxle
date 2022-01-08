@@ -36,15 +36,11 @@ import os
 from abc import ABC, abstractclassmethod, abstractmethod, abstractproperty
 from collections import OrderedDict
 from dataclasses import asdict, dataclass, field, fields
-from enum import Enum
 from json.encoder import JSONEncoder
-from numbers import Number
 from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
                     Sequence, Tuple, Type, TypeVar, Union)
 
 import numpy as np
-
-from neuraxle.logging.warnings import RaiseDeprecatedClass
 from neuraxle.base import (BaseService, BaseStep, ContextLock,
                            ExecutionContext, Flow, TrialStatus)
 from neuraxle.data_container import DataContainer as DACT
@@ -53,8 +49,8 @@ from neuraxle.hyperparams.space import (HyperparameterSamples,
 from neuraxle.logging.logging import (LOGGER_FORMAT,
                                       LOGGING_DATETIME_STR_FORMAT,
                                       NeuraxleLogger)
+from neuraxle.logging.warnings import RaiseDeprecatedClass
 from neuraxle.metaopt.observable import _ObservableRepo, _ObserverOfRepo
-from neuraxle.steps.flow import IfExecutionPhaseIsThen
 
 SubDataclassT = TypeVar('SubDataclassT', bound=Optional['BaseDataclass'])
 ScopedLocationAttrInt = int
@@ -141,9 +137,28 @@ class ScopedLocation(BaseService):
 
     def with_id(self, _id: ScopedLocationAttr) -> 'ScopedLocation':
         """
-        Returns a new :class:`ScopedLocation` with the provided id added.
+        Returns a longer :class:`ScopedLocation` with the provided id added at the end.
         """
         return ScopedLocation(*(self.as_list() + [_id]))
+
+    def at_dc(self, dc: 'BaseDataclass') -> 'ScopedLocation':
+        """
+        Returns a trimmed :class:`ScopedLocation` with the provided :class:`BaseDataclass` (dc) type's id as the ScopedLocation's deepest attribute.
+        """
+        if isinstance(dc, RootDataclass):
+            return ScopedLocation()
+        return self[:dc.__class__]
+
+    @staticmethod
+    def default() -> 'ScopedLocation':
+        """
+        Returns the default :class:`ScopedLocation`. That is:
+
+        .. code-block:: python
+            ScopedLocation("default_project", "default_client").
+
+        """
+        return ScopedLocation(DEFAULT_PROJECT, DEFAULT_CLIENT)
 
     def __setitem__(self, key: Type['BaseDataclass'], value: ScopedLocationAttr):
         """
@@ -291,6 +306,19 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
         setattr(self, dataclass_2_subloc_attr[self.__class__], sublocation)
         return self
 
+    def __contains__(self, key: ScopedLocation) -> bool:
+        # Too shallow:
+        if len(key) < list(dataclass_2_subdataclass.keys()).index(self.__class__):
+            raise ValueError(f"Key not deep enough for this dataclass of type {self.__class__.__name__}")
+        # Terminal recursion condition:
+        if key.at_dc(self) == key:
+            return key.peek() == self.get_id()
+        # Recursive call deeper otherwise:
+        key_subattr: ScopedLocationAttr = key[self.__class__]
+        if key_subattr in self.get_sublocation_keys():
+            return key in self.get_sublocation()[key_subattr]
+        return False
+
     def __getitem__(self, loc: ScopedLocation) -> 'SubDataclassT':
         subdataklass: Type[SubDataclassT] = dataclass_2_subdataclass[self.__class__]
         if subdataklass is None:
@@ -309,10 +337,23 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
 
     @abstractmethod
     def store(self, dc: SubDataclassT) -> ScopedLocationAttr:
+        """
+        Add a subdataclass to the sublocation, at its proper ID.
+        """
         raise NotImplementedError("Must use mixins.")
 
     @abstractmethod
     def shallow(self) -> 'BaseDataclass':
+        """
+        Replaces the sublocation items with None.
+        """
+        raise NotImplementedError("Must use mixins.")
+
+    @abstractmethod
+    def empty(self) -> 'BaseDataclass':
+        """
+        Do empty the sublocation.
+        """
         raise NotImplementedError("Must use mixins.")
 
     @abstractmethod
@@ -362,6 +403,11 @@ class DataclassHasOrderedDictMixin:
         # Deep copy only after trimming sublocations.
         return copy.deepcopy(self_copy)
 
+    def empty(self) -> 'BaseDataclass':
+        self_copy = copy.copy(self)
+        self_copy.set_sublocation(OrderedDict())
+        return copy.deepcopy(self_copy)
+
 
 @dataclass(order=True)
 class DataclassHasListMixin:
@@ -400,6 +446,11 @@ class DataclassHasListMixin:
         new_sublocation = [None for _ in range(len(self))]
         self_copy.set_sublocation(new_sublocation)
         # Deep copy only after trimming sublocations.
+        return copy.deepcopy(self_copy)
+
+    def empty(self) -> 'BaseDataclass':
+        self_copy = copy.copy(self)
+        self_copy.set_sublocation([])
         return copy.deepcopy(self_copy)
 
     def get_next_i(self) -> ScopedLocationAttrInt:
@@ -757,14 +808,15 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
         return copy.deepcopy(ret)
 
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'VanillaHyperparamsRepository':
-        if not isinstance(_dataclass, BaseDataclass):
-            raise ValueError(f"Was expecting a dataclass. Got `{_dataclass.__class__.__name__}`.")
-
+        # Sanitizing
         _dataclass: SubDataclassT = copy.deepcopy(_dataclass)
 
+        # Sanity checks: good type
+        if not isinstance(_dataclass, BaseDataclass):
+            raise ValueError(f"Was expecting a dataclass. Got `{_dataclass.__class__.__name__}`.")
+        # Sanity checks: sufficient scope depth
+        scope = scope.at_dc(_dataclass)  # Sanitizing scope to dtype loc.
         _id_from_scope: ScopedLocationAttr = scope[_dataclass.__class__]
-        scope = scope[:_dataclass.__class__]  # Sanitizing scope to dtype loc.
-
         if _id_from_scope is not None:
             if _id_from_scope != _dataclass.get_id():
                 raise ValueError(
@@ -777,19 +829,21 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
                 f"The scope `{scope}` is not of the good length for dataclass type `{_dataclass.__class__.__name__}`."
             )
 
+        # Passthrough dc's sublocation when saving shallow:
         if not deep:
-            # Reassign saved sublocation to new dataclass:
             if isinstance(_dataclass, RootDataclass):
-                prev_dc = self.root
+                _dataclass.set_sublocation(self.root.get_sublocation())
+            elif scope.with_dc(_dataclass) in self.root:
+                prev_dc: SubDataclassT = self.root[scope.with_dc(_dataclass)]
+                _dataclass.set_sublocation(prev_dc.get_sublocation())
             else:
-                prev_dc: SubDataclassT = self.load(scope.with_dc(_dataclass), deep=True)
-            _dataclass.set_sublocation(prev_dc.get_sublocation())
+                _dataclass = _dataclass.empty()
 
+        # Finally storing.
         if isinstance(_dataclass, RootDataclass):
             self.root = _dataclass
         else:
             self.root[scope].store(_dataclass)
-
         return self
 
     def get_scoped_logger_path(self, scope: ScopedLocation) -> str:
