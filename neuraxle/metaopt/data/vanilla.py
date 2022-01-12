@@ -314,7 +314,7 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
         if key.at_dc(self) == key:
             return key.peek() == self.get_id()
         # Recursive call deeper otherwise:
-        key_subattr: ScopedLocationAttr = key[self.__class__]
+        key_subattr: ScopedLocationAttr = key[self.__class__ + 1]
         if key_subattr in self.get_sublocation_keys():
             return key in self.get_sublocation()[key_subattr]
         return False
@@ -815,7 +815,7 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
         if not isinstance(_dataclass, BaseDataclass):
             raise ValueError(f"Was expecting a dataclass. Got `{_dataclass.__class__.__name__}`.")
         # Sanity checks: sufficient scope depth
-        scope = scope.at_dc(_dataclass)  # Sanitizing scope to dtype loc.
+        scope = scope[:_dataclass.__class__]  # Sanitizing scope to dtype loc.
         _id_from_scope: ScopedLocationAttr = scope[_dataclass.__class__]
         if _id_from_scope is not None:
             if _id_from_scope != _dataclass.get_id():

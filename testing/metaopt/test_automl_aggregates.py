@@ -137,6 +137,7 @@ cant_be_shallow_aggs = [
 @pytest.mark.parametrize("aggregate_class", list(aggregate_2_subaggregate.keys()))
 @pytest.mark.parametrize("is_deep", [True, False])
 def test_aggregates_creation(aggregate_class: Type[BaseAggregate], is_deep):
+    # Create repo from deep root DC:
     dataclass_class: Type = aggregate_2_dataclass[aggregate_class]
     scoped_loc: ScopedLocation = SOME_FULL_SCOPED_LOCATION[:dataclass_class]
     context = ExecutionContext()
@@ -145,22 +146,30 @@ def test_aggregates_creation(aggregate_class: Type[BaseAggregate], is_deep):
         VanillaHyperparamsRepository.from_root(SOME_ROOT_DATACLASS, context.get_path())
     )
 
+    # Retrieve scoped DC from root
     dataclass = SOME_ROOT_DATACLASS[scoped_loc]
     if not is_deep:
         dataclass = dataclass.shallow()
+
+    # It shouldbe the same from loading it from the repo:
     assert dataclass == context.repo.load(scoped_loc, deep=is_deep)
 
+    # Finally create aggregate from the DC loaded above:
     if aggregate_class in cant_be_shallow_aggs and not is_deep:
         with pytest.raises(AssertionError):
-
             aggregate = aggregate_class(dataclass, context.with_loc(
                 scoped_loc.popped()), is_deep=is_deep)
+        return  # skip the rest of the test when class can't be shallow
     else:
-        if True:
-            aggregate = aggregate_class(dataclass, context.with_loc(
-                scoped_loc.popped()), is_deep=is_deep)
+        aggregate = aggregate_class(dataclass, context.with_loc(
+            scoped_loc.popped()), is_deep=is_deep)
 
-        aggregate.save(deep=False)
-        assert aggregate._dataclass == dataclass
-        assert aggregate._dataclass == context.repo.load(scoped_loc, deep=is_deep)
-        assert isinstance(aggregate, aggregate_class)
+    # Its data should stay intact right after construction:
+    assert aggregate._dataclass == dataclass
+    assert isinstance(aggregate, aggregate_class)
+
+    # Save aggregate to repo, shallowly:
+    aggregate.save(deep=False)
+
+    # try to load its dataclass back to ensure consistency
+    assert aggregate._dataclass == context.repo.load(scoped_loc, deep=is_deep)
