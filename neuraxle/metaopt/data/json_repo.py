@@ -63,7 +63,6 @@ class HyperparamsJSONRepository(HyperparamsRepository):
         :class:`AutoML`,
         :class:`Trainer`,
         :class:`~neuraxle.metaopt.data.trial.Trial`,
-        :class:`InMemoryHyperparamsRepository`,
         :class:`HyperparamsJSONRepository`,
         :class:`BaseHyperparameterSelectionStrategy`,
         :class:`RandomSearchHyperparameterSelectionStrategy`,

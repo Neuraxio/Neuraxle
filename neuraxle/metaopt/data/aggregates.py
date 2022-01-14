@@ -64,13 +64,11 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            BaseHyperparameterOptimizer,
                                            ClientDataclass,
                                            HyperparamsRepository,
-                                           InMemoryHyperparamsRepository,
                                            MetricResultsDataclass,
-                                           ProjectDataclass, RecursiveDict,
-                                           RootDataclass, RoundDataclass,
-                                           ScopedLocation, ScopedLocationAttr,
-                                           SubDataclassT, TrialDataclass,
-                                           TrialSplitDataclass,
+                                           ProjectDataclass, RootDataclass,
+                                           RoundDataclass, ScopedLocation,
+                                           ScopedLocationAttr, SubDataclassT,
+                                           TrialDataclass, TrialSplitDataclass,
                                            VanillaHyperparamsRepository,
                                            dataclass_2_id_attr)
 from neuraxle.steps.flow import ReversiblePreprocessingWrapper
@@ -120,6 +118,17 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDa
 
         self.service_assertions = [Flow, HyperparamsRepository]
         self._invariant()
+
+    @staticmethod
+    def from_context(context: AutoMLContext, dataclass_id: ScopedLocationAttr = None) -> 'BaseAggregate':
+        """
+        Return an aggregate from a context.
+        Requirement: Have already pre-push the attr of dataclass into
+        the context before calling this.
+        """
+        _dataclass = context.load_dc(deep=True)
+        aggregate_class = dataclass_2_aggregate[_dataclass.__class__]
+        return aggregate_class(_dataclass, context, is_deep=True)
 
     def _invariant(self):
         _type: Type[SubDataclassT] = self.dataclass
@@ -354,6 +363,11 @@ class Client(BaseAggregate['Round', ClientDataclass]):
         self._managed_subresource(new_round=False)
         return self
 
+    @_with_method_as_context_manager
+    def optim_round(self, new_round: bool) -> 'Client':
+        self._managed_subresource(new_round=new_round)
+        return self
+
     def _acquire_managed_subresource(self, new_round: bool = True) -> 'Round':
         with self.context.lock:
             self.refresh(self.is_deep)
@@ -377,10 +391,10 @@ class Client(BaseAggregate['Round', ClientDataclass]):
 class Round(BaseAggregate['Trial', RoundDataclass]):
 
     def with_optimizer(
-        self, hp_optimizer: BaseHyperparameterOptimizer, hps: HyperparameterSpace
+        self, hp_optimizer: BaseHyperparameterOptimizer, hp_space: HyperparameterSpace
     ) -> 'Round':
         self.hp_optimizer: BaseHyperparameterOptimizer = hp_optimizer
-        self.hps: HyperparameterSpace = hps
+        self.hp_space: HyperparameterSpace = hp_space
         return self
 
     @_with_method_as_context_manager
@@ -430,8 +444,13 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
         with self.context.lock:
             self.refresh(True)
 
-            if e is None:
+            is_all_success: bool = all(i.is_success() for i in resource)
+            is_all_failure: bool = all(not i.is_success() for i in resource)
+
+            if e is None or is_all_success:
                 resource.set_success()
+            elif e is None and is_all_failure:
+                resource.set_failed(RuntimeError("All trial splits failed for this trial."))
             else:
                 resource.set_failed(e)
 
@@ -561,8 +580,15 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
         :class:`ExecutionContext`
     """
 
+    def continue_loop_on_error(self) -> 'Trial':
+        self.continue_loop_on_error: bool = True
+        return self
+
     @_with_method_as_context_manager
-    def new_validation_split(self, continue_loop_on_error: bool) -> 'Trial':
+    def new_validation_split(self, continue_loop_on_error: bool = False) -> 'Trial':
+        continue_loop_on_error = continue_loop_on_error or (
+            hasattr(self, "continue_loop_on_error") and self.continue_loop_on_error)
+
         self._managed_subresource(continue_loop_on_error=continue_loop_on_error)
         return self
 
@@ -747,7 +773,7 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
         Epochs are 1-indexed like lengths: first epoch is 1, second is 2, etc.
         """
         if self.n_epochs is None:
-            raise ValueError("self.n_epochs is not set. Please call self.with_n_epochs(n_epochs) first.")
+            raise ValueError("self.n_epochs is not set. Please call self.with_n_epochs(n_epochs) first on your TrialSplit.")
         if self.epoch == 0:
             self.start()
         self.epoch: int = self.epoch + 1
@@ -977,3 +1003,7 @@ aggregate_2_dataclass: OrderedDict[BaseAggregate, BaseDataclass] = OrderedDict([
     (TrialSplit, TrialSplitDataclass),
     (MetricResults, MetricResultsDataclass),
 ])
+dataclass_2_aggregate: OrderedDict[BaseDataclass, BaseAggregate] = {
+    dc: agg
+    for agg, dc in aggregate_2_dataclass.items()
+}

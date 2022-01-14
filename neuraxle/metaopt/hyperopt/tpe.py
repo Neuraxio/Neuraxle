@@ -8,18 +8,16 @@ from operator import itemgetter
 from typing import Any, List, Tuple
 
 import numpy as np
+from neuraxle.base import TrialStatus
 from neuraxle.hyperparams.distributions import (
     Choice, DiscreteHyperparameterDistribution, DistributionMixture,
     HyperparameterDistribution, LogNormal, LogUniform, PriorityChoice,
     Quantized)
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
-from neuraxle.metaopt.auto_ml import (BaseHyperparameterOptimizer, Round,
-                                      TrialStatus)
 from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
 from neuraxle.metaopt.validation import GridExplorationSampler
-
 
 _LOG_DISTRIBUTION = (LogNormal, LogUniform)
 _QUANTIZED_DISTRIBUTION = (Quantized,)
@@ -36,6 +34,7 @@ class TreeParzenEstimator(BaseHyperparameterOptimizer):
     :class:`neuraxle.metaopt.automl.GridExplorationSampler` instead of a random search
     to pick the first exploration samples to furthermore explore the space at the beginning.
     """
+
     def __init__(
             self,
             number_of_initial_random_step: int = 40,

@@ -629,7 +629,6 @@ class RandomSearch(BaseHyperparameterOptimizer):
         :class:`~neuraxle.metaopt.data.trial.Trial`,
         :class:`~neuraxle.metaopt.data.trial.Trials`,
         :class:`HyperparamsRepository`,
-        :class:`InMemoryHyperparamsRepository`,
         :class:`HyperparamsJSONRepository`,
         :class:`BaseHyperparameterSelectionStrategy`,
         :class:`RandomSearchHyperparameterSelectionStrategy`,
@@ -675,7 +674,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
         :return: next hyperparams
         """
         if self._i == 0:
-            self._generate_grid(round_scope.hps)
+            self._generate_grid(round_scope.hp_space)
         else:
             self._reshuffle_grid()
         self._i += 1

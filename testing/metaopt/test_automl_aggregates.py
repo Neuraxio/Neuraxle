@@ -74,7 +74,7 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
         with ps.default_client() as cs:
             cs: Client = cs
             with cs.new_round() as rs:
-                rs: Round = rs.with_optimizer(hp_optimizer=hp_optimizer, hps=hps)
+                rs: Round = rs.with_optimizer(hp_optimizer=hp_optimizer, hp_space=hps)
                 with rs.new_rvs_trial() as ts:
                     ts: Trial = ts
                     with ts.new_validation_split(continue_loop_on_error=False) as tss:
@@ -83,9 +83,13 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
                         for _ in range(n_epochs):
                             e = tss.next_epoch()
 
-                            p, eval_dact_train = p.handle_fit_transform(
-                                dact_train,
+                            p = p.handle_fit(
+                                dact_train.copy(),
                                 tss.train_context())
+
+                            eval_dact_train = p.handle_predict(
+                                dact_train.without_eo(),
+                                tss.validation_context())
                             eval_dact_valid = p.handle_predict(
                                 dact_valid.without_eo(),
                                 tss.validation_context())

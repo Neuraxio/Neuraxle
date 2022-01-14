@@ -67,7 +67,7 @@ def test_context_assertions_raises_when_it_throws(tmpdir):
 
     try:
         SomeStepWithFailedAssertion().transform([True, True, False])
-    except AssertionError as _:
+    except AssertionError:
         assertion_was_raised = True
 
     assert assertion_was_raised
@@ -78,7 +78,7 @@ def test_context_assertions_passes_when_it_passes(tmpdir):
 
     try:
         SomeStepWithFailedAssertion().transform([True, True, True])
-    except AssertionError as _:
+    except AssertionError:
         assertion_was_raised = True
 
     assert not assertion_was_raised
@@ -140,7 +140,6 @@ def test_localassert_should_fail_when_services_are_missing_at_exec(tmpdir):
 
 def _make_autoML_loop(tmpdir, p: Pipeline):
     hp_repository = HyperparamsJSONRepository(cache_folder=tmpdir)
-    # hp_repository = InMemoryHyperparamsRepository(cache_folder=str(tmpdir) + "_hp")
     n_epochs = 1
     return EasyAutoML(
         pipeline=p,

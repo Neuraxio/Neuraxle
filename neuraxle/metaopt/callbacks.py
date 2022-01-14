@@ -60,8 +60,8 @@ class BaseCallback(ABC):
     def call(
         self,
         trial_split: TrialSplit,
-        dact_train: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
-        dact_valid: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
+        dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
+        dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
         is_finished_and_fitted: bool = False
     ) -> bool:
         pass
@@ -84,8 +84,8 @@ class EarlyStoppingCallback(BaseCallback):
     def call(
         self,
         trial_split: TrialSplit,
-        dact_train: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
-        dact_valid: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
+        dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
+        dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
         is_finished_and_fitted: bool = False
     ) -> bool:
         if self.metric_name is None:
@@ -125,8 +125,8 @@ class MetaCallback(BaseCallback):
     def call(
         self,
         trial_split: TrialSplit,
-        dact_train: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
-        dact_valid: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
+        dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
+        dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
         is_finished_and_fitted: bool = False
     ) -> bool:
         return self.wrapped_callback.call(
@@ -148,8 +148,8 @@ class IfBestScore(MetaCallback):
     def call(
         self,
         trial_split: TrialSplit,
-        dact_train: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
-        dact_valid: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
+        dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
+        dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
         is_finished_and_fitted: bool = False
     ) -> bool:
         if trial_split.is_new_best_score():
@@ -174,8 +174,8 @@ class IfLastStep(MetaCallback):
     def call(
         self,
         trial_split: TrialSplit,
-        dact_train: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
-        dact_valid: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
+        dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
+        dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
         is_finished_and_fitted: bool = False
     ) -> bool:
         if trial_split.epoch == trial_split.n_epochs or is_finished_and_fitted:
@@ -207,8 +207,8 @@ class StepSaverCallback(BaseCallback):
     def call(
         self,
         trial_split: TrialSplit,
-        dact_train: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
-        dact_valid: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
+        dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
+        dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
         is_finished_and_fitted: bool = False
     ) -> bool:
         trial_split.save_model(self.label)
@@ -244,8 +244,8 @@ class CallbackList(BaseCallback):
     def call(
         self,
         trial_split: TrialSplit,
-        dact_train: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
-        dact_valid: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
+        dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
+        dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
         is_finished_and_fitted: bool = False
     ) -> bool:
         for callback in self.callbacks:
@@ -302,8 +302,8 @@ class MetricCallback(BaseCallback):
     def call(
         self,
         trial_split: TrialSplit,
-        dact_train: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
-        dact_valid: DACT[IDT, ARG_Y_EXPECTED, ARG_Y_PREDICTD],
+        dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
+        dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
         is_finished_and_fitted: bool = False
     ) -> bool:
         f = self.metric_function

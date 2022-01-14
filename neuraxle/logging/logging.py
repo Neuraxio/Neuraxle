@@ -113,8 +113,14 @@ class NeuraxleLogger(logging.Logger):
         self._add_stream_handler("info_handler", sys.stdout, logging.DEBUG, _FilterSTDErr())
         return self
 
-    def get_string_history(self) -> str:
+    def get_scoped_string_history(self) -> str:
         return LOGGER_STRING_IO[self.name].getvalue()
+
+    def get_full_string_history(self) -> str:
+        return LOGGER_STRING_IO[NEURAXLE_LOGGER_NAME].getvalue()
+
+    def print_full_string_history(self) -> None:
+        print('\n'.join(["\n" + k + " -> str:\n\n" + i.getvalue() for k, i in LOGGER_STRING_IO.items()]))
 
     def _add_stream_handler(
         self,

@@ -39,15 +39,18 @@ from neuraxle.base import (BaseService, BaseServiceT, BaseStep,
                            ForceHandleMixin, TrialStatus, TruncableService,
                            _HasChildrenMixin)
 from neuraxle.data_container import DACT as DACT
+from neuraxle.data_container import IDT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
 from neuraxle.logging.warnings import (warn_deprecated_arg,
                                        warn_deprecated_class)
-from neuraxle.metaopt.callbacks import (BaseCallback, CallbackList,
+from neuraxle.metaopt.callbacks import (ARG_Y_EXPECTED, ARG_Y_PREDICTD,
+                                        BaseCallback, CallbackList,
                                         ScoringCallback)
-from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round, Trial,
-                                              TrialSplit)
-from neuraxle.metaopt.data.vanilla import (AutoMLContext, BaseDataclass,
+from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
+                                              Trial, TrialSplit)
+from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
+                                           AutoMLContext, BaseDataclass,
                                            ClientDataclass,
                                            HyperparamsRepository,
                                            InMemoryHyperparamsRepository,
@@ -98,37 +101,46 @@ class Trainer(BaseService):
 
         """
 
-        splits: List[Tuple[DACT, DACT]] = self.validation_splitter.split_dact(dact, context=trial_scope.context)
+        splits: List[Tuple[DACT, DACT]] = self.validation_splitter.split_dact(
+            dact, context=trial_scope.context)
 
         for train_dact, val_dact in splits:
-            with trial_scope.new_trial_split(self.n_epochs) as trial_split_scope:
-                trial_split_scope: TrialSplit = trial_split_scope  # typing helps
+            with trial_scope.new_validation_split() as trial_split_scope:
+                trial_split_scope: TrialSplit = trial_split_scope.with_n_epochs(self.n_epochs)
 
-                # TODO: No split? use a default single split. Log warning if so?
+                p: BaseStep = pipeline.copy(trial_split_scope.context, deep=True)
+                p.set_hyperparams(trial_scope.get_hyperparams())
 
-                p = pipeline.copy(trial_split_scope.context).set_hyperparams(trial_scope.hps)
+                for _ in range(self.n_epochs):
+                    e = trial_split_scope.next_epoch()
 
-                for e in range(self.n_epochs):
-                    with trial_split_scope.new_epoch(e) as epoch_scope:
-                        epoch_scope: Epoch = epoch_scope  # typing helps
+                    # Fit train
+                    p = p.set_train(True)
+                    p = p.handle_fit(
+                        train_dact.copy(),
+                        trial_split_scope.context.train())
 
-                        p = p.set_train(True)
-                        p = p.handle_fit(train_dact.copy(), epoch_scope.context.train())
+                    # Predict train & val
+                    p = p.set_train(False)
+                    eval_dact_train = p.handle_predict(
+                        train_dact.without_eo(),
+                        trial_split_scope.context.validation())
+                    eval_dact_valid = p.handle_predict(
+                        val_dact.without_eo(),
+                        trial_split_scope.context.validation())
 
-                        y_pred_train = p.handle_predict(train_dact.copy(), epoch_scope.context.validation())
-                        y_pred_val = p.handle_predict(val_dact.copy(), epoch_scope.context.validation())
+                    # Prepare dacts for metric callbacks with a special typing:
+                    eval_dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_train.with_eo(train_dact.eo)
+                    eval_dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_valid.with_eo(val_dact.eo)
 
-                        if self.callbacks.call(
-                                context=epoch_scope.context.validation(),
-                                input_train=train_dact,
-                                pred_train=y_pred_train,
-                                input_val=val_dact,
-                                pred_val=y_pred_val,
-                        ):
-                            break
-                            # Saves the metrics with flow split exit.
-
-                # TODO: log success in the __exit__ method(s).
+                    # Log metrics / evaluate
+                    if self.callbacks.call(
+                        trial_split_scope,
+                        eval_dact_train,
+                        eval_dact_valid,
+                        e == self.n_epochs
+                    ):
+                        break  # Saves stats using the '__exit__' method of managed scoped aggregates.
 
     def refit(self, p: BaseStep, data_container: DACT, context: ExecutionContext) -> BaseStep:
         """
@@ -176,17 +188,20 @@ class BaseControllerLoop(TruncableService):
         :return:
         """
         trainer: Trainer = self[Trainer]
+        hp_optimizer: BaseHyperparameterOptimizer = self[BaseHyperparameterOptimizer]
         hp_space: HyperparameterSpace = pipeline.get_hyperparams_space()
+
         # thread_safe_lock, context = context.thread_safe()
 
-        with client.optim_round(hp_space, self.start_new_run) as optim_round:
-            optim_round: Round = optim_round
+        with client.optim_round(new_round=self.start_new_run) as optim_round:
+            optim_round: Round = optim_round.with_optimizer(hp_optimizer, hp_space)
 
-            for trial_scope in self.loop(optim_round):
-                trial_scope: Trial = trial_scope  # typing helps
-                # trial_scope.context.restore_lock(thread_safe_lock)
+            for managed_trial_scope in self.loop(optim_round):
+                managed_trial_scope: Trial = managed_trial_scope  # typing helps
 
-                trainer.train(pipeline, dact, trial_scope)
+                # trial_scope.context.restore_lock(thread_safe_lock) ??
+
+                trainer.train(pipeline, dact, managed_trial_scope)
 
     def loop(self, round_scope: Round) -> Iterator[Trial]:
         """
@@ -196,13 +211,14 @@ class BaseControllerLoop(TruncableService):
         :param context: execution context
         :return:
         """
-        hp_optimizer: BaseHyperparameterOptimizer = self[BaseHyperparameterOptimizer]
-
         for _ in range(self.n_trials):
-            with round_scope.new_hyperparametrized_trial(hp_optimizer, self.continue_loop_on_error) as trial_scope:
-                trial_scope: Trial = trial_scope  # typing helps
+            with round_scope.new_rvs_trial() as managed_trial_scope:
+                managed_trial_scope: Trial = managed_trial_scope  # typing helps
 
-                yield trial_scope
+                if self.continue_loop_on_error:
+                    managed_trial_scope.continue_loop_on_error()
+
+                yield managed_trial_scope
 
 
 class DefaultLoop(BaseControllerLoop):
@@ -211,14 +227,16 @@ class DefaultLoop(BaseControllerLoop):
         self,
         trainer: Trainer,
         n_trials: int,
-        n_jobs: int = 1,
         hp_optimizer: BaseHyperparameterOptimizer = None,
+        start_new_round: bool = True,
         continue_loop_on_error: bool = True,
+        n_jobs: int = 1,
     ):
         super().__init__(
             trainer,
             n_trials,
             hp_optimizer=hp_optimizer,
+            start_new_round=start_new_round,
             continue_loop_on_error=continue_loop_on_error
         )
         self.n_jobs = n_jobs
@@ -339,8 +357,8 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             loop: BaseControllerLoop,
             repo: HyperparamsRepository,
             refit_best_trial: bool = True,
-            project_name: str = None,
-            client_name: str = None,
+            project_name: str = DEFAULT_PROJECT,
+            client_name: str = DEFAULT_CLIENT,
     ):
         """
         .. note::
@@ -353,7 +371,6 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         :param pipeline: The pipeline, or BaseStep, which will be use by the AutoMLloop
         :param loop: The loop, or BaseControllerLoop, which will be used by the AutoML loop
         :param flow: The flow, or Flow, which will be used by the AutoML loop
-        :param start_new_round: If True, a new run (round) will be started. Otherwise, the last run will be used.
         :param refit_best_trial: A boolean indicating whether to perform, after a fit call, a refit on the best trial.
         """
         BaseStep.__init__(self)
@@ -364,8 +381,8 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         self.loop: BaseControllerLoop = loop
         self.repo: HyperparamsRepository = repo
         self.refit_best_trial: bool = refit_best_trial
-        self.project_name: str = project_name or property(attrgetter("name"))
-        self.client_name: str = client_name or property(attrgetter("name"))
+        self.project_name: str = project_name
+        self.client_name: str = client_name
 
     def get_children(self) -> List[BaseServiceT]:
         return [self.pipeline]
@@ -382,8 +399,9 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         :return: self
         """
         automl_context: AutoMLContext = AutoMLContext.from_context(context, repo=self.repo)
+        root: Root = Root.from_context(automl_context)
 
-        with Root.get_project(self.project_name) as ps:
+        with root.get_project(self.project_name) as ps:
             ps: Project = ps
             with ps.get_client(self.client_name) as cs:
                 cs: Client = cs

@@ -150,15 +150,35 @@ class ScopedLocation(BaseService):
         return self[:dc.__class__]
 
     @staticmethod
-    def default() -> 'ScopedLocation':
+    def default(
+        round_number: Optional[ScopedLocationAttrInt] = None,
+        trial_number: Optional[ScopedLocationAttrInt] = None,
+        split_number: Optional[ScopedLocationAttrInt] = None,
+        metric_name: Optional[ScopedLocationAttrStr] = None,
+    ) -> 'ScopedLocation':
         """
         Returns the default :class:`ScopedLocation`. That is:
 
         .. code-block:: python
-            ScopedLocation("default_project", "default_client").
+            ScopedLocation("default_project", "default_client", *kargs, **kwargs).
 
         """
-        return ScopedLocation(DEFAULT_PROJECT, DEFAULT_CLIENT)
+        if not ((round_number is not None) >= (trial_number is not None) >= (split_number is not None) >= (metric_name is not None)):
+            raise ValueError(
+                "round_number, trial_number, split_number, and metric_name "
+                "must be specified in order, one after the other.")
+
+        _args = []
+        if round_number is not None:
+            _args.append(round_number)
+            if trial_number is not None:
+                _args.append(trial_number)
+                if split_number is not None:
+                    _args.append(split_number)
+                    if metric_name is not None:
+                        _args.append(metric_name)
+
+        return ScopedLocation(DEFAULT_PROJECT, DEFAULT_CLIENT, *_args)
 
     def __setitem__(self, key: Type['BaseDataclass'], value: ScopedLocationAttr):
         """
@@ -229,10 +249,16 @@ class ScopedLocation(BaseService):
         Creates a new :class:`BaseDataclass` of the right type with
         just the provided ID filled.
         """
-        _list = self.as_list()
-        dataklass: Type[BaseDataclass] = list(dataclass_2_id_attr.keys())[len(_list) - 1]
+        dataklass = self.last_dc_type()
 
-        return dataklass().set_id(_list[-1])
+        return dataklass().set_id(self.as_list()[-1])
+
+    def last_dc_type(self) -> Type['BaseDataclass']:
+        dataklass: Type[BaseDataclass] = list(dataclass_2_id_attr.keys())[len(self) - 1]
+        return dataklass
+
+    def __eq__(self, other: 'ScopedLocation') -> bool:
+        return self.as_list() == other.as_list()
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({repr(self.as_list())[1:-1]})"
@@ -310,11 +336,13 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
         # Too shallow:
         if len(key) < list(dataclass_2_subdataclass.keys()).index(self.__class__):
             raise ValueError(f"Key not deep enough for this dataclass of type {self.__class__.__name__}")
+
         # Terminal recursion condition:
         if key.at_dc(self) == key:
             return key.peek() == self.get_id()
+
         # Recursive call deeper otherwise:
-        key_subattr: ScopedLocationAttr = key[self.__class__ + 1]
+        key_subattr: ScopedLocationAttr = key[self.subdataclass_type()]
         if key_subattr in self.get_sublocation_keys():
             return key in self.get_sublocation()[key_subattr]
         return False
@@ -363,6 +391,10 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
     @abstractmethod
     def get_sublocation_keys(self) -> List[ScopedLocationAttr]:
         raise NotImplementedError("Must use mixins.")
+
+    @classmethod
+    def subdataclass_type(cls) -> Type[SubDataclassT]:
+        return dataclass_2_subdataclass[cls]
 
 
 @dataclass(order=True)
@@ -669,7 +701,6 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
         :class:`AutoML`,
         :class:`Trainer`,
         :class:`~neuraxle.metaopt.data.trial.Trial`,
-        :class:`InMemoryHyperparamsRepository`,
         :class:`HyperparamsJSONRepository`,
         :class:`BaseHyperparameterSelectionStrategy`,
         :class:`RandomSearchHyperparameterSelectionStrategy`,
@@ -919,6 +950,13 @@ class AutoMLContext(ExecutionContext):
             l: str = "".join(f.readlines())
         return l
 
+    def copy(self):
+        copy_kwargs = self._get_copy_kwargs()
+        return AutoMLContext(**copy_kwargs)
+
+    def _get_copy_kwargs(self):
+        return super()._get_copy_kwargs()
+
     @staticmethod
     def from_context(
         context: ExecutionContext = None,
@@ -982,3 +1020,9 @@ class AutoMLContext(ExecutionContext):
         new_self: AutoMLContext = self.copy()
         new_self.register_service(ScopedLocation, loc)
         return new_self
+
+    def load_dc(self, deep=True) -> BaseDataclass:
+        """
+        Load the current dc from the repo.
+        """
+        return self.repo.load(self.loc, deep)

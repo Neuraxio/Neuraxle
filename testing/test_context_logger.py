@@ -156,7 +156,7 @@ def test_root_neuraxle_logger_logs_to_string():
 
     nxl.info("This is a test.")
 
-    assert "This is a test." in nxl.get_string_history()
+    assert "This is a test." in nxl.get_scoped_string_history()
 
 
 def test_automl_neuraxle_logger_logs_to_repo_file():
@@ -192,17 +192,17 @@ def test_sub_root_neuraxle_loggers_logs_to_string():
     nxl_a.info(str_a)
     nxl_b.info(str_b)
 
-    assert str_r in nxl_r.get_string_history()
-    assert str_r not in nxl_a.get_string_history()
-    assert str_r not in nxl_b.get_string_history()
+    assert str_r in nxl_r.get_scoped_string_history()
+    assert str_r not in nxl_a.get_scoped_string_history()
+    assert str_r not in nxl_b.get_scoped_string_history()
 
-    assert str_a in nxl_r.get_string_history()
-    assert str_a in nxl_a.get_string_history()
-    assert str_a not in nxl_b.get_string_history()
+    assert str_a in nxl_r.get_scoped_string_history()
+    assert str_a in nxl_a.get_scoped_string_history()
+    assert str_a not in nxl_b.get_scoped_string_history()
 
-    assert str_b in nxl_r.get_string_history()
-    assert str_b not in nxl_a.get_string_history()
-    assert str_b in nxl_b.get_string_history()
+    assert str_b in nxl_r.get_scoped_string_history()
+    assert str_b not in nxl_a.get_scoped_string_history()
+    assert str_b in nxl_b.get_scoped_string_history()
 
 
 def test_auto_ml_context_services_names():

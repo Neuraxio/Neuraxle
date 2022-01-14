@@ -32,14 +32,21 @@ from sklearn.metrics import median_absolute_error
 
 
 class StepThatAssertsContextIsSpecified(HandleOnlyMixin, BaseStep):
-    def __init__(self, expected_context: ExecutionContext):
+    def __init__(self, expected_loc: ScopedLocation):
         BaseStep.__init__(self)
         HandleOnlyMixin.__init__(self)
-        self.context = expected_context
+        self.expected_loc = expected_loc
 
     def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> BaseTransformer:
-        # todo: context.flow.get_logs() == same ? Looks like pytest with logger class.
-        self._assert_equals(self.context, context, 'Context is not the expected one.', context)
+        context: AutoMLContext = context  # typing annotation for IDE
+
+        self._assert_equals(
+            self.expected_loc, context.loc,
+            'Context is not at the expected location.', context)
+        self._assert_equals(
+            context.loc in context.repo.root, True,
+            'Context has the dataclass', context)
+
         return super()._fit_data_container(data_container, context)
 
 
@@ -47,8 +54,8 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
     # This is a large test
     dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
     cx = ExecutionContext(root=tmpdir)
-    expected_deep_cx = ExecutionContext(root=tmpdir)
-    assertion_step = StepThatAssertsContextIsSpecified(expected_context=expected_deep_cx)
+    expected_deep_cx_loc = ScopedLocation.default(0, 0, 0)
+    assertion_step = StepThatAssertsContextIsSpecified(expected_loc=expected_deep_cx_loc)
     automl = AutoML(
         pipeline=Pipeline([
             TrainOnlyWrapper(DataShuffler()),

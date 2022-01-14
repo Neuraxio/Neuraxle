@@ -220,7 +220,11 @@ class MixinForBaseService:
         assert isinstance(self, BaseService), "This class should be of type BaseService."
         if not all(map(lambda x: hasattr(self, x), ('apply', 'get_config', 'set_config'))):
             raise RuntimeError(
-                f'Please initialize Mixins in the good order. The present Mixin should be initialized after BaseService. Got: {inspect.getmro(self.__class__)}'
+                f'Please initialize Mixins in the good order. The present Mixin should '
+                f'be initialized after BaseService. '
+                f'Got: {inspect.getmro(self.__class__)}. '
+                f'Visit https://www.neuraxle.org/stable/classes_and_modules_overview.html '
+                f'for more information.'
             )
 
 
@@ -1153,6 +1157,7 @@ class ExecutionContext(TruncableService):
             :class:`BaseStep`,
             :func:`~neuraxle.base._HasSavers.save`
         """
+        # Documentation: https://www.neuraxle.org/stable/step_saving_and_lifecycle.html
         while not self.empty():
             should_save_last_step = self.should_save_last_step()
             last_step = self.peek()
@@ -1210,7 +1215,7 @@ class ExecutionContext(TruncableService):
         :param step: step to add to the execution context
         :return: self
         """
-        return ExecutionContext(
+        return self.__class__(
             root=self.root,
             flow=self.flow,
             execution_mode=self.execution_mode,
@@ -1220,18 +1225,24 @@ class ExecutionContext(TruncableService):
         )
 
     def copy(self):
+        copy_kwargs = self._get_copy_kwargs()
+        return self.__class__(**copy_kwargs)
+
+    def _get_copy_kwargs(self):
         possibly_copied_services = {
             k: (v.copy() if hasattr(v, "copy") else v)
             for k, v in self.services.items()
         }
-        return self.__class__(
-            root=self.root,
-            flow=self.flow.copy(),
-            execution_mode=self.execution_mode,
-            execution_phase=self.execution_phase,
-            parents=copy(self.parents),
-            services=possibly_copied_services,
-        )
+        copy_kwargs = {
+            'root': self.root,
+            'flow': self.flow.copy(),
+            'execution_mode': self.execution_mode,
+            'execution_phase': self.execution_phase,
+            'parents': copy(self.parents),
+            'services': possibly_copied_services,
+        }
+        
+        return copy_kwargs
 
     def train(self) -> 'ExecutionContext':
         """
@@ -1454,8 +1465,8 @@ class _HasSetupTeardownLifecycle(MixinForBaseService):
             context
         )
         if deep:
-            return copy.deepcopy(self)
-        return copy.copy(self)
+            return deepcopy(self)
+        return copy(self)
 
     def setup(self, context: 'ExecutionContext') -> 'BaseTransformer':
         """
@@ -1556,6 +1567,7 @@ class _TransformerStep(MixinForBaseService):
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_transform_data_container(data_container, context)
         # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+        # Documentation: https://www.neuraxle.org/stable/handler_methods.html
         data_container = self._transform_data_container(data_container, context)
         # ////////////////////////////////////////////////////////////////////
         data_container = self._did_transform(data_container, context)
@@ -1587,7 +1599,7 @@ class _TransformerStep(MixinForBaseService):
         return data_container
 
     def __call__(self, *args, **kwargs) -> Any:
-        return self.transform(*args)
+        return self.transform(*args, **kwargs)
 
     @abstractmethod
     def transform(self, data_inputs):
@@ -1598,8 +1610,9 @@ class _TransformerStep(MixinForBaseService):
         :return: transformed data inputs
         """
         raise NotImplementedError(
-            "Implement this method in {}, or have this class inherit from the NonTransformableMixin.".format(
-                self.__class__.__name__))
+            f"Implement this method in {self.__class__.__name__}, or have this class inherit from "
+            f"the NonFittableMixin. You should otherwise ideally use handler methods. "
+            f"Read more: https://www.neuraxle.org/stable/handler_methods.html")
 
     def _did_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
         """
@@ -1670,6 +1683,7 @@ class _TransformerStep(MixinForBaseService):
         :param expected_outputs: expected outputs to fit on
         :return: transformed data inputs
         """
+        self = self.fit(data_inputs, expected_outputs)
         return self, self.transform(data_inputs)
 
     def handle_predict(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
@@ -1776,6 +1790,7 @@ class _FittableStep(MixinForBaseService):
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit(data_container, context)
         # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+        # Documentation: https://www.neuraxle.org/stable/handler_methods.html
         new_self = self._fit_data_container(data_container, context)
         # ////////////////////////////////////////////////////////////////////
         self._did_fit(data_container, context)
@@ -1826,8 +1841,9 @@ class _FittableStep(MixinForBaseService):
         :return: self
         """
         raise NotImplementedError(
-            "Implement this method in {}, or have this class inherit from the NonFittableMixin.".format(
-                self.__class__.__name__))
+            f"Implement this method in {self.__class__.__name__}, or have this class inherit from "
+            f"the NonFittableMixin. You should otherwise ideally use handler methods. "
+            f"Read more: https://www.neuraxle.org/stable/handler_methods.html")
 
     def handle_fit_transform(
         self, data_container: DataContainer, context: ExecutionContext
@@ -1845,6 +1861,7 @@ class _FittableStep(MixinForBaseService):
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit_transform(data_container, context)
         # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+        # Documentation: https://www.neuraxle.org/stable/handler_methods.html
         new_self, data_container = self._fit_transform_data_container(data_container, context)
         # ////////////////////////////////////////////////////////////////////
         data_container = self._did_fit_transform(data_container, context)
@@ -1946,6 +1963,7 @@ class _CustomHandlerMethods(MixinForBaseService):
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit(data_container, context)
         # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+        # Documentation: https://www.neuraxle.org/stable/handler_methods.html
         new_self = self.fit_data_container(data_container, context)
         # ////////////////////////////////////////////////////////////////////
         self._did_fit(data_container, context)
@@ -1976,6 +1994,7 @@ class _CustomHandlerMethods(MixinForBaseService):
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_fit_transform(data_container, context)
         # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+        # Documentation: https://www.neuraxle.org/stable/handler_methods.html
         new_self, data_container = self.fit_transform_data_container(data_container, context)
         # ////////////////////////////////////////////////////////////////////
         data_container = self._did_fit_transform(data_container, context)
@@ -2004,6 +2023,7 @@ class _CustomHandlerMethods(MixinForBaseService):
         data_container, context = self._will_process(data_container, context)
         data_container, context = self._will_transform_data_container(data_container, context)
         # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+        # Documentation: https://www.neuraxle.org/stable/handler_methods.html
         data_container = self.transform_data_container(data_container, context)
         # ////////////////////////////////////////////////////////////////////
         data_container = self._did_transform(data_container, context)
@@ -2485,6 +2505,8 @@ class _HasSavers(MixinForBaseService):
             :class:`ExecutionContext`,
             :class:`BaseSaver`
         """
+        # Documentation: https://www.neuraxle.org/stable/step_saving_and_lifecycle.html
+
         context = context.push(self)
         if not full_dump and not self.should_save():
             return self
@@ -2749,6 +2771,7 @@ class BaseTransformer(
             name: str = None,
             savers: List[BaseSaver] = None,
     ):
+        # Must read: https://www.neuraxle.org/stable/classes_and_modules_overview.html
         BaseService.__init__(self, config=config, name=name)
         _HasSetupTeardownLifecycle.__init__(self)
         _HasHyperparams.__init__(self, hyperparams=hyperparams)
@@ -2871,6 +2894,7 @@ class BaseStep(_FittableStep, BaseTransformer, ABC):
         :class:`~neuraxle.base.ExecutionContext`,
         :class:`~neuraxle.pipeline.Pipeline`,
     """
+    # Documentation: https://www.neuraxle.org/stable/classes_and_modules_overview.html
     pass
 
 
@@ -2896,7 +2920,11 @@ class MixinForBaseTransformer:
             ('name', 'savers', 'is_initialized', 'is_train', 'is_invalidated', 'setup', '_teardown')
         )):
             raise RuntimeError(
-                f'Please initialize Mixins in the good order. The present Mixin should be initialized after BaseTransformer. Got: {inspect.getmro(self.__class__)}'
+                f'Please initialize Mixins in the good order. The present Mixin should '
+                f'be initialized after BaseTransformer. '
+                f'Got: {inspect.getmro(self.__class__)}. '
+                f'Visit https://www.neuraxle.org/stable/classes_and_modules_overview.html '
+                f'for more information.'
             )
 
 
