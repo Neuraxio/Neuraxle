@@ -622,6 +622,8 @@ class _HasChildrenMixin(MixinForBaseService, Generic[BaseServiceT]):
         of :class:`~neuraxle.base._HasRecursiveMethods`. Read the documentation of the
         original method to learn more.
 
+        Read more: `Steps containing other steps <https://www.neuraxle.org/stable/classes_and_modules_overview.html#steps-containing-other-steps-as-the-composite-design-pattern-in-machine-learning>`_.
+
         :param method: str or callable function to apply
         :param ra: recursive arguments
         :return:
@@ -630,7 +632,7 @@ class _HasChildrenMixin(MixinForBaseService, Generic[BaseServiceT]):
         self._validate_children_exists(ra)
         # #################################################################
         results: RecursiveDict = self._apply_self(method=method, ra=ra)
-        # #################################################################
+        # Documentation: https://www.neuraxle.org/stable/classes_and_modules_overview.html#steps-containing-other-steps-as-the-composite-design-pattern-in-machine-learning
         results: RecursiveDict = self._apply_childrens(results=results, method=method, ra=ra)
         # #################################################################
         return results

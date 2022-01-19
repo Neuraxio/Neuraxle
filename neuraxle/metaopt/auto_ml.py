@@ -196,6 +196,9 @@ class BaseControllerLoop(TruncableService):
         with client.optim_round(new_round=self.start_new_run) as optim_round:
             optim_round: Round = optim_round.with_optimizer(hp_optimizer, hp_space)
 
+            if self.continue_loop_on_error:
+                optim_round.continue_loop_on_error()
+
             for managed_trial_scope in self.loop(optim_round):
                 managed_trial_scope: Trial = managed_trial_scope  # typing helps
 
@@ -434,8 +437,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         p: Union[BaseCrossValidationWrapper, BaseStep] = copy.copy(self.pipeline)
         p = p.update_hyperparams(best_hyperparams)
 
-        best_model = p.get_step()
-        return copy.deepcopy(best_model)
+        return copy.deepcopy(p)
 
     def _load_virgin_model(self, hyperparams: HyperparameterSamples) -> BaseStep:
         """

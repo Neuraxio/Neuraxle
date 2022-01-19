@@ -243,7 +243,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDa
             self.save_subaggregate(subagg, deep=False)
             return subagg
 
-    def _release_managed_subresource(self, resource: SubAggregateT, e: Exception = None) -> Optional[Exception]:
+    def _release_managed_subresource(self, resource: SubAggregateT, e: Exception = None) -> bool:
         """
         Release a subaggregate that was acquired with managed_subresource. The subaggregate
         normally has already saved itself. We may update things again here if needed.
@@ -253,7 +253,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[SubAggregateT, SubDa
         with self.context.lock:
             self.refresh(self.is_deep)
             self.save(False)
-        return False
+        return e is not None
 
     def __len__(self) -> int:
         return len(self._dataclass.get_sublocation())
@@ -434,37 +434,45 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
                 self.save_subaggregate(subagg, deep=True)
             return subagg
 
-    def _release_managed_subresource(self, resource: 'Trial', e: Exception = None) -> Optional[Exception]:
+    def _release_managed_subresource(self, resource: 'Trial', e: Exception = None) -> bool:
         """
         Release a subaggregate that was acquired with managed_subresource. The subaggregate
         normally has already saved itself. We may update things again here if needed.
 
         Exceptions may be handled here. If handled, return True, if not, then return False.
         """
+        resource: Trial = resource  # typing
+        handled_exception = False
         with self.context.lock:
             self.refresh(True)
 
-            is_all_success: bool = all(i.is_success() for i in resource)
-            is_all_failure: bool = all(not i.is_success() for i in resource)
+            is_all_success: bool = resource.are_all_splits_successful()
+            is_all_failure: bool = resource.are_all_splits_failures()
 
-            if e is None or is_all_success:
-                resource.set_success()
-            elif e is None and is_all_failure:
-                resource.set_failed(RuntimeError("All trial splits failed for this trial."))
+            if e is None:
+                handled_exception = True
+                if is_all_success:
+                    resource.set_success()
+                elif is_all_failure:
+                    e = RuntimeError("All trial splits failed for this trial.")
+                    resource.set_failed(e)
             else:
                 resource.set_failed(e)
 
             self.save_subaggregate(resource, deep=resource.is_deep)
 
-            self.flow.log('Finished round hp search!')
-            main_metric_name = self.hp_optimizer.get_main_metric_name()
-            self.flow.log_best_hps(
-                main_metric_name,
-                self.get_best_hyperparams(main_metric_name)
-            )
+            if not is_all_failure:
+                main_metric_name = self.hp_optimizer.get_main_metric_name()
+                self.flow.log('Finished round hp search!')
+                self.flow.log_best_hps(
+                    main_metric_name,
+                    self.get_best_hyperparams(main_metric_name)
+                )
+            else:
+                self.flow.log_failure(e)
 
             self.save(False)
-        return False
+        return handled_exception
 
     def get_best_hyperparams(self, main_metric_name: str) -> HyperparameterSamples:
         """
@@ -492,7 +500,7 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
             trial_score = trial.get_avg_validation_score(main_metric_name)
 
             _has_better_score = best_score is None or (
-                trial_score is not None and (
+                trial_score is not None and trial.is_success() and (
                     self.is_higher_score_better(main_metric_name) == (trial_score > best_score)
                 )
             )
@@ -625,7 +633,7 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
             self.save_subaggregate(subagg, deep=True)
             return subagg
 
-    def _release_managed_subresource(self, resource: 'TrialSplit', e: Exception = None) -> Optional[Exception]:
+    def _release_managed_subresource(self, resource: 'TrialSplit', e: Exception = None) -> bool:
         gc.collect()
         handled_error = True
 
@@ -648,11 +656,23 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
 
     def is_success(self):
         """
-        Set trial status to success.
+        Checks if the trial is successful from its dataclass record.
         """
         return self._dataclass.status == TrialStatus.SUCCESS
 
-    def get_avg_validation_score(self, metric_name: str) -> float:
+    def are_all_splits_successful(self) -> bool:
+        """
+        Return true if all splits are successful.
+        """
+        return all(i.is_success() for i in self._validation_splits)
+
+    def are_all_splits_failures(self) -> bool:
+        """
+        Return true if all splits are failed.
+        """
+        return all(not i.is_success() for i in self._validation_splits)
+
+    def get_avg_validation_score(self, metric_name: str) -> Optional[float]:
         """
         Returns the average score for all validation splits's
         best validation score for the specified scoring metric.
@@ -665,7 +685,7 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
                 for val_split in self._validation_splits
                 if val_split.is_success() and metric_name in val_split.get_metric_names()
             ]
-            return sum(scores) / len(scores)
+            return sum(scores) / len(scores) if len(scores) > 0 else None
 
     def get_avg_n_epoch_to_best_validation_score(self, metric_name: str) -> float:
         # TODO: use in flow.log_results:
@@ -830,9 +850,7 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
             )
         return self._dataclass.metric_results[name]
 
-    def _release_managed_subresource(self, resource: 'MetricResults', e: Exception = None) -> Optional[Exception]:
-        # TODO: func return type??
-
+    def _release_managed_subresource(self, resource: 'MetricResults', e: Exception = None) -> bool:
         handled_error = True
         with self.context.lock:
             if e is not None:

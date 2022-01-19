@@ -27,27 +27,28 @@ from neuraxle.metaopt.validation import (GridExplorationSampler,
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.data import DataShuffler
 from neuraxle.steps.flow import TrainOnlyWrapper
+from neuraxle.steps.misc import AssertFalseStep
 from neuraxle.steps.numpy import AddN, MultiplyByN
 from sklearn.metrics import median_absolute_error
 
 
-class StepThatAssertsContextIsSpecified(HandleOnlyMixin, BaseStep):
+class StepThatAssertsContextIsSpecified(Identity):
     def __init__(self, expected_loc: ScopedLocation):
         BaseStep.__init__(self)
         HandleOnlyMixin.__init__(self)
         self.expected_loc = expected_loc
 
-    def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> BaseTransformer:
+    def _did_process(self, data_container: DACT, context: ExecutionContext) -> DACT:
         context: AutoMLContext = context  # typing annotation for IDE
-
         self._assert_equals(
             self.expected_loc, context.loc,
-            'Context is not at the expected location.', context)
+            f'Context is not at the expected location. '
+            f'Expected {self.expected_loc}, got {context.loc}.',
+            context)
         self._assert_equals(
             context.loc in context.repo.root, True,
-            'Context has the dataclass', context)
-
-        return super()._fit_data_container(data_container, context)
+            "Context should have the dataclass, but it doesn't", context)
+        return data_container
 
 
 def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scenario(tmpdir):
@@ -56,6 +57,26 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
     cx = ExecutionContext(root=tmpdir)
     expected_deep_cx_loc = ScopedLocation.default(0, 0, 0)
     assertion_step = StepThatAssertsContextIsSpecified(expected_loc=expected_deep_cx_loc)
+    automl = _create_automl_test_loop(tmpdir, assertion_step)
+    automl = automl.handle_fit(dact, cx)
+
+    predicted = automl.handle_predict(dact.without_eo(), cx)
+
+    assert np.array_equal(predicted.di, np.array(range(10, 20)))
+
+
+def test_automl_step_can_interrupt_on_fail_with_full_automl_scenario(tmpdir):
+    # This is a large test
+    dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
+    cx = ExecutionContext(root=tmpdir)
+    assertion_step = AssertFalseStep()
+    automl = _create_automl_test_loop(tmpdir, assertion_step)
+
+    with pytest.raises(AssertionError):
+        automl.handle_fit(dact, cx)
+
+
+def _create_automl_test_loop(tmpdir, assertion_step: BaseStep):
     automl = AutoML(
         pipeline=Pipeline([
             TrainOnlyWrapper(DataShuffler()),
@@ -65,22 +86,20 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
         loop=DefaultLoop(
             trainer=Trainer(
                 validation_splitter=ValidationSplitter(test_size=0.2),
-                n_epochs=1,
-                callbacks=[MetricCallback('MAE', median_absolute_error, True)]
+                n_epochs=4,
+                callbacks=[MetricCallback('MAE', median_absolute_error, True)],
             ),
             hp_optimizer=RandomSearch(main_metric_name='MAE'),
-            n_trials=80,
-            n_jobs=10,
+            n_trials=5,
             start_new_round=True,
+            continue_loop_on_error=False,
+            n_jobs=2,
         ),
         repo=VanillaHyperparamsRepository(tmpdir),
         refit_best_trial=True,
     )
-    automl = automl.handle_fit(dact, cx)
 
-    predicted = automl.handle_predict(dact.without_eo(), cx)
-
-    assert np.array_equal(predicted.di, np.array(range(10, 20)))
+    return automl
 
 
 def test_two_automl_in_parallel_can_contribute_to_the_same_hp_repository():

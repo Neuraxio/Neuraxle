@@ -39,7 +39,7 @@ VALUE_CACHING = 'value_caching'
 
 class AssertFalseStep(HandleOnlyMixin, BaseStep):
     """
-    Asserts that the input is False using self._assert(False, ..., context)
+    Assert False upon _transform_data_container and _fit_data_container.
     """
 
     def __init__(self, message: str = "This step should not fit nor transform."):
