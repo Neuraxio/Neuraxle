@@ -763,6 +763,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
         for seed, (k, v) in enumerate(self.flat_hp_grid_values.items()):
             if self._i % len(v) == 0:
                 # reshuffling the grid for when it comes to the end of each of its sublist.
+                # TODO: make a test for this to ensure that over an infinity of trials that the lists are shuffled evenly, or use a real and repeatable pseudorandom rng generator for it.
                 new_v = self.disorder(v, seed % (self._i + 1) + self._i % (seed + 1))
                 self.flat_hp_grid_values[k] = new_v
 

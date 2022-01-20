@@ -564,14 +564,13 @@ class ProjectDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ClientDatacl
 class ClientDataclass(DataclassHasListMixin, BaseDataclass['RoundDataclass']):
     client_name: ScopedLocationAttrStr = DEFAULT_CLIENT
     rounds: List['RoundDataclass'] = field(default_factory=list)
-    # By default, the first metric is the main one.  # TODO: make it configurable, or in round?
-    main_metric_name: str = None
 
 
 @dataclass(order=True)
 class RoundDataclass(DataclassHasListMixin, BaseDataclass['TrialDataclass']):
     round_number: ScopedLocationAttrInt = 0
     trials: List['TrialDataclass'] = field(default_factory=list)
+    main_metric_name: str = None
 
 
 @dataclass(order=True)
@@ -583,6 +582,7 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
     """
     trial_number: ScopedLocationAttrInt = 0
     validation_splits: List['TrialSplitDataclass'] = field(default_factory=list)
+    retrained_split: 'TrialSplitDataclass' = None
 
 
 @dataclass(order=True)
@@ -902,15 +902,6 @@ class InMemoryHyperparamsRepository(RaiseDeprecatedClass, HyperparamsRepository)
 
 class BaseHyperparameterOptimizer(ABC):
 
-    def __init__(self, main_metric_name: str = None):
-        """
-        :param main_metric_name: if None, pick first metric from the metrics callback.
-        """
-        self.main_metric_name = main_metric_name
-
-    def get_main_metric_name(self) -> str:
-        return self.main_metric_name
-
     @abstractmethod
     def find_next_best_hyperparams(self, round) -> HyperparameterSamples:
         """
@@ -1009,6 +1000,14 @@ class AutoMLContext(ExecutionContext):
         :return: an AutoMLContext copy with the new loc attribute.
         """
         return self.with_loc(self.loc.with_dc(subdataclass))
+
+    def pop_attr(self) -> 'AutoMLContext':
+        """
+        Pop an attribute from the ScopedLocation.
+
+        :return: an AutoMLContext copy with the new popped loc attribute.
+        """
+        return self.with_loc(self.loc.popped())
 
     def with_loc(self, loc: ScopedLocation) -> 'AutoMLContext':
         """

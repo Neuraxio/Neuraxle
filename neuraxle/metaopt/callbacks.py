@@ -310,16 +310,19 @@ class MetricCallback(BaseCallback):
 
         if self.pass_context_to_metric_function:
             train_score: float = f(dact_train.eo, dact_train.di, trial_split.validation_context())
-            valid_score: float = f(dact_valid.eo, dact_valid.di, trial_split.validation_context())
+            if dact_valid is not None:
+                valid_score: float = f(dact_valid.eo, dact_valid.di, trial_split.validation_context())
         else:
             train_score: float = f(dact_train.eo, dact_train.di)
-            valid_score: float = f(dact_valid.eo, dact_valid.di)
+            if dact_valid is not None:
+                valid_score: float = f(dact_valid.eo, dact_valid.di)
 
         with trial_split.managed_metric(self.name, self.higher_score_is_better) as metric:
             metric: MetricResults = metric  # just a typing comment here for convenience.
 
             metric.add_train_result(train_score)
-            metric.add_valid_result(valid_score)
+            if dact_valid is not None:
+                metric.add_valid_result(valid_score)
 
         return is_finished_and_fitted
 

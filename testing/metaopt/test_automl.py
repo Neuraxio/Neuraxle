@@ -140,7 +140,7 @@ def test_automl_with_kfold(tmpdir):
     auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
-    p = auto_ml.get_best_model()
+    p = auto_ml.get_retrained_best_model()
     outputs = p.transform(data_inputs)
     mse = mean_squared_error(expected_outputs, outputs)
 

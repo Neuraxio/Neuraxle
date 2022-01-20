@@ -31,7 +31,7 @@ import json
 import multiprocessing
 import traceback
 from operator import attrgetter
-from typing import Iterator, List, Tuple, Union
+from typing import Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 from neuraxle.base import (BaseService, BaseServiceT, BaseStep,
@@ -88,17 +88,11 @@ class Trainer(BaseService):
         pipeline: BaseStep,
         dact: DACT,
         trial_scope: Trial,
-    ) -> Trial:
+    ):
         """
         Train pipeline using the validation splitter.
         Track training, and validation metrics for each epoch.
         Note: the present method is just a shortcut to using the `execute_trial` method with less boilerplate code needed. Refer to `execute_trial` for full flexibility
-
-        :param pipeline: pipeline to train on
-        :param data_inputs: data inputs
-        :param expected_outputs: expected ouptuts to fit on
-        :return: executed trial
-
         """
 
         splits: List[Tuple[DACT, DACT]] = self.validation_splitter.split_dact(
@@ -106,49 +100,64 @@ class Trainer(BaseService):
 
         for train_dact, val_dact in splits:
             with trial_scope.new_validation_split() as trial_split_scope:
-                trial_split_scope: TrialSplit = trial_split_scope.with_n_epochs(self.n_epochs)
+                self.train_split(pipeline, train_dact, val_dact, trial_split_scope)
 
-                p: BaseStep = pipeline.copy(trial_split_scope.context, deep=True)
-                p.set_hyperparams(trial_scope.get_hyperparams())
+    def train_split(
+        self,
+        pipeline: BaseStep,
+        train_dact: DACT,
+        val_dact: Optional[DACT],
+        trial_split_scope: TrialSplit
+    ):
+        """
+        Train a pipeline split. You probably want to use `self.train` instead, to use the validation splitter.
+        If validation DACT is None, the evaluation metrics will not save validation results.
+        """
+        trial_split_scope: TrialSplit = trial_split_scope.with_n_epochs(self.n_epochs)
+        p: BaseStep = pipeline.copy(trial_split_scope.context, deep=True)
+        p.set_hyperparams(trial_split_scope.get_hyperparams())
 
-                for _ in range(self.n_epochs):
-                    e = trial_split_scope.next_epoch()
+        for _ in range(self.n_epochs):
+            e = trial_split_scope.next_epoch()
 
-                    # Fit train
-                    p = p.set_train(True)
-                    p = p.handle_fit(
-                        train_dact.copy(),
-                        trial_split_scope.context.train())
+            # Fit train
+            p = p.set_train(True)
+            p = p.handle_fit(
+                train_dact.copy(),
+                trial_split_scope.context.train())
 
-                    # Predict train & val
-                    p = p.set_train(False)
-                    eval_dact_train = p.handle_predict(
-                        train_dact.without_eo(),
-                        trial_split_scope.context.validation())
-                    eval_dact_valid = p.handle_predict(
-                        val_dact.without_eo(),
-                        trial_split_scope.context.validation())
+            # Predict train & val
+            p = p.set_train(False)
+            eval_dact_train = p.handle_predict(
+                train_dact.without_eo(),
+                trial_split_scope.context.validation())
+            eval_dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_train.with_eo(train_dact.eo)
 
-                    # Prepare dacts for metric callbacks with a special typing:
-                    eval_dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_train.with_eo(train_dact.eo)
-                    eval_dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_valid.with_eo(val_dact.eo)
+            if val_dact is not None:
+                eval_dact_valid = p.handle_predict(
+                    val_dact.without_eo(),
+                    trial_split_scope.context.validation())
+                eval_dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_valid.with_eo(val_dact.eo)
+            else:
+                eval_dact_valid = None
 
-                    # Log metrics / evaluate
-                    if self.callbacks.call(
-                        trial_split_scope,
-                        eval_dact_train,
-                        eval_dact_valid,
-                        e == self.n_epochs
-                    ):
-                        break  # Saves stats using the '__exit__' method of managed scoped aggregates.
+            # Log metrics / evaluate
+            if self.callbacks.call(
+                trial_split_scope,
+                eval_dact_train,
+                eval_dact_valid,
+                e == self.n_epochs
+            ):
+                break  # Saves stats using the '__exit__' method of managed scoped aggregates.
 
-    def refit(self, p: BaseStep, data_container: DACT, context: ExecutionContext) -> BaseStep:
+    def refit(
+        self,
+        pipeline: BaseStep,
+        dact: DACT,
+        trial_scope: Trial,
+    ) -> BaseStep:
         """
         Refit the pipeline on the whole dataset (without any validation technique).
-
-        :param p: trial to refit
-        :param data_container: data container
-        :param context: execution context
 
         :return: fitted pipeline
         """
@@ -165,10 +174,12 @@ class BaseControllerLoop(TruncableService):
         self,
         trainer: Trainer,
         n_trials: int,
+        main_metric_name: str,
         hp_optimizer: BaseHyperparameterOptimizer = None,
         start_new_round: bool = True,
         continue_loop_on_error: bool = True
     ):
+        main_metric_name: str = main_metric_name
         if hp_optimizer is None:
             hp_optimizer = RandomSearch()
 
@@ -180,31 +191,35 @@ class BaseControllerLoop(TruncableService):
         self.start_new_run: bool = start_new_round
         self.continue_loop_on_error: bool = continue_loop_on_error
 
-    def run(self, pipeline: BaseStep, dact: DACT, client: Client):
+    @property
+    def trainer(self) -> Trainer:
+        return self.get_service(Trainer)
+
+    def run(self, pipeline: BaseStep, dact: DACT, client: Client) -> int:
         """
         Run the controller loop.
 
         :param context: execution context
-        :return:
+        :return: the ID of the round that was executed (either created or continued from previous optimization).
         """
-        trainer: Trainer = self[Trainer]
-        hp_optimizer: BaseHyperparameterOptimizer = self[BaseHyperparameterOptimizer]
-        hp_space: HyperparameterSpace = pipeline.get_hyperparams_space()
 
-        # thread_safe_lock, context = context.thread_safe()
+        # thread_safe_lock, context = context.thread_safe() ??
 
-        with client.optim_round(new_round=self.start_new_run) as optim_round:
+        with client.optim_round(self.start_new_run, self.main_metric_name) as optim_round:
+            hp_optimizer: BaseHyperparameterOptimizer = self[BaseHyperparameterOptimizer]
+            hp_space: HyperparameterSpace = pipeline.get_hyperparams_space()
+
             optim_round: Round = optim_round.with_optimizer(hp_optimizer, hp_space)
-
             if self.continue_loop_on_error:
                 optim_round.continue_loop_on_error()
 
             for managed_trial_scope in self.loop(optim_round):
                 managed_trial_scope: Trial = managed_trial_scope  # typing helps
-
                 # trial_scope.context.restore_lock(thread_safe_lock) ??
+                self.trainer.train(pipeline, dact, managed_trial_scope)
 
-                trainer.train(pipeline, dact, managed_trial_scope)
+            round_id: int = optim_round.get_id()
+        return round_id
 
     def loop(self, round_scope: Round) -> Iterator[Trial]:
         """
@@ -223,6 +238,18 @@ class BaseControllerLoop(TruncableService):
 
                 yield managed_trial_scope
 
+    def refit_best_trial(self, pipeline: BaseStep, dact: DACT, client_scope: Client) -> BaseStep:
+        """
+        Refit the pipeline on the whole dataset (without any validation technique).
+        """
+        with client_scope.resume_last_round() as round_scope:
+            with round_scope.managed_best_trial() as managed_trial_scope:
+
+                refitted: BaseStep = self.trainer.refit(
+                    pipeline, dact, managed_trial_scope)
+
+        return refitted
+
 
 class DefaultLoop(BaseControllerLoop):
 
@@ -230,6 +257,7 @@ class DefaultLoop(BaseControllerLoop):
         self,
         trainer: Trainer,
         n_trials: int,
+        main_metric_name: str,
         hp_optimizer: BaseHyperparameterOptimizer = None,
         start_new_round: bool = True,
         continue_loop_on_error: bool = True,
@@ -238,13 +266,14 @@ class DefaultLoop(BaseControllerLoop):
         super().__init__(
             trainer,
             n_trials,
+            main_metric_name=main_metric_name,
             hp_optimizer=hp_optimizer,
             start_new_round=start_new_round,
             continue_loop_on_error=continue_loop_on_error
         )
         self.n_jobs = n_jobs
 
-    def _run(self, pipeline, dact: DACT, context: ExecutionContext):
+    def TODO_DELETE_run(self, pipeline, dact: DACT, context: ExecutionContext):
         # TODO: what is this method used for?
 
         if self.n_jobs in (None, 1):
@@ -365,11 +394,11 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
     ):
         """
         .. note::
-              Usage of a multiprocess-safe hyperparams repository is recommended,
-              although it is, most of the time, not necessary.
-              Beware of the behaviour of HyperparamsRepository's observers/subscribers.
-              Context instances are not shared between trial but copied.
-              So is the AutoML loop and the DACTs.
+            Usage of a multiprocess-safe hyperparams repository is recommended,
+            although it is, most of the time, not necessary.
+            Beware of the behaviour of HyperparamsRepository's observers/subscribers.
+            Context instances are not shared between trial but copied.
+            So is the AutoML loop and the DACTs.
 
         :param pipeline: The pipeline, or BaseStep, which will be use by the AutoMLloop
         :param loop: The loop, or BaseControllerLoop, which will be used by the AutoML loop
@@ -386,9 +415,6 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         self.refit_best_trial: bool = refit_best_trial
         self.project_name: str = project_name
         self.client_name: str = client_name
-
-    def get_children(self) -> List[BaseServiceT]:
-        return [self.pipeline]
 
     def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> 'BaseStep':
         """
@@ -409,22 +435,26 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             with ps.get_client(self.client_name) as cs:
                 cs: Client = cs
 
-                self.loop.run(self.pipeline, data_container, cs)
+                round_id: int = self.loop.run(self.pipeline, data_container, cs)
 
                 if self.refit_best_trial:
                     self.pipeline = self.loop.refit_best_trial(
-                        self.pipeline, data_container, cs)
+                        self.pipeline, data_container, cs, round_id)
 
         return self
 
     def _fit_transform_data_container(
         self, data_container: DACT, context: ExecutionContext
     ) -> Tuple['BaseStep', DACT]:
-        raise NotImplementedError("AutoML does not implement method _fit_transform_data_container. Use method such as "
-                                  "fit or handle_fit to train models and then use method such as get_best_model to "
-                                  "retrieve the model you wish to use for transform")
+        if not self.refit_best_trial:
+            raise ValueError('self.refit_best_trial must be True in AutoML class to fit_transform.')
+        self = self._fit_data_container(data_container, context)
+        data_container = self._transform_data_container()
+        return self, data_container
 
     def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+        if not self.refit_best_trial:
+            raise ValueError('self.refit_best_trial must be True in AutoML class to transform.')
         return self.pipeline.handle_transform(data_container, context)
 
     def _load_virgin_best_model(self) -> BaseStep:
@@ -447,7 +477,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         """
         return copy.deepcopy(self.pipeline).update_hyperparams(hyperparams)
 
-    def get_best_model(self) -> BaseStep:
+    def get_retrained_best_model(self) -> BaseStep:
         """
         Get best model using the hyperparams repository.
 
@@ -456,7 +486,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         raise NotImplementedError("TODO")
 
     def get_children(self) -> List[BaseStep]:
-        return [self.get_best_model()]
+        return [self.get_retrained_best_model()]
 
     @property
     def wrapped(self) -> BaseStep:

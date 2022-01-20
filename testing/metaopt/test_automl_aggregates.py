@@ -47,8 +47,7 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
         ids=list(range(0, 10)), di=list(range(0, 10)), eo=list(range(100, 110)))
     dact_valid: DACT[IDT, ARG_X_INPUTTED, ARG_Y_PREDICTD] = DACT(
         ids=list(range(10, 20)), di=list(range(10, 20)), eo=list(range(110, 120)))
-    hp_optimizer: BaseHyperparameterOptimizer = GridExplorationSampler(
-        main_metric_name='MAE', expected_n_trials=1)
+    hp_optimizer: BaseHyperparameterOptimizer = GridExplorationSampler(expected_n_trials=1)
     n_epochs = 3
     callbacks = CallbackList([
         MetricCallback('MAE', median_absolute_error, False),
@@ -73,7 +72,7 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
         ps: Project = ps
         with ps.default_client() as cs:
             cs: Client = cs
-            with cs.new_round() as rs:
+            with cs.new_round(main_metric_name='MAE') as rs:
                 rs: Round = rs.with_optimizer(hp_optimizer=hp_optimizer, hp_space=hps)
                 with rs.new_rvs_trial() as ts:
                     ts: Trial = ts
@@ -138,7 +137,7 @@ cant_be_shallow_aggs = [
 ]
 
 
-@pytest.mark.parametrize("aggregate_class", list(aggregate_2_subaggregate.keys()))
+@pytest.mark.parametrize("aggregate_class", list(aggregate_2_subaggregate.keys())[1:])
 @pytest.mark.parametrize("is_deep", [True, False])
 def test_aggregates_creation(aggregate_class: Type[BaseAggregate], is_deep):
     # Create repo from deep root DC:
