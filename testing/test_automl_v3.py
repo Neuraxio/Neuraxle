@@ -32,22 +32,23 @@ from neuraxle.steps.numpy import AddN, MultiplyByN
 from sklearn.metrics import median_absolute_error
 
 
-class StepThatAssertsContextIsSpecified(Identity):
+class StepThatAssertsContextIsSpecifiedAtTrain(Identity):
     def __init__(self, expected_loc: ScopedLocation):
         BaseStep.__init__(self)
         HandleOnlyMixin.__init__(self)
         self.expected_loc = expected_loc
 
     def _did_process(self, data_container: DACT, context: ExecutionContext) -> DACT:
-        context: AutoMLContext = context  # typing annotation for IDE
-        self._assert_equals(
-            self.expected_loc, context.loc,
-            f'Context is not at the expected location. '
-            f'Expected {self.expected_loc}, got {context.loc}.',
-            context)
-        self._assert_equals(
-            context.loc in context.repo.root, True,
-            "Context should have the dataclass, but it doesn't", context)
+        if self.is_train:
+            context: AutoMLContext = context  # typing annotation for IDE
+            self._assert_equals(
+                self.expected_loc, context.loc,
+                f'Context is not at the expected location. '
+                f'Expected {self.expected_loc}, got {context.loc}.',
+                context)
+            self._assert_equals(
+                context.loc in context.repo.root, True,
+                "Context should have the dataclass, but it doesn't", context)
         return data_container
 
 
@@ -56,7 +57,7 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
     dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
     cx = ExecutionContext(root=tmpdir)
     expected_deep_cx_loc = ScopedLocation.default(0, 0, 0)
-    assertion_step = StepThatAssertsContextIsSpecified(expected_loc=expected_deep_cx_loc)
+    assertion_step = StepThatAssertsContextIsSpecifiedAtTrain(expected_loc=expected_deep_cx_loc)
     automl = _create_automl_test_loop(tmpdir, assertion_step)
     automl = automl.handle_fit(dact, cx)
 
@@ -89,14 +90,14 @@ def _create_automl_test_loop(tmpdir, assertion_step: BaseStep):
                 n_epochs=4,
                 callbacks=[MetricCallback('MAE', median_absolute_error, True)],
             ),
-            main_metric_name='MAE',
             hp_optimizer=RandomSearch(),
             n_trials=5,
-            start_new_round=True,
             continue_loop_on_error=False,
             n_jobs=2,
         ),
         repo=VanillaHyperparamsRepository(tmpdir),
+        main_metric_name='MAE',
+        start_new_round=True,
         refit_best_trial=True,
     )
 

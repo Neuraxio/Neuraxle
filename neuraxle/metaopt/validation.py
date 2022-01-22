@@ -635,8 +635,8 @@ class RandomSearch(BaseHyperparameterOptimizer):
         :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
-    def __init__(self, main_metric_name: str = None):
-        BaseHyperparameterOptimizer.__init__(self, main_metric_name=main_metric_name)
+    def __init__(self):
+        BaseHyperparameterOptimizer.__init__(self)
 
     def find_next_best_hyperparams(self, round_scope: 'Round') -> HyperparameterSamples:
         """

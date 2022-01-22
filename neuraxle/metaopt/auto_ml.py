@@ -25,12 +25,14 @@ Hyperparameter selection strategies are used to optimize the hyperparameters of 
 
 """
 
+from asyncore import loop
 import copy
 import gc
 import json
 import multiprocessing
 import traceback
 from operator import attrgetter
+from tracemalloc import start
 from typing import Iterator, List, Optional, Tuple, Union
 
 import numpy as np
@@ -47,7 +49,7 @@ from neuraxle.logging.warnings import (warn_deprecated_arg,
 from neuraxle.metaopt.callbacks import (ARG_Y_EXPECTED, ARG_Y_PREDICTD,
                                         BaseCallback, CallbackList,
                                         ScoringCallback)
-from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
+from neuraxle.metaopt.data.aggregates import (Client, ManageableT, Project, Root, Round,
                                               Trial, TrialSplit)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            AutoMLContext, BaseDataclass,
@@ -174,12 +176,9 @@ class BaseControllerLoop(TruncableService):
         self,
         trainer: Trainer,
         n_trials: int,
-        main_metric_name: str,
         hp_optimizer: BaseHyperparameterOptimizer = None,
-        start_new_round: bool = True,
         continue_loop_on_error: bool = True
     ):
-        main_metric_name: str = main_metric_name
         if hp_optimizer is None:
             hp_optimizer = RandomSearch()
 
@@ -188,14 +187,13 @@ class BaseControllerLoop(TruncableService):
             BaseHyperparameterOptimizer: hp_optimizer,
         })
         self.n_trials = n_trials
-        self.start_new_run: bool = start_new_round
         self.continue_loop_on_error: bool = continue_loop_on_error
 
     @property
     def trainer(self) -> Trainer:
         return self.get_service(Trainer)
 
-    def run(self, pipeline: BaseStep, dact: DACT, client: Client) -> int:
+    def run(self, pipeline: BaseStep, dact: DACT, round: Round, refit_best_trial: bool) -> int:
         """
         Run the controller loop.
 
@@ -205,20 +203,19 @@ class BaseControllerLoop(TruncableService):
 
         # thread_safe_lock, context = context.thread_safe() ??
 
-        with client.optim_round(self.start_new_run, self.main_metric_name) as optim_round:
-            hp_optimizer: BaseHyperparameterOptimizer = self[BaseHyperparameterOptimizer]
-            hp_space: HyperparameterSpace = pipeline.get_hyperparams_space()
+        hp_optimizer: BaseHyperparameterOptimizer = self[BaseHyperparameterOptimizer]
+        hp_space: HyperparameterSpace = pipeline.get_hyperparams_space()
 
-            optim_round: Round = optim_round.with_optimizer(hp_optimizer, hp_space)
-            if self.continue_loop_on_error:
-                optim_round.continue_loop_on_error()
+        round: Round = round.with_optimizer(hp_optimizer, hp_space)
+        if self.continue_loop_on_error:
+            round.continue_loop_on_error()
 
-            for managed_trial_scope in self.loop(optim_round):
-                managed_trial_scope: Trial = managed_trial_scope  # typing helps
-                # trial_scope.context.restore_lock(thread_safe_lock) ??
-                self.trainer.train(pipeline, dact, managed_trial_scope)
+        for managed_trial_scope in self.loop(round):
+            managed_trial_scope: Trial = managed_trial_scope  # typing helps
+            # trial_scope.context.restore_lock(thread_safe_lock) ??
+            self.trainer.train(pipeline, dact, managed_trial_scope)
 
-            round_id: int = optim_round.get_id()
+        round_id: int = round.get_id()
         return round_id
 
     def loop(self, round_scope: Round) -> Iterator[Trial]:
@@ -238,15 +235,23 @@ class BaseControllerLoop(TruncableService):
 
                 yield managed_trial_scope
 
-    def refit_best_trial(self, pipeline: BaseStep, dact: DACT, client_scope: Client) -> BaseStep:
+    def next_trial(self, round_scope: Round) -> ManageableT[Trial]:
+        """
+        Get the next trial to be executed.
+
+        :param round_scope: round scope
+        :return: the next trial to be executed.
+        """
+        return round_scope.new_rvs_trial()  # TODO: finish for parallelization
+
+    def refit_best_trial(self, pipeline: BaseStep, dact: DACT, round_scope: Round) -> BaseStep:
         """
         Refit the pipeline on the whole dataset (without any validation technique).
         """
-        with client_scope.resume_last_round() as round_scope:
-            with round_scope.managed_best_trial() as managed_trial_scope:
+        with round_scope.managed_best_trial() as managed_trial_scope:
 
-                refitted: BaseStep = self.trainer.refit(
-                    pipeline, dact, managed_trial_scope)
+            refitted: BaseStep = self.trainer.refit(
+                pipeline, dact, managed_trial_scope)
 
         return refitted
 
@@ -257,31 +262,33 @@ class DefaultLoop(BaseControllerLoop):
         self,
         trainer: Trainer,
         n_trials: int,
-        main_metric_name: str,
         hp_optimizer: BaseHyperparameterOptimizer = None,
-        start_new_round: bool = True,
         continue_loop_on_error: bool = True,
         n_jobs: int = 1,
     ):
         super().__init__(
             trainer,
             n_trials,
-            main_metric_name=main_metric_name,
             hp_optimizer=hp_optimizer,
-            start_new_round=start_new_round,
             continue_loop_on_error=continue_loop_on_error
         )
         self.n_jobs = n_jobs
 
-    def TODO_DELETE_run(self, pipeline, dact: DACT, context: ExecutionContext):
+    def TODO_loop(self, pipeline, dact: DACT, context: ExecutionContext):
         # TODO: what is this method used for?
 
         if self.n_jobs in (None, 1):
             # Single Process
+            # for i in i super().loop...
             for trial_number in range(self.n_trial):
                 self._attempt_trial(trial_number, validation_splits, context)
+
         else:
             # Multiprocssing
+            # dispatch task to each process where each fetch an interation of the super.loop??
+            # todo: refactor this method to make the loop not necessarily a generator.
+            #       this way, it could be possible to call "self.next" in threads to do the same.
+
             context.logger.info(f"Number of processors available: {multiprocessing.cpu_count()}")
 
             if isinstance(self.hyperparams_repository, InMemoryHyperparamsRepository):
@@ -295,82 +302,6 @@ class DefaultLoop(BaseControllerLoop):
             with multiprocessing.get_context("spawn").Pool(processes=n_jobs) as pool:
                 args = [(self, trial_number, validation_splits, context) for trial_number in range(self.n_trial)]
                 pool.starmap(AutoML._attempt_trial, args)
-
-        best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
-
-        context.logger.info(
-            '\nbest hyperparams: {}'.format(json.dumps(best_hyperparams.to_nested_dict(), sort_keys=True, indent=4)))
-
-        # Notify HyperparamsRepository subscribers
-        self.hyperparams_repository.notify_complete(value=self.hyperparams_repository)
-
-        self.pipeline = self.refit_best_trial(self.pipeline, data_container, context)
-
-        return self.pipeline
-
-    def refit_best_trial(self, pipeline: BaseStep, data_container: DACT, context: ExecutionContext) -> BaseStep:
-        """
-        Refit the pipeline on the whole dataset (without any validation technique).
-
-        :param pipeline: a virgin pipeline to refit.
-        :param data_container: data container containing all the data to refit on.
-        :param context: execution context containing the flow to operate on and with.
-        :return: fitted pipeline
-        """
-        p: BaseStep = self._load_virgin_model(hyperparams=best_hyperparams)
-        p = self.trainer.refit(
-            p=p,
-            data_container=data_container,
-            context=context.set_execution_phase(ExecutionPhase.TRAIN)
-        )
-
-        context.flow.log_model(p)
-
-        return self
-
-    def _attempt_trial(self, trial_number, validation_splits, context: ExecutionContext):
-
-        try:
-            auto_ml_data = AutoMLContainer(
-                trial_number=trial_number,
-                trials=self.hyperparams_repository.load_trials(TrialStatus.SUCCESS),
-                hyperparameter_space=self.pipeline.get_hyperparams_space(),
-                main_scoring_metric_name=self.trainer.get_main_metric_name()
-            )
-
-            with self.hyperparams_repository.new_trial(auto_ml_data) as repo_trial:
-                repo_trial_split = None
-                context.set_logger(repo_trial.logger)
-                context.logger.info('trial {}/{}'.format(trial_number + 1, self.n_trial))
-
-                repo_trial_split = self.trainer.execute_trial(
-                    pipeline=self.pipeline,
-                    context=context,
-                    repo_trial=repo_trial,
-                    validation_splits=validation_splits,
-                    n_trial=self.n_trial
-                )
-        except self.error_types_to_raise as error:
-            track = traceback.format_exc()
-            repo_trial.set_failed(error)
-            context.logger.critical(track)
-            raise error
-        except Exception:
-            track = traceback.format_exc()
-            repo_trial_split_number = 0 if repo_trial_split is None else repo_trial_split.split_number + 1
-            context.logger.error('failed trial {}'.format(_get_trial_split_description(
-                repo_trial=repo_trial,
-                repo_trial_split_number=repo_trial_split_number,
-                validation_splits=validation_splits,
-                trial_number=trial_number,
-                n_trial=self.n_trial
-            )))
-            context.logger.error(track)
-        finally:
-            repo_trial.update_final_trial_status()
-            # Some heavy objects might have stayed in memory for a while during the execution of our trial;
-            # It is best to do a full collection as that may free up some ram.
-            gc.collect()
 
 
 class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
@@ -388,6 +319,8 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             pipeline: BaseStep,
             loop: BaseControllerLoop,
             repo: HyperparamsRepository,
+            main_metric_name: str,
+            start_new_round: bool = True,
             refit_best_trial: bool = True,
             project_name: str = DEFAULT_PROJECT,
             client_name: str = DEFAULT_CLIENT,
@@ -412,9 +345,32 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         self.pipeline: BaseStep = pipeline
         self.loop: BaseControllerLoop = loop
         self.repo: HyperparamsRepository = repo
+
+        self.main_metric_name: str = main_metric_name
+        self.start_new_round: bool = start_new_round
         self.refit_best_trial: bool = refit_best_trial
         self.project_name: str = project_name
         self.client_name: str = client_name
+
+        self.has_model_been_retrained: bool = False
+
+    def get_children(self) -> List[BaseStep]:
+        return [self.pipeline]
+
+    @property
+    def wrapped(self) -> BaseStep:
+        return self.pipeline
+
+    def _fit_transform_data_container(
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple['BaseStep', DACT]:
+        if not self.refit_best_trial:
+            raise ValueError(
+                "self.refit_best_trial must be True in this AutoML class to do the transform in 'fit_transform'.")
+
+        self = self._fit_data_container(data_container, context)
+        data_container = self._transform_data_container()
+        return self, data_container
 
     def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> 'BaseStep':
         """
@@ -434,80 +390,22 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
             ps: Project = ps
             with ps.get_client(self.client_name) as cs:
                 cs: Client = cs
+                with cs.optim_round(self.start_new_round, self.main_metric_name) as rs:
+                    rs: Round = rs
 
-                round_id: int = self.loop.run(self.pipeline, data_container, cs)
+                    self.loop.run(self.pipeline, data_container, rs)
 
-                if self.refit_best_trial:
-                    self.pipeline = self.loop.refit_best_trial(
-                        self.pipeline, data_container, cs, round_id)
+                    if self.refit_best_trial:
+                        self.pipeline = self.loop.refit_best_trial(self.pipeline, data_container, rs)
+                        self.has_model_been_retrained = True
 
         return self
 
-    def _fit_transform_data_container(
-        self, data_container: DACT, context: ExecutionContext
-    ) -> Tuple['BaseStep', DACT]:
-        if not self.refit_best_trial:
-            raise ValueError('self.refit_best_trial must be True in AutoML class to fit_transform.')
-        self = self._fit_data_container(data_container, context)
-        data_container = self._transform_data_container()
-        return self, data_container
-
     def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
-        if not self.refit_best_trial:
+        if not self.has_model_been_retrained:
             raise ValueError('self.refit_best_trial must be True in AutoML class to transform.')
+
         return self.pipeline.handle_transform(data_container, context)
-
-    def _load_virgin_best_model(self) -> BaseStep:
-        """
-        Get the best model from all of the previous trials.
-
-        :return: best model step
-        """
-        best_hyperparams = self.hyperparams_repository.get_best_hyperparams()
-        p: Union[BaseCrossValidationWrapper, BaseStep] = copy.copy(self.pipeline)
-        p = p.update_hyperparams(best_hyperparams)
-
-        return copy.deepcopy(p)
-
-    def _load_virgin_model(self, hyperparams: HyperparameterSamples) -> BaseStep:
-        """
-        Load virigin model with the given hyperparams.
-
-        :return: best model step
-        """
-        return copy.deepcopy(self.pipeline).update_hyperparams(hyperparams)
-
-    def get_retrained_best_model(self) -> BaseStep:
-        """
-        Get best model using the hyperparams repository.
-
-        :return:
-        """
-        raise NotImplementedError("TODO")
-
-    def get_children(self) -> List[BaseStep]:
-        return [self.get_retrained_best_model()]
-
-    @property
-    def wrapped(self) -> BaseStep:
-        return self.get_children()
-
-
-def _get_trial_split_description(
-        repo_trial: Trial,
-        repo_trial_split_number: int,
-        validation_splits: List[Tuple[DACT, DACT]],
-        trial_number: int,
-        n_trial: int
-):
-    trial_split_description = '{}/{} split {}/{}\nhyperparams: {}'.format(
-        trial_number + 1,
-        n_trial,
-        repo_trial_split_number + 1,
-        len(validation_splits),
-        json.dumps(repo_trial.hyperparams, sort_keys=True, indent=4)
-    )
-    return trial_split_description
 
 
 class EasyAutoML(AutoML):

@@ -76,6 +76,11 @@ from neuraxle.steps.flow import ReversiblePreprocessingWrapper
 SubAggregateT = TypeVar('SubAggregateT', bound=Optional['BaseAggregate'])
 ParentAggregateT = TypeVar('ParentAggregateT', bound=Optional['BaseAggregate'])
 
+# Ready to be entered as a context manager. This is the only way to sync items with the repos.
+ManageableT = TypeVar('ManageableT', bound=Optional['BaseAggregate'])
+# Entered as a context manager. This item's __exit__ will be called later.
+ManagedT = TypeVar('ManagedT', bound=Optional['BaseAggregate'])
+
 
 def _with_method_as_context_manager(func: Callable[['BaseAggregate'], SubAggregateT]):
     """
@@ -282,7 +287,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[ParentAggregateT, Su
     def __iter__(self) -> Iterable[SubAggregateT]:
         for subdataclass in self._dataclass.get_sublocation_values():
             if subdataclass is not None:
-                yield self.subaggregate(subdataclass, self.context, is_deep=self.is_deep, self)
+                yield self.subaggregate(subdataclass, self.context, is_deep=self.is_deep, parent=self)
 
     def __getitem__(self, item: int) -> 'Trial':
         """
@@ -313,7 +318,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[ParentAggregateT, Su
         return self._dataclass == other._dataclass
 
 
-class Root(BaseAggregate['Project', RootDataclass]):
+class Root(BaseAggregate[None, 'Project', RootDataclass]):
 
     def save(self, deep: bool = False):
         if deep:
@@ -354,7 +359,7 @@ class Root(BaseAggregate['Project', RootDataclass]):
         return super()._acquire_managed_subresource(project_loc)
 
 
-class Project(BaseAggregate['Client', ProjectDataclass]):
+class Project(BaseAggregate[None, 'Client', ProjectDataclass]):
 
     @_with_method_as_context_manager
     def get_client(self, name: str) -> 'Project':
@@ -372,7 +377,7 @@ class Project(BaseAggregate['Client', ProjectDataclass]):
         return super()._acquire_managed_subresource(client_loc)
 
 
-class Client(BaseAggregate['Round', ClientDataclass]):
+class Client(BaseAggregate[Project, 'Round', ClientDataclass]):
 
     @_with_method_as_context_manager
     def new_round(self, main_metric_name: str) -> 'Client':
@@ -410,7 +415,7 @@ class Client(BaseAggregate['Round', ClientDataclass]):
             return subagg
 
 
-class Round(BaseAggregate['Trial', RoundDataclass]):
+class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
 
     def with_optimizer(
         self, hp_optimizer: BaseHyperparameterOptimizer, hp_space: HyperparameterSpace
@@ -607,7 +612,7 @@ class Round(BaseAggregate['Trial', RoundDataclass]):
         return []
 
 
-class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
+class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
     """
     This class is a sub-contextualization of the :class:`HyperparameterRepository`
     class for holding a trial and manipulating it within its context.
@@ -802,7 +807,7 @@ class Trial(BaseAggregate['TrialSplit', TrialDataclass]):
         return self._dataclass.validation_splits[-1].metric_results[metric_name].higher_score_is_better
 
 
-class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
+class TrialSplit(BaseAggregate[Trial, 'MetricResults', TrialSplitDataclass]):
     """
     One split of a trial.
 
@@ -959,7 +964,7 @@ class TrialSplit(BaseAggregate['MetricResults', TrialSplitDataclass]):
         return self
 
 
-class MetricResults(BaseAggregate[None, MetricResultsDataclass]):
+class MetricResults(BaseAggregate[TrialSplit, None, MetricResultsDataclass]):
 
     def _invariant(self):
         self._assert(self.is_deep,
