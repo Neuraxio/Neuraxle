@@ -291,8 +291,8 @@ class MetricCallback(BaseCallback):
         log_metrics=True,
         pass_context_to_metric_function: bool = False
     ):
-        # TODO: make a dictionnary somewhere to store predefined metrics.
-        self.name = name
+        # TODO: make a dictionnary somewhere to store predefined metrics?
+        self.name: str = name
         self.metric_function: Callable[
             [ARG_Y_EXPECTED, ARG_Y_PREDICTD, OPTIONAL_ARG_CONTEXT], RETURNS_SCORE] = metric_function
         self.higher_score_is_better = higher_score_is_better

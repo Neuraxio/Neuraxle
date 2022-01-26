@@ -658,8 +658,8 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
     It may be good for space exploration before a TPE or for unit tests.
     """
 
-    def __init__(self, expected_n_trials: int, main_metric_name: str = None):
-        BaseHyperparameterOptimizer.__init__(self, main_metric_name=main_metric_name)
+    def __init__(self, expected_n_trials: int):
+        BaseHyperparameterOptimizer.__init__(self)
         self.expected_n_trials: int = expected_n_trials
 
         self._i: int = 0

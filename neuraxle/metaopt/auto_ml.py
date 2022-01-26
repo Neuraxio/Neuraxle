@@ -25,17 +25,9 @@ Hyperparameter selection strategies are used to optimize the hyperparameters of 
 
 """
 
-from asyncore import loop
-import copy
-import gc
-import json
 import multiprocessing
-import traceback
-from operator import attrgetter
-from tracemalloc import start
-from typing import Iterator, List, Optional, Tuple, Union
+from typing import ContextManager, Iterator, List, Optional, Tuple
 
-import numpy as np
 from neuraxle.base import (BaseService, BaseServiceT, BaseStep,
                            ExecutionContext, ExecutionPhase, Flow,
                            ForceHandleMixin, TrialStatus, TruncableService,
@@ -49,7 +41,7 @@ from neuraxle.logging.warnings import (warn_deprecated_arg,
 from neuraxle.metaopt.callbacks import (ARG_Y_EXPECTED, ARG_Y_PREDICTD,
                                         BaseCallback, CallbackList,
                                         ScoringCallback)
-from neuraxle.metaopt.data.aggregates import (Client, ManageableT, Project, Root, Round,
+from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
                                               Trial, TrialSplit)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            AutoMLContext, BaseDataclass,
@@ -193,7 +185,7 @@ class BaseControllerLoop(TruncableService):
     def trainer(self) -> Trainer:
         return self.get_service(Trainer)
 
-    def run(self, pipeline: BaseStep, dact: DACT, round: Round, refit_best_trial: bool) -> int:
+    def run(self, pipeline: BaseStep, dact: DACT, round: Round):
         """
         Run the controller loop.
 
@@ -207,16 +199,11 @@ class BaseControllerLoop(TruncableService):
         hp_space: HyperparameterSpace = pipeline.get_hyperparams_space()
 
         round: Round = round.with_optimizer(hp_optimizer, hp_space)
-        if self.continue_loop_on_error:
-            round.continue_loop_on_error()
 
         for managed_trial_scope in self.loop(round):
             managed_trial_scope: Trial = managed_trial_scope  # typing helps
             # trial_scope.context.restore_lock(thread_safe_lock) ??
             self.trainer.train(pipeline, dact, managed_trial_scope)
-
-        round_id: int = round.get_id()
-        return round_id
 
     def loop(self, round_scope: Round) -> Iterator[Trial]:
         """
@@ -227,28 +214,25 @@ class BaseControllerLoop(TruncableService):
         :return:
         """
         for _ in range(self.n_trials):
-            with round_scope.new_rvs_trial() as managed_trial_scope:
+            with self.next_trial(round_scope) as managed_trial_scope:
                 managed_trial_scope: Trial = managed_trial_scope  # typing helps
-
-                if self.continue_loop_on_error:
-                    managed_trial_scope.continue_loop_on_error()
 
                 yield managed_trial_scope
 
-    def next_trial(self, round_scope: Round) -> ManageableT[Trial]:
+    def next_trial(self, round_scope: Round) -> ContextManager[Trial]:
         """
         Get the next trial to be executed.
 
         :param round_scope: round scope
         :return: the next trial to be executed.
         """
-        return round_scope.new_rvs_trial()  # TODO: finish for parallelization
+        return round_scope.new_rvs_trial(self.continue_loop_on_error)  # TODO: finish for parallelization
 
     def refit_best_trial(self, pipeline: BaseStep, dact: DACT, round_scope: Round) -> BaseStep:
         """
         Refit the pipeline on the whole dataset (without any validation technique).
         """
-        with round_scope.managed_best_trial() as managed_trial_scope:
+        with round_scope.refitting_best_trial() as managed_trial_scope:
 
             refitted: BaseStep = self.trainer.refit(
                 pipeline, dact, managed_trial_scope)
@@ -369,7 +353,7 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
                 "self.refit_best_trial must be True in this AutoML class to do the transform in 'fit_transform'.")
 
         self = self._fit_data_container(data_container, context)
-        data_container = self._transform_data_container()
+        data_container = self._transform_data_container(data_container, context)
         return self, data_container
 
     def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> 'BaseStep':
@@ -403,7 +387,9 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
     def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
         if not self.has_model_been_retrained:
-            raise ValueError('self.refit_best_trial must be True in AutoML class to transform.')
+            raise ValueError(
+                'self.refit_best_trial must be True in AutoML class '
+                'to transform, and the AutoMl should have been fitted.')
 
         return self.pipeline.handle_transform(data_container, context)
 
@@ -457,7 +443,6 @@ class EasyAutoML(AutoML):
             n_jobs=n_jobs,
             hp_optimizer=hyperparams_optimizer,
             continue_loop_on_error=continue_loop_on_error,
-            start_new_round=True,
         )
         assert cache_folder_when_no_handle is None  # TODO: remove this.
 
@@ -466,5 +451,7 @@ class EasyAutoML(AutoML):
             pipeline=pipeline,
             loop=controller_loop,
             repo=hyperparams_repository,
+            main_metric_name=scoring_callback.name,
+            start_new_round=True,
             refit_best_trial=refit_best_trial,
         )

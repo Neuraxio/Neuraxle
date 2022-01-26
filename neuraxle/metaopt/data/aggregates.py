@@ -49,8 +49,9 @@ from collections import OrderedDict
 from enum import Enum
 from json.encoder import JSONEncoder
 from logging import FileHandler, Logger
-from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
-                    Tuple, Type, TypeVar, Union)
+from types import TracebackType
+from typing import (Any, Callable, ContextManager, Dict, Generic, Iterable,
+                    List, Optional, Tuple, Type, TypeVar, Union)
 
 import numpy as np
 from neuraxle.base import (BaseService, BaseStep, ExecutionContext, Flow,
@@ -76,19 +77,14 @@ from neuraxle.steps.flow import ReversiblePreprocessingWrapper
 SubAggregateT = TypeVar('SubAggregateT', bound=Optional['BaseAggregate'])
 ParentAggregateT = TypeVar('ParentAggregateT', bound=Optional['BaseAggregate'])
 
-# Ready to be entered as a context manager. This is the only way to sync items with the repos.
-ManageableT = TypeVar('ManageableT', bound=Optional['BaseAggregate'])
-# Entered as a context manager. This item's __exit__ will be called later.
-ManagedT = TypeVar('ManagedT', bound=Optional['BaseAggregate'])
 
-
-def _with_method_as_context_manager(func: Callable[['BaseAggregate'], SubAggregateT]):
+def _with_method_as_context_manager(
+    func: Callable[['BaseAggregate'], 'BaseAggregate']
+) -> Callable[['BaseAggregate'], ContextManager['SubAggregateT']]:
     """
-
-    .. note::
-        This is a method to be used as a context manager.
-        This will sync items with the repos.
-        Example:
+    This is a method to be used as a context manager.
+    This will sync items with the repos.
+    Example:
 
     .. code-block:: python
         with obj.func() as managed_context:
@@ -109,7 +105,7 @@ def _with_method_as_context_manager(func: Callable[['BaseAggregate'], SubAggrega
     return func
 
 
-class BaseAggregate(_CouldHaveContext, BaseService, Generic[ParentAggregateT, SubAggregateT, SubDataclassT]):
+class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT], Generic[ParentAggregateT, SubAggregateT, SubDataclassT]):
     """
     Base class for aggregated objects using the repo and the dataclasses to manipulate them.
     """
@@ -237,7 +233,12 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[ParentAggregateT, Su
 
         return self._managed_resource
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType]
+    ) -> Optional[bool]:
         self._managed_resource.context.free_scoped_logger_file_handler()
         # self.context.add_scoped_logger_file_handler()
 
@@ -249,7 +250,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[ParentAggregateT, Su
         self._managed_subresource(*args, **kwds)
         return self
 
-    def _managed_subresource(self, *args, **kwds) -> SubAggregateT:
+    def _managed_subresource(self, *args, **kwds) -> ContextManager[SubAggregateT]:
         self._invariant()
         self._managed_resource: SubAggregateT = self._acquire_managed_subresource(
             *args, **kwds)
@@ -279,7 +280,8 @@ class BaseAggregate(_CouldHaveContext, BaseService, Generic[ParentAggregateT, Su
         with self.context.lock:
             self.refresh(self.is_deep)
             self.save(False)
-        return e is not None
+        handled_error = e is None
+        return handled_error
 
     def __len__(self) -> int:
         return len(self._dataclass.get_sublocation())
@@ -429,13 +431,18 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
         return self._dataclass.main_metric_name
 
     @_with_method_as_context_manager
-    def new_rvs_trial(self) -> 'Round':
-        self._managed_subresource(new_trial=True)
+    def new_rvs_trial(self, continue_on_error: bool = False) -> 'Round':
+        self._managed_subresource(new_trial=True, continue_on_error=continue_on_error)
         return self
 
     @_with_method_as_context_manager
-    def last_trial(self) -> 'Round':
-        self._managed_subresource(new_trial=False)
+    def last_trial(self, continue_on_error: bool = False) -> 'Round':
+        self._managed_subresource(new_trial=False, continue_on_error=continue_on_error)
+        return self
+
+    @_with_method_as_context_manager
+    def refitting_best_trial(self) -> 'Round':
+        self._managed_subresource(new_trial=None, continue_on_error=False)
         return self
 
     @property
@@ -448,14 +455,25 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
     def get_id(self) -> int:
         return self._dataclass.get_id()
 
-    def _acquire_managed_subresource(self, new_trial=True) -> 'Trial':
+    def _acquire_managed_subresource(self, new_trial=True, continue_on_error: bool = False) -> 'Trial':
+        """
+        Get a trial.
+
+        :param new_trial: If True, will create a new trial. If false, will load the last trial. If None, will load the best trial.
+        :param continue_on_error: If True, will continue to the next trial if the current trial fails.
+                                  Otherwise, will let the exception be raised for the failure (won't catch).
+        """
         with self.context.lock:
             self.refresh(self.is_deep)
             # self.context.add_scoped_logger_file_handler()
 
             # Get new trial loc:
             trial_id: int = self._dataclass.get_next_i()
-            if not new_trial:
+            if new_trial is None:
+                raise NotImplementedError(
+                    "Refitting best trial not implemented yet: needs to think about the release of the resource that won't be a 'subaggregate' exactly...")
+                trial_id: int = self.get_best_trial()
+            elif not new_trial:
                 # Try get last trial
                 trial_id = max(0, trial_id - 1)
             trial_loc = self.loc.with_id(trial_id)
@@ -466,6 +484,9 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
             _trial_dataclass.hyperparams = new_hps
             self.flow.log_planned(new_hps)
             subagg: Trial = Trial(_trial_dataclass, self.context, is_deep=True)
+
+            if continue_on_error:
+                subagg.continue_loop_on_error()
 
             if new_trial or trial_loc == 0:
                 self.save_subaggregate(subagg, deep=True)
@@ -499,7 +520,7 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
             self.save_subaggregate(resource, deep=resource.is_deep)
 
             if not is_all_failure:
-                main_metric_name = self.hp_optimizer.get_main_metric_name()
+                main_metric_name = self.main_metric_name
                 self.flow.log('Finished round hp search!')
                 self.flow.log_best_hps(
                     main_metric_name,
@@ -678,7 +699,7 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
 
     def _release_managed_subresource(self, resource: 'TrialSplit', e: Exception = None) -> bool:
         gc.collect()
-        handled_error = True
+        handled_error = False
 
         with self.context.lock:
             self.refresh(self.is_deep)
@@ -686,12 +707,15 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
 
             if e is None:
                 resource.set_success()
+                handled_error = True
             else:
                 resource.set_failed(e)
 
                 if any((isinstance(e, c) for c in self.error_types_to_raise)):
-                    handled_error = False
                     self.set_failed(e)
+                    handled_error = False
+                else:
+                    handled_error = True
 
             self.save_subaggregate(resource, deep=True)
 
@@ -915,11 +939,13 @@ class TrialSplit(BaseAggregate[Trial, 'MetricResults', TrialSplitDataclass]):
         return self._dataclass.metric_results[name]
 
     def _release_managed_subresource(self, resource: 'MetricResults', e: Exception = None) -> bool:
-        handled_error = True
+        handled_error = False
         with self.context.lock:
             if e is not None:
                 handled_error = False
                 self.context.flow.log_error(e)
+            else:
+                handled_error = True
             self.save_subaggregate(resource, deep=True)
         return handled_error
 
@@ -974,7 +1000,7 @@ class MetricResults(BaseAggregate[TrialSplit, None, MetricResultsDataclass]):
 
     @property
     def metric_name(self) -> str:
-        return self._dataclass.main_metric_name
+        return self._dataclass.metric_name
 
     def _acquire_managed_subresource(self, *args, **kwds) -> SubAggregateT:
         # TODO: epoch class and epoch location?

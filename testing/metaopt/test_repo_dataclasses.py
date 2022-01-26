@@ -62,10 +62,10 @@ SOME_TRIAL_DATACLASS.end(TrialStatus.SUCCESS)
 SOME_ROUND_DATACLASS = RoundDataclass(
     round_number=0,
     trials=[SOME_TRIAL_DATACLASS],
+    main_metric_name=SOME_METRIC_NAME,
 )
 SOME_CLIENT_DATACLASS = ClientDataclass(
     client_name=DEFAULT_CLIENT,
-    main_metric_name=SOME_METRIC_NAME,
     rounds=[SOME_ROUND_DATACLASS],
 )
 SOME_PROJECT_DATACLASS = ProjectDataclass(
