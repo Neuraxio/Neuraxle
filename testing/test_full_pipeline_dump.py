@@ -1,8 +1,8 @@
 import os
 
 import numpy as np
-
-from neuraxle.base import Identity, ExecutionContext, StepWithContext
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import Identity, StepWithContext
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCallbackStep, TapeCallbackFunction
 from neuraxle.steps.output_handlers import OutputTransformerWrapper
@@ -22,7 +22,7 @@ def test_load_full_dump_from_pipeline_name(tmpdir):
         ('step_b', OutputTransformerWrapper(
             FitTransformCallbackStep(tape_fit_callback_function, tape_transform_callback_function)
         ))
-    ]).set_name(PIPELINE_NAME).with_context(ExecutionContext(tmpdir))
+    ]).set_name(PIPELINE_NAME).with_context(CX(tmpdir))
 
     # When
     pipeline, _ = pipeline.fit_transform(DATA_INPUTS, EXPECTED_OUTPUTS)
@@ -32,10 +32,10 @@ def test_load_full_dump_from_pipeline_name(tmpdir):
     assert np.array_equal(step_b_wrapped_step.fit_callback_function.data[0][0], EXPECTED_OUTPUTS)
     assert np.array_equal(step_b_wrapped_step.fit_callback_function.data[0][1], [None] * len(EXPECTED_OUTPUTS))
 
-    pipeline.save(ExecutionContext(tmpdir), full_dump=True)
+    pipeline.save(CX(tmpdir), full_dump=True)
 
     # Then
-    loaded_pipeline = ExecutionContext(tmpdir).load(PIPELINE_NAME)
+    loaded_pipeline = CX(tmpdir).load(PIPELINE_NAME)
 
     assert isinstance(loaded_pipeline, Pipeline)
     assert isinstance(loaded_pipeline['step_a'], Identity)
@@ -56,14 +56,14 @@ def test_load_full_dump_from_path(tmpdir):
         ('step_b', OutputTransformerWrapper(
             FitTransformCallbackStep(tape_fit_callback_function, tape_transform_callback_function)
         ))
-    ]).set_name(PIPELINE_NAME).with_context(ExecutionContext(tmpdir))
+    ]).set_name(PIPELINE_NAME).with_context(CX(tmpdir))
 
     # When
     pipeline, _ = pipeline.fit_transform(DATA_INPUTS, EXPECTED_OUTPUTS)
-    pipeline.save(ExecutionContext(tmpdir), full_dump=True)
+    pipeline.save(CX(tmpdir), full_dump=True)
 
     # Then
-    loaded_pipeline = ExecutionContext(tmpdir).load(os.path.join(PIPELINE_NAME, 'step_b'))
+    loaded_pipeline = CX(tmpdir).load(os.path.join(PIPELINE_NAME, 'step_b'))
 
     assert isinstance(loaded_pipeline, OutputTransformerWrapper)
     loaded_step_b_wrapped_step = loaded_pipeline.wrapped

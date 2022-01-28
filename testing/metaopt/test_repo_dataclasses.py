@@ -5,7 +5,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 import numpy as np
 import pytest
 from neuraxle.base import (BaseService, BaseStep, BaseTransformer,
-                           ExecutionContext, Flow, HandleOnlyMixin, Identity,
+                           CX, Flow, HandleOnlyMixin, Identity,
                            MetaStep, TrialStatus, synchroneous_flow_method)
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import RandInt, Uniform
@@ -127,7 +127,7 @@ def test_base_empty_default_dataclass_getters(
 
 
 def test_auto_ml_context_loc_stays_the_same():
-    context = ExecutionContext()
+    context = CX()
     context = AutoMLContext.from_context(
         context, VanillaHyperparamsRepository(context.get_path()))
 
@@ -141,7 +141,7 @@ def test_auto_ml_context_loc_stays_the_same():
 
 
 def test_context_changes_independently_once_copied():
-    cx = ExecutionContext()
+    cx = CX()
     cx = AutoMLContext.from_context()
 
     copied_cx: AutoMLContext = cx.copy().push_attr(
@@ -243,12 +243,12 @@ def test_hyperparams_repository_has_default_client_project():
 
 
 def vanilla_repo_ctor(tmpdir) -> AutoMLContext:
-    return AutoMLContext.from_context(ExecutionContext())
+    return AutoMLContext.from_context(CX())
 
 
 def json_repo_ctor(tmpdir) -> AutoMLContext:
     # TODO: add this function to REPO_CTORS
-    return AutoMLContext.from_context(ExecutionContext(), repo=HyperparamsJSONRepository(tmpdir))
+    return AutoMLContext.from_context(CX(), repo=HyperparamsJSONRepository(tmpdir))
 
 
 REPO_CTORS = [vanilla_repo_ctor]

@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 from sklearn.metrics import mean_squared_error
-from neuraxle.base import ExecutionContext
+from neuraxle.base import ExecutionContext as CX
 
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
@@ -39,7 +39,7 @@ def test_automl_sequential_wrapper(tmpdir):
 
     # When
     auto_ml: AutoMLSequentialWrapper = auto_ml.handle_fit(
-        DACT(data_inputs=data_inputs, expected_outputs=expected_outputs), ExecutionContext(tmpdir))
+        DACT(data_inputs=data_inputs, expected_outputs=expected_outputs), CX(tmpdir))
     best_model: Pipeline = auto_ml.get_best_model()
     predicted_outputs = best_model.transform(data_inputs)
 
@@ -78,7 +78,7 @@ def test_automl_sequential_wrapper_with_validation_split_wrapper(tmpdir):
         hyperparams_repository=HyperparamsJSONRepository(tmpdir),
         higher_score_is_better=False,
         n_iter=100
-    ).with_context(ExecutionContext(tmpdir))
+    ).with_context(CX(tmpdir))
 
     # When
     mse_before = ((data_inputs - expected_outputs) ** 2).mean()

@@ -29,7 +29,7 @@ import multiprocessing
 from typing import ContextManager, Iterator, List, Optional, Tuple
 
 from neuraxle.base import (BaseService, BaseServiceT, BaseStep,
-                           ExecutionContext, ExecutionPhase, Flow,
+                           CX, ExecutionPhase, Flow,
                            ForceHandleMixin, TrialStatus, TruncableService,
                            _HasChildrenMixin)
 from neuraxle.data_container import IDT
@@ -265,7 +265,7 @@ class DefaultLoop(BaseControllerLoop):
         )
         self.n_jobs = n_jobs
 
-    def TODO_loop(self, pipeline, dact: DACT, context: ExecutionContext):
+    def TODO_loop(self, pipeline, dact: DACT, context: CX):
         # TODO: what is this method used for?
 
         if self.n_jobs in (None, 1):
@@ -359,7 +359,7 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         return self.pipeline
 
     def _fit_transform_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple['BaseStep', DACT]:
         if not self.refit_best_trial:
             raise ValueError(
@@ -369,7 +369,7 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         data_container = self._transform_data_container(data_container, context)
         return self, data_container
 
-    def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> 'BaseStep':
+    def _fit_data_container(self, data_container: DACT, context: CX) -> 'BaseStep':
         """
         Run Auto ML Loop.
         Find the best hyperparams using the hyperparameter optmizer.
@@ -398,7 +398,7 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
         return self
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         if not self.has_model_been_retrained:
             raise ValueError(
                 'self.refit_best_trial must be True in AutoML class '

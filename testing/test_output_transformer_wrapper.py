@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from neuraxle.base import ExecutionContext, BaseTransformer, ForceHandleMixin
+from neuraxle.base import CX, BaseTransformer, ForceHandleMixin
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
@@ -58,7 +58,7 @@ def test_output_transformer_wrapper_should_fit_transform_with_data_inputs_and_ex
     p, data_container = p.handle_fit_transform(DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
-    ), ExecutionContext())
+    ), CX())
 
     assert np.array_equal(data_container.data_inputs, data_inputs)
     assert np.array_equal(data_container.expected_outputs, expected_outputs * 2)
@@ -74,7 +74,7 @@ def test_output_transformer_wrapper_should_transform_with_data_inputs_and_expect
     data_container = p.handle_transform(DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
-    ), ExecutionContext())
+    ), CX())
 
     assert np.array_equal(data_container.data_inputs, data_inputs)
     assert np.array_equal(data_container.expected_outputs, expected_outputs * 2)
@@ -99,7 +99,7 @@ def test_input_and_output_transformer_wrapper_should_fit_transform_with_data_inp
     p, data_container = p.handle_fit_transform(DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
-    ), ExecutionContext())
+    ), CX())
 
     assert np.array_equal(data_container.data_inputs, data_inputs * 2)
     assert np.array_equal(data_container.expected_outputs, expected_outputs * 2)
@@ -114,7 +114,7 @@ def test_input_and_output_transformer_wrapper_should_transform_with_data_inputs_
     data_container = p.handle_transform(DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
-    ), ExecutionContext())
+    ), CX())
 
     assert np.array_equal(data_container.data_inputs, data_inputs * 2)
     assert np.array_equal(data_container.expected_outputs, expected_outputs * 2)
@@ -155,7 +155,7 @@ class DoubleData(ForceHandleMixin, BaseTransformer):
         BaseTransformer.__init__(self)
         ForceHandleMixin.__init__(self)
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         di, eo = data_container.data_inputs
         return DACT(data_inputs=(di[0].tolist()*2, eo[0].tolist()*2),
                              ids=data_container.ids*2)
@@ -169,7 +169,7 @@ def test_input_and_output_transformer_wrapper_should_not_return_a_different_amou
         p.handle_transform(DACT(
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
-        ), ExecutionContext())
+        ), CX())
 
 
 def test_input_and_output_transformer_wrapper_should_raise_an_assertion_error_if_ids_have_not_been_resampled_correctly():
@@ -180,7 +180,7 @@ def test_input_and_output_transformer_wrapper_should_raise_an_assertion_error_if
         p.handle_transform(DACT(
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
-        ), ExecutionContext())
+        ), CX())
 
 
 def test_data_doubler():
@@ -190,7 +190,7 @@ def test_data_doubler():
     out = p.handle_transform(DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
-    ), ExecutionContext())
+    ), CX())
 
     doubled_length = len(out.data_inputs)
     assert doubled_length == 2*len(data_inputs)

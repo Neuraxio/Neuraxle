@@ -28,16 +28,18 @@ for the transformers.
 import time
 import warnings
 from abc import abstractmethod
-from multiprocessing import Queue, Lock, RLock
-from multiprocessing import Process
+from multiprocessing import Lock, Process, Queue, RLock
 from threading import Thread
-from typing import Dict, Tuple, List, Union, Iterable, Any
+from typing import Any, Dict, Iterable, List, Tuple, Union
 
-from neuraxle.base import NamedStepsList, ExecutionContext, MetaStep, BaseSaver, _FittableStep, \
-    BaseTransformer, NonFittableMixin, MixinForBaseTransformer, ContextLock
-from neuraxle.data_container import DACT, ListDataContainer, AbsentValuesNullObject
+from neuraxle.base import BaseSaver, BaseTransformer, ContextLock
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import (MetaStep, MixinForBaseTransformer, NamedStepsList,
+                           NonFittableMixin, _FittableStep)
+from neuraxle.data_container import (DACT, AbsentValuesNullObject,
+                                     ListDataContainer)
 from neuraxle.hyperparams.space import RecursiveDict
-from neuraxle.pipeline import MiniBatchSequentialPipeline, Joiner, Pipeline
+from neuraxle.pipeline import Joiner, MiniBatchSequentialPipeline, Pipeline
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
 
@@ -138,15 +140,15 @@ class ObservableQueueStepSaver(BaseSaver):
         :class:`SequentialQueuedPipeline`
     """
 
-    def save_step(self, step: BaseTransformer, context: 'ExecutionContext') -> BaseTransformer:
+    def save_step(self, step: BaseTransformer, context: 'CX') -> BaseTransformer:
         step.queue = None
         step.observers = []
         return step
 
-    def can_load(self, step: BaseTransformer, context: 'ExecutionContext') -> bool:
+    def can_load(self, step: BaseTransformer, context: 'CX') -> bool:
         return True
 
-    def load_step(self, step: 'BaseTransformer', context: 'ExecutionContext') -> 'BaseTransformer':
+    def load_step(self, step: 'BaseTransformer', context: 'CX') -> 'BaseTransformer':
         step.queue = Queue()
         return step
 
@@ -196,7 +198,7 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
         state['workers'] = None
         return state
 
-    def start(self, context: ExecutionContext):
+    def start(self, context: CX):
         """
         Start multiple processes or threads with the worker function as a target.
 
@@ -249,7 +251,7 @@ class QueueWorker(ObservableQueueMixin, MetaStep):
         self.observers = []
 
 
-def worker_function(queue_worker: QueueWorker, shared_lock: Lock, context: ExecutionContext, use_savers: bool,
+def worker_function(queue_worker: QueueWorker, shared_lock: Lock, context: CX, use_savers: bool,
                     additional_worker_arguments):
     """
     Worker function that transforms the items inside the queue of items to process.
@@ -479,8 +481,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         return name, n_workers, additional_arguments, max_queue_size, actual_step
 
     def _will_process(
-        self, data_container: DACT, context: ExecutionContext
-    ) -> Tuple[DACT, ExecutionContext]:
+        self, data_container: DACT, context: CX
+    ) -> Tuple[DACT, CX]:
         """
         Setup streaming pipeline before any handler methods.
 
@@ -491,7 +493,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         self._setup(context=context)
         return data_container, context
 
-    def _setup(self, context: ExecutionContext = None) -> 'BaseTransformer':
+    def _setup(self, context: CX = None) -> 'BaseTransformer':
         """
         Connect the queued workers together so that the data can correctly flow through the pipeline.
 
@@ -505,7 +507,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         return RecursiveDict()
 
     def fit_transform_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple[Pipeline, DACT]:
         """
         Fit transform sequentially if any step is fittable. Otherwise transform in parallel.
@@ -530,7 +532,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
         return super().fit_transform_data_container(data_container, context)
 
-    def transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
         Transform data container
 
@@ -562,7 +564,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         data_container = joiner.join(original_data_container=data_container)
         return data_container
 
-    def _did_transform(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _did_transform(self, data_container: DACT, context: CX) -> DACT:
         """
         Stop all of the workers after transform. Also, join the data using self.data_joiner.
 

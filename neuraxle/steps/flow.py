@@ -42,7 +42,7 @@ from typing import Optional as OptionalType
 from typing import Tuple, Union
 
 from neuraxle.base import (BaseStep, BaseTransformer, DACT,
-                           ExecutionContext, ExecutionPhase,
+                           CX, ExecutionPhase,
                            ForceHandleOnlyMixin, HandleOnlyMixin, MetaStep,
                            NonFittableMixin, TransformHandlerOnlyMixin,
                            TruncableSteps)
@@ -86,7 +86,7 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStep):
 
         self.is_train_only = is_train_only
 
-    def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> BaseStep:
+    def _fit_data_container(self, data_container: DACT, context: CX) -> BaseStep:
         """
         :param data_container: data container
         :param context: execution context
@@ -98,7 +98,7 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStep):
         return self
 
     def _fit_transform_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple[BaseStep, DACT]:
         """
         :param data_container: data container
@@ -110,7 +110,7 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStep):
             return self, data_container
         return self, data_container
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
         :param data_container: data container
         :param context: execution context
@@ -173,17 +173,17 @@ class ExecuteIf(HandleOnlyMixin, MetaStep):
         HandleOnlyMixin.__init__(self)
         self.condition_function: Callable = condition_function
 
-    def _fit_data_container(self, data_container: DACT, context: ExecutionContext):
+    def _fit_data_container(self, data_container: DACT, context: CX):
         if self.condition_function(self, data_container, context):
             return MetaStep._fit_data_container(self, data_container, context)
         return self
 
-    def _fit_transform_data_container(self, data_container: DACT, context: ExecutionContext):
+    def _fit_transform_data_container(self, data_container: DACT, context: CX):
         if self.condition_function(self, data_container, context):
             return MetaStep._fit_transform_data_container(self, data_container, context)
         return self, data_container
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DACT, context: CX):
         if self.condition_function(self, data_container, context):
             return MetaStep._transform_data_container(self, data_container, context)
         return data_container
@@ -202,7 +202,7 @@ class IfExecutionPhaseIsThen(ExecuteIf):
         self.phase = phase
         self.raise_if_phase_unspecified = raise_if_phase_unspecified
 
-    def check_context(self, step, data_container, context: ExecutionContext):
+    def check_context(self, step, data_container, context: CX):
         if context.execution_phase == self.phase:
             return True
         elif self.raise_if_phase_unspecified and context.execution_phase == ExecutionPhase.UNSPECIFIED:
@@ -239,18 +239,18 @@ class ExecutionPhaseSwitch(HandleOnlyMixin, TruncableSteps):
         self.steps_as_tuple[ind] = (self.steps_as_tuple[ind][0], step)
         return self
 
-    def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> 'BaseStep':
+    def _fit_data_container(self, data_container: DACT, context: CX) -> 'BaseStep':
         step = self._get_step(context).handle_fit(data_container, context)
         return self._set_step(context, step)
 
     def _fit_transform_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple['BaseTransformer', DACT]:
         step, data_container = self._get_step(context).handle_fit_transform(data_container, context)
         return self._set_step(context, step), data_container
 
     def _transform_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple['BaseTransformer', DACT]:
         return self._get_step(context).handle_transform(data_container, context)
 
@@ -296,7 +296,7 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
         self.nullify_hyperparams = nullify_hyperparams
 
     def _fit_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple['BaseTransformer', DACT]:
         """
         Nullify wrapped step hyperparams, and don't fit the wrapped step.
@@ -314,7 +314,7 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
         return self
 
     def _fit_transform_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple['BaseTransformer', DACT]:
         """
         Nullify wrapped step hyperparams, and don't fit_transform the wrapped step.
@@ -335,7 +335,7 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
             expected_outputs=self.nullified_return_value
         )
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
         Nullify wrapped step hyperparams, and don't transform the wrapped step.
 
@@ -535,7 +535,7 @@ class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseTransformer):
         BaseTransformer.__init__(self)
         TransformHandlerOnlyMixin.__init__(self)
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DACT, context: CX):
         """
         Handle transform.
 
@@ -567,7 +567,7 @@ class SelectNonEmptyDataContainer(TransformHandlerOnlyMixin, BaseTransformer):
         BaseTransformer.__init__(self)
         TransformHandlerOnlyMixin.__init__(self)
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DACT, context: CX):
 
         data_containers = list(filter(
             lambda dc: (len(dc.di) > 0 and len(dc.eo) > 0),
@@ -609,7 +609,7 @@ class ExpandDim(MetaStep):
         data_container, context = BaseStep._will_process(self, data_container, context)
         return ExpandedDataContainer.create_from(data_container), context
 
-    def _did_process(self, data_container: DACT, context: ExecutionContext):
+    def _did_process(self, data_container: DACT, context: CX):
         data_container = super()._did_process(data_container, context)
         return data_container.reduce_dim()
 
@@ -642,7 +642,7 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
         HandleOnlyMixin.__init__(self)
 
     def _fit_data_container(self, data_container: DACT,
-                            context: ExecutionContext) -> 'ReversiblePreprocessingWrapper':
+                            context: CX) -> 'ReversiblePreprocessingWrapper':
         """
         Handle fit by fitting preprocessing step, and postprocessing step.
 
@@ -660,7 +660,7 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
 
         return self
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
         According to the idiom of `(1, 2, reversed(1))`, we do this, in order:
 
@@ -682,7 +682,7 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
         return data_container
 
     def _fit_transform_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple[BaseStep, DACT]:
         """
         According to the idiom of `(1, 2, reversed(1))`, we do this, in order:

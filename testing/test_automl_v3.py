@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from neuraxle.base import (BaseService, BaseStep, BaseTransformer,
-                           ExecutionContext, Flow, HandleOnlyMixin, Identity,
+                           CX, Flow, HandleOnlyMixin, Identity,
                            MetaStep)
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import RandInt, Uniform
@@ -38,7 +38,7 @@ class StepThatAssertsContextIsSpecifiedAtTrain(Identity):
         HandleOnlyMixin.__init__(self)
         self.expected_loc = expected_loc
 
-    def _did_process(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _did_process(self, data_container: DACT, context: CX) -> DACT:
         if self.is_train:
             context: AutoMLContext = context  # typing annotation for IDE
             self._assert_equals(
@@ -55,7 +55,7 @@ class StepThatAssertsContextIsSpecifiedAtTrain(Identity):
 def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scenario(tmpdir):
     # This is a large test
     dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
-    cx = ExecutionContext(root=tmpdir)
+    cx = CX(root=tmpdir)
     expected_deep_cx_loc = ScopedLocation.default(0, 0, 0)
     assertion_step = StepThatAssertsContextIsSpecifiedAtTrain(expected_loc=expected_deep_cx_loc)
     automl = _create_automl_test_loop(tmpdir, assertion_step)
@@ -69,7 +69,7 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
 def test_automl_step_can_interrupt_on_fail_with_full_automl_scenario(tmpdir):
     # This is a large test
     dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
-    cx = ExecutionContext(root=tmpdir)
+    cx = CX(root=tmpdir)
     assertion_step = AssertFalseStep()
     automl = _create_automl_test_loop(tmpdir, assertion_step)
 

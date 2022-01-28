@@ -1,6 +1,6 @@
 import numpy as np
 
-from neuraxle.base import ExecutionContext
+from neuraxle.base import ExecutionContext as CX
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.data import InnerConcatenateDataContainer, ZipBatchDataContainer
@@ -29,7 +29,7 @@ def test_inner_concatenate_data_should_merge_3d_with_3d():
         InnerConcatenateDataContainer(sub_data_container_names=['2d'])
     ])
 
-    data_container = p.handle_transform(data_container, ExecutionContext())
+    data_container = p.handle_transform(data_container, CX())
 
     # Then
     assert data_container.data_inputs.shape == (SHAPE_3D[0], SHAPE_3D[1], SHAPE_3D[2] * 2)
@@ -52,7 +52,7 @@ def test_inner_concatenate_data_should_merge_2d_with_3d():
         InnerConcatenateDataContainer(sub_data_container_names=['2d'])
     ])
 
-    data_container_3d = p.handle_transform(data_container_3d, ExecutionContext())
+    data_container_3d = p.handle_transform(data_container_3d, CX())
 
     # Then
     assert data_container_3d.data_inputs.shape == (SHAPE_3D[0], SHAPE_3D[1], SHAPE_3D[2] + 1)
@@ -74,7 +74,7 @@ def test_inner_concatenate_data_should_merge_1d_with_3d():
         InnerConcatenateDataContainer(sub_data_container_names=['1d'])
     ])
 
-    data_container = p.handle_transform(data_container, ExecutionContext())
+    data_container = p.handle_transform(data_container, CX())
 
     # Then
     broadcasted_data_inputs_1d = np.broadcast_to(np.expand_dims(data_container_1d.data_inputs, axis=-1),
@@ -102,7 +102,7 @@ def test_inner_concatenate_data_should_merge_1d_with_2d():
         InnerConcatenateDataContainer(sub_data_container_names=['1d'])
     ])
 
-    data_container = p.handle_transform(data_container, ExecutionContext())
+    data_container = p.handle_transform(data_container, CX())
 
     # Then
     assert data_container.data_inputs.shape == (SHAPE_2D[0], SHAPE_2D[1] + 1)
@@ -124,7 +124,7 @@ def test_outer_concatenate_data_should_merge_2d_with_3d():
         ZipBatchDataContainer(sub_data_container_names=['2d'])
     ])
 
-    data_container = p.handle_transform(data_container, ExecutionContext())
+    data_container = p.handle_transform(data_container, CX())
 
     # Then
     for i, (first_di, second_di) in enumerate(zip(data_inputs_3d, data_inputs_2d)):

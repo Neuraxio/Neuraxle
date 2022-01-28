@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from neuraxle.base import ExecutionContext
+from neuraxle.base import ExecutionContext as CX
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import FixedHyperparameter, RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
@@ -87,7 +87,7 @@ def test_automl_savebestmodel_callback(tmpdir):
         refit_trial=False,
         hyperparams_repository=hp_repository,
         continue_loop_on_error=False
-    ).with_context(ExecutionContext(tmpdir))
+    ).with_context(CX(tmpdir))
 
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     expected_outputs = data_inputs * 4
@@ -156,7 +156,7 @@ def test_validation_splitter_should_split_data_properly():
     # When
     validation_splits = splitter.split_dact(
         data_container=DACT(data_inputs=data_inputs, expected_outputs=expected_outputs),
-        context=ExecutionContext()
+        context=CX()
     )
     train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 
@@ -187,7 +187,7 @@ def test_kfold_cross_validation_should_split_data_properly():
     # When
     validation_splits = splitter.split_dact(
         data_container=DACT(data_inputs=data_inputs, expected_outputs=expected_outputs),
-        context=ExecutionContext()
+        context=CX()
     )
     train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 
@@ -247,7 +247,7 @@ def test_kfold_cross_validation_should_split_data_properly_bug():
     splitter = KFoldCrossValidationSplitter(k_fold=2)
 
     # When
-    validation_splits = splitter.split_dact(data_container, ExecutionContext())
+    validation_splits = splitter.split_dact(data_container, CX())
 
     train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 
@@ -346,7 +346,7 @@ def test_trainer_train():
     )
 
     repo_trial: Trial = trainer.train(pipeline=p, data_inputs=data_inputs,
-                                      expected_outputs=expected_outputs, context=ExecutionContext())
+                                      expected_outputs=expected_outputs, context=CX())
 
     trained_pipeline = repo_trial.get_trained_pipeline(split_number=0)
 

@@ -3,7 +3,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 import numpy as np
 import pytest
 from neuraxle.base import (BaseService, BaseStep, BaseTransformer,
-                           ExecutionContext, Flow, HandleOnlyMixin, Identity,
+                           CX, Flow, HandleOnlyMixin, Identity,
                            MetaStep)
 from neuraxle.data_container import IDT
 from neuraxle.data_container import DataContainer as DACT
@@ -66,7 +66,7 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
         AddN().with_hp_range(range(99, 103)),
     ])
     hps: HyperparameterSpace = p.get_hyperparams_space()
-    root: Root = Root.vanilla(ExecutionContext())
+    root: Root = Root.vanilla(CX())
 
     with root.default_project() as ps:
         ps: Project = ps
@@ -143,7 +143,7 @@ def test_aggregates_creation(aggregate_class: Type[BaseAggregate], is_deep):
     # Create repo from deep root DC:
     dataclass_class: Type = aggregate_2_dataclass[aggregate_class]
     scoped_loc: ScopedLocation = SOME_FULL_SCOPED_LOCATION[:dataclass_class]
-    context = ExecutionContext()
+    context = CX()
     context: AutoMLContext = AutoMLContext().from_context(
         context,
         VanillaHyperparamsRepository.from_root(SOME_ROOT_DATACLASS, context.get_path())

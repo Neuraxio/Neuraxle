@@ -1,7 +1,7 @@
 import os
 
 import numpy as np
-from neuraxle.base import ExecutionContext
+from neuraxle.base import ExecutionContext as CX
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import (Boolean, Choice, LogUniform,
                                                 RandInt)
@@ -66,7 +66,7 @@ def test_automl_api_entry_point(tmpdir):
 
     a, _out = a.handle_fit_transform(
         dact,
-        ExecutionContext(root=os.path.join(tmpdir, "automl"))
+        CX(root=os.path.join(tmpdir, "automl"))
     )
 
     assert _out is not None

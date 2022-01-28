@@ -1,9 +1,10 @@
 from unittest import TestCase
+
 import numpy as np
 import pytest
-
-
-from neuraxle.base import AssertExpectedOutputIsNone, BaseStep, ExecutionContext, ExecutionMode, ExecutionPhase, HandleOnlyMixin, NonFittableMixin
+from neuraxle.base import AssertExpectedOutputIsNone, BaseStep
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import ExecutionPhase, HandleOnlyMixin, NonFittableMixin
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.pipeline import Pipeline
 
@@ -13,7 +14,7 @@ class SomeAssertionStep(NonFittableMixin, HandleOnlyMixin, BaseStep):
         BaseStep.__init__(self)
         HandleOnlyMixin.__init__(self)
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         _, data_inputs, expected_outputs = data_container.tolist().unpack()
         if expected_outputs is not None:
             self._assert_equals(data_inputs, expected_outputs, "Assertion failed", context)
@@ -30,7 +31,7 @@ class TestAssertionMethodInSteps(TestCase):
 
         with self.assertLogs() as captured:
             with pytest.raises(AssertionError):
-                p.handle_fit_transform(dact, context=ExecutionContext())
+                p.handle_fit_transform(dact, context=CX())
 
             self.assertIn("Assertion failed", captured.output[0])
 
@@ -39,7 +40,7 @@ class TestAssertionMethodInSteps(TestCase):
         expected_outputs = data_inputs * 2
         dact = DACT(data_inputs, None, expected_outputs)
         p = Pipeline([SomeAssertionStep()])
-        context = ExecutionContext(execution_phase=ExecutionPhase.PROD)
+        context = CX(execution_phase=ExecutionPhase.PROD)
         try:
             p = p.handle_fit(dact, context=context)
         except AssertionError:

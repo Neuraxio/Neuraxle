@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
-
-from neuraxle.base import ForceHandleMixin, ForceHandleIdentity, BaseStep, ExecutionContext
+from neuraxle.base import BaseStep
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import ForceHandleIdentity, ForceHandleMixin
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.pipeline import Pipeline
 
@@ -20,7 +21,7 @@ def test_raises_exception_if_method_not_redefined(tmpdir):
     assert "Please define _fit_data_container" in exception_info.value.args[0]
     assert "in BadForceHandleStep" in exception_info.value.args[0]
 
-    def _fit_data_container(self, data_container: DACT, context: ExecutionContext):
+    def _fit_data_container(self, data_container: DACT, context: CX):
         return self
     BadForceHandleStep._fit_data_container = _fit_data_container
 
@@ -30,7 +31,7 @@ def test_raises_exception_if_method_not_redefined(tmpdir):
     assert "Please define _fit_transform_data_container" in exception_info.value.args[0]
     assert "in BadForceHandleStep" in exception_info.value.args[0]
 
-    def _fit_transform_data_container(self, data_container: DACT, context: ExecutionContext):
+    def _fit_transform_data_container(self, data_container: DACT, context: CX):
         return self, data_container
     BadForceHandleStep._fit_transform_data_container = _fit_transform_data_container
 
@@ -40,7 +41,7 @@ def test_raises_exception_if_method_not_redefined(tmpdir):
     assert "Please define _transform_data_container" in exception_info.value.args[0]
     assert "in BadForceHandleStep" in exception_info.value.args[0]
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DACT, context: CX):
         return data_container
     BadForceHandleStep._transform_data_container = _transform_data_container
 

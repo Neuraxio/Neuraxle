@@ -28,12 +28,14 @@ from abc import ABC, abstractmethod
 from copy import copy
 from typing import Any, List, Tuple, Union
 
-from neuraxle.base import (BaseStep, ExecutionContext, ExecutionMode,
-                           ForceHandleMixin, Identity, MetaStep,
+from neuraxle.base import BaseStep
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import (ExecutionMode, ForceHandleMixin, Identity,
                            NamedStepsList, TruncableSteps,
                            _CustomHandlerMethods)
-from neuraxle.data_container import (AbsentValuesNullObject, DACT,
-                                     ListDataContainer, ZipDataContainer)
+from neuraxle.data_container import AbsentValuesNullObject
+from neuraxle.data_container import DataContainer as DACT
+from neuraxle.data_container import ListDataContainer, ZipDataContainer
 from neuraxle.logging.warnings import warn_deprecated_arg
 
 
@@ -128,28 +130,28 @@ class Pipeline(BasePipeline):
         :return: backward transformed processed outputs
         """
         warn_deprecated_arg(self, "handler method", "handle_inverse_transform",
-                            "inverse_transform", "handle_inverse_transform", Tuple[DACT, ExecutionContext])
-        context = ExecutionContext(execution_mode=ExecutionMode.INVERSE_TRANSFORM)
+                            "inverse_transform", "handle_inverse_transform", Tuple[DACT, CX])
+        context = CX(execution_mode=ExecutionMode.INVERSE_TRANSFORM)
         data_container = DACT(data_inputs=processed_outputs)
         for step in list(reversed(self.values())):
             data_container = step.handle_inverse_transform(data_container, context)
         return data_container.data_inputs
 
     def fit_data_container(self, data_container) -> 'Pipeline':
-        context = ExecutionContext(execution_mode=ExecutionMode.FIT)
+        context = CX(execution_mode=ExecutionMode.FIT)
         return self.handle_fit(data_container, context)
 
     def transform_data_container(self, data_container: DACT):
-        context = ExecutionContext(execution_mode=ExecutionMode.TRANSFORM)
+        context = CX(execution_mode=ExecutionMode.TRANSFORM)
         data_container = self.handle_transform(data_container, context)
         return data_container
 
     def fit_transform_data_container(self, data_container) -> Tuple['Pipeline', DACT]:
-        context = ExecutionContext(execution_mode=ExecutionMode.FIT_TRANSFORM)
+        context = CX(execution_mode=ExecutionMode.FIT_TRANSFORM)
         new_self, data_container = self.handle_fit_transform(data_container, context)
         return new_self, data_container
 
-    def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> 'Pipeline':
+    def _fit_data_container(self, data_container: DACT, context: CX) -> 'Pipeline':
         """
         After loading the last checkpoint, fit transform each pipeline steps,
         but only fit the last pipeline step.
@@ -171,7 +173,7 @@ class Pipeline(BasePipeline):
         self.set_steps(new_steps_as_tuple)
         return self
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
         After loading the last checkpoint, transform each pipeline steps
 
@@ -183,7 +185,7 @@ class Pipeline(BasePipeline):
         return data_container
 
     def _fit_transform_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple['Pipeline', DACT]:
         """
         After loading the last checkpoint, fit transform each pipeline steps
@@ -202,7 +204,7 @@ class Pipeline(BasePipeline):
         return self, data_container
 
     def _inverse_transform_data_container(
-            self, data_container: DACT, context: ExecutionContext) -> DACT:
+            self, data_container: DACT, context: CX) -> DACT:
         """
         After transforming all data inputs, and obtaining a prediction, we can inverse transform the processed outputs
         """
@@ -398,7 +400,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
 
         self._refresh_steps()
 
-    def transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
         Transform all sub pipelines splitted by the Barrier steps.
         :param data_container: data container to transform.
@@ -417,7 +419,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
 
         return data_container
 
-    def fit_data_container(self, data_container: DACT, context: ExecutionContext) -> BaseStep:
+    def fit_data_container(self, data_container: DACT, context: CX) -> BaseStep:
         """
         Fit all sub pipelines splitted by the Barrier steps.
         :param data_container: data container to transform.
@@ -446,7 +448,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
 
         return self
 
-    def fit_transform_data_container(self, data_container: DACT, context: ExecutionContext) -> Tuple[
+    def fit_transform_data_container(self, data_container: DACT, context: CX) -> Tuple[
             BaseStep, DACT]:
         """
         Transform all sub pipelines splitted by the Barrier steps.
@@ -513,7 +515,7 @@ class Barrier(Identity, ABC):
 
     @abstractmethod
     def join_transform(self, step: TruncableSteps, data_container: DACT,
-                       context: ExecutionContext) -> DACT:
+                       context: CX) -> DACT:
         """
         Execute the given pipeline :func:`~neuraxle.pipeline.Pipeline.transform` with the given data container, and execution context.
         :param step: truncable steps to execute
@@ -528,7 +530,7 @@ class Barrier(Identity, ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def join_fit_transform(self, step: Pipeline, data_container: DACT, context: ExecutionContext) -> Tuple[
+    def join_fit_transform(self, step: Pipeline, data_container: DACT, context: CX) -> Tuple[
             'Any', DACT]:
         """
         Execute the given pipeline :func:`~neuraxle.pipeline.Pipeline.fit_transform` with the given data container, and execution context.
@@ -562,7 +564,7 @@ class Joiner(Barrier):
         self.default_value_data_inputs: Union[Any, AbsentValuesNullObject] = default_value_data_inputs
         self.default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = default_value_expected_outputs
 
-    def join_transform(self, step: Pipeline, data_container: DACT, context: ExecutionContext) -> DACT:
+    def join_transform(self, step: Pipeline, data_container: DACT, context: CX) -> DACT:
         """
         Concatenate the pipeline transform output of each batch of self.batch_size together.
         :param step: pipeline to transform on
@@ -587,7 +589,7 @@ class Joiner(Barrier):
 
         return output_data_container
 
-    def join_fit_transform(self, step: Pipeline, data_container: DACT, context: ExecutionContext) -> \
+    def join_fit_transform(self, step: Pipeline, data_container: DACT, context: CX) -> \
             Tuple['Any', DACT]:
         """
         Concatenate the pipeline fit transform output of each batch of self.batch_size together.
@@ -622,7 +624,7 @@ class ZipMinibatchJoiner(Joiner):
     """
 
     def join_transform(self, step: TruncableSteps, data_container: DACT,
-                       context: ExecutionContext) -> ZipDataContainer:
+                       context: CX) -> ZipDataContainer:
         context = context.push(step)
         data_container_batches = data_container.minibatches(
             batch_size=self.batch_size,
@@ -637,7 +639,7 @@ class ZipMinibatchJoiner(Joiner):
 
         return ZipDataContainer.create_from(*output_data_container)
 
-    def join_fit_transform(self, step: Pipeline, data_container: DACT, context: ExecutionContext) -> \
+    def join_fit_transform(self, step: Pipeline, data_container: DACT, context: CX) -> \
             Tuple['Any', DACT]:
         context = context.push(step)
         data_container_batches = data_container.minibatches(

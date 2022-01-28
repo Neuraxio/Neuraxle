@@ -23,8 +23,9 @@ import random
 from operator import attrgetter
 from typing import Iterable, List, Tuple
 
-from neuraxle.base import (BaseStep, BaseTransformer, ExecutionContext,
-                           ForceHandleOnlyMixin, MetaStep)
+from neuraxle.base import BaseStep, BaseTransformer
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import ForceHandleOnlyMixin, MetaStep
 from neuraxle.data_container import DACT, _inner_concatenate_np_array
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import TrainOnlyWrapper
@@ -106,7 +107,7 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStep):
         self.repeat_in_test_mode = repeat_in_test_mode
         self.epochs = epochs
 
-    def _fit_transform_data_container(self, data_container: DACT, context: ExecutionContext) -> Tuple['BaseStep', DACT]:
+    def _fit_transform_data_container(self, data_container: DACT, context: CX) -> Tuple['BaseStep', DACT]:
         """
         Fit transform wrapped step self.epochs times using wrapped step handle fit transform method.
 
@@ -139,7 +140,7 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStep):
 
         return self, outputs
 
-    def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> 'BaseStep':
+    def _fit_data_container(self, data_container: DACT, context: CX) -> 'BaseStep':
         """
         Fit wrapped step self.epochs times using wrapped step handle fit method.
 
@@ -174,7 +175,7 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStep):
     def _should_repeat(self):
         return self.is_train or (not self.is_train and self.repeat_in_test_mode)
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         return self.wrapped.handle_transform(data_container, context)
 
     def _get_epochs(self):
@@ -233,7 +234,7 @@ class InnerConcatenateDataContainer(ForceHandleOnlyMixin, BaseTransformer):
         self.data_sources = sub_data_container_names
 
     def _fit_transform_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple['BaseTransformer', DACT]:
         """
         Merge sub data containers into the current data container.
@@ -247,7 +248,7 @@ class InnerConcatenateDataContainer(ForceHandleOnlyMixin, BaseTransformer):
         """
         return self, self._concatenate_sub_data_containers(data_container)
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
         Merge sub data containers into the current data container.
 
@@ -340,7 +341,7 @@ class ZipBatchDataContainer(ForceHandleOnlyMixin, BaseTransformer):
 
         self.data_sources = sub_data_container_names
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
         Merge sub data containers into the current data container.
 

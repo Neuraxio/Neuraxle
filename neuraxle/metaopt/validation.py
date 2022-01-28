@@ -32,8 +32,9 @@ from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
                     Tuple, Type, TypeVar, Union)
 
 import numpy as np
-from neuraxle.base import (BaseStep, EvaluableStepMixin, ExecutionContext,
-                           ForceHandleOnlyMixin, MetaStep, TrialStatus)
+from neuraxle.base import BaseStep, EvaluableStepMixin
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import ForceHandleOnlyMixin, MetaStep, TrialStatus
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import (
     ContinuousHyperparameterDistribution, DiscreteHyperparameterDistribution)
@@ -91,13 +92,13 @@ class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseV
         self.predict_after_fit = predict_after_fit
         self.joiner = joiner
 
-    def train(self, train_data_container: DACT, context: ExecutionContext):
+    def train(self, train_data_container: DACT, context: CX):
         step = StepClonerForEachDataInput(self.wrapped)
         step = step.handle_fit(train_data_container, context)
 
         return step
 
-    def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> BaseStep:
+    def _fit_data_container(self, data_container: DACT, context: CX) -> BaseStep:
         assert self.wrapped is not None
 
         step = StepClonerForEachDataInput(self.wrapped)
@@ -188,7 +189,7 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
         self.scoring_function = scoring_function
 
     def _fit_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple['ValidationSplitWrapper', DACT]:
         """
         Fit using the training split.
@@ -204,7 +205,7 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
         return new_self
 
     def _fit_transform_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple['BaseStep', DACT]:
         """
         Fit Transform given data inputs without splitting.
@@ -232,7 +233,7 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
 
         return self, data_container
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DACT, context: CX):
         """
         Transform given data inputs without splitting.
 
@@ -780,7 +781,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
 
 
 class BaseValidationSplitter(ABC):
-    def split_dact(self, data_container: DACT, context: ExecutionContext) -> List[
+    def split_dact(self, data_container: DACT, context: CX) -> List[
             Tuple[DACT, DACT]]:
         """
         Wrap a validation split function with a split data container function.
@@ -821,7 +822,7 @@ class BaseValidationSplitter(ABC):
         return splits
 
     @abstractmethod
-    def split(self, data_inputs, ids=None, expected_outputs=None, context: ExecutionContext = None) \
+    def split(self, data_inputs, ids=None, expected_outputs=None, context: CX = None) \
             -> Tuple[List, List, List, List, List, List]:
         """
         Train/Test split data inputs and expected outputs.
@@ -853,7 +854,7 @@ class KFoldCrossValidationSplitter(BaseValidationSplitter):
         BaseValidationSplitter.__init__(self)
         self.k_fold = k_fold
 
-    def split(self, data_inputs, ids=None, expected_outputs=None, context: ExecutionContext = None) \
+    def split(self, data_inputs, ids=None, expected_outputs=None, context: CX = None) \
             -> Tuple[List, List, List, List, List, List]:
         data_inputs_train, data_inputs_val = kfold_cross_validation_split(
             data_inputs=data_inputs,
@@ -919,7 +920,7 @@ class ValidationSplitter(BaseValidationSplitter):
         self.test_size = test_size
 
     def split(
-        self, data_inputs, ids=None, expected_outputs=None, context: ExecutionContext = None
+        self, data_inputs, ids=None, expected_outputs=None, context: CX = None
     ) -> Tuple[List, List, List, List]:
         train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids = validation_split(
             test_size=self.test_size,

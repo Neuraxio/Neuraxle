@@ -1,6 +1,6 @@
 import numpy as np
 
-from neuraxle.base import ExecutionContext
+from neuraxle.base import ExecutionContext as CX
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import TestOnlyWrapper, TrainOnlyWrapper
@@ -38,7 +38,7 @@ def test_handle_predict_should_predict_in_test_mode():
 
     data_container = p.handle_predict(
         data_container=DACT(data_inputs=np.array([1, 1]), expected_outputs=np.array([1, 1])),
-        context=ExecutionContext()
+        context=CX()
     )
 
     assert np.array_equal(data_container.data_inputs, np.array([2, 2]))
@@ -55,9 +55,9 @@ def test_handle_predict_should_handle_transform_with_initial_is_train_mode_after
 
     p.handle_predict(
         data_container=data_container.copy(),
-        context=ExecutionContext()
+        context=CX()
     )
-    data_container = p.handle_transform(data_container, ExecutionContext())
+    data_container = p.handle_transform(data_container, CX())
 
     assert np.array_equal(data_container.data_inputs, np.array([4, 4]))
 

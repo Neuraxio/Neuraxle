@@ -27,8 +27,10 @@ import copy
 from abc import ABC
 from typing import List, Tuple
 
-from neuraxle.base import (BaseStep, ExecutionContext, ForceHandleOnlyMixin,
-                           MetaStep, MixinForBaseTransformer)
+from neuraxle.base import BaseStep
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import (ForceHandleOnlyMixin, MetaStep,
+                           MixinForBaseTransformer)
 from neuraxle.data_container import DataContainer as DACT
 
 
@@ -42,7 +44,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         MetaStep.__init__(self, wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
         Handle transform by passing expected outputs to the wrapped step transform method.
         Update the expected outputs with the outputs.
@@ -65,7 +67,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         return data_container
 
     def _fit_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple[BaseStep, DACT]:
         """
         Handle fit by passing expected outputs to the wrapped step fit method.
@@ -87,7 +89,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         return self, data_container
 
     def _fit_transform_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple[BaseStep, DACT]:
         """
         Handle fit transform by passing expected outputs to the wrapped step fit method.
@@ -110,7 +112,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
 
         return self, data_container
 
-    def handle_inverse_transform(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def handle_inverse_transform(self, data_container: DACT, context: CX) -> DACT:
         """
         Handle inverse transform by passing expected outputs to the wrapped step inverse transform method.
         Update the expected outputs with the outputs.
@@ -150,7 +152,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
 
 
 class _DidProcessInputOutputHandlerMixin(MixinForBaseTransformer):
-    def _did_process(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _did_process(self, data_container: DACT, context: CX) -> DACT:
         di, eo = data_container.data_inputs
         if len(di) != len(eo):
             raise AssertionError(
@@ -185,7 +187,7 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
         _DidProcessInputOutputHandlerMixin.__init__(self)
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
         Handle transform by passing data_inputs, and expected outputs to the wrapped step transform method.
         Update the expected outputs with the outputs.
@@ -207,7 +209,7 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         return output_data_container
 
     def _fit_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple[BaseStep, DACT]:
         """
         Handle fit by passing the data inputs, and the expected outputs to the wrapped step fit method.
@@ -232,7 +234,7 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         return self
 
     def _fit_transform_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple[BaseStep, DACT]:
         """
         Handle fit transform by passing the data inputs, and the expected outputs to the wrapped step fit method.
@@ -253,7 +255,7 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         )
         return self, output_data_container
 
-    def handle_inverse_transform(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def handle_inverse_transform(self, data_container: DACT, context: CX) -> DACT:
         """
         Handle inverse transform by passing the data inputs, and the expected outputs to the wrapped step inverse transform method.
         Update the expected outputs with the outputs.
@@ -280,7 +282,7 @@ class InputAndOutputTransformerMixin(_DidProcessInputOutputHandlerMixin):
     Base output transformer step that can modify data inputs, and expected_outputs at the same time.
     """
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
         Handle inverse transform by updating the data inputs, and expected outputs inside the data container.
 
@@ -293,7 +295,7 @@ class InputAndOutputTransformerMixin(_DidProcessInputOutputHandlerMixin):
         data_container.set_data_inputs((new_data_inputs, new_expected_outputs))
         return data_container
 
-    def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> 'BaseStep':
+    def _fit_data_container(self, data_container: DACT, context: CX) -> 'BaseStep':
         """
         Handle transform by fitting the step,
         and updating the data inputs, and expected outputs inside the data container.
@@ -308,7 +310,7 @@ class InputAndOutputTransformerMixin(_DidProcessInputOutputHandlerMixin):
         return new_self
 
     def _fit_transform_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple['BaseStep', DACT]:
         """
         Handle transform by fitting the step,

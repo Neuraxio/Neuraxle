@@ -27,21 +27,21 @@ Training callback classes.
 import traceback
 import warnings
 from abc import ABC, abstractmethod
-from typing import Callable, Union, List, Optional
+from typing import Callable, List, Optional, Union
 
-from neuraxle.base import (BaseStep, BaseTransformer, ExecutionContext,
-                           MixinForBaseTransformer)
-from neuraxle.data_container import IDT, DIT, EOT
+from neuraxle.base import BaseStep, BaseTransformer
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import MixinForBaseTransformer
+from neuraxle.data_container import DIT, EOT, IDT
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.logging.warnings import (warn_deprecated_arg,
                                        warn_deprecated_class)
-from neuraxle.metaopt.data.aggregates import TrialSplit, MetricResults
-
+from neuraxle.metaopt.data.aggregates import MetricResults, TrialSplit
 
 ARG_X_INPUTTED = DIT
 ARG_Y_EXPECTED = EOT
 ARG_Y_PREDICTD = DIT
-OPTIONAL_ARG_CONTEXT = Optional[ExecutionContext]
+OPTIONAL_ARG_CONTEXT = Optional[CX]
 RETURNS_SCORE = float
 
 

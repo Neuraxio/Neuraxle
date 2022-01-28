@@ -25,8 +25,9 @@ Those steps works with NumPy (np) arrays.
 """
 from typing import Sequence, Tuple
 
-from neuraxle.base import (BaseStep, BaseTransformer, ExecutionContext,
-                           ForceHandleMixin, NonFittableMixin)
+from neuraxle.base import BaseStep, BaseTransformer
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import ForceHandleMixin, NonFittableMixin
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import PriorityChoice
 from neuraxle.hyperparams.space import (HyperparameterSamples,
@@ -94,7 +95,7 @@ class NumpyConcatenateOnAxisIfNotEmpty(BaseTransformer):
         self.axis = axis
         BaseTransformer.__init__(self)
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DACT, context: CX):
         """
         Handle transform.
 
@@ -390,8 +391,8 @@ class ToNumpy(ForceHandleMixin, BaseTransformer):
         ForceHandleMixin.__init__(self)
 
     def _will_process(
-        self, data_container: DACT, context: ExecutionContext
-    ) -> Tuple[DACT, ExecutionContext]:
+        self, data_container: DACT, context: CX
+    ) -> Tuple[DACT, CX]:
         return data_container.to_numpy(), context
 
 

@@ -42,7 +42,7 @@ from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
 
 import numpy as np
 from neuraxle.base import (BaseService, BaseStep, ContextLock,
-                           ExecutionContext, Flow, TrialStatus)
+                           CX, Flow, TrialStatus)
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
 from neuraxle.logging.logging import (LOGGER_FORMAT,
@@ -789,19 +789,19 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
 
         raise NotImplementedError("Use a concrete class. This is an abstract class.")
 
-    def _save_model(self, trial: 'TrialManager', pipeline: BaseStep, context: ExecutionContext):
+    def _save_model(self, trial: 'TrialManager', pipeline: BaseStep, context: CX):
         hyperparams = self.hyperparams.to_flat_dict()
         # TODO: ???
         trial_hash = trial.get_trial_id(hyperparams)
         pipeline.set_name(trial_hash).save(context, full_dump=True)
 
-    def load_model(self, trial: 'TrialManager', context: ExecutionContext) -> BaseStep:
+    def load_model(self, trial: 'TrialManager', context: CX) -> BaseStep:
         """
         Load model in the trial hash folder.
         """
         # TODO: glob?
         trial_hash: str = trial.get_trial_id(self.hyperparams.to_flat_dict)
-        return ExecutionContext.load(
+        return CX.load(
             context=context,
             pipeline_name=trial_hash,
         )
@@ -920,7 +920,7 @@ class BaseHyperparameterOptimizer(ABC):
         raise NotImplementedError()
 
 
-class AutoMLContext(ExecutionContext):
+class AutoMLContext(CX):
 
     @property
     def logger_at_scoped_loc(self) -> NeuraxleLogger:
@@ -955,7 +955,7 @@ class AutoMLContext(ExecutionContext):
 
     @staticmethod
     def from_context(
-        context: ExecutionContext = None,
+        context: CX = None,
         repo: HyperparamsRepository = None,
         loc: ScopedLocation = None
     ) -> 'AutoMLContext':

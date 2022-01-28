@@ -29,7 +29,7 @@ import time
 
 import numpy as np
 from sklearn.metrics import mean_squared_error
-from neuraxle.base import ExecutionContext
+from neuraxle.base import ExecutionContext as CX
 
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
@@ -122,4 +122,4 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
 
 
 if __name__ == "__main__":
-    main(ExecutionContext.get_new_cache_folder(), sleep_time=0.005, n_iter=10)
+    main(CX.get_new_cache_folder(), sleep_time=0.005, n_iter=10)

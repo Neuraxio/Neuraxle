@@ -29,7 +29,9 @@ from abc import ABC, abstractmethod
 from typing import Any, Iterable, Tuple
 
 import joblib
-from neuraxle.base import BaseStep, ExecutionContext, MetaStep
+from neuraxle.base import BaseStep
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import MetaStep
 from neuraxle.data_container import DataContainer as DACT
 
 
@@ -76,11 +78,11 @@ class TransformDIValueCachingWrapper(MetaStep):
             self.value_hasher = StrValueHasher()
 
         if cache_folder is None:
-            cache_folder = os.path.join(ExecutionContext().push(self).get_path(), "cache")
+            cache_folder = os.path.join(CX().push(self).get_path(), "cache")
         self.value_caching_folder = cache_folder
 
     def _fit_transform_data_container(
-        self, data_container: DACT, context: ExecutionContext
+        self, data_container: DACT, context: CX
     ) -> Tuple[BaseStep, DACT]:
         """
         Fit transform data container.

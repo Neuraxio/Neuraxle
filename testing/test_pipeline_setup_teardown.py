@@ -1,8 +1,9 @@
 from typing import Any, Tuple
 
 import pytest
-from neuraxle.base import (BaseService, BaseStep, ExecutionContext, Identity,
-                           MetaStep, NamedStepsList, _HasChildrenMixin)
+from neuraxle.base import BaseService, BaseStep
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import Identity, MetaStep, NamedStepsList, _HasChildrenMixin
 from neuraxle.hyperparams.space import RecursiveDict
 from neuraxle.pipeline import Pipeline
 
@@ -91,7 +92,7 @@ class SomeService(BaseService):
 def test_that_steps_are_setuppeable(base_service: BaseService, tmpdir):
     assert not base_service.is_initialized
     _verify_subservices_initialization(base_service, False)
-    base_service.setup(ExecutionContext(tmpdir))
+    base_service.setup(CX(tmpdir))
     _verify_subservices_initialization(base_service, True)
     base_service.teardown()
     _verify_subservices_initialization(base_service, False)
@@ -108,12 +109,12 @@ def _verify_subservices_initialization(sub_service, is_initialized: bool):
     Identity(),
     MetaStep(Identity()),
     SomePipeline([SomeStepSetup()]),
-    ExecutionContext(),
-    ExecutionContext().set_service_locator({
+    CX(),
+    CX().set_service_locator({
         Identity: Identity(),
         SomeService: SomeService()
     }),
-    ExecutionContext().set_service_locator({
+    CX().set_service_locator({
         Pipeline: Pipeline([SomeStepSetup()])
     })
 ])

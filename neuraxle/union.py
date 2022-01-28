@@ -29,7 +29,7 @@ from typing import Tuple
 from joblib import Parallel, delayed
 
 from neuraxle.base import (BaseStep, BaseTransformer, DACT,
-                           ExecutionContext, ForceHandleOnlyMixin, Identity,
+                           CX, ForceHandleOnlyMixin, Identity,
                            NamedStepsList, NonFittableMixin, TruncableSteps)
 from neuraxle.data_container import ZipDataContainer
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
@@ -176,7 +176,7 @@ class ZipFeatures(NonFittableMixin, BaseStep):
             data_container.concatenate_inner_features()
         return data_container.data_inputs
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         if any(not isinstance(di, DACT) for di in data_container.data_inputs):
             raise ValueError("data_inputs given to ZipFeatures must be a list of DataContainer instances")
         data_container = ZipDataContainer.create_from(*data_container.data_inputs)
@@ -284,7 +284,7 @@ class ModelStacking(FeatureUnion):
 
         return data_container
 
-    def _did_fit(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _did_fit(self, data_container: DACT, context: CX) -> DACT:
         """
         Fit the parallel steps on the data. It will make use of some parallel processing.
         Also, fit the judge on the result of the parallel steps.

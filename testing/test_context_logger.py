@@ -5,8 +5,9 @@ from typing import Set
 
 import numpy as np
 import pytest
-from neuraxle.base import (BaseStep, ExecutionContext, Flow, HandleOnlyMixin,
-                           Identity, TrialStatus)
+from neuraxle.base import BaseStep
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import HandleOnlyMixin, Identity, TrialStatus
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
@@ -28,15 +29,15 @@ class FitTransformCounterLoggingStep(HandleOnlyMixin, BaseStep):
         HandleOnlyMixin.__init__(self)
         self.logging_call_counter = 0
 
-    def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> BaseStep:
+    def _fit_data_container(self, data_container: DACT, context: CX) -> BaseStep:
         self._log(context, "fit")
         return self
 
-    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         self._log(context, "transform")
         return data_container
 
-    def _fit_transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _fit_transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         self._log(context, "fit_transform")
         return data_container
 
@@ -53,7 +54,7 @@ def test_context_logger_log_file(tmpdir):
     try:
 
         # Given
-        cx = ExecutionContext(tmpdir)
+        cx = CX(tmpdir)
         cx.logger.with_file_handler(file_path)
         pipeline = Pipeline([
             MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
@@ -83,7 +84,7 @@ def test_context_logger_log_file(tmpdir):
 class TestTrialLogger:
     def test_logger_automl(self, tmpdir):
         # Given
-        context = ExecutionContext(tmpdir)
+        context = CX(tmpdir)
         self.tmpdir = str(tmpdir)
         hp_repository = HyperparamsJSONRepository(cache_folder=self.tmpdir)
         n_epochs = 2
@@ -152,7 +153,7 @@ def test_automl_context_loc_pushes_identifier():
 
 
 def test_root_neuraxle_logger_logs_to_string():
-    nxl: NeuraxleLogger = NeuraxleLogger.from_identifier(ExecutionContext().get_identifier())
+    nxl: NeuraxleLogger = NeuraxleLogger.from_identifier(CX().get_identifier())
 
     nxl.info("This is a test.")
 
@@ -180,7 +181,7 @@ def test_sub_root_neuraxle_loggers_logs_to_string():
     str_r = "Testing root."
     str_a = "Testing a."
     str_b = "Testing b."
-    cx = ExecutionContext()
+    cx = CX()
     nxl_r: NeuraxleLogger = NeuraxleLogger.from_identifier(
         cx.get_identifier())
     nxl_a: NeuraxleLogger = NeuraxleLogger.from_identifier(

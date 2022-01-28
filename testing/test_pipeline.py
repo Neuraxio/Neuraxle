@@ -24,7 +24,7 @@ import numpy as np
 import pytest
 
 from neuraxle.base import (_FittableStep, _HasChildrenMixin, BaseStep, BaseTransformer,
-                           ExecutionContext, NonTransformableMixin)
+                           CX, NonTransformableMixin)
 from neuraxle.hyperparams.distributions import RandInt, LogUniform
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.pipeline import Pipeline
@@ -418,7 +418,7 @@ def test_pipeline_setup_incrementally():
         def __init__(self):
             Identity.__init__(self)
 
-        def setup(self, context: ExecutionContext = None) -> BaseTransformer:
+        def setup(self, context: CX = None) -> BaseTransformer:
             assert some_step.has_fitted is True
             assert some_step2.has_fitted is False
             return self

@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from pytest import skip
 
-from neuraxle.base import ExecutionContext, ExecutionPhase
+from neuraxle.base import CX, ExecutionPhase
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.steps.flow import IfExecutionPhaseIsThen, ExecutionPhaseSwitch
 from testing.test_forcehandle_mixin import ForceHandleIdentity
@@ -13,7 +13,7 @@ class SomeStep(ForceHandleIdentity):
         ForceHandleIdentity.__init__(self)
         self.did_process = False
 
-    def _did_process(self, data_container: DACT, context: ExecutionContext) -> DACT:
+    def _did_process(self, data_container: DACT, context: CX) -> DACT:
         self.did_process = True
         return data_container
 
@@ -27,7 +27,7 @@ def test_ifexecphase_different_then_skip_step(tmpdir):
 
 
 def _run(tmpdir, phase, expected):
-    context = ExecutionContext(root=tmpdir, execution_phase=phase)
+    context = CX(root=tmpdir, execution_phase=phase)
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
     some_step = SomeStep()
@@ -39,7 +39,7 @@ def _run(tmpdir, phase, expected):
 
 
 def test_ifexecphase_raise_exception_when_unspecified(tmpdir):
-    context = ExecutionContext(root=tmpdir)
+    context = CX(root=tmpdir)
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
     some_step = SomeStep()
@@ -52,7 +52,7 @@ def test_ifexecphase_raise_exception_when_unspecified(tmpdir):
 
 
 def test_execswitch(tmpdir):
-    context = ExecutionContext(root=tmpdir, execution_phase=ExecutionPhase.TRAIN)
+    context = CX(root=tmpdir, execution_phase=ExecutionPhase.TRAIN)
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
     phase_to_step = {p: SomeStep() for p in (ExecutionPhase.PRETRAIN, ExecutionPhase.TRAIN, ExecutionPhase.TEST)}

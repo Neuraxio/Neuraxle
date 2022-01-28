@@ -1,6 +1,6 @@
 import numpy as np
 
-from neuraxle.base import ExecutionContext
+from neuraxle.base import ExecutionContext as CX
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.metaopt.validation import ValidationSplitWrapper
 from neuraxle.steps.misc import FitTransformCallbackStep, TapeCallbackFunction
@@ -23,7 +23,7 @@ def test_validation_split_wrapper_handle_methods_should_split_data(tmpdir):
     validation_split_wrapper, outputs = validation_split_wrapper.handle_fit_transform(
         DACT(data_inputs=data_inputs, ids=list(range(len(data_inputs))),
                       expected_outputs=expected_outputs),
-        ExecutionContext(tmpdir)
+        CX(tmpdir)
     )
 
     assert np.array_equal(outputs.data_inputs, data_inputs * 2)

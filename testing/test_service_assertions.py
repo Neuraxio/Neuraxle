@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 import pytest
 from neuraxle.base import (BaseService, BaseStep, BaseTransformerT,
-                           ExecutionContext, ForceHandleIdentity, Identity,
+                           CX, ForceHandleIdentity, Identity,
                            NonFittableMixin, StepWithContext)
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.data_container import DataContainer as DACT
@@ -32,12 +32,12 @@ class AnotherService(BaseService):
     def __init__(self):
         super().__init__()
 
-    def _setup(self, context: 'ExecutionContext' = None) -> BaseTransformerT:
+    def _setup(self, context: 'CX' = None) -> BaseTransformerT:
         return BaseService._setup(self, context=context)
 
 
 class SomeStep(ForceHandleIdentity):
-    def _will_process(self, data_container: DACT, context: ExecutionContext):
+    def _will_process(self, data_container: DACT, context: CX):
         data_container, context = super()._will_process(data_container, context)
         service = context.get_service(SomeBaseService)
         service.service_method(data_container.data_inputs)
@@ -45,7 +45,7 @@ class SomeStep(ForceHandleIdentity):
 
 
 class RegisterServiceDynamically(ForceHandleIdentity):
-    def _will_process(self, data_container: DACT, context: ExecutionContext):
+    def _will_process(self, data_container: DACT, context: CX):
         context.register_service(SomeBaseService, SomeService())
         return data_container, context
 
@@ -86,7 +86,7 @@ def test_context_assertions_passes_when_it_passes(tmpdir):
 
 def test_with_context_should_inject_dependencies_properly(tmpdir):
     data_inputs = np.array([0, 1, 2, 3])
-    context = ExecutionContext(root=tmpdir)
+    context = CX(root=tmpdir)
     service = SomeService()
     context.set_service_locator({SomeBaseService: service})
     p = Pipeline([
@@ -100,7 +100,7 @@ def test_with_context_should_inject_dependencies_properly(tmpdir):
 
 
 def test_with_context_should_fail_at_init_when_services_are_missing(tmpdir):
-    context = ExecutionContext(root=tmpdir)
+    context = CX(root=tmpdir)
     p = Pipeline([
         SomeStep().assert_has_services(SomeBaseService)
     ]).with_context(context=context)
@@ -114,7 +114,7 @@ def test_with_context_should_fail_at_init_when_services_are_missing(tmpdir):
 
 def test_localassert_should_assert_dependencies_properly_at_exec(tmpdir):
     data_inputs = np.array([0, 1, 2, 3])
-    context = ExecutionContext(root=tmpdir)
+    context = CX(root=tmpdir)
     RegisterServiceDynamically().handle_transform(DACT(data_inputs), context)
     p = Pipeline([Pipeline([
         SomeStep().assert_has_services_at_execution(SomeBaseService)
@@ -126,7 +126,7 @@ def test_localassert_should_assert_dependencies_properly_at_exec(tmpdir):
 
 
 def test_localassert_should_fail_when_services_are_missing_at_exec(tmpdir):
-    context = ExecutionContext(root=tmpdir)
+    context = CX(root=tmpdir)
     p = Pipeline([
         SomeStep().assert_has_services_at_execution(SomeBaseService)
     ]).with_context(context=context)
@@ -168,14 +168,14 @@ class TestServiceAssertion:
     def test_step_with_context_saver_only_saves_wrapped(self, tmpdir):
         self._setup(tmpdir)
         pipeline_name = 'testname'
-        context = ExecutionContext(tmpdir).set_service_locator({SomeBaseService: SomeService()})
+        context = CX(tmpdir).set_service_locator({SomeBaseService: SomeService()})
         p = Pipeline([
             SomeStep().assert_has_services(SomeBaseService)
         ]).set_name(pipeline_name).with_context(context=context)
 
         p.save(context, full_dump=True)
 
-        p: Pipeline = ExecutionContext(tmpdir).load(os.path.join(pipeline_name))
+        p: Pipeline = CX(tmpdir).load(os.path.join(pipeline_name))
         assert isinstance(p, Pipeline)
 
     @pytest.mark.skip(reason="TODO: AutoML Refactor")
@@ -187,7 +187,7 @@ class TestServiceAssertion:
             SomeStep().assert_has_services(SomeBaseService),
             SomeStep().assert_has_services_at_execution(SomeBaseService)
         ])
-        context = ExecutionContext(root=self.tmpdir)
+        context = CX(root=self.tmpdir)
         service = SomeService()
         context.set_service_locator({SomeBaseService: service})
 
@@ -208,7 +208,7 @@ class TestServiceAssertion:
             SomeStep().assert_has_services(SomeBaseService),
         ])
 
-        context = ExecutionContext(root=self.tmpdir)
+        context = CX(root=self.tmpdir)
 
         auto_ml: AutoML = _make_autoML_loop(self.tmpdir_hp, p)
         auto_ml: StepWithContext = auto_ml.with_context(context=context)
@@ -227,7 +227,7 @@ class TestServiceAssertion:
         p = Pipeline([
             SomeStep().assert_has_services_at_execution(SomeBaseService),
         ])
-        context = ExecutionContext(root=self.tmpdir)
+        context = CX(root=self.tmpdir)
 
         auto_ml: AutoML = _make_autoML_loop(self.tmpdir_hp, p)
         auto_ml: StepWithContext = auto_ml.with_context(context=context)
@@ -246,7 +246,7 @@ class TestServiceAssertion:
             RegisterServiceDynamically(),
             SomeStep().assert_has_services_at_execution(SomeBaseService),
         ])
-        context = ExecutionContext(root=self.tmpdir)
+        context = CX(root=self.tmpdir)
 
         auto_ml: AutoML = _make_autoML_loop(self.tmpdir_hp, p)
         auto_ml: StepWithContext = auto_ml.with_context(context=context)
@@ -261,7 +261,7 @@ def test_context_can_access_services_from_apply_method(tmpdir):
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     expected_outputs = data_inputs * 2
 
-    cx = ExecutionContext(tmpdir, services={
+    cx = CX(tmpdir, services={
         SomeBaseService: SomeService(),
         AnotherService: AnotherService()
     })

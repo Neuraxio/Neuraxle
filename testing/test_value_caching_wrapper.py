@@ -29,7 +29,7 @@ import uuid
 import os
 import tempfile
 
-from neuraxle.base import ExecutionContext, Identity, StepWithContext
+from neuraxle.base import CX, Identity, StepWithContext
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import TapeCallbackFunction, FitTransformCallbackStep
 from neuraxle.steps.caching import JoblibTransformDIValueCachingWrapper
@@ -240,7 +240,7 @@ def test_1_fit_value_caching(test_case: Callable):
 @pytest.mark.parametrize("test_case", create_test_cases())
 def test_2_transform_value_caching(test_case: Callable):
     test_case: PipelineTestCase = test_case()
-    pipeline = Pipeline(test_case.steps).with_context(ExecutionContext())
+    pipeline = Pipeline(test_case.steps).with_context(CX())
 
     actual_data_inputs = pipeline.transform(test_case.data_inputs)
 

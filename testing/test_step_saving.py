@@ -6,7 +6,7 @@ from py._path.local import LocalPath
 from pprint import pprint
 
 from neuraxle.hyperparams.space import RecursiveDict
-from neuraxle.base import ExecutionContext, StepWithContext, TruncableJoblibStepSaver
+from neuraxle.base import CX, StepWithContext, TruncableJoblibStepSaver
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import MultiplyByN
 
@@ -65,7 +65,7 @@ def test_pipeline_transform_should_not_save_steps(tmpdir: LocalPath):
     p: StepWithContext = create_pipeline(tmpdir)
 
     outputs = p.transform(np.array(range(10)))
-    p.wrapped.save(ExecutionContext(tmpdir), full_dump=False)
+    p.wrapped.save(CX(tmpdir), full_dump=False)
 
     assert np.array_equal(outputs, EXPECTED_OUTPUTS)
     not_saved_paths = [
@@ -118,10 +118,10 @@ def test_pipeline_fit_should_load_all_pipeline_steps(tmpdir: LocalPath):
 
 def given_saved_pipeline(tmpdir: LocalPath) -> Pipeline:
     path = create_root_path(tmpdir, True)
-    p = Pipeline([]).set_name(ROOT).with_context(ExecutionContext(tmpdir)).with_context(ExecutionContext(tmpdir))
+    p = Pipeline([]).set_name(ROOT).with_context(CX(tmpdir)).with_context(CX(tmpdir))
     dump(p, path)
 
-    pipeline_2 = Pipeline([]).set_name(PIPELINE_2).with_context(ExecutionContext(tmpdir))
+    pipeline_2 = Pipeline([]).set_name(PIPELINE_2).with_context(CX(tmpdir))
     pipeline_2.sub_steps_savers = [
         (SOME_STEPS[0], []),
         (SOME_STEPS[1], []),
@@ -144,7 +144,7 @@ def create_pipeline(tmpdir) -> StepWithContext:
             (SOME_STEPS[1], MultiplyByN(multiply_by=4)),
             (SOME_STEPS[2], MultiplyByN(multiply_by=6))
         ]))
-    ]).set_name(ROOT).with_context(ExecutionContext(tmpdir))
+    ]).set_name(ROOT).with_context(CX(tmpdir))
 
 
 def given_saved_some_step(multiply_by, step_no, path):

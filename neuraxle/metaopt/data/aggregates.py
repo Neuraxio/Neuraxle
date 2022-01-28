@@ -54,10 +54,9 @@ from typing import (Any, Callable, ContextManager, Dict, Generic, Iterable,
                     List, Optional, Tuple, Type, TypeVar, Union)
 
 import numpy as np
-from neuraxle.base import (BaseService, BaseStep, ExecutionContext, Flow,
-                           TrialStatus, _CouldHaveContext, _HasChildrenMixin,
-                           synchroneous_flow_method)
-from neuraxle.data_container import DataContainer as DACT
+from neuraxle.base import BaseService, BaseStep
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import Flow, TrialStatus, _CouldHaveContext
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
@@ -337,15 +336,15 @@ class Root(BaseAggregate[None, 'Project', RootDataclass]):
         return list(self)
 
     @staticmethod
-    def from_repo(context: ExecutionContext, repo: HyperparamsRepository) -> 'Root':
+    def from_repo(context: CX, repo: HyperparamsRepository) -> 'Root':
         _dataclass: RootDataclass = repo.load(ScopedLocation())
         automl_context: AutoMLContext = AutoMLContext.from_context(context, repo)
         return Root(_dataclass, automl_context)
 
     @staticmethod
-    def vanilla(context: ExecutionContext = None) -> 'Root':
+    def vanilla(context: CX = None) -> 'Root':
         if context is None:
-            context = ExecutionContext()
+            context = CX()
         vanilla_repo: HyperparamsRepository = VanillaHyperparamsRepository(
             os.path.join(context.get_path(), "hyperparams"))
         return Root.from_repo(context, vanilla_repo)
