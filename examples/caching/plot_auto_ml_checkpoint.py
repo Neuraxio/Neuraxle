@@ -33,7 +33,7 @@ from neuraxle.base import ExecutionContext
 
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearch, ValidationSplitter
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearch, ValidationSplitter
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEach
@@ -61,7 +61,7 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
     ], cache_folder=classic_pipeline_folder).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
-    auto_ml = EasyAutoML(
+    auto_ml = AutoML(
         pipeline,
         refit_best_trial=True,
         n_trials=n_iter,
@@ -96,7 +96,7 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
     ], cache_folder=caching_pipeline_folder).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
-    auto_ml = EasyAutoML(
+    auto_ml = AutoML(
         pipeline,
         refit_best_trial=True,
         n_trials=n_iter,

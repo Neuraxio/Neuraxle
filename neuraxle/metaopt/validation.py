@@ -34,7 +34,6 @@ from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
 import numpy as np
 from neuraxle.base import (BaseStep, EvaluableStepMixin, ExecutionContext,
                            ForceHandleOnlyMixin, MetaStep, TrialStatus)
-from neuraxle.data_container import DataContainer
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import (
     ContinuousHyperparameterDistribution, DiscreteHyperparameterDistribution)
@@ -75,7 +74,7 @@ class BaseValidation(MetaStep, ABC):
         self.scoring_function = scoring_function
 
     @abstractmethod
-    def split_data_container(self, data_container) -> Tuple[DataContainer, DataContainer]:
+    def split_data_container(self, data_container) -> Tuple[DACT, DACT]:
         pass
 
 
@@ -92,13 +91,13 @@ class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseV
         self.predict_after_fit = predict_after_fit
         self.joiner = joiner
 
-    def train(self, train_data_container: DataContainer, context: ExecutionContext):
+    def train(self, train_data_container: DACT, context: ExecutionContext):
         step = StepClonerForEachDataInput(self.wrapped)
         step = step.handle_fit(train_data_container, context)
 
         return step
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+    def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> BaseStep:
         assert self.wrapped is not None
 
         step = StepClonerForEachDataInput(self.wrapped)
@@ -111,14 +110,14 @@ class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseV
         self.scores_mean = np.mean(self.scores)
         self.scores_std = np.std(self.scores)
 
-    def split_data_container(self, data_container: DataContainer) -> Tuple[DataContainer, DataContainer]:
+    def split_data_container(self, data_container: DACT) -> Tuple[DACT, DACT]:
         train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = self.split(
             data_container.data_inputs,
             data_container.expected_outputs
         )
 
-        train_data_container = DataContainer(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
-        validation_data_container = DataContainer(
+        train_data_container = DACT(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
+        validation_data_container = DACT(
             data_inputs=validation_data_inputs,
             expected_outputs=validation_expected_outputs
         )
@@ -189,8 +188,8 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
         self.scoring_function = scoring_function
 
     def _fit_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple['ValidationSplitWrapper', DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple['ValidationSplitWrapper', DACT]:
         """
         Fit using the training split.
         Calculate the scores using the validation split.
@@ -198,21 +197,21 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
         :param context: execution context
         :param data_container: data container
         :type context: ExecutionContext
-        :type data_container: DataContainer
+        :type data_container: DACT
         :return: fitted self
         """
         new_self, results_data_container = self._fit_transform_data_container(data_container, context)
         return new_self
 
     def _fit_transform_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple['BaseStep', DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple['BaseStep', DACT]:
         """
         Fit Transform given data inputs without splitting.
 
         :param context:
-        :param data_container: DataContainer
-        :type data_container: DataContainer
+        :param data_container: DACT
+        :type data_container: DACT
         :type context: ExecutionContext
         :return: outputs
         """
@@ -233,13 +232,13 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
 
         return self, data_container
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext):
         """
         Transform given data inputs without splitting.
 
         :param context: execution context
-        :param data_container: DataContainer
-        :type data_container: DataContainer
+        :param data_container: DACT
+        :type data_container: DACT
         :type context: ExecutionContext
         :return: outputs
         """
@@ -264,12 +263,12 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
     def get_score_train(self):
         return self.scores_validation_mean
 
-    def split_data_container(self, data_container) -> Tuple[DataContainer, DataContainer]:
+    def split_data_container(self, data_container) -> Tuple[DACT, DACT]:
         """
         Split data container into a training set, and a validation set.
 
         :param data_container: data container
-        :type data_container: DataContainer
+        :type data_container: DACT
         :return: train_data_container, validation_data_container
         """
 
@@ -277,14 +276,14 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
             self.split(data_container.data_inputs, data_container.expected_outputs)
 
         train_ids = self.train_split(data_container.ids)
-        train_data_container = DataContainer(
+        train_data_container = DACT(
             data_inputs=train_data_inputs,
             ids=train_ids,
             expected_outputs=train_expected_outputs
         )
 
         validation_ids = self.validation_split(data_container.ids)
-        validation_data_container = DataContainer(
+        validation_data_container = DACT(
             data_inputs=validation_data_inputs,
             ids=validation_ids,
             expected_outputs=validation_expected_outputs

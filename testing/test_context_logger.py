@@ -11,7 +11,7 @@ from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.logging.logging import NEURAXLE_LOGGER_NAME, NeuraxleLogger
-from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearch
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearch
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
 from neuraxle.metaopt.data.vanilla import (DEFAULT_PROJECT, AutoMLContext,
@@ -88,7 +88,7 @@ class TestTrialLogger:
         hp_repository = HyperparamsJSONRepository(cache_folder=self.tmpdir)
         n_epochs = 2
         n_trials = 4
-        auto_ml = EasyAutoML(
+        auto_ml = AutoML(
             pipeline=Pipeline([
                 MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
                     'multiply_by': FixedHyperparameter(2)

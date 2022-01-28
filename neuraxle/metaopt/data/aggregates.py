@@ -61,6 +61,7 @@ from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
+                                           RETRAIN_TRIAL_SPLIT_ID,
                                            AutoMLContext, BaseDataclass,
                                            BaseHyperparameterOptimizer,
                                            ClientDataclass,
@@ -132,7 +133,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
         """
         _dataclass = context.load_dc(deep=True)
         aggregate_class = dataclass_2_aggregate[_dataclass.__class__]
-        return aggregate_class(_dataclass, context, is_deep=is_deep)
+        return aggregate_class(_dataclass, context.pop_attr(), is_deep=is_deep)
 
     def _invariant(self):
         _type: Type[SubDataclassT] = self.dataclass
@@ -199,6 +200,10 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
         """
         If the argument metric is None, the optimizer's metric is taken. If the optimizer's metric is None, the parent metric is taken.
         """
+        if metric_name is not None:
+            return metric_name
+        elif hasattr(self._dataclass, "main_metric_name") and self._dataclass.main_metric_name is not None:
+            return self._dataclass.main_metric_name
         return metric_name or self.parent.sanitize_metric_name(metric_name)
 
     def refresh(self, deep: bool = True):
@@ -470,9 +475,7 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
             # Get new trial loc:
             trial_id: int = self._dataclass.get_next_i()
             if new_trial is None:
-                raise NotImplementedError(
-                    "Refitting best trial not implemented yet: needs to think about the release of the resource that won't be a 'subaggregate' exactly...")
-                trial_id: int = self.get_best_trial()
+                trial_id: int = self.get_best_trial()._dataclass.get_id()
             elif not new_trial:
                 # Try get last trial
                 trial_id = max(0, trial_id - 1)
@@ -488,7 +491,7 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
             if continue_on_error:
                 subagg.continue_loop_on_error()
 
-            if new_trial or trial_loc == 0:
+            if new_trial or trial_id == 0:
                 self.save_subaggregate(subagg, deep=True)
             return subagg
 
@@ -671,7 +674,11 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
         self._managed_subresource(continue_loop_on_error=continue_loop_on_error)
         return self
 
-    def _acquire_managed_subresource(self, continue_loop_on_error: bool) -> 'TrialSplit':
+    def retrain_split(self) -> 'Trial':
+        self._managed_subresource(continue_loop_on_error=False, retrain_split=True)
+        return self
+
+    def _acquire_managed_subresource(self, continue_loop_on_error: bool, retrain_split=False) -> 'TrialSplit':
 
         self.error_types_to_raise = (
             SystemError, SystemExit, EOFError, KeyboardInterrupt
@@ -682,10 +689,13 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
             # self.context.add_scoped_logger_file_handler()
 
             # Get new split loc:
-            split_id: int = self._dataclass.get_next_i()
-            split_id = max(0, split_id)
-            if split_id == 0:
-                self.flow.log_start()
+            if retrain_split:
+                split_id = RETRAIN_TRIAL_SPLIT_ID
+            else:
+                split_id: int = self._dataclass.get_next_i()
+                split_id = max(0, split_id)
+                if split_id == 0:
+                    self.flow.log_start()
             split_loc = self.loc.with_id(split_id)
 
             # Get split to return:
@@ -717,7 +727,12 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
                 else:
                     handled_error = True
 
-            self.save_subaggregate(resource, deep=True)
+            if resource._dataclass.split_number == RETRAIN_TRIAL_SPLIT_ID:
+                self._dataclass.retrained_split = resource._dataclass
+                resource.save(deep=True)
+                self.save(deep=False)
+            else:
+                self.save_subaggregate(resource, deep=True)
 
         return handled_error
 
@@ -833,14 +848,7 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
 
 class TrialSplit(BaseAggregate[Trial, 'MetricResults', TrialSplitDataclass]):
     """
-    One split of a trial.
-
-    .. seealso::
-        :class:`AutoML`,
-        :class:`HyperparamsRepository`,
-        :class:`BaseHyperparameterSelectionStrategy`,
-        :class:`RandomSearchHyperparameterSelectionStrategy`,
-        :class:`DataContainer`
+    One split of a trial. This is where a model is trained and evaluated on a specific dataset split.
     """
 
     def __init__(self, _dataclass: SubDataclassT, context: AutoMLContext, is_deep=False, parent: Trial = None):

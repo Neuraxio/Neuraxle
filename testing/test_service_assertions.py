@@ -9,7 +9,7 @@ from neuraxle.base import (BaseService, BaseStep, BaseTransformerT,
                            NonFittableMixin, StepWithContext)
 from neuraxle.data_container import DataContainer
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearch
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearch
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
 from neuraxle.metaopt.validation import ValidationSplitter
@@ -141,7 +141,7 @@ def test_localassert_should_fail_when_services_are_missing_at_exec(tmpdir):
 def _make_autoML_loop(tmpdir, p: Pipeline):
     hp_repository = HyperparamsJSONRepository(cache_folder=tmpdir)
     n_epochs = 1
-    return EasyAutoML(
+    return AutoML(
         pipeline=p,
         hyperparams_optimizer=RandomSearch(),
         validation_splitter=ValidationSplitter(0.20),
@@ -191,7 +191,7 @@ class TestServiceAssertion:
         service = SomeService()
         context.set_service_locator({SomeBaseService: service})
 
-        auto_ml: EasyAutoML = _make_autoML_loop(self.tmpdir_hp, p)
+        auto_ml: AutoML = _make_autoML_loop(self.tmpdir_hp, p)
         auto_ml: StepWithContext = auto_ml.with_context(context=context)
         assert isinstance(auto_ml, StepWithContext)
         auto_ml.fit(data_inputs, expected_outputs)
@@ -210,7 +210,7 @@ class TestServiceAssertion:
 
         context = ExecutionContext(root=self.tmpdir)
 
-        auto_ml: EasyAutoML = _make_autoML_loop(self.tmpdir_hp, p)
+        auto_ml: AutoML = _make_autoML_loop(self.tmpdir_hp, p)
         auto_ml: StepWithContext = auto_ml.with_context(context=context)
         assert isinstance(auto_ml, StepWithContext)
 
@@ -229,7 +229,7 @@ class TestServiceAssertion:
         ])
         context = ExecutionContext(root=self.tmpdir)
 
-        auto_ml: EasyAutoML = _make_autoML_loop(self.tmpdir_hp, p)
+        auto_ml: AutoML = _make_autoML_loop(self.tmpdir_hp, p)
         auto_ml: StepWithContext = auto_ml.with_context(context=context)
         assert isinstance(auto_ml, StepWithContext)
 
@@ -248,7 +248,7 @@ class TestServiceAssertion:
         ])
         context = ExecutionContext(root=self.tmpdir)
 
-        auto_ml: EasyAutoML = _make_autoML_loop(self.tmpdir_hp, p)
+        auto_ml: AutoML = _make_autoML_loop(self.tmpdir_hp, p)
         auto_ml: StepWithContext = auto_ml.with_context(context=context)
         assert isinstance(auto_ml, StepWithContext)
         auto_ml.fit(data_inputs, expected_outputs)

@@ -7,8 +7,8 @@ from neuraxle.base import TrialStatus
 from neuraxle.hyperparams.distributions import (Choice, LogNormal, LogUniform,
                                                 Normal, Quantized, Uniform)
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import (AutoML, BaseHyperparameterOptimizer,
-                                      EasyAutoML, RandomSearch)
+from neuraxle.metaopt.auto_ml import (ControlledAutoML, BaseHyperparameterOptimizer,
+                                      AutoML, RandomSearch)
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.vanilla import InMemoryHyperparamsRepository
@@ -124,7 +124,7 @@ def _test_trial_scores(
     hp_repository: InMemoryHyperparamsRepository = InMemoryHyperparamsRepository(cache_folder=str(tmpdir))
     n_epochs = 1
     n_trials = 10
-    auto_ml: AutoML = EasyAutoML(
+    auto_ml: ControlledAutoML = AutoML(
         pipeline=pipeline,
         hyperparams_optimizer=hyperparams_optimizer,
         validation_splitter=ValidationSplitter(0.5),

@@ -4,7 +4,7 @@ from neuraxle.base import ExecutionContext
 from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import FixedHyperparameter, RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearch, Trainer
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearch, Trainer
 from neuraxle.metaopt.callbacks import (BestModelCheckpoint,
                                         EarlyStoppingCallback, MetricCallback,
                                         ScoringCallback)
@@ -29,7 +29,7 @@ def test_automl_early_stopping_callback(tmpdir):
     hp_repository = InMemoryHyperparamsRepository(cache_folder=str(tmpdir))
     n_epochs = 10
     max_epochs_without_improvement = 3
-    auto_ml = EasyAutoML(
+    auto_ml = AutoML(
         pipeline=Pipeline([
             MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
                 'multiply_by': FixedHyperparameter(2)
@@ -68,7 +68,7 @@ def test_automl_savebestmodel_callback(tmpdir):
     # Given
     hp_repository = HyperparamsJSONRepository(cache_folder=tmpdir)
     validation_splitter = ValidationSplitter(0.20)
-    auto_ml = EasyAutoML(
+    auto_ml = AutoML(
         pipeline=Pipeline([
             MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
                 'multiply_by': FixedHyperparameter(2)
@@ -111,7 +111,7 @@ def test_automl_savebestmodel_callback(tmpdir):
 def test_automl_with_kfold(tmpdir):
     # Given
     hp_repository = HyperparamsJSONRepository(cache_folder=tmpdir)
-    auto_ml = EasyAutoML(
+    auto_ml = AutoML(
         pipeline=Pipeline([
             MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
                 'multiply_by': FixedHyperparameter(2)
@@ -307,7 +307,7 @@ def test_automl_should_shallow_copy_data_before_each_epoch(tmpdir):
         SKLearnWrapper(LinearSVC(), HyperparameterSpace({'C': RandInt(0, 10000)})),
     ])
 
-    auto_ml = EasyAutoML(
+    auto_ml = AutoML(
         p,
         validation_splitter=ValidationSplitter(0.20),
         refit_trial=True,

@@ -34,7 +34,7 @@ from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier
 
 from neuraxle.hyperparams.distributions import Choice, RandInt, Boolean, LogUniform
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearch, ValidationSplitter, \
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearch, ValidationSplitter, \
     HyperparamsJSONRepository
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.pipeline import Pipeline
@@ -111,7 +111,7 @@ def main():
     # Create the AutoML loop object.
     # See also AutoML documentation : https://www.neuraxle.org/stable/api/neuraxle.metaopt.auto_ml.html#neuraxle.metaopt.auto_ml.AutoML
 
-    auto_ml = EasyAutoML(
+    auto_ml = AutoML(
         pipeline=pipeline,
         hyperparams_optimizer=RandomSearch(),
         validation_splitter=ValidationSplitter(test_size=0.20),

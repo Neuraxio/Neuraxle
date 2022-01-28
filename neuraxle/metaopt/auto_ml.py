@@ -32,8 +32,8 @@ from neuraxle.base import (BaseService, BaseServiceT, BaseStep,
                            ExecutionContext, ExecutionPhase, Flow,
                            ForceHandleMixin, TrialStatus, TruncableService,
                            _HasChildrenMixin)
-from neuraxle.data_container import DACT as DACT
 from neuraxle.data_container import IDT
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
 from neuraxle.logging.warnings import (warn_deprecated_arg,
@@ -102,7 +102,7 @@ class Trainer(BaseService):
         train_dact: DACT,
         val_dact: Optional[DACT],
         trial_split_scope: TrialSplit
-    ):
+    ) -> BaseStep:
         """
         Train a pipeline split. You probably want to use `self.train` instead, to use the validation splitter.
         If validation DACT is None, the evaluation metrics will not save validation results.
@@ -144,6 +144,8 @@ class Trainer(BaseService):
             ):
                 break  # Saves stats using the '__exit__' method of managed scoped aggregates.
 
+        return p
+
     def refit(
         self,
         pipeline: BaseStep,
@@ -155,11 +157,16 @@ class Trainer(BaseService):
 
         :return: fitted pipeline
         """
-        context.set_execution_phase(ExecutionPhase.TRAIN)
-        for i in range(self.epochs):
-            p = p.handle_fit(data_container, context)
-            # TODO: log retraing metrics outside of a split by using the split abstraction again but outside split list?
-        return p
+
+        with trial_scope.retrain_split() as trial_split_scope:
+            trial_split_scope: TrialSplit = trial_split_scope
+
+            return self.train_split(
+                pipeline,
+                dact,
+                None,
+                trial_split_scope
+            )
 
 
 class BaseControllerLoop(TruncableService):
@@ -285,14 +292,20 @@ class DefaultLoop(BaseControllerLoop):
 
             with multiprocessing.get_context("spawn").Pool(processes=n_jobs) as pool:
                 args = [(self, trial_number, validation_splits, context) for trial_number in range(self.n_trial)]
-                pool.starmap(AutoML._attempt_trial, args)
+                pool.starmap(ControlledAutoML._attempt_trial, args)
 
 
-class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
+class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
     """
     A step to execute Automated Machine Learning (AutoML) algorithms. This step will
     automatically split the data into train and validation splits, and execute an
     hyperparameter optimization on the splits to find the best hyperparameters.
+
+    The Controller Loop is useful to possibly split the execution into multiple
+    threads, or even multiple machines.
+
+    The Trainer is responsible for training the pipeline on the train and validation
+    splits as splitted.
 
     The step with the chosen good hyperparameters will be refitted to the full
     unsplitted data if desired.
@@ -394,26 +407,23 @@ class AutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         return self.pipeline.handle_transform(data_container, context)
 
 
-class EasyAutoML(AutoML):
+class AutoML(ControlledAutoML):
     """
-    This is a wrapper to the old version of the AutoML module.
-    It is kept for easier backwards compatibility. It also provides a
-    nice interface to easily use the AutoML module.
+    This class provides a nice interface to easily use the
+    ControlledAutoML class and the metaopt module in general.
 
     :param pipeline: pipeline to copy and use for training
     :param validation_splitter: validation splitter to use
-    :param refit_trial: whether to refit the best model on the whole dataset after the optimization
+    :param refit_best_trial: whether to refit the best model on the whole dataset after the optimization
     :param scoring_callback: main callback to use for scoring, that is deprecated
     :param hyperparams_optimizer: hyperparams optimizer to use
     :param hyperparams_repository: hyperparams repository to use
     :param n_trials: number of trials to run
     :param epochs: number of epochs to train the model for each val split
     :param callbacks: callbacks to use for training - there can be aditionnal metrics there
-    :param refit_scoring_function: scoring function to use for refitting the best model
-    :param cache_folder_when_no_handle: folder to use for caching when no handle is provided
     :param n_jobs: number of jobs to use for parallelization, defaults is None for no parallelization
     :param continue_loop_on_error: whether to continue the main optimization loop on error or not
-    :return: AutoML object ready to use
+    :return: AutoML object ready to use with fit and transform.
     """
 
     def __init__(
@@ -427,11 +437,10 @@ class EasyAutoML(AutoML):
         n_trials: int = 10,
         epochs: int = 1,
         callbacks: List[BaseCallback] = None,
-        cache_folder_when_no_handle=None,
         n_jobs=None,
         continue_loop_on_error=True
     ):
-        warn_deprecated_class(self, AutoML)
+        warn_deprecated_class(self, ControlledAutoML)
         trainer = Trainer(
             callbacks=[scoring_callback] + callbacks,
             validation_splitter=validation_splitter,
@@ -444,9 +453,8 @@ class EasyAutoML(AutoML):
             hp_optimizer=hyperparams_optimizer,
             continue_loop_on_error=continue_loop_on_error,
         )
-        assert cache_folder_when_no_handle is None  # TODO: remove this.
 
-        AutoML.__init__(
+        ControlledAutoML.__init__(
             self,
             pipeline=pipeline,
             loop=controller_loop,

@@ -43,7 +43,6 @@ from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
 import numpy as np
 from neuraxle.base import (BaseService, BaseStep, ContextLock,
                            ExecutionContext, Flow, TrialStatus)
-from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
 from neuraxle.logging.logging import (LOGGER_FORMAT,
@@ -585,6 +584,9 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
     retrained_split: 'TrialSplitDataclass' = None
 
 
+RETRAIN_TRIAL_SPLIT_ID = -1
+
+
 @dataclass(order=True)
 class TrialSplitDataclass(DataclassHasOrderedDictMixin, BaseTrialDataclassMixin, BaseDataclass['MetricResultsDataclass']):
     """
@@ -593,6 +595,9 @@ class TrialSplitDataclass(DataclassHasOrderedDictMixin, BaseTrialDataclassMixin,
     split_number: ScopedLocationAttrInt = 0
     metric_results: OrderedDict[str, 'MetricResultsDataclass'] = field(default_factory=OrderedDict)
     # introspection_data: RecursiveDict[str, Number] = field(default_factory=RecursiveDict)
+
+    def is_retrain_split(self) -> bool:
+        return self.split_number == -1
 
 
 @dataclass(order=True)

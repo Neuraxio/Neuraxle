@@ -6,7 +6,7 @@ from neuraxle.data_container import DataContainer
 from neuraxle.hyperparams.distributions import (Boolean, Choice, LogUniform,
                                                 RandInt)
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import EasyAutoML, RandomSearch
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearch
 from neuraxle.metaopt.callbacks import (EarlyStoppingCallback, MetricCallback,
                                         ScoringCallback)
 from neuraxle.metaopt.data.vanilla import VanillaHyperparamsRepository
@@ -22,7 +22,7 @@ from sklearn.preprocessing import StandardScaler
 
 def _create_data_source():
     data_inputs = np.random.random((25, 50)).astype(np.float32)
-    expected_outputs = np.random.random((25,)).astype(np.float32)
+    expected_outputs = (np.random.random((25,)) > 0.5).astype(np.int32)
     return data_inputs, expected_outputs
 
 
@@ -48,7 +48,7 @@ def test_automl_api_entry_point(tmpdir):
     pipeline = _create_pipeline()
     # TODO: # HyperbandControllerLoop(), ClusteringParallelFor() ?
 
-    a: EasyAutoML = EasyAutoML(
+    a: AutoML = AutoML(
         pipeline=pipeline,
         validation_splitter=ValidationSplitter(0.20),
         hyperparams_optimizer=RandomSearch(),

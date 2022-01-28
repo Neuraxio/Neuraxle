@@ -31,7 +31,7 @@ from typing import Any, Callable, Generic, Iterable, List, Optional, Tuple, Type
 import numpy as np
 
 
-NamedDataContainerTuple = Tuple[str, 'DataContainer']
+NamedDACTTuple = Tuple[str, 'DataContainer']
 IDT = TypeVar('IDT', bound=Iterable)  # Ids Type that is often a list of things
 DIT = TypeVar('DIT', bound=Iterable)  # Data Inputs Type that is often a list of things
 EOT = TypeVar('EOT', bound=Iterable)  # Expected Outputs Type that is often a list of things
@@ -87,7 +87,7 @@ class DataContainer(Generic[IDT, DIT, EOT]):
             data_inputs: Optional[DIT] = None,
             ids: Optional[IDT] = None,
             expected_outputs: Optional[EOT] = None,
-            sub_data_containers: List['NamedDataContainerTuple'] = None,
+            sub_data_containers: List['NamedDACTTuple'] = None,
             *,
             di: Optional[DIT] = None,
             eo: Optional[EOT] = None,
@@ -106,7 +106,7 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         self._ids: IDT = ids
         self.data_inputs: DIT = data_inputs if di is None else di
         self.expected_outputs: EOT = expected_outputs if eo is None else eo
-        self.sub_data_containers: List[NamedDataContainerTuple] = sub_data_containers or []
+        self.sub_data_containers: List[NamedDACTTuple] = sub_data_containers or []
 
     @property
     def ids(self) -> IDT:
@@ -189,7 +189,7 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         self.expected_outputs = eo
 
     @property
-    def sdact(self) -> List['NamedDataContainerTuple']:
+    def sdact(self) -> List['NamedDACTTuple']:
         """
         Get sub data containers.
 

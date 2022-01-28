@@ -11,7 +11,7 @@ from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import RandInt, Uniform
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
-from neuraxle.metaopt.auto_ml import AutoML, DefaultLoop, RandomSearch, Trainer
+from neuraxle.metaopt.auto_ml import ControlledAutoML, DefaultLoop, RandomSearch, Trainer
 from neuraxle.metaopt.callbacks import (CallbackList, EarlyStoppingCallback,
                                         MetricCallback)
 from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,

@@ -31,7 +31,6 @@ Classes are splitted like this for the AutoML:
 from typing import List
 
 from neuraxle.base import TrialStatus
-from neuraxle.data_container import DataContainer as DACT
 from neuraxle.metaopt.data.aggregates import Round, Trial
 from neuraxle.metaopt.data.vanilla import HyperparamsRepository
 from sqlalchemy import (Boolean, DateTime, MetaData, PickleType, String, Table,
