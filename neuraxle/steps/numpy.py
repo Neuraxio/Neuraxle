@@ -27,7 +27,7 @@ from typing import Sequence, Tuple
 
 from neuraxle.base import (BaseStep, BaseTransformer, ExecutionContext,
                            ForceHandleMixin, NonFittableMixin)
-from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import PriorityChoice
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
@@ -94,7 +94,7 @@ class NumpyConcatenateOnAxisIfNotEmpty(BaseTransformer):
         self.axis = axis
         BaseTransformer.__init__(self)
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext):
         """
         Handle transform.
 
@@ -103,7 +103,7 @@ class NumpyConcatenateOnAxisIfNotEmpty(BaseTransformer):
         :return: transformed data container
         """
         data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs if len(dc.data_inputs) > 0])
-        data_container = DataContainer(data_inputs=data_inputs, ids=data_container.ids,
+        data_container = DACT(data_inputs=data_inputs, ids=data_container.ids,
                                        expected_outputs=data_container.expected_outputs)
         data_container.set_data_inputs(data_inputs)
 
@@ -390,8 +390,8 @@ class ToNumpy(ForceHandleMixin, BaseTransformer):
         ForceHandleMixin.__init__(self)
 
     def _will_process(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple[DataContainer, ExecutionContext]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple[DACT, ExecutionContext]:
         return data_container.to_numpy(), context
 
 

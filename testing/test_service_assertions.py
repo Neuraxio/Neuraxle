@@ -7,7 +7,7 @@ import pytest
 from neuraxle.base import (BaseService, BaseStep, BaseTransformerT,
                            ExecutionContext, ForceHandleIdentity, Identity,
                            NonFittableMixin, StepWithContext)
-from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.metaopt.auto_ml import AutoML, RandomSearch
 from neuraxle.metaopt.callbacks import ScoringCallback
@@ -37,7 +37,7 @@ class AnotherService(BaseService):
 
 
 class SomeStep(ForceHandleIdentity):
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext):
+    def _will_process(self, data_container: DACT, context: ExecutionContext):
         data_container, context = super()._will_process(data_container, context)
         service = context.get_service(SomeBaseService)
         service.service_method(data_container.data_inputs)
@@ -45,7 +45,7 @@ class SomeStep(ForceHandleIdentity):
 
 
 class RegisterServiceDynamically(ForceHandleIdentity):
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext):
+    def _will_process(self, data_container: DACT, context: ExecutionContext):
         context.register_service(SomeBaseService, SomeService())
         return data_container, context
 

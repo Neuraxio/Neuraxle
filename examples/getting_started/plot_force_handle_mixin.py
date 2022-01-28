@@ -32,7 +32,7 @@ ForceHandleMixin as demonstrated here. Handler methods are useful when :
 from typing import Tuple
 
 import numpy as np
-from neuraxle.base import (BaseStep, DataContainer, ExecutionContext,
+from neuraxle.base import (BaseStep, DACT, ExecutionContext,
                            ForceHandleMixin)
 
 
@@ -47,7 +47,7 @@ class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
         BaseStep.__init__(self)
         ForceHandleMixin.__init__(self)
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+    def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> BaseStep:
         """
         Change the shape of the data container.
         and/or
@@ -58,7 +58,7 @@ class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
         context.logger.info("Handling the 'fit' with handler method!")
         return self
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
         """
         Change the shape of the data container.
         and/or
@@ -70,8 +70,8 @@ class ForceHandleMixinStep(ForceHandleMixin, BaseStep):
         return data_container
 
     def _fit_transform_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple[BaseStep, DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple[BaseStep, DACT]:
         """
         Change the shape of the data container.
         and/or

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from neuraxle.base import ExecutionContext
-from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import FixedHyperparameter, RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import AutoML, RandomSearch, Trainer
@@ -155,7 +155,7 @@ def test_validation_splitter_should_split_data_properly():
 
     # When
     validation_splits = splitter.split_dact(
-        data_container=DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs),
+        data_container=DACT(data_inputs=data_inputs, expected_outputs=expected_outputs),
         context=ExecutionContext()
     )
     train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
@@ -186,7 +186,7 @@ def test_kfold_cross_validation_should_split_data_properly():
 
     # When
     validation_splits = splitter.split_dact(
-        data_container=DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs),
+        data_container=DACT(data_inputs=data_inputs, expected_outputs=expected_outputs),
         context=ExecutionContext()
     )
     train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
@@ -240,7 +240,7 @@ def test_kfold_cross_validation_should_split_data_properly():
 def test_kfold_cross_validation_should_split_data_properly_bug():
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     expected_outputs = np.array([0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40])
-    data_container = DataContainer(
+    data_container = DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
     )

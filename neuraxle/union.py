@@ -28,7 +28,7 @@ from typing import Tuple
 
 from joblib import Parallel, delayed
 
-from neuraxle.base import (BaseStep, BaseTransformer, DataContainer,
+from neuraxle.base import (BaseStep, BaseTransformer, DACT,
                            ExecutionContext, ForceHandleOnlyMixin, Identity,
                            NamedStepsList, NonFittableMixin, TruncableSteps)
 from neuraxle.data_container import ZipDataContainer
@@ -123,7 +123,7 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
                 for _, step in self.steps_as_tuple[:-1]
             ]
 
-        return DataContainer(
+        return DACT(
             data_inputs=data_containers,
             ids=data_container.ids,
             expected_outputs=data_container.expected_outputs,
@@ -169,15 +169,15 @@ class ZipFeatures(NonFittableMixin, BaseStep):
         self.concatenate_inner_features = concatenate_inner_features
 
     def transform(self, data_inputs):
-        if any(not isinstance(di, DataContainer) for di in data_inputs):
+        if any(not isinstance(di, DACT) for di in data_inputs):
             raise ValueError("data_inputs given to ZipFeatures must be a list of DataContainer instances")
         data_container = ZipDataContainer.create_from(*data_inputs)
         if self.concatenate_inner_features:
             data_container.concatenate_inner_features()
         return data_container.data_inputs
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        if any(not isinstance(di, DataContainer) for di in data_container.data_inputs):
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
+        if any(not isinstance(di, DACT) for di in data_container.data_inputs):
             raise ValueError("data_inputs given to ZipFeatures must be a list of DataContainer instances")
         data_container = ZipDataContainer.create_from(*data_container.data_inputs)
         if self.concatenate_inner_features:
@@ -276,7 +276,7 @@ class ModelStacking(FeatureUnion):
         super().__init__(steps_as_tuple=steps_as_tuple, **kwargs)
         self.judge: BaseStep = judge  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
 
-    def _did_fit_transform(self, data_container, context) -> Tuple['BaseStep', DataContainer]:
+    def _did_fit_transform(self, data_container, context) -> Tuple['BaseStep', DACT]:
         data_container = super()._did_fit_transform(data_container, context)
 
         fitted_judge, data_container = self.judge.handle_fit_transform(data_container, context)
@@ -284,7 +284,7 @@ class ModelStacking(FeatureUnion):
 
         return data_container
 
-    def _did_fit(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _did_fit(self, data_container: DACT, context: ExecutionContext) -> DACT:
         """
         Fit the parallel steps on the data. It will make use of some parallel processing.
         Also, fit the judge on the result of the parallel steps.
@@ -301,7 +301,7 @@ class ModelStacking(FeatureUnion):
 
         return data_container
 
-    def _did_transform(self, data_container, context) -> DataContainer:
+    def _did_transform(self, data_container, context) -> DACT:
         """
         Transform the data with the unions. It will make use of some parallel processing.
         Then, use the judge to refine the transformations.

@@ -22,7 +22,7 @@ The neuraxle classes to track metrics results.
 from typing import Dict
 
 from neuraxle.base import MetaStep, BaseStep, ExecutionContext, _FittableStep
-from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import RecursiveDict
 
 
@@ -83,13 +83,13 @@ class MetricsWrapper(MetaStep):
             self.metrics_results_train[m] = []
             self.metrics_results_validation[m] = []
 
-    def _did_fit_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _did_fit_transform(self, data_container: DACT, context: ExecutionContext) -> DACT:
         return self._did_fit_transform_or_transform(data_container, context)
 
-    def _did_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _did_transform(self, data_container: DACT, context: ExecutionContext) -> DACT:
         return self._did_fit_transform_or_transform(data_container, context)
 
-    def _did_fit_transform_or_transform(self, data_container: DataContainer, context: ExecutionContext):
+    def _did_fit_transform_or_transform(self, data_container: DACT, context: ExecutionContext):
         """
         Calculate metrics results after fit, or transform if there is an expected outputs in the data container.
         Also, calculate validation metrics if there is a sub data container named validation in the data container.
@@ -117,7 +117,7 @@ class MetricsWrapper(MetaStep):
 
         return data_container
 
-    def _calculate_metrics_results(self, data_container: DataContainer):
+    def _calculate_metrics_results(self, data_container: DACT):
         """
         Calculate metrics results using the transformed data container, and the metrics function dict.
 

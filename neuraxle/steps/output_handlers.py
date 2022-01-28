@@ -29,7 +29,7 @@ from typing import List, Tuple
 
 from neuraxle.base import (BaseStep, ExecutionContext, ForceHandleOnlyMixin,
                            MetaStep, MixinForBaseTransformer)
-from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer as DACT
 
 
 class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
@@ -42,7 +42,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         MetaStep.__init__(self, wrapped)
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
         """
         Handle transform by passing expected outputs to the wrapped step transform method.
         Update the expected outputs with the outputs.
@@ -53,7 +53,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         :rtype: DataContainer
         """
         new_expected_outputs_data_container = self.wrapped.handle_transform(
-            DataContainer(
+            DACT(
                 ids=data_container.ids,
                 data_inputs=data_container.eo,
                 expected_outputs=None
@@ -65,8 +65,8 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         return data_container
 
     def _fit_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple[BaseStep, DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple[BaseStep, DACT]:
         """
         Handle fit by passing expected outputs to the wrapped step fit method.
 
@@ -76,7 +76,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         :return: self, data container
         """
         self.wrapped = self.wrapped.handle_fit(
-            DataContainer(
+            DACT(
                 data_inputs=data_container.expected_outputs,
                 ids=data_container.ids,
                 expected_outputs=None
@@ -87,8 +87,8 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         return self, data_container
 
     def _fit_transform_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple[BaseStep, DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple[BaseStep, DACT]:
         """
         Handle fit transform by passing expected outputs to the wrapped step fit method.
         Update the expected outputs with the outputs.
@@ -99,7 +99,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         :return: self, data container
         """
         self.wrapped, new_expected_outputs_data_container = self.wrapped.handle_fit_transform(
-            DataContainer(
+            DACT(
                 data_inputs=data_container.expected_outputs,
                 ids=data_container.ids,
                 expected_outputs=None
@@ -110,7 +110,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
 
         return self, data_container
 
-    def handle_inverse_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def handle_inverse_transform(self, data_container: DACT, context: ExecutionContext) -> DACT:
         """
         Handle inverse transform by passing expected outputs to the wrapped step inverse transform method.
         Update the expected outputs with the outputs.
@@ -121,7 +121,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         :rtype: DataContainer
         """
         new_expected_outputs_data_container = self.wrapped.handle_inverse_transform(
-            DataContainer(
+            DACT(
                 data_inputs=data_container.expected_outputs,
                 ids=data_container.ids,
                 expected_outputs=None
@@ -134,8 +134,8 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         return data_container
 
     def _set_expected_outputs(
-            self, data_container: DataContainer, new_expected_outputs_data_container: DataContainer
-    ) -> DataContainer:
+            self, data_container: DACT, new_expected_outputs_data_container: DACT
+    ) -> DACT:
 
         if len(data_container) != len(new_expected_outputs_data_container):
             raise AssertionError(
@@ -150,7 +150,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
 
 
 class _DidProcessInputOutputHandlerMixin(MixinForBaseTransformer):
-    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _did_process(self, data_container: DACT, context: ExecutionContext) -> DACT:
         di, eo = data_container.data_inputs
         if len(di) != len(eo):
             raise AssertionError(
@@ -185,7 +185,7 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
         _DidProcessInputOutputHandlerMixin.__init__(self)
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
         """
         Handle transform by passing data_inputs, and expected outputs to the wrapped step transform method.
         Update the expected outputs with the outputs.
@@ -196,7 +196,7 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         :rtype: DataContainer
         """
         output_data_container = self.wrapped.handle_transform(
-            DataContainer(
+            DACT(
                 data_inputs=(data_container.data_inputs, data_container.expected_outputs),
                 ids=data_container.ids,
                 expected_outputs=None
@@ -207,8 +207,8 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         return output_data_container
 
     def _fit_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple[BaseStep, DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple[BaseStep, DACT]:
         """
         Handle fit by passing the data inputs, and the expected outputs to the wrapped step fit method.
 
@@ -218,7 +218,7 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         :return: self, data container
         """
         self.wrapped = self.wrapped.handle_fit(
-            DataContainer(
+            DACT(
                 data_inputs=(copy.copy(data_container.data_inputs), copy.copy(data_container.expected_outputs)),
                 ids=data_container.ids,
                 expected_outputs=None
@@ -232,8 +232,8 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         return self
 
     def _fit_transform_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple[BaseStep, DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple[BaseStep, DACT]:
         """
         Handle fit transform by passing the data inputs, and the expected outputs to the wrapped step fit method.
         Update the expected outputs with the outputs.
@@ -244,7 +244,7 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         :return: self, data container
         """
         self.wrapped, output_data_container = self.wrapped.handle_fit_transform(
-            DataContainer(
+            DACT(
                 data_inputs=(data_container.data_inputs, data_container.expected_outputs),
                 ids=data_container.ids,
                 expected_outputs=None
@@ -253,7 +253,7 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         )
         return self, output_data_container
 
-    def handle_inverse_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def handle_inverse_transform(self, data_container: DACT, context: ExecutionContext) -> DACT:
         """
         Handle inverse transform by passing the data inputs, and the expected outputs to the wrapped step inverse transform method.
         Update the expected outputs with the outputs.
@@ -264,7 +264,7 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         :rtype: DataContainer
         """
         output_data_container = self.wrapped.handle_inverse_transform(
-            DataContainer(
+            DACT(
                 data_inputs=(data_container.data_inputs, data_container.expected_outputs),
                 ids=data_container.ids,
                 expected_outputs=None
@@ -280,7 +280,7 @@ class InputAndOutputTransformerMixin(_DidProcessInputOutputHandlerMixin):
     Base output transformer step that can modify data inputs, and expected_outputs at the same time.
     """
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
         """
         Handle inverse transform by updating the data inputs, and expected outputs inside the data container.
 
@@ -293,7 +293,7 @@ class InputAndOutputTransformerMixin(_DidProcessInputOutputHandlerMixin):
         data_container.set_data_inputs((new_data_inputs, new_expected_outputs))
         return data_container
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
+    def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> 'BaseStep':
         """
         Handle transform by fitting the step,
         and updating the data inputs, and expected outputs inside the data container.
@@ -308,8 +308,8 @@ class InputAndOutputTransformerMixin(_DidProcessInputOutputHandlerMixin):
         return new_self
 
     def _fit_transform_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple['BaseStep', DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple['BaseStep', DACT]:
         """
         Handle transform by fitting the step,
         and updating the data inputs, and expected outputs inside the data container.

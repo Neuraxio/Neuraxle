@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from neuraxle.base import (BaseStep, ExecutionContext, Flow, HandleOnlyMixin,
                            Identity, TrialStatus)
-from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.logging.logging import NEURAXLE_LOGGER_NAME, NeuraxleLogger
@@ -28,15 +28,15 @@ class FitTransformCounterLoggingStep(HandleOnlyMixin, BaseStep):
         HandleOnlyMixin.__init__(self)
         self.logging_call_counter = 0
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+    def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> BaseStep:
         self._log(context, "fit")
         return self
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
         self._log(context, "transform")
         return data_container
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _fit_transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
         self._log(context, "fit_transform")
         return data_container
 
@@ -64,7 +64,7 @@ def test_context_logger_log_file(tmpdir):
         ])
 
         # When
-        dact = DataContainer(
+        dact = DACT(
             data_inputs=np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
         )
         pipeline.handle_fit(dact, cx)
@@ -107,7 +107,7 @@ class TestTrialLogger:
         )
 
         # When
-        data_container = DataContainer(
+        data_container = DACT(
             data_inputs=np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
             expected_outputs=np.array([10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
         )

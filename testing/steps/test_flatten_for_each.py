@@ -1,7 +1,7 @@
 import numpy as np
 
 from neuraxle.base import ExecutionContext
-from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import FlattenForEach
 from neuraxle.steps.numpy import MultiplyByN
@@ -40,7 +40,7 @@ def test_flatten_for_each_should_transform_data_inputs_and_expected_outputs():
     data_inputs, expected_outputs = _create_random_of_shape(DATA_SHAPE)
 
     p, outputs = p.handle_fit_transform(
-        DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs), ExecutionContext())
+        DACT(data_inputs=data_inputs, expected_outputs=expected_outputs), ExecutionContext())
 
     assert np.array(outputs.data_inputs).shape == DATA_SHAPE
     assert np.array_equal(outputs.data_inputs, data_inputs * 2)

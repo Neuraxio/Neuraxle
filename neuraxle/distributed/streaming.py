@@ -35,7 +35,7 @@ from typing import Dict, Tuple, List, Union, Iterable, Any
 
 from neuraxle.base import NamedStepsList, ExecutionContext, MetaStep, BaseSaver, _FittableStep, \
     BaseTransformer, NonFittableMixin, MixinForBaseTransformer, ContextLock
-from neuraxle.data_container import DataContainer, ListDataContainer, AbsentValuesNullObject
+from neuraxle.data_container import DACT, ListDataContainer, AbsentValuesNullObject
 from neuraxle.hyperparams.space import RecursiveDict
 from neuraxle.pipeline import MiniBatchSequentialPipeline, Joiner, Pipeline
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
@@ -95,13 +95,13 @@ class ObservableQueueMixin(MixinForBaseTransformer):
         """
         return self.queue.get()
 
-    def put_task(self, value: DataContainer):
+    def put_task(self, value: DACT):
         """
         Put a queued pipeline task in queue.
         """
         self.queue.put(QueuedPipelineTask(step_name=self.name, data_container=value.copy()))
 
-    def notify_step(self, value: DataContainer):
+    def notify_step(self, value: DACT):
         """
         Notify all subscribed queue workers to put them some tasks on their queue.
         """
@@ -479,8 +479,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         return name, n_workers, additional_arguments, max_queue_size, actual_step
 
     def _will_process(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple[DataContainer, ExecutionContext]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple[DACT, ExecutionContext]:
         """
         Setup streaming pipeline before any handler methods.
 
@@ -505,8 +505,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         return RecursiveDict()
 
     def fit_transform_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple[Pipeline, DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple[Pipeline, DACT]:
         """
         Fit transform sequentially if any step is fittable. Otherwise transform in parallel.
 
@@ -530,7 +530,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
         return super().fit_transform_data_container(data_container, context)
 
-    def transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
         """
         Transform data container
 
@@ -562,7 +562,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         data_container = joiner.join(original_data_container=data_container)
         return data_container
 
-    def _did_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _did_transform(self, data_container: DACT, context: ExecutionContext) -> DACT:
         """
         Stop all of the workers after transform. Also, join the data using self.data_joiner.
 
@@ -599,7 +599,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         raise NotImplementedError()
 
     @abstractmethod
-    def send_batch_to_queued_pipeline(self, batch_index: int, data_container: DataContainer):
+    def send_batch_to_queued_pipeline(self, batch_index: int, data_container: DACT):
         """
         Send batches to queued pipeline. It is blocking if there is no more space available in the multiprocessing queues.
         Workers might return batches in a different order, but the queue joiner will reorder them at the end.
@@ -655,7 +655,7 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
         for i, (name, step) in enumerate(self[1:]):
             self[i].subscribe_step(step)
 
-    def send_batch_to_queued_pipeline(self, batch_index: int, data_container: DataContainer):
+    def send_batch_to_queued_pipeline(self, batch_index: int, data_container: DACT):
         """
         Send batches to process to the first queued worker.
 
@@ -697,7 +697,7 @@ class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
         for name, step in self[:-1]:
             step.subscribe_step(self[-1])
 
-    def send_batch_to_queued_pipeline(self, batch_index: int, data_container: DataContainer):
+    def send_batch_to_queued_pipeline(self, batch_index: int, data_container: DACT):
         """
         Send batches to process to all of the queued workers.
 
@@ -745,7 +745,7 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
     def set_n_batches(self, n_batches):
         self.n_batches_left_to_do = n_batches
 
-    def join(self, original_data_container: DataContainer) -> DataContainer:
+    def join(self, original_data_container: DACT) -> DACT:
         """
         Return the accumulated results received by the on next method of this observer.
 

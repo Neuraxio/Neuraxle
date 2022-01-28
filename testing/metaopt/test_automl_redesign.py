@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 from neuraxle.base import ExecutionContext
-from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import (Boolean, Choice, LogUniform,
                                                 RandInt)
 from neuraxle.hyperparams.space import HyperparameterSpace
@@ -44,7 +44,7 @@ def _create_pipeline():
 
 def test_automl_api_entry_point(tmpdir):
     data_inputs, expected_outputs = _create_data_source()
-    dact = DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs)
+    dact = DACT(data_inputs=data_inputs, expected_outputs=expected_outputs)
     pipeline = _create_pipeline()
     # TODO: # HyperbandControllerLoop(), ClusteringParallelFor() ?
 

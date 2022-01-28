@@ -8,7 +8,7 @@ from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.validation import ValidationSplitWrapper
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import MultiplyByN
-from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer as DACT
 
 
 @pytest.mark.skip(reason="TODO: AutoML Refactor")
@@ -39,7 +39,7 @@ def test_automl_sequential_wrapper(tmpdir):
 
     # When
     auto_ml: AutoMLSequentialWrapper = auto_ml.handle_fit(
-        DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs), ExecutionContext(tmpdir))
+        DACT(data_inputs=data_inputs, expected_outputs=expected_outputs), ExecutionContext(tmpdir))
     best_model: Pipeline = auto_ml.get_best_model()
     predicted_outputs = best_model.transform(data_inputs)
 

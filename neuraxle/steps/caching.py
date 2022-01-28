@@ -30,7 +30,7 @@ from typing import Any, Iterable, Tuple
 
 import joblib
 from neuraxle.base import BaseStep, ExecutionContext, MetaStep
-from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer as DACT
 
 
 class BaseValueHasher(ABC):
@@ -80,8 +80,8 @@ class TransformDIValueCachingWrapper(MetaStep):
         self.value_caching_folder = cache_folder
 
     def _fit_transform_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple[BaseStep, DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple[BaseStep, DACT]:
         """
         Fit transform data container.
 
@@ -119,7 +119,7 @@ class TransformDIValueCachingWrapper(MetaStep):
     def _hash_value(self, data_input):
         return self.value_hasher.hash(data_input)
 
-    def _transform_with_cache(self, data_container: DataContainer) -> Iterable:
+    def _transform_with_cache(self, data_container: DACT) -> Iterable:
         """
         Transform data container using value caching.
 

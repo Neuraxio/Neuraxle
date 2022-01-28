@@ -1,6 +1,6 @@
 import pytest
 
-from neuraxle.data_container import DataContainer, AbsentValuesNullObject
+from neuraxle.data_container import DACT, AbsentValuesNullObject
 import numpy as np
 
 
@@ -39,7 +39,7 @@ def test_data_container_minibatch_should_be_lazy_and_use_getitem_when_data_is_la
     items = [LoadableItem() for _ in range(10)]
     data_inputs = SomeLazyLoadableCollection(items)
     expected_outputs = SomeLazyLoadableCollection([LoadableItem() for _ in range(10)])
-    data_container = DataContainer(
+    data_container = DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
     )
@@ -55,25 +55,25 @@ def test_data_container_minibatch_should_be_lazy_and_use_getitem_when_data_is_la
 
 @pytest.mark.parametrize('batch_size,include_incomplete_pass,default_value,expected_data_containers', [
     (3, False, None, [
-        DataContainer(ids=[0, 1, 2], data_inputs=[0, 1, 2], expected_outputs=[10, 11, 12]),
-        DataContainer(ids=[3, 4, 5], data_inputs=[3, 4, 5], expected_outputs=[13, 14, 15]),
-        DataContainer(ids=[6, 7, 8], data_inputs=[6, 7, 8], expected_outputs=[16, 17, 18]),
+        DACT(ids=[0, 1, 2], data_inputs=[0, 1, 2], expected_outputs=[10, 11, 12]),
+        DACT(ids=[3, 4, 5], data_inputs=[3, 4, 5], expected_outputs=[13, 14, 15]),
+        DACT(ids=[6, 7, 8], data_inputs=[6, 7, 8], expected_outputs=[16, 17, 18]),
     ]),
     (3, True, 0, [
-        DataContainer(ids=[0, 1, 2], data_inputs=[0, 1, 2], expected_outputs=[10, 11, 12]),
-        DataContainer(ids=[3, 4, 5], data_inputs=[3, 4, 5], expected_outputs=[13, 14, 15]),
-        DataContainer(ids=[6, 7, 8], data_inputs=[6, 7, 8], expected_outputs=[16, 17, 18]),
-        DataContainer(ids=[0, 1, 2], data_inputs=[9, 0, 0], expected_outputs=[19, 0, 0])
+        DACT(ids=[0, 1, 2], data_inputs=[0, 1, 2], expected_outputs=[10, 11, 12]),
+        DACT(ids=[3, 4, 5], data_inputs=[3, 4, 5], expected_outputs=[13, 14, 15]),
+        DACT(ids=[6, 7, 8], data_inputs=[6, 7, 8], expected_outputs=[16, 17, 18]),
+        DACT(ids=[0, 1, 2], data_inputs=[9, 0, 0], expected_outputs=[19, 0, 0])
     ]),
     (3, True, AbsentValuesNullObject(), [
-        DataContainer(ids=[0, 1, 2], data_inputs=[0, 1, 2], expected_outputs=[10, 11, 12]),
-        DataContainer(ids=[3, 4, 5], data_inputs=[3, 4, 5], expected_outputs=[13, 14, 15]),
-        DataContainer(ids=[6, 7, 8], data_inputs=[6, 7, 8], expected_outputs=[16, 17, 18]),
-        DataContainer(ids=[9], data_inputs=[9], expected_outputs=[19])
+        DACT(ids=[0, 1, 2], data_inputs=[0, 1, 2], expected_outputs=[10, 11, 12]),
+        DACT(ids=[3, 4, 5], data_inputs=[3, 4, 5], expected_outputs=[13, 14, 15]),
+        DACT(ids=[6, 7, 8], data_inputs=[6, 7, 8], expected_outputs=[16, 17, 18]),
+        DACT(ids=[9], data_inputs=[9], expected_outputs=[19])
     ])
 ])
 def test_data_container_batching(batch_size, include_incomplete_pass, default_value, expected_data_containers):
-    data_container = DataContainer(
+    data_container = DACT(
         ids=[str(i) for i in range(10)],
         data_inputs=np.array(list(range(10))),
         expected_outputs=np.array(list(range(10, 20)))

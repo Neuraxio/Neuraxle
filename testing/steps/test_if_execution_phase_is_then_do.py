@@ -3,7 +3,7 @@ import pytest
 from pytest import skip
 
 from neuraxle.base import ExecutionContext, ExecutionPhase
-from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.steps.flow import IfExecutionPhaseIsThen, ExecutionPhaseSwitch
 from testing.test_forcehandle_mixin import ForceHandleIdentity
 
@@ -13,7 +13,7 @@ class SomeStep(ForceHandleIdentity):
         ForceHandleIdentity.__init__(self)
         self.did_process = False
 
-    def _did_process(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _did_process(self, data_container: DACT, context: ExecutionContext) -> DACT:
         self.did_process = True
         return data_container
 

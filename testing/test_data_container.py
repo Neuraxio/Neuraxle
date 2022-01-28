@@ -1,10 +1,10 @@
 import numpy as np
 
-from neuraxle.data_container import DataContainer, ListDataContainer
+from neuraxle.data_container import DACT, ListDataContainer
 
 
 def test_data_container_iter_method_should_iterate_with_none_ids():
-    data_container = DataContainer(
+    data_container = DACT(
         di=np.array(list(range(100))),
         eo=np.array(list(range(100, 200)))
     ).set_ids(None)
@@ -16,7 +16,7 @@ def test_data_container_iter_method_should_iterate_with_none_ids():
 
 
 def test_data_container_iter_method_should_iterate_with_none_expected_outputs():
-    data_container = DataContainer(
+    data_container = DACT(
         ids=[str(i) for i in range(100)],
         data_inputs=np.array(list(range(100))),
         expected_outputs=None
@@ -28,13 +28,13 @@ def test_data_container_iter_method_should_iterate_with_none_expected_outputs():
 
 
 def test_data_container_len_method_should_return_data_inputs_len():
-    data_container = DataContainer.from_di(np.array(list(range(100))))
+    data_container = DACT.from_di(np.array(list(range(100))))
 
     assert len(data_container) == 100
 
 
 def test_data_container_should_iterate_through_data_using_minibatches():
-    data_container = DataContainer(
+    data_container = DACT(
         ids=[str(i) for i in range(100)],
         data_inputs=np.array(list(range(100))),
         expected_outputs=np.array(list(range(100, 200)))
@@ -61,7 +61,7 @@ def test_list_data_container_concat():
     )
 
     # When
-    data_container.concat(DataContainer(
+    data_container.concat(DACT(
         ids=[str(i) for i in range(100, 200)],
         data_inputs=np.array(list(range(100, 200))),
         expected_outputs=np.array(list(range(200, 300)))

@@ -1,7 +1,7 @@
 import numpy as np
 
 from neuraxle.base import ExecutionContext
-from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.data import InnerConcatenateDataContainer, ZipBatchDataContainer
 
@@ -19,9 +19,9 @@ def test_inner_concatenate_data_should_merge_3d_with_3d():
     # Given
     data_inputs_3d, expected_outputs_3d = _create_data_source(SHAPE_3D)
     data_inputs_3d_second, expected_outputs_3d_second = _create_data_source(SHAPE_3D)
-    data_container_3d_second = DataContainer(data_inputs=data_inputs_3d_second,
+    data_container_3d_second = DACT(data_inputs=data_inputs_3d_second,
                                              expected_outputs=expected_outputs_3d_second)
-    data_container = DataContainer(data_inputs=data_inputs_3d, expected_outputs=expected_outputs_3d) \
+    data_container = DACT(data_inputs=data_inputs_3d, expected_outputs=expected_outputs_3d) \
         .add_sub_data_container('2d', data_container_3d_second)
 
     # When
@@ -43,8 +43,8 @@ def test_inner_concatenate_data_should_merge_2d_with_3d():
     # Given
     data_inputs_3d, expected_outputs_3d = _create_data_source(SHAPE_3D)
     data_inputs_2d, expected_outputs_2d = _create_data_source(SHAPE_2D)
-    data_container_2d = DataContainer(data_inputs=data_inputs_2d, expected_outputs=expected_outputs_2d)
-    data_container_3d = DataContainer(data_inputs=data_inputs_3d, expected_outputs=expected_outputs_3d) \
+    data_container_2d = DACT(data_inputs=data_inputs_2d, expected_outputs=expected_outputs_2d)
+    data_container_3d = DACT(data_inputs=data_inputs_3d, expected_outputs=expected_outputs_3d) \
         .add_sub_data_container('2d', data_container_2d)
 
     # When
@@ -65,8 +65,8 @@ def test_inner_concatenate_data_should_merge_1d_with_3d():
     # Given
     data_inputs_3d, expected_outputs_3d = _create_data_source(SHAPE_3D)
     data_inputs_1d, expected_outputs_1d = _create_data_source(SHAPE_1D)
-    data_container_1d = DataContainer(data_inputs=data_inputs_1d, expected_outputs=expected_outputs_1d)
-    data_container = DataContainer(data_inputs=data_inputs_3d, expected_outputs=expected_outputs_3d) \
+    data_container_1d = DACT(data_inputs=data_inputs_1d, expected_outputs=expected_outputs_1d)
+    data_container = DACT(data_inputs=data_inputs_3d, expected_outputs=expected_outputs_3d) \
         .add_sub_data_container('1d', data_container_1d)
 
     # When
@@ -93,8 +93,8 @@ def test_inner_concatenate_data_should_merge_1d_with_2d():
     # Given
     data_inputs_2d, expected_outputs_2d = _create_data_source(SHAPE_2D)
     data_inputs_1d, expected_outputs_1d = _create_data_source(SHAPE_1D)
-    data_container_1d = DataContainer(data_inputs=data_inputs_1d, expected_outputs=expected_outputs_1d)
-    data_container = DataContainer(data_inputs=data_inputs_2d, expected_outputs=expected_outputs_2d) \
+    data_container_1d = DACT(data_inputs=data_inputs_1d, expected_outputs=expected_outputs_1d)
+    data_container = DACT(data_inputs=data_inputs_2d, expected_outputs=expected_outputs_2d) \
         .add_sub_data_container('1d', data_container_1d)
 
     # When
@@ -115,8 +115,8 @@ def test_outer_concatenate_data_should_merge_2d_with_3d():
     # Given
     data_inputs_3d, expected_outputs_3d = _create_data_source(SHAPE_3D)
     data_inputs_2d, expected_outputs_2d = _create_data_source(SHAPE_2D)
-    data_container_2d = DataContainer(data_inputs=data_inputs_2d, expected_outputs=expected_outputs_2d)
-    data_container = DataContainer(data_inputs=data_inputs_3d, expected_outputs=expected_outputs_3d) \
+    data_container_2d = DACT(data_inputs=data_inputs_2d, expected_outputs=expected_outputs_2d)
+    data_container = DACT(data_inputs=data_inputs_3d, expected_outputs=expected_outputs_3d) \
         .add_sub_data_container('2d', data_container_2d)
 
     # When

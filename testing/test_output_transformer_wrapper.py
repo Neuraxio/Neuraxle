@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from neuraxle.base import ExecutionContext, BaseTransformer, ForceHandleMixin
-from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitCallbackStep, TapeCallbackFunction
@@ -55,7 +55,7 @@ def test_output_transformer_wrapper_should_fit_transform_with_data_inputs_and_ex
     p = OutputTransformerWrapper(Pipeline([MultiplyByN(2), FitCallbackStep(tape)]))
     data_inputs, expected_outputs = _create_data_source((10, 10))
 
-    p, data_container = p.handle_fit_transform(DataContainer(
+    p, data_container = p.handle_fit_transform(DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
     ), ExecutionContext())
@@ -71,7 +71,7 @@ def test_output_transformer_wrapper_should_transform_with_data_inputs_and_expect
     p = OutputTransformerWrapper(MultiplyByN(2))
     data_inputs, expected_outputs = _create_data_source((10, 10))
 
-    data_container = p.handle_transform(DataContainer(
+    data_container = p.handle_transform(DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
     ), ExecutionContext())
@@ -96,7 +96,7 @@ def test_input_and_output_transformer_wrapper_should_fit_transform_with_data_inp
     p = InputAndOutputTransformerWrapper(Pipeline([MultiplyByNInputAndOutput(2), FitCallbackStep(tape)]))
     data_inputs, expected_outputs = _create_data_source((10, 10))
 
-    p, data_container = p.handle_fit_transform(DataContainer(
+    p, data_container = p.handle_fit_transform(DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
     ), ExecutionContext())
@@ -111,7 +111,7 @@ def test_input_and_output_transformer_wrapper_should_transform_with_data_inputs_
     p = InputAndOutputTransformerWrapper(MultiplyByNInputAndOutput(2))
     data_inputs, expected_outputs = _create_data_source((10, 10))
 
-    data_container = p.handle_transform(DataContainer(
+    data_container = p.handle_transform(DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
     ), ExecutionContext())
@@ -155,9 +155,9 @@ class DoubleData(ForceHandleMixin, BaseTransformer):
         BaseTransformer.__init__(self)
         ForceHandleMixin.__init__(self)
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
         di, eo = data_container.data_inputs
-        return DataContainer(data_inputs=(di[0].tolist()*2, eo[0].tolist()*2),
+        return DACT(data_inputs=(di[0].tolist()*2, eo[0].tolist()*2),
                              ids=data_container.ids*2)
 
 
@@ -166,7 +166,7 @@ def test_input_and_output_transformer_wrapper_should_not_return_a_different_amou
         p = InputAndOutputTransformerWrapper(ChangeLenDataInputs())
         data_inputs, expected_outputs = _create_data_source((10, 10))
 
-        p.handle_transform(DataContainer(
+        p.handle_transform(DACT(
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         ), ExecutionContext())
@@ -177,7 +177,7 @@ def test_input_and_output_transformer_wrapper_should_raise_an_assertion_error_if
         p = InputAndOutputTransformerWrapper(ChangeLenDataInputsAndExpectedOutputs())
         data_inputs, expected_outputs = _create_data_source((10, 10))
 
-        p.handle_transform(DataContainer(
+        p.handle_transform(DACT(
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
         ), ExecutionContext())
@@ -187,7 +187,7 @@ def test_data_doubler():
     p = InputAndOutputTransformerWrapper(DoubleData())
     data_inputs, expected_outputs = _create_data_source((10, 10))
 
-    out = p.handle_transform(DataContainer(
+    out = p.handle_transform(DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
     ), ExecutionContext())

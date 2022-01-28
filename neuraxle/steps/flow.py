@@ -41,7 +41,7 @@ from typing import Callable, Dict
 from typing import Optional as OptionalType
 from typing import Tuple, Union
 
-from neuraxle.base import (BaseStep, BaseTransformer, DataContainer,
+from neuraxle.base import (BaseStep, BaseTransformer, DACT,
                            ExecutionContext, ExecutionPhase,
                            ForceHandleOnlyMixin, HandleOnlyMixin, MetaStep,
                            NonFittableMixin, TransformHandlerOnlyMixin,
@@ -86,7 +86,7 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStep):
 
         self.is_train_only = is_train_only
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> BaseStep:
+    def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> BaseStep:
         """
         :param data_container: data container
         :param context: execution context
@@ -98,8 +98,8 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStep):
         return self
 
     def _fit_transform_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple[BaseStep, DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple[BaseStep, DACT]:
         """
         :param data_container: data container
         :param context: execution context
@@ -110,7 +110,7 @@ class TrainOrTestOnlyWrapper(ForceHandleOnlyMixin, MetaStep):
             return self, data_container
         return self, data_container
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
         """
         :param data_container: data container
         :param context: execution context
@@ -173,17 +173,17 @@ class ExecuteIf(HandleOnlyMixin, MetaStep):
         HandleOnlyMixin.__init__(self)
         self.condition_function: Callable = condition_function
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext):
+    def _fit_data_container(self, data_container: DACT, context: ExecutionContext):
         if self.condition_function(self, data_container, context):
             return MetaStep._fit_data_container(self, data_container, context)
         return self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+    def _fit_transform_data_container(self, data_container: DACT, context: ExecutionContext):
         if self.condition_function(self, data_container, context):
             return MetaStep._fit_transform_data_container(self, data_container, context)
         return self, data_container
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext):
         if self.condition_function(self, data_container, context):
             return MetaStep._transform_data_container(self, data_container, context)
         return data_container
@@ -239,19 +239,19 @@ class ExecutionPhaseSwitch(HandleOnlyMixin, TruncableSteps):
         self.steps_as_tuple[ind] = (self.steps_as_tuple[ind][0], step)
         return self
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> 'BaseStep':
+    def _fit_data_container(self, data_container: DACT, context: ExecutionContext) -> 'BaseStep':
         step = self._get_step(context).handle_fit(data_container, context)
         return self._set_step(context, step)
 
     def _fit_transform_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple['BaseTransformer', DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple['BaseTransformer', DACT]:
         step, data_container = self._get_step(context).handle_fit_transform(data_container, context)
         return self._set_step(context, step), data_container
 
     def _transform_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple['BaseTransformer', DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple['BaseTransformer', DACT]:
         return self._get_step(context).handle_transform(data_container, context)
 
 
@@ -296,8 +296,8 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
         self.nullify_hyperparams = nullify_hyperparams
 
     def _fit_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple['BaseTransformer', DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple['BaseTransformer', DACT]:
         """
         Nullify wrapped step hyperparams, and don't fit the wrapped step.
 
@@ -314,8 +314,8 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
         return self
 
     def _fit_transform_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple['BaseTransformer', DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple['BaseTransformer', DACT]:
         """
         Nullify wrapped step hyperparams, and don't fit_transform the wrapped step.
 
@@ -329,13 +329,13 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
 
         self._nullify_hyperparams()
 
-        return self, DataContainer(
+        return self, DACT(
             data_inputs=self.nullified_return_value,
             ids=data_container.ids,
             expected_outputs=self.nullified_return_value
         )
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
         """
         Nullify wrapped step hyperparams, and don't transform the wrapped step.
 
@@ -349,7 +349,7 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
         self._nullify_hyperparams()
         data_container.set_data_inputs(self.nullified_return_value)
 
-        return DataContainer(
+        return DACT(
             data_inputs=self.nullified_return_value,
             ids=data_container.ids,
             expected_outputs=self.nullified_return_value
@@ -535,7 +535,7 @@ class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseTransformer):
         BaseTransformer.__init__(self)
         TransformHandlerOnlyMixin.__init__(self)
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext):
         """
         Handle transform.
 
@@ -547,7 +547,7 @@ class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseTransformer):
         if len(data_inputs) == 1:
             data_inputs = data_inputs[0]
 
-        data_container = DataContainer(data_inputs=data_inputs, ids=data_container.ids,
+        data_container = DACT(data_inputs=data_inputs, ids=data_container.ids,
                                        expected_outputs=data_container.expected_outputs)
 
         return data_container
@@ -567,7 +567,7 @@ class SelectNonEmptyDataContainer(TransformHandlerOnlyMixin, BaseTransformer):
         BaseTransformer.__init__(self)
         TransformHandlerOnlyMixin.__init__(self)
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext):
 
         data_containers = list(filter(
             lambda dc: (len(dc.di) > 0 and len(dc.eo) > 0),
@@ -576,7 +576,7 @@ class SelectNonEmptyDataContainer(TransformHandlerOnlyMixin, BaseTransformer):
         if len(data_containers) == 1:
             return data_containers[0]
         else:
-            return DataContainer(
+            return DACT(
                 ids=data_container.ids,
                 di=list(map(attrgetter("di"))),
                 eo=list(map(attrgetter("eo"))),
@@ -609,7 +609,7 @@ class ExpandDim(MetaStep):
         data_container, context = BaseStep._will_process(self, data_container, context)
         return ExpandedDataContainer.create_from(data_container), context
 
-    def _did_process(self, data_container: DataContainer, context: ExecutionContext):
+    def _did_process(self, data_container: DACT, context: ExecutionContext):
         data_container = super()._did_process(data_container, context)
         return data_container.reduce_dim()
 
@@ -641,7 +641,7 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
         ])
         HandleOnlyMixin.__init__(self)
 
-    def _fit_data_container(self, data_container: DataContainer,
+    def _fit_data_container(self, data_container: DACT,
                             context: ExecutionContext) -> 'ReversiblePreprocessingWrapper':
         """
         Handle fit by fitting preprocessing step, and postprocessing step.
@@ -660,7 +660,7 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
 
         return self
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
         """
         According to the idiom of `(1, 2, reversed(1))`, we do this, in order:
 
@@ -682,8 +682,8 @@ class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
         return data_container
 
     def _fit_transform_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple[BaseStep, DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple[BaseStep, DACT]:
         """
         According to the idiom of `(1, 2, reversed(1))`, we do this, in order:
 

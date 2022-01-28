@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from neuraxle.base import ExecutionContext
-from neuraxle.data_container import DataContainer, AbsentValuesNullObject
+from neuraxle.data_container import DACT, AbsentValuesNullObject
 from neuraxle.distributed.streaming import SequentialQueuedPipeline, ParallelQueuedFeatureUnion, QueueJoiner
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
@@ -77,7 +77,7 @@ def test_queued_pipeline_with_step_with_process():
         MultiplyByN(2)
     ], batch_size=10, n_workers_per_step=1, max_queue_size=5, use_processes=True)
 
-    data_container = DataContainer(data_inputs=list(range(100)))
+    data_container = DACT(data_inputs=list(range(100)))
     context = ExecutionContext()
 
     outputs = p.handle_transform(data_container, context)
@@ -93,7 +93,7 @@ def test_queued_pipeline_with_step_with_threading():
         MultiplyByN(2)
     ], batch_size=10, n_workers_per_step=1, max_queue_size=5, use_processes=False)
 
-    data_container = DataContainer(data_inputs=list(range(100)))
+    data_container = DACT(data_inputs=list(range(100)))
     context = ExecutionContext()
 
     outputs = p.handle_transform(data_container, context)
@@ -352,7 +352,7 @@ class QueueJoinerForTest(QueueJoiner):
         super().__init__(batch_size)
         self.called_queue_joiner = False
 
-    def join(self, original_data_container: DataContainer) -> DataContainer:
+    def join(self, original_data_container: DACT) -> DACT:
         self.called_queue_joiner = True
         super().join(original_data_container)
 

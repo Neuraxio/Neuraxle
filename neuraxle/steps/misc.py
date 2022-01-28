@@ -24,7 +24,7 @@ You can find here misc. pipeline steps, for example, callbacks useful for debugg
 
 """
 
-from neuraxle.data_container import DataContainer
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.base import (BaseStep, BaseTransformer, ExecutionContext,
                            ForceHandleOnlyMixin, HandleOnlyMixin, MetaStep,
                            NonTransformableMixin, _FittableStep)
@@ -245,8 +245,8 @@ class CallbackWrapper(HandleOnlyMixin, MetaStep):
         self.transform_callback_function = transform_callback_function
 
     def _fit_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple['BaseStep', DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple['BaseStep', DACT]:
         """
         :param data_container: data container
         :type data_container: DataContainer
@@ -259,8 +259,8 @@ class CallbackWrapper(HandleOnlyMixin, MetaStep):
         return self
 
     def _fit_transform_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple['BaseStep', DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple['BaseStep', DACT]:
         """
         :param data_container: data container
         :type data_container: DataContainer
@@ -273,7 +273,7 @@ class CallbackWrapper(HandleOnlyMixin, MetaStep):
         self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
         return self, data_container
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DACT, context: ExecutionContext) -> DACT:
         """
         :param data_container: data container
         :type data_container: DataContainer
@@ -285,7 +285,7 @@ class CallbackWrapper(HandleOnlyMixin, MetaStep):
         self.transform_callback_function(data_container.data_inputs, *self.more_arguments)
         return self.wrapped.handle_transform(data_container, context.push(self.wrapped))
 
-    def handle_inverse_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def handle_inverse_transform(self, data_container: DACT, context: ExecutionContext) -> DACT:
         """
         :param context: execution context
         :type context: ExecutionContext
@@ -387,20 +387,20 @@ class HandleCallbackStep(ForceHandleOnlyMixin, BaseStep):
         self.handle_transform_callback = handle_transform_callback
 
     def _fit_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple['BaseStep', DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple['BaseStep', DACT]:
         self.handle_fit_callback((data_container, context))
         return self, data_container
 
     def _transform_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> DataContainer:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> DACT:
         self.handle_transform_callback((data_container, context))
         return data_container
 
     def _fit_transform_data_container(
-        self, data_container: DataContainer, context: ExecutionContext
-    ) -> Tuple['BaseStep', DataContainer]:
+        self, data_container: DACT, context: ExecutionContext
+    ) -> Tuple['BaseStep', DACT]:
         self.handle_fit_transform_callback((data_container, context))
         return self, data_container
 
