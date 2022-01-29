@@ -40,9 +40,10 @@ from json.encoder import JSONEncoder
 from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
                     Sequence, Tuple, Type, TypeVar, Union)
 
+import neuraxle.metaopt.data.aggregates as agg
 import numpy as np
-from neuraxle.base import (BaseService, BaseStep, ContextLock,
-                           CX, Flow, TrialStatus)
+from neuraxle.base import (CX, BaseService, BaseStep, ContextLock, Flow,
+                           TrialStatus)
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
 from neuraxle.logging.logging import (LOGGER_FORMAT,
@@ -583,6 +584,33 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
     validation_splits: List['TrialSplitDataclass'] = field(default_factory=list)
     retrained_split: 'TrialSplitDataclass' = None
 
+    def store(self, dc: SubDataclassT) -> ScopedLocationAttrInt:
+        if dc.get_id() == RETRAIN_TRIAL_SPLIT_ID:
+            self.retrained_split = dc
+            return RETRAIN_TRIAL_SPLIT_ID
+        else:
+            return super().store(dc)
+
+    def __contains__(self, key: ScopedLocation) -> bool:
+        if key[self.__class__] != self.get_id():
+            return False
+        if key[self.subdataclass_type()] == RETRAIN_TRIAL_SPLIT_ID:
+            if self.retrained_split is None:
+                return False
+            return key in self.retrained_split
+        else:
+            return super().__contains__(key)
+
+    def __getitem__(self, loc: ScopedLocation) -> SubDataclassT:
+        if loc[self.__class__] != self.get_id():
+            raise KeyError(f"Item at loc={loc} is not in {self.shallow()}.")
+        if loc[self.subdataclass_type()] == RETRAIN_TRIAL_SPLIT_ID:
+            if self.retrained_split is None:
+                raise KeyError(f"Item at loc={loc} is not in {self.shallow()}. No retrains are available.")
+            return self.retrained_split[loc]
+        else:
+            return super().__getitem__(loc)
+
 
 RETRAIN_TRIAL_SPLIT_ID = -1
 
@@ -1030,3 +1058,9 @@ class AutoMLContext(CX):
         Load the current dc from the repo.
         """
         return self.repo.load(self.loc, deep)
+
+    def load_agg(self, deep=True) -> 'agg.BaseAggregate':
+        """
+        Load the current agg from the repo.
+        """
+        return agg.BaseAggregate.from_context(self, is_deep=deep)

@@ -17,7 +17,7 @@ from neuraxle.metaopt.callbacks import (CallbackList, EarlyStoppingCallback,
 from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
                                               Trial, TrialSplit)
 from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
-from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
+from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT, RETRAIN_TRIAL_SPLIT_ID,
                                            AutoMLContext, BaseDataclass,
                                            BaseHyperparameterOptimizer,
                                            ClientDataclass, HyperparamsRepository,
@@ -300,3 +300,21 @@ def test_hyperparams_repository_saves_subsequent_data(
 
     restored_dataclass_deep = repo.load(new_loc, deep=True)
     assert restored_dataclass_deep == new_dataclass
+
+
+def test_trial_dataclass_can_store_and_contains_retrain_split():
+    tc: TrialDataclass = TrialDataclass(trial_number=5)
+    tc.store(TrialSplitDataclass(split_number=0))
+    tc.store(TrialSplitDataclass(split_number=1))
+    tc.store(TrialSplitDataclass(split_number=2))
+    sl: ScopedLocation = ScopedLocation.default(
+        round_number=0, trial_number=5, split_number=RETRAIN_TRIAL_SPLIT_ID)
+    tsc: TrialSplitDataclass = TrialSplitDataclass(split_number=RETRAIN_TRIAL_SPLIT_ID)
+
+    tc.store(tsc)
+
+    assert len(tc) == 3
+    assert sl in tc
+    assert tsc.get_id() == RETRAIN_TRIAL_SPLIT_ID
+    assert tc.retrained_split == tsc
+    assert tc[sl] == tc.retrained_split

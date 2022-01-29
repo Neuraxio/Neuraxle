@@ -37,27 +37,20 @@ Classes are splitted like this for the AutoML:
 """
 
 import copy
-import datetime
 import gc
 import hashlib
-import json
-import logging
 import os
-import traceback
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from collections import OrderedDict
-from enum import Enum
-from json.encoder import JSONEncoder
-from logging import FileHandler, Logger
 from types import TracebackType
 from typing import (Any, Callable, ContextManager, Dict, Generic, Iterable,
                     List, Optional, Tuple, Type, TypeVar, Union)
 
 import numpy as np
-from neuraxle.base import BaseService, BaseStep
+from neuraxle.base import BaseService
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import Flow, TrialStatus, _CouldHaveContext
-from neuraxle.hyperparams.space import (HyperparameterSamples,
+from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            RETRAIN_TRIAL_SPLIT_ID,
@@ -68,11 +61,12 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            MetricResultsDataclass,
                                            ProjectDataclass, RootDataclass,
                                            RoundDataclass, ScopedLocation,
-                                           ScopedLocationAttr, SubDataclassT,
-                                           TrialDataclass, TrialSplitDataclass,
+                                           ScopedLocationAttr,
+                                           ScopedLocationAttrInt,
+                                           SubDataclassT, TrialDataclass,
+                                           TrialSplitDataclass,
                                            VanillaHyperparamsRepository,
                                            dataclass_2_id_attr)
-from neuraxle.steps.flow import ReversiblePreprocessingWrapper
 
 SubAggregateT = TypeVar('SubAggregateT', bound=Optional['BaseAggregate'])
 ParentAggregateT = TypeVar('ParentAggregateT', bound=Optional['BaseAggregate'])
@@ -124,7 +118,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
         self._invariant()
 
     @staticmethod
-    def from_context(context: AutoMLContext, dataclass_id: ScopedLocationAttr = None, is_deep=True) -> 'BaseAggregate':
+    def from_context(context: AutoMLContext, is_deep=True) -> 'BaseAggregate':
         """
         Return an aggregate from a context.
         Requirement: Have already pre-push the attr of dataclass into
@@ -633,6 +627,32 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
         if len(self) > 0:
             return list(self[-1]._dataclass.validation_splits[-1].metric_results.keys())
         return []
+
+    def summary(
+        self, metric_name: str = None
+    ) -> List[Tuple[float, ScopedLocationAttrInt, FlatDict]]:
+        """
+        Get a summary of the round. Best score is first.
+        Values in the triplet tuples are: (score, trial_number, hyperparams)
+
+        :param metric_name:
+        :return:
+        """
+        if not self.is_deep:
+            self.refresh(True)
+        metric_name = self.sanitize_metric_name(metric_name)
+
+        results: List[float, FlatDict] = list()
+        for trial in self._trials:
+            score = trial.get_avg_validation_score(metric_name)
+            trial_number = trial._dataclass.trial_number
+            hp = trial.get_hyperparams()
+            results.append((score, trial_number, hp))
+
+        is_reverse: bool = self.is_higher_score_better(metric_name)
+        results = list(sorted(results, reverse=is_reverse))
+        summary = OrderedDict(results)
+        return summary
 
 
 class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):

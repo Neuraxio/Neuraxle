@@ -29,7 +29,7 @@ import multiprocessing
 from typing import ContextManager, Iterator, List, Optional, Tuple
 
 from neuraxle.base import (BaseService, BaseServiceT, BaseStep,
-                           CX, ExecutionPhase, Flow,
+                           CX, BaseStepT, ExecutionContext, ExecutionPhase, Flow,
                            ForceHandleMixin, TrialStatus, TruncableService,
                            _HasChildrenMixin)
 from neuraxle.data_container import IDT
@@ -295,7 +295,7 @@ class DefaultLoop(BaseControllerLoop):
                 pool.starmap(ControlledAutoML._attempt_trial, args)
 
 
-class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
+class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep):
     """
     A step to execute Automated Machine Learning (AutoML) algorithms. This step will
     automatically split the data into train and validation splits, and execute an
@@ -313,7 +313,7 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
     def __init__(
             self,
-            pipeline: BaseStep,
+            pipeline: BaseStepT,
             loop: BaseControllerLoop,
             repo: HyperparamsRepository,
             main_metric_name: str,
@@ -339,7 +339,7 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
         _HasChildrenMixin.__init__(self)
         ForceHandleMixin.__init__(self)
 
-        self.pipeline: BaseStep = pipeline
+        self.pipeline: BaseStepT = pipeline
         self.loop: BaseControllerLoop = loop
         self.repo: HyperparamsRepository = repo
 
@@ -380,7 +380,7 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
 
         :return: self
         """
-        automl_context: AutoMLContext = AutoMLContext.from_context(context, repo=self.repo)
+        automl_context: AutoMLContext = self.get_automl_context(context)
         root: Root = Root.from_context(automl_context)
 
         with root.get_project(self.project_name) as ps:
@@ -397,6 +397,11 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin, BaseStep):
                         self.has_model_been_retrained = True
 
         return self
+
+    def get_automl_context(self, context: ExecutionContext) -> AutoMLContext:
+        # if with_loc:
+        #     return AutoMLContext.from_context(context, repo=self.repo).with_loc(self.project_name, self.client_name, ???)
+        return AutoMLContext.from_context(context, repo=self.repo)
 
     def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         if not self.has_model_been_retrained:

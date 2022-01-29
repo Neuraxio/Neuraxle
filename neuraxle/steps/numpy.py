@@ -23,7 +23,7 @@ Those steps works with NumPy (np) arrays.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-from typing import Sequence, Tuple
+from typing import Iterable, Sequence, Tuple, Union
 
 from neuraxle.base import BaseStep, BaseTransformer
 from neuraxle.base import ExecutionContext as CX
@@ -264,7 +264,7 @@ class AddN(BaseTransformer):
     def __init__(self, add=1):
         super().__init__(hyperparams=HyperparameterSamples({'add': add}))
 
-    def with_hp_range(self, hp_range: range) -> 'AddN':
+    def with_hp_range(self, hp_range: Iterable[Union[float, int]]) -> 'AddN':
         """
         Specify a range for the hyperparametern "N" to be used as an hyperparameter space.
 

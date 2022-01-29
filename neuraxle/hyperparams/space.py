@@ -63,6 +63,7 @@ ready to be sent to an instance of the pipeline to try and score it, for example
 """
 from collections import OrderedDict
 from copy import deepcopy
+from typing import Any
 
 from scipy.stats import rv_continuous, rv_discrete
 from scipy.stats._distn_infrastructure import rv_generic
@@ -72,7 +73,10 @@ from neuraxle.hyperparams.scipy_distributions import ScipyDiscreteDistributionWr
     ScipyContinuousDistributionWrapper
 
 
-class RecursiveDict(OrderedDict):
+FlatDict = OrderedDict[str, Any]
+
+
+class RecursiveDict(FlatDict):
     """
     A data structure that provides an interface to access nested dictionaries with "flattened keys", and a few more functions.
 
@@ -153,7 +157,7 @@ class RecursiveDict(OrderedDict):
             # Splitted on sep and recursively call getter
             return rec_dict._rec_get(rkey)
 
-    def get_root_leaf_data(self) -> dict:
+    def get_root_leaf_data(self) -> FlatDict:
         """
         Returns a dictionary of all the non-recursive elements.
         That is, all the elements that are not RecursiveDict in the
@@ -192,9 +196,10 @@ class RecursiveDict(OrderedDict):
                 else:
                     yield (pre_key + k, v)
 
-    def to_flat_dict(self) -> OrderedDict:
+    def to_flat_dict(self) -> FlatDict:
         """
-        Returns an OrderedDict with no recursively nested elements, i.e. {flattened_key: value}.
+        Returns a FlatDict, that is an OrderedDict[str, Any], 
+        with no recursively nested elements, i.e.: {flattened_key: value}.
         """
         return OrderedDict(self.iter_flat())
 
@@ -209,12 +214,9 @@ class RecursiveDict(OrderedDict):
             out_dict[k] = v
         return out_dict
 
-    def with_separator(self, separator):
+    def with_separator(self, separator: str):
         """
-        Create a new recursive dict that uses the given separator at each level.
-
-        :param separator:
-        :return:
+        Create a new recursive dict (from copy) that uses the given separator at each level.
         """
         return type(self)(
             separator=separator, **{
@@ -223,7 +225,7 @@ class RecursiveDict(OrderedDict):
                 else value.with_separator(separator) for key, value in self.items()
             })
 
-    def is_empty(self):
+    def is_empty(self) -> bool:
         return len(self) == 0 or len(self.to_flat_dict()) == 0
 
 
