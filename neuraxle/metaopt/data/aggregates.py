@@ -628,31 +628,47 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
             return list(self[-1]._dataclass.validation_splits[-1].metric_results.keys())
         return []
 
+    def best_result_summary(self, metric_name: str = None) -> Tuple[float, ScopedLocationAttrInt, FlatDict]:
+        return self.summary(metric_name)[0]
+
     def summary(
         self, metric_name: str = None
     ) -> List[Tuple[float, ScopedLocationAttrInt, FlatDict]]:
         """
         Get a summary of the round. Best score is first.
-        Values in the triplet tuples are: (score, trial_number, hyperparams)
-
-        :param metric_name:
-        :return:
+        Values in the returned triplet tuples are: (score, trial_number, hyperparams),
+        sorted by score such that the best score is first.
         """
         if not self.is_deep:
             self.refresh(True)
         metric_name = self.sanitize_metric_name(metric_name)
 
-        results: List[float, FlatDict] = list()
+        results: List[float, ScopedLocationAttrInt, FlatDict] = list()
+
         for trial in self._trials:
             score = trial.get_avg_validation_score(metric_name)
             trial_number = trial._dataclass.trial_number
-            hp = trial.get_hyperparams()
+            hp = trial.get_hyperparams().to_flat_dict()
+
             results.append((score, trial_number, hp))
 
         is_reverse: bool = self.is_higher_score_better(metric_name)
         results = list(sorted(results, reverse=is_reverse))
-        summary = OrderedDict(results)
-        return summary
+        return results
+
+    def get_all_hyperparams(self) -> List[FlatDict]:
+        """
+        Get all hyperparams from all trials.
+
+        :return:
+        """
+        self.refresh(True)
+
+        hyperparams: List[FlatDict] = list()
+        for trial in self._trials:
+            hyperparams.append(trial.get_hyperparams().to_flat_dict())
+
+        return hyperparams
 
 
 class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):

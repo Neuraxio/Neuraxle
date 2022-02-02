@@ -186,8 +186,9 @@ class RecursiveDict(FlatDict):
     def iter_flat(self, pre_key="", values_only=False):
         """
         Returns a generator which yield (flatenned_key, value) pairs. value is never a RecursiveDict instance.
+        Keys are sorted, then values are sorted as well.
         """
-        for k, v in self.items():
+        for k, v in sorted(self.items()):
             if isinstance(v, RecursiveDict):
                 yield from v.iter_flat(pre_key + k + self.separator, values_only=values_only)
             else:
@@ -198,10 +199,14 @@ class RecursiveDict(FlatDict):
 
     def to_flat_dict(self) -> FlatDict:
         """
-        Returns a FlatDict, that is an OrderedDict[str, Any], 
-        with no recursively nested elements, i.e.: {flattened_key: value}.
+        Returns a FlatDict, that is a totally flatened OrderedDict[str, Any],
+        with no recursively nested elements, i.e.: {fully__flattened__params: value}.
+
+        .. info::
+            The returned FlatDict is sorted in a new alphabetical order.
+
         """
-        return OrderedDict(self.iter_flat())
+        return FlatDict(self.iter_flat())
 
     def to_nested_dict(self) -> dict:
         """

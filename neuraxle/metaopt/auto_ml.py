@@ -254,7 +254,7 @@ class DefaultLoop(BaseControllerLoop):
         trainer: Trainer,
         n_trials: int,
         hp_optimizer: BaseHyperparameterOptimizer = None,
-        continue_loop_on_error: bool = True,
+        continue_loop_on_error: bool = False,
         n_jobs: int = 1,
     ):
         super().__init__(

@@ -25,11 +25,13 @@ Classes for hyperparameter tuning, such as random search.
 """
 import copy
 import math
+import operator
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
+from functools import reduce
 from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
-                    Tuple, Type, TypeVar, Union)
+                    Set, Tuple, Type, TypeVar, Union)
 
 import numpy as np
 from neuraxle.base import BaseStep, EvaluableStepMixin
@@ -38,7 +40,7 @@ from neuraxle.base import ForceHandleOnlyMixin, MetaStep, TrialStatus
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import (
     ContinuousHyperparameterDistribution, DiscreteHyperparameterDistribution)
-from neuraxle.hyperparams.space import (HyperparameterSamples,
+from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
 from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
@@ -651,20 +653,39 @@ class RandomSearch(BaseHyperparameterOptimizer):
 class GridExplorationSampler(BaseHyperparameterOptimizer):
     """
     This hyperparameter space optimizer is similar to a grid search, however, it does
-    try to sample maximally different points in the space to explore it. This space
-    optimizer has a fixed pseudorandom exploration method that makes the sampling
-    reproductible.
+    try to greedily sample maximally different points in the space to explore it. This space
+    optimizer has a fixed pseudorandom exploration method that makes the sampling reproductible.
+
+    When over the expected_n_trials (if sampling too much), the sampler will turn
+    to a non-seeded random search.
 
     It may be good for space exploration before a TPE or for unit tests.
     """
 
-    def __init__(self, expected_n_trials: int):
+    def __init__(self, expected_n_trials: int, seed_i: int = 0):
         BaseHyperparameterOptimizer.__init__(self)
         self.expected_n_trials: int = expected_n_trials
+        self._i: int = seed_i
 
-        self._i: int = 0
+    def _update_grid_exploration_sampler(self, round_scope: 'Round') -> HyperparameterSamples:
+        """
+        Update the grid exploration sampler.
+
+        :param round_scope: round scope
+        :return: next random hyperparams
+        """
+        self._n_sampled = 0
         self.flat_hp_grid_values: OrderedDict[str, List[Any]] = {}
         self.flat_hp_grid_lens: List[int] = []
+        # TODO: could make use of a ND array here to keep track of the grid exploration instead of using random too much. And a walk method picking the most L2-distant point, permutated over the last mod 3 samples to walk awkwardly like [mid, begin, fartest, side, other side] in the ND cube, also avoiding same-seen values.
+        self._seen_hp_grid_values: Set[Tuple[int]] = set()
+
+        self._generate_grid(round_scope.hp_space)
+        for flat_dict_sample in round_scope.get_all_hyperparams():
+            self._reshuffle_grid()
+
+            vals: Tuple[int] = tuple(flat_dict_sample.values())
+            self._seen_hp_grid_values.append(vals)
 
     def find_next_best_hyperparams(self, round_scope: 'Round') -> HyperparameterSamples:
         """
@@ -673,13 +694,21 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
         :param round_scope: round scope
         :return: next hyperparams
         """
-        if self._i == 0:
-            self._generate_grid(round_scope.hp_space)
-        else:
-            self._reshuffle_grid()
-        self._i += 1
+        self._update_grid_exploration_sampler(round_scope)
 
-        i_grid_keys: List[int] = self._gen_keys_for_grid()
+        _space_max = reduce(operator.mul, self.flat_hp_grid_lens, 1)
+
+        if self._n_sampled >= max(self.expected_n_trials, _space_max):
+            return RandomSearch().find_next_best_hyperparams(round_scope)
+        for _ in range(_space_max):
+            i_grid_keys: Tuple[int] = tuple(self._gen_keys_for_grid())
+            if i_grid_keys in self._seen_hp_grid_values:
+                self._reshuffle_grid()
+                self._i += 1
+            else:
+                self._seen_hp_grid_values.add(i_grid_keys)
+                break
+
         flat_result: OrderedDict[str, Any] = self[i_grid_keys]
         return HyperparameterSamples(flat_result)
 
@@ -717,7 +746,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
                     hp_dist.mean() + hp_dist.std() * 2.5,
                     hp_dist.mean() - hp_dist.std() * 2.5,
                 ]
-                hp_samples: List[Any] = [x for x in hp_samples[:remainder] if x >= hp_dist.min() and x <= hp_dist.max()]
+                hp_samples: List[Any] = [x for x in hp_samples[:remainder] if x in hp_dist]
 
                 self.flat_hp_grid_values[hp_name] = hp_samples
                 self.flat_hp_grid_lens.append(len(hp_samples))
@@ -726,13 +755,15 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
         _sum = sum(self.flat_hp_grid_lens)
         if self.expected_n_trials != _sum:
             warnings.warn(
-                f"Warning: changed {self.__class__.__name__}.expected_n_trials="
-                f"{self.expected_n_trials} to {_sum}."
-            )
-        self.expected_n_trials = _sum
+                f"Warning: changed {self.__class__.__name__}.expected_n_trials from "
+                f"{self.expected_n_trials} to {_sum} due to high amount of trials. "
+                f"This may lead to a non-reproducible search using RandomSearch. as a fallback past this point.")
+            self.expected_n_trials = _sum
+
+        self._i = 1
 
     @staticmethod
-    def disorder(x: list, seed: int = 0) -> list:
+    def disorder(x: List, seed: int = 0) -> list:
         """
         Shuffle a list to create a pseudo-random order that is interesting.
         """
@@ -756,16 +787,25 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
             flat_idx.append(self._i % _len)
         return flat_idx
 
-    def _reshuffle_grid(self):
+    def _reshuffle_grid(self, new_sample: FlatDict = None):
         """
         Reshuffling with pseudo-random seed the hyperparameters' values:
         """
+        assert self._n_sampled != 0, "Cannot reshuffle the grid when _i is 0. Please generate grid first and increase _i."
+
         for seed, (k, v) in enumerate(self.flat_hp_grid_values.items()):
             if self._i % len(v) == 0:
                 # reshuffling the grid for when it comes to the end of each of its sublist.
                 # TODO: make a test for this to ensure that over an infinity of trials that the lists are shuffled evenly, or use a real and repeatable pseudorandom rng generator for it.
                 new_v = self.disorder(v, seed % (self._i + 1) + self._i % (seed + 1))
                 self.flat_hp_grid_values[k] = new_v
+
+                if (seed + self._i / len(v)) % 3 == 0:
+                    # reversing the grid at each 3 reshuffles + seed as it may sometimes skip the zero in the disorder.
+                    self.flat_hp_grid_values[k] = list(reversed(self.flat_hp_grid_values[k]))
+                    self._n_sampled += 1
+
+        self._i += 1
 
     def __getitem__(self, i_grid_keys: List[int]) -> OrderedDict[str, Any]:
         """
