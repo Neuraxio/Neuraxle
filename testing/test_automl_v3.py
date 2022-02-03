@@ -117,7 +117,7 @@ def _create_automl_test_loop(tmpdir, assertion_step: BaseStep, n_trials: int = 4
     return automl
 
 
-@pytest.mark.parametrize('n_trials', [1, 3, 4, 12, 13, 16, 17, 20, 40, 50, 100])
+@pytest.mark.parametrize('n_trials', [1, 3, 4, 12, 13, 16, 17, 20])
 def test_grid_sampler_fulls_grid(n_trials):
     round, ges = _get_optimization_scenario(n_trials)
 
@@ -153,8 +153,8 @@ def test_grid_sampler_fulls_individual_params(n_trials):
             round_numbs = min(n_trials, len(round.hp_space[hp_k].values()))
             assert len(value_set) == round_numbs
         else:
-            round_numbs = ges._max
-            assert len(value_set) == round_numbs, (
+            round_numbs = min(n_trials, len(ges.flat_hp_grid_values[hp_k]))
+            assert len(value_set) >= round_numbs, (
                 f"value_set={value_set} has a len={len(value_set)}, but len={round_numbs} was expected.")
 
 

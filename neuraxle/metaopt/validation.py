@@ -685,7 +685,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
             self._reshuffle_grid()
 
             vals: Tuple[int] = tuple(flat_dict_sample.values())
-            self._seen_hp_grid_values.append(vals)
+            self._seen_hp_grid_values.add(vals)
 
     def find_next_best_hyperparams(self, round_scope: 'Round') -> HyperparameterSamples:
         """
@@ -723,7 +723,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
             if isinstance(hp_dist, DiscreteHyperparameterDistribution):
                 hp_samples: List[Any] = hp_dist.values()
 
-                reordered_hp_samples = self.disorder(hp_samples)
+                reordered_hp_samples = self._pseudo_shuffle_list(hp_samples)
                 self.flat_hp_grid_values[hp_name] = reordered_hp_samples
                 self.flat_hp_grid_lens.append(len(reordered_hp_samples))
 
@@ -763,7 +763,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
         self._i = 1
 
     @staticmethod
-    def disorder(x: List, seed: int = 0) -> list:
+    def _pseudo_shuffle_list(x: List, seed: int = 0) -> list:
         """
         Shuffle a list to create a pseudo-random order that is interesting.
         """
@@ -791,13 +791,13 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
         """
         Reshuffling with pseudo-random seed the hyperparameters' values:
         """
-        assert self._n_sampled != 0, "Cannot reshuffle the grid when _i is 0. Please generate grid first and increase _i."
+        assert self._i != 0, "Cannot reshuffle the grid when _i is 0. Please generate grid first and increase _i."
 
         for seed, (k, v) in enumerate(self.flat_hp_grid_values.items()):
             if self._i % len(v) == 0:
                 # reshuffling the grid for when it comes to the end of each of its sublist.
                 # TODO: make a test for this to ensure that over an infinity of trials that the lists are shuffled evenly, or use a real and repeatable pseudorandom rng generator for it.
-                new_v = self.disorder(v, seed % (self._i + 1) + self._i % (seed + 1))
+                new_v = self._pseudo_shuffle_list(v, seed % (self._i + 1) + self._i % (seed + 1))
                 self.flat_hp_grid_values[k] = new_v
 
                 if (seed + self._i / len(v)) % 3 == 0:
