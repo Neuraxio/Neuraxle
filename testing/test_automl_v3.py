@@ -12,7 +12,7 @@ from neuraxle.hyperparams.distributions import DiscreteHyperparameterDistributio
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         HyperparameterSpace)
 from neuraxle.metaopt.auto_ml import (ControlledAutoML, DefaultLoop,
-                                      RandomSearch, Trainer)
+                                      RandomSearchSampler, Trainer)
 from neuraxle.metaopt.callbacks import (CallbackList, EarlyStoppingCallback,
                                         MetricCallback)
 from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
@@ -99,7 +99,7 @@ def _create_automl_test_loop(tmpdir, assertion_step: BaseStep, n_trials: int = 4
         ]),
         loop=DefaultLoop(
             trainer=Trainer(
-                validation_splitter=ValidationSplitter(test_size=0.2),
+                validation_splitter=ValidationSplitter(validation_size=0.2),
                 n_epochs=4,
                 callbacks=[MetricCallback('MAE', median_absolute_error, False)],
             ),

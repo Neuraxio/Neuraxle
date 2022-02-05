@@ -128,6 +128,34 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
         aggregate_class = dataclass_2_aggregate[_dataclass.__class__]
         return aggregate_class(_dataclass, context.pop_attr(), is_deep=is_deep)
 
+    @classmethod
+    def dummy(cls: Type['BaseAggregate'], context: CX = None) -> 'BaseAggregate':
+        """
+        Create a dummy object of the desired type for testing purposes.
+        The parent subtree will be created in a temporary repository,
+        or in a real repository if the context is provided.
+        """
+        context = context or AutoMLContext.from_context(context)
+
+        # create dataclass tree:
+        dataclasses: List[BaseDataclass] = dataclass_2_id_attr.keys()
+        root_dc: RootDataclass = RootDataclass()
+        target_dc_class: Type[BaseDataclass] = aggregate_2_dataclass[cls]
+        prev_dc: BaseDataclass = root_dc
+        for _dataclass in dataclasses:
+            # loop for every type of dataclass and create them until we find the one we want:
+            dc: BaseDataclass = _dataclass()
+            prev_dc.store(dc)
+
+            prev_dc = dc
+            context = context.push_attr(dc)
+            if isinstance(dc, target_dc_class):
+                break
+
+        # create the aggregate:
+        context.repo.save(root_dc, ScopedLocation(), deep=True)
+        return cls.from_context(context, is_deep=False)
+
     def _invariant(self):
         _type: Type[SubDataclassT] = self.dataclass
         self._assert(isinstance(self._dataclass, _type),

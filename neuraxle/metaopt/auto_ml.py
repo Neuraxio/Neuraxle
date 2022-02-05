@@ -28,43 +28,33 @@ Hyperparameter selection strategies are used to optimize the hyperparameters of 
 import multiprocessing
 from typing import ContextManager, Iterator, List, Optional, Tuple
 
-from neuraxle.base import (BaseService, BaseServiceT, BaseStep,
-                           CX, BaseStepT, ExecutionContext, ExecutionPhase, Flow,
-                           ForceHandleMixin, TrialStatus, TruncableService,
-                           _HasChildrenMixin)
+from neuraxle.base import (CX, BaseService, BaseServiceT, BaseStep, BaseStepT,
+                           ExecutionContext, ForceHandleMixin,
+                           TruncableService, _HasChildrenMixin)
 from neuraxle.data_container import IDT
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
-from neuraxle.logging.warnings import (warn_deprecated_arg,
-                                       warn_deprecated_class)
 from neuraxle.metaopt.callbacks import (ARG_Y_EXPECTED, ARG_Y_PREDICTD,
                                         BaseCallback, CallbackList,
                                         ScoringCallback)
 from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
                                               Trial, TrialSplit)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
-                                           AutoMLContext, BaseDataclass,
-                                           ClientDataclass,
+                                           AutoMLContext,
                                            HyperparamsRepository,
-                                           InMemoryHyperparamsRepository,
-                                           MetricResultsDataclass,
-                                           ProjectDataclass, RecursiveDict,
-                                           RootDataclass, RoundDataclass,
-                                           ScopedLocation, SubDataclassT,
-                                           TrialDataclass, TrialSplitDataclass)
-from neuraxle.metaopt.validation import (BaseCrossValidationWrapper,
-                                         BaseHyperparameterOptimizer,
-                                         BaseValidationSplitter, RandomSearch)
+                                           InMemoryHyperparamsRepository)
+from neuraxle.metaopt.validation import (BaseHyperparameterOptimizer,
+                                         BaseValidationSplitter,
+                                         RandomSearchSampler)
 
 
 class Trainer(BaseService):
     """
     Class used to train a pipeline using various data splits and callbacks for evaluation purposes.
-
+    """
     # TODO: add this `with_val_set` method that would change splitter to
     # PresetValidationSetSplitter(self, val) and override.
-    """
 
     def __init__(
             self,
@@ -179,7 +169,7 @@ class BaseControllerLoop(TruncableService):
         continue_loop_on_error: bool = True
     ):
         if hp_optimizer is None:
-            hp_optimizer = RandomSearch()
+            hp_optimizer = RandomSearchSampler()
 
         TruncableService.__init__(self, {
             Trainer: trainer,
@@ -445,7 +435,8 @@ class AutoML(ControlledAutoML):
         n_jobs=None,
         continue_loop_on_error=True
     ):
-        warn_deprecated_class(self, ControlledAutoML)
+
+        callbacks = callbacks or []
         trainer = Trainer(
             callbacks=[scoring_callback] + callbacks,
             validation_splitter=validation_splitter,

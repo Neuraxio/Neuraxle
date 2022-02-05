@@ -9,7 +9,7 @@ from neuraxle.base import (BaseService, BaseStep, BaseTransformerT,
                            NonFittableMixin, StepWithContext)
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.metaopt.auto_ml import AutoML, RandomSearch
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
 from neuraxle.metaopt.validation import ValidationSplitter
@@ -143,7 +143,7 @@ def _make_autoML_loop(tmpdir, p: Pipeline):
     n_epochs = 1
     return AutoML(
         pipeline=p,
-        hyperparams_optimizer=RandomSearch(),
+        hyperparams_optimizer=RandomSearchSampler(),
         validation_splitter=ValidationSplitter(0.20),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         n_trials=1,
@@ -178,7 +178,6 @@ class TestServiceAssertion:
         p: Pipeline = CX(tmpdir).load(os.path.join(pipeline_name))
         assert isinstance(p, Pipeline)
 
-    @pytest.mark.skip(reason="TODO: AutoML Refactor")
     def test_auto_ml_should_inject_dependencies_properly(self, tmpdir):
         self._setup(tmpdir)
         data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
@@ -198,7 +197,6 @@ class TestServiceAssertion:
 
         assert np.array_equal(service.data, data_inputs)
 
-    @pytest.mark.skip(reason="TODO: AutoML Refactor")
     def test_auto_ml_should_fail_at_init_when_services_are_missing(self, tmpdir):
         self._setup(tmpdir)
         data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
@@ -219,7 +217,6 @@ class TestServiceAssertion:
 
         assert 'SomeBaseService dependency missing' in exception_info.value.args[0]
 
-    @pytest.mark.skip(reason="TODO: AutoML Refactor")
     def test_auto_ml_should_fail_at_exec_when_services_are_missing(self, tmpdir):
         self._setup(tmpdir)
         data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
@@ -237,7 +234,6 @@ class TestServiceAssertion:
             auto_ml.fit(data_inputs, expected_outputs)
         assert 'SomeBaseService dependency missing' in exception_info.value.args[0]
 
-    @pytest.mark.skip(reason="TODO: AutoML Refactor")
     def test_auto_ml_should_assert_dependecies_properly_at_exec(self, tmpdir):
         self._setup(tmpdir)
         data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])

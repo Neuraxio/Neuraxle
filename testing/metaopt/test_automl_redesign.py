@@ -6,7 +6,7 @@ from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import (Boolean, Choice, LogUniform,
                                                 RandInt)
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, RandomSearch
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler
 from neuraxle.metaopt.callbacks import (EarlyStoppingCallback, MetricCallback,
                                         ScoringCallback)
 from neuraxle.metaopt.data.vanilla import VanillaHyperparamsRepository
@@ -51,7 +51,7 @@ def test_automl_api_entry_point(tmpdir):
     a: AutoML = AutoML(
         pipeline=pipeline,
         validation_splitter=ValidationSplitter(0.20),
-        hyperparams_optimizer=RandomSearch(),
+        hyperparams_optimizer=RandomSearchSampler(),
         hyperparams_repository=VanillaHyperparamsRepository(cache_folder=os.path.join(tmpdir, "hp")),
         scoring_callback=ScoringCallback(mean_squared_error),
         callbacks=[

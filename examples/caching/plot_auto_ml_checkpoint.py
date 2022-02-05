@@ -33,7 +33,7 @@ from neuraxle.base import ExecutionContext as CX
 
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, RandomSearch, ValidationSplitter
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler, ValidationSplitter
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEach
@@ -67,7 +67,7 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
         n_trials=n_iter,
         cache_folder_when_no_handle=classic_pipeline_folder,
         validation_splitter=ValidationSplitter(0.2),
-        hyperparams_optimizer=RandomSearch(),
+        hyperparams_optimizer=RandomSearchSampler(),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
             MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)
@@ -102,7 +102,7 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
         n_trials=n_iter,
         cache_folder_when_no_handle=caching_pipeline_folder,
         validation_splitter=ValidationSplitter(0.2),
-        hyperparams_optimizer=RandomSearch(),
+        hyperparams_optimizer=RandomSearchSampler(),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
             MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)

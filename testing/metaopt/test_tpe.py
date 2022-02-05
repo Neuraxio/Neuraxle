@@ -8,19 +8,18 @@ from neuraxle.hyperparams.distributions import (Choice, LogNormal, LogUniform,
                                                 Normal, Quantized, Uniform)
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import (ControlledAutoML, BaseHyperparameterOptimizer,
-                                      AutoML, RandomSearch)
+                                      AutoML)
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.vanilla import InMemoryHyperparamsRepository
 from neuraxle.metaopt.hyperopt.tpe import TreeParzenEstimator
-from neuraxle.metaopt.validation import ValidationSplitter
+from neuraxle.metaopt.validation import ValidationSplitter, RandomSearchSampler
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCallbackStep
 from neuraxle.steps.numpy import AddN
 from sklearn.metrics import mean_squared_error
 
 
-@pytest.mark.skip(reason="TODO: AutoML Refactor")
 @pytest.mark.parametrize("expected_output_mult, pipeline", [
     (3.5, Pipeline([
         FitTransformCallbackStep().set_name('callback'),
@@ -103,7 +102,7 @@ def test_tpe(expected_output_mult, pipeline, tmpdir):
         delayed(_test_trial_scores)(
             expected_output_mult,
             pipeline,
-            RandomSearch(),
+            RandomSearchSampler(),
             os.path.join(tmpdir, 'random', str(i))
         )
         for i in range(4)

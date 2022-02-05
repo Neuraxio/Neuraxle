@@ -60,6 +60,10 @@ Slice = Sequence
 
 DEFAULT_PROJECT: ScopedLocationAttrStr = "default_project"
 DEFAULT_CLIENT: ScopedLocationAttrStr = "default_client"
+DEFAULT_ROUND: ScopedLocationAttrInt = 0
+DEFAULT_TRIAL: ScopedLocationAttrInt = 0
+DEFAULT_TRIAL_SPLIT: ScopedLocationAttrInt = 0
+DEFAULT_METRIC_NAME: ScopedLocationAttrStr = "main"
 
 
 @dataclass(order=True)
@@ -148,6 +152,21 @@ class ScopedLocation(BaseService):
         if isinstance(dc, RootDataclass):
             return ScopedLocation()
         return self[:dc.__class__]
+
+    @staticmethod
+    def default_full() -> 'ScopedLocation':
+        """
+        Returns a :class:`ScopedLocation` with all attributes
+        set to the default non-null value instead of None.
+        """
+        return ScopedLocation(
+            DEFAULT_PROJECT,
+            DEFAULT_CLIENT,
+            DEFAULT_ROUND,
+            DEFAULT_TRIAL,
+            DEFAULT_TRIAL_SPLIT,
+            DEFAULT_METRIC_NAME,
+        )
 
     @staticmethod
     def default(
@@ -1032,6 +1051,8 @@ class AutoMLContext(CX):
         :param value: attribute value
         :return: an AutoMLContext copy with the new loc attribute.
         """
+        if not isinstance(subdataclass, BaseDataclass) and isinstance(subdataclass, (str, int)):
+            return self.with_loc(self.loc.with_id(subdataclass))  # ID instead.
         return self.with_loc(self.loc.with_dc(subdataclass))
 
     def pop_attr(self) -> 'AutoMLContext':

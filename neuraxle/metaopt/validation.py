@@ -142,23 +142,6 @@ class ValidationSplitWrapper(BaseCrossValidationWrapper):
     """
     Wrapper for validation split that calculates the score for the validation split.
 
-    .. code-block:: python
-
-        random_search = Pipeline([
-            RandomSearch(
-                ValidationSplitWrapper(
-                    Identity(),
-                    test_size=0.1
-                    scoring_function=mean_absolute_relative_error,
-                    run_validation_split_in_test_mode=False
-                ),
-                n_iter= 10,
-                higher_score_is_better= True,
-                validation_technique=KFoldCrossValidationWrapper(),
-                refit=True
-            )
-        ])
-
     .. note::
         The data is not shuffled before split. Please refer to the :class`DataShuffler` step for data shuffling.
 
@@ -621,7 +604,7 @@ class WalkForwardTimeSeriesCrossValidationWrapper(AnchoredWalkForwardTimeSeriesC
         return splitted_data_inputs
 
 
-class RandomSearch(BaseHyperparameterOptimizer):
+class RandomSearchSampler(BaseHyperparameterOptimizer):
     """
     AutoML Hyperparameter Optimizer that randomly samples the space of random variables.
     Please refer to :class:`AutoML` for a usage example.
@@ -699,7 +682,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
         _space_max = reduce(operator.mul, self.flat_hp_grid_lens, 1)
 
         if self._n_sampled >= max(self.expected_n_trials, _space_max):
-            return RandomSearch().find_next_best_hyperparams(round_scope)
+            return RandomSearchSampler().find_next_best_hyperparams(round_scope)
         for _ in range(_space_max):
             i_grid_keys: Tuple[int] = tuple(self._gen_keys_for_grid())
             if i_grid_keys in self._seen_hp_grid_values:
@@ -757,7 +740,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
             warnings.warn(
                 f"Warning: changed {self.__class__.__name__}.expected_n_trials from "
                 f"{self.expected_n_trials} to {_sum} due to high amount of trials. "
-                f"This may lead to a non-reproducible search using RandomSearch. as a fallback past this point.")
+                f"This may lead to a non-reproducible search using RandomSearch as a fallback past this point.")
             self.expected_n_trials = _sum
 
         self._i = 1
@@ -956,14 +939,14 @@ class ValidationSplitter(BaseValidationSplitter):
     :return:
     """
 
-    def __init__(self, test_size: float):
-        self.test_size = test_size
+    def __init__(self, validation_size: float):
+        self.validation_size = validation_size
 
     def split(
         self, data_inputs, ids=None, expected_outputs=None, context: CX = None
     ) -> Tuple[List, List, List, List]:
         train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids = validation_split(
-            test_size=self.test_size,
+            test_size=self.validation_size,
             data_inputs=data_inputs,
             ids=ids,
             expected_outputs=expected_outputs

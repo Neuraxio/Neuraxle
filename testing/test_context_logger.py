@@ -12,12 +12,12 @@ from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.logging.logging import NEURAXLE_LOGGER_NAME, NeuraxleLogger
-from neuraxle.metaopt.auto_ml import AutoML, RandomSearch
+from neuraxle.metaopt.auto_ml import AutoML
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
 from neuraxle.metaopt.data.vanilla import (DEFAULT_PROJECT, AutoMLContext,
                                            ProjectDataclass, ScopedLocation)
-from neuraxle.metaopt.validation import ValidationSplitter
+from neuraxle.metaopt.validation import ValidationSplitter, RandomSearchSampler
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import AddN, MultiplyByN, NumpyReshape
 from sklearn.metrics import mean_squared_error
@@ -80,7 +80,6 @@ def test_context_logger_log_file(tmpdir):
         os.remove(file_path)
 
 
-@pytest.mark.skip(reason="TODO: AutoML Refactor")
 class TestTrialLogger:
     def test_logger_automl(self, tmpdir):
         # Given
@@ -97,7 +96,7 @@ class TestTrialLogger:
                 NumpyReshape(new_shape=(-1, 1)),
                 FitTransformCounterLoggingStep()
             ]),
-            hyperparams_optimizer=RandomSearch(),
+            hyperparams_optimizer=RandomSearchSampler(),
             validation_splitter=ValidationSplitter(0.20),
             scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
             n_trials=n_trials,

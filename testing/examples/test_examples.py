@@ -2,13 +2,11 @@ from py._path.local import LocalPath
 import pytest
 
 
-@pytest.mark.skip(reason="TODO: AutoML Refactor")
 def test_auto_ml_loop_clean_kata(tmpdir: LocalPath):
     from examples.auto_ml.plot_automl_loop_clean_kata import main
     main()
 
 
-@pytest.mark.skip(reason="TODO: AutoML Refactor")
 def test_auto_ml_checkpoint(tmpdir: LocalPath):
     from examples.caching.plot_auto_ml_checkpoint import main
     main(tmpdir)
@@ -64,7 +62,6 @@ def test_parallel_streaming():
     main()
 
 
-@pytest.mark.skip(reason="TODO: AutoML Refactor")
 def test_boston_housing_meta_optimization(tmpdir: LocalPath):
     from examples.sklearn.plot_boston_housing_meta_optimization import main
     main(tmpdir)
@@ -77,4 +74,5 @@ def test_boston_housing_regression_with_model_stacking():
 
 def test_cyclical_feature_engineering():
     from examples.sklearn.plot_cyclical_feature_engineering import predictions
+    assert predictions is not None
     print(predictions)

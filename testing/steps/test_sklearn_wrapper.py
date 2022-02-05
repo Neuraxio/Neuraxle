@@ -6,7 +6,7 @@ from neuraxle.base import Identity
 from neuraxle.hyperparams.distributions import RandInt, Uniform
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
-from neuraxle.metaopt.auto_ml import AutoML, RandomSearch
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
 from neuraxle.metaopt.validation import KFoldCrossValidationSplitter
@@ -132,7 +132,7 @@ def _test_within_auto_ml_loop(tmpdir, pipeline):
 
     auto_ml = AutoML(
         pipeline=pipeline,
-        hyperparams_optimizer=RandomSearch(),
+        hyperparams_optimizer=RandomSearchSampler(),
         validation_splitter=validation_splitter,
         scoring_callback=scoring_callback,
         n_trials=2,

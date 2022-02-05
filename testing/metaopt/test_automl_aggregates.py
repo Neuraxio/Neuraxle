@@ -10,7 +10,7 @@ from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import RandInt, Uniform
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
-from neuraxle.metaopt.auto_ml import ControlledAutoML, DefaultLoop, RandomSearch, Trainer
+from neuraxle.metaopt.auto_ml import ControlledAutoML, DefaultLoop, RandomSearchSampler, Trainer
 from neuraxle.metaopt.callbacks import (ARG_X_INPUTTED, ARG_Y_EXPECTED,
                                         ARG_Y_PREDICTD, CallbackList,
                                         EarlyStoppingCallback, MetricCallback)
