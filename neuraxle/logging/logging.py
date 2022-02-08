@@ -116,11 +116,12 @@ class NeuraxleLogger(logging.Logger):
     def get_scoped_string_history(self) -> str:
         return LOGGER_STRING_IO[self.name].getvalue()
 
-    def get_full_string_history(self) -> str:
+    def get_root_string_history(self) -> str:
         return LOGGER_STRING_IO[NEURAXLE_LOGGER_NAME].getvalue()
 
-    def print_full_string_history(self) -> None:
-        print('\n'.join(["\n" + k + " -> str:\n\n" + i.getvalue() for k, i in LOGGER_STRING_IO.items()]))
+    def print_root_string_history(self) -> None:
+        print(f"{NEURAXLE_LOGGER_NAME} -> str:\n\n"
+              f"{LOGGER_STRING_IO[NEURAXLE_LOGGER_NAME].getvalue()}")
 
     def _add_stream_handler(
         self,

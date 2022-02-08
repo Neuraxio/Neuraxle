@@ -1005,6 +1005,7 @@ class Flow(BaseService):
         self.log_end(TrialStatus.FAILED)
 
     def log_error(self, exception: Exception):
+        self.log(f'The following exception occurred: \n{exception}', level=logging.INFO)
         if exception is not None:
             self.logger.exception(exception)
 

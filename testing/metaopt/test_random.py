@@ -77,7 +77,7 @@ def test_classic_walkforward_crossvalidation_split(
 
     # Calculate the size of the remainder
     remainder_size = (time_series_size - training_window_size - padding_between_training_and_validation) % \
-                     validation_window_size_temp
+                      validation_window_size_temp
     if remainder_size == 0:
         # Remainder of 0 means the data perfecftly fits in the number of fold and remainder should window_size instead.
         remainder_size = validation_window_size_temp

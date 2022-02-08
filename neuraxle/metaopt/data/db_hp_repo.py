@@ -47,7 +47,7 @@ def get_database_path(user: str, password: str, host: str, dialect: str, driver:
     :param driver: (Optional) e.g. "pymysql"
     :return:
     """
-    return f"dialect[+driver]://user:password@host/dbname"
+    return "dialect[+driver]://user:password@host/dbname"
 
 
 def get_database_path_sqlite(path):

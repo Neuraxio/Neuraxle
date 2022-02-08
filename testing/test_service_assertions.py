@@ -8,7 +8,6 @@ from neuraxle.base import (BaseService, BaseStep, BaseTransformerT,
                            CX, ForceHandleIdentity, Identity,
                            NonFittableMixin, StepWithContext)
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.data_container import DataContainer as DACT
 from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
@@ -159,7 +158,7 @@ class TestServiceAssertion:
 
     def _setup(self, tmpdir):
         self.tmpdir = str(tmpdir)
-        self.tmpdir_hp = self.tmpdir+"_hp"
+        self.tmpdir_hp = self.tmpdir + "_hp"
 
     def teardown(self):
         shutil.rmtree(self.tmpdir, ignore_errors=True)

@@ -302,7 +302,7 @@ class TestTrials:
             is_deep=True)
         self.cx.repo.save(trial_2._dataclass, SOME_FULL_SCOPED_LOCATION[:RoundDataclass].with_id(1))
         trial__split_2 = self._given_success_trial_validation_split(trial_2, best_score=0.1)
-        self.cx.repo.save(trial_2.set_success()._dataclass, SOME_FULL_SCOPED_LOCATION[:RoundDataclass].with_id(1))
+        self.cx.repo.save(trial_2._set_success()._dataclass, SOME_FULL_SCOPED_LOCATION[:RoundDataclass].with_id(1))
 
         trials = Round(
             RoundDataclass(trials=[trial_1._dataclass, trial_2._dataclass]),

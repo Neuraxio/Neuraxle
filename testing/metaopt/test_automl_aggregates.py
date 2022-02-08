@@ -1,16 +1,17 @@
+from cmath import phase
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 import numpy as np
 import pytest
-from neuraxle.base import (BaseService, BaseStep, BaseTransformer,
-                           CX, Flow, HandleOnlyMixin, Identity,
-                           MetaStep)
+from neuraxle.base import (CX, BaseService, BaseStep, BaseTransformer, Flow,
+                           HandleOnlyMixin, Identity, MetaStep)
 from neuraxle.data_container import IDT
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import RandInt, Uniform
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
-from neuraxle.metaopt.auto_ml import ControlledAutoML, DefaultLoop, RandomSearchSampler, Trainer
+from neuraxle.metaopt.auto_ml import (ControlledAutoML, DefaultLoop,
+                                      RandomSearchSampler, Trainer)
 from neuraxle.metaopt.callbacks import (ARG_X_INPUTTED, ARG_Y_EXPECTED,
                                         ARG_Y_PREDICTD, CallbackList,
                                         EarlyStoppingCallback, MetricCallback)
@@ -42,6 +43,61 @@ from testing.metaopt.test_repo_dataclasses import (SOME_FULL_SCOPED_LOCATION,
                                                    SOME_ROOT_DATACLASS)
 
 
+class SomeException(Exception):
+    pass
+
+
+def _raise_if_is_at_level(aggregate: BaseAggregate, level_to_raise: Type[BaseAggregate], current_phase: str, phase_to_raise: str):
+    if isinstance(aggregate, level_to_raise) and phase_to_raise == current_phase:
+        raise SomeException(f"==> Raising at `{phase_to_raise}`of `{level_to_raise.__name__}` as planned. <==\n"
+                            f"(This should not be catched).")
+    else:
+        return
+
+
+BEGIN = "beginning"
+END = "the end"
+
+
+@pytest.mark.parametrize('lvlno, level_to_raise', list(enumerate(list(aggregate_2_subaggregate.keys())[1:])))
+@pytest.mark.parametrize('phase_to_raise', [BEGIN, END])
+def test_aggregate_exceptions_will_raise(phase_to_raise: str, lvlno: int, level_to_raise: Type[BaseAggregate]):
+
+    with pytest.raises(SomeException):
+        root: Root = Root.vanilla(CX())
+        _raise_if_is_at_level(root, level_to_raise, BEGIN, phase_to_raise)
+        with root.default_project() as ps:
+            ps: Project = ps
+            _raise_if_is_at_level(ps, level_to_raise, BEGIN, phase_to_raise)
+            with ps.default_client() as cs:
+                cs: Client = cs
+                _raise_if_is_at_level(cs, level_to_raise, BEGIN, phase_to_raise)
+                with cs.new_round(main_metric_name="some_metric") as rs:
+                    rs: Round = rs.with_optimizer(GridExplorationSampler(1), HyperparameterSpace())
+                    _raise_if_is_at_level(rs, level_to_raise, BEGIN, phase_to_raise)
+                    with rs.new_rvs_trial() as ts:
+                        ts: Trial = ts
+                        _raise_if_is_at_level(ts, level_to_raise, BEGIN, phase_to_raise)
+                        with ts.new_validation_split(continue_loop_on_error=False) as tss:
+                            tss: TrialSplit = tss.with_n_epochs(1)
+                            _raise_if_is_at_level(tss, level_to_raise, BEGIN, phase_to_raise)
+                            with tss.managed_metric(rs.main_metric_name, True) as mrs:
+                                mrs: MetricResults = mrs
+                                _raise_if_is_at_level(mrs, level_to_raise, BEGIN, phase_to_raise)
+
+                                mrs.add_train_result(0.0)
+                                mrs.add_valid_result(0.0)
+
+                                _raise_if_is_at_level(mrs, level_to_raise, END, phase_to_raise)
+                            _raise_if_is_at_level(tss, level_to_raise, END, phase_to_raise)
+                        _raise_if_is_at_level(ts, level_to_raise, END, phase_to_raise)
+                    _raise_if_is_at_level(rs, level_to_raise, END, phase_to_raise)
+                _raise_if_is_at_level(cs, level_to_raise, END, phase_to_raise)
+            _raise_if_is_at_level(ps, level_to_raise, END, phase_to_raise)
+        _raise_if_is_at_level(root, level_to_raise, END, phase_to_raise)
+    pass
+
+
 def test_scoped_cascade_does_the_right_logging(tmpdir):
     dact_train: DACT[IDT, ARG_X_INPUTTED, ARG_Y_PREDICTD] = DACT(
         ids=list(range(0, 10)), di=list(range(0, 10)), eo=list(range(100, 110)))
@@ -49,9 +105,11 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
         ids=list(range(10, 20)), di=list(range(10, 20)), eo=list(range(110, 120)))
     hp_optimizer: BaseHyperparameterOptimizer = GridExplorationSampler(expected_n_trials=1)
     n_epochs = 3
+    n_early_stopping_sentinel = 1
+    n_effective_epochs = min(n_epochs, 1 + n_early_stopping_sentinel)
     callbacks = CallbackList([
         MetricCallback('MAE', median_absolute_error, False),
-        EarlyStoppingCallback(1, 'MAE')
+        EarlyStoppingCallback(n_early_stopping_sentinel, 'MAE')
     ])
     expected_scope = ScopedLocation(
         project_name=DEFAULT_PROJECT,
@@ -107,7 +165,7 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
         assert dc.get_id() == expected_scope[dc_type]
 
         if dc_type == MetricResultsDataclass:
-            assert len(dc.get_sublocation()) == n_epochs
+            assert len(dc.get_sublocation()) == n_effective_epochs
         else:
             assert len(dc.get_sublocation()) == 1
 

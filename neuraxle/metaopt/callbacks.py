@@ -88,13 +88,12 @@ class EarlyStoppingCallback(BaseCallback):
         dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
         is_finished_and_fitted: bool = False
     ) -> bool:
-        if self.metric_name is None:
-            validation_scores = trial_split.get_valid_scores()
-        else:
-            validation_scores = trial_split.get_valid_scores(self.metric_name)
+        metric_name = self.metric_name or trial_split.main_metric_name
+        unmanaged_metric_results: MetricResults = trial_split.metric_result(metric_name)
+        validation_scores = unmanaged_metric_results.get_valid_scores()
 
         if len(validation_scores) > self.n_epochs_without_improvement:
-            higher_score_is_better = trial_split.is_higher_score_better()
+            higher_score_is_better = unmanaged_metric_results.is_higher_score_better()
             if (higher_score_is_better) and \
                     all(validation_scores[-self.n_epochs_without_improvement] >= v for v in
                         validation_scores[-self.n_epochs_without_improvement:]):
@@ -259,6 +258,7 @@ class CallbackList(BaseCallback):
                     is_finished_and_fitted = True
             except Exception as e:
                 trial_split.context.flow.log_error(e)
+                raise e
 
         return is_finished_and_fitted
 
