@@ -25,6 +25,7 @@ Hyperparameter selection strategies are used to optimize the hyperparameters of 
 
 """
 
+from copy import copy
 import multiprocessing
 from typing import ContextManager, Iterator, List, Optional, Tuple
 
@@ -236,6 +237,15 @@ class BaseControllerLoop(TruncableService):
 
         return refitted
 
+    def for_refit_only(self) -> 'BaseControllerLoop':
+        """
+        Create a controller loop configured with zero iterations
+        so as to only make the "refit_best_trial" possible.
+        """
+        self_copy = copy.copy(self)
+        self_copy.n_trials = 0
+        return self_copy
+
 
 class DefaultLoop(BaseControllerLoop):
 
@@ -358,6 +368,13 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
         self = self._fit_data_container(data_container, context)
         data_container = self._transform_data_container(data_container, context)
         return self, data_container
+
+    def to_force_refit_best_trial(self) -> 'ControlledAutoML':
+        self_copy = copy.copy(self)
+        self_copy.refit_best_trial = True
+        self_copy.has_model_been_retrained = False
+        self_copy.loop = self_copy.loop.for_refit_only()
+        return self_copy
 
     def _fit_data_container(self, data_container: DACT, context: CX) -> 'BaseStep':
         """

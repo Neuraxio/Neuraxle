@@ -630,6 +630,11 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
         else:
             return super().__getitem__(loc)
 
+    def shallow(self) -> 'BaseDataclass':
+        shallowed: TrialDataclass = super().shallow()
+        shallowed.retrained_split = f"ShallowedRetrainedSplitWithId({shallowed.retrained_split.get_id()})" if shallowed.retrained_split else None
+        return shallowed
+
 
 RETRAIN_TRIAL_SPLIT_ID = -1
 

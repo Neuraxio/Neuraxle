@@ -37,12 +37,9 @@ control logic to the flow of data into the steps:
 
 """
 from operator import attrgetter
-from typing import Callable, Dict
-from typing import Optional as OptionalType
-from typing import Tuple, Union
+from typing import Callable, Dict, Optional, Tuple, Union
 
-from neuraxle.base import (BaseStep, BaseTransformer, DACT,
-                           CX, ExecutionPhase,
+from neuraxle.base import (CX, DACT, BaseStep, BaseTransformer, ExecutionPhase,
                            ForceHandleOnlyMixin, HandleOnlyMixin, MetaStep,
                            NonFittableMixin, TransformHandlerOnlyMixin,
                            TruncableSteps)
@@ -212,7 +209,7 @@ class IfExecutionPhaseIsThen(ExecuteIf):
 
 class ExecutionPhaseSwitch(HandleOnlyMixin, TruncableSteps):
     def __init__(self, phase_to_callable: Dict[ExecutionPhase, BaseTransformer],
-                 default: OptionalType[BaseTransformer] = None):
+                 default: Optional[BaseTransformer] = None):
         phase, steps = zip(*phase_to_callable.items())
         if default:
             steps.append(default)
@@ -255,23 +252,20 @@ class ExecutionPhaseSwitch(HandleOnlyMixin, TruncableSteps):
         return self._get_step(context).handle_transform(data_container, context)
 
 
-class Optional(ForceHandleOnlyMixin, MetaStep):
+class OptionalStep(ForceHandleOnlyMixin, MetaStep):
     """
-    A wrapper to nullify a step : nullify its hyperparams, and also nullify all of his behavior.
-
-    Example usage :
+    A wrapper to nullify a step: nullify its hyperparams, and also nullify all of his behavior.
+    Example usage:
 
     .. code-block:: python
 
         p = Pipeline([
-            Optional(Identity(), enabled=True)
+            OptionalStep(Identity(), enabled=True)
         ])
 
     .. seealso::
-        :class:`TrainOrTestOnlyWrapper`,
-        :class:`TrainOnlyWrapper`
-        :class:`~neuraxle.base.MetaStepMixin`,
-        :class:`~neuraxle.base.BaseStep`
+        :class:`~neuraxle.base.MetaStep`,
+        :class:`~neuraxle.metaopt.AutoML`,
     """
 
     def __init__(self, wrapped: BaseTransformer, enabled: bool = True, nullified_return_value=None,
@@ -308,10 +302,9 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
         if self.hyperparams[OPTIONAL_ENABLED_HYPERPARAM]:
             self.wrapped = self.wrapped.handle_fit(data_container, context)
             return self
-
-        self._nullify_hyperparams()
-
-        return self
+        else:
+            self._nullify_hyperparams()
+            return self
 
     def _fit_transform_data_container(
         self, data_container: DACT, context: CX
@@ -326,14 +319,9 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
         if self.hyperparams[OPTIONAL_ENABLED_HYPERPARAM]:
             self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
             return self, data_container
-
-        self._nullify_hyperparams()
-
-        return self, DACT(
-            data_inputs=self.nullified_return_value,
-            ids=data_container.ids,
-            expected_outputs=self.nullified_return_value
-        )
+        else:
+            self._nullify_hyperparams()
+            return self, self._passtrough_dact(data_container)
 
     def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
@@ -345,15 +333,9 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
         """
         if self.hyperparams[OPTIONAL_ENABLED_HYPERPARAM]:
             return self.wrapped.handle_transform(data_container, context)
-
-        self._nullify_hyperparams()
-        data_container.set_data_inputs(self.nullified_return_value)
-
-        return DACT(
-            data_inputs=self.nullified_return_value,
-            ids=data_container.ids,
-            expected_outputs=self.nullified_return_value
-        )
+        else:
+            self._nullify_hyperparams()
+            return self._passtrough_dact(data_container)
 
     def _nullify_hyperparams(self):
         """
@@ -363,6 +345,21 @@ class Optional(ForceHandleOnlyMixin, MetaStep):
             return
         hyperparams_space = self.wrapped.get_hyperparams_space()
         self.wrapped.set_hyperparams(hyperparams_space.nullify())
+
+    def _passtrough_dact(self, data_container):
+        return DACT(
+            data_inputs=self.nullified_return_value,
+            ids=data_container.ids,
+            expected_outputs=self.nullified_return_value
+        )
+
+
+class ChooseStepElseIdentity(OptionalStep):
+    def __init__(self, wrapped: BaseTransformer, enabled: bool = True, nullify_hyperparams=True):
+        OptionalStep.__init__(self, wrapped, enabled, None, None, True, nullify_hyperparams)
+
+    def _passtrough_dact(self, data_container):
+        return data_container
 
 
 class ChooseOneStepOf(FeatureUnion):
@@ -465,8 +462,8 @@ class ChooseOneStepOf(FeatureUnion):
         """
         step_names = list(self.keys())
         for step_name in step_names[:-1]:
-            self[step_name] = Optional(
-                self[step_name].set_name('Optional({})'.format(step_name)),
+            self[step_name] = OptionalStep(
+                self[step_name].set_name('OptionalStep({})'.format(step_name)),
                 use_hyperparameter_space=False,
                 nullify_hyperparams=False
             )
@@ -518,7 +515,7 @@ class ChooseOneOrManyStepsOf(FeatureUnion):
         """
         step_names = list(self.keys())
         for step_name in step_names[:-1]:
-            self[step_name] = Optional(self[step_name])
+            self[step_name] = OptionalStep(self[step_name])
         self._refresh_steps()
 
 

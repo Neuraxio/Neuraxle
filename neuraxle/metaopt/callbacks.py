@@ -151,9 +151,8 @@ class IfBestScore(MetaCallback):
         dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
         is_finished_and_fitted: bool = False
     ) -> bool:
-        if trial_split.is_new_best_score():
+        if trial_split.metric_result().is_new_best_score():
             return self.wrapped_callback.call(
-                self,
                 trial_split,
                 dact_train,
                 dact_valid,
@@ -179,7 +178,6 @@ class IfLastStep(MetaCallback):
     ) -> bool:
         if trial_split.epoch == trial_split.n_epochs or is_finished_and_fitted:
             self.wrapped_callback.call(
-                self,
                 trial_split,
                 dact_train,
                 dact_valid,
@@ -210,6 +208,7 @@ class StepSaverCallback(BaseCallback):
         dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
         is_finished_and_fitted: bool = False
     ) -> bool:
+        # TODO: maybe the trial split could contain the model again. This would imply that the trainer would let the trial split train itself. This is a bit weird, still.
         trial_split.save_model(self.label)
         return False
 

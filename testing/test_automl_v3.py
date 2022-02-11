@@ -180,30 +180,13 @@ def _get_optimization_scenario(n_trials):
     return round, ges
 
 
-def test_two_automl_in_parallel_can_contribute_to_the_same_hp_repository():
-    # This is a large test
-    pass
+def test_parallel_automl_can_contribute_to_the_same_hp_repository():
+    assert False
 
 
-def test_automl_flow_logs_the_data_of_the_status_and_metrics_and_introspection():
-    pass
-
+def test_parallel_automl_can_keep_all_trials_to_force_refit_best_trial(tmpdir):
+    # AutoML.to_force_refit_best_trial
+    assert False
 
 def test_on_disk_repo_is_structured_accordingly():
-    pass
-
-
-def test_automl_will_use_logger_for_each_trial():
-    pass
-
-
-def test_automl_default_loop_does_the_right_number_of_trials():
-    pass
-
-
-def test_automl_rounds_does_the_right_number_of_trials():
-    pass
-
-
-def test_trial_split_collects_good_metadata():
-    pass
+    assert False

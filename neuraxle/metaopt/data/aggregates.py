@@ -945,11 +945,6 @@ class TrialSplit(BaseAggregate[Trial, 'MetricResults', TrialSplitDataclass]):
         return self.parent.main_metric_name
 
     def get_hyperparams(self) -> RecursiveDict:
-        """
-        Return hyperparams dict.
-
-        :return: hyperparams dict
-        """
         return self._dataclass.hyperparams
 
     def with_n_epochs(self, n_epochs: int) -> 'TrialSplit':

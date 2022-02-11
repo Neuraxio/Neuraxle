@@ -49,7 +49,7 @@ class TestTrials:
 
     def test_trial_should_have_end_time_later_than_start_time(self):
         with self.trial.new_validation_split(False) as trial_split:
-            trial_split.set_success()
+            trial_split._set_success()
             pass
 
         assert isinstance(trial_split._dataclass.created_time, datetime.datetime)
