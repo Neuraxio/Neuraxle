@@ -35,7 +35,7 @@ NamedDACTTuple = Tuple[str, 'DataContainer']
 IDT = TypeVar('IDT', bound=Iterable)  # Ids Type that is often a list of things
 DIT = TypeVar('DIT', bound=Iterable)  # Data Inputs Type that is often a list of things
 EOT = TypeVar('EOT', bound=Iterable)  # Expected Outputs Type that is often a list of things
-
+DACTData = Union[IDT, DIT, EOT]  # Any of the 3 types
 
 class AbsentValuesNullObject:
     """
@@ -465,7 +465,7 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         self.set_expected_outputs(conversion_function(self.expected_outputs))
         return self
 
-    def unpack(self) -> Tuple[Iterable[IDT], Iterable[DIT], Iterable[EOT]]:
+    def unpack(self) -> Tuple[IDT, DIT, EOT]:
         """
         Unpack to a tuples of (ids, data input, expected output).
 
@@ -486,14 +486,23 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         return str(self)
 
     def __str__(self):
-        len_di = ("<of len=" + str(len(self.di)) + ">") if hasattr(self.di, "__len__") else ""
-        len_eo = ("<of len=" + str(len(self.eo)) + ">") if hasattr(self.eo, "__len__") else ""
+        di_rep = self._str_data(self.di)
+        eo_rep = self._str_data(self.eo)
         return (
             f"{self.__class__.__name__}("
             f"ids={repr(list(self.ids))}, "
-            f"di={type(self.di)}{len_di}, "
-            f"eo={type(self.eo)}{len_eo})"
+            f"di={di_rep}, "
+            f"eo={eo_rep})"
         )
+
+    def _str_data(self, _idata: DACTData) -> str:
+        if hasattr(_idata, '__len__'):
+            if len(_idata) > 10:
+                _len_rep = ("<of len=" + str(len(self.di)) + ">") if hasattr(self.di, "__len__") else ""
+                _rep = f"{type(self.di)}{_len_rep}"
+            else:
+                _rep = repr(_idata)
+        return _rep
 
     def __len__(self):
         return len(self.data_inputs)

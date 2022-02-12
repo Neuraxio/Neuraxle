@@ -362,7 +362,7 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
 
         # Recursive call deeper otherwise:
         key_subattr: ScopedLocationAttr = key[self.subdataclass_type()]
-        if key_subattr in self.get_sublocation_keys():
+        if self._is_key_in_subattr(key_subattr):
             return key in self.get_sublocation()[key_subattr]
         return False
 
@@ -373,11 +373,14 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
         located_sub_attr: ScopedLocationAttr = loc[subdataklass]
         if located_sub_attr is None:
             return self
-        if located_sub_attr not in self.get_sublocation_keys():
+        if not self._is_key_in_subattr(located_sub_attr):
             raise KeyError(f"Item at loc={loc} is not in {self.shallow()}.")
         subloc: SubDataclassT = self.get_sublocation()[located_sub_attr]
         sublocs_sublocs: SubDataclassT = subloc[loc]
         return sublocs_sublocs
+
+    def _is_key_in_subattr(self, key_subattr):
+        return key_subattr in self.get_sublocation_keys()
 
     def __len__(self) -> int:
         return len(self.get_sublocation())
@@ -480,6 +483,9 @@ class DataclassHasListMixin:
 
     def get_sublocation_keys(self) -> List[ScopedLocationAttrInt]:
         return list(range(len(self)))
+
+    def _is_key_in_subattr(self, key_subattr):
+        return key_subattr in self.get_sublocation_keys() or (key_subattr == -1 and len(self) != 0)
 
     def store(self, dc: SubDataclassT) -> ScopedLocationAttrInt:
         _id = dc.get_id()
@@ -632,7 +638,9 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
 
     def shallow(self) -> 'BaseDataclass':
         shallowed: TrialDataclass = super().shallow()
-        shallowed.retrained_split = f"ShallowedRetrainedSplitWithId({shallowed.retrained_split.get_id()})" if shallowed.retrained_split else None
+        if shallowed.retrained_split is not None and not isinstance(shallowed.retrained_split, str):
+            shallowed.retrained_split = (
+                f"ShallowedRetrainedSplitWithId({shallowed.retrained_split.get_id()})")
         return shallowed
 
 
@@ -788,48 +796,6 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
         """
         raise NotImplementedError("Use a concrete class. This is an abstract class.")
 
-    def load_trials(self, status: 'TrialStatus' = None) -> 'RoundManager':
-        """
-        Load all hyperparameter trials with their corresponding score.
-        Sorted by creation date.
-        Filtered by probided status.
-
-        :param status: status to filter trials.
-        :return: Trials (hyperparams, scores)
-        """
-        # TODO: delete this method.
-        pass
-
-    def save_trial(self, trial: 'TrialManager'):
-        """
-        Save trial, and notify trial observers.
-
-        :param trial: trial to save.
-        :return:
-        """
-        self._save_trial(trial)
-        self.notify_next(value=(self, trial))  # notify a tuple of (repo, trial) to observers
-
-    def _save_trial(self, trial: 'TrialManager'):
-        """
-        save trial.
-
-        :param trial: trial to save.
-        :return:
-        """
-        # TODO: delete this method.
-        pass
-
-    def get_best_hyperparams(self, loc: ScopedLocation) -> TrialDataclass:
-        """
-        Get best hyperparams.
-
-        :param status: status to filter trials.
-        :return: best hyperparams.
-        """
-        round: RoundDataclass = self.load(ScopedLocation(loc.as_list()[:3]))
-        return round.best_trial
-
     @abstractmethod
     def get_scoped_logger_path(self, scope: ScopedLocation) -> str:
         """
@@ -838,25 +804,9 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
         :param scope: scope to get logger path from.
         :return: logger path with given scope.
         """
-
+        # TODO: perhaps rename this to "add_scoped_logger_handlers" to make clear that
+        #       it only adds handlers to a scope, instead of getting a path to later set up the logger with it.
         raise NotImplementedError("Use a concrete class. This is an abstract class.")
-
-    def _save_model(self, trial: 'TrialManager', pipeline: BaseStep, context: CX):
-        hyperparams = self.hyperparams.to_flat_dict()
-        # TODO: ???
-        trial_hash = trial.get_trial_id(hyperparams)
-        pipeline.set_name(trial_hash).save(context, full_dump=True)
-
-    def load_model(self, trial: 'TrialManager', context: CX) -> BaseStep:
-        """
-        Load model in the trial hash folder.
-        """
-        # TODO: glob?
-        trial_hash: str = trial.get_trial_id(self.hyperparams.to_flat_dict)
-        return CX.load(
-            context=context,
-            pipeline_name=trial_hash,
-        )
 
 
 class VanillaHyperparamsRepository(HyperparamsRepository):

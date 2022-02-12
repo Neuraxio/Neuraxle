@@ -38,6 +38,7 @@ from neuraxle.metaopt.auto_ml import HyperparamsRepository
 
 from neuraxle.hyperparams.distributions import *
 from neuraxle.hyperparams.space import HyperparameterSpace
+from neuraxle.metaopt.data.vanilla import ScopedLocation
 from neuraxle.metaopt.observable import _ObserverOfRepo, BaseDataclassT
 from neuraxle.metaopt.data.aggregates import Trial, Round
 from neuraxle.base import TrialStatus
@@ -216,7 +217,7 @@ class TrialMetricsPlottingObserver(_ObserverOfRepo[Tuple[HyperparamsRepository, 
         :return:
         """
         repo = value
-        trials: Round = repo.load_trials(TrialStatus.SUCCESS)
+        trials: Round = repo.load(ScopedLocation.default(-1)).filter(TrialStatus.SUCCESS)
         if not self.plot_all_trials_on_complete:
             return
         if len(trials) == 0:

@@ -574,7 +574,7 @@ class Choice(DiscreteHyperparameterDistribution):
 
     def __str__(self):
         return self.__class__.__name__ + \
-            f"({'choice_list='+', '.join(self.choice_list) if len(self.choice_list)<4 else f'a {len(self.choice_list)} elements choice_list'})"
+            f"({'choice_list='+', '.join(self.choice_list) if len(self.choice_list) < 4 else f'<a {len(self.choice_list)} elements list>'})"
 
 
 class PriorityChoice(OrdinalDiscreteHyperparameterDistribution):
@@ -1272,7 +1272,7 @@ class Normal(ContinuousHyperparameterDistribution):
 
         :return: minimal value return from distribution.
         """
-        return self.hard_clip_min or -1 * np.inf
+        return self.hard_clip_min if self.hard_clip_min is not None else -1 * np.inf
 
     def max(self):
         """
@@ -1280,7 +1280,7 @@ class Normal(ContinuousHyperparameterDistribution):
 
         :return: minimal value return from distribution.
         """
-        return self.hard_clip_max or np.inf
+        return self.hard_clip_max if self.hard_clip_max is not None else np.inf
 
     def mean(self):
         """
@@ -1379,9 +1379,9 @@ class LogNormal(LogSpaceDistributionMixin, ContinuousHyperparameterDistribution)
             ContinuousHyperparameterDistribution.__init__(self, null_default_value)
         self.log2_space_mean = log2_space_mean
         self.log2_space_std = log2_space_std
+        if hard_clip_min is not None and hard_clip_min <= 0:
+            hard_clip_min = None
         self.hard_clip_min = hard_clip_min
-        if self.hard_clip_min is not None and self.hard_clip_min <= 0:
-            self.hard_clip_min = None
         self.hard_clip_max = hard_clip_max
 
     def rvs(self) -> float:
@@ -1472,7 +1472,7 @@ class LogNormal(LogSpaceDistributionMixin, ContinuousHyperparameterDistribution)
 
         :return: minimal value return from distribution.
         """
-        return self.hard_clip_min or 0.
+        return self.hard_clip_min if self.hard_clip_min is not None else 0.
 
     def max(self):
         """
@@ -1480,7 +1480,7 @@ class LogNormal(LogSpaceDistributionMixin, ContinuousHyperparameterDistribution)
 
         :return: maximal value return from distribution.
         """
-        return self.hard_clip_max or np.inf
+        return self.hard_clip_max if self.hard_clip_max is not None else np.inf
 
     def mean(self):
         """
@@ -1591,7 +1591,7 @@ class DistributionMixture(DiscreteHyperparameterDistribution):
             distributions_max: List[float],
             use_logs: bool = False,
             use_quantized_distributions: bool = False
-    ):
+    ) -> 'DistributionMixture':
         """
         Create a gaussian mixture.
 

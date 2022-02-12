@@ -5,7 +5,7 @@ Code for tree parzen estimator auto ml.
 """
 from collections import Counter
 from operator import itemgetter
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Union
 
 import numpy as np
 from neuraxle.base import TrialStatus
@@ -13,10 +13,11 @@ from neuraxle.hyperparams.distributions import (
     Choice, DiscreteHyperparameterDistribution, DistributionMixture,
     HyperparameterDistribution, LogNormal, LogUniform, PriorityChoice,
     Quantized)
-from neuraxle.hyperparams.space import (HyperparameterSamples,
+from neuraxle.hyperparams.space import (HPSampledValue, HyperparameterSamples,
                                         HyperparameterSpace)
-from neuraxle.metaopt.data.aggregates import Round
-from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
+from neuraxle.metaopt.data.aggregates import Round, Trial
+from neuraxle.metaopt.data.vanilla import (BaseHyperparameterOptimizer,
+                                           ScopedLocation)
 from neuraxle.metaopt.validation import GridExplorationSampler
 
 _LOG_DISTRIBUTION = (LogNormal, LogUniform)
@@ -69,30 +70,27 @@ class TreeParzenEstimator(BaseHyperparameterOptimizer):
         hyperparams_space_list: List[(str, HyperparameterDistribution)] = list(
             round_scope.hp_space.to_flat_dict().items())
 
-        if round_scope.trial_number < self.number_of_initial_random_step:
+        if len(round_scope) < self.number_of_initial_random_step:
             # Perform random search
             return self.initial_auto_ml_algo.find_next_best_hyperparams(round_scope)
 
-        # Keep only success trials
-        success_trials: Round = round_scope.repo.load_trials(status=TrialStatus.SUCCESS)
-
         # Split trials into good and bad using quantile threshold.
-        good_trials, bad_trials = self.split_good_and_bad_trials(
-            success_trials=success_trials,
-            quantile_threshold=self.quantile_threshold,
-            number_of_good_trials_max_cap=self.number_good_trials_max_cap
-        )
+        good_trials, bad_trials = self._split_good_and_bad_trials(round_scope)
 
-        # Create gaussian mixture of good and gaussian mixture of bads.
-
-        hyperparams_keys = list(map(itemgetter(0), hyperparams_space_list))
+        # Create gaussian mixture of good and gaussian mixture of bads. Lists here are on a per-hp basis:
+        hyperparams_keys: List[str] = list(map(itemgetter(0), hyperparams_space_list))
         good_posteriors: List[HyperparameterDistribution] = self._create_posterior(hyperparams_space_list, good_trials)
         bad_posteriors: List[HyperparameterDistribution] = self._create_posterior(hyperparams_space_list, bad_trials)
 
-        best_hyperparams = []
+        best_hyperparams: List[Tuple[str, HPSampledValue]] = []
         for (hyperparam_key, good_posterior, bad_posterior) in zip(hyperparams_keys, good_posteriors, bad_posteriors):
-            best_new_hyperparam_value = None
-            best_ratio = None
+            # Typing:
+            hyperparam_key: List[str] = hyperparam_key
+            good_posterior: HyperparameterDistribution = good_posterior
+            bad_posterior: HyperparameterDistribution = bad_posterior
+
+            best_next_hyperparam_value: HPSampledValue = None
+            best_ratio: float = None
             for _ in range(self.number_possible_hyperparams_candidates):
                 # Sample possible new hyperparams in the good_trials.
                 possible_new_hyperparm = good_posterior.rvs()
@@ -107,85 +105,86 @@ class TreeParzenEstimator(BaseHyperparameterOptimizer):
                 # # new_node = scope.broadcast_best(b_post, improvement)
                 # new_node = scope.broadcast_best(b_post, below_llik, above_llik)
 
-                # Verify ratio good pdf versus bad pdf for all possible new hyperparms.
+                # Verify ratio good pdf versus bad pdf for all possible new hyperparms. This is as dividing good probabilities by bad probabilities.
                 # Used what is describe in the article which is the ratio (gamma + g(x) / l(x) ( 1- gamma))^-1 that we have to maximize.
                 # Since there is ^-1, we have to maximize l(x) / g(x)
                 # Only the best ratio is kept and is the new best hyperparams.
                 # Seems to take log of pdf and not pdf directly probable to have `-` instead of `/`.
                 # TODO: Maybe they use the likelyhood to sum over all possible parameters to find the max so it become a join distribution of all hyperparameters, would make sense.
                 # TODO: verify is for quantized we do not want to do cdf(value higher) - cdf(value lower) to have pdf.
-                ratio = good_posterior.pdf(possible_new_hyperparm) / bad_posterior.pdf(
+                proba_ratio = good_posterior.pdf(possible_new_hyperparm) / bad_posterior.pdf(
                     possible_new_hyperparm)
 
-                if best_new_hyperparam_value is None:
-                    best_new_hyperparam_value = possible_new_hyperparm
-                    best_ratio = ratio
-                else:
-                    if ratio > best_ratio:
-                        best_new_hyperparam_value = possible_new_hyperparm
-                        best_ratio = ratio
+                if best_next_hyperparam_value is None:
+                    best_next_hyperparam_value = possible_new_hyperparm
+                    best_ratio = proba_ratio
+                elif proba_ratio > best_ratio:
+                    best_next_hyperparam_value = possible_new_hyperparm
+                    best_ratio = proba_ratio
 
-            best_hyperparams.append((hyperparam_key, best_new_hyperparam_value))
+            best_hyperparams.append((hyperparam_key, best_next_hyperparam_value))
         return HyperparameterSamples(best_hyperparams)
 
-    def split_good_and_bad_trials(
-        self, success_trials: Round, quantile_threshold: float, number_of_good_trials_max_cap: int
-    ) -> Tuple['Round', 'Round']:
-        success_trials: Round = success_trials.filter(TrialStatus.SUCCESS)
+    def _split_good_and_bad_trials(self, round_scope: Round) -> Tuple[List[Trial], List[Trial]]:
 
         # Split trials into good and bad using quantile threshold.
-        trials_scores = np.array([trial.get_validation_score() for trial in success_trials])
+        successful_trials: List[Trial] = [
+            trial for trial in round_scope._trials
+            if trial.is_success()
+        ]
+        trials_scores: List[Tuple[float, Trial]] = [t.get_avg_validation_score() for t in successful_trials]
 
-        trial_sorted_indexes = np.argsort(trials_scores)
-        if success_trials.is_higher_score_better():
+        trial_sorted_indexes: List[int] = np.argsort(trials_scores)
+        if round_scope.is_higher_score_better():
             trial_sorted_indexes = list(reversed(trial_sorted_indexes))
 
         # In hyperopt they use this to split, where default_gamma_cap = 25. They clip the max of item they use in the good item.
         # default_gamma_cap is link to the number of recent_trial_at_full_weight also.
         # n_below = min(int(np.ceil(gamma * np.sqrt(len(l_vals)))), gamma_cap)
-        n_good = int(min(np.ceil(quantile_threshold * len(trials_scores)), number_of_good_trials_max_cap))
+        n_good = int(min(np.ceil(self.quantile_threshold * len(trials_scores)), self.number_good_trials_max_cap))
 
         good_trials_indexes = trial_sorted_indexes[:n_good]
         bad_trials_indexes = trial_sorted_indexes[n_good:]
 
-        good_trials = []
-        bad_trials = []
-        for trial_index, trial in enumerate(success_trials):
-            if trial_index in good_trials_indexes:
-                good_trials.append(trial)
-            if trial_index in bad_trials_indexes:
-                bad_trials.append(trial)
+        good_trials: List[Trial] = [successful_trials[i] for i in good_trials_indexes]
+        bad_trials: List[Trial] = [successful_trials[i] for i in bad_trials_indexes]
 
-        return Round(trials=good_trials), Round(trials=bad_trials)
+        return good_trials, bad_trials
 
-    def _create_posterior(self, flat_hyperparameter_space_list: List[Tuple[str, HyperparameterDistribution]],
-                          trials: Round) -> HyperparameterSpace:
+    def _create_posterior(
+        self,
+        flat_hyperparameter_space_list: List[Tuple[str, HyperparameterDistribution]],
+        trials: List[Trial]
+    ) -> List[HyperparameterDistribution]:
 
         # Loop through all hyperparams
-        posterior_distributions = []
+        posterior_distributions: List[HyperparameterDistribution] = []
         for (hyperparam_key, hyperparam_distribution) in flat_hyperparameter_space_list:
+            # Typing:
+            hyperparam_key: str = hyperparam_key
+            hyperparam_distribution: HyperparameterDistribution = hyperparam_distribution
 
-            # Get trial hyperparams
-            trial_hyperparams: List[HyperparameterSamples] = [
-                trial.hyperparams[hyperparam_key] for trial in trials
+            # Get these trials' hyperparam values for this hyperparam
+            trial_hyperparams: List[HPSampledValue] = [
+                trial.get_hyperparams()[hyperparam_key] for trial in trials
             ]
 
             if hyperparam_distribution.is_discrete():
-                posterior_distribution = self._reweights_categorical(
-                    discrete_distribution=hyperparam_distribution,
-                    trial_hyperparameters=trial_hyperparams
-                )
+                posterior_distribution: Union[Choice, PriorityChoice] = self._reweights_categorical(
+                    hyperparam_distribution, trial_hyperparams)
             else:
-                posterior_distribution = self._create_gaussian_mixture(
-                    continuous_distribution=hyperparam_distribution,
-                    trial_hyperparameters=trial_hyperparams
-                )
+                posterior_distribution: DistributionMixture = self._create_gaussian_mixture(
+                    hyperparam_distribution, trial_hyperparams)
 
             posterior_distributions.append(posterior_distribution)
 
         return posterior_distributions
 
-    def _reweights_categorical(self, discrete_distribution: DiscreteHyperparameterDistribution, trial_hyperparameters):
+    def _reweights_categorical(
+        self,
+        discrete_distribution: DiscreteHyperparameterDistribution,
+        trial_hyperparameters: List[HPSampledValue]
+    ) -> Union[Choice, PriorityChoice]:
         # For discrete categorical distribution
         # We need to reweights probability depending on trial counts.
         probas: List[float] = discrete_distribution.probabilities()
@@ -195,7 +194,7 @@ class TreeParzenEstimator(BaseHyperparameterOptimizer):
 
         # Since the reweighted is proportional to N*p_i + C_i,
         # where N is the number of probas, p_i is the original probas and c_i is the count.
-        reweighted_probas = number_probas * probas
+        reweighted_probas = np.array(number_probas) * probas
 
         # Count number of occurence for each values.
         count_trials = Counter(trial_hyperparameters)
@@ -221,8 +220,8 @@ class TreeParzenEstimator(BaseHyperparameterOptimizer):
     def _create_gaussian_mixture(
             self,
             continuous_distribution: HyperparameterDistribution,
-            trial_hyperparameters: List[HyperparameterSamples]
-    ):
+            trial_hyperparameters: List[HPSampledValue]
+    ) -> DistributionMixture:
         # TODO: see how to manage distribution mixture here.
 
         use_logs = False
@@ -241,7 +240,7 @@ class TreeParzenEstimator(BaseHyperparameterOptimizer):
             trial_hyperparameters)
 
         # Create appropriate gaussian mixture that wrapped all hyperparams.
-        gmm = DistributionMixture.build_gaussian_mixture(
+        gmm: DistributionMixture = DistributionMixture.build_gaussian_mixture(
             distribution_amplitudes=distribution_amplitudes,
             means=means,
             stds=stds,
@@ -254,7 +253,7 @@ class TreeParzenEstimator(BaseHyperparameterOptimizer):
         return gmm
 
     def _adaptive_parzen_normal(self, hyperparam_distribution, distribution_trials):
-        """This code is enterily inspire from Hyperopt (https://github.com/hyperopt) code."""
+        """This code is enterily inspired from `Hyperopt <https://github.com/hyperopt>`_ code."""
 
         # TODO: check if someone use the DistributionMixture how to manage it in here.
         # TODO: Distribution Mixture : Treat has a standard distribution or prior distribution is all small gaussian for each distribution in the distribution mixture.

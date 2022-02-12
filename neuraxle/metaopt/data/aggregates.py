@@ -336,9 +336,11 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
         return len(self._dataclass.get_sublocation())
 
     def __iter__(self) -> Iterable[SubAggregateT]:
+        if not self.is_deep:
+            self.refresh(True)
         for subdataclass in self._dataclass.get_sublocation_values():
             if subdataclass is not None:
-                yield self.subaggregate(subdataclass, self.context, is_deep=self.is_deep, parent=self)
+                yield self.subaggregate(subdataclass, self.context, is_deep=True, parent=self)
 
     def __getitem__(self, item: int) -> 'Trial':
         """
@@ -658,18 +660,20 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
         :param status: trial status
         :return:
         """
-        _round_copy: Round = self.copy().without_context()
+        _round_copy: Round = self.copy()
+        _round_copy.refresh(deep=True)
         _trials: List[TrialDataclass] = [
-            sdc
-            for sdc in self._dataclass.trials
+            sdc._dataclass
+            for sdc in _round_copy._trials
             if sdc.get_status() == status
         ]
+        _round_copy = _round_copy.without_context()
         _round_copy._dataclass.trials = _trials
 
         return _round_copy
 
     def copy(self) -> 'Round':
-        return Round(copy.deepcopy(self._dataclass), self.context.copy(), self._parent.copy())
+        return Round(copy.deepcopy(self._dataclass), self.context.copy().with_loc(self.loc.popped()))
 
     def get_number_of_split(self):
         if len(self) > 0:
@@ -699,6 +703,7 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
         results: List[float, ScopedLocationAttrInt, FlatDict] = list()
 
         for trial in self._trials:
+            # TODO: what happens to failed or ongoing trials?
             score = trial.get_avg_validation_score(metric_name)
             trial_number = trial._dataclass.trial_number
             hp = trial.get_hyperparams().to_flat_dict()
@@ -830,6 +835,12 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
         """
         return self._dataclass.status == TrialStatus.SUCCESS
 
+    def get_status(self) -> TrialStatus:
+        """
+        Get the status of the trial.
+        """
+        return self._dataclass.status
+
     def are_all_splits_successful(self) -> bool:
         """
         Return true if all splits are successful.
@@ -872,7 +883,7 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
         n_epochs = sum(n_epochs) / len(n_epochs) if len(n_epochs) > 0 else None
         return n_epochs
 
-    def get_hyperparams(self) -> RecursiveDict:
+    def get_hyperparams(self) -> HyperparameterSamples:
         """
         Return hyperparams dict.
 

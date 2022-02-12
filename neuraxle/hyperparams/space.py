@@ -63,7 +63,7 @@ ready to be sent to an instance of the pipeline to try and score it, for example
 """
 from collections import OrderedDict
 from copy import deepcopy
-from typing import Any
+from typing import Any, Dict, Iterable, Tuple, Union
 
 from scipy.stats import rv_continuous, rv_discrete
 from scipy.stats._distn_infrastructure import rv_generic
@@ -73,10 +73,12 @@ from neuraxle.hyperparams.scipy_distributions import ScipyDiscreteDistributionWr
     ScipyContinuousDistributionWrapper
 
 
-FlatDict = OrderedDict[str, Any]
+HPSampledValue = Any
+FlatDict = OrderedDict[str, HPSampledValue]
+RecursiveDictValue = Union[Any, 'RecursiveDict']
 
 
-class RecursiveDict(FlatDict):
+class RecursiveDict(OrderedDict[str, RecursiveDictValue]):
     """
     A data structure that provides an interface to access nested dictionaries with "flattened keys", and a few more functions.
 
@@ -88,7 +90,7 @@ class RecursiveDict(FlatDict):
 
     This class serves as a base for HyperparameterSamples and HyperparameterSpace
     """
-    DEFAULT_SEPARATOR = '__'
+    DEFAULT_SEPARATOR: str = '__'
 
     def __init__(self, *args, separator=None, **kwds):
 
@@ -132,16 +134,16 @@ class RecursiveDict(FlatDict):
         """
         return arg, False
 
-    def get(self, key):
+    def get(self, key) -> RecursiveDictValue:
         try:
             return self[key]
         except KeyError:
             return self.same_class_new_instance()
 
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> RecursiveDictValue:
         return self._rec_get(key)
 
-    def _rec_get(self, key):
+    def _rec_get(self, key) -> RecursiveDictValue:
         """
         Split the keys and call getter recursively until we get to the desired element.
         None returns every non-recursive elements.
@@ -165,7 +167,7 @@ class RecursiveDict(FlatDict):
         """
         return dict(filter(lambda x: not isinstance(x[1], RecursiveDict), self.items()))
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: RecursiveDictValue):
         lkey, _, rkey = key.partition(self.separator)
         if rkey == "":
             if isinstance(value, dict) and not isinstance(value, RecursiveDict):
@@ -176,14 +178,14 @@ class RecursiveDict(FlatDict):
                 OrderedDict.__setitem__(self, lkey, self.same_class_new_instance())
             self[lkey][rkey] = value
 
-    def __contains__(self, key) -> bool:
+    def __contains__(self, key: str) -> bool:
         try:
             _ = self[key]
             return True
         except KeyError:
             return False
 
-    def iter_flat(self, pre_key="", values_only=False):
+    def iter_flat(self, pre_key="", values_only=False) -> Iterable:
         """
         Returns a generator which yield (flatenned_key, value) pairs. value is never a RecursiveDict instance.
         Keys are sorted, then values are sorted as well.
@@ -199,7 +201,7 @@ class RecursiveDict(FlatDict):
 
     def to_flat_dict(self) -> FlatDict:
         """
-        Returns a FlatDict, that is a totally flatened OrderedDict[str, Any],
+        Returns a FlatDict, that is a totally flatened OrderedDict[str, HPSampledValue],
         with no recursively nested elements, i.e.: {fully__flattened__params: value}.
 
         .. info::
@@ -208,7 +210,7 @@ class RecursiveDict(FlatDict):
         """
         return FlatDict(self.iter_flat())
 
-    def to_nested_dict(self) -> dict:
+    def to_nested_dict(self) -> Dict[str, RecursiveDictValue]:
         """
         Returns a dictionary counterpart which is still nested but that contains no RecursiveDict.
         """

@@ -4124,14 +4124,10 @@ class LocalServiceAssertionWrapper(WillProcessAssertionMixin, MetaStep):
             err_message = (
                 f"Expected context to have service of type {service_type.__name__} but it did not. "
                 f"Please register the service {service_type.__name__} inside the ExecutionContext. "
-                f'You can do so by calling register_service, or set_services on any step. '
-                f'There is also the option to register all services inside the ExecutionContext'
             )
-            self._assert(
-                context.has_service(service_type=service_type),
-                err_message,
-                context
-            )
+            self._assert(context.has_service(service_type=service_type),
+                         err_message,
+                         context)
 
 
 class GlobalyRetrievableServiceAssertionWrapper(LocalServiceAssertionWrapper):

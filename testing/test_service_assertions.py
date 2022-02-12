@@ -11,7 +11,7 @@ from neuraxle.data_container import DataContainer as DACT
 from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
-from neuraxle.metaopt.validation import ValidationSplitter
+from neuraxle.metaopt.validation import GridExplorationSampler, ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from sklearn.metrics import mean_squared_error
 
@@ -138,18 +138,14 @@ def test_localassert_should_fail_when_services_are_missing_at_exec(tmpdir):
 
 
 def _make_autoML_loop(tmpdir, p: Pipeline):
-    hp_repository = HyperparamsJSONRepository(cache_folder=tmpdir)
-    n_epochs = 1
     return AutoML(
         pipeline=p,
-        hyperparams_optimizer=RandomSearchSampler(),
+        hyperparams_optimizer=GridExplorationSampler(1),
         validation_splitter=ValidationSplitter(0.20),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         n_trials=1,
         refit_best_trial=True,
-        epochs=n_epochs,
-        hyperparams_repository=hp_repository,
-        cache_folder_when_no_handle=str(tmpdir),
+        epochs=1,
         continue_loop_on_error=False
     )
 
@@ -214,7 +210,8 @@ class TestServiceAssertion:
         with pytest.raises(AssertionError) as exception_info:
             auto_ml.fit(data_inputs, expected_outputs)
 
-        assert 'SomeBaseService dependency missing' in exception_info.value.args[0]
+        assert 'Expected context to have service of type SomeBaseService but it did not.' in exception_info.value.args[
+            0]
 
     def test_auto_ml_should_fail_at_exec_when_services_are_missing(self, tmpdir):
         self._setup(tmpdir)
@@ -231,25 +228,8 @@ class TestServiceAssertion:
 
         with pytest.raises(AssertionError) as exception_info:
             auto_ml.fit(data_inputs, expected_outputs)
-        assert 'SomeBaseService dependency missing' in exception_info.value.args[0]
-
-    def test_auto_ml_should_assert_dependecies_properly_at_exec(self, tmpdir):
-        self._setup(tmpdir)
-        data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-        expected_outputs = data_inputs * 2
-        p = Pipeline([
-            RegisterServiceDynamically(),
-            SomeStep().assert_has_services_at_execution(SomeBaseService),
-        ])
-        context = CX(root=self.tmpdir)
-
-        auto_ml: AutoML = _make_autoML_loop(self.tmpdir_hp, p)
-        auto_ml: StepWithContext = auto_ml.with_context(context=context)
-        assert isinstance(auto_ml, StepWithContext)
-        auto_ml.fit(data_inputs, expected_outputs)
-
-        service = context.get_service(SomeBaseService)
-        assert np.array_equal(service.data, data_inputs)
+        assert 'Expected context to have service of type SomeBaseService but it did not.' in exception_info.value.args[
+            0]
 
 
 def test_context_can_access_services_from_apply_method(tmpdir):

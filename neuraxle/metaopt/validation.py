@@ -729,8 +729,10 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
                     hp_dist.mean() + hp_dist.std() * 2.5,
                     hp_dist.mean() - hp_dist.std() * 2.5,
                 ]
-                hp_samples: List[Any] = [x for x in hp_samples[:remainder] if x in hp_dist]
-
+                hp_samples: List[Any] = [
+                    x for x in hp_samples[:remainder]
+                    if x in hp_dist and not (math.isinf(x) or math.isnan(x))
+                ]
                 self.flat_hp_grid_values[hp_name] = hp_samples
                 self.flat_hp_grid_lens.append(len(hp_samples))
 
