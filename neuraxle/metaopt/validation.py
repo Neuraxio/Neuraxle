@@ -26,6 +26,7 @@ Classes for hyperparameter tuning, such as random search.
 import copy
 import math
 import operator
+from tkinter import Grid
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
@@ -91,14 +92,23 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
     to a non-seeded random search.
 
     It may be good for space exploration before a TPE or for unit tests.
+
+    If the expected_n_trials is not set or set to 0, the sampler will guess its ideal
+    sampling count and then switch to random search after that.
     """
 
-    def __init__(self, expected_n_trials: int, seed_i: int = 0):
+    def __init__(self, expected_n_trials: int = 0, seed_i: int = 0):
         BaseHyperparameterOptimizer.__init__(self)
         self.expected_n_trials: int = expected_n_trials
         self._i: int = seed_i
 
-    def _update_grid_exploration_sampler(self, round_scope: 'Round') -> HyperparameterSamples:
+    @staticmethod
+    def estimate_ideal_n_trials(hp_space: HyperparameterSpace) -> int:
+        _ges: GridExplorationSampler = GridExplorationSampler(expected_n_trials=1)
+        _ges._reinitialize_grid(hp_space, [])
+        return _ges.expected_n_trials
+
+    def _reinitialize_grid(self, hp_space: HyperparameterSpace, previous_trials_hp: List[HyperparameterSamples]) -> HyperparameterSamples:
         """
         Update the grid exploration sampler.
 
@@ -111,8 +121,8 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
         # TODO: could make use of a ND array here to keep track of the grid exploration instead of using random too much. And a walk method picking the most L2-distant point, permutated over the last mod 3 samples to walk awkwardly like [mid, begin, fartest, side, other side] in the ND cube, also avoiding same-seen values.
         self._seen_hp_grid_values: Set[Tuple[int]] = set()
 
-        self._generate_grid(round_scope.hp_space)
-        for flat_dict_sample in round_scope.get_all_hyperparams():
+        self._generate_grid(hp_space)
+        for flat_dict_sample in previous_trials_hp:
             self._reshuffle_grid()
 
             vals: Tuple[int] = tuple(flat_dict_sample.values())
@@ -125,7 +135,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
         :param round_scope: round scope
         :return: next hyperparams
         """
-        self._update_grid_exploration_sampler(round_scope)
+        self._reinitialize_grid(round_scope.hp_space, round_scope.get_all_hyperparams())
 
         _space_max = reduce(operator.mul, self.flat_hp_grid_lens, 1)
 
@@ -185,13 +195,16 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
                 self.flat_hp_grid_lens.append(len(hp_samples))
 
         # Then readjust the expected_n_trials to be a multiple of the number of hyperparameters:
-        _sum = sum(self.flat_hp_grid_lens)
-        if self.expected_n_trials != _sum:
+        #     NOTE: TRIED A DOZEN OF POWS SQRT CUMSUMPROD AND SOPHISTICATED OTHER THINGS, AND FOUND THIS BEST ONE:
+        _estimated_ideal_n_trials: int = math.ceil(0.29 * sum(self.flat_hp_grid_lens))
+        # TODO: could add more samples to the grid lens to match the counts in _estimated_ideal_n_trials.
+
+        if self.expected_n_trials != _estimated_ideal_n_trials:
             warnings.warn(
                 f"Warning: changed {self.__class__.__name__}.expected_n_trials from "
-                f"{self.expected_n_trials} to {_sum} due to high amount of trials. "
+                f"{self.expected_n_trials} to {_estimated_ideal_n_trials} due to high amount of trials. "
                 f"This may lead to a non-reproducible search using RandomSearch as a fallback past this point.")
-            self.expected_n_trials = _sum
+            self.expected_n_trials = _estimated_ideal_n_trials
 
         self._i = 1
 

@@ -449,15 +449,17 @@ class AutoML(ControlledAutoML):
         n_trials: int = None,
         epochs: int = 1,
         callbacks: List[BaseCallback] = None,
-        n_jobs=None,
+        n_jobs=1,
         continue_loop_on_error=True
     ):
         validation_splitter = validation_splitter or ValidationSplitter(0.2)
         hyperparams_optimizer = hyperparams_optimizer or GridExplorationSampler()
         callbacks = callbacks or []
-        callbacks = [scoring_callback] + callbacks,
-        if n_trials is None:
-            n_trials = GridExplorationSampler.find_n_trials(pipeline.get_hyperparams_space())
+        if scoring_callback is not None:
+            callbacks = [scoring_callback].extend(callbacks),
+
+        if n_trials is None or n_trials < 1:
+            n_trials: int = GridExplorationSampler.estimate_ideal_n_trials(pipeline.get_hyperparams_space())
 
         trainer = Trainer(
             callbacks=[scoring_callback] + callbacks,
