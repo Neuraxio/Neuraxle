@@ -26,6 +26,7 @@ Classes for containing the data that flows throught the pipeline steps.
 import copy
 import math
 from operator import attrgetter
+from optparse import Option
 from typing import Any, Callable, Generic, Iterable, List, Optional, Tuple, TypeVar, Union, Iterator
 
 import numpy as np
@@ -36,6 +37,11 @@ IDT = TypeVar('IDT', bound=Iterable)  # Ids Type that is often a list of things
 DIT = TypeVar('DIT', bound=Iterable)  # Data Inputs Type that is often a list of things
 EOT = TypeVar('EOT', bound=Iterable)  # Expected Outputs Type that is often a list of things
 DACTData = Union[IDT, DIT, EOT]  # Any of the 3 types
+
+ARG_X_INPUTTED = DIT
+ARG_Y_EXPECTED = EOT
+ARG_Y_PREDICTD = DIT
+
 
 class AbsentValuesNullObject:
     """
@@ -508,7 +514,16 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         return len(self.data_inputs)
 
 
+ARG_X_INPUTTED = DIT
+ARG_Y_PREDICTD = DIT
+ARG_Y_EXPECTED = EOT
+
 DACT = DataContainer
+TrainDACT = DACT[IDT, ARG_X_INPUTTED, ARG_Y_EXPECTED]  # training set input
+ValidDACT = DACT[IDT, ARG_X_INPUTTED, ARG_Y_EXPECTED]  # validation set input
+PredsDACT = DACT[IDT, ARG_Y_PREDICTD, Optional[EOT]]  # output after prediction
+
+EvalEOTDACT = DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED]  # a merge of ValidDACT and PredsDACT: PRED Y and EXPECTED Y
 
 
 class ExpandedDataContainer(DACT):

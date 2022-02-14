@@ -32,15 +32,12 @@ from typing import Callable, List, Optional, Union
 from neuraxle.base import BaseStep, BaseTransformer
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import MixinForBaseTransformer
-from neuraxle.data_container import DIT, EOT, IDT
+from neuraxle.data_container import DIT, EOT, IDT, ARG_X_INPUTTED, ARG_Y_EXPECTED, ARG_Y_PREDICTD, EvalEOTDACT
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.logging.warnings import (warn_deprecated_arg,
                                        warn_deprecated_class)
 from neuraxle.metaopt.data.aggregates import MetricResults, TrialSplit
 
-ARG_X_INPUTTED = DIT
-ARG_Y_EXPECTED = EOT
-ARG_Y_PREDICTD = DIT
 OPTIONAL_ARG_CONTEXT = Optional[CX]
 RETURNS_SCORE = float
 
@@ -60,8 +57,8 @@ class BaseCallback(ABC):
     def call(
         self,
         trial_split: TrialSplit,
-        dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
-        dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
+        dact_train: EvalEOTDACT,
+        dact_valid: EvalEOTDACT,
         is_finished_and_fitted: bool = False
     ) -> bool:
         pass
@@ -84,8 +81,8 @@ class EarlyStoppingCallback(BaseCallback):
     def call(
         self,
         trial_split: TrialSplit,
-        dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
-        dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
+        dact_train: EvalEOTDACT,
+        dact_valid: EvalEOTDACT,
         is_finished_and_fitted: bool = False
     ) -> bool:
         metric_name = self.metric_name or trial_split.main_metric_name
@@ -124,8 +121,8 @@ class MetaCallback(BaseCallback):
     def call(
         self,
         trial_split: TrialSplit,
-        dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
-        dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
+        dact_train: EvalEOTDACT,
+        dact_valid: EvalEOTDACT,
         is_finished_and_fitted: bool = False
     ) -> bool:
         return self.wrapped_callback.call(
@@ -147,8 +144,8 @@ class IfBestScore(MetaCallback):
     def call(
         self,
         trial_split: TrialSplit,
-        dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
-        dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
+        dact_train: EvalEOTDACT,
+        dact_valid: EvalEOTDACT,
         is_finished_and_fitted: bool = False
     ) -> bool:
         if trial_split.metric_result().is_new_best_score():
@@ -172,8 +169,8 @@ class IfLastStep(MetaCallback):
     def call(
         self,
         trial_split: TrialSplit,
-        dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
-        dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
+        dact_train: EvalEOTDACT,
+        dact_valid: EvalEOTDACT,
         is_finished_and_fitted: bool = False
     ) -> bool:
         if trial_split.epoch == trial_split.n_epochs or is_finished_and_fitted:
@@ -204,8 +201,8 @@ class StepSaverCallback(BaseCallback):
     def call(
         self,
         trial_split: TrialSplit,
-        dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
-        dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
+        dact_train: EvalEOTDACT,
+        dact_valid: EvalEOTDACT,
         is_finished_and_fitted: bool = False
     ) -> bool:
         # TODO: maybe the trial split could contain the model again. This would imply that the trainer would let the trial split train itself. This is a bit weird, still.
@@ -242,8 +239,8 @@ class CallbackList(BaseCallback):
     def call(
         self,
         trial_split: TrialSplit,
-        dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
-        dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
+        dact_train: EvalEOTDACT,
+        dact_valid: EvalEOTDACT,
         is_finished_and_fitted: bool = False
     ) -> bool:
         for callback in self.callbacks:
@@ -301,8 +298,8 @@ class MetricCallback(BaseCallback):
     def call(
         self,
         trial_split: TrialSplit,
-        dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
-        dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED],
+        dact_train: EvalEOTDACT,
+        dact_valid: EvalEOTDACT,
         is_finished_and_fitted: bool = False
     ) -> bool:
         f = self.metric_function

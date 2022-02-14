@@ -38,6 +38,7 @@ from neuraxle.base import BaseStep, EvaluableStepMixin
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import ForceHandleOnlyMixin, MetaStep, TrialStatus
 from neuraxle.data_container import DataContainer as DACT
+from neuraxle.data_container import TrainDACT, ValidDACT, PredsDACT, EvalEOTDACT
 from neuraxle.hyperparams.distributions import (
     ContinuousHyperparameterDistribution, DiscreteHyperparameterDistribution)
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
@@ -108,11 +109,6 @@ class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseV
 
         return step
 
-    def calculate_score(self, results):
-        self.scores = [self.scoring_function(a, b) for a, b in zip(results.data_inputs, results.expected_outputs)]
-        self.scores_mean = np.mean(self.scores)
-        self.scores_std = np.std(self.scores)
-
     def split_data_container(self, data_container: DACT) -> Tuple[DACT, DACT]:
         train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = self.split(
             data_container.data_inputs,
@@ -126,12 +122,6 @@ class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseV
         )
 
         return train_data_container, validation_data_container
-
-    def get_score(self):
-        return self.scores_mean
-
-    def get_scores_std(self):
-        return self.scores_std
 
     @abstractmethod
     def split(self, data_inputs, expected_outputs):
@@ -807,7 +797,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
 
 class BaseValidationSplitter(ABC):
     def split_dact(self, data_container: DACT, context: CX) -> List[
-            Tuple[DACT, DACT]]:
+            Tuple[TrainDACT, ValidDACT]]:
         """
         Wrap a validation split function with a split data container function.
         A validation split function takes two arguments:  data inputs, and expected outputs.
@@ -828,16 +818,16 @@ class BaseValidationSplitter(ABC):
                                          ids=validation_ids,
                                          expected_outputs=validation_expected_outputs)
 
-        splits = []
+        splits: List[Tuple[TrainDACT, ValidDACT]] = []
         for (train_id, train_di, train_eo), (validation_id, validation_di, validation_eo) in zip(
                 train_data_container, validation_data_container):
-            # TODO: use ListDACT instead of DACT
-            train_data_container_split = DACT(
+            # TODO: use ListDACT instead of DACT?
+            train_data_container_split = TrainDACT(
                 data_inputs=train_di,
                 expected_outputs=train_eo
             )
 
-            validation_data_container_split = DACT(
+            validation_data_container_split = ValidDACT(
                 data_inputs=validation_di,
                 expected_outputs=validation_eo
             )

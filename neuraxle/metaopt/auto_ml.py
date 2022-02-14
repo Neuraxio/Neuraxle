@@ -46,8 +46,8 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            HyperparamsRepository,
                                            InMemoryHyperparamsRepository)
 from neuraxle.metaopt.validation import (BaseHyperparameterOptimizer,
-                                         BaseValidationSplitter,
-                                         RandomSearchSampler)
+                                         BaseValidationSplitter, GridExplorationSampler,
+                                         RandomSearchSampler, ValidationSplitter)
 
 
 class Trainer(BaseService):
@@ -441,19 +441,24 @@ class AutoML(ControlledAutoML):
     def __init__(
         self,
         pipeline: BaseStep,
-        validation_splitter: 'BaseValidationSplitter',
-        refit_best_trial: bool,
-        scoring_callback: ScoringCallback,
+        scoring_callback: ScoringCallback = None,
+        refit_best_trial: bool = True,
+        validation_splitter: 'BaseValidationSplitter' = None,
         hyperparams_optimizer: BaseHyperparameterOptimizer = None,
         hyperparams_repository: HyperparamsRepository = None,
-        n_trials: int = 10,
+        n_trials: int = None,
         epochs: int = 1,
         callbacks: List[BaseCallback] = None,
         n_jobs=None,
         continue_loop_on_error=True
     ):
-
+        validation_splitter = validation_splitter or ValidationSplitter(0.2)
+        hyperparams_optimizer = hyperparams_optimizer or GridExplorationSampler()
         callbacks = callbacks or []
+        callbacks = [scoring_callback] + callbacks,
+        if n_trials is None:
+            n_trials = GridExplorationSampler.find_n_trials(pipeline.get_hyperparams_space())
+
         trainer = Trainer(
             callbacks=[scoring_callback] + callbacks,
             validation_splitter=validation_splitter,

@@ -6,13 +6,14 @@ from neuraxle.base import ExecutionContext as CX
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.validation import KFoldCrossValidationWrapper, ValidationSplitWrapper, RandomSearchSampler
+from neuraxle.metaopt.auto_ml import AutoML
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import MultiplyByN
 from neuraxle.data_container import DataContainer as DACT
 
 
 def test_automl_sequential_wrapper(tmpdir):
-    # Setting seed for reproducibility
+    # Setting seed for better reproducibility
     np.random.seed(68)
 
     # Given
@@ -31,7 +32,9 @@ def test_automl_sequential_wrapper(tmpdir):
         ('multiplication_3', MultiplyByN())
     ]).set_hyperparams_space(hyperparameter_space)
 
-    auto_ml = RandomSearchSampler(
+    auto_ml = AutoML(
+        pipeline,
+        RandomSearchSampler(),
         KFoldCrossValidationWrapper().set_step(pipeline)
     )
 
