@@ -52,6 +52,413 @@ from neuraxle.steps.numpy import (NumpyConcatenateInnerFeatures,
 from sklearn.metrics import r2_score
 
 
+class RandomSearchSampler(BaseHyperparameterOptimizer):
+    """
+    AutoML Hyperparameter Optimizer that randomly samples the space of random variables.
+    Please refer to :class:`AutoML` for a usage example.
+
+    .. seealso::
+        :class:`Trainer`,
+        :class:`~neuraxle.metaopt.data.trial.Trial`,
+        :class:`~neuraxle.metaopt.data.trial.Trials`,
+        :class:`HyperparamsRepository`,
+        :class:`HyperparamsJSONRepository`,
+        :class:`BaseHyperparameterSelectionStrategy`,
+        :class:`RandomSearchHyperparameterSelectionStrategy`,
+        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
+    """
+
+    def __init__(self):
+        BaseHyperparameterOptimizer.__init__(self)
+
+    def find_next_best_hyperparams(self, round_scope: 'Round') -> HyperparameterSamples:
+        """
+        Randomly sample the next hyperparams to try.
+
+        :param round_scope: round scope
+        :return: next random hyperparams
+        """
+        return round_scope.hp_space.rvs()
+
+
+class GridExplorationSampler(BaseHyperparameterOptimizer):
+    """
+    This hyperparameter space optimizer is similar to a grid search, however, it does
+    try to greedily sample maximally different points in the space to explore it. This space
+    optimizer has a fixed pseudorandom exploration method that makes the sampling reproductible.
+
+    When over the expected_n_trials (if sampling too much), the sampler will turn
+    to a non-seeded random search.
+
+    It may be good for space exploration before a TPE or for unit tests.
+    """
+
+    def __init__(self, expected_n_trials: int, seed_i: int = 0):
+        BaseHyperparameterOptimizer.__init__(self)
+        self.expected_n_trials: int = expected_n_trials
+        self._i: int = seed_i
+
+    def _update_grid_exploration_sampler(self, round_scope: 'Round') -> HyperparameterSamples:
+        """
+        Update the grid exploration sampler.
+
+        :param round_scope: round scope
+        :return: next random hyperparams
+        """
+        self._n_sampled = 0
+        self.flat_hp_grid_values: OrderedDict[str, List[Any]] = {}
+        self.flat_hp_grid_lens: List[int] = []
+        # TODO: could make use of a ND array here to keep track of the grid exploration instead of using random too much. And a walk method picking the most L2-distant point, permutated over the last mod 3 samples to walk awkwardly like [mid, begin, fartest, side, other side] in the ND cube, also avoiding same-seen values.
+        self._seen_hp_grid_values: Set[Tuple[int]] = set()
+
+        self._generate_grid(round_scope.hp_space)
+        for flat_dict_sample in round_scope.get_all_hyperparams():
+            self._reshuffle_grid()
+
+            vals: Tuple[int] = tuple(flat_dict_sample.values())
+            self._seen_hp_grid_values.add(vals)
+
+    def find_next_best_hyperparams(self, round_scope: 'Round') -> HyperparameterSamples:
+        """
+        Sample the next hyperparams to try.
+
+        :param round_scope: round scope
+        :return: next hyperparams
+        """
+        self._update_grid_exploration_sampler(round_scope)
+
+        _space_max = reduce(operator.mul, self.flat_hp_grid_lens, 1)
+
+        if self._n_sampled >= max(self.expected_n_trials, _space_max):
+            return RandomSearchSampler().find_next_best_hyperparams(round_scope)
+        for _ in range(_space_max):
+            i_grid_keys: Tuple[int] = tuple(self._gen_keys_for_grid())
+            if i_grid_keys in self._seen_hp_grid_values:
+                self._reshuffle_grid()
+                self._i += 1
+            else:
+                self._seen_hp_grid_values.add(i_grid_keys)
+                break
+
+        flat_result: OrderedDict[str, Any] = self[i_grid_keys]
+        return HyperparameterSamples(flat_result)
+
+    def _generate_grid(self, hp_space: HyperparameterSpace):
+        """
+        Generate the grid of hyperparameters to pick from.
+
+        :param hp_space: hyperparameter space
+        """
+        # Start with discrete params:
+        for hp_name, hp_dist in hp_space.to_flat_dict().items():
+            if isinstance(hp_dist, DiscreteHyperparameterDistribution):
+                hp_samples: List[Any] = hp_dist.values()
+
+                reordered_hp_samples = self._pseudo_shuffle_list(hp_samples)
+                self.flat_hp_grid_values[hp_name] = reordered_hp_samples
+                self.flat_hp_grid_lens.append(len(reordered_hp_samples))
+
+        # Then fill the remaining continous params using the expected_n_trials:
+        remainder: int = max(3, self.expected_n_trials)
+        for hp_name, hp_dist in hp_space.to_flat_dict().items():
+            if isinstance(hp_dist, ContinuousHyperparameterDistribution):
+                hp_samples: List[Any] = [
+                    hp_dist.mean(),
+                    hp_dist.min(),
+                    hp_dist.max(),
+                    hp_dist.mean() + hp_dist.std(),
+                    hp_dist.mean() - hp_dist.std(),
+                    hp_dist.mean() + hp_dist.std() / 2,
+                    hp_dist.mean() - hp_dist.std() / 2,
+                    hp_dist.mean() + hp_dist.std() * 1.5,
+                    hp_dist.mean() - hp_dist.std() * 1.5,
+                    hp_dist.mean() + hp_dist.std() / 4,
+                    hp_dist.mean() - hp_dist.std() / 4,
+                    hp_dist.mean() + hp_dist.std() * 2.5,
+                    hp_dist.mean() - hp_dist.std() * 2.5,
+                ]
+                hp_samples: List[Any] = [
+                    x for x in hp_samples[:remainder]
+                    if x in hp_dist and not (math.isinf(x) or math.isnan(x))
+                ]
+                self.flat_hp_grid_values[hp_name] = hp_samples
+                self.flat_hp_grid_lens.append(len(hp_samples))
+
+        # Then readjust the expected_n_trials to be a multiple of the number of hyperparameters:
+        _sum = sum(self.flat_hp_grid_lens)
+        if self.expected_n_trials != _sum:
+            warnings.warn(
+                f"Warning: changed {self.__class__.__name__}.expected_n_trials from "
+                f"{self.expected_n_trials} to {_sum} due to high amount of trials. "
+                f"This may lead to a non-reproducible search using RandomSearch as a fallback past this point.")
+            self.expected_n_trials = _sum
+
+        self._i = 1
+
+    @staticmethod
+    def _pseudo_shuffle_list(x: List, seed: int = 0) -> list:
+        """
+        Shuffle a list to create a pseudo-random order that is interesting.
+        """
+        x = copy.copy(x)
+        for i in reversed(range(len(x))):
+            v = x[i]
+            if (len(x) + i + seed) % 2 and (i + seed) != 0:
+                del x[i]
+                x.insert(1 - (seed % 2), v)
+        return x
+
+    def _gen_keys_for_grid(self) -> List[int]:
+        """
+        Generate the keys for the grid.
+
+        :param i: index
+        :return: keys
+        """
+        flat_idx: List[int] = []
+        for _len in self.flat_hp_grid_lens:
+            flat_idx.append(self._i % _len)
+        return flat_idx
+
+    def _reshuffle_grid(self, new_sample: FlatDict = None):
+        """
+        Reshuffling with pseudo-random seed the hyperparameters' values:
+        """
+        assert self._i != 0, "Cannot reshuffle the grid when _i is 0. Please generate grid first and increase _i."
+
+        for seed, (k, v) in enumerate(self.flat_hp_grid_values.items()):
+            if self._i % len(v) == 0:
+                # reshuffling the grid for when it comes to the end of each of its sublist.
+                # TODO: make a test for this to ensure that over an infinity of trials that the lists are shuffled evenly, or use a real and repeatable pseudorandom rng generator for it.
+                new_v = self._pseudo_shuffle_list(v, seed % (self._i + 1) + self._i % (seed + 1))
+                self.flat_hp_grid_values[k] = new_v
+
+                if (seed + self._i / len(v)) % 3 == 0:
+                    # reversing the grid at each 3 reshuffles + seed as it may sometimes skip the zero in the disorder.
+                    self.flat_hp_grid_values[k] = list(reversed(self.flat_hp_grid_values[k]))
+                    self._n_sampled += 1
+
+        self._i += 1
+
+    def __getitem__(self, i_grid_keys: List[int]) -> OrderedDict[str, Any]:
+        """
+        Access the keys for the grid.
+
+        :param i_grid_keys: keys
+        :return: hyperparams
+        """
+        flat_result: OrderedDict[str, Any] = OrderedDict()
+        for j, hp_name in enumerate(self.flat_hp_grid_values.keys()):
+            flat_result[hp_name] = self.flat_hp_grid_values[hp_name][i_grid_keys[j]]
+        return flat_result
+
+
+class BaseValidationSplitter(ABC):
+    def split_dact(self, data_container: DACT, context: CX) -> List[
+            Tuple[TrainDACT, ValidDACT]]:
+        """
+        Wrap a validation split function with a split data container function.
+        A validation split function takes two arguments:  data inputs, and expected outputs.
+
+        :param data_container: data container to split
+        :return: a function that returns the pairs of training, and validation data containers for each validation split.
+        """
+        train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids = self.split(
+            data_inputs=data_container.data_inputs,
+            expected_outputs=data_container.expected_outputs,
+            context=context
+        )
+
+        train_data_container = DACT(data_inputs=train_data_inputs,
+                                    ids=train_ids,
+                                    expected_outputs=train_expected_outputs)
+        validation_data_container = DACT(data_inputs=validation_data_inputs,
+                                         ids=validation_ids,
+                                         expected_outputs=validation_expected_outputs)
+
+        splits: List[Tuple[TrainDACT, ValidDACT]] = []
+        for (train_id, train_di, train_eo), (validation_id, validation_di, validation_eo) in zip(
+                train_data_container, validation_data_container):
+            # TODO: use ListDACT instead of DACT?
+            train_data_container_split = TrainDACT(
+                data_inputs=train_di,
+                expected_outputs=train_eo
+            )
+
+            validation_data_container_split = ValidDACT(
+                data_inputs=validation_di,
+                expected_outputs=validation_eo
+            )
+
+            splits.append((train_data_container_split, validation_data_container_split))
+
+        return splits
+
+    @abstractmethod
+    def split(self, data_inputs, ids=None, expected_outputs=None, context: CX = None) \
+            -> Tuple[List, List, List, List, List, List]:
+        """
+        Train/Test split data inputs and expected outputs.
+
+        :param data_inputs: data inputs
+        :param ids: id associated with each data entry (optional)
+        :param expected_outputs: expected outputs (optional)
+        :param context: execution context (optional)
+        :return: train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids
+        """
+        pass
+
+
+class KFoldCrossValidationSplitter(BaseValidationSplitter):
+    """
+    Create a function that splits data with K-Fold Cross-Validation resampling.
+
+    .. code-block:: python
+
+        # create a kfold cross validation splitter with 2 kfold
+        kfold_cross_validation_split(0.20)
+
+
+    :param k_fold: number of folds.
+    :return:
+    """
+
+    def __init__(self, k_fold: int):
+        BaseValidationSplitter.__init__(self)
+        self.k_fold = k_fold
+
+    def split(self, data_inputs, ids=None, expected_outputs=None, context: CX = None) \
+            -> Tuple[List, List, List, List, List, List]:
+        data_inputs_train, data_inputs_val = kfold_cross_validation_split(
+            data_inputs=data_inputs,
+            k_fold=self.k_fold
+        )
+
+        if ids is not None:
+            ids_train, ids_val = kfold_cross_validation_split(
+                data_inputs=ids,
+                k_fold=self.k_fold
+            )
+        else:
+            ids_train, ids_val = [None] * len(data_inputs_train), [None] * len(data_inputs_val)
+
+        if expected_outputs is not None:
+            expected_outputs_train, expected_outputs_val = kfold_cross_validation_split(
+                data_inputs=expected_outputs,
+                k_fold=self.k_fold
+            )
+        else:
+            expected_outputs_train, expected_outputs_val = [None] * len(data_inputs_train), [None] * len(
+                data_inputs_val)
+
+        return data_inputs_train, expected_outputs_train, ids_train, \
+            data_inputs_val, expected_outputs_val, ids_val
+
+
+def kfold_cross_validation_split(data_inputs, k_fold):
+    splitted_train_data_inputs = []
+    splitted_validation_inputs = []
+
+    step = len(data_inputs) / float(k_fold)
+    for i in range(k_fold):
+        a = int(step * i)
+        b = int(step * (i + 1))
+        if b > len(data_inputs):
+            b = len(data_inputs)
+
+        validation = data_inputs[a:b]
+        train = np.concatenate((data_inputs[:a], data_inputs[b:]), axis=0)
+
+        splitted_validation_inputs.append(validation)
+        splitted_train_data_inputs.append(train)
+
+    return splitted_train_data_inputs, splitted_validation_inputs
+
+
+class ValidationSplitter(BaseValidationSplitter):
+    """
+    Create a function that splits data into a training, and a validation set.
+
+    .. code-block:: python
+
+        # create a validation splitter function with 80% train, and 20% validation
+        validation_splitter(0.20)
+
+
+    :param test_size: test size in float
+    :return:
+    """
+
+    def __init__(self, validation_size: float):
+        self.validation_size = validation_size
+
+    def split(
+        self, data_inputs, ids=None, expected_outputs=None, context: CX = None
+    ) -> Tuple[List, List, List, List]:
+        train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids = validation_split(
+            test_size=self.validation_size,
+            data_inputs=data_inputs,
+            ids=ids,
+            expected_outputs=expected_outputs
+        )
+
+        return [train_data_inputs], [train_expected_outputs], [train_ids], \
+               [validation_data_inputs], [validation_expected_outputs], [validation_ids]
+
+
+def validation_split(test_size: float, data_inputs, ids=None, expected_outputs=None) \
+        -> Tuple[List, List, List, List, List, List]:
+    """
+    Split data inputs, and expected outputs into a training set, and a validation set.
+
+    :param test_size: test size in float
+    :param data_inputs: data inputs to split
+    :param ids: ids associated with each data entry
+    :param expected_outputs: expected outputs to split
+    :return: train_data_inputs, train_expected_outputs, ids_train, validation_data_inputs, validation_expected_outputs, ids_val
+    """
+    validation_data_inputs = _validation_split(data_inputs, test_size)
+    validation_expected_outputs, ids_val = None, None
+    if expected_outputs is not None:
+        validation_expected_outputs = _validation_split(expected_outputs, test_size)
+    if ids is not None:
+        ids_val = _validation_split(ids, test_size)
+
+    train_data_inputs = _train_split(data_inputs, test_size)
+    train_expected_outputs, ids_train = None, None
+    if expected_outputs is not None:
+        train_expected_outputs = _train_split(expected_outputs, test_size)
+    if ids is not None:
+        ids_train = _train_split(ids, test_size)
+
+    return train_data_inputs, train_expected_outputs, ids_train, \
+        validation_data_inputs, validation_expected_outputs, ids_val
+
+
+def _train_split(data_inputs, test_size) -> List:
+    """
+    Split training set.
+
+    :param data_inputs: data inputs to split
+    :return: train_data_inputs
+    """
+    return data_inputs[0:_get_index_split(data_inputs, test_size)]
+
+
+def _validation_split(data_inputs, test_size) -> List:
+    """
+    Split validation set.
+
+    :param data_inputs: data inputs to split
+    :return: validation_data_inputs
+    """
+    return data_inputs[_get_index_split(data_inputs, test_size):]
+
+
+def _get_index_split(data_inputs, test_size):
+    return math.floor(len(data_inputs) * (1 - test_size))
+
+
 class BaseValidation(MetaStep, ABC):
     """
     Base class For validation wrappers.
@@ -592,410 +999,3 @@ class WalkForwardTimeSeriesCrossValidationWrapper(AnchoredWalkForwardTimeSeriesC
             slice = data_inputs[:, a:b]
             splitted_data_inputs.append(slice)
         return splitted_data_inputs
-
-
-class RandomSearchSampler(BaseHyperparameterOptimizer):
-    """
-    AutoML Hyperparameter Optimizer that randomly samples the space of random variables.
-    Please refer to :class:`AutoML` for a usage example.
-
-    .. seealso::
-        :class:`Trainer`,
-        :class:`~neuraxle.metaopt.data.trial.Trial`,
-        :class:`~neuraxle.metaopt.data.trial.Trials`,
-        :class:`HyperparamsRepository`,
-        :class:`HyperparamsJSONRepository`,
-        :class:`BaseHyperparameterSelectionStrategy`,
-        :class:`RandomSearchHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
-    """
-
-    def __init__(self):
-        BaseHyperparameterOptimizer.__init__(self)
-
-    def find_next_best_hyperparams(self, round_scope: 'Round') -> HyperparameterSamples:
-        """
-        Randomly sample the next hyperparams to try.
-
-        :param round_scope: round scope
-        :return: next random hyperparams
-        """
-        return round_scope.hp_space.rvs()
-
-
-class GridExplorationSampler(BaseHyperparameterOptimizer):
-    """
-    This hyperparameter space optimizer is similar to a grid search, however, it does
-    try to greedily sample maximally different points in the space to explore it. This space
-    optimizer has a fixed pseudorandom exploration method that makes the sampling reproductible.
-
-    When over the expected_n_trials (if sampling too much), the sampler will turn
-    to a non-seeded random search.
-
-    It may be good for space exploration before a TPE or for unit tests.
-    """
-
-    def __init__(self, expected_n_trials: int, seed_i: int = 0):
-        BaseHyperparameterOptimizer.__init__(self)
-        self.expected_n_trials: int = expected_n_trials
-        self._i: int = seed_i
-
-    def _update_grid_exploration_sampler(self, round_scope: 'Round') -> HyperparameterSamples:
-        """
-        Update the grid exploration sampler.
-
-        :param round_scope: round scope
-        :return: next random hyperparams
-        """
-        self._n_sampled = 0
-        self.flat_hp_grid_values: OrderedDict[str, List[Any]] = {}
-        self.flat_hp_grid_lens: List[int] = []
-        # TODO: could make use of a ND array here to keep track of the grid exploration instead of using random too much. And a walk method picking the most L2-distant point, permutated over the last mod 3 samples to walk awkwardly like [mid, begin, fartest, side, other side] in the ND cube, also avoiding same-seen values.
-        self._seen_hp_grid_values: Set[Tuple[int]] = set()
-
-        self._generate_grid(round_scope.hp_space)
-        for flat_dict_sample in round_scope.get_all_hyperparams():
-            self._reshuffle_grid()
-
-            vals: Tuple[int] = tuple(flat_dict_sample.values())
-            self._seen_hp_grid_values.add(vals)
-
-    def find_next_best_hyperparams(self, round_scope: 'Round') -> HyperparameterSamples:
-        """
-        Sample the next hyperparams to try.
-
-        :param round_scope: round scope
-        :return: next hyperparams
-        """
-        self._update_grid_exploration_sampler(round_scope)
-
-        _space_max = reduce(operator.mul, self.flat_hp_grid_lens, 1)
-
-        if self._n_sampled >= max(self.expected_n_trials, _space_max):
-            return RandomSearchSampler().find_next_best_hyperparams(round_scope)
-        for _ in range(_space_max):
-            i_grid_keys: Tuple[int] = tuple(self._gen_keys_for_grid())
-            if i_grid_keys in self._seen_hp_grid_values:
-                self._reshuffle_grid()
-                self._i += 1
-            else:
-                self._seen_hp_grid_values.add(i_grid_keys)
-                break
-
-        flat_result: OrderedDict[str, Any] = self[i_grid_keys]
-        return HyperparameterSamples(flat_result)
-
-    def _generate_grid(self, hp_space: HyperparameterSpace):
-        """
-        Generate the grid of hyperparameters to pick from.
-
-        :param hp_space: hyperparameter space
-        """
-        # Start with discrete params:
-        for hp_name, hp_dist in hp_space.to_flat_dict().items():
-            if isinstance(hp_dist, DiscreteHyperparameterDistribution):
-                hp_samples: List[Any] = hp_dist.values()
-
-                reordered_hp_samples = self._pseudo_shuffle_list(hp_samples)
-                self.flat_hp_grid_values[hp_name] = reordered_hp_samples
-                self.flat_hp_grid_lens.append(len(reordered_hp_samples))
-
-        # Then fill the remaining continous params using the expected_n_trials:
-        remainder: int = max(3, self.expected_n_trials)
-        for hp_name, hp_dist in hp_space.to_flat_dict().items():
-            if isinstance(hp_dist, ContinuousHyperparameterDistribution):
-                hp_samples: List[Any] = [
-                    hp_dist.mean(),
-                    hp_dist.min(),
-                    hp_dist.max(),
-                    hp_dist.mean() + hp_dist.std(),
-                    hp_dist.mean() - hp_dist.std(),
-                    hp_dist.mean() + hp_dist.std() / 2,
-                    hp_dist.mean() - hp_dist.std() / 2,
-                    hp_dist.mean() + hp_dist.std() * 1.5,
-                    hp_dist.mean() - hp_dist.std() * 1.5,
-                    hp_dist.mean() + hp_dist.std() / 4,
-                    hp_dist.mean() - hp_dist.std() / 4,
-                    hp_dist.mean() + hp_dist.std() * 2.5,
-                    hp_dist.mean() - hp_dist.std() * 2.5,
-                ]
-                hp_samples: List[Any] = [
-                    x for x in hp_samples[:remainder]
-                    if x in hp_dist and not (math.isinf(x) or math.isnan(x))
-                ]
-                self.flat_hp_grid_values[hp_name] = hp_samples
-                self.flat_hp_grid_lens.append(len(hp_samples))
-
-        # Then readjust the expected_n_trials to be a multiple of the number of hyperparameters:
-        _sum = sum(self.flat_hp_grid_lens)
-        if self.expected_n_trials != _sum:
-            warnings.warn(
-                f"Warning: changed {self.__class__.__name__}.expected_n_trials from "
-                f"{self.expected_n_trials} to {_sum} due to high amount of trials. "
-                f"This may lead to a non-reproducible search using RandomSearch as a fallback past this point.")
-            self.expected_n_trials = _sum
-
-        self._i = 1
-
-    @staticmethod
-    def _pseudo_shuffle_list(x: List, seed: int = 0) -> list:
-        """
-        Shuffle a list to create a pseudo-random order that is interesting.
-        """
-        x = copy.copy(x)
-        for i in reversed(range(len(x))):
-            v = x[i]
-            if (len(x) + i + seed) % 2 and (i + seed) != 0:
-                del x[i]
-                x.insert(1 - (seed % 2), v)
-        return x
-
-    def _gen_keys_for_grid(self) -> List[int]:
-        """
-        Generate the keys for the grid.
-
-        :param i: index
-        :return: keys
-        """
-        flat_idx: List[int] = []
-        for _len in self.flat_hp_grid_lens:
-            flat_idx.append(self._i % _len)
-        return flat_idx
-
-    def _reshuffle_grid(self, new_sample: FlatDict = None):
-        """
-        Reshuffling with pseudo-random seed the hyperparameters' values:
-        """
-        assert self._i != 0, "Cannot reshuffle the grid when _i is 0. Please generate grid first and increase _i."
-
-        for seed, (k, v) in enumerate(self.flat_hp_grid_values.items()):
-            if self._i % len(v) == 0:
-                # reshuffling the grid for when it comes to the end of each of its sublist.
-                # TODO: make a test for this to ensure that over an infinity of trials that the lists are shuffled evenly, or use a real and repeatable pseudorandom rng generator for it.
-                new_v = self._pseudo_shuffle_list(v, seed % (self._i + 1) + self._i % (seed + 1))
-                self.flat_hp_grid_values[k] = new_v
-
-                if (seed + self._i / len(v)) % 3 == 0:
-                    # reversing the grid at each 3 reshuffles + seed as it may sometimes skip the zero in the disorder.
-                    self.flat_hp_grid_values[k] = list(reversed(self.flat_hp_grid_values[k]))
-                    self._n_sampled += 1
-
-        self._i += 1
-
-    def __getitem__(self, i_grid_keys: List[int]) -> OrderedDict[str, Any]:
-        """
-        Access the keys for the grid.
-
-        :param i_grid_keys: keys
-        :return: hyperparams
-        """
-        flat_result: OrderedDict[str, Any] = OrderedDict()
-        for j, hp_name in enumerate(self.flat_hp_grid_values.keys()):
-            flat_result[hp_name] = self.flat_hp_grid_values[hp_name][i_grid_keys[j]]
-        return flat_result
-
-
-class BaseValidationSplitter(ABC):
-    def split_dact(self, data_container: DACT, context: CX) -> List[
-            Tuple[TrainDACT, ValidDACT]]:
-        """
-        Wrap a validation split function with a split data container function.
-        A validation split function takes two arguments:  data inputs, and expected outputs.
-
-        :param data_container: data container to split
-        :return: a function that returns the pairs of training, and validation data containers for each validation split.
-        """
-        train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids = self.split(
-            data_inputs=data_container.data_inputs,
-            expected_outputs=data_container.expected_outputs,
-            context=context
-        )
-
-        train_data_container = DACT(data_inputs=train_data_inputs,
-                                    ids=train_ids,
-                                    expected_outputs=train_expected_outputs)
-        validation_data_container = DACT(data_inputs=validation_data_inputs,
-                                         ids=validation_ids,
-                                         expected_outputs=validation_expected_outputs)
-
-        splits: List[Tuple[TrainDACT, ValidDACT]] = []
-        for (train_id, train_di, train_eo), (validation_id, validation_di, validation_eo) in zip(
-                train_data_container, validation_data_container):
-            # TODO: use ListDACT instead of DACT?
-            train_data_container_split = TrainDACT(
-                data_inputs=train_di,
-                expected_outputs=train_eo
-            )
-
-            validation_data_container_split = ValidDACT(
-                data_inputs=validation_di,
-                expected_outputs=validation_eo
-            )
-
-            splits.append((train_data_container_split, validation_data_container_split))
-
-        return splits
-
-    @abstractmethod
-    def split(self, data_inputs, ids=None, expected_outputs=None, context: CX = None) \
-            -> Tuple[List, List, List, List, List, List]:
-        """
-        Train/Test split data inputs and expected outputs.
-
-        :param data_inputs: data inputs
-        :param ids: id associated with each data entry (optional)
-        :param expected_outputs: expected outputs (optional)
-        :param context: execution context (optional)
-        :return: train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids
-        """
-        pass
-
-
-class KFoldCrossValidationSplitter(BaseValidationSplitter):
-    """
-    Create a function that splits data with K-Fold Cross-Validation resampling.
-
-    .. code-block:: python
-
-        # create a kfold cross validation splitter with 2 kfold
-        kfold_cross_validation_split(0.20)
-
-
-    :param k_fold: number of folds.
-    :return:
-    """
-
-    def __init__(self, k_fold: int):
-        BaseValidationSplitter.__init__(self)
-        self.k_fold = k_fold
-
-    def split(self, data_inputs, ids=None, expected_outputs=None, context: CX = None) \
-            -> Tuple[List, List, List, List, List, List]:
-        data_inputs_train, data_inputs_val = kfold_cross_validation_split(
-            data_inputs=data_inputs,
-            k_fold=self.k_fold
-        )
-
-        if ids is not None:
-            ids_train, ids_val = kfold_cross_validation_split(
-                data_inputs=ids,
-                k_fold=self.k_fold
-            )
-        else:
-            ids_train, ids_val = [None] * len(data_inputs_train), [None] * len(data_inputs_val)
-
-        if expected_outputs is not None:
-            expected_outputs_train, expected_outputs_val = kfold_cross_validation_split(
-                data_inputs=expected_outputs,
-                k_fold=self.k_fold
-            )
-        else:
-            expected_outputs_train, expected_outputs_val = [None] * len(data_inputs_train), [None] * len(
-                data_inputs_val)
-
-        return data_inputs_train, expected_outputs_train, ids_train, \
-            data_inputs_val, expected_outputs_val, ids_val
-
-
-def kfold_cross_validation_split(data_inputs, k_fold):
-    splitted_train_data_inputs = []
-    splitted_validation_inputs = []
-
-    step = len(data_inputs) / float(k_fold)
-    for i in range(k_fold):
-        a = int(step * i)
-        b = int(step * (i + 1))
-        if b > len(data_inputs):
-            b = len(data_inputs)
-
-        validation = data_inputs[a:b]
-        train = np.concatenate((data_inputs[:a], data_inputs[b:]), axis=0)
-
-        splitted_validation_inputs.append(validation)
-        splitted_train_data_inputs.append(train)
-
-    return splitted_train_data_inputs, splitted_validation_inputs
-
-
-class ValidationSplitter(BaseValidationSplitter):
-    """
-    Create a function that splits data into a training, and a validation set.
-
-    .. code-block:: python
-
-        # create a validation splitter function with 80% train, and 20% validation
-        validation_splitter(0.20)
-
-
-    :param test_size: test size in float
-    :return:
-    """
-
-    def __init__(self, validation_size: float):
-        self.validation_size = validation_size
-
-    def split(
-        self, data_inputs, ids=None, expected_outputs=None, context: CX = None
-    ) -> Tuple[List, List, List, List]:
-        train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids = validation_split(
-            test_size=self.validation_size,
-            data_inputs=data_inputs,
-            ids=ids,
-            expected_outputs=expected_outputs
-        )
-
-        return [train_data_inputs], [train_expected_outputs], [train_ids], \
-               [validation_data_inputs], [validation_expected_outputs], [validation_ids]
-
-
-def validation_split(test_size: float, data_inputs, ids=None, expected_outputs=None) \
-        -> Tuple[List, List, List, List, List, List]:
-    """
-    Split data inputs, and expected outputs into a training set, and a validation set.
-
-    :param test_size: test size in float
-    :param data_inputs: data inputs to split
-    :param ids: ids associated with each data entry
-    :param expected_outputs: expected outputs to split
-    :return: train_data_inputs, train_expected_outputs, ids_train, validation_data_inputs, validation_expected_outputs, ids_val
-    """
-    validation_data_inputs = _validation_split(data_inputs, test_size)
-    validation_expected_outputs, ids_val = None, None
-    if expected_outputs is not None:
-        validation_expected_outputs = _validation_split(expected_outputs, test_size)
-    if ids is not None:
-        ids_val = _validation_split(ids, test_size)
-
-    train_data_inputs = _train_split(data_inputs, test_size)
-    train_expected_outputs, ids_train = None, None
-    if expected_outputs is not None:
-        train_expected_outputs = _train_split(expected_outputs, test_size)
-    if ids is not None:
-        ids_train = _train_split(ids, test_size)
-
-    return train_data_inputs, train_expected_outputs, ids_train, \
-        validation_data_inputs, validation_expected_outputs, ids_val
-
-
-def _train_split(data_inputs, test_size) -> List:
-    """
-    Split training set.
-
-    :param data_inputs: data inputs to split
-    :return: train_data_inputs
-    """
-    return data_inputs[0:_get_index_split(data_inputs, test_size)]
-
-
-def _validation_split(data_inputs, test_size) -> List:
-    """
-    Split validation set.
-
-    :param data_inputs: data inputs to split
-    :return: validation_data_inputs
-    """
-    return data_inputs[_get_index_split(data_inputs, test_size):]
-
-
-def _get_index_split(data_inputs, test_size):
-    return math.floor(len(data_inputs) * (1 - test_size))
