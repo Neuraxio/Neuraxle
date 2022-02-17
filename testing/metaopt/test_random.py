@@ -21,7 +21,7 @@ Tests for Metaopt
 import pytest
 import math
 import numpy as np
-from neuraxle.metaopt.validation import WalkForwardTimeSeriesCrossValidationWrapper, AnchoredWalkForwardTimeSeriesCrossValidationWrapper
+from neuraxle.metaopt.validation import WalkForwardTimeSeriesCrossValidationSplitter, AnchoredWalkForwardTimeSeriesCrossValidationSplitter
 
 classic_walforward_parameters = [
     # (training_size, validation_size, padding_between_training_and_validation, drop_remainder)
@@ -88,7 +88,7 @@ def test_classic_walkforward_crossvalidation_split(
         .astype(float)
 
     # Initialize the class to test.
-    step = WalkForwardTimeSeriesCrossValidationWrapper(
+    step = WalkForwardTimeSeriesCrossValidationSplitter(
         validation_window_size=validation_window_size,
         training_window_size=training_window_size,
         padding_between_training_and_validation=padding_between_training_and_validation,
@@ -196,7 +196,7 @@ def test_anchored_walkforward_crossvalidation_split(
         .astype(float)
 
     # Initialize the class to test.
-    step = AnchoredWalkForwardTimeSeriesCrossValidationWrapper(
+    step = AnchoredWalkForwardTimeSeriesCrossValidationSplitter(
         validation_window_size=validation_window_size,
         minimum_training_size=minimum_training_size,
         padding_between_training_and_validation=padding_between_training_and_validation,

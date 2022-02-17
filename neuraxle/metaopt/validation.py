@@ -38,7 +38,7 @@ from neuraxle.base import BaseStep, EvaluableStepMixin
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import ForceHandleOnlyMixin, MetaStep, TrialStatus
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.data_container import TrainDACT, ValidDACT, PredsDACT, EvalEOTDACT, IDT, DIT, EOT, DACTData
+from neuraxle.data_container import TrainDACT, ValidDACT, PredsDACT, EvalEOTDACT, IDT, DIT, EOT, DACTData, ARG_Y_PREDICTD, ARG_Y_EXPECTED
 from neuraxle.hyperparams.distributions import (
     ContinuousHyperparameterDistribution, DiscreteHyperparameterDistribution)
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
@@ -341,7 +341,10 @@ class KFoldCrossValidationSplitter(BaseValidationSplitter):
 
     def __init__(self, k_fold: int):
         BaseValidationSplitter.__init__(self)
-        self.k_fold: int = k_fold
+        self._k_fold: int = k_fold
+
+    def _get_k_fold(self, dact_data: DACTData = None) -> int:
+        return self._k_fold
 
     def split(
         self,
@@ -351,53 +354,59 @@ class KFoldCrossValidationSplitter(BaseValidationSplitter):
         context: Optional[CX] = None
     ) -> Tuple[FoldsList[DIT], FoldsList[EOT], FoldsList[IDT], FoldsList[DIT], FoldsList[EOT], FoldsList[IDT]]:
 
-        train_di, valid_di = kfold_cv_split(data_inputs, self.k_fold)
+        train_di, valid_di = self._kfold_cv_split(
+            data_inputs)
 
         _n_folds = len(train_di)
         _empty_folds: Tuple[FoldsList] = [[None] * _n_folds] * 2
 
-        train_ids, valid_ids = kfold_cv_split(ids, self.k_fold) \
-            if ids is not None else copy.deepcopy(_empty_folds)
+        train_ids, valid_ids = self._kfold_cv_split(
+            ids) or copy.deepcopy(_empty_folds)
 
-        train_eo, valid_eo = kfold_cv_split(expected_outputs, self.k_fold) \
-            if expected_outputs is not None else copy.deepcopy(_empty_folds)
+        train_eo, valid_eo = self._kfold_cv_split(
+            expected_outputs) or copy.deepcopy(_empty_folds)
 
         return train_di, train_eo, train_ids, \
             valid_di, valid_eo, valid_ids
 
+    def _kfold_cv_split(self, dact_data: DACTData) -> Tuple[FoldsList[DACTData], FoldsList[DACTData]]:
+        """
+        Split data with K-Fold Cross-Validation splitting.
 
-def kfold_cv_split(data_inputs: DACTData, k_fold: int) -> Tuple[FoldsList[DACTData], FoldsList[DACTData]]:
-    """
-    Split data with K-Fold Cross-Validation splitting.
+        :param data_inputs: data inputs
+        :param k_fold: number of folds
+        :return: a tuple of lists of folds of train_data, and of lists of validation_data, each of length "k_fold".
+        """
+        if dact_data is None:
+            return None
 
-    :param data_inputs: data inputs
-    :param k_fold: number of folds
-    :return: a tuple of lists of folds of train_data, and of lists of validation_data, each of length "k_fold".
-    """
-    splitted_train_data_inputs: List[DACTData] = []
-    splitted_validation_inputs: List[DACTData] = []
+        train_splitted_data: List[DACTData] = []
+        valid_splitted_data: List[DACTData] = []
 
-    step = len(data_inputs) / float(k_fold)
-    for fold_i in range(k_fold):
+        for fold_i in range(self._get_k_fold(dact_data)):
+            train_slice, valid_slice = self._get_slices_at_fold_i(dact_data, fold_i)
+
+            train_splitted_data.append(train_slice)
+            valid_splitted_data.append(valid_slice)
+
+        return train_splitted_data, valid_splitted_data
+
+    def _get_train_val_slices_at_fold_i(self, dact_data: DACTData, fold_i: int) -> Tuple[DACTData, DACTData]:
+        step = len(dact_data) / float(self._get_k_fold())
         a = int(step * fold_i)
         b = int(step * (fold_i + 1))
-        if b > len(data_inputs):
-            b = len(data_inputs)
+        b = min(b, len(dact_data))
 
-        train: DACTData = concat_dact_data(data_inputs[:a], data_inputs[b:])
-        validation: DACTData = data_inputs[a:b]  # held-out fold against the training data
+        train_slice: DACTData = self._concat_fold_dact_data(dact_data[:a], dact_data[b:])
+        valid_slice: DACTData = dact_data[a:b]  # held-out fold against the training data
 
-        splitted_train_data_inputs.append(train)
-        splitted_validation_inputs.append(validation)
+        return train_slice, valid_slice
 
-    return splitted_train_data_inputs, splitted_validation_inputs
-
-
-def concat_dact_data(arr1: DACTData, arr2: DACTData) -> DACTData:
-    if isinstance(arr1, (list, tuple)):
-        return arr1 + arr2
-    else:
-        return np.concatenate((arr1, arr2), axis=0)
+    def _concat_fold_dact_data(self, arr1: DACTData, arr2: DACTData) -> DACTData:
+        if isinstance(arr1, (list, tuple)):
+            return arr1 + arr2
+        else:
+            return np.concatenate((arr1, arr2), axis=0)
 
 
 class ValidationSplitter(BaseValidationSplitter):
@@ -491,368 +500,26 @@ def _get_index_split(data_inputs: DACTData, test_size):
     return math.floor(len(data_inputs) * (1 - test_size))
 
 
-class BaseValidation(MetaStep, ABC):
+class AnchoredWalkForwardTimeSeriesCrossValidationSplitter(KFoldCrossValidationSplitter):
     """
-    Base class For validation wrappers.
-    It has a scoring function to calculate the score for the validation split.
+    An anchored walk forward cross validation works by performing a forward rolling split.
 
-    .. seealso::
-        :class`neuraxle.metaopt.validation.ValidationSplitWrapper`,
-        :class`Kneuraxle.metaopt.validation.FoldCrossValidationWrapper`,
-        :class`neuraxle.metaopt.validation.AnchoredWalkForwardTimeSeriesCrossValidationWrapper`,
-        :class`neuraxle.metaopt.validation.WalkForwardTimeSeriesCrossValidationWrapper`
+    All training splits start at the beginning of the time series, and finish time varies.
 
-    """
-
-    def __init__(self, wrapped=None, scoring_function: Callable = r2_score):
-        """
-        Base class For validation wrappers.
-        It has a scoring function to calculate the score for the validation split.
-
-        :param scoring_function: scoring function with two arguments (y_true, y_pred)
-        :type scoring_function: Callable
-        """
-        BaseStep.__init__(self)
-        MetaStep.__init__(self, wrapped)
-        self.scoring_function = scoring_function
-
-    @abstractmethod
-    def split_data_container(self, data_container) -> Tuple[DACT, DACT]:
-        pass
-
-
-class BaseCrossValidationWrapper(EvaluableStepMixin, ForceHandleOnlyMixin, BaseValidation, ABC):
-    # TODO: change default argument of scoring_function...
-    def __init__(self, wrapped=None, scoring_function=r2_score, joiner=NumpyConcatenateOuterBatch(),
-                 cache_folder_when_no_handle=None,
-                 split_data_container_during_fit=True, predict_after_fit=True):
-        BaseValidation.__init__(self, wrapped=wrapped, scoring_function=scoring_function)
-        ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
-        EvaluableStepMixin.__init__(self)
-
-        self.split_data_container_during_fit = split_data_container_during_fit
-        self.predict_after_fit = predict_after_fit
-        self.joiner = joiner
-
-    def train(self, train_data_container: DACT, context: CX):
-        step = StepClonerForEachDataInput(self.wrapped)
-        step = step.handle_fit(train_data_container, context)
-
-        return step
-
-    def _fit_data_container(self, data_container: DACT, context: CX) -> BaseStep:
-        assert self.wrapped is not None
-
-        step = StepClonerForEachDataInput(self.wrapped)
-        step = step.handle_fit(data_container, context)
-
-        return step
-
-    def split_data_container(self, data_container: DACT) -> Tuple[DACT, DACT]:
-        train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = self.split(
-            data_container.data_inputs,
-            data_container.expected_outputs
-        )
-
-        train_data_container = DACT(data_inputs=train_data_inputs, expected_outputs=train_expected_outputs)
-        validation_data_container = DACT(
-            data_inputs=validation_data_inputs,
-            expected_outputs=validation_expected_outputs
-        )
-
-        return train_data_container, validation_data_container
-
-    @abstractmethod
-    def split(self, data_inputs, expected_outputs):
-        raise NotImplementedError("TODO")
-
-
-class ValidationSplitWrapper(BaseCrossValidationWrapper):
-    """
-    Wrapper for validation split that calculates the score for the validation split.
-
-    .. note::
-        The data is not shuffled before split. Please refer to the :class`DataShuffler` step for data shuffling.
-
-    .. seealso::
-        :class`BaseValidation`,
-        :class`BaseCrossValidationWrapper`,
-        :class`neuraxle.metaopt.auto_ml.RandomSearch`,
-        :class`neuraxle.steps.data.DataShuffler`
-
-    """
-
-    def __init__(
-            self,
-            wrapped: BaseStep = None,
-            test_size: float = 0.2,
-            scoring_function=r2_score,
-            run_validation_split_in_test_mode=True,
-            cache_folder_when_no_handle=None
-    ):
-        """
-        :param wrapped: wrapped step
-        :param test_size: ratio for test size between 0 and 1
-        :param scoring_function: scoring function with two arguments (y_true, y_pred)
-        """
-        BaseCrossValidationWrapper.__init__(self, wrapped=wrapped,
-                                            cache_folder_when_no_handle=cache_folder_when_no_handle)
-
-        self.run_validation_split_in_test_mode = run_validation_split_in_test_mode
-        self.test_size = test_size
-        self.scoring_function = scoring_function
-
-    def _fit_data_container(
-        self, data_container: DACT, context: CX
-    ) -> Tuple['ValidationSplitWrapper', DACT]:
-        """
-        Fit using the training split.
-        Calculate the scores using the validation split.
-
-        :param context: execution context
-        :param data_container: data container
-        :type context: ExecutionContext
-        :type data_container: DACT
-        :return: fitted self
-        """
-        new_self, results_data_container = self._fit_transform_data_container(data_container, context)
-        return new_self
-
-    def _fit_transform_data_container(
-        self, data_container: DACT, context: CX
-    ) -> Tuple['BaseStep', DACT]:
-        """
-        Fit Transform given data inputs without splitting.
-
-        :param context:
-        :param data_container: DACT
-        :type data_container: DACT
-        :type context: ExecutionContext
-        :return: outputs
-        """
-        train_data_container, validation_data_container = self.split_data_container(data_container)
-
-        self.wrapped, results_data_container = self.wrapped.handle_fit_transform(train_data_container,
-                                                                                 context.push(self.wrapped))
-
-        self._update_scores_train(results_data_container.data_inputs, results_data_container.expected_outputs)
-
-        results_data_container = self.wrapped.handle_predict(validation_data_container, context.push(self.wrapped))
-
-        self._update_scores_validation(results_data_container.data_inputs, results_data_container.expected_outputs)
-
-        self.wrapped.apply('disable_metrics')
-        data_container = self.wrapped.handle_predict(data_container, context.push(self.wrapped))
-        self.wrapped.apply('enable_metrics')
-
-        return self, data_container
-
-    def _transform_data_container(self, data_container: DACT, context: CX):
-        """
-        Transform given data inputs without splitting.
-
-        :param context: execution context
-        :param data_container: DACT
-        :type data_container: DACT
-        :type context: ExecutionContext
-        :return: outputs
-        """
-        return self.wrapped.handle_transform(data_container, context.push(self.wrapped))
-
-    def _update_scores_validation(self, data_inputs, expected_outputs):
-        self.scores_validation = self.scoring_function(expected_outputs, data_inputs)
-        self.scores_validation_mean = np.mean(self.scores_validation)
-        self.scores_validation_std = np.std(self.scores_validation)
-
-    def _update_scores_train(self, data_inputs, expected_outputs):
-        self.scores_train = self.scoring_function(expected_outputs, data_inputs)
-        self.scores_train_mean = np.mean(self.scores_train)
-        self.scores_train_std = np.std(self.scores_train)
-
-    def get_score(self):
-        return self.scores_validation_mean
-
-    def get_score_validation(self):
-        return self.scores_validation_mean
-
-    def get_score_train(self):
-        return self.scores_validation_mean
-
-    def split_data_container(self, data_container) -> Tuple[DACT, DACT]:
-        """
-        Split data container into a training set, and a validation set.
-
-        :param data_container: data container
-        :type data_container: DACT
-        :return: train_data_container, validation_data_container
-        """
-
-        train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = \
-            self.split(data_container.data_inputs, data_container.expected_outputs)
-
-        train_ids = self.train_split(data_container.ids)
-        train_data_container = DACT(
-            data_inputs=train_data_inputs,
-            ids=train_ids,
-            expected_outputs=train_expected_outputs
-        )
-
-        validation_ids = self.validation_split(data_container.ids)
-        validation_data_container = DACT(
-            data_inputs=validation_data_inputs,
-            ids=validation_ids,
-            expected_outputs=validation_expected_outputs
-        )
-
-        return train_data_container, validation_data_container
-
-    def split(self, data_inputs, expected_outputs=None) -> Tuple[List, List, List, List]:
-        """
-        Split data inputs, and expected outputs into a training set, and a validation set.
-
-        :param data_inputs: data inputs to split
-        :param expected_outputs: expected outputs to split
-        :return: train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
-        """
-        validation_data_inputs = self.validation_split(data_inputs)
-        validation_expected_outputs = None
-        if expected_outputs is not None:
-            validation_expected_outputs = self.validation_split(expected_outputs)
-
-        train_data_inputs = self.train_split(data_inputs)
-        train_expected_outputs = None
-        if expected_outputs is not None:
-            train_expected_outputs = self.train_split(expected_outputs)
-
-        return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
-
-    def train_split(self, data_inputs) -> List:
-        """
-        Split training set.
-
-        :param data_inputs: data inputs to split
-        :return: train_data_inputs
-        """
-        return data_inputs[0:self._get_index_split(data_inputs)]
-
-    def validation_split(self, data_inputs) -> List:
-        """
-        Split validation set.
-
-        :param data_inputs: data inputs to split
-        :return: validation_data_inputs
-        """
-        return data_inputs[self._get_index_split(data_inputs):]
-
-    def disable_metrics(self):
-        self.metrics_enabled = False
-        if self.wrapped is not None:
-            self.wrapped.apply('disable_metrics')
-        return RecursiveDict()
-
-    def enable_metrics(self):
-        self.metrics_enabled = True
-        if self.wrapped is not None:
-            self.wrapped.apply('enable_metrics')
-        return RecursiveDict()
-
-    def _get_index_split(self, data_inputs):
-        return math.floor(len(data_inputs) * (1 - self.test_size))
-
-
-def average_kfold_scores(metric_function):
-    def calculate(y_true_kfolds, y_pred_kfolds):
-        kfold_scores = []
-        for y_true, y_pred in zip(y_true_kfolds, y_pred_kfolds):
-            kfold_scores.append(metric_function(y_true, y_pred))
-
-        return np.mean(kfold_scores)
-
-    return calculate
-
-
-class KFoldCrossValidationWrapper(BaseCrossValidationWrapper):
-    def __init__(
-            self,
-            scoring_function=r2_score,
-            k_fold=3,
-            joiner=NumpyConcatenateOuterBatch(),
-            cache_folder_when_no_handle=None
-    ):
-        self.k_fold = k_fold
-        BaseCrossValidationWrapper.__init__(
-            self,
-            scoring_function=scoring_function,
-            joiner=joiner,
-            cache_folder_when_no_handle=cache_folder_when_no_handle
-        )
-
-    def split(self, data_inputs, expected_outputs):
-        validation_data_inputs, validation_expected_outputs = self.validation_split(data_inputs, expected_outputs)
-        train_data_inputs, train_expected_outputs = self.train_split(data_inputs, expected_outputs)
-
-        return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
-
-    def train_split(self, data_inputs, expected_outputs) -> Tuple[List, List]:
-        train_data_inputs = []
-        train_expected_outputs = []
-        data_inputs = np.array(data_inputs)
-        expected_outputs = np.array(expected_outputs)
-
-        for i in range(len(data_inputs)):
-            before_di = data_inputs[:i]
-            after_di = data_inputs[i + 1:]
-            inputs = (before_di, after_di)
-
-            before_eo = expected_outputs[:i]
-            after_eo = expected_outputs[i + 1:]
-            outputs = (before_eo, after_eo)
-
-            inputs = self.joiner.transform(inputs)
-            outputs = self.joiner.transform(outputs)
-
-            train_data_inputs.append(inputs)
-            train_expected_outputs.append(outputs)
-
-        return train_data_inputs, train_expected_outputs
-
-    def validation_split(self, data_inputs, expected_outputs=None) -> Tuple[List, List]:
-        splitted_data_inputs = self._split(data_inputs)
-        if expected_outputs is not None:
-            splitted_expected_outputs = self._split(expected_outputs)
-            return splitted_data_inputs, splitted_expected_outputs
-
-        return splitted_data_inputs, [None] * len(splitted_data_inputs)
-
-    def _split(self, data_inputs):
-        splitted_data_inputs = []
-        step = len(data_inputs) / float(self.k_fold)
-        for i in range(self.k_fold):
-            a = int(step * i)
-            b = int(step * (i + 1))
-            if b > len(data_inputs):
-                b = len(data_inputs)
-
-            slice = data_inputs[a:b]
-            splitted_data_inputs.append(slice)
-        return splitted_data_inputs
-
-
-class AnchoredWalkForwardTimeSeriesCrossValidationWrapper(BaseCrossValidationWrapper):
-    """
-    Perform an anchored walk forward cross validation by performing a forward rolling split.
-    All training splits start at the beginning of the time series, but finish at different time. The finish time
-    increase toward the end at each forward split.
-
-    For the validation split it will start after a certain time delay (if padding is set)
+    For the validation split it, will start after a certain time delay (if padding is set)
     after their corresponding training split.
 
-    Notes: The data supported by this cross validation is nd.array of shape [batch_size, total_time_steps, n_features].
-    The array can have an arbitrary number of dimension, but the time series axis is currently limited to `axis=1`.
+    Data is expected to be an is a square nd.array of shape [batch_size, total_time_steps, ...].
+    It can be N dimensions, such as 3D or more, but the time series axis is currently limited to `axis=1`.
     """
 
-    def __init__(self, minimum_training_size, validation_window_size=None, padding_between_training_and_validation=0,
-                 drop_remainder=False, scoring_function=r2_score, joiner=NumpyConcatenateInnerFeatures()):
+    def __init__(
+        self,
+        minimum_training_size,
+        validation_window_size=None,
+        padding_between_training_and_validation=0,
+        drop_remainder=False,
+    ):
         """
         Create a anchored walk forward time series cross validation object.
 
@@ -867,11 +534,7 @@ class AnchoredWalkForwardTimeSeriesCrossValidationWrapper(BaseCrossValidationWra
             and the start of the validation split, by default 0.
         :param drop_remainder: drop the last split if the last validation split does not coincide
             with a full validation_window_size, by default False.
-        :param scoring_function: scoring function use to validate performance if it is not None, by default r2_score,
-        :param joiner the joiner callable that can join the different result together.
-        :return: WalkForwardTimeSeriesCrossValidation instance.
         """
-        BaseCrossValidationWrapper.__init__(self, scoring_function=scoring_function, joiner=joiner)
         self.minimum_training_size = minimum_training_size
         # If validation_window_size is None, we give the same value as training_window_size.
         self.validation_window_size = validation_window_size or self.minimum_training_size
@@ -879,105 +542,41 @@ class AnchoredWalkForwardTimeSeriesCrossValidationWrapper(BaseCrossValidationWra
         self.drop_remainder = drop_remainder
         self._validation_initial_start = self.minimum_training_size + self.padding_between_training_and_validation
 
-    def split(self, data_inputs, expected_outputs):
-        """
-        Split the data into train inputs, train expected outputs, validation inputs, validation expected outputs.
-
-        Notes: The data supported by this cross validation is nd.array of shape [batch_size, total_time_steps, n_features].
-        The array can have an arbitrary number of dimension, but the time series axis is currently limited to `axis=1`.
-
-        :param data_inputs: data to perform walk forward cross validation into.
-        :param expected_outputs: the expected target/label that will be used during walk forward cross validation.
-        :return: train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
-        """
-        validation_data_inputs, validation_expected_outputs = self.validation_split(
-            data_inputs, expected_outputs)
-
-        train_data_inputs, train_expected_outputs = self.train_split(
-            data_inputs, expected_outputs)
-
-        return train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs
-
-    def train_split(self, data_inputs, expected_outputs=None) -> Tuple[List, List]:
-        """
-        Split the data into train inputs, train expected outputs
-
-        Notes: The data supported by this cross validation is nd.array of shape [batch_size, total_time_steps, n_features].
-        The array can have an arbitrary number of dimension, but the time series axis is currently limited to `axis=1`.
-
-        :param data_inputs: data to perform walk forward cross validation into.
-        :param expected_outputs: the expected target*label that will be used during walk forward cross validation.
-        :return: train_data_inputs, train_expected_outputs
-        """
-        splitted_data_inputs = self._train_split(data_inputs)
-        if expected_outputs is not None:
-            splitted_expected_outputs = self._train_split(expected_outputs)
-            return splitted_data_inputs, splitted_expected_outputs
-
-    def validation_split(self, data_inputs, expected_outputs=None) -> List:
-        """
-        Split the data into validation inputs, validation expected outputs.
-
-        Notes: The data supported by this cross validation is nd.array of shape [batch_size, total_time_steps, n_features].
-        The array can have an arbitrary number of dimension, but the time series axis is currently limited to `axis=1`.
-
-        :param data_inputs: data to perform walk forward cross validation into.
-        :param expected_outputs: the expected target*label that will be used during walk forward cross validation.
-        :return: validation_data_inputs, validation_expected_outputs
-        """
-        splitted_data_inputs = self._validation_split(data_inputs)
-        if expected_outputs is not None:
-            splitted_expected_outputs = self._validation_split(expected_outputs)
-            return splitted_data_inputs, splitted_expected_outputs
-        return splitted_data_inputs
-
-    def _train_split(self, data_inputs):
-        splitted_data_inputs = []
-        number_step = self._get_number_fold(data_inputs)
-
-        for i in range(number_step):
-            # first slice index is always 0 for anchored walk forward cross validation.
-            a = 0
-            b = int(self.minimum_training_size + i * self.validation_window_size)
-
-            if b > data_inputs.shape[1]:
-                b = data_inputs.shape[1]
-
-            # TODO: The slicer could a inverse_transform of the joiner. A len method should also be defined.
-            slice = data_inputs[:, a:b]
-            splitted_data_inputs.append(slice)
-        return splitted_data_inputs
-
-    def _validation_split(self, data_inputs):
-        splitted_data_inputs = []
-        number_step = self._get_number_fold(data_inputs)
-        for i in range(number_step):
-            a = int(self._validation_initial_start + i * self.validation_window_size)
-            b = int(a + self.validation_window_size)
-
-            if b > data_inputs.shape[1]:
-                b = data_inputs.shape[1]
-
-            # TODO: The slicer could a inverse_transform of the joiner. A len method should also be defined.
-            slice = data_inputs[:, a:b]
-            splitted_data_inputs.append(slice)
-        return splitted_data_inputs
-
-    def _get_number_fold(self, data_inputs):
+    def _get_k_fold(self, dact_data: DACTData = None) -> int:
         if self.drop_remainder:
-            number_step = math.floor(
-                (data_inputs.shape[1] - self._validation_initial_start) / float(self.validation_window_size)
-            )
+            _round_func = math.floor
         else:
-            number_step = math.ceil(
-                (data_inputs.shape[1] - self._validation_initial_start) / float(self.validation_window_size)
-            )
-        return number_step
+            _round_func = math.ceil
+        k_folds = _round_func(
+            (dact_data.shape[1] - self._validation_initial_start) / float(self.validation_window_size)
+        )
+        return k_folds
+
+    def _get_train_val_slices_at_fold_i(self, dact_data: DACTData, fold_i: int) -> Tuple[DACTData, DACTData]:
+        # dact_data of shape [batch_size, total_time_steps, ...].
+
+        # first slice index is always 0 for anchored walk forward cross validation.
+        a = self._get_a_size(fold_i)
+        b = int(fold_i * self.validation_window_size + self.minimum_training_size)
+        b = min(b, dact_data.shape[1])
+        train_slice: DACTData = dact_data[:, a:b]
+
+        x = int(fold_i * self.validation_window_size + self._validation_initial_start)
+        y = int(x + self.validation_window_size)
+        y = min(y, dact_data.shape[1])
+        valid_slice: DACTData = dact_data[:, x:y]  # held-out fold against the training data
+
+        return train_slice, valid_slice
+
+    def _get_beginning_at_fold_i(self, fold_i: int) -> int:
+        return 0
 
 
-class WalkForwardTimeSeriesCrossValidationWrapper(AnchoredWalkForwardTimeSeriesCrossValidationWrapper):
+class WalkForwardTimeSeriesCrossValidationSplitter(AnchoredWalkForwardTimeSeriesCrossValidationSplitter):
     """
     Perform a classic walk forward cross validation by performing a forward rolling split.
+    As opposed to the AnchoredWalkForwardTimeSeriesCrossValidationSplitter, this class
+    has a train split that is always of the same size.
 
     All the training split have the same `validation_window_size` size. The start time and end time of each training
     split will increase identically toward the end at each forward split. Same principle apply with the validation
@@ -988,8 +587,13 @@ class WalkForwardTimeSeriesCrossValidationWrapper(AnchoredWalkForwardTimeSeriesC
     The array can have an arbitrary number of dimension, but the time series axis is currently limited to `axis=1`.
     """
 
-    def __init__(self, training_window_size, validation_window_size=None, padding_between_training_and_validation=0,
-                 drop_remainder=False, scoring_function=r2_score, joiner=NumpyConcatenateOnAxis(axis=1)):
+    def __init__(
+        self,
+        training_window_size,
+        validation_window_size=None,
+        padding_between_training_and_validation=0,
+        drop_remainder=False
+    ):
         """
         Create a classic walk forward time series cross validation object.
 
@@ -1003,31 +607,14 @@ class WalkForwardTimeSeriesCrossValidationWrapper(AnchoredWalkForwardTimeSeriesC
             and the start of the validation split, by default 0.
         :param drop_remainder: drop the last split if the last validation split does not coincide
             with a full validation_window_size, by default False.
-        :param scoring_function: scoring function use to validate performance if it is not None, by default r2_score,
-        :param joiner the joiner callable that can join the different result together.
-        :return: WalkForwardTimeSeriesCrossValidation instance.
         """
-        AnchoredWalkForwardTimeSeriesCrossValidationWrapper.__init__(
+        AnchoredWalkForwardTimeSeriesCrossValidationSplitter.__init__(
             self,
             training_window_size,
             validation_window_size=validation_window_size,
             padding_between_training_and_validation=padding_between_training_and_validation,
-            drop_remainder=drop_remainder, scoring_function=scoring_function, joiner=joiner
+            drop_remainder=drop_remainder
         )
 
-    def _train_split(self, data_inputs):
-        splitted_data_inputs = []
-        number_step = self._get_number_fold(data_inputs)
-
-        for i in range(number_step):
-            a = int(i * self.validation_window_size)
-            # Here minimum_training_size = training_size, since each training split has the same length.
-            b = int(a + self.minimum_training_size)
-
-            if b > data_inputs.shape[1]:
-                b = data_inputs.shape[1]
-
-            # TODO: The slicer could a inverse_transform of the joiner. A len method should also be defined.
-            slice = data_inputs[:, a:b]
-            splitted_data_inputs.append(slice)
-        return splitted_data_inputs
+    def _get_beginning_at_fold_i(self, fold_i: int) -> int:
+        return int(fold_i * self.validation_window_size)
