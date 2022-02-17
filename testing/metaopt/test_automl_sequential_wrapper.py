@@ -5,6 +5,7 @@ from neuraxle.base import ExecutionContext as CX
 
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
+from neuraxle.metaopt.callbacks import MetricCallback
 from neuraxle.metaopt.validation import KFoldCrossValidationWrapper, ValidationSplitWrapper, RandomSearchSampler
 from neuraxle.metaopt.auto_ml import AutoML
 from neuraxle.pipeline import Pipeline
@@ -33,9 +34,10 @@ def test_automl_sequential_wrapper(tmpdir):
     ]).set_hyperparams_space(hyperparameter_space)
 
     auto_ml = AutoML(
-        pipeline,
-        RandomSearchSampler(),
-        KFoldCrossValidationWrapper().set_step(pipeline)
+        pipeline=pipeline,
+        hyperparams_optimizer=RandomSearchSampler(),
+        validation_splitter=KFoldCrossValidationWrapper().set_step(pipeline),
+        callbacks=[MetricCallback("MSE", mean_squared_error, False)],
     )
 
     # When

@@ -441,28 +441,33 @@ class AutoML(ControlledAutoML):
     def __init__(
         self,
         pipeline: BaseStep,
-        scoring_callback: ScoringCallback = None,
-        refit_best_trial: bool = True,
         validation_splitter: 'BaseValidationSplitter' = None,
         hyperparams_optimizer: BaseHyperparameterOptimizer = None,
+        scoring_callback: ScoringCallback = None,
+        callbacks: List[BaseCallback] = None,
         hyperparams_repository: HyperparamsRepository = None,
         n_trials: int = None,
+        refit_best_trial: bool = True,
         epochs: int = 1,
-        callbacks: List[BaseCallback] = None,
         n_jobs=1,
         continue_loop_on_error=True
     ):
+        # parse or guess args:
         validation_splitter = validation_splitter or ValidationSplitter(0.2)
         hyperparams_optimizer = hyperparams_optimizer or GridExplorationSampler()
-        callbacks = callbacks or []
+
+        callbacks = list(callbacks) if callbacks is not None else []
         if scoring_callback is not None:
-            callbacks = [scoring_callback].extend(callbacks),
+            callbacks = [scoring_callback] + callbacks
+        if len(callbacks) == 0:
+            raise ValueError("At least one callback must be provided.")
 
         if n_trials is None or n_trials < 1:
             n_trials: int = GridExplorationSampler.estimate_ideal_n_trials(pipeline.get_hyperparams_space())
 
+        # init subservices:
         trainer = Trainer(
-            callbacks=[scoring_callback] + callbacks,
+            callbacks=callbacks,
             validation_splitter=validation_splitter,
             n_epochs=epochs,
         )
@@ -474,12 +479,13 @@ class AutoML(ControlledAutoML):
             continue_loop_on_error=continue_loop_on_error,
         )
 
+        # init base class:
         ControlledAutoML.__init__(
             self,
             pipeline=pipeline,
             loop=controller_loop,
             repo=hyperparams_repository,
-            main_metric_name=scoring_callback.name,
+            main_metric_name=callbacks[0].name,
             start_new_round=True,
             refit_best_trial=refit_best_trial,
         )

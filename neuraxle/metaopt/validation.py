@@ -26,7 +26,6 @@ Classes for hyperparameter tuning, such as random search.
 import copy
 import math
 import operator
-from tkinter import Grid
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
@@ -39,7 +38,7 @@ from neuraxle.base import BaseStep, EvaluableStepMixin
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import ForceHandleOnlyMixin, MetaStep, TrialStatus
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.data_container import TrainDACT, ValidDACT, PredsDACT, EvalEOTDACT
+from neuraxle.data_container import TrainDACT, ValidDACT, PredsDACT, EvalEOTDACT, IDT, DIT, EOT, DACTData
 from neuraxle.hyperparams.distributions import (
     ContinuousHyperparameterDistribution, DiscreteHyperparameterDistribution)
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
@@ -191,6 +190,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
                     x for x in hp_samples[:remainder]
                     if x in hp_dist and not (math.isinf(x) or math.isnan(x))
                 ]
+                # TODO: remove duplicates such as when (or if) STD is of 0.
                 self.flat_hp_grid_values[hp_name] = hp_samples
                 self.flat_hp_grid_lens.append(len(hp_samples))
 
@@ -266,41 +266,39 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
         return flat_result
 
 
+FoldsList = List  # A list over folds. Can contain DACTData or even DACTs or Tuples of DACTs.
+FoldsIterable = Iterable
+
+
 class BaseValidationSplitter(ABC):
-    def split_dact(self, data_container: DACT, context: CX) -> List[
-            Tuple[TrainDACT, ValidDACT]]:
+    def split_dact(self, data_container: DACT, context: CX) -> FoldsList[Tuple[TrainDACT, ValidDACT]]:
         """
         Wrap a validation split function with a split data container function.
         A validation split function takes two arguments:  data inputs, and expected outputs.
 
         :param data_container: data container to split
-        :return: a function that returns the pairs of training, and validation data containers for each validation split.
+        :return: a tuple of the train and validation data containers.
         """
-        train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids = self.split(
-            data_inputs=data_container.data_inputs,
-            expected_outputs=data_container.expected_outputs,
-            context=context
-        )
+        splits: FoldsList[Tuple[TrainDACT, ValidDACT]] = []
 
-        train_data_container = DACT(data_inputs=train_data_inputs,
-                                    ids=train_ids,
-                                    expected_outputs=train_expected_outputs)
-        validation_data_container = DACT(data_inputs=validation_data_inputs,
-                                         ids=validation_ids,
-                                         expected_outputs=validation_expected_outputs)
+        data_folds: FoldsIterable[Tuple[DIT, EOT, IDT, DIT, EOT, IDT]] = zip(self.split(
+            data_container.data_inputs, data_container.expected_outputs, context
+        ))
 
-        splits: List[Tuple[TrainDACT, ValidDACT]] = []
-        for (train_id, train_di, train_eo), (validation_id, validation_di, validation_eo) in zip(
-                train_data_container, validation_data_container):
+        # Iterate on folds:
+        for (train_di, train_eo, train_ids, valid_di, valid_eo, valid_ids) in data_folds:
+
             # TODO: use ListDACT instead of DACT?
-            train_data_container_split = TrainDACT(
+            train_data_container_split: TrainDACT = TrainDACT(
+                ids=train_ids,
                 data_inputs=train_di,
                 expected_outputs=train_eo
             )
 
-            validation_data_container_split = ValidDACT(
-                data_inputs=validation_di,
-                expected_outputs=validation_eo
+            validation_data_container_split: ValidDACT = ValidDACT(
+                ids=valid_ids,
+                data_inputs=valid_di,
+                expected_outputs=valid_eo
             )
 
             splits.append((train_data_container_split, validation_data_container_split))
@@ -308,8 +306,13 @@ class BaseValidationSplitter(ABC):
         return splits
 
     @abstractmethod
-    def split(self, data_inputs, ids=None, expected_outputs=None, context: CX = None) \
-            -> Tuple[List, List, List, List, List, List]:
+    def split(
+        self,
+        data_inputs: DIT,
+        ids: Optional[IDT] = None,
+        expected_outputs: Optional[EOT] = None,
+        context: Optional[CX] = None
+    ) -> Tuple[FoldsList[DIT], FoldsList[EOT], FoldsList[IDT], FoldsList[DIT], FoldsList[EOT], FoldsList[IDT]]:
         """
         Train/Test split data inputs and expected outputs.
 
@@ -317,7 +320,7 @@ class BaseValidationSplitter(ABC):
         :param ids: id associated with each data entry (optional)
         :param expected_outputs: expected outputs (optional)
         :param context: execution context (optional)
-        :return: train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids
+        :return: train_di, train_eo, train_ids, valid_di, valid_eo, valid_ids
         """
         pass
 
@@ -338,54 +341,63 @@ class KFoldCrossValidationSplitter(BaseValidationSplitter):
 
     def __init__(self, k_fold: int):
         BaseValidationSplitter.__init__(self)
-        self.k_fold = k_fold
+        self.k_fold: int = k_fold
 
-    def split(self, data_inputs, ids=None, expected_outputs=None, context: CX = None) \
-            -> Tuple[List, List, List, List, List, List]:
-        data_inputs_train, data_inputs_val = kfold_cross_validation_split(
-            data_inputs=data_inputs,
-            k_fold=self.k_fold
-        )
+    def split(
+        self,
+        data_inputs: DIT,
+        ids: Optional[IDT] = None,
+        expected_outputs: Optional[EOT] = None,
+        context: Optional[CX] = None
+    ) -> Tuple[FoldsList[DIT], FoldsList[EOT], FoldsList[IDT], FoldsList[DIT], FoldsList[EOT], FoldsList[IDT]]:
 
-        if ids is not None:
-            ids_train, ids_val = kfold_cross_validation_split(
-                data_inputs=ids,
-                k_fold=self.k_fold
-            )
-        else:
-            ids_train, ids_val = [None] * len(data_inputs_train), [None] * len(data_inputs_val)
+        train_di, valid_di = kfold_cv_split(data_inputs, self.k_fold)
 
-        if expected_outputs is not None:
-            expected_outputs_train, expected_outputs_val = kfold_cross_validation_split(
-                data_inputs=expected_outputs,
-                k_fold=self.k_fold
-            )
-        else:
-            expected_outputs_train, expected_outputs_val = [None] * len(data_inputs_train), [None] * len(
-                data_inputs_val)
+        _n_folds = len(train_di)
+        _empty_folds: Tuple[FoldsList] = [[None] * _n_folds] * 2
 
-        return data_inputs_train, expected_outputs_train, ids_train, \
-            data_inputs_val, expected_outputs_val, ids_val
+        train_ids, valid_ids = kfold_cv_split(ids, self.k_fold) \
+            if ids is not None else copy.deepcopy(_empty_folds)
+
+        train_eo, valid_eo = kfold_cv_split(expected_outputs, self.k_fold) \
+            if expected_outputs is not None else copy.deepcopy(_empty_folds)
+
+        return train_di, train_eo, train_ids, \
+            valid_di, valid_eo, valid_ids
 
 
-def kfold_cross_validation_split(data_inputs, k_fold):
-    splitted_train_data_inputs = []
-    splitted_validation_inputs = []
+def kfold_cv_split(data_inputs: DACTData, k_fold: int) -> Tuple[FoldsList[DACTData], FoldsList[DACTData]]:
+    """
+    Split data with K-Fold Cross-Validation splitting.
+
+    :param data_inputs: data inputs
+    :param k_fold: number of folds
+    :return: a tuple of lists of folds of train_data, and of lists of validation_data, each of length "k_fold".
+    """
+    splitted_train_data_inputs: List[DACTData] = []
+    splitted_validation_inputs: List[DACTData] = []
 
     step = len(data_inputs) / float(k_fold)
-    for i in range(k_fold):
-        a = int(step * i)
-        b = int(step * (i + 1))
+    for fold_i in range(k_fold):
+        a = int(step * fold_i)
+        b = int(step * (fold_i + 1))
         if b > len(data_inputs):
             b = len(data_inputs)
 
-        validation = data_inputs[a:b]
-        train = np.concatenate((data_inputs[:a], data_inputs[b:]), axis=0)
+        train: DACTData = concat_dact_data(data_inputs[:a], data_inputs[b:])
+        validation: DACTData = data_inputs[a:b]  # held-out fold against the training data
 
-        splitted_validation_inputs.append(validation)
         splitted_train_data_inputs.append(train)
+        splitted_validation_inputs.append(validation)
 
     return splitted_train_data_inputs, splitted_validation_inputs
+
+
+def concat_dact_data(arr1: DACTData, arr2: DACTData) -> DACTData:
+    if isinstance(arr1, (list, tuple)):
+        return arr1 + arr2
+    else:
+        return np.concatenate((arr1, arr2), axis=0)
 
 
 class ValidationSplitter(BaseValidationSplitter):
@@ -406,69 +418,76 @@ class ValidationSplitter(BaseValidationSplitter):
         self.validation_size = validation_size
 
     def split(
-        self, data_inputs, ids=None, expected_outputs=None, context: CX = None
-    ) -> Tuple[List, List, List, List]:
-        train_data_inputs, train_expected_outputs, train_ids, validation_data_inputs, validation_expected_outputs, validation_ids = validation_split(
-            test_size=self.validation_size,
-            data_inputs=data_inputs,
-            ids=ids,
-            expected_outputs=expected_outputs
-        )
+        self,
+        data_inputs: DIT,
+        ids: Optional[IDT] = None,
+        expected_outputs: Optional[EOT] = None,
+        context: Optional[CX] = None
+    ) -> Tuple[FoldsList[DIT], FoldsList[EOT], FoldsList[IDT], FoldsList[DIT], FoldsList[EOT], FoldsList[IDT]]:
 
-        return [train_data_inputs], [train_expected_outputs], [train_ids], \
-               [validation_data_inputs], [validation_expected_outputs], [validation_ids]
+        return tuple([
+            # The data goes from `DACTData` to `FoldsList[DACTData]`, as per the a single fold:
+            [data] for data in validation_split(
+                test_size=self.validation_size,
+                data_inputs=data_inputs,
+                ids=ids,
+                expected_outputs=expected_outputs
+            )
+        ])
 
 
-def validation_split(test_size: float, data_inputs, ids=None, expected_outputs=None) \
-        -> Tuple[List, List, List, List, List, List]:
+def validation_split(
+    test_size: float,
+    data_inputs: Optional[DIT] = None,
+    ids: Optional[IDT] = None,
+    expected_outputs: Optional[EOT] = None
+) -> Tuple[DIT, EOT, IDT, DIT, EOT, IDT]:
     """
-    Split data inputs, and expected outputs into a training set, and a validation set.
+    Split data inputs, and expected outputs into a single training set, and a single validation set.
 
     :param test_size: test size in float
     :param data_inputs: data inputs to split
     :param ids: ids associated with each data entry
     :param expected_outputs: expected outputs to split
-    :return: train_data_inputs, train_expected_outputs, ids_train, validation_data_inputs, validation_expected_outputs, ids_val
+    :return: train_di, train_eo, train_ids, valid_di, valid_eo, valid_ids
     """
-    validation_data_inputs = _validation_split(data_inputs, test_size)
-    validation_expected_outputs, ids_val = None, None
-    if expected_outputs is not None:
-        validation_expected_outputs = _validation_split(expected_outputs, test_size)
-    if ids is not None:
-        ids_val = _validation_split(ids, test_size)
-
-    train_data_inputs = _train_split(data_inputs, test_size)
-    train_expected_outputs, ids_train = None, None
-    if expected_outputs is not None:
-        train_expected_outputs = _train_split(expected_outputs, test_size)
-    if ids is not None:
-        ids_train = _train_split(ids, test_size)
-
-    return train_data_inputs, train_expected_outputs, ids_train, \
-        validation_data_inputs, validation_expected_outputs, ids_val
+    return (
+        _train_split(data_inputs, test_size),
+        _train_split(expected_outputs, test_size),
+        _train_split(ids, test_size),
+        _validation_split(data_inputs, test_size),
+        _validation_split(expected_outputs, test_size),
+        _validation_split(ids, test_size),
+    )
 
 
-def _train_split(data_inputs, test_size) -> List:
+def _train_split(data_inputs: DACTData, test_size) -> DACTData:
     """
     Split training set.
 
     :param data_inputs: data inputs to split
     :return: train_data_inputs
     """
+    if data_inputs is None:
+        return None
     return data_inputs[0:_get_index_split(data_inputs, test_size)]
 
 
-def _validation_split(data_inputs, test_size) -> List:
+def _validation_split(data_inputs: DACTData, test_size) -> DACTData:
     """
     Split validation set.
 
     :param data_inputs: data inputs to split
     :return: validation_data_inputs
     """
+    if data_inputs is None:
+        return None
     return data_inputs[_get_index_split(data_inputs, test_size):]
 
 
-def _get_index_split(data_inputs, test_size):
+def _get_index_split(data_inputs: DACTData, test_size):
+    if test_size < 0 or test_size > 1:
+        raise ValueError('test_size must be a float in the range [0, 1].')
     return math.floor(len(data_inputs) * (1 - test_size))
 
 
