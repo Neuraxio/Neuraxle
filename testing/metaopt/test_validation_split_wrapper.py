@@ -1,30 +1,32 @@
 import numpy as np
-
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.metaopt.validation import ValidationSplitWrapper
+from neuraxle.metaopt.auto_ml import AutoML
+from neuraxle.metaopt.callbacks import MetricCallback
+from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.steps.misc import FitTransformCallbackStep, TapeCallbackFunction
+from sklearn.metrics import mean_squared_error
 
 
-def test_validation_split_wrapper_handle_methods_should_split_data(tmpdir):
+def test_validation_splitter_handler_methods_should_split_data(tmpdir):
     transform_callback = TapeCallbackFunction()
     fit_callback = TapeCallbackFunction()
-    validation_split_wrapper = ValidationSplitWrapper(
-        FitTransformCallbackStep(
+    validation_split_wrapper = AutoML(
+        pipeline=FitTransformCallbackStep(
             transform_callback_function=transform_callback,
             fit_callback_function=fit_callback,
             transform_function=lambda di: di * 2
         ),
-        test_size=0.1
-    )
-    data_inputs = np.random.randint(1, 100, (100, 5))
-    expected_outputs = np.random.randint(1, 100, (100, 5))
+        validation_splitter=ValidationSplitter(validation_size=0.1),
+        scoring_callback=MetricCallback("MSE", mean_squared_error, False),
+        n_trials=18,
+    ).with_context(CX(tmpdir))
+
+    data_inputs = np.random.randint(low=1, high=100, size=(100, 5))
+    expected_outputs = np.random.randint(low=1, high=100, size=(100, 5))
 
     validation_split_wrapper, outputs = validation_split_wrapper.handle_fit_transform(
-        DACT(data_inputs=data_inputs, ids=list(range(len(data_inputs))),
-                      expected_outputs=expected_outputs),
-        CX(tmpdir)
-    )
+        DACT(di=data_inputs, eo=expected_outputs), CX(tmpdir))
 
     assert np.array_equal(outputs.data_inputs, data_inputs * 2)
 

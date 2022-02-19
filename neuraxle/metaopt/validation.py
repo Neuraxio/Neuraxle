@@ -267,7 +267,6 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
 
 
 FoldsList = List  # A list over folds. Can contain DACTData or even DACTs or Tuples of DACTs.
-FoldsIterable = Iterable
 
 
 class BaseValidationSplitter(ABC):
@@ -281,9 +280,9 @@ class BaseValidationSplitter(ABC):
         """
         splits: FoldsList[Tuple[TrainDACT, ValidDACT]] = []
 
-        data_folds: FoldsIterable[Tuple[DIT, EOT, IDT, DIT, EOT, IDT]] = zip(self.split(
-            data_container.data_inputs, data_container.expected_outputs, context
-        ))
+        data_folds: FoldsList[Tuple[DIT, EOT, IDT, DIT, EOT, IDT]] = list(zip(*self.split(
+            data_container.data_inputs, data_container.ids, data_container.expected_outputs, context
+        )))
 
         # Iterate on folds:
         for (train_di, train_eo, train_ids, valid_di, valid_eo, valid_ids) in data_folds:
@@ -323,6 +322,92 @@ class BaseValidationSplitter(ABC):
         :return: train_di, train_eo, train_ids, valid_di, valid_eo, valid_ids
         """
         pass
+
+
+class ValidationSplitter(BaseValidationSplitter):
+    """
+    Create a function that splits data into a training, and a validation set.
+
+    .. code-block:: python
+
+        # create a validation splitter function with 80% train, and 20% validation
+        validation_splitter(0.20)
+
+
+    :param test_size: test size in float
+    :return:
+    """
+
+    def __init__(self, validation_size: float):
+        self.validation_size = validation_size
+
+    def split(
+        self,
+        data_inputs: DIT,
+        ids: Optional[IDT] = None,
+        expected_outputs: Optional[EOT] = None,
+        context: Optional[CX] = None
+    ) -> Tuple[FoldsList[DIT], FoldsList[EOT], FoldsList[IDT], FoldsList[DIT], FoldsList[EOT], FoldsList[IDT]]:
+
+        return tuple([
+            # The data goes from `DACTData` to `FoldsList[DACTData]`, as per the a single fold:
+            [data] for data in self._full_validation_split(
+                data_inputs=data_inputs,
+                ids=ids,
+                expected_outputs=expected_outputs
+            )
+        ])
+
+    def _full_validation_split(
+        self,
+        data_inputs: Optional[DIT] = None,
+        ids: Optional[IDT] = None,
+        expected_outputs: Optional[EOT] = None
+    ) -> Tuple[DIT, EOT, IDT, DIT, EOT, IDT]:
+        """
+        Split data inputs, and expected outputs into a single training set, and a single validation set.
+
+        :param test_size: test size in float
+        :param data_inputs: data inputs to split
+        :param ids: ids associated with each data entry
+        :param expected_outputs: expected outputs to split
+        :return: train_di, train_eo, train_ids, valid_di, valid_eo, valid_ids
+        """
+        return (
+            self._train_split(data_inputs),
+            self._train_split(expected_outputs),
+            self._train_split(ids),
+            self._validation_split(data_inputs),
+            self._validation_split(expected_outputs),
+            self._validation_split(ids),
+        )
+
+    def _train_split(self, data_inputs: DACTData) -> DACTData:
+        """
+        Split training set.
+
+        :param data_inputs: data inputs to split
+        :return: train_data_inputs
+        """
+        if data_inputs is None:
+            return None
+        return data_inputs[0:self._get_index_split(data_inputs)]
+
+    def _validation_split(self, data_inputs: DACTData) -> DACTData:
+        """
+        Split validation set.
+
+        :param data_inputs: data inputs to split
+        :return: validation_data_inputs
+        """
+        if data_inputs is None:
+            return None
+        return data_inputs[self._get_index_split(data_inputs):]
+
+    def _get_index_split(self, data_inputs: DACTData) -> int:
+        if self.validation_size < 0 or self.validation_size > 1:
+            raise ValueError('validation_size must be a float in the range [0, 1].')
+        return math.floor(len(data_inputs) * (1 - self.validation_size))
 
 
 class KFoldCrossValidationSplitter(BaseValidationSplitter):
@@ -384,7 +469,7 @@ class KFoldCrossValidationSplitter(BaseValidationSplitter):
         valid_splitted_data: List[DACTData] = []
 
         for fold_i in range(self._get_k_fold(dact_data)):
-            train_slice, valid_slice = self._get_slices_at_fold_i(dact_data, fold_i)
+            train_slice, valid_slice = self._get_train_val_slices_at_fold_i(dact_data, fold_i)
 
             train_splitted_data.append(train_slice)
             valid_splitted_data.append(valid_slice)
@@ -407,97 +492,6 @@ class KFoldCrossValidationSplitter(BaseValidationSplitter):
             return arr1 + arr2
         else:
             return np.concatenate((arr1, arr2), axis=0)
-
-
-class ValidationSplitter(BaseValidationSplitter):
-    """
-    Create a function that splits data into a training, and a validation set.
-
-    .. code-block:: python
-
-        # create a validation splitter function with 80% train, and 20% validation
-        validation_splitter(0.20)
-
-
-    :param test_size: test size in float
-    :return:
-    """
-
-    def __init__(self, validation_size: float):
-        self.validation_size = validation_size
-
-    def split(
-        self,
-        data_inputs: DIT,
-        ids: Optional[IDT] = None,
-        expected_outputs: Optional[EOT] = None,
-        context: Optional[CX] = None
-    ) -> Tuple[FoldsList[DIT], FoldsList[EOT], FoldsList[IDT], FoldsList[DIT], FoldsList[EOT], FoldsList[IDT]]:
-
-        return tuple([
-            # The data goes from `DACTData` to `FoldsList[DACTData]`, as per the a single fold:
-            [data] for data in validation_split(
-                test_size=self.validation_size,
-                data_inputs=data_inputs,
-                ids=ids,
-                expected_outputs=expected_outputs
-            )
-        ])
-
-
-def validation_split(
-    test_size: float,
-    data_inputs: Optional[DIT] = None,
-    ids: Optional[IDT] = None,
-    expected_outputs: Optional[EOT] = None
-) -> Tuple[DIT, EOT, IDT, DIT, EOT, IDT]:
-    """
-    Split data inputs, and expected outputs into a single training set, and a single validation set.
-
-    :param test_size: test size in float
-    :param data_inputs: data inputs to split
-    :param ids: ids associated with each data entry
-    :param expected_outputs: expected outputs to split
-    :return: train_di, train_eo, train_ids, valid_di, valid_eo, valid_ids
-    """
-    return (
-        _train_split(data_inputs, test_size),
-        _train_split(expected_outputs, test_size),
-        _train_split(ids, test_size),
-        _validation_split(data_inputs, test_size),
-        _validation_split(expected_outputs, test_size),
-        _validation_split(ids, test_size),
-    )
-
-
-def _train_split(data_inputs: DACTData, test_size) -> DACTData:
-    """
-    Split training set.
-
-    :param data_inputs: data inputs to split
-    :return: train_data_inputs
-    """
-    if data_inputs is None:
-        return None
-    return data_inputs[0:_get_index_split(data_inputs, test_size)]
-
-
-def _validation_split(data_inputs: DACTData, test_size) -> DACTData:
-    """
-    Split validation set.
-
-    :param data_inputs: data inputs to split
-    :return: validation_data_inputs
-    """
-    if data_inputs is None:
-        return None
-    return data_inputs[_get_index_split(data_inputs, test_size):]
-
-
-def _get_index_split(data_inputs: DACTData, test_size):
-    if test_size < 0 or test_size > 1:
-        raise ValueError('test_size must be a float in the range [0, 1].')
-    return math.floor(len(data_inputs) * (1 - test_size))
 
 
 class AnchoredWalkForwardTimeSeriesCrossValidationSplitter(KFoldCrossValidationSplitter):
@@ -556,7 +550,7 @@ class AnchoredWalkForwardTimeSeriesCrossValidationSplitter(KFoldCrossValidationS
         # dact_data of shape [batch_size, total_time_steps, ...].
 
         # first slice index is always 0 for anchored walk forward cross validation.
-        a = self._get_a_size(fold_i)
+        a = self._get_beginning_at_fold_i(fold_i)
         b = int(fold_i * self.validation_window_size + self.minimum_training_size)
         b = min(b, dact_data.shape[1])
         train_slice: DACTData = dact_data[:, a:b]
@@ -569,6 +563,11 @@ class AnchoredWalkForwardTimeSeriesCrossValidationSplitter(KFoldCrossValidationS
         return train_slice, valid_slice
 
     def _get_beginning_at_fold_i(self, fold_i: int) -> int:
+        """
+        Get the start time of the training split at the given fold index.
+        Here in the anchored splitter, it is always zero. This method is overwritten
+        in the non-anchored version of the walk forward ts validation splitter
+        """
         return 0
 
 
@@ -617,4 +616,7 @@ class WalkForwardTimeSeriesCrossValidationSplitter(AnchoredWalkForwardTimeSeries
         )
 
     def _get_beginning_at_fold_i(self, fold_i: int) -> int:
+        """
+        Get the start time of the training split at the given fold index.
+        """
         return int(fold_i * self.validation_window_size)
