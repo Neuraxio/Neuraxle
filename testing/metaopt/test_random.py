@@ -96,8 +96,8 @@ def test_classic_walkforward_crossvalidation_split(
     )
 
     # Act
-    train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = \
-        step.split(data_inputs, expected_outputs)
+    train_data_inputs, train_expected_outputs, _, validation_data_inputs, validation_expected_outputs, _ = \
+        step.split(data_inputs, None, expected_outputs)
 
     # Assert
     assert len(train_data_inputs) == number_of_fold
@@ -204,8 +204,8 @@ def test_anchored_walkforward_crossvalidation_split(
     )
 
     # Act
-    train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = \
-        step.split(data_inputs, expected_outputs)
+    train_data_inputs, train_expected_outputs, _, validation_data_inputs, validation_expected_outputs, _ = \
+        step.split(data_inputs, None, expected_outputs)
 
     # Assert
     assert len(train_data_inputs) == number_of_fold

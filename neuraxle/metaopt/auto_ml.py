@@ -26,6 +26,7 @@ Hyperparameter selection strategies are used to optimize the hyperparameters of 
 """
 
 from copy import copy
+import gc
 import multiprocessing
 from typing import ContextManager, Iterator, List, Optional, Tuple
 
@@ -73,19 +74,28 @@ class Trainer(BaseService):
         pipeline: BaseStep,
         dact: DACT,
         trial_scope: Trial,
-    ):
+        return_trained_pipelines: bool = False
+    ) -> Optional[List[BaseStep]]:
         """
         Train pipeline using the validation splitter.
         Track training, and validation metrics for each epoch.
         Note: the present method is just a shortcut to using the `execute_trial` method with less boilerplate code needed. Refer to `execute_trial` for full flexibility
         """
+        trained_pipelines: List[BaseStep] = []
 
         splits: List[Tuple[DACT, DACT]] = self.validation_splitter.split_dact(
             dact, context=trial_scope.context)
 
         for train_dact, val_dact in splits:
             with trial_scope.new_validation_split() as trial_split_scope:
-                self.train_split(pipeline, train_dact, val_dact, trial_split_scope)
+                p = self.train_split(pipeline, train_dact, val_dact, trial_split_scope)
+                if return_trained_pipelines:
+                    trained_pipelines.append(p)
+                else:
+                    del p
+                    gc.collect()
+
+        return trained_pipelines
 
     def train_split(
         self,

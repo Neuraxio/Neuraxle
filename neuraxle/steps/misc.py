@@ -26,7 +26,7 @@ You can find here misc. pipeline steps, for example, callbacks useful for debugg
 
 import time
 from abc import ABC
-from typing import Any, List, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 from neuraxle.base import BaseStep, BaseTransformer
 from neuraxle.base import ExecutionContext as CX
@@ -168,8 +168,8 @@ class FitTransformCallbackStep(BaseStep):
 
         self.transform_function = transform_function
         self.more_arguments = more_arguments
-        self.fit_callback_function = fit_callback_function
-        self.transform_callback_function = transform_callback_function
+        self.fit_callback_function: Optional[Callable] = fit_callback_function
+        self.transform_callback_function: Optional[Callable] = transform_callback_function
 
     def fit(self, data_inputs, expected_outputs=None):
         self.fit_callback_function((data_inputs, expected_outputs), *self.more_arguments)

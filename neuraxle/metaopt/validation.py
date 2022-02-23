@@ -105,7 +105,14 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
     def estimate_ideal_n_trials(hp_space: HyperparameterSpace) -> int:
         _ges: GridExplorationSampler = GridExplorationSampler(expected_n_trials=1)
         _ges._reinitialize_grid(hp_space, [])
-        return _ges.expected_n_trials
+
+        _expected_n_trials = _ges.expected_n_trials
+        # Then readjust the expected_n_trials to be a multiple of the number of hyperparameters:
+        #     NOTE: TRIED A DOZEN OF POWS SQRT CUMSUMPROD AND SOPHISTICATED OTHER THINGS, AND FOUND THIS BEST ONE:
+        _estimated_ideal_n_trials: int = math.ceil(0.29 * _expected_n_trials)
+        # TODO: could add more samples to the grid lens to match the counts in _estimated_ideal_n_trials.
+
+        return _estimated_ideal_n_trials
 
     def _reinitialize_grid(self, hp_space: HyperparameterSpace, previous_trials_hp: List[HyperparameterSamples]) -> HyperparameterSamples:
         """
@@ -194,10 +201,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
                 self.flat_hp_grid_values[hp_name] = hp_samples
                 self.flat_hp_grid_lens.append(len(hp_samples))
 
-        # Then readjust the expected_n_trials to be a multiple of the number of hyperparameters:
-        #     NOTE: TRIED A DOZEN OF POWS SQRT CUMSUMPROD AND SOPHISTICATED OTHER THINGS, AND FOUND THIS BEST ONE:
-        _estimated_ideal_n_trials: int = math.ceil(0.29 * sum(self.flat_hp_grid_lens))
-        # TODO: could add more samples to the grid lens to match the counts in _estimated_ideal_n_trials.
+        _estimated_ideal_n_trials: int = sum(self.flat_hp_grid_lens)
 
         if self.expected_n_trials != _estimated_ideal_n_trials:
             warnings.warn(

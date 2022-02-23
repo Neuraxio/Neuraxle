@@ -200,7 +200,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
 
     @property
     def parent(self) -> ParentAggregateT:
-        if self._parent is None:
+        if self._parent is None and not isinstance(self, Root):
             self._parent = self.from_context(self.context.pop_attr(), is_deep=False)
             self._assert(isinstance(self._parent, self.parentaggregate),
                          f"parent should be of type {self.parentaggregate.__name__} but is of type {self._parent.__class__.__name__}", self.context)
@@ -220,13 +220,14 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
 
     def sanitize_metric_name(self, metric_name: str = None):
         """
-        If the argument metric is None, the optimizer's metric is taken. If the optimizer's metric is None, the parent metric is taken.
+        If the argument metric is None, the optimizer's metric is taken.
+        If the optimizer's metric is None, the parent metric is taken.
         """
         if metric_name is not None:
             return metric_name
         elif hasattr(self._dataclass, "main_metric_name") and self._dataclass.main_metric_name is not None:
             return self._dataclass.main_metric_name
-        return metric_name or self.parent.sanitize_metric_name(metric_name)
+        return metric_name or (self.parent.sanitize_metric_name(metric_name) if self.parent is not None else None)
 
     def refresh(self, deep: bool = True):
         with self.context.lock:
@@ -471,10 +472,16 @@ class Client(BaseAggregate[Project, 'Round', ClientDataclass]):
 class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
 
     def with_optimizer(
-        self, hp_optimizer: BaseHyperparameterOptimizer, hp_space: HyperparameterSpace
+        self,
+        hp_optimizer: BaseHyperparameterOptimizer,
+        hp_space: HyperparameterSpace
     ) -> 'Round':
         self.hp_optimizer: BaseHyperparameterOptimizer = hp_optimizer
         self.hp_space: HyperparameterSpace = hp_space
+        return self
+
+    def with_metric(self, metric_name: str) -> 'Round':
+        self._dataclass.main_metric_name = metric_name
         return self
 
     @property
