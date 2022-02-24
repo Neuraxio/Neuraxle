@@ -29,12 +29,14 @@ import time
 
 import numpy as np
 from sklearn.metrics import mean_squared_error
-from neuraxle.base import ExecutionContext as CX
 
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.data_container import DataContainer as DACT
+from neuraxle.data_container import TrainDACT, PredsDACT
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler, ValidationSplitter
-from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
+from neuraxle.metaopt.auto_ml import AutoML, ValidationSplitter
+from neuraxle.metaopt.callbacks import MetricCallback
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEach
 from neuraxle.steps.misc import Sleep
@@ -43,8 +45,7 @@ from neuraxle.steps.caching import JoblibTransformDIValueCachingWrapper
 
 
 def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
-    DATA_INPUTS = np.array(range(100))
-    EXPECTED_OUTPUTS = np.array(range(100, 200))
+    DATA_CONTAINER: TrainDACT = DACT(data_inputs=np.array(range(100)), expected_outputs=np.array(range(100, 200)))
 
     HYPERPARAMETER_SPACE = HyperparameterSpace({
         'multiplication_1__multiply_by': RandInt(1, 2),
@@ -53,31 +54,27 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
 
     print('Classic Pipeline:')
     classic_pipeline_folder = os.path.join(str(tmpdir), 'classic')
+    classic_pipeline_context = CX(root=classic_pipeline_folder)
 
     pipeline = Pipeline([
         ('multiplication_1', MultiplyByN()),
         ('sleep_1', ForEach(Sleep(sleep_time))),
         ('multiplication_2', MultiplyByN()),
-    ], cache_folder=classic_pipeline_folder).set_hyperparams_space(HYPERPARAMETER_SPACE)
+    ]).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
     auto_ml = AutoML(
         pipeline,
         refit_best_trial=True,
         n_trials=n_iter,
-        cache_folder_when_no_handle=classic_pipeline_folder,
         validation_splitter=ValidationSplitter(0.2),
-        hyperparams_optimizer=RandomSearchSampler(),
-        scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
-        callbacks=[
-            MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)
-        ],
+        callbacks=[MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)],
     )
-    auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
-    outputs = auto_ml.get_best_model().predict(DATA_INPUTS)
+    auto_ml = auto_ml.handle_fit(DATA_CONTAINER, classic_pipeline_context)
+    outputs: PredsDACT = auto_ml.handle_predict(DATA_CONTAINER.without_eo(), classic_pipeline_context)
     time_b = time.time()
 
-    actual_score = mean_squared_error(EXPECTED_OUTPUTS, outputs)
+    actual_score = mean_squared_error(DATA_CONTAINER.eo, outputs.di)
     print('{0} seconds'.format(time_b - time_a))
     print('smallest mse: {0}'.format(actual_score))
     print('best hyperparams: {0}'.format(pipeline.get_hyperparams()))
@@ -86,6 +83,7 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
 
     print('Resumable Pipeline:')
     caching_pipeline_folder = os.path.join(str(tmpdir), 'cache')
+    caching_pipeline_context = CX(root=caching_pipeline_folder)
 
     pipeline: Pipeline = Pipeline([
         ('multiplication_1', MultiplyByN()),
@@ -93,26 +91,21 @@ def main(tmpdir, sleep_time: float = 0.001, n_iter: int = 10):
             ('sleep_1', ForEach(Sleep(sleep_time))),
             ('multiplication_2', MultiplyByN()),
         ]))),
-    ], cache_folder=caching_pipeline_folder).set_hyperparams_space(HYPERPARAMETER_SPACE)
+    ]).set_hyperparams_space(HYPERPARAMETER_SPACE)
 
     time_a = time.time()
     auto_ml = AutoML(
         pipeline,
         refit_best_trial=True,
         n_trials=n_iter,
-        cache_folder_when_no_handle=caching_pipeline_folder,
         validation_splitter=ValidationSplitter(0.2),
-        hyperparams_optimizer=RandomSearchSampler(),
-        scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
-        callbacks=[
-            MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)
-        ]
+        callbacks=[MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)]
     )
-    auto_ml = auto_ml.fit(DATA_INPUTS, EXPECTED_OUTPUTS)
-    outputs2 = auto_ml.get_best_model().predict(DATA_INPUTS)
+    auto_ml = auto_ml.handle_fit(DATA_CONTAINER, caching_pipeline_context)
+    outputs2: PredsDACT = auto_ml.handle_predict(DATA_CONTAINER.without_eo(), caching_pipeline_context)
     time_b = time.time()
 
-    actual_score = mean_squared_error(EXPECTED_OUTPUTS, outputs2)
+    actual_score = mean_squared_error(DATA_CONTAINER.eo, outputs2.di)
     print('{0} seconds'.format(time_b - time_a))
     print('smallest mse: {0}'.format(actual_score))
     print('best hyperparams: {0}'.format(pipeline.get_hyperparams()))

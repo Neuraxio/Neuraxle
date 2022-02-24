@@ -514,10 +514,6 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         return len(self.data_inputs)
 
 
-ARG_X_INPUTTED = DIT
-ARG_Y_PREDICTD = DIT
-ARG_Y_EXPECTED = EOT
-
 DACT = DataContainer
 TrainDACT = DACT[IDT, ARG_X_INPUTTED, ARG_Y_EXPECTED]  # training set input
 ValidDACT = DACT[IDT, ARG_X_INPUTTED, ARG_Y_EXPECTED]  # validation set input

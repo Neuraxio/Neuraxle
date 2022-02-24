@@ -52,7 +52,7 @@ from typing import (Any, Callable, Dict, Generic, ItemsView, Iterable,
 
 from joblib import dump, load
 
-from neuraxle.data_container import DIT, EOT
+from neuraxle.data_container import IDT, DIT, EOT, TrainDACT, PredsDACT, ARG_X_INPUTTED, ARG_Y_EXPECTED, ARG_Y_PREDICTD
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
@@ -1549,8 +1549,8 @@ class _TransformerStep(MixinForBaseService):
     """
 
     def _will_process(
-        self, data_container: DACT, context: CX
-    ) -> Tuple[DACT, CX]:
+        self, data_container: TrainDACT, context: CX
+    ) -> Tuple[TrainDACT, CX]:
         """
         Apply side effects before any step method.
         :param data_container: data container
@@ -1559,7 +1559,7 @@ class _TransformerStep(MixinForBaseService):
         """
         return data_container, context
 
-    def handle_transform(self, data_container: DACT, context: CX) -> DACT:
+    def handle_transform(self, data_container: TrainDACT, context: CX) -> PredsDACT:
         """
         Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base._TransformerStep.transform`.
 
@@ -1582,8 +1582,8 @@ class _TransformerStep(MixinForBaseService):
         return data_container
 
     def _will_transform_data_container(
-        self, data_container: DACT, context: CX
-    ) -> Tuple[DACT, CX]:
+        self, data_container: TrainDACT, context: CX
+    ) -> Tuple[TrainDACT, CX]:
         """
         Apply side effects before transform.
 
@@ -1593,7 +1593,7 @@ class _TransformerStep(MixinForBaseService):
         """
         return data_container, context.push(self)
 
-    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
+    def _transform_data_container(self, data_container: TrainDACT, context: CX) -> PredsDACT:
         """
         Transform data container.
 
@@ -1608,7 +1608,7 @@ class _TransformerStep(MixinForBaseService):
         return self.transform(*args, **kwargs)
 
     @abstractmethod
-    def transform(self, data_inputs):
+    def transform(self, data_inputs: ARG_X_INPUTTED) -> ARG_Y_PREDICTD:
         """
         Transform given data inputs.
 
@@ -1620,7 +1620,7 @@ class _TransformerStep(MixinForBaseService):
             f"the NonFittableMixin. You should otherwise ideally use handler methods. "
             f"Read more: https://www.neuraxle.org/stable/handler_methods.html")
 
-    def _did_transform(self, data_container: DACT, context: CX) -> DACT:
+    def _did_transform(self, data_container: PredsDACT, context: CX) -> PredsDACT:
         """
         Apply side effects after transform.
 
@@ -1630,7 +1630,7 @@ class _TransformerStep(MixinForBaseService):
         """
         return data_container
 
-    def _did_process(self, data_container: DACT, context: CX) -> DACT:
+    def _did_process(self, data_container: PredsDACT, context: CX) -> PredsDACT:
         """
         Apply side effects after any step method.
 
@@ -1640,7 +1640,7 @@ class _TransformerStep(MixinForBaseService):
         """
         return data_container
 
-    def handle_fit(self, data_container: DACT, context: CX) -> 'BaseTransformer':
+    def handle_fit(self, data_container: TrainDACT, context: CX) -> 'BaseTransformer':
         """
         Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base._FittableStep.fit`.
 
@@ -1659,10 +1659,11 @@ class _TransformerStep(MixinForBaseService):
         return self
 
     def handle_fit_transform(
-        self, data_container: DACT, context: CX
-    ) -> Tuple['BaseTransformer', DACT]:
+        self, data_container: TrainDACT, context: CX
+    ) -> Tuple['BaseTransformer', PredsDACT]:
         """
-        Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base._FittableStep.fit_transform`.
+        Override this to add side effects or change the execution flow before
+        (or after) calling * :func:`~neuraxle.base._FittableStep.fit_transform`.
 
         :param data_container: the data container to transform
         :param context: execution context
@@ -1670,7 +1671,7 @@ class _TransformerStep(MixinForBaseService):
         """
         return self, self.handle_transform(data_container, context)
 
-    def fit(self, data_inputs: DIT, expected_outputs: EOT) -> '_TransformerStep':
+    def fit(self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED) -> '_TransformerStep':
         """
         Fit given data inputs. By default, a step only transforms in the fit transform method.
         To add fitting to your step, see class:`_FittableStep` for more info.
@@ -1680,7 +1681,9 @@ class _TransformerStep(MixinForBaseService):
         """
         return self
 
-    def fit_transform(self, data_inputs: DIT, expected_outputs: EOT = None):
+    def fit_transform(
+        self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED = None
+    ) -> Tuple['_TransformerStep', ARG_Y_PREDICTD]:
         """
         Fit transform given data inputs. By default, a step only transforms in the fit transform method.
         To add fitting to your step, see class:`_FittableStep` for more info.
@@ -1692,7 +1695,7 @@ class _TransformerStep(MixinForBaseService):
         self = self.fit(data_inputs, expected_outputs)
         return self, self.transform(data_inputs)
 
-    def handle_predict(self, data_container: DACT, context: CX) -> DACT:
+    def handle_predict(self, data_container: TrainDACT, context: CX) -> PredsDACT:
         """
         Handle_transform in test mode.
 
@@ -1708,7 +1711,7 @@ class _TransformerStep(MixinForBaseService):
         self.set_train(was_train)
         return data_container
 
-    def predict(self, data_input):
+    def predict(self, data_input: ARG_X_INPUTTED) -> ARG_Y_PREDICTD:
         """
         Predict the expected output in test mode using func:`~neuraxle.base._TransformerStep.transform`, but by setting self to test mode first and then reverting the mode.
 
@@ -1723,7 +1726,7 @@ class _TransformerStep(MixinForBaseService):
         self.set_train(was_train)
         return outputs
 
-    def handle_inverse_transform(self, data_container: DACT, context: CX) -> DACT:
+    def handle_inverse_transform(self, data_container: PredsDACT, context: CX) -> TrainDACT:
         """
         Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base._TransformerStep.inverse_transform`.
 
@@ -1744,13 +1747,13 @@ class _TransformerStep(MixinForBaseService):
 
         return data_container
 
-    def _inverse_transform_data_container(self, data_container: DACT, context: CX) -> DACT:
+    def _inverse_transform_data_container(self, data_container: PredsDACT, context: CX) -> TrainDACT:
         processed_outputs = self.inverse_transform(data_container.data_inputs)
         data_container.set_data_inputs(processed_outputs)
 
         return data_container
 
-    def inverse_transform(self, processed_outputs):
+    def inverse_transform(self, processed_outputs: ARG_Y_PREDICTD) -> ARG_X_INPUTTED:
         """
         Inverse Transform the given transformed data inputs.
 
@@ -1781,7 +1784,7 @@ class _FittableStep(MixinForBaseService):
         :class:`~neuraxle.data_container.DataContainer`
     """
 
-    def handle_fit(self, data_container: DACT, context: CX) -> 'BaseStep':
+    def handle_fit(self, data_container: TrainDACT, context: CX) -> 'BaseStep':
         """
         Override this to add side effects or change the execution flow before (or after) calling :func:`~neuraxle.base._FittableStep.fit`.
 
@@ -1804,8 +1807,8 @@ class _FittableStep(MixinForBaseService):
         return new_self
 
     def _will_fit(
-        self, data_container: DACT, context: CX
-    ) -> Tuple[DACT, CX]:
+        self, data_container: TrainDACT, context: CX
+    ) -> Tuple[TrainDACT, CX]:
         """
         Before fit is called, apply side effects on the step, the data container, or the execution context.
 
@@ -1816,7 +1819,7 @@ class _FittableStep(MixinForBaseService):
         self._invalidate()
         return data_container, context.push(self)
 
-    def _fit_data_container(self, data_container: DACT, context: CX) -> '_FittableStep':
+    def _fit_data_container(self, data_container: TrainDACT, context: CX) -> '_FittableStep':
         """
         Fit data container.
 
@@ -1826,7 +1829,7 @@ class _FittableStep(MixinForBaseService):
         """
         return self.fit(data_container.di, data_container.eo)
 
-    def _did_fit(self, data_container: DACT, context: CX) -> DACT:
+    def _did_fit(self, data_container: TrainDACT, context: CX) -> TrainDACT:
         """
         Apply side effects before fit is called.
 
@@ -1837,7 +1840,7 @@ class _FittableStep(MixinForBaseService):
         return data_container
 
     @abstractmethod
-    def fit(self, data_inputs: DIT, expected_outputs: EOT) -> '_FittableStep':
+    def fit(self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED) -> '_FittableStep':
         """
         Fit data inputs on the given expected outputs.
 
@@ -1851,8 +1854,8 @@ class _FittableStep(MixinForBaseService):
             f"Read more: https://www.neuraxle.org/stable/handler_methods.html")
 
     def handle_fit_transform(
-        self, data_container: DACT, context: CX
-    ) -> Tuple['BaseStep', DACT]:
+        self, data_container: TrainDACT, context: CX
+    ) -> Tuple['BaseStep', PredsDACT]:
         """
         Override this to add side effects or change the execution flow before (or after) calling * :func:`~neuraxle.base._FittableStep.fit_transform`.
 
@@ -1875,8 +1878,8 @@ class _FittableStep(MixinForBaseService):
         return new_self, data_container
 
     def _will_fit_transform(
-        self, data_container: DACT, context: CX
-    ) -> Tuple[DACT, CX]:
+        self, data_container: TrainDACT, context: CX
+    ) -> Tuple[TrainDACT, CX]:
         """
         Apply side effects before fit_transform is called.
 
@@ -1888,8 +1891,8 @@ class _FittableStep(MixinForBaseService):
         return data_container, context.push(self)
 
     def _fit_transform_data_container(
-        self, data_container: DACT, context: CX
-    ) -> Tuple['BaseStep', DACT]:
+        self, data_container: TrainDACT, context: CX
+    ) -> Tuple['BaseStep', PredsDACT]:
         """
         Fit transform data container.
 
@@ -1919,7 +1922,7 @@ class _FittableStep(MixinForBaseService):
 
         return new_self, out
 
-    def _did_fit_transform(self, data_container: DACT, context: CX) -> DACT:
+    def _did_fit_transform(self, data_container: PredsDACT, context: CX) -> PredsDACT:
         """
         Apply side effects after fit transform.
 
@@ -1947,7 +1950,7 @@ class _CustomHandlerMethods(MixinForBaseService):
         :class:`~neuraxle.distributed.streaming.BaseQueuedPipeline`
     """
 
-    def handle_fit(self, data_container: DACT, context: CX) -> 'BaseStep':
+    def handle_fit(self, data_container: TrainDACT, context: CX) -> 'BaseStep':
         """
         Handle fit with a custom handler method for fitting the data container.
         The custom method to override is fit_data_container.
@@ -1977,8 +1980,8 @@ class _CustomHandlerMethods(MixinForBaseService):
         return new_self
 
     def handle_fit_transform(
-        self, data_container: DACT, context: CX
-    ) -> Tuple['BaseStep', DACT]:
+        self, data_container: TrainDACT, context: CX
+    ) -> Tuple['BaseStep', PredsDACT]:
         """
         Handle fit_transform with a custom handler method for fitting, and transforming the data container.
         The custom method to override is fit_transform_data_container.
@@ -2007,7 +2010,7 @@ class _CustomHandlerMethods(MixinForBaseService):
 
         return new_self, data_container
 
-    def handle_transform(self, data_container: DACT, context: CX) -> DACT:
+    def handle_transform(self, data_container: TrainDACT, context: CX) -> PredsDACT:
         """
         Handle transform with a custom handler method for transforming the data container.
         The custom method to override is transform_data_container.
@@ -2037,7 +2040,7 @@ class _CustomHandlerMethods(MixinForBaseService):
         return data_container
 
     @abstractmethod
-    def fit_data_container(self, data_container: DACT, context: CX):
+    def fit_data_container(self, data_container: TrainDACT, context: CX):
         """
         Custom fit data container method.
 
@@ -2048,7 +2051,7 @@ class _CustomHandlerMethods(MixinForBaseService):
         raise NotImplementedError()
 
     @abstractmethod
-    def fit_transform_data_container(self, data_container: DACT, context: CX):
+    def fit_transform_data_container(self, data_container: TrainDACT, context: CX):
         """
         Custom fit transform data container method.
 
@@ -2059,7 +2062,7 @@ class _CustomHandlerMethods(MixinForBaseService):
         raise NotImplementedError()
 
     @abstractmethod
-    def transform_data_container(self, data_container: DACT, context: CX):
+    def transform_data_container(self, data_container: TrainDACT, context: CX):
         """
         Custom transform data container method.
 
@@ -2867,19 +2870,23 @@ class BaseStep(_FittableStep, BaseTransformer, ABC):
                 self.mean = None
                 self.std = None
 
-            def fit(self, data_inputs: DIT, expected_outputs: EOT = None) -> 'BaseStep':
+            def fit(
+                self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED = None
+            ) -> 'BaseStep':
                 self._calculate_mean_std(data_inputs)
                 return self
 
-            def _calculate_mean_std(self, data_inputs):
+            def _calculate_mean_std(self, data_inputs: ARG_X_INPUTTED):
                 self.mean = np.array(data_inputs).mean(axis=0)
                 self.std = np.array(data_inputs).std(axis=0)
 
-            def fit_transform(self, data_inputs: DIT, expected_outputs: EOT = None):
+            def fit_transform(
+                self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED = None
+            ) -> Tuple['BaseStep', ARG_Y_PREDICTD]:
                 self.fit(data_inputs, expected_outputs)
                 return self, (np.array(data_inputs) - self.mean) / self.std
 
-            def transform(self, data_inputs):
+            def transform(self, data_inputs: ARG_X_INPUTTED) -> ARG_Y_PREDICTD:
                 if self.mean is None or self.std is None:
                     self._calculate_mean_std(data_inputs)
                 return (np.array(data_inputs) - self.mean) / self.std
@@ -2948,32 +2955,29 @@ class MetaStepMixin(MixinForBaseTransformer, MetaServiceMixin):
                 BaseStep.__init__(self)
                 MetaStepMixin.__init__(self, wrapped)
 
-            def fit(self, data_inputs: DIT, expected_outputs: EOT = None):
+            def fit(self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED = None) -> 'BaseStep':
                 if expected_outputs is None:
                     expected_outputs = [None] * len(data_inputs)
-
                 for di, eo in zip(data_inputs, expected_outputs):
                     self.wrapped = self.wrapped.fit(di, eo)
-
                 return self
 
-            def transform(self, data_inputs):
+            def transform(self, data_inputs: ARG_X_INPUTTED) -> ARG_Y_PREDICTD:
                 outputs = []
                 for di in data_inputs:
                     output = self.wrapped.transform(di)
                     outputs.append(output)
+                return outputs
 
-            return outputs
-
-            def fit_transform(self, data_inputs: DIT, expected_outputs: EOT = None):
+            def fit_transform(
+                self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED = None
+            ) -> Tuple['BaseStep', ARG_Y_PREDICTD]:
                 if expected_outputs is None:
                     expected_outputs = [None] * len(data_inputs)
-
                 outputs = []
                 for di, eo in zip(data_inputs, expected_outputs):
                     self.wrapped, output = self.wrapped.fit_transform(di, eo)
                 outputs.append(output)
-
                 return self, outputs
 
     .. seealso::
@@ -2991,45 +2995,51 @@ class MetaStepMixin(MixinForBaseTransformer, MetaServiceMixin):
         savers.append(MetaStepJoblibStepSaver())
         self.savers.extend(savers)
 
-    def handle_fit_transform(self, data_container: DACT, context: CX):
+    def handle_fit_transform(
+        self, data_container: TrainDACT, context: CX
+    ) -> Tuple[BaseStep, PredsDACT]:
         new_self, data_container = super().handle_fit_transform(data_container, context)
 
         return new_self, data_container
 
-    def handle_transform(self, data_container: DACT, context: CX):
+    def handle_transform(self, data_container: TrainDACT, context: CX) -> PredsDACT:
         data_container = super().handle_transform(data_container, context)
 
         return data_container
 
-    def _fit_transform_data_container(self, data_container: DACT, context: CX):
+    def _fit_transform_data_container(
+        self, data_container: TrainDACT, context: CX
+    ) -> Tuple[BaseStep, PredsDACT]:
         self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
         return self, data_container
 
-    def _fit_data_container(self, data_container: DACT, context: CX):
+    def _fit_data_container(self, data_container: TrainDACT, context: CX) -> BaseStep:
         self.wrapped = self.wrapped.handle_fit(data_container, context)
         return self
 
-    def _transform_data_container(self, data_container: DACT, context: CX):
+    def _transform_data_container(self, data_container: TrainDACT, context: CX) -> PredsDACT:
         data_container = self.wrapped.handle_transform(data_container, context)
         return data_container
 
-    def _inverse_transform_data_container(self, data_container: DACT, context: CX) -> DACT:
+    def _inverse_transform_data_container(self, data_container: PredsDACT, context: CX) -> TrainDACT:
         data_container = self.wrapped.handle_inverse_transform(data_container, context)
         return data_container
 
-    def fit_transform(self, data_inputs: DIT, expected_outputs: EOT = None):
+    def fit_transform(
+        self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED = None
+    ) -> Tuple[BaseStep, ARG_Y_PREDICTD]:
         self.wrapped, data_inputs = self.wrapped.fit_transform(data_inputs, expected_outputs)
         return self, data_inputs
 
-    def fit(self, data_inputs: DIT, expected_outputs: EOT = None):
+    def fit(self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED = None) -> BaseStep:
         self.wrapped = self.wrapped.fit(data_inputs, expected_outputs)
         return self
 
-    def transform(self, data_inputs):
+    def transform(self, data_inputs: ARG_X_INPUTTED) -> ARG_Y_PREDICTD:
         data_inputs = self.wrapped.transform(data_inputs)
         return data_inputs
 
-    def inverse_transform(self, processed_outputs):
+    def inverse_transform(self, processed_outputs: ARG_Y_PREDICTD) -> ARG_X_INPUTTED:
         data_inputs = self.wrapped.inverse_transform(processed_outputs)
         return data_inputs
 
@@ -3124,13 +3134,13 @@ class NonFittableMixin(MixinForBaseTransformer):
     Note: fit methods are not implemented
     """
 
-    def _fit_data_container(self, data_container: DACT, context: CX):
+    def _fit_data_container(self, data_container: TrainDACT, context: CX) -> BaseStep:
         return self
 
-    def _fit_transform_data_container(self, data_container: DACT, context: CX):
+    def _fit_transform_data_container(self, data_container: TrainDACT, context: CX) -> Tuple[BaseStep, PredsDACT]:
         return self, self._transform_data_container(data_container, context)
 
-    def fit(self, data_inputs: DIT, expected_outputs: EOT = None) -> 'NonFittableMixin':
+    def fit(self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED = None) -> BaseStep:
         """
         Don't fit.
 
@@ -3154,18 +3164,18 @@ class NonTransformableMixin(MixinForBaseTransformer):
             def __init__(self):
                 BaseStep.__init__(self)
 
-            def fit(self, data_inputs: DIT, expected_outputs: EOT = None) -> 'FitCallbackStep':
+            def fit(self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED = None) -> BaseStep:
                 print((data_inputs, expected_outputs))
                 return self
 
     .. note::
-        fit methods are not implemented
+        Fit methods are not implemented.
     """
 
-    def _fit_transform_data_container(self, data_container: DACT, context: CX):
+    def _fit_transform_data_container(self, data_container: TrainDACT, context: CX):
         return self._fit_data_container(data_container, context), data_container
 
-    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
+    def _transform_data_container(self, data_container: TrainDACT, context: CX) -> PredsDACT:
         """
         Do nothing - return the same data.
 
@@ -3175,7 +3185,7 @@ class NonTransformableMixin(MixinForBaseTransformer):
         """
         return data_container
 
-    def transform(self, data_inputs):
+    def transform(self, data_inputs: ARG_X_INPUTTED) -> ARG_Y_PREDICTD:
         """
         Do nothing - return the same data.
 
@@ -3184,9 +3194,9 @@ class NonTransformableMixin(MixinForBaseTransformer):
         """
         return data_inputs
 
-    def inverse_transform(self, processed_outputs):
+    def inverse_transform(self, processed_outputs: ARG_Y_PREDICTD) -> ARG_X_INPUTTED:
         """
-        Do nothing - return the same data.
+        Do nothing - passthrough to return the same data.
 
         :param processed_outputs: the data to process
         :return: the ``processed_outputs``, unchanged.
@@ -3718,7 +3728,7 @@ class TransformHandlerOnlyMixin(MixinForBaseTransformer):
     """
 
     @abstractmethod
-    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
+    def _transform_data_container(self, data_container: TrainDACT, context: CX) -> PredsDACT:
         """
         Transform data container with the given execution context.
 
@@ -3755,16 +3765,16 @@ class HandleOnlyMixin(MixinForBaseTransformer):
     """
 
     @abstractmethod
-    def _fit_data_container(self, data_container: DACT, context: CX) -> 'BaseTransformer':
+    def _fit_data_container(self, data_container: TrainDACT, context: CX) -> 'BaseTransformer':
         raise NotImplementedError('Must implement _fit_data_container in {0}'.format(self.name))
 
     @abstractmethod
-    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
+    def _transform_data_container(self, data_container: TrainDACT, context: CX) -> PredsDACT:
         raise NotImplementedError('Must implement _transform_data_container in {0}'.format(self.name))
 
     def _fit_transform_data_container(
-        self, data_container: DACT, context: CX
-    ) -> Tuple['BaseTransformer', DACT]:
+        self, data_container: TrainDACT, context: CX
+    ) -> Tuple['BaseTransformer', PredsDACT]:
         """
         Fit and transform data container with the given execution context. Will do:
 
@@ -3788,12 +3798,12 @@ class HandleOnlyMixin(MixinForBaseTransformer):
             'Transform method is not supported for {0}, because it inherits from HandleOnlyMixin. Please use handle_transform instead.'.format(
                 self.name))
 
-    def fit(self, data_inputs: DIT, expected_outputs: EOT = None) -> 'HandleOnlyMixin':
+    def fit(self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED = None) -> 'HandleOnlyMixin':
         raise Exception(
             'Fit method is not supported for {0}, because it inherits from HandleOnlyMixin. Please use handle_fit instead.'.format(
                 self.name))
 
-    def fit_transform(self, data_inputs: DIT, expected_outputs: EOT = None) -> 'HandleOnlyMixin':
+    def fit_transform(self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED = None) -> Tuple['HandleOnlyMixin', ARG_Y_PREDICTD]:
         raise Exception(
             'Fit transform method is not supported for {0}, because it inherits from HandleOnlyMixin. Please use handle_fit_transform instead.'.format(
                 self.name))
@@ -3838,7 +3848,7 @@ class ForceHandleMixin(MixinForBaseTransformer):
             raise NotImplementedError(
                 f"The ForceHandleMixin class overrides fit, transform and fit_transform to force a call on their handler method counterparts. Failure to redefine basic _fit_data_container, _transform_data_container and _fit_transform_data_container methods can cause an infinite loop. Please define {method_name} in {self.__class__.__name__}.")
 
-    def transform(self, data_inputs) -> Iterable:
+    def transform(self, data_inputs: ARG_X_INPUTTED) -> ARG_Y_PREDICTD:
         """
         Using :func:`~neuraxle.base._TransformerStep.handle_transform`, transform data inputs.
 
@@ -3851,9 +3861,9 @@ class ForceHandleMixin(MixinForBaseTransformer):
 
         return data_container.data_inputs
 
-    def fit(self, data_inputs: DIT, expected_outputs: EOT = None) -> 'HandleOnlyMixin':
+    def fit(self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED = None) -> 'ForceHandleMixin':
         """
-        Using :func:`~neuraxle.base._FittableStep.handle_fit`, fit step with the 
+        Using :func:`~neuraxle.base._FittableStep.handle_fit`, fit step with the
         given data inputs, and expected outputs.
 
         :param data_inputs: data inputs
@@ -3865,10 +3875,11 @@ class ForceHandleMixin(MixinForBaseTransformer):
         return new_self
 
     def fit_transform(
-        self, data_inputs, expected_outputs=None
-    ) -> Tuple['HandleOnlyMixin', Iterable]:
+        self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED = None
+    ) -> Tuple['ForceHandleMixin', ARG_Y_PREDICTD]:
         """
-        Using :func:`~neuraxle.base._FittableStep.handle_fit_transform`, fit and transform step with the given data inputs, and expected outputs.
+        Using :func:`~neuraxle.base._FittableStep.handle_fit_transform`,
+        fit and transform step with the given data inputs, and expected outputs.
 
         :param data_inputs: data inputs
         :return: fitted self, outputs
@@ -3879,8 +3890,8 @@ class ForceHandleMixin(MixinForBaseTransformer):
         return new_self, data_container.data_inputs
 
     def _encapsulate_data(
-        self, data_inputs, expected_outputs=None, execution_mode=None
-    ) -> Tuple[CX, DACT]:
+        self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED, execution_mode: ExecutionMode
+    ) -> Tuple[CX, TrainDACT]:
         """
         Encapsulate data with :class:`~neuraxle.data_container.DataContainer`.
 
@@ -3889,10 +3900,8 @@ class ForceHandleMixin(MixinForBaseTransformer):
         :param execution_mode: execution mode
         :return: execution context, data container
         """
-        data_container = DACT(
-            data_inputs=data_inputs, expected_outputs=expected_outputs)
+        data_container = TrainDACT(data_inputs=data_inputs, expected_outputs=expected_outputs)
         context = CX(execution_mode=execution_mode)
-
         return context, data_container
 
 
@@ -3956,16 +3965,18 @@ class IdentityHandlerMethodsMixin(ForceHandleOnlyMixin):
     """
 
     def _fit_data_container(
-        self, data_container: DACT, context: CX
+        self, data_container: TrainDACT, context: CX
     ) -> Tuple['BaseTransformer', DACT]:
         return self
 
-    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
+    def _transform_data_container(
+        self, data_container: TrainDACT, context: CX
+    ) -> PredsDACT:
         return data_container
 
     def _fit_transform_data_container(
-        self, data_container: DACT, context: CX
-    ) -> Tuple['BaseTransformer', DACT]:
+        self, data_container: TrainDACT, context: CX
+    ) -> Tuple['BaseTransformer', PredsDACT]:
         return self, data_container
 
 
@@ -4037,8 +4048,8 @@ class AssertionMixin(ForceHandleMixin):
 
 class WillProcessAssertionMixin(AssertionMixin):
     def _will_process(
-        self, data_container: DACT, context: CX
-    ) -> Tuple[DACT, CX]:
+        self, data_container: TrainDACT, context: CX
+    ) -> Tuple[TrainDACT, CX]:
         """
         Calls self._assert_at_lifecycle(data_container, context).
         """
@@ -4050,8 +4061,8 @@ class WillProcessAssertionMixin(AssertionMixin):
 
 class DidProcessAssertionMixin(AssertionMixin):
     def _did_process(
-        self, data_container: DACT, context: CX
-    ) -> Tuple[DACT, CX]:
+        self, data_container: PredsDACT, context: CX
+    ) -> Tuple[PredsDACT, CX]:
         """
         Calls self._assert_at_lifecycle(data_container,context)
         """
@@ -4218,8 +4229,8 @@ class StepWithContext(GlobalServiceAssertionExecutorMixin, MetaStep):
         self.raise_if_not_root = raise_if_not_root
 
     def _will_process(
-        self, data_container: DACT, context: CX
-    ) -> Tuple[DACT, CX]:
+        self, data_container: TrainDACT, context: CX
+    ) -> Tuple[TrainDACT, CX]:
         """
         Inject the given context and test service assertions (if any are appliable) before processing the wrapped step.
 

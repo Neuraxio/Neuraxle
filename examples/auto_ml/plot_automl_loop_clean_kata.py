@@ -34,9 +34,9 @@ from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier
 
 from neuraxle.hyperparams.distributions import Choice, RandInt, Boolean, LogUniform
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler, ValidationSplitter, \
-    HyperparamsJSONRepository
+from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler, ValidationSplitter
 from neuraxle.metaopt.callbacks import ScoringCallback
+from neuraxle.metaopt.data.vanilla import VanillaHyperparamsRepository
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import ChooseOneStepOf
 from neuraxle.steps.numpy import NumpyRavel
@@ -114,11 +114,11 @@ def main():
     auto_ml = AutoML(
         pipeline=pipeline,
         hyperparams_optimizer=RandomSearchSampler(),
-        validation_splitter=ValidationSplitter(test_size=0.20),
+        validation_splitter=ValidationSplitter(validation_size=0.20),
         scoring_callback=ScoringCallback(accuracy_score, higher_score_is_better=True),
         n_trials=7,
         epochs=1,
-        hyperparams_repository=HyperparamsJSONRepository(cache_folder='cache'),
+        hyperparams_repository=VanillaHyperparamsRepository(cache_folder='cache'),
         refit_best_trial=True,
         continue_loop_on_error=False
     )
@@ -128,11 +128,8 @@ def main():
     X_train, y_train, X_test, y_test = generate_classification_data()
     auto_ml = auto_ml.fit(X_train, y_train)
 
-    # Get the model from the best trial, and make predictions using predict.
-    # See also predict documentation : https://www.neuraxle.org/stable/api/neuraxle.base.html#neuraxle.base.BaseStep.predict
-
-    best_pipeline = auto_ml.get_best_model()
-    y_pred = best_pipeline.predict(X_test)
+    # Get the model from the best trial, and make predictions using predict, as per the `refit_best_trial=True` argument to AutoML.
+    y_pred = auto_ml.predict(X_test)
 
     accuracy = accuracy_score(y_true=y_test, y_pred=y_pred)
     print("Test accuracy score:", accuracy)
