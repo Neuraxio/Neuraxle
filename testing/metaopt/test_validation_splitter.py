@@ -18,9 +18,9 @@ def test_validation_splitter_handler_methods_should_split_data(tmpdir):
         fit_callback_function=fit_callback,
         transform_function=lambda di: di * 2
     )
-    metric = MetricCallback("MSE", mean_squared_error, False)
+    metric: MetricCallback = MetricCallback("MSE", mean_squared_error, False)
     validation_split_wrapper = Trainer(
-        callbacks=[metric.name],
+        callbacks=[metric],
         validation_splitter=ValidationSplitter(validation_size=0.1),
         n_epochs=1,
     )
@@ -29,7 +29,7 @@ def test_validation_splitter_handler_methods_should_split_data(tmpdir):
     expected_outputs = np.random.randint(low=1, high=100, size=(100, 5))
     dact = DACT(di=data_inputs, eo=expected_outputs)
 
-    round_scope: Round = Round.dummy().with_metric(metric.name)
+    round_scope: Round = Round.dummy().with_metric(metric.name).save(deep=False)
     with round_scope.with_optimizer(GridExplorationSampler(), HyperparameterSpace()).new_rvs_trial() as trial_scope:
         trained_pipeline: FitTransformCallbackStep = validation_split_wrapper.train(
             pipeline, dact, trial_scope, return_trained_pipelines=True)[0]

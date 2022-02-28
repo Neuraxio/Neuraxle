@@ -1,4 +1,6 @@
+
 from collections import defaultdict, namedtuple
+import copy
 from dataclasses import dataclass, field
 from operator import attrgetter
 from typing import Any, Dict, List, Optional, Set, Tuple, Type
@@ -6,17 +8,19 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Type
 import numpy as np
 import pytest
 from neuraxle.base import (CX, BaseService, BaseStep, BaseTransformer, Flow,
-                           HandleOnlyMixin, Identity, MetaStep)
+                           HandleOnlyMixin, Identity, MetaStep, NonFittableMixin)
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.hyperparams.distributions import DiscreteHyperparameterDistribution, RandInt, Uniform, PriorityChoice
+from neuraxle.data_container import TrainDACT, PredsDACT
+from neuraxle.distributed.streaming import ParallelQueuedFeatureUnion
+from neuraxle.hyperparams.distributions import (
+    DiscreteHyperparameterDistribution, PriorityChoice, RandInt, Uniform)
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         HyperparameterSpace)
 from neuraxle.metaopt.auto_ml import (ControlledAutoML, DefaultLoop,
                                       RandomSearchSampler, Trainer)
 from neuraxle.metaopt.callbacks import (CallbackList, EarlyStoppingCallback,
                                         MetricCallback)
-from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
-                                              Trial, TrialSplit)
+from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            AutoMLContext, BaseDataclass,
                                            BaseHyperparameterOptimizer,
@@ -30,6 +34,7 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
 from neuraxle.metaopt.validation import (GridExplorationSampler,
                                          ValidationSplitter)
 from neuraxle.pipeline import Pipeline
+from neuraxle.steps.misc import Sleep
 from neuraxle.steps.data import DataShuffler
 from neuraxle.steps.flow import TrainOnlyWrapper
 from neuraxle.steps.misc import AssertFalseStep
@@ -61,7 +66,7 @@ class StepThatAssertsContextIsSpecifiedAtTrain(Identity):
 def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scenario(tmpdir):
     # This is a large test
     dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
-    cx = CX(root=tmpdir)
+    cx = AutoMLContext.from_context(CX(root=tmpdir))
     expected_deep_cx_loc = ScopedLocation.default(0, 0, 0)
     assertion_step = StepThatAssertsContextIsSpecifiedAtTrain(expected_loc=expected_deep_cx_loc)
     automl: ControlledAutoML[Pipeline] = _create_automl_test_loop(tmpdir, assertion_step)
@@ -69,8 +74,7 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
 
     pred: DACT = automl.handle_predict(dact.without_eo(), cx)
 
-    round: Round = automl.get_automl_context(
-        cx).with_loc(ScopedLocation.default(round_number=0)).load_agg()
+    round: Round = cx.with_loc(ScopedLocation.default(round_number=0)).load_agg()
     best: Tuple[float, int, FlatDict] = round.best_result_summary()
     best_score = best[0]
     assert best_score == 0
@@ -90,7 +94,7 @@ def test_automl_step_can_interrupt_on_fail_with_full_automl_scenario(tmpdir):
         automl.handle_fit(dact, cx)
 
 
-def _create_automl_test_loop(tmpdir, assertion_step: BaseStep, n_trials: int = 4):
+def _create_automl_test_loop(tmpdir, assertion_step: BaseStep, n_trials: int = 4, start_new_round=True, refit_best_trial=True):
     automl = ControlledAutoML(
         pipeline=Pipeline([
             TrainOnlyWrapper(DataShuffler()),
@@ -106,12 +110,10 @@ def _create_automl_test_loop(tmpdir, assertion_step: BaseStep, n_trials: int = 4
             hp_optimizer=GridExplorationSampler(n_trials),
             n_trials=n_trials,
             continue_loop_on_error=False,
-            n_jobs=2,
         ),
-        repo=VanillaHyperparamsRepository(tmpdir),
         main_metric_name='MAE',
-        start_new_round=True,
-        refit_best_trial=True,
+        start_new_round=start_new_round,
+        refit_best_trial=refit_best_trial,
     )
 
     return automl
@@ -180,13 +182,58 @@ def _get_optimization_scenario(n_trials):
     return round, ges
 
 
-def test_parallel_automl_can_contribute_to_the_same_hp_repository():
-    assert False
+class OnlyFitAtTransformTime(NonFittableMixin, MetaStep):
+    """
+    This is needed for AutoML to make sure that fitting will happen in parallel, not in the same thread.
+    Note that nothing is returned, the step does not transform the data. It only fits.
+    """
+
+    def _transform_data_container(self, data_container: TrainDACT, context: CX) -> PredsDACT:
+        self.wrapped = self.wrapped.handle_fit(data_container, context)
+        return data_container
+
+
+@pytest.mark.parametrize("use_processes", [False, True])
+def test_parallel_automl_can_contribute_to_the_same_hp_repository(tmpdir, use_processes):
+    dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
+    cx = AutoMLContext.from_context(CX(root=tmpdir))
+    sleep_step = Sleep(1)
+    automl = _create_automl_test_loop(
+        tmpdir, sleep_step, n_trials=1, start_new_round=False, refit_best_trial=False)
+    parallel_automl = ParallelQueuedFeatureUnion(
+        steps=[
+            OnlyFitAtTransformTime(copy.deepcopy(automl)),
+            OnlyFitAtTransformTime(copy.deepcopy(automl)),
+            OnlyFitAtTransformTime(copy.deepcopy(automl))
+        ],
+        batch_size=len(dact),
+        n_workers_per_step=2,
+        use_processes=use_processes,
+        use_savers=False,
+        max_queue_size=1
+    )
+    parallel_automl.handle_fit_transform(dact, cx)
+
+    automl_refit_best_to_predict = _create_automl_test_loop(
+        tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)
+    preds = automl_refit_best_to_predict.fit_transform(dact, cx)
+
+    round: Round = automl.get_automl_context(
+        cx).with_loc(ScopedLocation.default(round_number=0)).load_agg()
+    bests: List[Tuple[float, int, FlatDict]] = round.summary()
+
+    assert len(bests) == 3 * 2
+    assert len(set(hp for score, i, hp in bests)) == 3 * 2
+
+    best_score = bests[0][1]
+    assert median_absolute_error(dact.eo, preds.di) == best_score
 
 
 def test_parallel_automl_can_keep_all_trials_to_force_refit_best_trial(tmpdir):
     # AutoML.to_force_refit_best_trial
     assert False
 
+
+@pytest.mark.skip(reason="TODO: on disk repo fix")
 def test_on_disk_repo_is_structured_accordingly():
     assert False

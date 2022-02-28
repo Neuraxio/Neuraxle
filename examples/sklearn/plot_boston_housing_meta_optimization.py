@@ -93,22 +93,17 @@ def main(tmpdir):
     auto_ml = AutoML(
         p,
         validation_splitter=ValidationSplitter(0.20),
-        refit_best_trial=True,
         n_trials=10,
-        epochs=1,  # 1 epoc here due to using sklearn models that just fit once.
-        cache_folder_when_no_handle=str(tmpdir),
-        scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
+        epochs=1,  # 1 epoch here due to using sklearn models that just fit once.
         callbacks=[MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)],
-        hyperparams_repository=InMemoryHyperparamsRepository(cache_folder=str(tmpdir))
     )
 
-    random_search = auto_ml.fit(X_train, y_train)
-    p = random_search.get_best_model()
+    fitted_random_search = auto_ml.fit(X_train, y_train)
     print("")
 
     print("Transforming train and test:")
-    y_train_predicted = p.predict(X_train)
-    y_test_predicted = p.predict(X_test)
+    y_train_predicted = fitted_random_search.predict(X_train)
+    y_test_predicted = fitted_random_search.predict(X_test)
 
     print("")
 

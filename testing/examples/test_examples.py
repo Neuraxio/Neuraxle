@@ -7,16 +7,6 @@ def test_auto_ml_loop_clean_kata(tmpdir: LocalPath):
     main()
 
 
-def test_auto_ml_checkpoint(tmpdir: LocalPath):
-    from examples.caching.plot_auto_ml_checkpoint import main
-    main(tmpdir)
-
-
-def test_auto_ml_value_caching():
-    from examples.caching.plot_value_caching import main
-    main()
-
-
 def test_easy_rest_api_serving():
     from examples.deployment.plot_easy_rest_api_serving import main
     main()

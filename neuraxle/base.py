@@ -1073,16 +1073,13 @@ class ExecutionContext(TruncableService):
 
     The :class:`~neuraxle.metaopt.AutoML` class is an example of a step that uses this execution context extensively.
 
-    The execution context is used for fitted step saving, and caching :
+    The execution context is used for fitted step saving:
         * :func:`~neuraxle.base._HasSavers.save`
         * :func:`~neuraxle.base._HasSavers.load`
-        * :func:`~neuraxle.steps.caching.ValueCachingWrapper.handle_transform`
-        * :func:`~neuraxle.steps.caching.ValueCachingWrapper.handle_fit_transform`
 
     .. seealso::
         :class:`~neuraxle.base.BaseStep`,
-        :class:`~neuraxle.steps.caching.ValueCachingWrapper`,
-        :class:`~neuraxle.metaopt.AutoML`
+        :class:`~neuraxle.metaopt.auto_ml.AutoML`
     """
 
     def __init__(
@@ -2982,7 +2979,6 @@ class MetaStepMixin(MixinForBaseTransformer, MetaServiceMixin):
 
     .. seealso::
         :class:`~neuraxle.steps.loop.ForEachDataInput`,
-        :class:`~neuraxle.steps.caching.ValueCachingWrapper`,
         :class:`~neuraxle.steps.loop.StepClonerForEachDataInput`
     """
 

@@ -255,7 +255,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
         self.is_deep = deep
         self._invariant()
 
-    def save(self, deep: bool = True):
+    def save(self, deep: bool = True) -> 'BaseAggregate':
         if deep and deep != self.is_deep:
             raise ValueError(
                 f"Cannot save {str(self)} with deep=True when self "
@@ -267,12 +267,15 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
 
         with self.context.lock:
             self.repo.save(self._dataclass, self.loc, deep=deep)
+        return self
 
-    def save_subaggregate(self, subagg: SubAggregateT, deep=False):
+    def save_subaggregate(self, subagg: SubAggregateT, deep=False) -> 'BaseAggregate':
         self._dataclass.store(subagg._dataclass)
+
         with self.context.lock:
             self.save(deep=False)
             subagg.save(deep=deep)
+        return self
 
     def __enter__(self) -> SubAggregateT:
         # self.context.free_scoped_logger_handler_file()
@@ -500,6 +503,7 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
 
     @_with_method_as_context_manager
     def refitting_best_trial(self) -> 'Round':
+        self.refresh(deep=True)
         self._managed_subresource(new_trial=None, continue_on_error=False)
         return self
 
