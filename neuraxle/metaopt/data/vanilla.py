@@ -967,7 +967,7 @@ class AutoMLContext(CX):
         :param context: ExecutionContext
         """
         new_context: AutoMLContext = AutoMLContext.copy(
-            context or AutoMLContext()
+            context if context is not None else AutoMLContext()
         )
         if not new_context.has_service(HyperparamsRepository):
             new_context.register_service(

@@ -193,19 +193,50 @@ class OnlyFitAtTransformTime(NonFittableMixin, MetaStep):
         return data_container
 
 
-@pytest.mark.parametrize("use_processes", [False, True])
-def test_parallel_automl_can_contribute_to_the_same_hp_repository(tmpdir, use_processes):
+def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
     dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
     cx = AutoMLContext.from_context(CX(root=tmpdir))
+    cx.add_scoped_logger_file_handler()
+    sleep_step = Sleep(0.001)
+    n_trials = 4
+    automl: ControlledAutoML = _create_automl_test_loop(
+        tmpdir, sleep_step, n_trials=1, start_new_round=False, refit_best_trial=False
+    )
+    for _ in range(n_trials):
+        copy.deepcopy(automl).handle_fit(dact, cx)
+
+    automl_refiting_best = _create_automl_test_loop(
+        tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)
+    automl_refiting_best, preds = automl_refiting_best.handle_fit_transform(dact, cx)
+
+    round: Round = cx.with_loc(ScopedLocation.default(round_number=0)).load_agg()
+    bests: List[Tuple[float, int, FlatDict]] = round.summary()
+
+    assert len(bests) == n_trials
+    assert len(set(tuple(dict(hp).items()) for score, i, hp in bests)
+               ) == n_trials, f"Expecting unique hyperparams for the given n_trials={n_trials} and intelligent grid sampler."
+
+    best_score = bests[0][0]
+    assert median_absolute_error(dact.eo, preds.di) == best_score
+
+
+@pytest.mark.parametrize("use_processes", [False])  # [False, True])
+def test_automl_can_use_same_repo_in_parallel(tmpdir, use_processes):
+    dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
+    cx = AutoMLContext.from_context(CX(root=tmpdir))
+    cx.add_scoped_logger_file_handler()
     sleep_step = Sleep(1)
-    automl = _create_automl_test_loop(
-        tmpdir, sleep_step, n_trials=1, start_new_round=False, refit_best_trial=False)
+    automl: ControlledAutoML = _create_automl_test_loop(
+        tmpdir, sleep_step, n_trials=1, start_new_round=False, refit_best_trial=False
+    )
+    n_trials = 3 * 2
     parallel_automl = ParallelQueuedFeatureUnion(
-        steps=[
-            OnlyFitAtTransformTime(copy.deepcopy(automl)),
-            OnlyFitAtTransformTime(copy.deepcopy(automl)),
-            OnlyFitAtTransformTime(copy.deepcopy(automl))
-        ],
+        steps=[OnlyFitAtTransformTime(automl)],
+        # steps=[
+        #     OnlyFitAtTransformTime(copy.deepcopy(automl)),
+        #     OnlyFitAtTransformTime(copy.deepcopy(automl)),
+        #     OnlyFitAtTransformTime(copy.deepcopy(automl))
+        # ],
         batch_size=len(dact),
         n_workers_per_step=2,
         use_processes=use_processes,
@@ -213,25 +244,28 @@ def test_parallel_automl_can_contribute_to_the_same_hp_repository(tmpdir, use_pr
         max_queue_size=1
     )
     parallel_automl.handle_fit_transform(dact, cx)
+    parallel_automl.handle_fit_transform(dact, cx)
+    parallel_automl.handle_fit_transform(dact, cx)
 
-    automl_refit_best_to_predict = _create_automl_test_loop(
+    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+
+    automl_refiting_best = _create_automl_test_loop(
         tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)
-    preds = automl_refit_best_to_predict.fit_transform(dact, cx)
+    automl_refiting_best, preds = automl_refiting_best.handle_fit_transform(dact, cx)
 
-    round: Round = automl.get_automl_context(
-        cx).with_loc(ScopedLocation.default(round_number=0)).load_agg()
+    round: Round = cx.with_loc(ScopedLocation.default(round_number=0)).load_agg()
     bests: List[Tuple[float, int, FlatDict]] = round.summary()
 
-    assert len(bests) == 3 * 2
-    assert len(set(hp for score, i, hp in bests)) == 3 * 2
+    assert len(bests) == n_trials
+    assert len(set(hp for score, i, hp in bests)) == n_trials, f"Expecting unique hyperparams for the given n_trials={n_trials} and intelligent grid sampler."
 
-    best_score = bests[0][1]
+    best_score = bests[0][0]
     assert median_absolute_error(dact.eo, preds.di) == best_score
-
-
-def test_parallel_automl_can_keep_all_trials_to_force_refit_best_trial(tmpdir):
-    # AutoML.to_force_refit_best_trial
-    assert False
 
 
 @pytest.mark.skip(reason="TODO: on disk repo fix")

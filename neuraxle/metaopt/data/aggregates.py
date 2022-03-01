@@ -457,6 +457,8 @@ class Client(BaseAggregate[Project, 'Round', ClientDataclass]):
 
             # Get new round loc:
             round_id: int = self._dataclass.get_next_i()
+            if not new_round:
+                round_id = max(0, round_id - 1)
             if round_id == 0:
                 new_round = True
             round_loc: ScopedLocation = self.loc.with_id(round_id)
@@ -485,7 +487,7 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
 
     def with_metric(self, metric_name: str) -> 'Round':
         self._dataclass.main_metric_name = metric_name
-        return self
+        return self.save(False)
 
     @property
     def main_metric_name(self) -> str:

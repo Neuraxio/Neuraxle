@@ -490,7 +490,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :return:
         """
         self._setup(context=context)
-        return data_container, context
+        return data_container.copy(), context
 
     def _setup(self, context: CX = None) -> 'BaseTransformer':
         """
