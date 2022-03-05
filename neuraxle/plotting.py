@@ -125,7 +125,8 @@ class TrialMetricsPlottingObserver(_ObserverOfRepo[Tuple[HyperparamsRepository, 
 
     .. code-block:: python
 
-        hyperparams_repository: HyperparamsJSONRepository = HyperparamsJSONRepository(cache_folder='trials')
+        hyperparams_repository = HyperparamsOnDiskRepository(cache_folder='trials')
+
         hyperparams_repository.subscribe(TrialMetricsPlottingObserver(
             plotting_folder_name: str = 'metric_results',
             plot_individual_trials_on_complete=False,
@@ -134,28 +135,14 @@ class TrialMetricsPlottingObserver(_ObserverOfRepo[Tuple[HyperparamsRepository, 
             save_plots=True
         ))
 
-        auto_ml = AutoML(
-            pipeline,
-            n_trials=n_iter,
-            validation_split_function=validation_splitter(0.2),
-            hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
-            scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
-            callbacks=[
-                MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)
-            ],
-            refit_trial=True,
-            cache_folder_when_no_handle=str(tmpdir)
-        )
+        auto_ml = AutoML(...)
+        auto_ml = auto_ml.handle_fit(...)
 
-        auto_ml = auto_ml.fit(data_inputs, expected_outputs)
 
     .. seealso::
         :class:`~neuraxle.metaopt._Observer`,
-        :class:`~neuraxle.metaopt.data.trial.Trial`,
-        :class:`~neuraxle.metaopt.data.trial.Trials`,
         :class:`~neuraxle.metaopt.auto_ml.AutoML`,
         :class:`HyperparamsRepository`,
-        :class:`HyperparamsJSONRepository`
     """
     def __init__(
             self,
@@ -166,6 +153,8 @@ class TrialMetricsPlottingObserver(_ObserverOfRepo[Tuple[HyperparamsRepository, 
             plot_all_trials_on_complete: bool = True,
             plot_individual_trials_on_complete: bool = True
     ):
+        # TODO: finish moving this class to dashboard and remove this.
+        raise NotImplementedError("TODO: this class is deprecated and needs maintenance.")
         self.plot_individual_trials_on_complete = plot_individual_trials_on_complete
         self.plot_trial_on_next: bool = plot_trial_on_next
         self.plot_all_trials_on_complete: bool = plot_all_trials_on_complete

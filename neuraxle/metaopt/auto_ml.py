@@ -234,7 +234,7 @@ class BaseControllerLoop(TruncableService):
         :param round_scope: round scope
         :return: the next trial to be executed.
         """
-        return round_scope.new_rvs_trial(self.continue_loop_on_error)  # TODO: finish for parallelization
+        return round_scope.new_rvs_trial(self.continue_loop_on_error)  # TODO: parallelization with this method?
 
     def refit_best_trial(self, pipeline: BaseStep, dact: DACT, round_scope: Round) -> BaseStep:
         """
@@ -274,35 +274,6 @@ class DefaultLoop(BaseControllerLoop):
             continue_loop_on_error=continue_loop_on_error
         )
         self.n_jobs = n_jobs
-
-    def TODO_loop(self, pipeline, dact: DACT, context: CX):
-        # TODO: what is this method used for?
-
-        if self.n_jobs in (None, 1):
-            # Single Process
-            # for i in i super().loop...
-            for trial_number in range(self.n_trial):
-                self._attempt_trial(trial_number, validation_splits, context)
-
-        else:
-            # Multiprocssing
-            # dispatch task to each process where each fetch an interation of the super.loop??
-            # todo: refactor this method to make the loop not necessarily a generator.
-            #       this way, it could be possible to call "self.next" in threads to do the same.
-
-            context.logger.info(f"Number of processors available: {multiprocessing.cpu_count()}")
-
-            if isinstance(self.hyperparams_repository, InMemoryHyperparamsRepository):
-                raise ValueError(
-                    "Cannot use InMemoryHyperparamsRepository for multiprocessing, use json-based repository.")
-
-            n_jobs = self.n_jobs
-            if n_jobs <= -1:
-                n_jobs = multiprocessing.cpu_count() + 1 + self.n_jobs
-
-            with multiprocessing.get_context("spawn").Pool(processes=n_jobs) as pool:
-                args = [(self, trial_number, validation_splits, context) for trial_number in range(self.n_trial)]
-                pool.starmap(ControlledAutoML._attempt_trial, args)
 
 
 class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep):

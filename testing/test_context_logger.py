@@ -14,7 +14,7 @@ from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.logging.logging import NEURAXLE_LOGGER_NAME, NeuraxleLogger
 from neuraxle.metaopt.auto_ml import AutoML
 from neuraxle.metaopt.callbacks import ScoringCallback
-from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
+from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
 from neuraxle.metaopt.data.vanilla import (DEFAULT_PROJECT, AutoMLContext,
                                            ProjectDataclass, ScopedLocation)
 from neuraxle.metaopt.validation import ValidationSplitter, RandomSearchSampler
@@ -87,7 +87,7 @@ class TestTrialLogger:
         # Given
         context = CX(tmpdir)
         self.tmpdir = str(tmpdir)
-        hp_repository = HyperparamsJSONRepository(cache_folder=self.tmpdir)
+        hp_repository = HyperparamsOnDiskRepository(cache_folder=self.tmpdir)
         n_epochs = 2
         n_trials = 4
         auto_ml = AutoML(

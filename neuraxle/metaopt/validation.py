@@ -59,13 +59,7 @@ class RandomSearchSampler(BaseHyperparameterOptimizer):
 
     .. seealso::
         :class:`Trainer`,
-        :class:`~neuraxle.metaopt.data.trial.Trial`,
-        :class:`~neuraxle.metaopt.data.trial.Trials`,
         :class:`HyperparamsRepository`,
-        :class:`HyperparamsJSONRepository`,
-        :class:`BaseHyperparameterSelectionStrategy`,
-        :class:`RandomSearchHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
     def __init__(self):
@@ -193,11 +187,20 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
                     hp_dist.mean() + hp_dist.std() * 2.5,
                     hp_dist.mean() - hp_dist.std() * 2.5,
                 ]
+
+                def _ensure_unique(value: Any, _unique_set: Set[Any]) -> bool:
+                    # remove duplicates such as when (or if) STD is of 0.
+                    try:
+                        ret = value not in _unique_set
+                        _unique_set.add(value)
+                        return ret
+                    except BaseException:
+                        return True
+                _unique_set: Set[Any] = set()
                 hp_samples: List[Any] = [
                     x for x in hp_samples[:remainder]
-                    if x in hp_dist and not (math.isinf(x) or math.isnan(x))
+                    if x in hp_dist and not (math.isinf(x) or math.isnan(x)) and _ensure_unique(x, _unique_set)
                 ]
-                # TODO: remove duplicates such as when (or if) STD is of 0.
                 self.flat_hp_grid_values[hp_name] = hp_samples
                 self.flat_hp_grid_lens.append(len(hp_samples))
 
@@ -291,7 +294,7 @@ class BaseValidationSplitter(ABC):
         # Iterate on folds:
         for (train_di, train_eo, train_ids, valid_di, valid_eo, valid_ids) in data_folds:
 
-            # TODO: use ListDACT instead of DACT?
+            # TODO: use ListDACT?
             train_data_container_split: TrainDACT = TrainDACT(
                 ids=train_ids,
                 data_inputs=train_di,

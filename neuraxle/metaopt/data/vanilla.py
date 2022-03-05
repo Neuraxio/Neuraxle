@@ -765,11 +765,6 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
     .. seealso::
         :class:`AutoML`,
         :class:`Trainer`,
-        :class:`~neuraxle.metaopt.data.trial.Trial`,
-        :class:`HyperparamsJSONRepository`,
-        :class:`BaseHyperparameterSelectionStrategy`,
-        :class:`RandomSearchHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`
     """
 
     @abstractmethod
@@ -918,7 +913,6 @@ class BaseHyperparameterOptimizer(ABC):
         :param round: a :class:`neuraxle.metaopt.data.aggregate.Round`
         :return: next hyperparameter samples to train on
         """
-        # TODO: revise arguments.
         raise NotImplementedError()
 
 

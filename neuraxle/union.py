@@ -274,7 +274,7 @@ class ModelStacking(FeatureUnion):
         :param kwargs: Other arguments to send to ``FeatureUnion``.
         """
         super().__init__(steps_as_tuple=steps_as_tuple, **kwargs)
-        self.judge: BaseStep = judge  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
+        self.judge: BaseStep = judge
 
     def _did_fit_transform(self, data_container, context) -> Tuple['BaseStep', DACT]:
         data_container = super()._did_fit_transform(data_container, context)

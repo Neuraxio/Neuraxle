@@ -28,51 +28,117 @@ Classes are splitted like this for the AutoML:
 
 
 """
+from copy import copy
 import glob
 import json
-import logging
 import os
+from this import d
 import time
 import traceback
-import warnings
 from typing import List, Tuple
 
 from neuraxle.base import TrialStatus
-from neuraxle.data_container import DataContainer as DACT
 from neuraxle.metaopt.data.aggregates import Round, Trial
-from neuraxle.metaopt.data.vanilla import HyperparamsRepository
+from neuraxle.metaopt.data.vanilla import AutoMLContext, HyperparamsRepository, VanillaHyperparamsRepository, BaseDataclass, ScopedLocation, SubDataclassT, dataclass_2_id_attr, to_json, from_json
 from neuraxle.metaopt.observable import _ObservableRepo
 
 
-class HyperparamsJSONRepository(HyperparamsRepository):
+class HyperparamsOnDiskRepository(HyperparamsRepository):
     """
     Hyperparams repository that saves json files for every AutoML trial.
-
-    Example usage :
-
-    .. code-block:: python
-
-        HyperparamsJSONRepository(
-            hyperparameter_selection_strategy=RandomSearchHyperparameterSelectionStrategy(),
-            cache_folder='cache',
-            best_retrained_model_folder='best'
-        )
-
 
     .. seealso::
         :class:`AutoML`,
         :class:`Trainer`,
-        :class:`~neuraxle.metaopt.data.trial.Trial`,
-        :class:`HyperparamsJSONRepository`,
-        :class:`BaseHyperparameterSelectionStrategy`,
-        :class:`RandomSearchHyperparameterSelectionStrategy`,
-        :class:`~neuraxle.hyperparams.trial.HyperparameterSamples`
     """
 
     def __init__(
             self,
             cache_folder: str = None,
-            best_retrained_model_folder: str = None
+    ):
+        HyperparamsRepository.__init__(self)
+        self._vanilla = VanillaHyperparamsRepository(cache_folder=cache_folder)
+        # self.cache_folder = cache_folder
+
+    def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
+        """
+        Get metadata from scope.
+
+        The fetched metadata will be the one that is the last item
+        that is not a None in the provided scope.
+
+        :param scope: scope to get metadata from.
+        :return: metadata from scope.
+        """
+        self._load_dc(scope=scope, deep=deep)
+        loaded = self._vanilla.load(scope=scope, deep=deep)
+        return loaded
+
+    def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
+        """
+        Save metadata to scope.
+
+        :param metadata: metadata to save.
+        :param scope: scope to save metadata to.
+        :param deep: if True, save metadata's sublocations recursively so as to update.
+        """
+        self._vanilla.save(_dataclass=_dataclass, scope=scope, deep=deep)
+        self._save_dc(_dataclass=_dataclass, scope=scope, deep=deep)
+        return self
+
+    def _load_dc(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
+        _, _, load_file = self._filenameof(None, scope)
+
+        if not os.path.exists(load_file):
+            raise FileNotFoundError(f"{load_file} not found.")
+
+        with open(load_file, 'r') as f:
+            _dataclass = from_json(json.load(f))
+            if deep:
+                raise NotImplemented("TODO")
+            return _dataclass
+
+    def _save_dc(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False):
+        scope, save_folder, save_file = self._filenameof(_dataclass, scope)
+
+        os.makedirs(save_folder, exist_ok=True)
+        with open(save_file, 'w') as f:
+            json.dump(to_json(_dataclass.shallow()), f, indent=4)
+
+        if deep:
+            for sub_dc in _dataclass.get_sublocation_values():
+                self._save_dc(sub_dc, scope=scope, deep=deep)
+
+    def _filenameof(self, _dataclass, scope):
+        scope = copy.deepcopy(scope)
+        _dc_id = _dataclass.get_id()
+        if _dc_id is not None:
+            setattr(scope, dataclass_2_id_attr[_dc_id.__class__], _dc_id)
+        suffixes = scope.as_list()
+        prefix = self._vanilla.cache_folder
+
+        save_folder = os.path.join(prefix, *suffixes)
+        save_file = os.path.join(save_folder, 'metadata.json')
+
+        return scope, save_folder, save_file
+
+    def get_scoped_logger_path(self, scope: ScopedLocation) -> str:
+        raise NotImplemented("TODO")
+
+
+class _HyperparamsOnDiskRepository(HyperparamsRepository):
+    """
+    Hyperparams repository that saves json files for every AutoML trial.
+
+    .. seealso::
+        :class:`AutoML`,
+        :class:`Trainer`,
+    """
+
+    def __init__(
+            self,
+            cache_folder: str = None,
+            best_retrained_model_folder: str = None  # TODO: prepend a keyword and remove this param.
     ):
         HyperparamsRepository.__init__(self)
         cache_folder: str = cache_folder if cache_folder is not None else 'json_repo_cache'
@@ -201,17 +267,3 @@ class HyperparamsJSONRepository(HyperparamsRepository):
     def _remove_previous_trial_state_json(self):
         if self.json_path_remove_on_update and os.path.exists(self.json_path_remove_on_update):
             os.remove(self.json_path_remove_on_update)
-
-    def subscribe_to_cache_folder_changes(self, refresh_interval_in_seconds: int,
-                                          observer: _ObservableRepo[Tuple[HyperparamsRepository, Trial]]):
-        """
-        Every refresh_interval_in_seconds
-
-        :param refresh_interval_in_seconds: number of seconds to wait before sending updates to the observers
-        :param observer:
-        :return:
-        """
-        self._observers.add(observer)
-        # TODO: start a process that notifies observers anytime a the file of a trial changes
-        # possibly use this ? https://github.com/samuelcolvin/watchgod
-        # note: this is how you notify observers self.on_next((self, updated_trial))

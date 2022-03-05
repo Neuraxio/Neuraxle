@@ -1028,9 +1028,9 @@ class Flow(BaseService):
 
 class ContextLock(BaseService):
     """
-    #TODO: move to a parallel package.
-    ContextLock is a service that is used to lock the flow when doing parallel processing.
+    ContextLock is a service that is used to lock the flow and repos when doing parallel processing.
     """
+    # TODO: move to a parallel package?
 
     def __init__(self, lock: RLock = None):
         BaseService.__init__(self)
@@ -3335,7 +3335,6 @@ class TruncableStepsMixin(_HasChildrenMixin):
         :param steps_as_tuple: a NamedStepsList
         :return: a NamedStepsList with fixed names
         """
-        # TODO: document more the type of the `steps as tuple`.
         names_yet = set()
         patched = []
         for class_name, step in steps_as_tuple:

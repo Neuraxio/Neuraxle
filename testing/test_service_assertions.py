@@ -10,7 +10,7 @@ from neuraxle.base import (BaseService, BaseStep, BaseTransformerT,
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler
 from neuraxle.metaopt.callbacks import ScoringCallback
-from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
+from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
 from neuraxle.metaopt.validation import GridExplorationSampler, ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from sklearn.metrics import mean_squared_error

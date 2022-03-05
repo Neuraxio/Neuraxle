@@ -16,7 +16,7 @@ from neuraxle.metaopt.callbacks import (CallbackList, EarlyStoppingCallback,
                                         MetricCallback)
 from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
                                               Trial, TrialSplit)
-from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
+from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT, RETRAIN_TRIAL_SPLIT_ID,
                                            AutoMLContext, BaseDataclass,
                                            BaseHyperparameterOptimizer,
@@ -246,12 +246,12 @@ def vanilla_repo_ctor(tmpdir) -> AutoMLContext:
     return AutoMLContext.from_context(CX())
 
 
-def json_repo_ctor(tmpdir) -> AutoMLContext:
+def disk_repo_ctor(tmpdir) -> AutoMLContext:
     # TODO: add this function to REPO_CTORS
-    return AutoMLContext.from_context(CX(), repo=HyperparamsJSONRepository(tmpdir))
+    return AutoMLContext.from_context(CX(), repo=HyperparamsOnDiskRepository(tmpdir))
 
 
-REPO_CTORS = [vanilla_repo_ctor]
+REPO_CTORS = [vanilla_repo_ctor, disk_repo_ctor]
 
 
 @pytest.mark.parametrize('repo_ctor', REPO_CTORS)

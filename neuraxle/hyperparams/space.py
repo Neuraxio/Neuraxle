@@ -295,7 +295,7 @@ class HyperparameterSpace(RecursiveDict):
             new_items.append((k, v))
         return HyperparameterSamples(new_items)
 
-    # TODO : The following functions aren't used, or tested, anywhere. They should work though.
+    # TODO : The following functions aren't really used, or tested. They should work though.
 
     def nullify(self):
         new_items = []

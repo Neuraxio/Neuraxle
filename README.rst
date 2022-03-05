@@ -121,9 +121,8 @@ You can also tune your hyperparameters using AutoML algorithms such as the TPE:
             MetricCallback(recall, higher_score_is_better=True)
         ],
         n_trials=7,
-        epochs=10,
-        hyperparams_repository=HyperparamsJSONRepository(cache_folder='cache'),
-        refit_trial=True,
+        n_epochs=10,
+        refit_best_trial=True,
     )
 
     # Load data, and launch AutoML loop !

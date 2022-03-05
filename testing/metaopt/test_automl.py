@@ -11,7 +11,7 @@ from neuraxle.metaopt.callbacks import (BestModelCheckpoint,
                                         EarlyStoppingCallback, MetricCallback,
                                         ScoringCallback)
 from neuraxle.metaopt.data.aggregates import MetricResults, Round, Trial
-from neuraxle.metaopt.data.json_repo import HyperparamsJSONRepository
+from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
 from neuraxle.metaopt.data.vanilla import AutoMLContext, ScopedLocation
 from neuraxle.metaopt.validation import (GridExplorationSampler,
                                          KFoldCrossValidationSplitter,

@@ -109,7 +109,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
         _CouldHaveContext.__init__(self)
         self._dataclass: SubDataclassT = _dataclass
         self._spare: SubDataclassT = copy.copy(_dataclass).shallow()
-        # TODO: pre-push context to allow for dc auto-loading and easier parent auto-loading.
+        # TODO: pre-push context to allow for dc auto-loading and easier parent auto-loading?
         self.context: AutoMLContext = context.push_attr(_dataclass)
         self.loc: ScopedLocation = self.context.loc.copy()
         self.is_deep = is_deep
@@ -402,7 +402,6 @@ class Root(BaseAggregate[None, 'Project', RootDataclass]):
 
     @_with_method_as_context_manager
     def get_project(self, name: str) -> 'Root':
-        # TODO: new project should be created if it does not exist?
         self._managed_subresource(project_name=name)
         return self
 
@@ -885,7 +884,6 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
             return sum(scores) / len(scores) if len(scores) > 0 else None
 
     def get_avg_n_epoch_to_best_validation_score(self, metric_name: str = None) -> float:
-        # TODO: use in flow.log_results:
         metric_name = self.sanitize_metric_name(metric_name)
 
         n_epochs = [
@@ -1108,7 +1106,6 @@ class MetricResults(BaseAggregate[TrialSplit, None, MetricResultsDataclass]):
         return self._dataclass.metric_name
 
     def _acquire_managed_subresource(self, *args, **kwds) -> SubAggregateT:
-        # TODO: epoch class and epoch location?
         raise NotImplementedError("MetricResults has no subresource to manage as a terminal resource.")
 
     def add_train_result(self, score: float):
