@@ -220,8 +220,7 @@ def test_dataclass_from_json_to_json():
 
     root_as_dict = root.to_dict()
     root_as_json = to_json(root_as_dict)
-    root_restored_dict = from_json(root_as_json)
-    root_restored_dc = RootDataclass.from_dict(root_restored_dict)
+    root_restored_dc = from_json(root_as_json)
 
     assert SOME_METRIC_RESULTS_DATACLASS == root_restored_dc[SOME_FULL_SCOPED_LOCATION]
     assert root == root_restored_dc
@@ -251,16 +250,16 @@ def disk_repo_ctor(tmpdir) -> AutoMLContext:
     return AutoMLContext.from_context(CX(), repo=HyperparamsOnDiskRepository(tmpdir))
 
 
-REPO_CTORS = [vanilla_repo_ctor, disk_repo_ctor]
+CX_WITH_REPO_CTORS = [vanilla_repo_ctor, disk_repo_ctor]
 
 
-@pytest.mark.parametrize('repo_ctor', REPO_CTORS)
+@pytest.mark.parametrize('cx_repo_ctor', CX_WITH_REPO_CTORS)
 @pytest.mark.parametrize('_dataclass', ALL_DATACLASSES)
 def test_hyperparams_repository_loads_stored_scoped_info(
-    tmpdir, repo_ctor: Callable[[str], AutoMLContext], _dataclass: BaseDataclass
+    tmpdir, cx_repo_ctor: Callable[[str], AutoMLContext], _dataclass: BaseDataclass
 ):
     loc: ScopedLocation = SOME_FULL_SCOPED_LOCATION.at_dc(_dataclass)
-    cx: AutoMLContext = repo_ctor(tmpdir).with_loc(loc)
+    cx: AutoMLContext = cx_repo_ctor(tmpdir).with_loc(loc)
     repo: HyperparamsRepository = cx.repo
     repo.save(copy.deepcopy(SOME_ROOT_DATACLASS), scope=loc, deep=True)
 
@@ -271,35 +270,52 @@ def test_hyperparams_repository_loads_stored_scoped_info(
     assert restored_dataclass_shallow == _dataclass.shallow()
 
 
-@pytest.mark.parametrize('repo_ctor', REPO_CTORS)
+@pytest.mark.parametrize('cx_repo_ctor', CX_WITH_REPO_CTORS)
 @pytest.mark.parametrize('_dataclass', ALL_DATACLASSES[1:])
 def test_hyperparams_repository_saves_subsequent_data(
-    tmpdir, repo_ctor: Callable[[str], AutoMLContext], _dataclass: BaseDataclass
+    tmpdir, cx_repo_ctor: Callable[[str], AutoMLContext], _dataclass: BaseDataclass
 ):
     loc: ScopedLocation = SOME_FULL_SCOPED_LOCATION.at_dc(_dataclass)
-    cx: AutoMLContext = repo_ctor(tmpdir).with_loc(loc)
+    cx: AutoMLContext = cx_repo_ctor(tmpdir).with_loc(loc)
     repo: HyperparamsRepository = cx.repo
     repo.save(copy.deepcopy(SOME_ROOT_DATACLASS), scope=loc, deep=True)
     old_id = _dataclass.get_id()
-    new_id = old_id + 1 if isinstance(old_id, int) else old_id + "_next"
-    new_dataclass = copy.deepcopy(_dataclass).set_id(new_id)
-    new_loc = loc.popped().with_dc(new_dataclass)
+    next_id = old_id + 1 if isinstance(old_id, int) else old_id + "_next"
+    next_dataclass = copy.deepcopy(_dataclass).set_id(next_id)
+    next_loc = loc.popped().with_dc(next_dataclass)
 
-    repo.save(new_dataclass, scope=new_loc, deep=False)
+    repo.save(next_dataclass, scope=next_loc, deep=False)
 
-    restored_dataclass_empty = repo.load(new_loc, deep=True)
-    assert restored_dataclass_empty == new_dataclass.empty()
+    restored_next_dataclass_empty = repo.load(next_loc, deep=True)
+    assert restored_next_dataclass_empty == next_dataclass.empty()
 
-    restored_dataclass_empty = repo.load(new_loc, deep=False)
-    assert restored_dataclass_empty == new_dataclass.empty()
+    restored_next_dataclass_empty = repo.load(next_loc, deep=False)
+    assert restored_next_dataclass_empty == next_dataclass.empty()
 
-    repo.save(new_dataclass, scope=new_loc, deep=True)
+    repo.save(next_dataclass, scope=next_loc, deep=True)
 
-    restored_dataclass_shallow = repo.load(new_loc, deep=False)
-    assert restored_dataclass_shallow == new_dataclass.shallow()
+    restored_dataclass_shallow = repo.load(next_loc, deep=False)
+    assert restored_dataclass_shallow == next_dataclass.shallow()
 
-    restored_dataclass_deep = repo.load(new_loc, deep=True)
-    assert restored_dataclass_deep == new_dataclass
+    restored_dataclass_deep = repo.load(next_loc, deep=True)
+    assert restored_dataclass_deep == next_dataclass
+
+
+@pytest.mark.parametrize('cx_repo_ctor', CX_WITH_REPO_CTORS)
+def test_shallow_save_isnt_deep_upon_load(
+    tmpdir, cx_repo_ctor: Callable[[str], AutoMLContext]
+):
+    zero_loc: ScopedLocation = SOME_FULL_SCOPED_LOCATION.at_dc(SOME_ROUND_DATACLASS)
+    cx: AutoMLContext = cx_repo_ctor(tmpdir).with_loc(zero_loc)
+    repo: HyperparamsRepository = cx.repo
+    next_round_dataclass: RoundDataclass = copy.deepcopy(SOME_ROUND_DATACLASS).set_id(1)
+    next_loc = zero_loc.popped().with_dc(next_round_dataclass)
+
+    repo.save(SOME_ROUND_DATACLASS, scope=zero_loc, deep=False)
+    repo.save(next_round_dataclass, scope=next_loc, deep=False)
+    reloaded_next_round = repo.load(next_loc, deep=True)
+
+    assert reloaded_next_round == next_round_dataclass.empty()
 
 
 def test_trial_dataclass_can_store_and_contains_retrain_split():

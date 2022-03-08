@@ -28,18 +28,17 @@ Classes are splitted like this for the AutoML:
 
 
 """
-from copy import copy
+from copy import copy, deepcopy
 import glob
 import json
 import os
-from this import d
 import time
 import traceback
 from typing import List, Tuple
 
 from neuraxle.base import TrialStatus
 from neuraxle.metaopt.data.aggregates import Round, Trial
-from neuraxle.metaopt.data.vanilla import AutoMLContext, HyperparamsRepository, VanillaHyperparamsRepository, BaseDataclass, ScopedLocation, SubDataclassT, dataclass_2_id_attr, to_json, from_json
+from neuraxle.metaopt.data.vanilla import AutoMLContext, HyperparamsRepository, VanillaHyperparamsRepository, BaseDataclass, ScopedLocation, SubDataclassT, dataclass_2_id_attr, dataclass_2_subdataclass, to_json, from_json
 from neuraxle.metaopt.observable import _ObservableRepo
 
 
@@ -55,10 +54,12 @@ class HyperparamsOnDiskRepository(HyperparamsRepository):
     def __init__(
             self,
             cache_folder: str = None,
+            for_unit_testing: bool = False,
     ):
         HyperparamsRepository.__init__(self)
         self._vanilla = VanillaHyperparamsRepository(cache_folder=cache_folder)
         # self.cache_folder = cache_folder
+        self.for_unit_testing: bool = for_unit_testing
 
     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
         """
@@ -70,8 +71,11 @@ class HyperparamsOnDiskRepository(HyperparamsRepository):
         :param scope: scope to get metadata from.
         :return: metadata from scope.
         """
-        self._load_dc(scope=scope, deep=deep)
-        loaded = self._vanilla.load(scope=scope, deep=deep)
+        loaded = self._load_dc(scope=scope, deep=deep)
+        self._vanilla.save(loaded, scope=scope, deep=deep)
+        # inmem_loaded = self._vanilla.load(scope=scope, deep=deep)
+        # if self.for_unit_testing is True:
+        #     assert(loaded == inmem_loaded), f"disk-loaded and in-memory-loaded are not the same: {loaded} != {inmem_loaded}"
         return loaded
 
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
@@ -87,34 +91,38 @@ class HyperparamsOnDiskRepository(HyperparamsRepository):
         return self
 
     def _load_dc(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
-        _, _, load_file = self._filenameof(None, scope)
+        scope, _, load_file = self._filenameof(None, scope)
 
         if not os.path.exists(load_file):
-            raise FileNotFoundError(f"{load_file} not found.")
+            # raise FileNotFoundError(f"{load_file} not found.")
+            return self._vanilla.load(scope=scope, deep=deep)
 
         with open(load_file, 'r') as f:
-            _dataclass = from_json(json.load(f))
-            if deep:
-                raise NotImplemented("TODO")
+            _dataclass: SubDataclassT = from_json(json.load(f)).shallow()
+            if deep is True and _dataclass.__class__ in list(dataclass_2_subdataclass.keys())[:-1]:
+                for sub_dc_id in _dataclass.get_sublocation_keys():
+                    sub_dc = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
+                    _dataclass.store(sub_dc)
             return _dataclass
 
     def _save_dc(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False):
+        scope = scope.at_dc(_dataclass)
         scope, save_folder, save_file = self._filenameof(_dataclass, scope)
 
         os.makedirs(save_folder, exist_ok=True)
         with open(save_file, 'w') as f:
-            json.dump(to_json(_dataclass.shallow()), f, indent=4)
+            _dc_to_save = _dataclass.shallow() if deep else _dataclass.empty()
+            json.dump(to_json(_dc_to_save), f, indent=4)
 
-        if deep:
+        if deep is True and _dataclass.__class__ in list(dataclass_2_subdataclass.keys())[:-1]:
             for sub_dc in _dataclass.get_sublocation_values():
                 self._save_dc(sub_dc, scope=scope, deep=deep)
 
-    def _filenameof(self, _dataclass, scope):
-        scope = copy.deepcopy(scope)
-        _dc_id = _dataclass.get_id()
-        if _dc_id is not None:
-            setattr(scope, dataclass_2_id_attr[_dc_id.__class__], _dc_id)
-        suffixes = scope.as_list()
+    def _filenameof(self, _dataclass: SubDataclassT, scope: ScopedLocation):
+        scope = deepcopy(scope)
+        if _dataclass is not None and _dataclass.get_id() is not None:
+            setattr(scope, dataclass_2_id_attr[_dataclass.__class__], _dataclass.get_id())
+        suffixes = scope.as_list(stringify=True)
         prefix = self._vanilla.cache_folder
 
         save_folder = os.path.join(prefix, *suffixes)
@@ -123,10 +131,10 @@ class HyperparamsOnDiskRepository(HyperparamsRepository):
         return scope, save_folder, save_file
 
     def get_scoped_logger_path(self, scope: ScopedLocation) -> str:
-        raise NotImplemented("TODO")
+        raise NotImplementedError("TODO")
 
 
-class _HyperparamsOnDiskRepository(HyperparamsRepository):
+class _HyperparamsOnDiskRepositoryDEPRECATED(HyperparamsRepository):
     """
     Hyperparams repository that saves json files for every AutoML trial.
 

@@ -395,14 +395,14 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
     @abstractmethod
     def shallow(self) -> 'BaseDataclass':
         """
-        Replaces the sublocation items with None.
+        Replaces the sublocation items with None when the sublocation is a BaseDataclass type.
         """
         raise NotImplementedError("Must use mixins.")
 
     @abstractmethod
     def empty(self) -> 'BaseDataclass':
         """
-        Do empty the sublocation.
+        Do empty the sublocation when the sublocation is a BaseDataclass type.
         """
         raise NotImplementedError("Must use mixins.")
 
@@ -670,6 +670,12 @@ class MetricResultsDataclass(DataclassHasListMixin, BaseDataclass[float]):
     train_values: List[float] = field(default_factory=list)
     higher_score_is_better: bool = True
 
+    def shallow(self) -> 'BaseDataclass':
+        return copy.deepcopy(self)
+
+    def empty(self) -> 'BaseDataclass':
+        return copy.deepcopy(self)
+
 
 dataclass_2_id_attr: OrderedDict[BaseDataclass, str] = OrderedDict([
     (ProjectDataclass, "project_name"),
@@ -724,7 +730,13 @@ def as_named_odict(
     ])
 
 
-def object_decoder(obj):
+def object_pairs_decoder(obj):
+    return object_decoder(obj, odictify=True)
+
+
+def object_decoder(obj, odictify=False):
+    if odictify:
+        obj = OrderedDict(obj)
     if '__type__' in obj and obj['__type__'] in str_2_dataclass:
         # cls: Type = str_2_dataclass[obj['__type__']]
         return BaseDataclass.from_dict(obj)
@@ -749,12 +761,12 @@ class MetadataJSONEncoder(JSONEncoder):
         return JSONEncoder.encode(self, obj)
 
 
-def to_json(obj: str) -> str:
+def to_json(obj: BaseDataclass) -> str:
     return json.dumps(obj, cls=MetadataJSONEncoder)
 
 
-def from_json(_json: str) -> str:
-    return json.loads(_json, object_pairs_hook=OrderedDict, object_hook=object_decoder)
+def from_json(_json: str) -> BaseDataclass:
+    return json.loads(_json, object_pairs_hook=object_pairs_decoder, object_hook=object_decoder)
 
 
 class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseDataclass]], BaseService):
@@ -835,7 +847,7 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
             ret: BaseDataclass = self.root[scope]
             if not deep:
                 ret = ret.shallow()
-        except KeyError as _:
+        except KeyError:
             ret: BaseDataclass = scope.new_dataclass_from_id()
 
         return copy.deepcopy(ret)
@@ -843,6 +855,7 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'VanillaHyperparamsRepository':
         # Sanitizing
         _dataclass: SubDataclassT = copy.deepcopy(_dataclass)
+        scope = scope.at_dc(_dataclass)
 
         # Sanity checks: good type
         if not isinstance(_dataclass, BaseDataclass):
