@@ -15,7 +15,7 @@ from neuraxle.metaopt.data.vanilla import (AutoMLContext, ClientDataclass,
                                            TrialDataclass,
                                            VanillaHyperparamsRepository,
                                            from_json, to_json)
-from testing.metaopt.test_repo_dataclasses import (SOME_FULL_SCOPED_LOCATION,
+from testing.metaopt.test_automl_dataclasses import (SOME_FULL_SCOPED_LOCATION,
                                                    SOME_ROOT_DATACLASS,
                                                    SOME_TRIAL_DATACLASS)
 

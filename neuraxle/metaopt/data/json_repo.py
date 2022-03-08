@@ -37,12 +37,40 @@ import traceback
 from typing import List, Tuple
 
 from neuraxle.base import TrialStatus
+from neuraxle.logging.logging import NeuraxleLogger
 from neuraxle.metaopt.data.aggregates import Round, Trial
 from neuraxle.metaopt.data.vanilla import AutoMLContext, HyperparamsRepository, VanillaHyperparamsRepository, BaseDataclass, ScopedLocation, SubDataclassT, dataclass_2_id_attr, dataclass_2_subdataclass, to_json, from_json
 from neuraxle.metaopt.observable import _ObservableRepo
 
 
-class HyperparamsOnDiskRepository(HyperparamsRepository):
+class _OnDiskRepositoryLoggerHandlerMixin:
+    """
+    Mixin to add a disk logging handler to a repository. It has a cache_folder.
+    """
+
+    def __init__(self, cache_folder: str):
+        self.cache_folder = cache_folder
+
+    def add_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> 'HyperparamsRepository':
+        """
+        Adds an on-disk logging handler to the repository.
+        The file at this scope can be retrieved with the method :func:`get_scoped_logger_path`.
+        """
+        pass
+
+    def get_log_from_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> List[str]:
+        pass
+
+    def get_folder_at_scope(self, scope: ScopedLocation) -> str:
+        _scope_attrs = scope.as_list(stringify=True)
+        return os.path.join(self.cache_folder, *_scope_attrs)
+
+    def get_scoped_logger_path(self, scope: ScopedLocation) -> str:
+        scoped_path: str = self.get_folder_at_scope(scope)
+        return os.path.join(scoped_path, 'log.txt')
+
+
+class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, HyperparamsRepository):
     """
     Hyperparams repository that saves json files for every AutoML trial.
 
@@ -57,8 +85,8 @@ class HyperparamsOnDiskRepository(HyperparamsRepository):
             for_unit_testing: bool = False,
     ):
         HyperparamsRepository.__init__(self)
+        _OnDiskRepositoryLoggerHandlerMixin.__init__(self, cache_folder=cache_folder)
         self._vanilla = VanillaHyperparamsRepository(cache_folder=cache_folder)
-        # self.cache_folder = cache_folder
         self.for_unit_testing: bool = for_unit_testing
 
     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
@@ -91,7 +119,7 @@ class HyperparamsOnDiskRepository(HyperparamsRepository):
         return self
 
     def _load_dc(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
-        scope, _, load_file = self._filenameof(None, scope)
+        scope, _, load_file = self._get_dataclass_filename_path(None, scope)
 
         if not os.path.exists(load_file):
             # raise FileNotFoundError(f"{load_file} not found.")
@@ -106,8 +134,7 @@ class HyperparamsOnDiskRepository(HyperparamsRepository):
             return _dataclass
 
     def _save_dc(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False):
-        scope = scope.at_dc(_dataclass)
-        scope, save_folder, save_file = self._filenameof(_dataclass, scope)
+        scope, save_folder, save_file = self._get_dataclass_filename_path(_dataclass, scope)
 
         os.makedirs(save_folder, exist_ok=True)
         with open(save_file, 'w') as f:
@@ -118,20 +145,20 @@ class HyperparamsOnDiskRepository(HyperparamsRepository):
             for sub_dc in _dataclass.get_sublocation_values():
                 self._save_dc(sub_dc, scope=scope, deep=deep)
 
-    def _filenameof(self, _dataclass: SubDataclassT, scope: ScopedLocation):
-        scope = deepcopy(scope)
-        if _dataclass is not None and _dataclass.get_id() is not None:
-            setattr(scope, dataclass_2_id_attr[_dataclass.__class__], _dataclass.get_id())
-        suffixes = scope.as_list(stringify=True)
-        prefix = self._vanilla.cache_folder
+    def _get_dataclass_filename_path(self, _dataclass: SubDataclassT, scope: ScopedLocation):
+        scope = self._patch_scope_for_dataclass(_dataclass, scope)
 
-        save_folder = os.path.join(prefix, *suffixes)
+        save_folder = self.get_folder_at_scope(scope)
         save_file = os.path.join(save_folder, 'metadata.json')
 
         return scope, save_folder, save_file
 
-    def get_scoped_logger_path(self, scope: ScopedLocation) -> str:
-        raise NotImplementedError("TODO")
+    def _patch_scope_for_dataclass(self, _dataclass: BaseDataclass, scope: ScopedLocation):
+        scope = deepcopy(scope)
+        scope = scope.at_dc(_dataclass)
+        if _dataclass is not None and _dataclass.get_id() is not None:
+            setattr(scope, dataclass_2_id_attr[_dataclass.__class__], _dataclass.get_id())
+        return scope
 
 
 class _HyperparamsOnDiskRepositoryDEPRECATED(HyperparamsRepository):

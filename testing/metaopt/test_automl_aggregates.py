@@ -1,20 +1,14 @@
 from cmath import phase
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import Type
 
-import numpy as np
 import pytest
-from neuraxle.base import (CX, BaseService, BaseStep, BaseTransformer, Flow,
-                           HandleOnlyMixin, Identity, MetaStep)
+from neuraxle.base import ExecutionContext as CX
 from neuraxle.data_container import IDT
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.hyperparams.distributions import RandInt, Uniform
-from neuraxle.hyperparams.space import (HyperparameterSamples,
-                                        HyperparameterSpace)
-from neuraxle.metaopt.auto_ml import (ControlledAutoML, DefaultLoop,
-                                      RandomSearchSampler, Trainer)
-from neuraxle.metaopt.callbacks import (ARG_X_INPUTTED, ARG_Y_EXPECTED,
-                                        ARG_Y_PREDICTD, CallbackList,
-                                        EarlyStoppingCallback, MetricCallback)
+from neuraxle.hyperparams.space import HyperparameterSpace
+from neuraxle.metaopt.callbacks import (ARG_X_INPUTTED, ARG_Y_PREDICTD,
+                                        CallbackList, EarlyStoppingCallback,
+                                        MetricCallback)
 from neuraxle.metaopt.data.aggregates import (BaseAggregate, Client,
                                               MetricResults, Project, Root,
                                               Round, Trial, TrialSplit,
@@ -23,24 +17,17 @@ from neuraxle.metaopt.data.aggregates import (BaseAggregate, Client,
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            AutoMLContext, BaseDataclass,
                                            BaseHyperparameterOptimizer,
-                                           ClientDataclass,
                                            MetricResultsDataclass,
-                                           ProjectDataclass, RootDataclass,
-                                           RoundDataclass, ScopedLocation,
-                                           TrialDataclass, TrialSplitDataclass,
+                                           ScopedLocation,
                                            VanillaHyperparamsRepository,
                                            dataclass_2_id_attr,
                                            dataclass_2_subdataclass)
-from neuraxle.metaopt.validation import (GridExplorationSampler,
-                                         ValidationSplitter)
+from neuraxle.metaopt.validation import GridExplorationSampler
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.data import DataShuffler
-from neuraxle.steps.flow import TrainOnlyWrapper
 from neuraxle.steps.numpy import AddN, MultiplyByN
 from sklearn.metrics import median_absolute_error
-from testing.metaopt.test_repo_dataclasses import (SOME_FULL_SCOPED_LOCATION,
-                                                   SOME_METRIC_NAME,
-                                                   SOME_ROOT_DATACLASS)
+from testing.metaopt.test_automl_dataclasses import (SOME_FULL_SCOPED_LOCATION,
+                                                     SOME_ROOT_DATACLASS)
 
 
 class SomeException(Exception):

@@ -815,8 +815,41 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
         #       it only adds handlers to a scope, instead of getting a path to later set up the logger with it.
         raise NotImplementedError("Use a concrete class. This is an abstract class.")
 
+    @abstractmethod
+    def add_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> 'HyperparamsRepository':
+        """
+        Add logging handler to repository's provided scope.
+        Handler must be set manually for each scope below this scope.
 
-class VanillaHyperparamsRepository(HyperparamsRepository):
+        :param logger: logger to add handler to.
+        :param scope: scope to add handler to.
+        :return: self.
+        """
+        raise NotImplementedError("Use a concrete class. This is an abstract class.")
+
+    @abstractmethod
+    def get_log_from_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> List[str]:
+        """
+        Get log from repository's provided scope and handler that was set with :func:`add_logging_handler`.
+
+        :param scope: scope to get log from.
+        :return: log from scope.
+        """
+        raise NotImplementedError("Use a concrete class. This is an abstract class.")
+
+
+class _InMemoryRepositoryLoggerHandlerMixin:
+    """
+    Mixin to add a in-memory logging handler to a repository.
+    """
+
+    def add_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> 'HyperparamsRepository':
+        pass
+
+    def get_log_from_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> List[str]:
+        pass
+
+class VanillaHyperparamsRepository(_InMemoryRepositoryLoggerHandlerMixin, HyperparamsRepository):
     """
     Hyperparams repository that saves data AutoML-related info.
     """
@@ -892,16 +925,8 @@ class VanillaHyperparamsRepository(HyperparamsRepository):
             self.root[scope].store(_dataclass)
         return self
 
-    def get_scoped_logger_path(self, scope: ScopedLocation) -> str:
-        scoped_path: str = self.get_scoped_path(scope)
-        return os.path.join(scoped_path, 'log.txt')
 
-    def get_scoped_path(self, scope: ScopedLocation) -> str:
-        _scope_attrs = scope.as_list(stringify=True)
-        return os.path.join(self.cache_folder, *_scope_attrs)
-
-
-class InMemoryHyperparamsRepository(RaiseDeprecatedClass, HyperparamsRepository):
+class InMemoryHyperparamsRepository(RaiseDeprecatedClass, _InMemoryRepositoryLoggerHandlerMixin, HyperparamsRepository):
     """
     In memory hyperparams repository that can print information about trials.
     Useful for debugging.
