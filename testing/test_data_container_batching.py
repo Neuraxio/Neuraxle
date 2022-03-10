@@ -53,6 +53,7 @@ def test_data_container_minibatch_should_be_lazy_and_use_getitem_when_data_is_la
             assert not items[y].is_loaded()
         i += 1
 
+
 @pytest.mark.parametrize('batch_size,include_incomplete_pass,default_value,expected_data_containers', [
     (3, False, None, [
         DACT(ids=[0, 1, 2], data_inputs=[0, 1, 2], expected_outputs=[10, 11, 12]),

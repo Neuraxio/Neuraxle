@@ -196,7 +196,7 @@ class OnlyFitAtTransformTime(NonFittableMixin, MetaStep):
 def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
     dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
     cx = AutoMLContext.from_context(CX(root=tmpdir))
-    cx.add_scoped_logger_file_handler()
+    # cx.add_scoped_logger_file_handler() TODO: use OnDiskRepo to test logging files with parallel?
     sleep_step = Sleep(0.001)
     n_trials = 4
     automl: ControlledAutoML = _create_automl_test_loop(
@@ -225,7 +225,7 @@ def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
 def test_automl_can_use_same_repo_in_parallel(tmpdir, use_processes):
     dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
     cx = AutoMLContext.from_context(CX(root=tmpdir))
-    cx.add_scoped_logger_file_handler()
+    # cx.add_scoped_logger_file_handler() TODO: use OnDiskRepo to test logging files with parallel.
     sleep_step = Sleep(1)
     automl: ControlledAutoML = _create_automl_test_loop(
         tmpdir, sleep_step, n_trials=1, start_new_round=False, refit_best_trial=False

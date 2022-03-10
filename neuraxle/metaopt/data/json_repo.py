@@ -56,10 +56,18 @@ class _OnDiskRepositoryLoggerHandlerMixin:
         Adds an on-disk logging handler to the repository.
         The file at this scope can be retrieved with the method :func:`get_scoped_logger_path`.
         """
-        pass
+        logging_file = self.get_scoped_logger_path(scope)
+        os.makedirs(os.path.dirname(logging_file), exist_ok=True)
+        logger.with_file_handler(logging_file)
+        return self
 
-    def get_log_from_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> List[str]:
-        pass
+    def get_log_from_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> str:
+        return ''.join(logger.read_log_file())
+        # TODO: what to do with this code:
+        # def read_scoped_logger_file(self) -> str:
+        #     with open(self.repo.get_scoped_logger_path(self.loc), "r") as f:
+        #         l: str = "".join(f.readlines())
+        #     return l
 
     def get_folder_at_scope(self, scope: ScopedLocation) -> str:
         _scope_attrs = scope.as_list(stringify=True)
@@ -155,8 +163,8 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
 
     def _patch_scope_for_dataclass(self, _dataclass: BaseDataclass, scope: ScopedLocation):
         scope = deepcopy(scope)
-        scope = scope.at_dc(_dataclass)
         if _dataclass is not None and _dataclass.get_id() is not None:
+            scope = scope.at_dc(_dataclass)
             setattr(scope, dataclass_2_id_attr[_dataclass.__class__], _dataclass.get_id())
         return scope
 

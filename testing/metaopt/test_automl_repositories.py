@@ -1,4 +1,6 @@
 import copy
+from lib2to3.pgen2.pgen import DFAState
+from signal import SIG_DFL
 from typing import Callable, List
 
 import pytest
@@ -69,27 +71,15 @@ def test_logger_level_works_with_multiple_levels(
 ):
     c0 = cx_repo_ctor(tmpdir)
 
-    try:
-        c0.add_scoped_logger_file_handler()
-        c0.flow.log("c0.flow.log: begin")
+    c0.flow.log("c0.flow.log: begin")
+    c1 = c0.push_attr(ProjectDataclass(project_name=DEFAULT_PROJECT))
+    c1.flow.log("c1.flow.log: begin")
+    c1.flow.log("c1.flow.log: some work being done from within c1")
+    c1.flow.log("c1.flow.log: end")
+    c0.flow.log("c0.flow.log: end")
 
-        c1 = c0.push_attr(ProjectDataclass(project_name=DEFAULT_PROJECT))
-        try:
-            c1.add_scoped_logger_file_handler()
-            c1.flow.log("c1.flow.log: begin")
-
-            c1.flow.log("c1.flow.log: some work being done from within c1")
-
-            c1.flow.log("c1.flow.log: end")
-        finally:
-            c1.free_scoped_logger_file_handler()
-
-        c0.flow.log("c0.flow.log: end")
-    finally:
-        c0.free_scoped_logger_file_handler()
-
-    l0 = c0.read_scoped_logger_file()
-    l1 = c1.read_scoped_logger_file()
+    l0: str = c0.read_scoped_log()
+    l1: str = c1.read_scoped_log()
 
     assert l0 != l1
     assert len(l0) > len(l1)

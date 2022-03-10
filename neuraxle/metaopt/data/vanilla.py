@@ -804,18 +804,6 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
         raise NotImplementedError("Use a concrete class. This is an abstract class.")
 
     @abstractmethod
-    def get_scoped_logger_path(self, scope: ScopedLocation) -> str:
-        """
-        Get logger path from scope.
-
-        :param scope: scope to get logger path from.
-        :return: logger path with given scope.
-        """
-        # TODO: perhaps rename this to "add_scoped_logger_handlers" to make clear that
-        #       it only adds handlers to a scope, instead of getting a path to later set up the logger with it.
-        raise NotImplementedError("Use a concrete class. This is an abstract class.")
-
-    @abstractmethod
     def add_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> 'HyperparamsRepository':
         """
         Add logging handler to repository's provided scope.
@@ -828,7 +816,7 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
         raise NotImplementedError("Use a concrete class. This is an abstract class.")
 
     @abstractmethod
-    def get_log_from_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> List[str]:
+    def get_log_from_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> str:
         """
         Get log from repository's provided scope and handler that was set with :func:`add_logging_handler`.
 
@@ -844,10 +832,11 @@ class _InMemoryRepositoryLoggerHandlerMixin:
     """
 
     def add_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> 'HyperparamsRepository':
-        pass
+        return self
 
-    def get_log_from_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> List[str]:
-        pass
+    def get_log_from_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> str:
+        return logger.get_scoped_string_history()
+
 
 class VanillaHyperparamsRepository(_InMemoryRepositoryLoggerHandlerMixin, HyperparamsRepository):
     """
@@ -957,6 +946,11 @@ class BaseHyperparameterOptimizer(ABC):
 class AutoMLContext(CX):
 
     @property
+    def logger(self) -> NeuraxleLogger:
+        self.add_scoped_logger_file_handler()
+        return CX.logger.fget(self)
+
+    @property
     def logger_at_scoped_loc(self) -> NeuraxleLogger:
         return logging.getLogger(self.get_identifier(include_step_names=False))
 
@@ -965,9 +959,7 @@ class AutoMLContext(CX):
         Add a file handler to the logger at the current scoped location to capture logs
         at this scope and below this scope.
         """
-        logging_file = self.repo.get_scoped_logger_path(self.loc)
-        os.makedirs(os.path.dirname(logging_file), exist_ok=True)
-        self.logger_at_scoped_loc.with_file_handler(logging_file)
+        self.repo.add_logging_handler(self.logger_at_scoped_loc, self.loc)
 
     def free_scoped_logger_file_handler(self):
         """
@@ -975,10 +967,11 @@ class AutoMLContext(CX):
         """
         self.logger_at_scoped_loc.without_file_handler()
 
-    def read_scoped_logger_file(self) -> str:
-        with open(self.repo.get_scoped_logger_path(self.loc), "r") as f:
-            l: str = "".join(f.readlines())
-        return l
+    def read_scoped_log(self) -> str:
+        """
+        Read the scoped logger file.
+        """
+        return self.repo.get_log_from_logging_handler(self.logger, self.loc)
 
     def copy(self):
         copy_kwargs = self._get_copy_kwargs()

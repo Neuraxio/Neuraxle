@@ -161,21 +161,20 @@ def test_root_neuraxle_logger_logs_to_string():
     assert "This is a test." in nxl.get_scoped_string_history()
 
 
-def test_automl_neuraxle_logger_logs_to_repo_file():
-    cx: AutoMLContext = AutoMLContext.from_context()
+def test_automl_neuraxle_logger_logs_to_repo_file(tmpdir):
+    cx: AutoMLContext = AutoMLContext.from_context(repo=HyperparamsOnDiskRepository(cache_folder=tmpdir))
 
-    try:
-        cx.add_scoped_logger_file_handler()
-
-        cx.flow.log_status(TrialStatus.RUNNING)
-    finally:
-        cx.free_scoped_logger_file_handler()
+    cx.flow.log_status(TrialStatus.RUNNING)
     cx.flow.log_end(TrialStatus.ABORTED)
 
-    assert os.path.exists(cx.repo.get_scoped_logger_path(cx.loc))
-    f = cx.read_scoped_logger_file()
-    assert str(TrialStatus.RUNNING) in f
-    assert str(TrialStatus.ABORTED) not in f
+    log_file_path_at_loc = cx.repo.get_scoped_logger_path(cx.loc)
+    assert os.path.exists(log_file_path_at_loc)
+    log1 = cx.read_scoped_log()
+    with open(log_file_path_at_loc, 'r') as _file:
+        log2 = _file.read()
+    assert log1 == log2
+    assert str(TrialStatus.RUNNING) in log1
+    assert str(TrialStatus.ABORTED) in log1
 
 
 def test_sub_root_neuraxle_loggers_logs_to_string():

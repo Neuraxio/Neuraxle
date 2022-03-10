@@ -5,7 +5,7 @@ Usage of AutoML loop, and hyperparams with sklearn models.
 This demonstrates how you can build an AutoML loop that finds the best possible sklearn classifier.
 It also shows you how to add hyperparams to sklearn steps using SKLearnWrapper.
 This example has been derived and simplified from the following repository: https://github.com/Neuraxio/Kata-Clean-Machine-Learning-From-Dirty-Code
-Here, 2D data is fitted, whereas in the original example 3D (sequential / time series) data is preprocessed and then fitted with the same models. 
+Here, 2D data is fitted, whereas in the original example 3D (sequential / time series) data is preprocessed and then fitted with the same models.
 
 ..
     Copyright 2019, Neuraxio Inc.
@@ -36,7 +36,7 @@ from neuraxle.hyperparams.distributions import Choice, RandInt, Boolean, LogUnif
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler, ValidationSplitter
 from neuraxle.metaopt.callbacks import ScoringCallback
-from neuraxle.metaopt.data.vanilla import VanillaHyperparamsRepository
+from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import ChooseOneStepOf
 from neuraxle.steps.numpy import NumpyRavel
@@ -118,7 +118,7 @@ def main():
         scoring_callback=ScoringCallback(accuracy_score, higher_score_is_better=True),
         n_trials=7,
         epochs=1,
-        hyperparams_repository=VanillaHyperparamsRepository(cache_folder='cache'),
+        hyperparams_repository=HyperparamsOnDiskRepository(cache_folder='cache'),
         refit_best_trial=True,
         continue_loop_on_error=False
     )

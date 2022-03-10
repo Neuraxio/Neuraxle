@@ -1241,7 +1241,7 @@ class ExecutionContext(TruncableService):
             'parents': copy(self.parents),
             'services': possibly_copied_services,
         }
-        
+
         return copy_kwargs
 
     def train(self) -> 'CX':
