@@ -1,6 +1,8 @@
 import os
+from typing import Callable, Optional
 
 import numpy as np
+import pytest
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import (Boolean, Choice, LogUniform,
@@ -9,7 +11,8 @@ from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler
 from neuraxle.metaopt.callbacks import (EarlyStoppingCallback, MetricCallback,
                                         ScoringCallback)
-from neuraxle.metaopt.data.vanilla import VanillaHyperparamsRepository
+from neuraxle.metaopt.data.vanilla import (AutoMLContext,
+                                           VanillaHyperparamsRepository)
 from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyRavel
@@ -18,6 +21,7 @@ from neuraxle.steps.sklearn import SKLearnWrapper
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, mean_squared_error
 from sklearn.preprocessing import StandardScaler
+from testing.metaopt.test_automl_repositories import CX_WITH_REPO_CTORS, TmpDir
 
 
 def _create_data_source():
@@ -42,7 +46,8 @@ def _create_pipeline():
     ])
 
 
-def test_automl_api_entry_point(tmpdir):
+@pytest.mark.parametrize('cx_repo_ctor', CX_WITH_REPO_CTORS)
+def test_automl_api_entry_point(tmpdir, cx_repo_ctor: Callable[[Optional[TmpDir]], AutoMLContext]):
     data_inputs, expected_outputs = _create_data_source()
     dact = DACT(data_inputs=data_inputs, expected_outputs=expected_outputs)
     pipeline = _create_pipeline()
@@ -66,7 +71,7 @@ def test_automl_api_entry_point(tmpdir):
 
     a, _out = a.handle_fit_transform(
         dact,
-        CX(root=os.path.join(tmpdir, "automl"))
+        cx_repo_ctor()
     )
 
     assert _out is not None

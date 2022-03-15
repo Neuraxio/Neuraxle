@@ -1,44 +1,34 @@
 
-from collections import defaultdict, namedtuple
 import copy
+from collections import defaultdict, namedtuple
 from dataclasses import dataclass, field
-from operator import attrgetter
-from typing import Any, Dict, List, Optional, Set, Tuple, Type
+from typing import Dict, List, Tuple, Type
 
 import numpy as np
 import pytest
-from neuraxle.base import (CX, BaseService, BaseStep, BaseTransformer, Flow,
-                           HandleOnlyMixin, Identity, MetaStep, NonFittableMixin)
+from neuraxle.base import (CX, BaseStep, HandleOnlyMixin, Identity, MetaStep,
+                           NonFittableMixin)
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.data_container import TrainDACT, PredsDACT
+from neuraxle.data_container import PredsDACT, TrainDACT
 from neuraxle.distributed.streaming import ParallelQueuedFeatureUnion
 from neuraxle.hyperparams.distributions import (
     DiscreteHyperparameterDistribution, PriorityChoice, RandInt, Uniform)
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         HyperparameterSpace)
-from neuraxle.metaopt.auto_ml import (ControlledAutoML, DefaultLoop,
-                                      RandomSearchSampler, Trainer)
+from neuraxle.metaopt.auto_ml import ControlledAutoML, DefaultLoop, Trainer
 from neuraxle.metaopt.callbacks import (CallbackList, EarlyStoppingCallback,
                                         MetricCallback)
 from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            AutoMLContext, BaseDataclass,
-                                           BaseHyperparameterOptimizer,
-                                           ClientDataclass,
-                                           MetricResultsDataclass,
-                                           ProjectDataclass, RootDataclass,
-                                           RoundDataclass, ScopedLocation,
-                                           TrialDataclass, TrialSplitDataclass,
-                                           VanillaHyperparamsRepository,
-                                           dataclass_2_id_attr)
+                                           RoundDataclass, ScopedLocation)
 from neuraxle.metaopt.validation import (GridExplorationSampler,
                                          ValidationSplitter)
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.misc import Sleep
 from neuraxle.steps.data import DataShuffler
 from neuraxle.steps.flow import TrainOnlyWrapper
-from neuraxle.steps.misc import AssertFalseStep
-from neuraxle.steps.numpy import AddN, MultiplyByN
+from neuraxle.steps.misc import AssertFalseStep, Sleep
+from neuraxle.steps.numpy import AddN
 from sklearn.metrics import median_absolute_error
 
 

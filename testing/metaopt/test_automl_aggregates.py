@@ -1,5 +1,6 @@
 from cmath import phase
-from typing import Type
+from copy import deepcopy
+from typing import Callable, Optional, Type
 
 import pytest
 from neuraxle.base import ExecutionContext as CX
@@ -28,7 +29,7 @@ from neuraxle.steps.numpy import AddN, MultiplyByN
 from sklearn.metrics import median_absolute_error
 from testing.metaopt.test_automl_dataclasses import (SOME_FULL_SCOPED_LOCATION,
                                                      SOME_ROOT_DATACLASS)
-
+from testing.metaopt.test_automl_repositories import CX_WITH_REPO_CTORS, TmpDir
 
 class SomeException(Exception):
     pass
@@ -48,10 +49,15 @@ END = "the end"
 
 @pytest.mark.parametrize('lvlno, level_to_raise', list(enumerate(list(aggregate_2_subaggregate.keys())[1:])))
 @pytest.mark.parametrize('phase_to_raise', [BEGIN, END])
-def test_aggregate_exceptions_will_raise(phase_to_raise: str, lvlno: int, level_to_raise: Type[BaseAggregate]):
+@pytest.mark.parametrize('cx_repo_ctor', CX_WITH_REPO_CTORS)
+def test_aggregate_exceptions_will_raise(
+    lvlno: int, level_to_raise: Type[BaseAggregate],
+    phase_to_raise: str,
+    cx_repo_ctor: Callable[[Optional[TmpDir]], AutoMLContext],
+):
 
     with pytest.raises(SomeException):
-        root: Root = Root.vanilla(CX())
+        root: Root = Root.vanilla(cx_repo_ctor())
         _raise_if_is_at_level(root, level_to_raise, BEGIN, phase_to_raise)
         with root.default_project() as ps:
             ps: Project = ps
@@ -85,7 +91,8 @@ def test_aggregate_exceptions_will_raise(phase_to_raise: str, lvlno: int, level_
     pass
 
 
-def test_scoped_cascade_does_the_right_logging(tmpdir):
+@pytest.mark.parametrize('cx_repo_ctor', CX_WITH_REPO_CTORS)
+def test_scoped_cascade_does_the_right_logging(tmpdir, cx_repo_ctor: Callable[[Optional[TmpDir]], AutoMLContext]):
     dact_train: DACT[IDT, ARG_X_INPUTTED, ARG_Y_PREDICTD] = DACT(
         ids=list(range(0, 10)), di=list(range(0, 10)), eo=list(range(100, 110)))
     dact_valid: DACT[IDT, ARG_X_INPUTTED, ARG_Y_PREDICTD] = DACT(
@@ -111,7 +118,7 @@ def test_scoped_cascade_does_the_right_logging(tmpdir):
         AddN().with_hp_range(range(99, 103)),
     ])
     hps: HyperparameterSpace = p.get_hyperparams_space()
-    root: Root = Root.vanilla(CX())
+    root: Root = Root.vanilla(cx_repo_ctor())
 
     with root.default_project() as ps:
         ps: Project = ps
@@ -184,15 +191,17 @@ cant_be_shallow_aggs = [
 
 @pytest.mark.parametrize("aggregate_class", list(aggregate_2_subaggregate.keys())[1:])
 @pytest.mark.parametrize("is_deep", [True, False])
-def test_aggregates_creation(aggregate_class: Type[BaseAggregate], is_deep):
+@pytest.mark.parametrize('cx_repo_ctor', CX_WITH_REPO_CTORS)
+def test_aggregates_creation(
+    aggregate_class: Type[BaseAggregate],
+    is_deep: bool,
+    cx_repo_ctor: Callable[[Optional[TmpDir]], AutoMLContext]
+):
     # Create repo from deep root DC:
     dataclass_class: Type = aggregate_2_dataclass[aggregate_class]
     scoped_loc: ScopedLocation = SOME_FULL_SCOPED_LOCATION[:dataclass_class]
-    context = CX()
-    context: AutoMLContext = AutoMLContext().from_context(
-        context,
-        VanillaHyperparamsRepository.from_root(SOME_ROOT_DATACLASS, context.get_path())
-    )
+    context = cx_repo_ctor()
+    context.repo.save(SOME_ROOT_DATACLASS, ScopedLocation(), deep=True)
 
     # Retrieve scoped DC from root
     dataclass = SOME_ROOT_DATACLASS[scoped_loc]

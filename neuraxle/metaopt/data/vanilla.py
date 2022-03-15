@@ -351,6 +351,13 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
         setattr(self, dataclass_2_subloc_attr[self.__class__], sublocation)
         return self
 
+    @abstractmethod
+    def set_sublocation_keys(self, keys: List[ScopedLocationAttr]) -> 'BaseDataclass':
+        """
+        Use this to set a shallow sublocation only from their keys.
+        """
+        raise NotImplementedError("This is an abstract method.")
+
     def __contains__(self, key: ScopedLocation) -> bool:
         # Too shallow:
         if len(key) < list(dataclass_2_subdataclass.keys()).index(self.__class__):
@@ -406,6 +413,9 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
         """
         raise NotImplementedError("Must use mixins.")
 
+    def has_sublocation_dataclasses(self) -> bool:
+        return self.__class__ in list(dataclass_2_subdataclass.keys())[:-1]
+
     @abstractmethod
     def get_sublocation_values(self) -> List[SubDataclassT]:
         raise NotImplementedError("Must use mixins.")
@@ -437,6 +447,11 @@ class DataclassHasOrderedDictMixin:
 
     def set_sublocation(self, sublocation: OrderedDict[ScopedLocationAttrStr, SubDataclassT]) -> None:
         setattr(self, self._sublocation_attr_name, sublocation)
+        self._validate()
+
+    def set_sublocation_keys(self, keys: List[ScopedLocationAttr]) -> 'BaseDataclass':
+        _sublocation = OrderedDict([(k, None) for k in keys])
+        setattr(self, self._sublocation_attr_name, _sublocation)
         self._validate()
 
     def get_sublocation_values(self) -> List[SubDataclassT]:
@@ -476,6 +491,13 @@ class DataclassHasListMixin:
 
     def set_sublocation(self, sublocation: List[SubDataclassT]) -> None:
         setattr(self, self._sublocation_attr_name, sublocation)
+        self._validate()
+
+    def set_sublocation_keys(self, keys: List[ScopedLocationAttr]) -> 'BaseDataclass':
+        _sublocation = [None for k in keys]
+        assert (set(range(len(_sublocation))) == set(
+            [int(k) for k in keys])), f"Bad sublocation keys are being set into DataclassHasListMixin (type {self.__class__.__name__}, id={self.get_id()}) : {keys}."
+        setattr(self, self._sublocation_attr_name, _sublocation)
         self._validate()
 
     def get_sublocation_values(self) -> List[SubDataclassT]:
@@ -635,6 +657,10 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
             return self.retrained_split[loc]
         else:
             return super().__getitem__(loc)
+
+    def set_sublocation_keys(self, keys: List[ScopedLocationAttr]) -> 'BaseDataclass':
+        keys = [k for k in keys if int(k) != RETRAIN_TRIAL_SPLIT_ID]
+        super().set_sublocation_keys(keys)
 
     def shallow(self) -> 'BaseDataclass':
         shallowed: TrialDataclass = super().shallow()

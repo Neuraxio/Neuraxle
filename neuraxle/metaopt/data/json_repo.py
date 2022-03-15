@@ -43,6 +43,9 @@ from neuraxle.metaopt.data.vanilla import AutoMLContext, HyperparamsRepository, 
 from neuraxle.metaopt.observable import _ObservableRepo
 
 
+ON_DISK_DELIM: str = "_"
+
+
 class _OnDiskRepositoryLoggerHandlerMixin:
     """
     Mixin to add a disk logging handler to a repository. It has a cache_folder.
@@ -71,6 +74,7 @@ class _OnDiskRepositoryLoggerHandlerMixin:
 
     def get_folder_at_scope(self, scope: ScopedLocation) -> str:
         _scope_attrs = scope.as_list(stringify=True)
+        _scope_attrs = [ON_DISK_DELIM + s for s in _scope_attrs]
         return os.path.join(self.cache_folder, *_scope_attrs)
 
     def get_scoped_logger_path(self, scope: ScopedLocation) -> str:
@@ -87,15 +91,10 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         :class:`Trainer`,
     """
 
-    def __init__(
-            self,
-            cache_folder: str = None,
-            for_unit_testing: bool = False,
-    ):
+    def __init__(self, cache_folder: str = None):
         HyperparamsRepository.__init__(self)
         _OnDiskRepositoryLoggerHandlerMixin.__init__(self, cache_folder=cache_folder)
         self._vanilla = VanillaHyperparamsRepository(cache_folder=cache_folder)
-        self.for_unit_testing: bool = for_unit_testing
 
     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
         """
@@ -109,9 +108,6 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         """
         loaded = self._load_dc(scope=scope, deep=deep)
         self._vanilla.save(loaded, scope=scope, deep=deep)
-        # inmem_loaded = self._vanilla.load(scope=scope, deep=deep)
-        # if self.for_unit_testing is True:
-        #     assert(loaded == inmem_loaded), f"disk-loaded and in-memory-loaded are not the same: {loaded} != {inmem_loaded}"
         return loaded
 
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
@@ -134,22 +130,30 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
             return self._vanilla.load(scope=scope, deep=deep)
 
         with open(load_file, 'r') as f:
-            _dataclass: SubDataclassT = from_json(json.load(f)).shallow()
-            if deep is True and _dataclass.__class__ in list(dataclass_2_subdataclass.keys())[:-1]:
-                for sub_dc_id in _dataclass.get_sublocation_keys():
-                    sub_dc = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
-                    _dataclass.store(sub_dc)
+            _dataclass: SubDataclassT = from_json(json.load(f))
+            if _dataclass.has_sublocation_dataclasses():
+                _dataclass = self._load_dc_sublocation_keys(_dataclass, scope)
+                if deep is True:
+                    for sub_dc_id in _dataclass.get_sublocation_keys():
+                        sub_dc = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
+                        _dataclass.store(sub_dc)
             return _dataclass
+
+    def _load_dc_sublocation_keys(self, _dataclass: SubDataclassT, scope) -> SubDataclassT:
+        dc_folder: str = self.get_folder_at_scope(scope)
+        sublocs: List[str] = os.listdir(dc_folder)
+        sublocs = [s[len(ON_DISK_DELIM):] for s in sublocs if s.startswith(ON_DISK_DELIM)]
+        _dataclass.set_sublocation_keys(sublocs)
+        return _dataclass
 
     def _save_dc(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False):
         scope, save_folder, save_file = self._get_dataclass_filename_path(_dataclass, scope)
 
         os.makedirs(save_folder, exist_ok=True)
         with open(save_file, 'w') as f:
-            _dc_to_save = _dataclass.shallow() if deep else _dataclass.empty()
-            json.dump(to_json(_dc_to_save), f, indent=4)
+            json.dump(to_json(_dataclass.empty()), f, indent=4)
 
-        if deep is True and _dataclass.__class__ in list(dataclass_2_subdataclass.keys())[:-1]:
+        if deep is True and _dataclass.has_sublocation_dataclasses():
             for sub_dc in _dataclass.get_sublocation_values():
                 self._save_dc(sub_dc, scope=scope, deep=deep)
 

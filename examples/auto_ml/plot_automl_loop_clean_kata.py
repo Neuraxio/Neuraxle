@@ -25,26 +25,29 @@ Here, 2D data is fitted, whereas in the original example 3D (sequential / time s
 """
 import shutil
 
-from sklearn.datasets import make_classification
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import RidgeClassifier, LogisticRegression
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import train_test_split
-from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier
-
-from neuraxle.hyperparams.distributions import Choice, RandInt, Boolean, LogUniform
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.hyperparams.distributions import (Boolean, Choice, LogUniform,
+                                                RandInt)
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler, ValidationSplitter
+from neuraxle.metaopt.auto_ml import (AutoML, RandomSearchSampler,
+                                      ValidationSplitter)
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
+from neuraxle.metaopt.data.vanilla import VanillaHyperparamsRepository
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import ChooseOneStepOf
 from neuraxle.steps.numpy import NumpyRavel
 from neuraxle.steps.output_handlers import OutputTransformerWrapper
 from neuraxle.steps.sklearn import SKLearnWrapper
+from sklearn.datasets import make_classification
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression, RidgeClassifier
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier
 
 
-def main():
+def main(tmpdir: str):
     # Define classification models, and hyperparams.
 
     decision_tree_classifier = SKLearnWrapper(
@@ -96,7 +99,7 @@ def main():
     ]).set_name('RandomForestClassifier')
 
     # Define a classification pipeline that lets the AutoML loop choose one of the classifier.
-    # See also ChooseOneStepOf documentation : https://www.neuraxle.org/stable/api/neuraxle.steps.flow.html#neuraxle.steps.flow.ChooseOneStepOf
+    # See also ChooseOneStepOf documentation: https://www.neuraxle.org/stable/api/neuraxle.steps.flow.html#neuraxle.steps.flow.ChooseOneStepOf
 
     pipeline = Pipeline([
         ChooseOneStepOf([
@@ -109,7 +112,7 @@ def main():
     ])
 
     # Create the AutoML loop object.
-    # See also AutoML documentation : https://www.neuraxle.org/stable/api/neuraxle.metaopt.auto_ml.html#neuraxle.metaopt.auto_ml.AutoML
+    # See also AutoML documentation: https://www.neuraxle.org/stable/api/neuraxle.metaopt.auto_ml.html#neuraxle.metaopt.auto_ml.AutoML
 
     auto_ml = AutoML(
         pipeline=pipeline,
@@ -118,7 +121,7 @@ def main():
         scoring_callback=ScoringCallback(accuracy_score, higher_score_is_better=True),
         n_trials=7,
         epochs=1,
-        hyperparams_repository=HyperparamsOnDiskRepository(cache_folder='cache'),
+        hyperparams_repository=HyperparamsOnDiskRepository(cache_folder=tmpdir),
         refit_best_trial=True,
         continue_loop_on_error=False
     )
@@ -134,7 +137,7 @@ def main():
     accuracy = accuracy_score(y_true=y_test, y_pred=y_pred)
     print("Test accuracy score:", accuracy)
 
-    shutil.rmtree('cache')
+    shutil.rmtree(tmpdir)
 
 
 def generate_classification_data():
@@ -159,4 +162,4 @@ def generate_classification_data():
 
 
 if __name__ == '__main__':
-    main()
+    main(CX.get_new_cache_folder())

@@ -25,13 +25,15 @@ from testing.metaopt.test_automl_dataclasses import (ALL_DATACLASSES,
 TmpDir = str
 
 
-def vanilla_repo_ctor(tmpdir: TmpDir) -> AutoMLContext:
+def vanilla_repo_ctor(tmpdir: TmpDir = None) -> AutoMLContext:
     return AutoMLContext.from_context(CX())
 
 
-def disk_repo_ctor(tmpdir: TmpDir) -> AutoMLContext:
+def disk_repo_ctor(tmpdir: TmpDir = None) -> AutoMLContext:
     # TODO: add this function to REPO_CTORS
-    return AutoMLContext.from_context(CX(), repo=HyperparamsOnDiskRepository(tmpdir))
+    cx = CX()
+    tmpdir = tmpdir or cx.get_new_cache_folder()
+    return AutoMLContext.from_context(cx, repo=HyperparamsOnDiskRepository(tmpdir))
 
 
 CX_WITH_REPO_CTORS: List[Callable[[TmpDir], AutoMLContext]] = [vanilla_repo_ctor, disk_repo_ctor]
