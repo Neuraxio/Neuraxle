@@ -44,7 +44,7 @@ from abc import abstractmethod
 from collections import OrderedDict
 from types import TracebackType
 from typing import (Any, Callable, ContextManager, Dict, Generic, Iterable,
-                    List, Optional, Tuple, Type, TypeVar, Union)
+                    List, Optional, Tuple, Type, TypeVar)
 
 import numpy as np
 from neuraxle.base import BaseService

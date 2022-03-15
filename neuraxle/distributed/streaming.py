@@ -32,7 +32,7 @@ from multiprocessing import Lock, Process, Queue, RLock
 from threading import Thread
 from typing import Any, Dict, Iterable, List, Tuple, Union
 
-from neuraxle.base import BaseSaver, BaseTransformer, ContextLock
+from neuraxle.base import BaseSaver, BaseTransformer
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import (MetaStep, MixinForBaseTransformer, NamedStepsList,
                            NonFittableMixin, _FittableStep)

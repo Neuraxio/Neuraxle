@@ -28,20 +28,23 @@ Classes are splitted like this for the AutoML:
 
 
 """
-from copy import copy, deepcopy
 import glob
 import json
 import os
 import time
 import traceback
-from typing import List, Tuple
+from copy import copy, deepcopy
+from typing import List
 
 from neuraxle.base import TrialStatus
 from neuraxle.logging.logging import NeuraxleLogger
 from neuraxle.metaopt.data.aggregates import Round, Trial
-from neuraxle.metaopt.data.vanilla import AutoMLContext, HyperparamsRepository, VanillaHyperparamsRepository, BaseDataclass, ScopedLocation, SubDataclassT, dataclass_2_id_attr, dataclass_2_subdataclass, to_json, from_json
-from neuraxle.metaopt.observable import _ObservableRepo
-
+from neuraxle.metaopt.data.vanilla import (BaseDataclass,
+                                           HyperparamsRepository,
+                                           ScopedLocation, SubDataclassT,
+                                           VanillaHyperparamsRepository,
+                                           dataclass_2_id_attr, from_json,
+                                           to_json)
 
 ON_DISK_DELIM: str = "_"
 
@@ -171,146 +174,3 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
             scope = scope.at_dc(_dataclass)
             setattr(scope, dataclass_2_id_attr[_dataclass.__class__], _dataclass.get_id())
         return scope
-
-
-class _HyperparamsOnDiskRepositoryDEPRECATED(HyperparamsRepository):
-    """
-    Hyperparams repository that saves json files for every AutoML trial.
-
-    .. seealso::
-        :class:`AutoML`,
-        :class:`Trainer`,
-    """
-
-    def __init__(
-            self,
-            cache_folder: str = None,
-            best_retrained_model_folder: str = None  # TODO: prepend a keyword and remove this param.
-    ):
-        HyperparamsRepository.__init__(self)
-        cache_folder: str = cache_folder if cache_folder is not None else 'json_repo_cache'
-        best_retrained_model_folder: str = (
-            best_retrained_model_folder if best_retrained_model_folder is not None else 'json_repo_best_model')
-        self.json_path_remove_on_update = None
-
-    def _save_trial(self, trial: 'Trial'):
-        """
-        Save trial json.
-
-        :param trial: trial to save
-        :return:
-        """
-        if not os.path.exists(self.cache_folder):
-            os.makedirs(self.cache_folder)
-
-        self._remove_previous_trial_state_json()
-
-        trial_path_func = {
-            TrialStatus.SUCCESS: self._get_successful_trial_json_file_path,
-            TrialStatus.FAILED: self._get_failed_trial_json_file_path,
-            TrialStatus.RUNNING: self._get_ongoing_trial_json_file_path,
-            TrialStatus.PLANNED: self._get_new_trial_json_file_path
-        }
-        trial_file_path = trial_path_func[trial.status](trial)
-
-        with open(trial_file_path, 'w+') as outfile:
-            json.dump(trial.to_json(), outfile)
-
-        if trial.status in (TrialStatus.SUCCESS, TrialStatus.FAILED):
-            self.json_path_remove_on_update = None
-        else:
-            self.json_path_remove_on_update = trial_file_path
-
-        # Sleeping to have a valid time difference between files when reloading them to sort them by creation time:
-        time.sleep(0.1)
-
-    def new_trial(self, auto_ml_container) -> Trial:
-        """
-        Create new hyperperams trial json file.
-
-        :param auto_ml_container: auto ml container
-        :return:
-        """
-        trial: Trial = HyperparamsRepository.new_trial(self, auto_ml_container)
-        self._save_trial(trial)
-
-        return trial
-
-    def load_trials(self, status: 'TrialStatus' = None) -> 'Round':
-        """
-        Load all hyperparameter trials with their corresponding score.
-        Reads all the saved trial json files, sorted by creation date.
-
-        :param status: (optional) filter to select only trials with this status.
-        :return: (hyperparams, scores)
-        """
-        trials = Round()
-
-        files = glob.glob(os.path.join(self.cache_folder, '*.json'))
-
-        # sort by created date:
-        def getmtimens(filename):
-            return os.stat(filename).st_mtime_ns
-
-        files.sort(key=getmtimens)
-
-        for base_path in files:
-            with open(base_path) as f:
-                try:
-                    trial_json = json.load(f)
-                except Exception as err:
-                    print('invalid trial json file'.format(base_path))
-                    print(traceback.format_exc())
-                    continue
-
-            if status is None or trial_json['status'] == status.value:
-                trials.append(Trial.from_json(
-                    update_trial_function=self.save_trial,
-                    trial_json=trial_json,
-                    cache_folder=self.cache_folder
-                ))
-
-        return trials
-
-    def _get_successful_trial_json_file_path(self, trial: 'Trial') -> str:
-        """
-        Get the json path for the given successful trial.
-
-        :param trial: trial
-        :return: str
-        """
-        trial_hash = self.get_trial_id(trial.hyperparams.to_flat_dict())
-        return os.path.join(
-            self.cache_folder,
-            str(float(trial.get_avg_validation_score())).replace('.', ',') + "_" + trial_hash
-        ) + '.json'
-
-    def _get_failed_trial_json_file_path(self, trial: 'Trial'):
-        """
-        Get the json path for the given failed trial.
-
-        :param trial: trial
-        :return: str
-        """
-        trial_hash = self.get_trial_id(trial.hyperparams.to_flat_dict())
-        return os.path.join(self.cache_folder, 'FAILED_' + trial_hash) + '.json'
-
-    def _get_ongoing_trial_json_file_path(self, trial: 'Trial'):
-        """
-        Get ongoing trial json path.
-        """
-        hp_dict = trial.hyperparams.to_flat_dict()
-        current_hyperparameters_hash = self.get_trial_id(hp_dict)
-        return os.path.join(self.cache_folder, "ONGOING_" + current_hyperparameters_hash) + '.json'
-
-    def _get_new_trial_json_file_path(self, trial: 'Trial'):
-        """
-        Get new trial json path.
-        """
-        hp_dict = trial.hyperparams.to_flat_dict()
-        current_hyperparameters_hash = self.get_trial_id(hp_dict)
-        return os.path.join(self.cache_folder, "NEW_" + current_hyperparameters_hash) + '.json'
-
-    def _remove_previous_trial_state_json(self):
-        if self.json_path_remove_on_update and os.path.exists(self.json_path_remove_on_update):
-            os.remove(self.json_path_remove_on_update)

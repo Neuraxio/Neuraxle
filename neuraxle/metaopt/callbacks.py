@@ -24,16 +24,14 @@ Training callback classes.
 
 """
 
-import traceback
-import warnings
 from abc import ABC, abstractmethod
-from typing import Callable, List, Optional, Union
+from typing import Callable, Optional, List
 
-from neuraxle.base import BaseStep, BaseTransformer
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.base import MixinForBaseTransformer
-from neuraxle.data_container import DIT, EOT, IDT, ARG_X_INPUTTED, ARG_Y_EXPECTED, ARG_Y_PREDICTD, EvalEOTDACT
+from neuraxle.data_container import (ARG_X_INPUTTED, ARG_Y_EXPECTED,
+                                     ARG_Y_PREDICTD, DIT, EOT, IDT)
 from neuraxle.data_container import DataContainer as DACT
+from neuraxle.data_container import EvalEOTDACT
 from neuraxle.logging.warnings import (warn_deprecated_arg,
                                        warn_deprecated_class)
 from neuraxle.metaopt.data.aggregates import MetricResults, TrialSplit

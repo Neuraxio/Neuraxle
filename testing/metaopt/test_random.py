@@ -18,10 +18,13 @@ Tests for Metaopt
     limitations under the License.
 
 """
-import pytest
 import math
+
 import numpy as np
-from neuraxle.metaopt.validation import WalkForwardTimeSeriesCrossValidationSplitter, AnchoredWalkForwardTimeSeriesCrossValidationSplitter
+import pytest
+from neuraxle.metaopt.validation import (
+    AnchoredWalkForwardTimeSeriesCrossValidationSplitter,
+    WalkForwardTimeSeriesCrossValidationSplitter)
 
 classic_walforward_parameters = [
     # (training_size, validation_size, padding_between_training_and_validation, drop_remainder)
@@ -77,7 +80,7 @@ def test_classic_walkforward_crossvalidation_split(
 
     # Calculate the size of the remainder
     remainder_size = (time_series_size - training_window_size - padding_between_training_and_validation) % \
-                      validation_window_size_temp
+        validation_window_size_temp
     if remainder_size == 0:
         # Remainder of 0 means the data perfecftly fits in the number of fold and remainder should window_size instead.
         remainder_size = validation_window_size_temp
@@ -185,7 +188,7 @@ def test_anchored_walkforward_crossvalidation_split(
 
     # Calculate the size of the remainder
     remainder_size = (time_series_size - minimum_training_size - padding_between_training_and_validation) % \
-                     validation_window_size_temp
+        validation_window_size_temp
     if remainder_size == 0:
         # Remainder of 0 means the data perfectly fits in the number of fold and remainder should window_size instead.
         remainder_size = validation_window_size_temp

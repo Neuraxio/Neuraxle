@@ -52,8 +52,10 @@ from typing import (Any, Callable, Dict, Generic, ItemsView, Iterable,
 
 from joblib import dump, load
 
-from neuraxle.data_container import IDT, DIT, EOT, TrainDACT, PredsDACT, ARG_X_INPUTTED, ARG_Y_EXPECTED, ARG_Y_PREDICTD
+from neuraxle.data_container import (ARG_X_INPUTTED, ARG_Y_EXPECTED,
+                                     ARG_Y_PREDICTD, DIT, EOT, IDT)
 from neuraxle.data_container import DataContainer as DACT
+from neuraxle.data_container import PredsDACT, TrainDACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
 from neuraxle.logging.logging import NEURAXLE_LOGGER_NAME, NeuraxleLogger

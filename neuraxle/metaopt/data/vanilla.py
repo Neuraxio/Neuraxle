@@ -33,24 +33,22 @@ import datetime
 import json
 import logging
 import os
-from abc import ABC, abstractclassmethod, abstractmethod, abstractproperty
+from abc import ABC, abstractmethod
 from collections import OrderedDict
 from dataclasses import asdict, dataclass, field, fields
 from json.encoder import JSONEncoder
-from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
-                    Sequence, Tuple, Type, TypeVar, Union)
+from typing import (Any, Dict, Generic, List, Optional, Sequence, Tuple, Type,
+                    TypeVar, Union)
 
 import neuraxle.metaopt.data.aggregates as agg
 import numpy as np
-from neuraxle.base import (CX, BaseService, BaseStep, ContextLock, Flow,
-                           TrialStatus)
-from neuraxle.hyperparams.space import (HyperparameterSamples,
-                                        HyperparameterSpace, RecursiveDict)
+from neuraxle.base import CX, BaseService, ContextLock, TrialStatus
+from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
 from neuraxle.logging.logging import (LOGGER_FORMAT,
                                       LOGGING_DATETIME_STR_FORMAT,
                                       NeuraxleLogger)
 from neuraxle.logging.warnings import RaiseDeprecatedClass
-from neuraxle.metaopt.observable import _ObservableRepo, _ObserverOfRepo
+from neuraxle.metaopt.observable import _ObservableRepo
 
 SubDataclassT = TypeVar('SubDataclassT', bound=Optional['BaseDataclass'])
 ScopedLocationAttrInt = int

@@ -39,7 +39,7 @@ from sklearn.utils import shuffle
 
 from neuraxle.hyperparams.distributions import RandInt, LogUniform, Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, InMemoryHyperparamsRepository, ValidationSplitter
+from neuraxle.metaopt.auto_ml import AutoML, ValidationSplitter
 from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyTranspose

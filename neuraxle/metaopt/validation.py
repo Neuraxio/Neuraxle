@@ -34,21 +34,18 @@ from typing import (Any, Callable, Dict, Generic, Iterable, List, Optional,
                     Set, Tuple, Type, TypeVar, Union)
 
 import numpy as np
-from neuraxle.base import BaseStep, EvaluableStepMixin
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.base import ForceHandleOnlyMixin, MetaStep, TrialStatus
+from neuraxle.data_container import (ARG_Y_EXPECTED, ARG_Y_PREDICTD, DIT, EOT,
+                                     IDT, DACTData)
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.data_container import TrainDACT, ValidDACT, PredsDACT, EvalEOTDACT, IDT, DIT, EOT, DACTData, ARG_Y_PREDICTD, ARG_Y_EXPECTED
+from neuraxle.data_container import (EvalEOTDACT, PredsDACT, TrainDACT,
+                                     ValidDACT)
 from neuraxle.hyperparams.distributions import (
     ContinuousHyperparameterDistribution, DiscreteHyperparameterDistribution)
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
-                                        HyperparameterSpace, RecursiveDict)
+                                        HyperparameterSpace)
 from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
-from neuraxle.steps.loop import StepClonerForEachDataInput
-from neuraxle.steps.numpy import (NumpyConcatenateInnerFeatures,
-                                  NumpyConcatenateOnAxis,
-                                  NumpyConcatenateOuterBatch)
 from sklearn.metrics import r2_score
 
 

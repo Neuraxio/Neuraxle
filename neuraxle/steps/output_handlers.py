@@ -24,7 +24,6 @@ You can find here output handlers steps that changes especially the data outputs
 
 """
 import copy
-from abc import ABC
 from typing import List, Tuple
 
 from neuraxle.base import BaseStep

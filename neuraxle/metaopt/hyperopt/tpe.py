@@ -8,16 +8,13 @@ from operator import itemgetter
 from typing import Any, List, Tuple, Union
 
 import numpy as np
-from neuraxle.base import TrialStatus
 from neuraxle.hyperparams.distributions import (
     Choice, DiscreteHyperparameterDistribution, DistributionMixture,
     HyperparameterDistribution, LogNormal, LogUniform, PriorityChoice,
     Quantized)
-from neuraxle.hyperparams.space import (HPSampledValue, HyperparameterSamples,
-                                        HyperparameterSpace)
+from neuraxle.hyperparams.space import HPSampledValue, HyperparameterSamples
 from neuraxle.metaopt.data.aggregates import Round, Trial
-from neuraxle.metaopt.data.vanilla import (BaseHyperparameterOptimizer,
-                                           ScopedLocation)
+from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
 from neuraxle.metaopt.validation import GridExplorationSampler
 
 _LOG_DISTRIBUTION = (LogNormal, LogUniform)

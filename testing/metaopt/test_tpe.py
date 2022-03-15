@@ -6,18 +6,17 @@ import pytest
 from joblib import Parallel, delayed
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.hyperparams.distributions import (Choice, HyperparameterDistribution, LogNormal, LogUniform,
-                                                Normal, Quantized, Uniform)
+                                                Normal, Quantized, RandInt, Uniform)
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import (AutoML, BaseHyperparameterOptimizer,
                                       ControlledAutoML)
-from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback
+from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.vanilla import ScopedLocation, VanillaHyperparamsRepository
 from neuraxle.metaopt.hyperopt.tpe import TreeParzenEstimator
 from neuraxle.metaopt.validation import (GridExplorationSampler,
                                          ValidationSplitter)
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.misc import FitTransformCallbackStep
 from neuraxle.steps.numpy import AddN
 from sklearn.metrics import mean_squared_error
 
@@ -35,10 +34,10 @@ def test_tpe(add_range: HyperparameterDistribution, tmpdir):
     # Given
     pipeline = Pipeline([
         AddN(0.).set_hyperparams_space(HyperparameterSpace({'add': add_range})),
-        AddN(0.).set_hyperparams_space(HyperparameterSpace({'add': add_range})),
+        AddN(0.).set_hyperparams_space(HyperparameterSpace({'add': RandInt(1, 2)})),
     ])
     tpe: BaseHyperparameterOptimizer = TreeParzenEstimator(
-        number_of_initial_random_step=5,
+        number_of_initial_random_step=1,
         quantile_threshold=0.3,
         number_good_trials_max_cap=25,
         number_possible_hyperparams_candidates=100,

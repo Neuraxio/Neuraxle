@@ -65,13 +65,12 @@ from collections import OrderedDict
 from copy import deepcopy
 from typing import Any, Dict, Iterable, Tuple, Union
 
+from neuraxle.hyperparams.distributions import (FixedHyperparameter,
+                                                HyperparameterDistribution)
+from neuraxle.hyperparams.scipy_distributions import (
+    ScipyContinuousDistributionWrapper, ScipyDiscreteDistributionWrapper)
 from scipy.stats import rv_continuous, rv_discrete
 from scipy.stats._distn_infrastructure import rv_generic
-
-from neuraxle.hyperparams.distributions import FixedHyperparameter, HyperparameterDistribution
-from neuraxle.hyperparams.scipy_distributions import ScipyDiscreteDistributionWrapper, \
-    ScipyContinuousDistributionWrapper
-
 
 HPSampledValue = Any
 FlatDict = OrderedDict[str, HPSampledValue]

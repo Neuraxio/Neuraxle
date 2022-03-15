@@ -24,12 +24,11 @@ Pipeline Steps For Looping
 """
 import copy
 from operator import itemgetter
-from typing import Callable, List, Tuple, ValuesView
+from typing import Callable, List, Tuple
 
-from neuraxle.base import (BaseStep, BaseTransformer, DACT,
-                           CX, ForceHandleMixin,
-                           ForceHandleOnlyMixin, Identity, MetaStep,
-                           NamedStepsList, TruncableJoblibStepSaver)
+from neuraxle.base import (CX, DACT, BaseStep, BaseTransformer,
+                           ForceHandleMixin, ForceHandleOnlyMixin, Identity,
+                           MetaStep, NamedStepsList, TruncableJoblibStepSaver)
 from neuraxle.data_container import ListDataContainer
 from neuraxle.steps.flow import ExecuteIf
 

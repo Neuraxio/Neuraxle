@@ -23,8 +23,7 @@ def test_inverse_transform():
 
 
 def test_label_encoder_across_multiple_columns():
-    from examples.getting_started.plot_label_encoder_across_multiple_columns import \
-        main
+    from examples.getting_started.plot_label_encoder_across_multiple_columns import main
     main()
 
 
@@ -59,12 +58,11 @@ def test_boston_housing_meta_optimization(tmpdir: LocalPath):
 
 
 def test_boston_housing_regression_with_model_stacking():
-    from examples.sklearn.plot_boston_housing_regression_with_model_stacking import \
-        main
+    from examples.sklearn.plot_boston_housing_regression_with_model_stacking import main
     main()
 
 
 def test_cyclical_feature_engineering():
     from examples.sklearn.plot_cyclical_feature_engineering import predictions
-    assert predictions is not None
     print(predictions)
+    assert predictions is not None

@@ -25,9 +25,8 @@ Hyperparameter selection strategies are used to optimize the hyperparameters of 
 
 """
 
-from copy import copy
 import gc
-import multiprocessing
+from copy import copy
 from typing import ContextManager, Iterator, List, Optional, Tuple
 
 from neuraxle.base import (CX, BaseService, BaseServiceT, BaseStep, BaseStepT,
@@ -35,8 +34,7 @@ from neuraxle.base import (CX, BaseService, BaseServiceT, BaseStep, BaseStepT,
                            TruncableService, _HasChildrenMixin)
 from neuraxle.data_container import IDT
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.hyperparams.space import (HyperparameterSamples,
-                                        HyperparameterSpace)
+from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.callbacks import (ARG_Y_EXPECTED, ARG_Y_PREDICTD,
                                         BaseCallback, CallbackList,
                                         ScoringCallback)
@@ -44,11 +42,12 @@ from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
                                               Trial, TrialSplit)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            AutoMLContext,
-                                           HyperparamsRepository,
-                                           InMemoryHyperparamsRepository)
+                                           HyperparamsRepository)
 from neuraxle.metaopt.validation import (BaseHyperparameterOptimizer,
-                                         BaseValidationSplitter, GridExplorationSampler,
-                                         RandomSearchSampler, ValidationSplitter)
+                                         BaseValidationSplitter,
+                                         GridExplorationSampler,
+                                         RandomSearchSampler,
+                                         ValidationSplitter)
 
 
 class Trainer(BaseService):
