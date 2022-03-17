@@ -28,17 +28,12 @@ Classes are splitted like this for the AutoML:
 
 
 """
-import glob
 import json
 import os
-import time
-import traceback
 from copy import copy, deepcopy
 from typing import List
 
-from neuraxle.base import TrialStatus
 from neuraxle.logging.logging import NeuraxleLogger
-from neuraxle.metaopt.data.aggregates import Round, Trial
 from neuraxle.metaopt.data.vanilla import (BaseDataclass,
                                            HyperparamsRepository,
                                            ScopedLocation, SubDataclassT,
@@ -69,11 +64,6 @@ class _OnDiskRepositoryLoggerHandlerMixin:
 
     def get_log_from_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> str:
         return ''.join(logger.read_log_file())
-        # TODO: what to do with this code:
-        # def read_scoped_logger_file(self) -> str:
-        #     with open(self.repo.get_scoped_logger_path(self.loc), "r") as f:
-        #         l: str = "".join(f.readlines())
-        #     return l
 
     def get_folder_at_scope(self, scope: ScopedLocation) -> str:
         _scope_attrs = scope.as_list(stringify=True)

@@ -3,12 +3,10 @@ from copy import deepcopy
 from typing import Callable, Optional, Type
 
 import pytest
-from neuraxle.base import ExecutionContext as CX
-from neuraxle.data_container import IDT
+from neuraxle.data_container import ARG_X_INPUTTED, ARG_Y_PREDICTD, IDT
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.callbacks import (ARG_X_INPUTTED, ARG_Y_PREDICTD,
-                                        CallbackList, EarlyStoppingCallback,
+from neuraxle.metaopt.callbacks import (CallbackList, EarlyStoppingCallback,
                                         MetricCallback)
 from neuraxle.metaopt.data.aggregates import (BaseAggregate, Client,
                                               MetricResults, Project, Root,
@@ -19,9 +17,7 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            AutoMLContext, BaseDataclass,
                                            BaseHyperparameterOptimizer,
                                            MetricResultsDataclass,
-                                           ScopedLocation,
-                                           VanillaHyperparamsRepository,
-                                           dataclass_2_id_attr,
+                                           ScopedLocation, dataclass_2_id_attr,
                                            dataclass_2_subdataclass)
 from neuraxle.metaopt.validation import GridExplorationSampler
 from neuraxle.pipeline import Pipeline
@@ -30,6 +26,7 @@ from sklearn.metrics import median_absolute_error
 from testing.metaopt.test_automl_dataclasses import (SOME_FULL_SCOPED_LOCATION,
                                                      SOME_ROOT_DATACLASS)
 from testing.metaopt.test_automl_repositories import CX_WITH_REPO_CTORS, TmpDir
+
 
 class SomeException(Exception):
     pass

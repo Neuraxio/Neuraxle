@@ -2,7 +2,7 @@
 import copy
 from collections import defaultdict, namedtuple
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Type
+from typing import Dict, List, Set, Tuple, Type, Any
 
 import numpy as np
 import pytest
@@ -16,12 +16,11 @@ from neuraxle.hyperparams.distributions import (
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         HyperparameterSpace)
 from neuraxle.metaopt.auto_ml import ControlledAutoML, DefaultLoop, Trainer
-from neuraxle.metaopt.callbacks import (CallbackList, EarlyStoppingCallback,
-                                        MetricCallback)
+from neuraxle.metaopt.callbacks import MetricCallback
 from neuraxle.metaopt.data.aggregates import Round
-from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
-                                           AutoMLContext, BaseDataclass,
-                                           RoundDataclass, ScopedLocation)
+from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, AutoMLContext,
+                                           BaseDataclass, RoundDataclass,
+                                           ScopedLocation)
 from neuraxle.metaopt.validation import (GridExplorationSampler,
                                          ValidationSplitter)
 from neuraxle.pipeline import Pipeline

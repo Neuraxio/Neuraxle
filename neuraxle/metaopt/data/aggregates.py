@@ -43,8 +43,8 @@ import os
 from abc import abstractmethod
 from collections import OrderedDict
 from types import TracebackType
-from typing import (Any, Callable, ContextManager, Dict, Generic, Iterable,
-                    List, Optional, Tuple, Type, TypeVar)
+from typing import (Callable, ContextManager, Dict, Generic, Iterable, List,
+                    Optional, Tuple, Type, TypeVar)
 
 import numpy as np
 from neuraxle.base import BaseService
@@ -194,9 +194,8 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
     def repo(self) -> HyperparamsRepository:
         return self.context.repo
 
-    @property
-    def subaggregate(self) -> Type[SubAggregateT]:
-        return aggregate_2_subaggregate[self.__class__]
+    def subaggregate(self, _dataclass: SubDataclassT, context: AutoMLContext, is_deep=False, parent: ParentAggregateT = None) -> SubAggregateT:
+        return aggregate_2_subaggregate[self.__class__](_dataclass, context, is_deep, parent)
 
     @property
     def parent(self) -> ParentAggregateT:

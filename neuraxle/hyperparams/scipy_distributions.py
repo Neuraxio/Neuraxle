@@ -580,7 +580,7 @@ class Poisson(BaseCustomDiscreteScipyDistribution):
         return math.exp(-self.mu) * self.mu ** x / factorial(x)
 
 
-class Histogram(ScipyDistributionWrapper):
+class Histogram(ScipyDiscreteDistributionWrapper):
     """
     Histogram distribution that inherits from `scipy.stats.rv_histogram <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.rv_histogram.html#scipy.stats.rv_histogram>`_
 
@@ -614,8 +614,9 @@ class Histogram(ScipyDistributionWrapper):
     """
 
     def __init__(self, histogram: np.histogram, null_default_value: float = None, **kwargs):
-        ScipyDistributionWrapper.__init__(
+        scipy_distribution = rv_histogram(histogram=histogram, **kwargs)
+        ScipyDiscreteDistributionWrapper.__init__(
             self,
-            scipy_distribution=rv_histogram(histogram=histogram, **kwargs)
+            scipy_distribution=scipy_distribution,
+            null_default_value=null_default_value
         )
-        ContinuousHyperparameterDistribution.__init__(self, null_default_value=null_default_value)

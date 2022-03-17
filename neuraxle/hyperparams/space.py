@@ -63,7 +63,7 @@ ready to be sent to an instance of the pipeline to try and score it, for example
 """
 from collections import OrderedDict
 from copy import deepcopy
-from typing import Any, Dict, Iterable, Tuple, Union
+from typing import Any, Dict, Iterable, Union
 
 from neuraxle.hyperparams.distributions import (FixedHyperparameter,
                                                 HyperparameterDistribution)

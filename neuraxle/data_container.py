@@ -26,11 +26,10 @@ Classes for containing the data that flows throught the pipeline steps.
 import copy
 import math
 from operator import attrgetter
-from optparse import Option
-from typing import Any, Callable, Generic, Iterable, List, Optional, Tuple, TypeVar, Union, Iterator
+from typing import (Any, Callable, Generic, Iterable, Iterator, List, Optional,
+                    Tuple, TypeVar, Union)
 
 import numpy as np
-
 
 NamedDACTTuple = Tuple[str, 'DataContainer']
 IDT = TypeVar('IDT', bound=Iterable)  # Ids Type that is often a list of things

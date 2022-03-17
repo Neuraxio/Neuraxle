@@ -35,7 +35,7 @@ import logging
 import os
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import dataclass, field, fields
 from json.encoder import JSONEncoder
 from typing import (Any, Dict, Generic, List, Optional, Sequence, Tuple, Type,
                     TypeVar, Union)
@@ -44,8 +44,7 @@ import neuraxle.metaopt.data.aggregates as agg
 import numpy as np
 from neuraxle.base import CX, BaseService, ContextLock, TrialStatus
 from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
-from neuraxle.logging.logging import (LOGGER_FORMAT,
-                                      LOGGING_DATETIME_STR_FORMAT,
+from neuraxle.logging.logging import (LOGGING_DATETIME_STR_FORMAT,
                                       NeuraxleLogger)
 from neuraxle.logging.warnings import RaiseDeprecatedClass
 from neuraxle.metaopt.observable import _ObservableRepo
@@ -157,14 +156,8 @@ class ScopedLocation(BaseService):
         Returns a :class:`ScopedLocation` with all attributes
         set to the default non-null value instead of None.
         """
-        return ScopedLocation(
-            DEFAULT_PROJECT,
-            DEFAULT_CLIENT,
-            DEFAULT_ROUND,
-            DEFAULT_TRIAL,
-            DEFAULT_TRIAL_SPLIT,
-            DEFAULT_METRIC_NAME,
-        )
+        args = [DEFAULT_PROJECT, DEFAULT_CLIENT, DEFAULT_ROUND, DEFAULT_TRIAL, DEFAULT_TRIAL_SPLIT, DEFAULT_METRIC_NAME]
+        return ScopedLocation(*args)
 
     @staticmethod
     def default(
@@ -540,7 +533,7 @@ class BaseTrialDataclassMixin:
     Mixin class for :class:`TrialMetadata` and :class:`TrialSplitMetadata` that
     also must inherit from :class:`BaseMetadata`.
     """
-    hyperparams: HyperparameterSamples = field(default_factory=lambda: HyperparameterSamples())
+    hyperparams: HyperparameterSamples = field(default_factory=HyperparameterSamples)
     status: TrialStatus = TrialStatus.PLANNED
     created_time: datetime.datetime = field(default_factory=datetime.datetime.now)
     start_time: datetime.datetime = field(default_factory=datetime.datetime.now)
@@ -771,18 +764,18 @@ def object_decoder(obj, odictify=False):
 
 
 class MetadataJSONEncoder(JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        if isinstance(obj, TrialStatus):
-            return obj.value
-        if isinstance(obj, RecursiveDict):
-            return obj.to_flat_dict()
-        if isinstance(obj, datetime.datetime):
-            return obj.strftime(LOGGING_DATETIME_STR_FORMAT)
-        if isinstance(obj, BaseDataclass):
-            return obj.to_dict()
-        return JSONEncoder.encode(self, obj)
+    def default(self, o):
+        if isinstance(o, np.ndarray):
+            return o.tolist()
+        if isinstance(o, TrialStatus):
+            return o.value
+        if isinstance(o, RecursiveDict):
+            return o.to_flat_dict()
+        if isinstance(o, datetime.datetime):
+            return o.strftime(LOGGING_DATETIME_STR_FORMAT)
+        if isinstance(o, BaseDataclass):
+            return o.to_dict()
+        return JSONEncoder.encode(self, o)
 
 
 def to_json(obj: BaseDataclass) -> str:
@@ -956,7 +949,7 @@ class InMemoryHyperparamsRepository(RaiseDeprecatedClass, _InMemoryRepositoryLog
 class BaseHyperparameterOptimizer(ABC):
 
     @abstractmethod
-    def find_next_best_hyperparams(self, round) -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, round_scope) -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials, that is the
         whole :class:`neuraxle.metaopt.data.aggregate.Round`.
