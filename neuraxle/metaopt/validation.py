@@ -30,8 +30,7 @@ import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from functools import reduce
-from typing import (Any, Callable, Generic, Iterable, List, Optional, Set,
-                    Tuple, Type, TypeVar, Union)
+from typing import Any, List, Optional, Set, Tuple
 
 import numpy as np
 from neuraxle.base import ExecutionContext as CX
@@ -59,7 +58,7 @@ class RandomSearchSampler(BaseHyperparameterOptimizer):
     def __init__(self):
         BaseHyperparameterOptimizer.__init__(self)
 
-    def find_next_best_hyperparams(self, round_scope: 'Round') -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, round_scope: Round) -> HyperparameterSamples:
         """
         Randomly sample the next hyperparams to try.
 
@@ -122,7 +121,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
             vals: Tuple[int] = tuple(flat_dict_sample.values())
             self._seen_hp_grid_values.add(vals)
 
-    def find_next_best_hyperparams(self, round_scope: 'Round') -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, round_scope: Round) -> HyperparameterSamples:
         """
         Sample the next hyperparams to try.
 

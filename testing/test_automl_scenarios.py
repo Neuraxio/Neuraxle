@@ -63,8 +63,8 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
 
     pred: DACT = automl.handle_predict(dact.without_eo(), cx)
 
-    round: Round = cx.with_loc(ScopedLocation.default(round_number=0)).load_agg()
-    best: Tuple[float, int, FlatDict] = round.best_result_summary()
+    round_scope: Round = cx.with_loc(ScopedLocation.default(round_number=0)).load_agg()
+    best: Tuple[float, int, FlatDict] = round_scope.best_result_summary()
     best_score = best[0]
     assert best_score == 0
     best_add_n: int = list(best[-1].values())[0]
@@ -125,14 +125,14 @@ def test_grid_sampler_fulls_grid(n_trials):
 
 @pytest.mark.parametrize('n_trials', [1, 3, 4, 12, 13, 16, 17, 20, 40, 50, 100])
 def test_grid_sampler_fulls_individual_params(n_trials):
-    round, ges = _get_optimization_scenario(n_trials=n_trials)
+    round_scope, ges = _get_optimization_scenario(n_trials=n_trials)
     ges: GridExplorationSampler = ges  # typing
-    round: Round = round  # typing
+    round_scope: Round = round_scope  # typing
 
     tried_params: Dict[str, Set[Any]] = defaultdict(set)
     for i in range(n_trials):
-        hp = ges.find_next_best_hyperparams(round).to_flat_dict()
-        round.add_testing_optim_result(hp)
+        hp = ges.find_next_best_hyperparams(round_scope).to_flat_dict()
+        round_scope.add_testing_optim_result(hp)
         for hp_k, value_set in hp.items():
             tried_params[hp_k].add(value_set)
 
@@ -140,8 +140,8 @@ def test_grid_sampler_fulls_individual_params(n_trials):
         hp_k: str = hp_k  # typing
         value_set: Set[Any] = value_set  # typing
 
-        if isinstance(round.hp_space[hp_k], DiscreteHyperparameterDistribution):
-            round_numbs = min(n_trials, len(round.hp_space[hp_k].values()))
+        if isinstance(round_scope.hp_space[hp_k], DiscreteHyperparameterDistribution):
+            round_numbs = min(n_trials, len(round_scope.hp_space[hp_k].values()))
             assert len(value_set) == round_numbs
         else:
             round_numbs = min(n_trials, len(ges.flat_hp_grid_values[hp_k]))
@@ -162,13 +162,13 @@ class RoundStub:
 
 
 def _get_optimization_scenario(n_trials):
-    round: Round = RoundStub(hp_space=HyperparameterSpace({
+    round_scope: Round = RoundStub(hp_space=HyperparameterSpace({
         'a__add_n': Uniform(0, 4),
         'b__multiply_n': RandInt(0, 4),
         'c__Pchoice': PriorityChoice(["one", "two"]),
     }))
     ges = GridExplorationSampler(n_trials)
-    return round, ges
+    return round_scope, ges
 
 
 class OnlyFitAtTransformTime(NonFittableMixin, MetaStep):
@@ -198,8 +198,8 @@ def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
         tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)
     automl_refiting_best, preds = automl_refiting_best.handle_fit_transform(dact, cx)
 
-    round: Round = cx.with_loc(ScopedLocation.default(round_number=0)).load_agg()
-    bests: List[Tuple[float, int, FlatDict]] = round.summary()
+    round_scope: Round = cx.with_loc(ScopedLocation.default(round_number=0)).load_agg()
+    bests: List[Tuple[float, int, FlatDict]] = round_scope.summary()
 
     assert len(bests) == n_trials
     assert len(set(tuple(dict(hp).items()) for score, i, hp in bests)
@@ -248,8 +248,8 @@ def test_automl_can_use_same_repo_in_parallel(tmpdir, use_processes):
         tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)
     automl_refiting_best, preds = automl_refiting_best.handle_fit_transform(dact, cx)
 
-    round: Round = cx.with_loc(ScopedLocation.default(round_number=0)).load_agg()
-    bests: List[Tuple[float, int, FlatDict]] = round.summary()
+    round_scope: Round = cx.with_loc(ScopedLocation.default(round_number=0)).load_agg()
+    bests: List[Tuple[float, int, FlatDict]] = round_scope.summary()
 
     assert len(bests) == n_trials
     assert len(set(hp for score, i, hp in bests)) == n_trials, f"Expecting unique hyperparams for the given n_trials={n_trials} and intelligent grid sampler."

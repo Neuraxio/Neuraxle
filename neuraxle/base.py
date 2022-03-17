@@ -2690,6 +2690,10 @@ class _CouldHaveContext(MixinForBaseService):
         If the ``context`` is in :class:`ExecutionPhase` ``.PROD``,
         the exception will not be raised and only logged.
 
+        it is good to call assertions here in a context-dependent way.
+        For more information on contextual validation, read
+        `Martin Fowler's article on Contextual Validation <https://martinfowler.com/bliki/ContextualValidation.html>`_.
+
         :param condition: condition to assert
         :param err_message: message to log and raise if the condition is false
         :param context: execution context to log the exception, and not raise it if in ``PROD`` mode.
@@ -4234,8 +4238,8 @@ class StepWithContext(GlobalServiceAssertionExecutorMixin, MetaStep):
         :param data_container: data container to process
         :return: data container, execution context
         """
-        if self.raise_if_not_root and len(context) > 0:
-            raise AssertionError('StepWithContext should be at the root of the pipeline.')
+        if self.raise_if_not_root:
+            self._assert(len(context) == 0, "StepWithContext should be at the root of the pipeline.", context)
 
         data_container, context = GlobalServiceAssertionExecutorMixin._will_process(self, data_container, self.context)
 

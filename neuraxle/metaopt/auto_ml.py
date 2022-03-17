@@ -192,7 +192,7 @@ class BaseControllerLoop(TruncableService):
     def trainer(self) -> Trainer:
         return self.get_service(Trainer)
 
-    def run(self, pipeline: BaseStep, dact: DACT, round: Round):
+    def run(self, pipeline: BaseStep, dact: DACT, round_scope: Round):
         """
         Run the controller loop.
 
@@ -205,9 +205,9 @@ class BaseControllerLoop(TruncableService):
         hp_optimizer: BaseHyperparameterOptimizer = self[BaseHyperparameterOptimizer]
         hp_space: HyperparameterSpace = pipeline.get_hyperparams_space()
 
-        round: Round = round.with_optimizer(hp_optimizer, hp_space)
+        round_scope: Round = round_scope.with_optimizer(hp_optimizer, hp_space)
 
-        for managed_trial_scope in self.loop(round):
+        for managed_trial_scope in self.loop(round_scope):
             managed_trial_scope: Trial = managed_trial_scope  # typing helps
             # trial_scope.context.restore_lock(thread_safe_lock) ??
             self.trainer.train(pipeline, dact, managed_trial_scope)

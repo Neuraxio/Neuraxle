@@ -61,7 +61,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
             ),
             context
         )
-        self._set_expected_outputs(data_container, new_expected_outputs_data_container)
+        self._set_expected_outputs(data_container, new_expected_outputs_data_container, context)
 
         return data_container
 
@@ -107,7 +107,7 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
             ),
             context
         )
-        self._set_expected_outputs(data_container, new_expected_outputs_data_container)
+        self._set_expected_outputs(data_container, new_expected_outputs_data_container, context)
 
         return self, data_container
 
@@ -130,19 +130,21 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
             context.push(self.wrapped)
         )
 
-        self._set_expected_outputs(data_container, new_expected_outputs_data_container)
+        self._set_expected_outputs(data_container, new_expected_outputs_data_container, context)
 
         return data_container
 
     def _set_expected_outputs(
-            self, data_container: DACT, new_expected_outputs_data_container: DACT
+            self, data_container: DACT, new_expected_outputs_data_container: DACT, context: CX
     ) -> DACT:
 
-        if len(data_container) != len(new_expected_outputs_data_container):
-            raise AssertionError(
-                'OutputTransformerWrapper: Found different len for old data inputs, and expected outputs to reinsert. '
-                'Please return the same the same amount of data inputs, and expected outputs, '
-                'or otherwise create your own handler methods to do more funky things.')
+        self._assert(
+            len(data_container) == len(new_expected_outputs_data_container),
+            'OutputTransformerWrapper: Found different len for old data inputs, and expected outputs '
+            'to reinsert. Please return the same the same amount of data inputs, and expected outputs, '
+            'or otherwise create your own handler methods to do more funky things.',
+            context
+        )
 
         data_container.set_expected_outputs(new_expected_outputs_data_container.data_inputs)
         data_container.set_ids(new_expected_outputs_data_container._ids)
@@ -153,20 +155,23 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
 class _DidProcessInputOutputHandlerMixin(MixinForBaseTransformer):
     def _did_process(self, data_container: DACT, context: CX) -> DACT:
         di, eo = data_container.data_inputs
-        if len(di) != len(eo):
-            raise AssertionError(
-                '{}: Found different len for data inputs, and expected outputs. Please return the same the same amount of data inputs, and expected outputs, or otherwise create your own handler methods to do more funky things.'.format(
-                    self.name))
+
+        self._assert(
+            len(di) == len(eo),
+            f'{self.name}: Found different len for data inputs, and expected outputs. Please return the same the same amount of data inputs, and expected outputs, or otherwise create your own handler methods to do more funky things.',
+            context
+        )
 
         data_container.set_data_inputs(data_inputs=di)
         data_container.set_expected_outputs(expected_outputs=eo)
 
         data_container = super()._did_process(data_container, context)
 
-        if len(data_container.ids) != len(data_container.data_inputs):
-            raise AssertionError(
-                '{}: Caching broken because there is a different len of current ids, and data inputs. Please use InputAndOutputTransformerWrapper if you plan to change the len of the data inputs.'.format(
-                    self.name))
+        self._assert(
+            len(data_container.ids) == len(data_container.data_inputs),
+            f'{self.name}: Caching broken because there is a different len of current ids, and data inputs. Please use InputAndOutputTransformerWrapper if you plan to change the len of the data inputs.',
+            context
+        )
 
         return data_container
 

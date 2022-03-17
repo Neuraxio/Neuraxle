@@ -102,6 +102,8 @@ def _with_method_as_context_manager(
 class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT], Generic[ParentAggregateT, SubAggregateT, SubDataclassT]):
     """
     Base class for aggregated objects using the repo and the dataclasses to manipulate them.
+
+    For more information, read this `article by Martin Fowler on DDD Aggregates <https://martinfowler.com/bliki/DDD_Aggregate.html>`_.
     """
 
     def __init__(self, _dataclass: SubDataclassT, context: AutoMLContext, is_deep=False, parent: ParentAggregateT = None):
@@ -663,25 +665,6 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
         :return:
         """
         self.save_subaggregate(trial, deep=False)
-
-    def filter(self, status: TrialStatus) -> 'Round':
-        """
-        Get all the trials with the given trial status.
-
-        :param status: trial status
-        :return:
-        """
-        _round_copy: Round = self.copy()
-        _round_copy.refresh(deep=True)
-        _trials: List[TrialDataclass] = [
-            sdc._dataclass
-            for sdc in _round_copy._trials
-            if sdc.get_status() == status
-        ]
-        _round_copy = _round_copy.without_context()
-        _round_copy._dataclass.trials = _trials
-
-        return _round_copy
 
     def copy(self) -> 'Round':
         return Round(copy.deepcopy(self._dataclass), self.context.copy().with_loc(self.loc.popped()))

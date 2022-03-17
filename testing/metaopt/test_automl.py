@@ -59,8 +59,8 @@ def test_automl_early_stopping_callback(tmpdir):
     auto_ml.handle_fit(DACT(data_inputs=data_inputs, expected_outputs=expected_outputs), cx)
 
     # Then
-    round: Round = cx.with_loc(ScopedLocation.default(0)).load_agg()
-    trial: Trial = round.get_best_trial()
+    round_scope: Round = cx.with_loc(ScopedLocation.default(0)).load_agg()
+    trial: Trial = round_scope.get_best_trial()
     assert len(trial._validation_splits) == 1
     validation_scores = trial._validation_splits[0].metric_result('mse').get_valid_scores()
     nepochs_executed = len(validation_scores)

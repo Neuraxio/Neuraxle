@@ -128,24 +128,24 @@ class NeuraxleLogger(logging.Logger):
         handler_name: str,
         stream: IO,
         level: Optional[int] = None,
-        filter: Optional[logging.Filter] = None
+        _filter: Optional[logging.Filter] = None
     ) -> 'NeuraxleLogger':
         handler = logging.StreamHandler(stream=stream)
-        return self._add_partial_handler(handler_name, handler, level, filter)
+        return self._add_partial_handler(handler_name, handler, level, _filter)
 
     def _add_partial_handler(
         self,
         handler_name: str,
         handler: logging.Handler,
         level: Optional[int] = None,
-        filter: Optional[logging.Filter] = None
+        _filter: Optional[logging.Filter] = None
     ) -> 'NeuraxleLogger':
         handler.setFormatter(FORMATTER)
         handler.set_name(f"{self.name}.{handler_name}")
         if level is not None:
             handler.setLevel(level)
-        if filter is not None:
-            handler.addFilter(filter)
+        if _filter is not None:
+            handler.addFilter(_filter)
         self.addHandler(handler)
         return self
 

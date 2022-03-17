@@ -156,8 +156,8 @@ class ScopedLocation(BaseService):
         Returns a :class:`ScopedLocation` with all attributes
         set to the default non-null value instead of None.
         """
-        args = [DEFAULT_PROJECT, DEFAULT_CLIENT, DEFAULT_ROUND, DEFAULT_TRIAL, DEFAULT_TRIAL_SPLIT, DEFAULT_METRIC_NAME]
-        return ScopedLocation(*args)
+        return ScopedLocation(
+            DEFAULT_PROJECT, DEFAULT_CLIENT, DEFAULT_ROUND, DEFAULT_TRIAL, DEFAULT_TRIAL_SPLIT, DEFAULT_METRIC_NAME)
 
     @staticmethod
     def default(
@@ -791,10 +791,16 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
     Hyperparams repository that saves hyperparams, and scores for every AutoML trial.
     Cache folder can be changed to do different round numbers.
 
+    For more information, read this `article by Martin Fowler on DDD Aggregates <https://martinfowler.com/bliki/DDD_Aggregate.html>`_.
+
     .. seealso::
         :class:`AutoML`,
         :class:`Trainer`,
     """
+
+    def __init__(self):
+        BaseService.__init__(self)
+        _ObservableRepo.__init__(self)
 
     @abstractmethod
     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
@@ -869,8 +875,8 @@ class VanillaHyperparamsRepository(_InMemoryRepositoryLoggerHandlerMixin, Hyperp
         :param hyperparams_repo_class: class to use to save hyperparams.
         :param hyperparams_repo_kwargs: kwargs to pass to hyperparams_repo_class.
         """
-        BaseService.__init__(self)
         HyperparamsRepository.__init__(self)
+        _InMemoryRepositoryLoggerHandlerMixin.__init__(self)
         self.cache_folder = os.path.join(cache_folder, self.__class__.__name__)
         self.root: RootDataclass = RootDataclass()
 

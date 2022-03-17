@@ -30,7 +30,7 @@ Classes are splitted like this for the AutoML:
 """
 import json
 import os
-from copy import copy, deepcopy
+from copy import deepcopy
 from typing import List
 
 from neuraxle.logging.logging import NeuraxleLogger

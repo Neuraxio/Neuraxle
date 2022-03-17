@@ -64,14 +64,14 @@ def _deprecated_class_msg(self, replacement_class: type = None, since_version: s
         f"The class `{self.__class__.__name__}` is deprecated"
         f" since version `neuraxle>={since_version}`." if since_version is not None else "."
         f" Please consider using the class `{replacement_class.__name__}` instead: visit https://www.neuraxle.org/stable/search.html?q={replacement_class.__name__} for more information" if (
-            hasattr(replacement_class, "__name__") and replacement_class.__name__ is not None) else f" Visit https://www.neuraxle.org/stable/api.html for more information."
+            hasattr(replacement_class, "__name__") and replacement_class.__name__ is not None) else " Visit https://www.neuraxle.org/stable/api.html for more information."
     )
 
 
 def warn_deprecated_arg(self, arg_name, default_value, value, replacement_argument_name, replacement_class: type = None):
     global SILENCE_DEPRECATION_WARNING
     if not SILENCE_DEPRECATION_WARNING and default_value != value:
-        if type(replacement_class) is type:
+        if isinstance(replacement_class, type):
             replacement_class = replacement_class.__name__
         warnings.warn(
             f"Argument `{arg_name}={value}` for class `{self.__class__.__name__}` is deprecated. "

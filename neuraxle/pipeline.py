@@ -180,7 +180,7 @@ class Pipeline(BasePipeline):
         :param data_container: the data container to transform
         :return: transformed data container
         """
-        for step_name, step in self.steps_as_tuple:
+        for _, step in self.steps_as_tuple:
             data_container = step.handle_transform(data_container, context)
         return data_container
 
@@ -426,26 +426,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         :param context: execution context
         :return: data container
         """
-        sub_pipelines = self._create_sub_pipelines()
-        index_start = 0
-
-        for sub_pipeline in sub_pipelines:
-            sub_pipeline._setup(context=context)
-
-            barrier = sub_pipeline[-1]
-            sub_pipeline, data_container = barrier.join_fit_transform(
-                step=sub_pipeline,
-                data_container=data_container,
-                context=context
-            )
-
-            new_self = self[:index_start] + sub_pipeline
-            if index_start + len(sub_pipeline) < len(self):
-                new_self += self[index_start + len(sub_pipeline):]
-
-            self.steps_as_tuple = new_self.steps_as_tuple
-            index_start += len(sub_pipeline)
-
+        self, data_container = self.fit_transform_data_container(data_container, context)
         return self
 
     def fit_transform_data_container(self, data_container: DACT, context: CX) -> Tuple[
