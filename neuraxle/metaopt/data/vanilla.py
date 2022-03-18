@@ -966,6 +966,15 @@ class BaseHyperparameterOptimizer(ABC):
         raise NotImplementedError()
 
 
+class HyperparameterSamplerStub(BaseHyperparameterOptimizer):
+
+    def __init__(self, preconfigured_hp_samples: HyperparameterSamples):
+        self.preconfigured_hp_samples = preconfigured_hp_samples
+
+    def find_next_best_hyperparams(self, round_scope) -> HyperparameterSamples:
+        return self.preconfigured_hp_samples
+
+
 class AutoMLContext(CX):
 
     @property

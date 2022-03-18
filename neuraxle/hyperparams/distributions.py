@@ -142,9 +142,6 @@ class HyperparameterDistribution(metaclass=ABCMeta):
     def __eq__(self, other):
         return self.first_id == other.first_id
 
-    def __str__(self) -> str:
-        return self.__class__.__name__ + f"(min={self.min()}, max={self.max()}, mean={self.mean()}, std={self.std()})"
-
     def __contains__(self, item) -> bool:
         """
         Check if item is in the distribution.
@@ -155,6 +152,9 @@ class HyperparameterDistribution(metaclass=ABCMeta):
             item >= self.min() or
             item <= self.max()
         )
+
+    def __str__(self) -> str:
+        return self.__class__.__name__ + f"<min={self.min()}, max={self.max()}>"
 
 
 class ContinuousHyperparameterDistribution(HyperparameterDistribution):

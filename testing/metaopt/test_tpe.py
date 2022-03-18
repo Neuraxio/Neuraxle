@@ -4,31 +4,37 @@ from typing import List
 
 import numpy as np
 import pytest
-from joblib import Parallel, delayed
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.hyperparams.distributions import (Choice, HyperparameterDistribution, LogNormal, LogUniform,
-                                                Normal, Quantized, RandInt, Uniform)
-from neuraxle.hyperparams.space import HyperparameterSpace
+from neuraxle.hyperparams.distributions import (Choice, DistributionMixture,
+                                                HyperparameterDistribution,
+                                                LogNormal, LogUniform, Normal,
+                                                Quantized, RandInt, Uniform)
+from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.auto_ml import (AutoML, BaseHyperparameterOptimizer,
                                       ControlledAutoML)
 from neuraxle.metaopt.callbacks import ScoringCallback
-from neuraxle.metaopt.data.aggregates import Round
-from neuraxle.metaopt.data.vanilla import ScopedLocation, VanillaHyperparamsRepository
-from neuraxle.metaopt.hyperopt.tpe import TreeParzenEstimator
+from neuraxle.metaopt.data.aggregates import MetricResults, Round, Trial, TrialSplit
+from neuraxle.metaopt.data.vanilla import (AutoMLContext, HyperparameterSamplerStub,
+                                           MetricResultsDataclass,
+                                           RoundDataclass, ScopedLocation,
+                                           TrialDataclass, TrialSplitDataclass,
+                                           VanillaHyperparamsRepository)
+from neuraxle.metaopt.hyperopt.tpe import (TreeParzenEstimator,
+                                           _DividedMixturesFactory,
+                                           _DividedTPEPosteriors)
 from neuraxle.metaopt.validation import (GridExplorationSampler,
                                          ValidationSplitter)
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import AddN
 from sklearn.metrics import mean_squared_error
 
-
 N_TRIALS = 40
 
 
-def _avg(l: List):
-    if len(l) == 0:
+def _avg(seq: List):
+    if len(seq) == 0:
         return None
-    return sum(l) / len(l)
+    return sum(seq) / len(seq)
 
 
 # @pytest.mark.parametrize("reduce_func", [min, _avg])
@@ -112,3 +118,122 @@ def _score_trials(
     #  hp_repository.load(ScopedLocation.default(-1)).filter(TrialStatus.SUCCESS)
     trials_validation_scores: List[float] = [t.get_avg_validation_score() for t in trials]
     return trials_validation_scores
+
+
+def test_divided_posteriors_rvs_good_is_in_range():
+    good_trials = RandInt(1, 2)
+    bad_trials = RandInt(101, 102)
+    divider: _DividedTPEPosteriors = _DividedTPEPosteriors(good_trials, bad_trials)
+
+    goods: List[int] = []
+    for i in range(100):
+        goods.append(divider.rvs_good())
+
+    assert good_trials.min() <= min(goods)
+    assert max(goods) <= good_trials.max()
+
+
+def test_divided_posteriors_ratio_is_ok():
+    good_trials = Normal(mean=1, std=0.5, hard_clip_min=0, hard_clip_max=3)
+    bad_trials = Normal(mean=2, std=0.5, hard_clip_min=0, hard_clip_max=3)
+    divider: _DividedTPEPosteriors = _DividedTPEPosteriors(good_trials, bad_trials)
+    gmm: DistributionMixture = DistributionMixture.build_gaussian_mixture(
+        distribution_amplitudes=[0.5, 0.5],
+        means=[1, 2],
+        stds=[0.5, 0.5],
+        distributions_mins=[0, 0],
+        distributions_max=[3, 3],
+    )
+
+    for i in range(100):
+        good_hyperparam, proba_ratio = divider.rvs_good_with_pdf_division_proba()
+
+        assert proba_ratio > 0.0
+        if good_hyperparam > gmm.mean():
+            assert proba_ratio < 1.0
+        else:
+            assert proba_ratio >= 1.0
+    assert gmm.mean() == 1.5
+
+
+class TrialBuilder:
+
+    def __init__(self, round_scope: Round) -> None:
+        self.round_scope: Round = round_scope
+
+    def with_optimizer(
+        self,
+        hp_optimizer: BaseHyperparameterOptimizer = None,
+        hp_space: HyperparameterSpace = None,
+    ) -> 'TrialBuilder':
+        self.round_scope.with_optimizer(hp_optimizer, hp_space)
+        self.round_scope.save()
+        return self
+
+    def add_trial_from_space_rvs(
+        self,
+        score: float,
+        hyperparams_samples: HyperparameterSamples = None
+    ) -> 'TrialBuilder':
+
+        if hyperparams_samples is not None:
+            self.round_scope.hp_optimizer = HyperparameterSamplerStub(hyperparams_samples)
+
+        with self.round_scope.new_rvs_trial() as trial:
+            trial: Trial = trial
+
+            with trial.new_validation_split() as trial_split:
+                trial_split: TrialSplit = trial_split
+
+                metric_name = self.round_scope._dataclass.main_metric_name
+                is_higher_score_better = self.round_scope.is_higher_score_better(metric_name)
+                with trial_split.managed_metric(metric_name, is_higher_score_better) as metric:
+                    metric: MetricResults = metric
+
+                    metric.add_train_result(score)
+                    metric.add_valid_result(score)
+
+        self.round_scope.save()
+        return self
+
+    def add_many_trials_from_space_rvs(
+        self,
+        scores: List[float],
+        hp_samples: List[HyperparameterSamples] = None,
+    ) -> 'TrialBuilder':
+        if hp_samples is None:
+            hp_samples = [None] * len(scores)
+        for score, hp in zip(scores, hp_samples):
+            self.add_trial_from_space_rvs(score, hp)
+        return self
+
+    def build(self) -> Round:
+        return self.round_scope.save()
+
+
+@pytest.mark.parametrize("_use_linear_forgetting_weights", [True, False])
+def test_divided_mixtures_factory(_use_linear_forgetting_weights):
+    hp_space = HyperparameterSpace([('a', Uniform(0, 1)), ('b', LogUniform(1, 2))])
+    round_scope: Round = Round.dummy().with_optimizer(None, hp_space)
+    round_scope = TrialBuilder(round_scope).add_many_trials_from_space_rvs(
+        scores=[0.0, 0.4, 0.6, 1.0],
+        hp_samples=[
+            HyperparameterSamples([('a', 0.0001), ('b', 1.0001)]),
+            HyperparameterSamples([('a', 0.9999), ('b', 1.0001)]),
+            HyperparameterSamples([('a', 0.0001), ('b', 1.9999)]),
+            HyperparameterSamples([('a', 0.9999), ('b', 1.9999)]),
+        ]
+    ).build()
+
+    dmf: _DividedMixturesFactory = _DividedMixturesFactory(
+        quantile_threshold=0.5,
+        number_good_trials_max_cap=10,
+        use_linear_forgetting_weights=_use_linear_forgetting_weights,
+        number_recent_trials_at_full_weights=10,
+    )
+    hps_names = List[str]
+    divided_distributions = List['_DividedTPEPosteriors']
+
+    hps_names, divided_distributions = dmf.create_from(round_scope)
+
+    assert False
