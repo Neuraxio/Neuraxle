@@ -84,7 +84,7 @@ def main(tmpdir):
             joiner=NumpyTranspose(),
             judge=SKLearnWrapper(
                 Ridge(),
-                HyperparameterSpace({"alpha": LogUniform(0.7, 1.4), "fit_intercept": Boolean()})
+                HyperparameterSpace({"alpha": LogUniform(0.7, 1.4), "fit_intercept": Boolean()}),
             ),
         )
     ])

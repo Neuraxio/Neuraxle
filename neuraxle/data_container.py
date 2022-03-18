@@ -780,7 +780,7 @@ def _inner_concatenate_np_array(np_arrays_to_concatenate: List[np.ndarray]):
     # they compute the max for every dimensions of the np arrays except the last.
     # Previous code just assumed np_arrays_to_concatenate[0].shape[:-1]
     _temp = map(attrgetter('shape'), np_arrays_to_concatenate)
-    _temp = map(lambda x: list(x)+[0 for _ in range(target_n_dims-len(x))], _temp)
+    _temp = map(lambda x: list(x) + [0 for _ in range(target_n_dims - len(x))], _temp)
     target_dims_m1 = list(map(max, *list(_temp)))[:-1]
 
     for i in range(n_arrays):

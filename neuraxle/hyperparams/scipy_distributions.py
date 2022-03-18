@@ -105,10 +105,7 @@ class ScipyDistributionWrapper(ABC):
     @scipy_method
     def fit_loc_scale(self, data, *args):
         """
-        Estimate loc and scale parameters from data using 1 st and 2 nd moments. 
-
-        :param data: 
-        :return: 
+        Estimate loc and scale parameters from data using 1st and 2nd moments.
         """
         return self.scipy_distribution.fit_loc_scale(data, *args, **self.scipy_distribution_arguments)
 

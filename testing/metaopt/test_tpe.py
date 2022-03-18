@@ -1,4 +1,5 @@
 import os
+import random
 from typing import List
 
 import numpy as np
@@ -21,52 +22,60 @@ from neuraxle.steps.numpy import AddN
 from sklearn.metrics import mean_squared_error
 
 
-@pytest.mark.skip(reason="TODO: fix this test")
+N_TRIALS = 40
+
+
+def _avg(l: List):
+    if len(l) == 0:
+        return None
+    return sum(l) / len(l)
+
+
+# @pytest.mark.parametrize("reduce_func", [min, _avg])
 @pytest.mark.parametrize("add_range", [
-    LogNormal(log2_space_mean=1.0, log2_space_std=0.5),
+    LogNormal(log2_space_mean=1.0, log2_space_std=0.5, hard_clip_min=0, hard_clip_max=6),
     Choice(choice_list=[0, 1.5, 2, 3.5, 4, 5, 6]),
     LogUniform(min_included=1.0, max_included=5.0),
     Normal(mean=3.0, std=2.0, hard_clip_min=0, hard_clip_max=6),
     Quantized(Uniform(0, 10)),
     Uniform(0, 6),
 ])
-def test_tpe(add_range: HyperparameterDistribution, tmpdir):
+def test_tpe(tmpdir, add_range: HyperparameterDistribution, reduce_func=_avg):
     np.random.seed(42)
+    random.seed(42)
+
     # Given
     pipeline = Pipeline([
         AddN(0.).set_hyperparams_space(HyperparameterSpace({'add': add_range})),
         AddN(0.).set_hyperparams_space(HyperparameterSpace({'add': RandInt(1, 2)})),
     ])
+    half_trials = int(N_TRIALS / 2)
     tpe: BaseHyperparameterOptimizer = TreeParzenEstimator(
-        number_of_initial_random_step=1,
+        number_of_initial_random_step=half_trials,
         quantile_threshold=0.3,
         number_good_trials_max_cap=25,
         number_possible_hyperparams_candidates=100,
-        prior_weight=0.,
         use_linear_forgetting_weights=False,
-        number_recent_trial_at_full_weights=25
+        number_recent_trials_at_full_weights=25
     )
-    grid: BaseHyperparameterOptimizer = GridExplorationSampler(10)
+    grid: BaseHyperparameterOptimizer = GridExplorationSampler(N_TRIALS)
 
-    tpe_scores = _score_meta_optimizer(tpe, pipeline, tmpdir)
     grid_scores = _score_meta_optimizer(grid, pipeline, tmpdir)
+    tpe_scores = _score_meta_optimizer(tpe, pipeline, tmpdir)
 
-    mean_tpe_score = np.array(tpe_scores).flatten().mean(axis=-1)
-    mean_random_score = np.array(grid_scores).flatten().mean(axis=-1)
+    mean_compared_grid_score = reduce_func(grid_scores[half_trials:])
+    mean_compared_tpe_score = reduce_func(tpe_scores[half_trials:])
 
-    assert mean_tpe_score < mean_random_score
+    assert mean_compared_tpe_score <= mean_compared_grid_score
 
 
 def _score_meta_optimizer(meta_optimizer: BaseHyperparameterOptimizer, pipeline, tmpdir):
     expected_output_mult = 3.5
-    optim_scores = Parallel(n_jobs=-2)(
-        delayed(_score_trials)(
-            expected_output_mult,
-            pipeline,
-            meta_optimizer,
-            os.path.join(tmpdir, meta_optimizer.__class__.__name__, str(i))
-        )
-        for i in range(4)
+    optim_scores = _score_trials(
+        expected_output_mult,
+        pipeline,
+        meta_optimizer,
+        os.path.join(tmpdir, meta_optimizer.__class__.__name__)
     )
     return optim_scores
 
@@ -79,13 +88,12 @@ def _score_trials(
 ):
     hp_repository: VanillaHyperparamsRepository = VanillaHyperparamsRepository(str(tmpdir))
     n_epochs = 1
-    n_trials = 10
     auto_ml: ControlledAutoML = AutoML(
         pipeline=pipeline,
         hyperparams_optimizer=hyperparams_optimizer,
         validation_splitter=ValidationSplitter(0.5),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False, name='mse'),
-        n_trials=n_trials,
+        n_trials=N_TRIALS,
         refit_best_trial=True,
         epochs=n_epochs,
         hyperparams_repository=hp_repository,

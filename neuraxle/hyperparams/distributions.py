@@ -142,6 +142,9 @@ class HyperparameterDistribution(metaclass=ABCMeta):
     def __eq__(self, other):
         return self.first_id == other.first_id
 
+    def __str__(self) -> str:
+        return self.__class__.__name__ + f"(min={self.min()}, max={self.max()}, mean={self.mean()}, std={self.std()})"
+
     def __contains__(self, item) -> bool:
         """
         Check if item is in the distribution.
@@ -305,7 +308,7 @@ class FixedHyperparameter(DiscreteHyperparameterDistribution):
         return 0
 
     def __str__(self):
-        return self.__class__.__name__+f"(value={self.value}: {type(self.value)})"
+        return self.__class__.__name__ + f"(value={self.value}: {type(self.value)})"
 
     def values(self) -> List[Any]:
         return [self.value]
@@ -336,7 +339,7 @@ class FixedHyperparameter(DiscreteHyperparameterDistribution):
 class Boolean(DiscreteHyperparameterDistribution):
     """Get a random boolean hyperparameter."""
 
-    def __init__(self,  proba_is_true: Optional[float] = None, null_default_value=False):
+    def __init__(self, proba_is_true: Optional[float] = None, null_default_value=False):
         """
         Create a boolean hyperparameter with given probability.
 
@@ -944,7 +947,7 @@ class RandInt(DiscreteHyperparameterDistribution):
         return ((self.max_included - self.min_included + 1) ** 2 - 1) / 12
 
     def __str__(self):
-        return self.__class__.__name__ + "("+"max_included=" + str(self.max_included)+", min_included=" + str(self.max_included)+")"
+        return self.__class__.__name__ + "(" + "max_included=" + str(self.max_included) + ", min_included=" + str(self.min_included) + ")"
 
 
 class Uniform(ContinuousHyperparameterDistribution):
@@ -1047,7 +1050,7 @@ class Uniform(ContinuousHyperparameterDistribution):
         return (self.max_included - self.min_included) ** 2 / 12
 
     def __str__(self):
-        return self.__class__.__name__ + "("+"max_included=" + str(self.max_included)+", min_included=" + str(self.max_included)+")"
+        return self.__class__.__name__ + "(" + "max_included=" + str(self.max_included) + ", min_included=" + str(self.min_included) + ")"
 
 
 class LogUniform(LogSpaceDistributionMixin, ContinuousHyperparameterDistribution):
@@ -1157,7 +1160,7 @@ class LogUniform(LogSpaceDistributionMixin, ContinuousHyperparameterDistribution
         return esperance_squared - (self.mean() ** 2)
 
     def __str__(self):
-        return self.__class__.__name__ + "("+"max_included=" + str(self.max_included)+", min_included=" + str(self.min_included)+")"
+        return self.__class__.__name__ + "(" + "max_included=" + str(self.max_included) + ", min_included=" + str(self.min_included) + ")"
 
 
 class Normal(ContinuousHyperparameterDistribution):
@@ -1364,7 +1367,7 @@ class LogNormal(LogSpaceDistributionMixin, ContinuousHyperparameterDistribution)
     def __init__(self, log2_space_mean: float, log2_space_std: float,
                  hard_clip_min: float = None, hard_clip_max: float = None, null_default_value=None):
         """
-        Create a LogNormal distribution. 
+        Create a LogNormal distribution.
 
         :param log2_space_mean: the most common value to pop, but before taking 2**value.
         :param log2_space_std: the standard deviation of the most common value to pop, but before taking 2**value.
