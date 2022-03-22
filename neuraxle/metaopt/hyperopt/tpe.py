@@ -11,14 +11,13 @@ import numpy as np
 from neuraxle.hyperparams.distributions import (
     Choice, DiscreteHyperparameterDistribution, DistributionMixture,
     HyperparameterDistribution, LogNormal, LogUniform, PriorityChoice,
-    Quantized)
+    Quantized, LogSpaceDistributionMixin)
 from neuraxle.hyperparams.space import HPSampledValue, HyperparameterSamples
 from neuraxle.metaopt.data.aggregates import Round, Trial
 from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
 from neuraxle.metaopt.validation import GridExplorationSampler
 
 
-_LOG_DISTRIBUTION = (LogNormal, LogUniform)
 _QUANTIZED_DISTRIBUTION = (Quantized,)
 
 
@@ -265,13 +264,13 @@ class _DividedMixturesFactory:
         # TODO: see how to manage distribution mixture here.
 
         use_logs = False
-        if isinstance(continuous_distribution, _LOG_DISTRIBUTION):
+        if isinstance(continuous_distribution, LogSpaceDistributionMixin):
             use_logs = True
 
         use_quantized_distributions = False
         if isinstance(continuous_distribution, Quantized):
             use_quantized_distributions = True
-            if isinstance(continuous_distribution.hd, _LOG_DISTRIBUTION):
+            if isinstance(continuous_distribution.hd, LogSpaceDistributionMixin):
                 use_logs = True
 
         # Find means, std, amplitudes, min and max.
@@ -349,9 +348,6 @@ class _DividedMixturesFactory:
             distribution_amplitudes = np.concatenate((weights_ramp, weights_flat), axis=0)
         else:
             distribution_amplitudes = np.ones(number_samples)
-
-        # Normalize them as well:
-        distribution_amplitudes = distribution_amplitudes / np.sum(distribution_amplitudes)
 
         return distribution_amplitudes
 

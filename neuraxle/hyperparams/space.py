@@ -66,13 +66,13 @@ from copy import deepcopy
 from typing import Any, Dict, Iterable, Union
 
 from neuraxle.hyperparams.distributions import (FixedHyperparameter,
+                                                HPSampledValue,
                                                 HyperparameterDistribution)
 from neuraxle.hyperparams.scipy_distributions import (
     ScipyContinuousDistributionWrapper, ScipyDiscreteDistributionWrapper)
 from scipy.stats import rv_continuous, rv_discrete
 from scipy.stats._distn_infrastructure import rv_generic
 
-HPSampledValue = Any
 FlatDict = OrderedDict[str, HPSampledValue]
 RecursiveDictValue = Union[Any, 'RecursiveDict']
 

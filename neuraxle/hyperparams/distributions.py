@@ -25,14 +25,17 @@ the distribution.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-
 import math
+import warnings
 from abc import ABCMeta, abstractmethod
-from typing import Any, List, Optional
+from typing import Any, Callable, List, Optional
 
 import numpy as np
 from scipy.integrate import quad
 from scipy.stats import norm, truncnorm
+
+
+HPSampledValue = Any
 
 
 class HyperparameterDistribution(metaclass=ABCMeta):
@@ -59,7 +62,7 @@ class HyperparameterDistribution(metaclass=ABCMeta):
         raise NotImplementedError("Please use a concrete class.")
 
     @abstractmethod
-    def rvs(self):
+    def rvs(self) -> HPSampledValue:
         """
         Sample the random variable.
 
@@ -67,14 +70,14 @@ class HyperparameterDistribution(metaclass=ABCMeta):
         """
         pass
 
-    def rvs_many(self, size: int) -> List:
+    def rvs_many(self, size: int) -> List[HPSampledValue]:
         return [self.rvs() for _ in range(size)]
 
-    def nullify(self):
+    def nullify(self) -> HPSampledValue:
         return self.null_default_value
 
     @abstractmethod
-    def pdf(self, x) -> float:
+    def pdf(self, x: HPSampledValue) -> float:
         """
         Abstract method for probability distribution function value at `x`.
 
@@ -85,9 +88,22 @@ class HyperparameterDistribution(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def cdf(self, x) -> float:
+    def cdf(self, x: HPSampledValue) -> float:
         """
         Abstract method for cumulative distribution function value at `x`.
+        Therefore, `p = cdf(x)`.
+
+        :param x: value where the cumulative distribution function is evaluated.
+
+        :return: The cumulative distribution function value.
+        """
+        pass
+
+    @abstractmethod
+    def icdf(self, p: float) -> HPSampledValue:
+        """
+        This is the inverse of the cumulative distribution function,
+        where x = icdf(p).
 
         :param x: value where the cumulative distribution function is evaluated.
 
@@ -172,6 +188,64 @@ class ContinuousHyperparameterDistribution(HyperparameterDistribution):
     def is_discrete(self) -> bool:
         return False
 
+    def icdf(self, p: float) -> HPSampledValue:
+        """
+        This is the inverse of the cumulative distribution function,
+        where x = icdf(p).
+        """
+        x: HPSampledValue = self._icdf(p, self.min(), self.max())
+        return x  # x is float since it's continuous.
+
+    def _icdf(self, p: float, x_min: float, x_max: float, _tolerance=2e-9, _maxiters=10) -> float:
+
+        p_min = 0.0
+        p_max = 1.0
+        if p <= 0.0:
+            return x_min
+        elif p >= 1.0:
+            return x_max
+
+        x_vals = [x_min, x_max]
+        p_vals = [p_min, p_max]
+        for _ in range(0, max(_maxiters, 1)):
+
+            # Calculating the mean of the current interval
+            x_midpoint = (x_min + x_max) / 2.0
+            p_mid = self.cdf(x_midpoint)
+            p_diff = p - p_mid
+
+            # Euler method guess:
+            x_mid_guess = x_midpoint - p_diff * (x_min - x_max)
+            p_mid_guess = self.cdf(x_mid_guess)
+            p_diff_guess = p - p_mid_guess
+            if (abs(p_diff_guess) < abs(p_diff)) and (p_min < p_mid_guess < p_max):
+                p_mid = p_mid_guess
+                x_midpoint = x_mid_guess
+                p_diff = p_diff_guess
+
+            # Exit condition
+            if abs(p_diff) < _tolerance:
+                return x_midpoint
+
+            # Update rule for next iter:
+            if p_diff > 0:
+                # p is greater than p_mid: increase x_min
+                x_min = x_midpoint
+                p_min = p_mid
+            else:
+                # p is less than p_mid: decrease x_max
+                x_max = x_midpoint
+                p_max = p_mid
+
+            x_vals.append(x_midpoint)
+            p_vals.append(p_mid)
+
+        warnings.warn(
+            f"Could not find a solution for icdf({p}): reached at most `{x_min} < x < {x_max}`. "
+            f"returning midpoint: {x_midpoint}. ")
+        raise ValueError(f"Could not find a solution for icdf({p}): reached at most `{x_min} < x < {x_max}`.")
+        return x_midpoint
+
 
 class DiscreteHyperparameterDistribution(HyperparameterDistribution):
     """
@@ -194,6 +268,16 @@ class DiscreteHyperparameterDistribution(HyperparameterDistribution):
     @abstractmethod
     def values(self) -> List[Any]:
         return [i for i in range(int(self.min()), int(self.max()) + 1)]
+
+    def icdf(self, p: float) -> HPSampledValue:
+        """
+        This is the inverse of the cumulative distribution function,
+        where x = icdf(p).
+        """
+        probas = np.array(self.probabilities())
+        closest_idx: int = np.argmin(np.abs(probas - p))
+        x: HPSampledValue = self.values()[closest_idx]
+        return x
 
     def probabilities(self) -> List[float]:
         return [self.pdf(i) for i in self.values()]
@@ -1364,6 +1448,13 @@ class Normal(ContinuousHyperparameterDistribution):
 class LogNormal(LogSpaceDistributionMixin, ContinuousHyperparameterDistribution):
     """Get a LogNormal distribution."""
 
+    @staticmethod
+    def from_regular_mean_std(
+            mean: float, std: float, hard_clip_min: float = None, hard_clip_max: float = None):
+        return LogNormal(
+            log2_space_mean=math.log2(mean), log2_space_std=math.log2(std),
+            hard_clip_min=hard_clip_min, hard_clip_max=hard_clip_max)
+
     def __init__(self, log2_space_mean: float, log2_space_std: float,
                  hard_clip_min: float = None, hard_clip_max: float = None, null_default_value=None):
         """
@@ -1491,6 +1582,8 @@ class LogNormal(LogSpaceDistributionMixin, ContinuousHyperparameterDistribution)
 
         :return: mean value of the random variable.
         """
+        # More info: https://en.wikipedia.org/wiki/Log-normal_distribution#Generation_and_parameters
+        # More info: https://en.wikipedia.org/wiki/Log-normal_distribution#Arithmetic_moments
         const = math.exp(math.log(2) * self.log2_space_mean + math.log(2) ** 2 * self.log2_space_std ** 2 / 2)
         if self.hard_clip_min is None and self.hard_clip_max is None:
             mean = const
@@ -1501,21 +1594,21 @@ class LogNormal(LogSpaceDistributionMixin, ContinuousHyperparameterDistribution)
 
         mean_to_calculate_cdf = self.log2_space_mean + math.log(2) * self.log2_space_std ** 2
 
-        if self.hard_clip_min is None:
-            cdf_min = 0.
-            log_normal_cdf_min = 0
-        else:
-            log_normal_cdf_min = norm.cdf(math.log2(self.hard_clip_min), loc=mean_to_calculate_cdf,
-                                          scale=self.log2_space_std)
-            cdf_min = norm.cdf(math.log2(self.hard_clip_min), loc=self.log2_space_mean, scale=self.log2_space_std)
+        cdf_min = 0.
+        log_normal_cdf_min = 0
+        if self.hard_clip_min is not None:
+            log_normal_cdf_min = norm.cdf(
+                math.log2(self.hard_clip_min), loc=mean_to_calculate_cdf, scale=2**self.log2_space_std)
+            cdf_min = norm.cdf(
+                math.log2(self.hard_clip_min), loc=self.log2_space_mean, scale=2**self.log2_space_std)
 
-        if self.hard_clip_max is None:
-            cdf_max = 1.
-            log_normal_cdf_max = 1
-        else:
-            log_normal_cdf_max = norm.cdf(math.log2(self.hard_clip_max), loc=mean_to_calculate_cdf,
-                                          scale=self.log2_space_std)
-            cdf_max = norm.cdf(math.log2(self.hard_clip_max), loc=self.log2_space_mean, scale=self.log2_space_std)
+        cdf_max = 1.
+        log_normal_cdf_max = 1
+        if self.hard_clip_max is not None:
+            log_normal_cdf_max = norm.cdf(
+                math.log2(self.hard_clip_max), loc=mean_to_calculate_cdf, scale=2**self.log2_space_std)
+            cdf_max = norm.cdf(
+                math.log2(self.hard_clip_max), loc=self.log2_space_mean, scale=2**self.log2_space_std)
 
         const_norm = const / (cdf_max - cdf_min)
         mean = const_norm * (log_normal_cdf_max - log_normal_cdf_min)
@@ -1544,17 +1637,19 @@ class LogNormal(LogSpaceDistributionMixin, ContinuousHyperparameterDistribution)
             cdf_min = 0.
             log_normal_cdf_min = 0
         else:
-            cdf_min = norm.cdf(math.log2(self.hard_clip_min), loc=self.log2_space_mean, scale=self.log2_space_std)
-            log_normal_cdf_min = norm.cdf(math.log2(self.hard_clip_min), loc=mean_to_calculate_cdf_for_variance,
-                                          scale=self.log2_space_std)
+            cdf_min = norm.cdf(
+                math.log2(self.hard_clip_min), loc=self.log2_space_mean, scale=2**self.log2_space_std)
+            log_normal_cdf_min = norm.cdf(
+                math.log2(self.hard_clip_min), loc=mean_to_calculate_cdf_for_variance, scale=2**self.log2_space_std)
 
         if self.hard_clip_max is None:
             cdf_max = 1.
             log_normal_cdf_max = 1
         else:
-            cdf_max = norm.cdf(math.log2(self.hard_clip_max), loc=self.log2_space_mean, scale=self.log2_space_std)
-            log_normal_cdf_max = norm.cdf(math.log2(self.hard_clip_max), loc=mean_to_calculate_cdf_for_variance,
-                                          scale=self.log2_space_std)
+            cdf_max = norm.cdf(
+                math.log2(self.hard_clip_max), loc=self.log2_space_mean, scale=2**self.log2_space_std)
+            log_normal_cdf_max = norm.cdf(
+                math.log2(self.hard_clip_max), loc=mean_to_calculate_cdf_for_variance, scale=2**self.log2_space_std)
 
         const_norm = const_moment_2 / (cdf_max - cdf_min)
         moment_2 = const_norm * (log_normal_cdf_max - log_normal_cdf_min)
@@ -1578,11 +1673,11 @@ class DistributionMixture(DiscreteHyperparameterDistribution):
         """
         DiscreteHyperparameterDistribution.__init__(self, null_default_value=None)
 
+        self.distributions: List[HyperparameterDistribution] = distributions
+
         # Normalize distribution amplitude
         distribution_amplitudes = np.array(distribution_amplitudes)
         distribution_amplitudes = distribution_amplitudes / np.sum(distribution_amplitudes)
-
-        self.distributions: List[HyperparameterDistribution] = distributions
         self.distribution_amplitudes: List[float] = distribution_amplitudes
 
     @staticmethod
@@ -1612,10 +1707,8 @@ class DistributionMixture(DiscreteHyperparameterDistribution):
         :return DistributionMixture instance
         """
 
-        distribution_class: HyperparameterDistribution = Normal
-
-        if use_logs:
-            distribution_class = LogNormal
+        distribution_ctor: Callable[[float, float, float, float], HyperparameterDistribution] = \
+            LogNormal.from_regular_mean_std if use_logs else Normal
 
         distributions = []
 
@@ -1627,7 +1720,8 @@ class DistributionMixture(DiscreteHyperparameterDistribution):
             if single_max is None or np.isposinf(single_max):
                 single_max = None
 
-            distribution_instance = distribution_class(mean, std, hard_clip_min=single_min, hard_clip_max=single_max)
+            distribution_instance = distribution_ctor(
+                mean=mean, std=std, hard_clip_min=single_min, hard_clip_max=single_max)
 
             if use_quantized_distributions:
                 distribution_instance = Quantized(distribution_instance)
@@ -1767,6 +1861,17 @@ class DistributionMixture(DiscreteHyperparameterDistribution):
         """
         if self.is_discrete():
             return sum([distribution.probabilities() for distribution in self.distributions], [])
+
+
+class LogDistributionMixture(DistributionMixture):
+
+    def rvs(self) -> float:
+        raise NotImplementedError("TODO: must code this for the 'use logs' method.")
+        return super().rvs()
+
+    @staticmethod
+    def vals_to_log_wrap(vals: List[float]) -> List[float]:
+        return
 
 
 def _calculate_sum(

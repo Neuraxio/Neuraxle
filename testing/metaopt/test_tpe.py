@@ -5,7 +5,7 @@ from typing import List
 import numpy as np
 import pytest
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.hyperparams.distributions import (Choice, DistributionMixture,
+from neuraxle.hyperparams.distributions import (Choice, DistributionMixture, HPSampledValue,
                                                 HyperparameterDistribution,
                                                 LogNormal, LogUniform, Normal,
                                                 Quantized, RandInt, Uniform)
@@ -37,15 +37,19 @@ def _avg(seq: List):
     return sum(seq) / len(seq)
 
 
-# @pytest.mark.parametrize("reduce_func", [min, _avg])
-@pytest.mark.parametrize("add_range", [
+distributions: List[HyperparameterDistribution] = [
     LogNormal(log2_space_mean=1.0, log2_space_std=0.5, hard_clip_min=0, hard_clip_max=6),
     Choice(choice_list=[0, 1.5, 2, 3.5, 4, 5, 6]),
     LogUniform(min_included=1.0, max_included=5.0),
     Normal(mean=3.0, std=2.0, hard_clip_min=0, hard_clip_max=6),
     Quantized(Uniform(0, 10)),
     Uniform(0, 6),
-])
+]
+
+# @pytest.mark.parametrize("reduce_func", [min, _avg])
+
+
+@pytest.mark.parametrize("add_range", distributions)
 def test_tpe(tmpdir, add_range: HyperparameterDistribution, reduce_func=_avg):
     np.random.seed(42)
     random.seed(42)
@@ -173,7 +177,9 @@ class TrialBuilder:
     def add_trial_from_space_rvs(
         self,
         score: float,
-        hyperparams_samples: HyperparameterSamples = None
+        metric_name: str,
+        is_higher_score_better: bool,
+        hyperparams_samples: HyperparameterSamples = None,
     ) -> 'TrialBuilder':
 
         if hyperparams_samples is not None:
@@ -185,8 +191,6 @@ class TrialBuilder:
             with trial.new_validation_split() as trial_split:
                 trial_split: TrialSplit = trial_split
 
-                metric_name = self.round_scope._dataclass.main_metric_name
-                is_higher_score_better = self.round_scope.is_higher_score_better(metric_name)
                 with trial_split.managed_metric(metric_name, is_higher_score_better) as metric:
                     metric: MetricResults = metric
 
@@ -199,12 +203,14 @@ class TrialBuilder:
     def add_many_trials_from_space_rvs(
         self,
         scores: List[float],
+        metric_name: str,
+        is_higher_score_better: bool,
         hp_samples: List[HyperparameterSamples] = None,
     ) -> 'TrialBuilder':
         if hp_samples is None:
             hp_samples = [None] * len(scores)
         for score, hp in zip(scores, hp_samples):
-            self.add_trial_from_space_rvs(score, hp)
+            self.add_trial_from_space_rvs(score, metric_name, is_higher_score_better, hp)
         return self
 
     def build(self) -> Round:
@@ -214,14 +220,17 @@ class TrialBuilder:
 @pytest.mark.parametrize("_use_linear_forgetting_weights", [True, False])
 def test_divided_mixtures_factory(_use_linear_forgetting_weights):
     hp_space = HyperparameterSpace([('a', Uniform(0, 1)), ('b', LogUniform(1, 2))])
-    round_scope: Round = Round.dummy().with_optimizer(None, hp_space)
+    round_scope: Round = Round.dummy()
+    round_scope.with_optimizer(None, hp_space).with_metric('mse')
     round_scope = TrialBuilder(round_scope).add_many_trials_from_space_rvs(
-        scores=[0.0, 0.4, 0.6, 1.0],
+        scores=[0.0, 0.1, 0.9, 1.0],
+        metric_name='mse',
+        is_higher_score_better=False,
         hp_samples=[
-            HyperparameterSamples([('a', 0.0001), ('b', 1.0001)]),
-            HyperparameterSamples([('a', 0.9999), ('b', 1.0001)]),
-            HyperparameterSamples([('a', 0.0001), ('b', 1.9999)]),
-            HyperparameterSamples([('a', 0.9999), ('b', 1.9999)]),
+            HyperparameterSamples([('a', 0.1), ('b', 1.1)]),
+            HyperparameterSamples([('a', 0.9), ('b', 1.1)]),
+            HyperparameterSamples([('a', 0.1), ('b', 1.9)]),
+            HyperparameterSamples([('a', 0.9), ('b', 1.9)]),
         ]
     ).build()
 
@@ -235,5 +244,54 @@ def test_divided_mixtures_factory(_use_linear_forgetting_weights):
     divided_distributions = List['_DividedTPEPosteriors']
 
     hps_names, divided_distributions = dmf.create_from(round_scope)
+    a_good_trials = divided_distributions[0].good_trials
+    a_bad_trials = divided_distributions[0].bad_trials
+    b_good_trials = divided_distributions[1].good_trials
+    b_bad_trials = divided_distributions[1].bad_trials
 
-    assert False
+    assert a_good_trials.mean() == 0.5
+    assert a_bad_trials.mean() == 0.5
+    assert b_good_trials.mean() < 0.5
+    assert b_bad_trials.mean() > 0.5
+
+    best_ratios = []
+    best_samples = []
+    for i, dist in enumerate(divided_distributions):
+        best_ratio = 0
+        best_hp_sample = None
+        for _ in range(100):
+
+            hp_sample, ratio = dist.rvs_good_with_pdf_division_proba()
+            if ratio > best_ratio or best_hp_sample is None:
+                best_ratio = ratio
+                best_hp_sample = hp_sample
+
+        best_ratios.append(best_ratio)
+        best_samples.append(best_hp_sample)
+
+    assert best_ratio[0] == 1.0
+    assert best_ratio[1] > 1.0
+    assert 1.0 <= best_samples[1] < 1.2
+
+
+@pytest.mark.parametrize("distribution", [
+    LogNormal(log2_space_mean=1.0, log2_space_std=0.5, hard_clip_min=0, hard_clip_max=6),
+    # Choice(choice_list=[0, 1.5, 2, 3.5, 4, 5, 6]),
+    LogUniform(min_included=1.0, max_included=5.0),
+    Normal(mean=3.0, std=2.0, hard_clip_min=0, hard_clip_max=6),
+    Quantized(Uniform(0, 10)),
+    Uniform(0, 6),
+])
+def test_icdf_is_within_tolerance_value(distribution):
+    tolerance = 2e-8
+
+    _min = distribution.min()
+    _max = distribution.max()
+    mean = distribution.mean()
+
+    _ps: List[float] = [0, 1, 0.5] + np.linspace(0.0, 1.0, 15).tolist()[1:-1] + [-0.1, 1.1]
+    _xs: List[HPSampledValue] = [_min, _max, mean] + np.linspace(_min, _max, 15).tolist()[1:-1] + [_min, _max]
+
+    for p, x in zip(_ps, _xs):
+        x_icdf = distribution.icdf(p)
+        assert abs(x_icdf - x) <= tolerance, f"`x_icdf != x` : `{x_icdf} != {x}`, given `p={p}`"
