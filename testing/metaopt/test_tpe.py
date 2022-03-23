@@ -5,16 +5,20 @@ from typing import List
 import numpy as np
 import pytest
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.hyperparams.distributions import (Choice, DistributionMixture, HPSampledValue,
+from neuraxle.hyperparams.distributions import (Choice, ContinuousHyperparameterDistribution, DiscreteHyperparameterDistribution, DistributionMixture,
+                                                HPSampledValue,
                                                 HyperparameterDistribution,
                                                 LogNormal, LogUniform, Normal,
                                                 Quantized, RandInt, Uniform)
-from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
+from neuraxle.hyperparams.space import (HyperparameterSamples,
+                                        HyperparameterSpace)
 from neuraxle.metaopt.auto_ml import (AutoML, BaseHyperparameterOptimizer,
                                       ControlledAutoML)
 from neuraxle.metaopt.callbacks import ScoringCallback
-from neuraxle.metaopt.data.aggregates import MetricResults, Round, Trial, TrialSplit
-from neuraxle.metaopt.data.vanilla import (AutoMLContext, HyperparameterSamplerStub,
+from neuraxle.metaopt.data.aggregates import (MetricResults, Round, Trial,
+                                              TrialSplit)
+from neuraxle.metaopt.data.vanilla import (AutoMLContext,
+                                           HyperparameterSamplerStub,
                                            MetricResultsDataclass,
                                            RoundDataclass, ScopedLocation,
                                            TrialDataclass, TrialSplitDataclass,
@@ -274,24 +278,38 @@ def test_divided_mixtures_factory(_use_linear_forgetting_weights):
     assert 1.0 <= best_samples[1] < 1.2
 
 
-@pytest.mark.parametrize("distribution", [
+@pytest.mark.parametrize("dist", [
     LogNormal(log2_space_mean=1.0, log2_space_std=0.5, hard_clip_min=0, hard_clip_max=6),
-    # Choice(choice_list=[0, 1.5, 2, 3.5, 4, 5, 6]),
+    LogNormal(log2_space_mean=1.0, log2_space_std=0.5, hard_clip_min=0),
+    Choice(choice_list=[0, 1, 2, 3, 4, 5, 6]),
     LogUniform(min_included=1.0, max_included=5.0),
     Normal(mean=3.0, std=2.0, hard_clip_min=0, hard_clip_max=6),
+    Normal(mean=3.0, std=2.0),
     Quantized(Uniform(0, 10)),
     Uniform(0, 6),
 ])
-def test_icdf_is_within_tolerance_value(distribution):
-    tolerance = 2e-8
+def test_icdf_is_within_tolerance_value(dist: HyperparameterDistribution):
+    tolerance = 2e-5
 
-    _min = distribution.min()
-    _max = distribution.max()
-    mean = distribution.mean()
+    # if isinstance(dist, ContinuousHyperparameterDistribution):
+    #     dist.min = dist._pseudo_min
+    #     dist.max = dist._pseudo_max
+    _min = dist.min() if dist.is_discrete() else dist._pseudo_min()
+    _max = dist.max() if dist.is_discrete() else dist._pseudo_max()
 
-    _ps: List[float] = [0, 1, 0.5] + np.linspace(0.0, 1.0, 15).tolist()[1:-1] + [-0.1, 1.1]
-    _xs: List[HPSampledValue] = [_min, _max, mean] + np.linspace(_min, _max, 15).tolist()[1:-1] + [_min, _max]
+    # create x range
+    if dist.is_discrete():
+        x_range = dist.values()
+    else:
+        x_range = np.linspace(_min, _max, 15).tolist()[1:-1]
+    # recreate p from x range
+    p_range = [dist.cdf(i) for i in x_range]
 
+    # expand p and x with more points
+    _ps: List[float] = [dist.cdf(_min), dist.cdf(_max)] + p_range + [-0.1, 1.1]
+    _xs: List[HPSampledValue] = [_min, _max] + x_range + [_min, _max]
+
+    # inverse with icdf to find x again and assert x_icdf == x
     for p, x in zip(_ps, _xs):
-        x_icdf = distribution.icdf(p)
+        x_icdf = dist.icdf(p)
         assert abs(x_icdf - x) <= tolerance, f"`x_icdf != x` : `{x_icdf} != {x}`, given `p={p}`"

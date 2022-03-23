@@ -141,7 +141,7 @@ def test_choice_and_priority_choice(ctor):
         assert hd.cdf(3) == 0.
 
     assert hd.min() == 0
-    assert hd.max() == len(choice_list)
+    assert hd.max() == len(choice_list) - 1
     assert abs(hd.mean() - (len(choice_list) - 1) / 2) < 1e-6
     assert abs(hd.var() - (len(choice_list) ** 2 - 1) / 12) < 1e-6
     assert abs(hd.std() - math.sqrt((len(choice_list) ** 2 - 1) / 12)) < 1e-6
@@ -186,7 +186,7 @@ def test_choice_and_priority_choice_with_probas(ctor):
         assert hd.cdf(3) == 0.
 
     assert hd.min() == 0
-    assert hd.max() == len(choice_list)
+    assert hd.max() == len(choice_list) - 1
     assert abs(hd.mean() - 1.6) < 1e-6
     assert abs(hd.var() - 0.84) < 1e-6
     assert abs(hd.std() - 0.9165151389911679) < 1e-6
@@ -597,7 +597,7 @@ def test_gaussian_distribution_mixture_truncated():
 
 def test_gaussian_distribution_mixture_log():
     distribution_amplitudes = [1, 1, 1]
-    means = [-2, 0, 2]
+    means = [1, 2, 3]
     stds = [1, 1, 1]
     distribution_mins = [None for _ in range(len(means))]
     distribution_max = [None for _ in range(len(means))]
@@ -608,7 +608,7 @@ def test_gaussian_distribution_mixture_log():
     samples = hd_rvs_many(hd)
 
     samples_median = np.median(samples)
-    assert 0.5 < samples_median < 1.5
+    assert 1.5 < samples_median < 2.5
     samples_std = np.std(samples)
     assert 1 < samples_std < 4
     assert abs(hd.pdf(-2.) - 0.) < 1e-6
