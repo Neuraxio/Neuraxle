@@ -1613,6 +1613,7 @@ class LogNormal(LogSpaceDistributionMixin, ContinuousHyperparameterDistribution)
         # More info: https://en.wikipedia.org/wiki/Log-normal_distribution#Generation_and_parameters
         # More info: https://en.wikipedia.org/wiki/Log-normal_distribution#Arithmetic_moments
         const = math.exp(math.log(2) * self.log2_space_mean + math.log(2) ** 2 * self.log2_space_std ** 2 / 2)
+
         if self.hard_clip_min is None and self.hard_clip_max is None:
             mean = const
             return mean
@@ -1649,11 +1650,11 @@ class LogNormal(LogSpaceDistributionMixin, ContinuousHyperparameterDistribution)
         :return: variance value of the random variable.
         """
         # Use the mean**2 to calculate variance, with variance = moment_2 - mean**2.
-        mean_squarred = self.mean() ** 2
+        mean_squared = self.mean() ** 2
         const_moment_2 = math.exp(
             2 * math.log(2) * self.log2_space_mean + 2 * math.log(2) ** 2 * self.log2_space_std ** 2)
         if self.hard_clip_min is None and self.hard_clip_max is None:
-            variance = const_moment_2 - mean_squarred
+            variance = const_moment_2 - mean_squared
             return variance
 
         if self.hard_clip_min == self.hard_clip_max:
@@ -1681,7 +1682,7 @@ class LogNormal(LogSpaceDistributionMixin, ContinuousHyperparameterDistribution)
 
         const_norm = const_moment_2 / (cdf_max - cdf_min)
         moment_2 = const_norm * (log_normal_cdf_max - log_normal_cdf_min)
-        variance = moment_2 - mean_squarred
+        variance = moment_2 - mean_squared
         return variance
 
 

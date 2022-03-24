@@ -602,30 +602,33 @@ def test_gaussian_distribution_mixture_log():
     distribution_mins = [None for _ in range(len(means))]
     distribution_max = [None for _ in range(len(means))]
 
-    hd = DistributionMixture.build_gaussian_mixture(distribution_amplitudes, means, stds, distribution_mins,
-                                                    distribution_max, use_logs=True)
+    hd = DistributionMixture.build_gaussian_mixture(
+        distribution_amplitudes, means, stds,
+        distribution_mins, distribution_max, use_logs=True)
 
     samples = hd_rvs_many(hd)
 
     samples_median = np.median(samples)
     assert 1.5 < samples_median < 2.5
     samples_std = np.std(samples)
+    assert 1.5 < hd.mean() < 2.5
     assert 1 < samples_std < 4
-    assert abs(hd.pdf(-2.) - 0.) < 1e-6
-    assert abs(hd.pdf(1.) - 0.24377901627294607) < 1e-6
-    assert abs(hd.pdf(5.) - 0.03902571107126729) < 1e-6
-    assert abs(hd.cdf(-2.) - 0.) < 1e-6
-    assert abs(hd.cdf(1.) - 0.5) < 1e-6
-    assert abs(hd.cdf(5.) - 0.8720400927468334) < 1e-6
-
+    assert 1 < hd.std() < 2
+    assert abs(hd.pdf(-2.) - 0.) == 0
+    assert abs(hd.pdf(1) - 1.0 / 3.0) < 0.1
+    assert abs(hd.pdf(2) - 1.0 / 3.0) < 0.1
+    assert abs(hd.pdf(3) - 1.0 / 3.0) < 0.1
+    assert abs(hd.cdf(1) - 1.0 / 4.0) < 0.1
+    assert abs(hd.cdf(2) - 2.0 / 4.0) < 0.1
+    assert abs(hd.cdf(3) - 3.0 / 4.0) < 0.1
+    assert hd.pdf(5.) < 0.05
     assert hd.min() == 0
     assert hd.max() == np.inf
-    assert abs(hd.mean() - 2.225189976999746) < 1e-6
-    assert abs(hd.var() - 9.916017516376925) < 1
-    assert abs(hd.std() - 3.1489708662318434) < 0.3
+    assert abs(hd.mean() - 2.15) < 0.015
+    assert abs(hd.std() ** 2 - hd.var()) < 0.001
     # Verify that hd mean and variance also correspond to mean and variance of sampling.
-    assert abs(hd.mean() - np.mean(samples)) < 2e-1
-    assert abs(hd.var() - np.var(samples)) < 1
+    assert abs(hd.mean() - np.mean(samples)) < 0.05
+    assert abs(hd.var() - np.var(samples)) < 0.15
 
 
 def test_gaussian_distribution_mixture_quantized():
