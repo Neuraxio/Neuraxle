@@ -378,7 +378,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             n_workers_per_step: int = None,
             max_queue_size: int = None,
             data_joiner: BaseTransformer = None,
-            use_processes: bool = True,
+            use_processes: bool = False,
             use_savers: bool = False,
             keep_incomplete_batch: bool = True,
             default_value_data_inputs: Union[Any, AbsentValuesNullObject] = None,

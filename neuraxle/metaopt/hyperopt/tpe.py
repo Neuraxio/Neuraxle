@@ -261,7 +261,6 @@ class _DividedMixturesFactory:
             continuous_distribution: HyperparameterDistribution,
             trial_hyperparameters: List[HPSampledValue]
     ) -> DistributionMixture:
-        # TODO: see how to manage distribution mixture here.
 
         use_logs = False
         if isinstance(continuous_distribution, LogSpaceDistributionMixin):
@@ -292,8 +291,6 @@ class _DividedMixturesFactory:
         return gmm
 
     def _adaptive_parzen_normal(self, hyperparam_distribution: HyperparameterDistribution, distribution_trials: List[HPSampledValue]):
-        # TODO: check if someone use the DistributionMixture how to manage it in here.
-        # TODO: Distribution Mixture : Treat has a standard distribution or prior distribution is all small gaussian for each distribution in the distribution mixture.
 
         hp_std = hyperparam_distribution.std()
 

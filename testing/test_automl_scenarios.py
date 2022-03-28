@@ -185,7 +185,6 @@ class OnlyFitAtTransformTime(NonFittableMixin, MetaStep):
 def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
     dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
     cx = AutoMLContext.from_context(CX(root=tmpdir))
-    # cx.add_scoped_logger_file_handler() TODO: use OnDiskRepo to test logging files with parallel?
     sleep_step = Sleep(0.001)
     n_trials = 4
     automl: ControlledAutoML = _create_automl_test_loop(
@@ -252,12 +251,8 @@ def test_automl_can_use_same_repo_in_parallel(tmpdir, use_processes):
     bests: List[Tuple[float, int, FlatDict]] = round_scope.summary()
 
     assert len(bests) == n_trials
-    assert len(set(hp for score, i, hp in bests)) == n_trials, f"Expecting unique hyperparams for the given n_trials={n_trials} and intelligent grid sampler."
+    assert len(set(hp for score, i, hp in bests)
+               ) == n_trials, f"Expecting unique hyperparams for the given n_trials={n_trials} and intelligent grid sampler."
 
     best_score = bests[0][0]
     assert median_absolute_error(dact.eo, preds.di) == best_score
-
-
-@pytest.mark.skip(reason="TODO: on disk repo fix")
-def test_on_disk_repo_is_structured_accordingly():
-    assert False

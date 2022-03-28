@@ -167,8 +167,8 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
             if isinstance(hp_dist, ContinuousHyperparameterDistribution):
                 hp_samples: List[Any] = [
                     hp_dist.mean(),
-                    hp_dist.min(),
-                    hp_dist.max(),
+                    hp_dist.min() if hp_dist.is_discrete() else hp_dist._pseudo_min(),
+                    hp_dist.max() if hp_dist.is_discrete() else hp_dist._pseudo_max(),
                     hp_dist.mean() + hp_dist.std(),
                     hp_dist.mean() - hp_dist.std(),
                     hp_dist.mean() + hp_dist.std() / 2,

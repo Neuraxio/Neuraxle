@@ -221,8 +221,7 @@ class TrialBuilder:
         return self.round_scope.save()
 
 
-@pytest.mark.parametrize("_use_linear_forgetting_weights", [True, False])
-def test_divided_mixtures_factory(_use_linear_forgetting_weights):
+def test_divided_mixtures_factory():
     hp_space = HyperparameterSpace([('a', Uniform(0, 1)), ('b', LogUniform(1, 2))])
     round_scope: Round = Round.dummy()
     round_scope.with_optimizer(None, hp_space).with_metric('mse')
@@ -241,8 +240,8 @@ def test_divided_mixtures_factory(_use_linear_forgetting_weights):
     dmf: _DividedMixturesFactory = _DividedMixturesFactory(
         quantile_threshold=0.5,
         number_good_trials_max_cap=10,
-        use_linear_forgetting_weights=_use_linear_forgetting_weights,
-        number_recent_trials_at_full_weights=10,
+        use_linear_forgetting_weights=False,
+        number_recent_trials_at_full_weights=10
     )
     hps_names = List[str]
     divided_distributions = List['_DividedTPEPosteriors']
@@ -255,8 +254,8 @@ def test_divided_mixtures_factory(_use_linear_forgetting_weights):
 
     assert a_good_trials.mean() == 0.5
     assert a_bad_trials.mean() == 0.5
-    assert b_good_trials.mean() < 0.5
-    assert b_bad_trials.mean() > 0.5
+    assert b_good_trials.mean() < 1.5
+    assert b_bad_trials.mean() > 1.5
 
     best_ratios = []
     best_samples = []
@@ -273,8 +272,8 @@ def test_divided_mixtures_factory(_use_linear_forgetting_weights):
         best_ratios.append(best_ratio)
         best_samples.append(best_hp_sample)
 
-    assert best_ratio[0] == 1.0
-    assert best_ratio[1] > 1.0
+    assert best_ratios[0] == 1.0
+    assert best_ratios[1] > 1.0
     assert 1.0 <= best_samples[1] < 1.2
 
 

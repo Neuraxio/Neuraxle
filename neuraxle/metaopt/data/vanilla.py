@@ -279,7 +279,6 @@ class ScopedLocation(BaseService):
 
 @dataclass(order=True)
 class BaseDataclass(Generic[SubDataclassT], ABC):
-    # TODO: from json, to json?
 
     def __post_init__(self):
         self._validate()

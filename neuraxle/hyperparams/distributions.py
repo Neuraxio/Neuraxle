@@ -165,8 +165,7 @@ class HyperparameterDistribution(metaclass=ABCMeta):
         """
         return (
             item == self.null_default_value or
-            item >= self.min() or
-            item <= self.max()
+            (self.min() <= item <= self.max())
         )
 
     def __str__(self) -> str:
@@ -193,12 +192,12 @@ class ContinuousHyperparameterDistribution(HyperparameterDistribution):
         This is the inverse of the cumulative distribution function,
         where x = icdf(p).
         """
-        x: HPSampledValue = self._icdf(p, self._pseudo_min(), self._pseudo_max())
+        _tolerance = 2e-11
+        _tolerance *= (self._pseudo_max() - self._pseudo_min())  # tolerance is relative to range.
+        x: HPSampledValue = self._icdf(p, self._pseudo_min(), self._pseudo_max(), _tolerance=2e-11)
         return x  # x is float since it's continuous.
 
     def _icdf(self, p: float, x_min: float, x_max: float, _tolerance=2e-11, _maxiters=100) -> float:
-
-        _tolerance *= (self._pseudo_max() - self._pseudo_min())  # tolerance is relative to range.
 
         if p <= 0.0:
             return x_min
@@ -309,7 +308,9 @@ class LogSpaceDistributionMixin:
     Use this mixin when your distribution samples from a log-space distribution
     to identify it.
     """
-    pass
+
+    def __contains__(self, item) -> bool:
+        return item != 0.0 and super().__contains__(item)
 
 
 class FixedHyperparameter(DiscreteHyperparameterDistribution):
@@ -1603,6 +1604,17 @@ class LogNormal(LogSpaceDistributionMixin, ContinuousHyperparameterDistribution)
         :return: maximal value return from distribution.
         """
         return self.hard_clip_max if self.hard_clip_max is not None else np.inf
+
+    def _pseudo_min(self) -> float:
+        """
+        This is like the function min, but in case it is of 0, there will be a clipping to at least 4 sigmas.
+        """
+        x = self.min()
+        if math.isinf(x) or math.isnan(x):
+            x = self.mean() - 4 * self.std()
+        elif x == 0:
+            x = self._icdf(0.0001, 0.0, self.mean())
+        return x
 
     def mean(self):
         """

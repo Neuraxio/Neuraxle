@@ -420,7 +420,6 @@ class Project(BaseAggregate[None, 'Client', ProjectDataclass]):
 
     @_with_method_as_context_manager
     def get_client(self, name: str) -> 'Project':
-        # TODO: new client should be created if it does not exist?
         self._managed_subresource(client_name=name)
         return self
 
@@ -789,7 +788,6 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
             _split_dataclass: TrialSplitDataclass = self.repo.load(split_loc)
             _split_dataclass.hyperparams = self.get_hyperparams()
             subagg: TrialSplit = TrialSplit(_split_dataclass, self.context, is_deep=True)
-            # TODO: logger loc and file for context.push_attr?
 
             self.save_subaggregate(subagg, deep=True)
             return subagg

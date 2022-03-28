@@ -15,7 +15,7 @@ from neuraxle.logging.logging import NEURAXLE_LOGGER_NAME, NeuraxleLogger
 from neuraxle.metaopt.auto_ml import AutoML
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
-from neuraxle.metaopt.data.vanilla import (DEFAULT_PROJECT, AutoMLContext,
+from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT, AutoMLContext,
                                            ProjectDataclass, ScopedLocation)
 from neuraxle.metaopt.validation import ValidationSplitter, RandomSearchSampler
 from neuraxle.pipeline import Pipeline
@@ -82,7 +82,6 @@ def test_context_logger_log_file(tmpdir):
 
 class TestTrialLogger:
 
-    @pytest.mark.skip(reason="TODO: fix the on disk repo and this logging test.")
     def test_logger_automl(self, tmpdir):
         # Given
         context = CX(tmpdir)
@@ -116,17 +115,18 @@ class TestTrialLogger:
         auto_ml.handle_fit(data_container, context)
 
         # Then
-        file_paths = [os.path.join(hp_repository.cache_folder, f"trial_{i}.log") for i in range(n_trials)]
+        file_paths = [os.path.join(
+            hp_repository.cache_folder, f"_{DEFAULT_PROJECT}", f"_{DEFAULT_CLIENT}", "_0", f"_{i}", "_0", "log.txt"
+        ) for i in range(n_trials)]
         assert len(file_paths) == n_trials
 
         for f in file_paths:
-            # TODO: cx.copy().with_sublocation(...).logger.read_log_file()
             assert os.path.exists(f)
 
         for f in file_paths:
             with open(f, 'r') as f:
                 log = f.readlines()
-                assert len(log) == 36
+                assert len(log) == 16, log
 
 
 def test_automl_context_has_loc():

@@ -30,7 +30,6 @@ def vanilla_repo_ctor(tmpdir: TmpDir = None) -> AutoMLContext:
 
 
 def disk_repo_ctor(tmpdir: TmpDir = None) -> AutoMLContext:
-    # TODO: add this function to REPO_CTORS
     cx = CX()
     tmpdir = tmpdir or cx.get_new_cache_folder()
     return AutoMLContext.from_context(cx, repo=HyperparamsOnDiskRepository(tmpdir))
