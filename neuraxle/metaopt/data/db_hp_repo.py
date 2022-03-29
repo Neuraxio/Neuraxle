@@ -105,7 +105,7 @@ class InDatabaseHyperparamRepository(HyperparamsRepository):
 
         return result[0] if len(result) == 1 else result
 
-    def load_trials(self, status: 'TrialStatus') -> 'Round':
+    def load_trials(self, status: 'TrialStatus') -> Round:
         """
         Load all hyperparameter trials with their corresponding score.
         Sorted by creation date.

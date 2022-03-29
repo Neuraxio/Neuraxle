@@ -79,7 +79,7 @@ FlatDict = 'OrderedDict[str, HPSampledValue]'
 RecursiveDictValue = Union[Any, 'RecursiveDict']
 
 
-class RecursiveDict(OrderedDict[str, RecursiveDictValue]):
+class RecursiveDict(OrderedDict, Dict[str, RecursiveDictValue]):
     """
     A data structure that provides an interface to access nested dictionaries with "flattened keys", and a few more functions.
 

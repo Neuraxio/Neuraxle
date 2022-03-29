@@ -204,7 +204,7 @@ class ContinuousHyperparameterDistribution(HyperparameterDistribution):
         elif p >= 1.0:
             return x_max
 
-        for i in range(0, max(_maxiters, 1)):
+        for _ in range(0, max(_maxiters, 1)):
 
             # Calculating the mean of the current interval
             x_mid = (x_min + x_max) / 2.0
@@ -224,7 +224,6 @@ class ContinuousHyperparameterDistribution(HyperparameterDistribution):
         warnings.warn(
             f"Could not find a solution for icdf({p}): reached at most `{x_min} < x < {x_max}`. "
             f"returning midpoint: {x_mid}. ")
-        raise ValueError(f"Could not find a solution for icdf({p}): reached at most `{x_min} < x < {x_max}`.")
         return x_mid
 
     def _pseudo_min(self) -> float:
@@ -1906,9 +1905,10 @@ class DistributionMixture(DiscreteHyperparameterDistribution):
 
 class LogDistributionMixture(DistributionMixture):
 
+    @abstractmethod
     def rvs(self) -> float:
+        # return super().rvs()
         raise NotImplementedError("TODO: must code this for the 'use logs' method.")
-        return super().rvs()
 
     @staticmethod
     def vals_to_log_wrap(vals: List[float]) -> List[float]:

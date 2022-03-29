@@ -28,8 +28,7 @@ from abc import ABC, abstractmethod
 from typing import Callable, List, Optional
 
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.data_container import (ARG_Y_EXPECTED, ARG_Y_PREDICTD, IDT,
-                                     EvalEOTDACT)
+from neuraxle.data_container import ARG_Y_EXPECTED, ARG_Y_PREDICTD, EvalEOTDACT
 from neuraxle.logging.warnings import warn_deprecated_class
 from neuraxle.metaopt.data.aggregates import MetricResults, TrialSplit
 
