@@ -253,7 +253,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
 
         self._i += 1
 
-    def __getitem__(self, i_grid_keys: List[int]) -> OrderedDict[str, Any]:
+    def __getitem__(self, i_grid_keys: List[int]) -> 'OrderedDict[str, Any]':
         """
         Access the keys for the grid.
 

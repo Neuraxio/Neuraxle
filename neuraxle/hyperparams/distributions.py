@@ -1821,7 +1821,7 @@ class DistributionMixture(DiscreteHyperparameterDistribution):
 
         where :math:`w_i` and :math:`\mu_i` are respectively the amplitude and mean of each distribution.
 
-        :return: mean value of the mixtture.
+        :return: mean value of the mixture.
         """
         mean_result = 0
 

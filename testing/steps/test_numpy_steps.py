@@ -19,7 +19,10 @@ Tests for NumPy Steps
 
 """
 
-from neuraxle.steps.numpy import *
+import numpy as np
+from neuraxle.steps.numpy import (NumpyConcatenateInnerFeatures,
+                                  NumpyFlattenDatum, NumpyShapePrinter,
+                                  NumpyTranspose)
 
 
 def test_flatten_datum():
@@ -58,5 +61,3 @@ def test_numpy_transpose():
 def test_numpy_shape_printer():
     pr = NumpyShapePrinter()
     pr.fit_transform(np.ones((10, 11)))
-
-

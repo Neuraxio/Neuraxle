@@ -334,7 +334,7 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
         self._validate()
         return self
 
-    def get_sublocation(self) -> Union[List[SubDataclassT], OrderedDict[str, SubDataclassT]]:
+    def get_sublocation(self) -> Union[List[SubDataclassT], 'OrderedDict[str, SubDataclassT]']:
         return getattr(self, dataclass_2_subloc_attr[self.__class__])
 
     def set_sublocation(self, sublocation: Union[List[SubDataclassT], OrderedDict[str, SubDataclassT]]) -> 'BaseDataclass':
@@ -431,7 +431,7 @@ class DataclassHasOrderedDictMixin:
         ):
             raise ValueError(f"{self.__class__.__name__} must have all sublocation keys as strings.")
 
-    def get_sublocation(self) -> OrderedDict[ScopedLocationAttrStr, SubDataclassT]:
+    def get_sublocation(self) -> 'OrderedDict[ScopedLocationAttrStr, SubDataclassT]':
         ret = super().get_sublocation()
         return ret
 
@@ -586,7 +586,7 @@ class RootDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ProjectDataclas
     def get_id(self) -> ScopedLocationAttr:
         return None
 
-    def get_sublocation(self) -> OrderedDict[str, SubDataclassT]:
+    def get_sublocation(self) -> 'OrderedDict[str, SubDataclassT]':
         return self.projects
 
 
@@ -736,7 +736,7 @@ str_2_dataclass: OrderedDict[str, BaseDataclass] = OrderedDict([
 
 def as_named_odict(
     obj: Union[BaseDataclass, List[BaseDataclass]]
-) -> OrderedDict[ScopedLocationAttrStr, BaseDataclass]:
+) -> 'OrderedDict[ScopedLocationAttrStr, BaseDataclass]':
 
     if isinstance(obj, BaseDataclass):
         obj = [obj]

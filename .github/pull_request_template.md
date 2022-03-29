@@ -45,7 +45,7 @@ Things to check each time you contribute:
 - [ ] Your local Git username is set to your GitHub username, and your local Git email is set to your GitHub email. This is important to avoid breaking the cla-bot and for your contributions to be linked to your profile. More info: https://github.com/settings/emails
 - [ ] Argument's dimensions and types are specified for new steps (important), with examples in docstrings when needed.
 - [ ] Class names and argument / API variables are very clear: there is no possible ambiguity. They also respect the existing code style (avoid duplicating words for the same concept) and are intuitive.
-- [ ] Use typing like `variable: Typing = ...` as much as possible. Also use typing for function arguments and return values like `def my_func(self, my_list: Dict[int, List[str]]) -> OrderedDict[int, str]:`.
+- [ ] Use typing like `variable: Typing = ...` as much as possible. Also use typing for function arguments and return values like `def my_func(self, my_list: Dict[int, List[str]]) -> 'OrderedDict[int, str]':`.
 - [ ] Classes are documented: their behavior is explained beyond just the title of the class. You may even use the description written in your pull request above to fill some docstrings accurately.
 - [ ] If a numpy array is used, it is important to remember that these arrays are a special type that must be documented accordingly, and that numpy array should not be abused. This is because Neuraxle is a library that is not only limited to transforming numpy arrays. To this effect, numpy steps should probably be located in the existing numpy python files as much as possible, and not be all over the place. The same applies to Pandas DataFrames.
 - [ ] Code coverage is above 90% for the added code for the unit tests.
