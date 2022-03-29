@@ -1,7 +1,11 @@
-from typing import Generic, TypeVar, Generic
+import sys
 import typing
+from typing import Generic, TypeVar
+
+import pytest
+from neuraxle.base import (BaseService, BaseStep, MetaStep, MetaStepMixin,
+                           NonFittableMixin)
 from neuraxle.pipeline import Pipeline
-from neuraxle.base import BaseStep, MetaStepMixin, MetaStep, NonFittableMixin, BaseService
 from neuraxle.union import Identity
 
 from testing.mocks.step_mocks import SomeMetaStepWithHyperparams
@@ -42,6 +46,7 @@ def test_subtyping_of_metastep_works_correctly():
     assert isinstance(some_step.get_step(), Identity)
 
 
+@pytest.mark.skipif(sys.version_info < (3, 8), reason="Python 3.8 or more needed")
 def test_typable_mixin_can_hold_type_annotation(tmpdir):
     # Testing the type annotation "MetaStep[MyService]":
     wrapped_service: MetaStep[Identity] = MetaStep(Identity())
