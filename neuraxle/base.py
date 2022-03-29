@@ -404,7 +404,7 @@ class _HasRecursiveMethods:
         """
         return self.apply(method='_getattr', attr_name=attr_name)
 
-    def _getattr(self, attr_name: str) -> RecursiveDict[str, str]:
+    def _getattr(self, attr_name: str) -> 'RecursiveDict[str, str]':
         """
         Get an attribute if it exists, as a RecursiveDict({attr_name: getattr(self, attr_name)}).
         """
