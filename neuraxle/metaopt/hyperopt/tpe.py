@@ -10,7 +10,7 @@ from typing import Any, List, Tuple, Union
 import numpy as np
 from neuraxle.hyperparams.distributions import (
     Choice, DiscreteHyperparameterDistribution, DistributionMixture,
-    HyperparameterDistribution, LogNormal, LogUniform, PriorityChoice,
+    HyperparameterDistribution, PriorityChoice,
     Quantized, LogSpaceDistributionMixin)
 from neuraxle.hyperparams.space import HPSampledValue, HyperparameterSamples
 from neuraxle.metaopt.data.aggregates import Round, Trial

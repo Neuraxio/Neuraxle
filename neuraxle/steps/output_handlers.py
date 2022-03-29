@@ -24,7 +24,7 @@ You can find here output handlers steps that changes especially the data outputs
 
 """
 import copy
-from typing import List, Tuple
+from typing import Tuple
 
 from neuraxle.base import BaseStep
 from neuraxle.base import ExecutionContext as CX

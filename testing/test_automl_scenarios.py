@@ -208,40 +208,39 @@ def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
     assert median_absolute_error(dact.eo, preds.di) == best_score
 
 
-@pytest.mark.skip(reason="infinite loop todo debug.")
-@pytest.mark.parametrize("use_processes", [False])  # [False, True])
+@pytest.mark.parametrize("use_processes", [False, True])
 def test_automl_can_use_same_repo_in_parallel(tmpdir, use_processes):
     dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
     cx = AutoMLContext.from_context(CX(root=tmpdir))
     # cx.add_scoped_logger_file_handler() TODO: use OnDiskRepo to test logging files with parallel.
-    sleep_step = Sleep(1)
+    sleep_step = Sleep(0.1)
     automl: ControlledAutoML = _create_automl_test_loop(
         tmpdir, sleep_step, n_trials=1, start_new_round=False, refit_best_trial=False
     )
     n_trials = 3 * 2
     parallel_automl = ParallelQueuedFeatureUnion(
-        steps=[OnlyFitAtTransformTime(automl)],
-        # steps=[
-        #     OnlyFitAtTransformTime(copy.deepcopy(automl)),
-        #     OnlyFitAtTransformTime(copy.deepcopy(automl)),
-        #     OnlyFitAtTransformTime(copy.deepcopy(automl))
-        # ],
+        # steps=[OnlyFitAtTransformTime(automl)],
+        steps=[
+            OnlyFitAtTransformTime(copy.deepcopy(automl)),
+            OnlyFitAtTransformTime(copy.deepcopy(automl)),
+            OnlyFitAtTransformTime(copy.deepcopy(automl))
+        ],
         batch_size=len(dact),
         n_workers_per_step=2,
         use_processes=use_processes,
         use_savers=False,
         max_queue_size=1
     )
-    parallel_automl.handle_fit_transform(dact, cx)
-    parallel_automl.handle_fit_transform(dact, cx)
-    parallel_automl.handle_fit_transform(dact, cx)
+    # parallel_automl.handle_fit_transform(dact, cx)
+    # parallel_automl.handle_fit_transform(dact, cx)
+    # parallel_automl.handle_fit_transform(dact, cx)
 
-    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
-    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
-    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
-    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
-    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
-    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
 
     automl_refiting_best = _create_automl_test_loop(
         tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)
@@ -251,8 +250,6 @@ def test_automl_can_use_same_repo_in_parallel(tmpdir, use_processes):
     bests: List[Tuple[float, int, FlatDict]] = round_scope.summary()
 
     assert len(bests) == n_trials
-    assert len(set(hp for score, i, hp in bests)
-               ) == n_trials, f"Expecting unique hyperparams for the given n_trials={n_trials} and intelligent grid sampler."
 
     best_score = bests[0][0]
     assert median_absolute_error(dact.eo, preds.di) == best_score

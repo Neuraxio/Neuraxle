@@ -117,12 +117,12 @@ class InDatabaseHyperparamRepository(HyperparamsRepository):
             select = select.where(status=TrialStatus.value)
         res = self._execute(select)
 
-        trials = Round()
+        # trials = Round()
 
-        for row in res:
+        for _ in res:  # loop on rows
             raise NotImplementedError()
-            trial = Trial()
-            trials.append(trial)
+            # trial = Trial()
+            # trials.append(trial)
 
     def _save_trial(self, trial: 'Trial'):
         """

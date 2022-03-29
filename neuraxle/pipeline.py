@@ -25,7 +25,6 @@ This is the core of Neuraxle's pipelines. You can chain steps to call them one a
 """
 import warnings
 from abc import ABC, abstractmethod
-from copy import copy
 from typing import Any, List, Tuple, Union
 
 from neuraxle.base import BaseStep

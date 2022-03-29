@@ -36,7 +36,7 @@ import numpy as np
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.data_container import DIT, EOT, IDT, DACTData
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.data_container import PredsDACT, TrainDACT, ValidDACT
+from neuraxle.data_container import TrainDACT, ValidDACT
 from neuraxle.hyperparams.distributions import (
     ContinuousHyperparameterDistribution, DiscreteHyperparameterDistribution)
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,

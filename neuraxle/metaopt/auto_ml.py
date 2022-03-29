@@ -29,7 +29,7 @@ import gc
 from copy import copy
 from typing import ContextManager, Iterator, List, Optional, Tuple
 
-from neuraxle.base import (CX, BaseService, BaseServiceT, BaseStep, BaseStepT,
+from neuraxle.base import (CX, BaseService, BaseStep, BaseStepT,
                            ExecutionContext, ForceHandleMixin,
                            TruncableService, _HasChildrenMixin)
 from neuraxle.data_container import IDT
