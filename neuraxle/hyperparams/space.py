@@ -63,7 +63,7 @@ ready to be sent to an instance of the pipeline to try and score it, for example
 """
 from collections import OrderedDict
 from copy import deepcopy
-from typing import Any, Dict, Iterable, Union
+from typing import Any, Dict, Generic, Iterable, Union
 
 from neuraxle.hyperparams.distributions import (FixedHyperparameter,
                                                 HPSampledValue,
@@ -79,7 +79,8 @@ FlatDict = 'OrderedDict[str, HPSampledValue]'
 RecursiveDictValue = Union[Any, 'RecursiveDict']
 
 
-class RecursiveDict(OrderedDict, Dict[str, RecursiveDictValue]):
+# class RecursiveDict(OrderedDict[str, RecursiveDictValue]):
+class RecursiveDict(OrderedDict):
     """
     A data structure that provides an interface to access nested dictionaries with "flattened keys", and a few more functions.
 
