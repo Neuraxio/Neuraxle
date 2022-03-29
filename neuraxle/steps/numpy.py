@@ -103,10 +103,10 @@ class NumpyConcatenateOnAxisIfNotEmpty(BaseTransformer):
         :param context: execution context
         :return: transformed data container
         """
-        data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs if len(dc.data_inputs) > 0])
-        data_container = DACT(data_inputs=data_inputs, ids=data_container.ids,
-                                       expected_outputs=data_container.expected_outputs)
-        data_container.set_data_inputs(data_inputs)
+        di = self.transform([dc.data_inputs for dc in data_container.di if len(dc.di) > 0])
+        data_container = DACT(
+            ids=data_container.ids, di=di, eo=data_container.eo)
+        data_container.set_data_inputs(di)
 
         return data_container
 
