@@ -337,7 +337,7 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
     def get_sublocation(self) -> Union[List[SubDataclassT], 'OrderedDict[str, SubDataclassT]']:
         return getattr(self, dataclass_2_subloc_attr[self.__class__])
 
-    def set_sublocation(self, sublocation: Union[List[SubDataclassT], OrderedDict[str, SubDataclassT]]) -> 'BaseDataclass':
+    def set_sublocation(self, sublocation: Union[List[SubDataclassT], 'OrderedDict[str, SubDataclassT]']) -> 'BaseDataclass':
         setattr(self, dataclass_2_subloc_attr[self.__class__], sublocation)
         return self
 
@@ -435,7 +435,7 @@ class DataclassHasOrderedDictMixin:
         ret = super().get_sublocation()
         return ret
 
-    def set_sublocation(self, sublocation: OrderedDict[ScopedLocationAttrStr, SubDataclassT]) -> None:
+    def set_sublocation(self, sublocation: 'OrderedDict[ScopedLocationAttrStr, SubDataclassT]') -> None:
         setattr(self, self._sublocation_attr_name, sublocation)
         self._validate()
 
