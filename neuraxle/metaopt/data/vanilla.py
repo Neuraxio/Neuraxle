@@ -33,6 +33,7 @@ import datetime
 import json
 import logging
 import os
+import typing
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from dataclasses import dataclass, field, fields
@@ -572,7 +573,7 @@ class BaseTrialDataclassMixin:
 
 @dataclass(order=True)
 class RootDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ProjectDataclass']):
-    projects: OrderedDict[str, 'ProjectDataclass'] = field(
+    projects: typing.OrderedDict[str, 'ProjectDataclass'] = field(
         default_factory=lambda: OrderedDict({DEFAULT_PROJECT: ProjectDataclass()}))
 
     @property
@@ -593,7 +594,7 @@ class RootDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ProjectDataclas
 @dataclass(order=True)
 class ProjectDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ClientDataclass']):
     project_name: str = DEFAULT_PROJECT
-    clients: OrderedDict[str, 'ClientDataclass'] = field(
+    clients: typing.OrderedDict[str, 'ClientDataclass'] = field(
         default_factory=lambda: OrderedDict({DEFAULT_CLIENT: ClientDataclass()}))
 
 
@@ -669,7 +670,7 @@ class TrialSplitDataclass(DataclassHasOrderedDictMixin, BaseTrialDataclassMixin,
     TrialSplit object used by AutoML algorithm classes.
     """
     split_number: ScopedLocationAttrInt = 0
-    metric_results: OrderedDict[str, 'MetricResultsDataclass'] = field(default_factory=OrderedDict)
+    metric_results: typing.OrderedDict[str, 'MetricResultsDataclass'] = field(default_factory=OrderedDict)
     # introspection_data: RecursiveDict[str, Number] = field(default_factory=RecursiveDict)
 
     def is_retrain_split(self) -> bool:
@@ -693,7 +694,7 @@ class MetricResultsDataclass(DataclassHasListMixin, BaseDataclass[float]):
         return copy.deepcopy(self)
 
 
-dataclass_2_id_attr: OrderedDict[BaseDataclass, str] = OrderedDict([
+dataclass_2_id_attr: typing.OrderedDict[BaseDataclass, str] = OrderedDict([
     (ProjectDataclass, "project_name"),
     (ClientDataclass, "client_name"),
     (RoundDataclass, "round_number"),
@@ -702,7 +703,7 @@ dataclass_2_id_attr: OrderedDict[BaseDataclass, str] = OrderedDict([
     (MetricResultsDataclass, "metric_name"),
 ])
 
-dataclass_2_subloc_attr: OrderedDict[BaseDataclass, str] = OrderedDict([
+dataclass_2_subloc_attr: typing.OrderedDict[BaseDataclass, str] = OrderedDict([
     (RootDataclass, "projects"),
     (ProjectDataclass, "clients"),
     (ClientDataclass, "rounds"),
@@ -712,7 +713,7 @@ dataclass_2_subloc_attr: OrderedDict[BaseDataclass, str] = OrderedDict([
     (MetricResultsDataclass, "validation_values"),
 ])
 
-dataclass_2_subdataclass: OrderedDict[BaseDataclass, SubDataclassT] = OrderedDict([
+dataclass_2_subdataclass: typing.OrderedDict[BaseDataclass, SubDataclassT] = OrderedDict([
     (RootDataclass, ProjectDataclass),
     (ProjectDataclass, ClientDataclass),
     (ClientDataclass, RoundDataclass),
@@ -722,7 +723,7 @@ dataclass_2_subdataclass: OrderedDict[BaseDataclass, SubDataclassT] = OrderedDic
     (MetricResultsDataclass, None),
 ])
 
-str_2_dataclass: OrderedDict[str, BaseDataclass] = OrderedDict([
+str_2_dataclass: typing.OrderedDict[str, BaseDataclass] = OrderedDict([
     (RootDataclass.__name__, RootDataclass),
     (ProjectDataclass.__name__, ProjectDataclass),
     (ClientDataclass.__name__, ClientDataclass),
