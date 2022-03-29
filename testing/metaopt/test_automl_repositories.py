@@ -1,6 +1,4 @@
 import copy
-from lib2to3.pgen2.pgen import DFAState
-from signal import SIG_DFL
 from typing import Callable, List
 
 import pytest
