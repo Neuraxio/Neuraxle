@@ -678,12 +678,12 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
             return list(self[-1]._dataclass.validation_splits[-1].metric_results.keys())
         return []
 
-    def best_result_summary(self, metric_name: str = None) -> Tuple[float, ScopedLocationAttrInt, 'FlatDict']:
+    def best_result_summary(self, metric_name: str = None) -> Tuple[float, ScopedLocationAttrInt, FlatDict]:
         return self.summary(metric_name)[0]
 
     def summary(
         self, metric_name: str = None
-    ) -> List[Tuple[float, ScopedLocationAttrInt, 'FlatDict']]:
+    ) -> List[Tuple[float, ScopedLocationAttrInt, FlatDict]]:
         """
         Get a summary of the round. Best score is first.
         Values in the returned triplet tuples are: (score, trial_number, hyperparams),
@@ -707,7 +707,7 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
         results = list(sorted(results, reverse=is_reverse))
         return results
 
-    def get_all_hyperparams(self) -> List['FlatDict']:
+    def get_all_hyperparams(self) -> List[FlatDict]:
         """
         Get all hyperparams from all trials.
 

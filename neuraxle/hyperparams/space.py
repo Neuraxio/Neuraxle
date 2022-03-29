@@ -73,7 +73,9 @@ from neuraxle.hyperparams.scipy_distributions import (
 from scipy.stats import rv_continuous, rv_discrete
 from scipy.stats._distn_infrastructure import rv_generic
 
-FlatDict = OrderedDict[str, HPSampledValue]
+
+# FlatDict needs to be a string for python under 3.9 because of the type hint:
+FlatDict = 'OrderedDict[str, HPSampledValue]'
 RecursiveDictValue = Union[Any, 'RecursiveDict']
 
 
@@ -158,7 +160,7 @@ class RecursiveDict(OrderedDict[str, RecursiveDictValue]):
             # Splitted on sep and recursively call getter
             return rec_dict._rec_get(rkey)
 
-    def get_root_leaf_data(self) -> 'FlatDict':
+    def get_root_leaf_data(self) -> FlatDict:
         """
         Returns a dictionary of all the non-recursive elements.
         That is, all the elements that are not RecursiveDict in the
@@ -198,7 +200,7 @@ class RecursiveDict(OrderedDict[str, RecursiveDictValue]):
                 else:
                     yield (pre_key + k, v)
 
-    def to_flat_dict(self) -> 'FlatDict':
+    def to_flat_dict(self) -> FlatDict:
         """
         Returns a FlatDict, that is a totally flatened OrderedDict[str, HPSampledValue],
         with no recursively nested elements, i.e.: {fully__flattened__params: value}.
@@ -207,7 +209,7 @@ class RecursiveDict(OrderedDict[str, RecursiveDictValue]):
             The returned FlatDict is sorted in a new alphabetical order.
 
         """
-        return FlatDict(self.iter_flat())
+        return OrderedDict(self.iter_flat())
 
     def to_nested_dict(self) -> Dict[str, RecursiveDictValue]:
         """
