@@ -158,7 +158,7 @@ class RecursiveDict(OrderedDict[str, RecursiveDictValue]):
             # Splitted on sep and recursively call getter
             return rec_dict._rec_get(rkey)
 
-    def get_root_leaf_data(self) -> FlatDict:
+    def get_root_leaf_data(self) -> 'FlatDict':
         """
         Returns a dictionary of all the non-recursive elements.
         That is, all the elements that are not RecursiveDict in the
@@ -198,7 +198,7 @@ class RecursiveDict(OrderedDict[str, RecursiveDictValue]):
                 else:
                     yield (pre_key + k, v)
 
-    def to_flat_dict(self) -> FlatDict:
+    def to_flat_dict(self) -> 'FlatDict':
         """
         Returns a FlatDict, that is a totally flatened OrderedDict[str, HPSampledValue],
         with no recursively nested elements, i.e.: {fully__flattened__params: value}.
