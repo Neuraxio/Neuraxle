@@ -40,6 +40,7 @@ import copy
 import gc
 import hashlib
 import os
+import typing
 from abc import abstractmethod
 from collections import OrderedDict
 from types import TracebackType
@@ -1180,7 +1181,7 @@ class MetricResults(BaseAggregate[TrialSplit, None, MetricResultsDataclass]):
         return self._dataclass.validation_values
 
 
-aggregate_2_subaggregate: OrderedDict[Type[BaseAggregate], Type[BaseAggregate]] = OrderedDict([
+aggregate_2_subaggregate: typing.OrderedDict[Type[BaseAggregate], Type[BaseAggregate]] = OrderedDict([
     (type(None), Root),
     (Root, Project),
     (Project, Client),
@@ -1191,7 +1192,7 @@ aggregate_2_subaggregate: OrderedDict[Type[BaseAggregate], Type[BaseAggregate]] 
     (MetricResults, type(None)),
 ])
 
-aggregate_2_dataclass: OrderedDict[BaseAggregate, BaseDataclass] = OrderedDict([
+aggregate_2_dataclass: typing.OrderedDict[BaseAggregate, BaseDataclass] = OrderedDict([
     (Root, RootDataclass),
     (Client, ClientDataclass),
     (Round, RoundDataclass),
@@ -1200,7 +1201,7 @@ aggregate_2_dataclass: OrderedDict[BaseAggregate, BaseDataclass] = OrderedDict([
     (TrialSplit, TrialSplitDataclass),
     (MetricResults, MetricResultsDataclass),
 ])
-dataclass_2_aggregate: OrderedDict[BaseDataclass, BaseAggregate] = {
+dataclass_2_aggregate: typing.OrderedDict[BaseDataclass, BaseAggregate] = {
     dc: agg
     for agg, dc in aggregate_2_dataclass.items()
 }
