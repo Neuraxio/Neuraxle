@@ -18,6 +18,7 @@ from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
 from neuraxle.metaopt.auto_ml import ControlledAutoML, DefaultLoop, Trainer
 from neuraxle.metaopt.callbacks import MetricCallback
 from neuraxle.metaopt.data.aggregates import Round
+from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, AutoMLContext,
                                            BaseDataclass, RoundDataclass,
                                            ScopedLocation)
@@ -208,12 +209,12 @@ def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
     assert median_absolute_error(dact.eo, preds.di) == best_score
 
 
-@pytest.mark.parametrize("use_processes", [False, True])
-def test_automl_can_use_same_repo_in_parallel(tmpdir, use_processes):
+def test_automl_can_use_same_repo_in_parallel(tmpdir, use_processes=True):
+    # @pytest.mark.parametrize("use_processes", [False, True])
     dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
-    cx = AutoMLContext.from_context(CX(root=tmpdir))
+    cx = AutoMLContext.from_context(CX(root=tmpdir), repo=HyperparamsOnDiskRepository(tmpdir))
     # cx.add_scoped_logger_file_handler() TODO: use OnDiskRepo to test logging files with parallel.
-    sleep_step = Sleep(0.1)
+    sleep_step = Sleep(0.25)
     automl: ControlledAutoML = _create_automl_test_loop(
         tmpdir, sleep_step, n_trials=1, start_new_round=False, refit_best_trial=False
     )
@@ -225,22 +226,20 @@ def test_automl_can_use_same_repo_in_parallel(tmpdir, use_processes):
             OnlyFitAtTransformTime(copy.deepcopy(automl)),
             OnlyFitAtTransformTime(copy.deepcopy(automl))
         ],
-        batch_size=len(dact),
+        batch_size=int(len(dact) / 2),
         n_workers_per_step=2,
         use_processes=use_processes,
         use_savers=False,
         max_queue_size=1
     )
-    # parallel_automl.handle_fit_transform(dact, cx)
-    # parallel_automl.handle_fit_transform(dact, cx)
-    # parallel_automl.handle_fit_transform(dact, cx)
+    parallel_automl.handle_fit_transform(dact, cx)
 
-    OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
-    OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
-    OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
-    OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
-    OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
-    OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
 
     automl_refiting_best = _create_automl_test_loop(
         tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)

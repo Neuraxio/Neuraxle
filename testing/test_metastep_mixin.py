@@ -3,8 +3,7 @@ import typing
 from typing import Generic, TypeVar
 
 import pytest
-from neuraxle.base import (BaseService, BaseStep, MetaStep, MetaStepMixin,
-                           NonFittableMixin)
+from neuraxle.base import BaseService, MetaStep, NonFittableMixin
 from neuraxle.pipeline import Pipeline
 from neuraxle.union import Identity
 

@@ -381,7 +381,6 @@ class _DividedTPEPosteriors:
     """
 
     def __init__(self, good_trials: HyperparameterDistribution, bad_trials: HyperparameterDistribution):
-        HyperparameterDistribution.__init__(self)
         self.good_trials = good_trials
         self.bad_trials = bad_trials
 
