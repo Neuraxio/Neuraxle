@@ -24,10 +24,13 @@ This module contains steps to perform various feature unions and model stacking,
 
 """
 
+from typing import Tuple
+
 from joblib import Parallel, delayed
 
-from neuraxle.base import BaseStep, TruncableSteps, NamedTupleList, Identity, ExecutionContext, DataContainer, \
-    ForceHandleOnlyMixin, BaseTransformer, NonFittableMixin
+from neuraxle.base import (BaseStep, BaseTransformer, DACT,
+                           CX, ForceHandleOnlyMixin, Identity,
+                           NamedStepsList, NonFittableMixin, TruncableSteps)
 from neuraxle.data_container import ZipDataContainer
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
@@ -58,7 +61,7 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
 
     def __init__(
             self,
-            steps_as_tuple: NamedTupleList,
+            steps_as_tuple: NamedStepsList,
             joiner: BaseTransformer = None,
             n_jobs: int = None,
             backend: str = "threading",
@@ -66,7 +69,7 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
     ):
         """
         Create a feature union.
-        :param steps_as_tuple: the NamedTupleList of steps to process in parallel and to join.
+        :param steps_as_tuple: the NamedStepsList of steps to process in parallel and to join.
         :param joiner: What will be used to join the features. ``NumpyConcatenateInnerFeatures()`` is used by default.
         :param n_jobs: The number of jobs for the parallelized ``joblib.Parallel`` loop in fit and in transform.
         :param backend: The type of parallelization to do with ``joblib.Parallel``. Possible values: "loky", "multiprocessing", "threading", "dask" if you use dask, and more.
@@ -120,10 +123,9 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
                 for _, step in self.steps_as_tuple[:-1]
             ]
 
-        return DataContainer(
+        return DACT(
             data_inputs=data_containers,
-            current_ids=data_container.current_ids,
-            summary_id=data_container.summary_id,
+            ids=data_container.ids,
             expected_outputs=data_container.expected_outputs,
             sub_data_containers=data_container.sub_data_containers
         )
@@ -167,15 +169,15 @@ class ZipFeatures(NonFittableMixin, BaseStep):
         self.concatenate_inner_features = concatenate_inner_features
 
     def transform(self, data_inputs):
-        if any(not isinstance(di, DataContainer) for di in data_inputs):
+        if any(not isinstance(di, DACT) for di in data_inputs):
             raise ValueError("data_inputs given to ZipFeatures must be a list of DataContainer instances")
         data_container = ZipDataContainer.create_from(*data_inputs)
         if self.concatenate_inner_features:
             data_container.concatenate_inner_features()
         return data_container.data_inputs
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
-        if any(not isinstance(di, DataContainer) for di in data_container.data_inputs):
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
+        if any(not isinstance(di, DACT) for di in data_container.data_inputs):
             raise ValueError("data_inputs given to ZipFeatures must be a list of DataContainer instances")
         data_container = ZipDataContainer.create_from(*data_container.data_inputs)
         if self.concatenate_inner_features:
@@ -205,7 +207,7 @@ class AddFeatures(FeatureUnion):
         :class:`~neuraxle.base.BaseStep`
     """
 
-    def __init__(self, steps_as_tuple: NamedTupleList, **kwargs):
+    def __init__(self, steps_as_tuple: NamedStepsList, **kwargs):
         """
         Create a ``FeatureUnion`` where ``Identity`` is the first step so as to also keep
         the inputs to concatenate them to the outputs.
@@ -260,21 +262,21 @@ class ModelStacking(FeatureUnion):
 
     def __init__(
             self,
-            steps_as_tuple: NamedTupleList,
+            steps_as_tuple: NamedStepsList,
             judge: BaseStep,
             **kwargs
     ):
         """
         Perform model stacking. The steps will be merged with a FeatureUnion,
         and the judge will recombine the predictions.
-        :param steps_as_tuple: the NamedTupleList of steps to process in parallel and to join.
+        :param steps_as_tuple: the NamedStepsList of steps to process in parallel and to join.
         :param judge: a BaseStep that will learn to judge the best answer and who to trust out of every parallel steps.
         :param kwargs: Other arguments to send to ``FeatureUnion``.
         """
         super().__init__(steps_as_tuple=steps_as_tuple, **kwargs)
-        self.judge: BaseStep = judge  # TODO: add "other" types of step(s) to TuncableSteps or to another intermediate class. For example, to get their hyperparameters.
+        self.judge: BaseStep = judge
 
-    def _did_fit_transform(self, data_container, context) -> ('BaseStep', DataContainer):
+    def _did_fit_transform(self, data_container, context) -> Tuple['BaseStep', DACT]:
         data_container = super()._did_fit_transform(data_container, context)
 
         fitted_judge, data_container = self.judge.handle_fit_transform(data_container, context)
@@ -282,7 +284,7 @@ class ModelStacking(FeatureUnion):
 
         return data_container
 
-    def _did_fit(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _did_fit(self, data_container: DACT, context: CX) -> DACT:
         """
         Fit the parallel steps on the data. It will make use of some parallel processing.
         Also, fit the judge on the result of the parallel steps.
@@ -299,7 +301,7 @@ class ModelStacking(FeatureUnion):
 
         return data_container
 
-    def _did_transform(self, data_container, context) -> DataContainer:
+    def _did_transform(self, data_container, context) -> DACT:
         """
         Transform the data with the unions. It will make use of some parallel processing.
         Then, use the judge to refine the transformations.

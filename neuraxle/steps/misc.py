@@ -26,15 +26,31 @@ You can find here misc. pipeline steps, for example, callbacks useful for debugg
 
 import time
 from abc import ABC
+from typing import Any, Callable, List, Optional, Tuple
 
+from neuraxle.base import BaseStep, BaseTransformer
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import ForceHandleOnlyMixin, HandleOnlyMixin, MetaStep
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import RecursiveDict
 
 VALUE_CACHING = 'value_caching'
-from typing import List, Any
 
-from neuraxle.base import BaseStep, NonTransformableMixin, ExecutionContext, MetaStep, \
-    HandleOnlyMixin, _FittableStep, BaseTransformer, ForceHandleOnlyMixin
-from neuraxle.data_container import DataContainer
+
+class AssertFalseStep(HandleOnlyMixin, BaseStep):
+    """
+    Assert False upon _transform_data_container and _fit_data_container.
+    """
+
+    def __init__(self, message: str = "This step should not fit nor transform."):
+        BaseStep.__init__(self)
+        self.message: str = message
+
+    def _transform_data_container(self, data_container, context):
+        self._assert(False, self.message, context)
+
+    def _fit_data_container(self, data_container, context):
+        self._assert(False, self.message, context)
 
 
 class BaseCallbackStep(BaseStep, ABC):
@@ -76,7 +92,7 @@ class BaseCallbackStep(BaseStep, ABC):
         """
         self.callback_function(data, *self.more_arguments)
 
-    def fit(self, data_inputs, expected_outputs = None):
+    def fit(self, data_inputs, expected_outputs=None):
         return self
 
     def transform(self, data_inputs):
@@ -106,7 +122,7 @@ class FitCallbackStep(BaseCallbackStep):
 class TransformCallbackStep(BaseCallbackStep):
     """Call a callback method on transform and inverse transform."""
 
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+    def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['BaseStep', Any]:
         self._callback(data_inputs)
 
         if self.transform_function is not None:
@@ -152,8 +168,8 @@ class FitTransformCallbackStep(BaseStep):
 
         self.transform_function = transform_function
         self.more_arguments = more_arguments
-        self.fit_callback_function = fit_callback_function
-        self.transform_callback_function = transform_callback_function
+        self.fit_callback_function: Optional[Callable] = fit_callback_function
+        self.transform_callback_function: Optional[Callable] = transform_callback_function
 
     def fit(self, data_inputs, expected_outputs=None):
         self.fit_callback_function((data_inputs, expected_outputs), *self.more_arguments)
@@ -165,7 +181,7 @@ class FitTransformCallbackStep(BaseStep):
             return self.transform_function(data_inputs)
         return data_inputs
 
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+    def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['BaseStep', Any]:
         self.fit_callback_function((data_inputs, expected_outputs), *self.more_arguments)
         self.transform_callback_function(data_inputs, *self.more_arguments)
         if self.transform_function is not None:
@@ -228,34 +244,36 @@ class CallbackWrapper(HandleOnlyMixin, MetaStep):
         self.fit_callback_function = fit_callback_function
         self.transform_callback_function = transform_callback_function
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_data_container(
+        self, data_container: DACT, context: CX
+    ) -> Tuple['BaseStep', DACT]:
         """
         :param data_container: data container
         :type data_container: DataContainer
         :param context: execution context
         :type context: ExecutionContext
         :return: step, data_container
-        :type: (BaseStep, DataContainer)
         """
         self.fit_callback_function((data_container.data_inputs, data_container.expected_outputs), *self.more_arguments)
         self.wrapped = self.wrapped.handle_fit(data_container, context)
         return self
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(
+        self, data_container: DACT, context: CX
+    ) -> Tuple['BaseStep', DACT]:
         """
         :param data_container: data container
         :type data_container: DataContainer
         :param context: execution context
         :type context: ExecutionContext
         :return: step, data_container
-        :type: (BaseStep, DataContainer)
         """
         self.fit_callback_function((data_container.data_inputs, data_container.expected_outputs), *self.more_arguments)
         self.transform_callback_function(data_container.data_inputs, *self.more_arguments)
         self.wrapped, data_container = self.wrapped.handle_fit_transform(data_container, context)
         return self, data_container
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
         :param data_container: data container
         :type data_container: DataContainer
@@ -267,7 +285,7 @@ class CallbackWrapper(HandleOnlyMixin, MetaStep):
         self.transform_callback_function(data_container.data_inputs, *self.more_arguments)
         return self.wrapped.handle_transform(data_container, context.push(self.wrapped))
 
-    def handle_inverse_transform(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def handle_inverse_transform(self, data_container: DACT, context: CX) -> DACT:
         """
         :param context: execution context
         :type context: ExecutionContext
@@ -278,8 +296,6 @@ class CallbackWrapper(HandleOnlyMixin, MetaStep):
         """
         self.inverse_transform_callback_function(data_container.data_inputs, *self.more_arguments)
         data_container = self.wrapped.handle_inverse_transform(data_container, context.push(self.wrapped))
-        current_ids = self.hash(data_container)
-        data_container.set_current_ids(current_ids)
 
         return data_container
 
@@ -370,15 +386,21 @@ class HandleCallbackStep(ForceHandleOnlyMixin, BaseStep):
         self.handle_fit_transform_callback = handle_fit_transform_callback
         self.handle_transform_callback = handle_transform_callback
 
-    def _fit_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_data_container(
+        self, data_container: DACT, context: CX
+    ) -> Tuple['BaseStep', DACT]:
         self.handle_fit_callback((data_container, context))
         return self, data_container
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(
+        self, data_container: DACT, context: CX
+    ) -> DACT:
         self.handle_transform_callback((data_container, context))
         return data_container
 
-    def _fit_transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> ('BaseStep', DataContainer):
+    def _fit_transform_data_container(
+        self, data_container: DACT, context: CX
+    ) -> Tuple['BaseStep', DACT]:
         self.handle_fit_transform_callback((data_container, context))
         return self, data_container
 

@@ -4,7 +4,7 @@ Pipeline Steps Based on NumPy
 Those steps works with NumPy (np) arrays.
 
 ..
-    Copyright 2019, Neuraxio Inc.
+    Copyright 2021, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -23,13 +23,18 @@ Those steps works with NumPy (np) arrays.
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-from typing import Sequence
+from typing import Iterable, Sequence, Tuple, Union
+
+from neuraxle.base import BaseStep, BaseTransformer
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import ForceHandleMixin, NonFittableMixin
+from neuraxle.data_container import DataContainer as DACT
+from neuraxle.hyperparams.distributions import PriorityChoice
+from neuraxle.hyperparams.space import (HyperparameterSamples,
+                                        HyperparameterSpace)
 
 import numpy as np
 
-from neuraxle.base import ExecutionContext, ForceHandleMixin, BaseTransformer, NonFittableMixin, BaseStep
-from neuraxle.data_container import DataContainer
-from neuraxle.hyperparams.space import HyperparameterSamples
 
 class NumpyFlattenDatum(BaseTransformer):
     def __init__(self):
@@ -62,11 +67,7 @@ class NumpyConcatenateOnAxis(BaseTransformer):
         :return: transformed data container
         """
         data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs])
-        data_container = DataContainer(data_inputs=data_inputs, current_ids=data_container.current_ids,
-                                       expected_outputs=data_container.expected_outputs)
-        data_container.set_data_inputs(data_inputs)
-
-        return data_container
+        return data_container.copy().set_data_inputs(data_inputs)
 
     def transform(self, data_inputs):
         """
@@ -94,7 +95,7 @@ class NumpyConcatenateOnAxisIfNotEmpty(BaseTransformer):
         self.axis = axis
         BaseTransformer.__init__(self)
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext):
+    def _transform_data_container(self, data_container: DACT, context: CX):
         """
         Handle transform.
 
@@ -102,10 +103,10 @@ class NumpyConcatenateOnAxisIfNotEmpty(BaseTransformer):
         :param context: execution context
         :return: transformed data container
         """
-        data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs if len(dc.data_inputs) > 0])
-        data_container = DataContainer(data_inputs=data_inputs, current_ids=data_container.current_ids,
-                                       expected_outputs=data_container.expected_outputs)
-        data_container.set_data_inputs(data_inputs)
+        di = self.transform([dc.data_inputs for dc in data_container.di if len(dc.di) > 0])
+        data_container = DACT(
+            ids=data_container.ids, di=di, eo=data_container.eo)
+        data_container.set_data_inputs(di)
 
         return data_container
 
@@ -162,11 +163,7 @@ class NumpyTranspose(BaseTransformer):
         :return: transformed data container
         """
         data_inputs = self.transform([dc.data_inputs for dc in data_container.data_inputs])
-        data_container = DataContainer(data_inputs=data_inputs, current_ids=data_container.current_ids,
-                                       expected_outputs=data_container.expected_outputs)
-        data_container.set_data_inputs(data_inputs)
-
-        return data_container
+        return data_container.copy().set_data_inputs(data_inputs)
 
     def transform(self, data_inputs):
         return self._transpose(data_inputs)
@@ -218,8 +215,19 @@ class MultiplyByN(BaseTransformer):
         :class:`~neuraxle.base.BaseStep`
     """
 
-    def __init__(self, multiply_by=1):
-        super().__init__(hyperparams=HyperparameterSamples({ 'multiply_by': multiply_by }))
+    def __init__(self, multiply_by: int = 1):
+        super().__init__(hyperparams=HyperparameterSamples({'multiply_by': multiply_by}))
+
+    def with_hp_range(self, multiply_by_hp_range: range) -> 'MultiplyByN':
+        """
+        Specify a range for the hyperparametern "N" to be used as an hyperparameter space.
+
+        :param hp_range: range of the hyperparameter. E.g.: ``range(1, 10)``
+        """
+        self.set_hyperparams_space(HyperparameterSpace({
+            'multiply_by': PriorityChoice(list(multiply_by_hp_range))
+        }))
+        return self
 
     def transform(self, data_inputs):
         if not isinstance(data_inputs, np.ndarray):
@@ -254,7 +262,18 @@ class AddN(BaseTransformer):
     """
 
     def __init__(self, add=1):
-        super().__init__(hyperparams=HyperparameterSamples({'add': add }))
+        super().__init__(hyperparams=HyperparameterSamples({'add': add}))
+
+    def with_hp_range(self, hp_range: Iterable[Union[float, int]]) -> 'AddN':
+        """
+        Specify a range for the hyperparametern "N" to be used as an hyperparameter space.
+
+        :param hp_range: range of the hyperparameter. E.g.: ``range(1, 10)``
+        """
+        self.set_hyperparams_space(HyperparameterSpace({
+            'add': PriorityChoice(list(hp_range))
+        }))
+        return self
 
     def transform(self, data_inputs):
         if not isinstance(data_inputs, np.ndarray):
@@ -371,8 +390,9 @@ class ToNumpy(ForceHandleMixin, BaseTransformer):
         BaseTransformer.__init__(self)
         ForceHandleMixin.__init__(self)
 
-    def _will_process(self, data_container: DataContainer, context: ExecutionContext) -> (
-            DataContainer, ExecutionContext):
+    def _will_process(
+        self, data_container: DACT, context: CX
+    ) -> Tuple[DACT, CX]:
         return data_container.to_numpy(), context
 
 

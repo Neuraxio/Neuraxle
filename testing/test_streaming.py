@@ -3,8 +3,8 @@ import time
 import numpy as np
 import pytest
 
-from neuraxle.base import ExecutionContext
-from neuraxle.data_container import DataContainer, AbsentValuesNullObject
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.data_container import DACT, AbsentValuesNullObject
 from neuraxle.distributed.streaming import SequentialQueuedPipeline, ParallelQueuedFeatureUnion, QueueJoiner
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
@@ -77,8 +77,8 @@ def test_queued_pipeline_with_step_with_process():
         MultiplyByN(2)
     ], batch_size=10, n_workers_per_step=1, max_queue_size=5, use_processes=True)
 
-    data_container = DataContainer(data_inputs=list(range(100)))
-    context = ExecutionContext()
+    data_container = DACT(data_inputs=list(range(100)))
+    context = CX()
 
     outputs = p.handle_transform(data_container, context)
 
@@ -93,8 +93,8 @@ def test_queued_pipeline_with_step_with_threading():
         MultiplyByN(2)
     ], batch_size=10, n_workers_per_step=1, max_queue_size=5, use_processes=False)
 
-    data_container = DataContainer(data_inputs=list(range(100)))
-    context = ExecutionContext()
+    data_container = DACT(data_inputs=list(range(100)))
+    context = CX()
 
     outputs = p.handle_transform(data_container, context)
 
@@ -192,16 +192,14 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_max_queue_size():
     assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
 
 
-@pytest.mark.parametrize("use_processes", [False, True])
-@pytest.mark.parametrize("use_savers", [False, True])
-def test_parallel_queued_parallelize_correctly(tmpdir, use_processes, use_savers):
+def test_parallel_queued_threads_do_parallelize_sleep_correctly(tmpdir):
     sleep_time = 0.01
     p = SequentialQueuedPipeline([
         ('1', 2, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
         ('2', 2, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
         ('3', 2, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
         ('4', 2, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]))
-    ], batch_size=10, use_processes=use_processes, use_savers=use_savers).with_context(ExecutionContext(tmpdir))
+    ], batch_size=10, use_processes=False, use_savers=False).with_context(CX(tmpdir))
 
     a = time.time()
     outputs_streaming = p.transform(list(range(100)))
@@ -299,12 +297,12 @@ def test_queued_pipeline_saving(tmpdir, use_processes, use_savers):
         ('3', 4, 10, FitTransformCallbackStep()),
         ('4', 4, 10, FitTransformCallbackStep()),
     ], n_workers_per_step=4, max_queue_size=10, batch_size=10,
-        use_processes=use_processes, use_savers=use_savers).with_context(ExecutionContext(tmpdir))
+        use_processes=use_processes, use_savers=use_savers).with_context(CX(tmpdir))
 
     # When
     p, _ = p.fit_transform(list(range(200)), list(range(200)))
     p = p.wrapped  # clear execution context wrapper
-    p.save(ExecutionContext(tmpdir))
+    p.save(CX(tmpdir))
     p.apply('clear_callbacks')
 
     # Then
@@ -318,7 +316,7 @@ def test_queued_pipeline_saving(tmpdir, use_processes, use_savers):
     assert len(p[3].wrapped.transform_callback_function.data) == 0
     assert len(p[3].wrapped.fit_callback_function.data) == 0
 
-    p = p.load(ExecutionContext(tmpdir))
+    p = p.load(CX(tmpdir))
 
     assert len(p[0].wrapped.transform_callback_function.data) == 20
     assert len(p[0].wrapped.fit_callback_function.data) == 20
@@ -330,14 +328,17 @@ def test_queued_pipeline_saving(tmpdir, use_processes, use_savers):
     assert len(p[3].wrapped.fit_callback_function.data) == 20
 
 
-def test_queued_pipeline_with_savers(tmpdir):
+@pytest.mark.parametrize("use_processes", [False, True])
+def test_queued_pipeline_with_savers(tmpdir, use_processes: bool):
     # Given
     p = ParallelQueuedFeatureUnion([
         ('1', MultiplyByN(2)),
         ('2', MultiplyByN(2)),
         ('3', MultiplyByN(2)),
         ('4', MultiplyByN(2)),
-    ], n_workers_per_step=1, max_queue_size=10, batch_size=10, use_savers=True).with_context(ExecutionContext(tmpdir))
+    ], n_workers_per_step=1, max_queue_size=10, batch_size=10,
+        use_savers=True, use_processes=use_processes
+    ).with_context(CX(tmpdir))
 
     # When
     outputs = p.transform(list(range(100)))
@@ -351,7 +352,7 @@ class QueueJoinerForTest(QueueJoiner):
         super().__init__(batch_size)
         self.called_queue_joiner = False
 
-    def join(self, original_data_container: DataContainer) -> DataContainer:
+    def join(self, original_data_container: DACT) -> DACT:
         self.called_queue_joiner = True
         super().join(original_data_container)
 

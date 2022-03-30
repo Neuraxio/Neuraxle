@@ -1,7 +1,7 @@
 import numpy as np
 
-from neuraxle.base import ExecutionContext
-from neuraxle.data_container import DataContainer
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import TestOnlyWrapper, TrainOnlyWrapper
 from neuraxle.steps.misc import TapeCallbackFunction, CallbackWrapper
@@ -37,8 +37,8 @@ def test_handle_predict_should_predict_in_test_mode():
     ])
 
     data_container = p.handle_predict(
-        data_container=DataContainer(data_inputs=np.array([1, 1]), expected_outputs=np.array([1, 1])),
-        context=ExecutionContext()
+        data_container=DACT(data_inputs=np.array([1, 1]), expected_outputs=np.array([1, 1])),
+        context=CX()
     )
 
     assert np.array_equal(data_container.data_inputs, np.array([2, 2]))
@@ -51,13 +51,13 @@ def test_handle_predict_should_handle_transform_with_initial_is_train_mode_after
         TestOnlyWrapper(CallbackWrapper(MultiplyByN(2), tape_transform, tape_fit)),
         TrainOnlyWrapper(CallbackWrapper(MultiplyByN(4), tape_transform, tape_fit))
     ])
-    data_container = DataContainer(data_inputs=np.array([1, 1]), expected_outputs=np.array([1, 1]))
+    data_container = DACT(data_inputs=np.array([1, 1]), expected_outputs=np.array([1, 1]))
 
     p.handle_predict(
         data_container=data_container.copy(),
-        context=ExecutionContext()
+        context=CX()
     )
-    data_container = p.handle_transform(data_container, ExecutionContext())
+    data_container = p.handle_transform(data_container, CX())
 
     assert np.array_equal(data_container.data_inputs, np.array([4, 4]))
 

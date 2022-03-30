@@ -1,21 +1,17 @@
+import sys
+import typing
+from typing import Generic, TypeVar
+
+import pytest
+from neuraxle.base import BaseService, MetaStep, NonFittableMixin
 from neuraxle.pipeline import Pipeline
-from neuraxle.base import BaseStep, MetaStepMixin
 from neuraxle.union import Identity
 
 from testing.mocks.step_mocks import SomeMetaStepWithHyperparams
 
 
-class SomeMetaStep(MetaStepMixin, BaseStep):
-    def __init__(self, wrapped: BaseStep):
-        BaseStep.__init__(self)
-        MetaStepMixin.__init__(self, wrapped)
-
-    def transform(self, data_inputs):
-        self.wrapped.transform(data_inputs)
-
-
 def test_metastepmixin_set_train_should_set_train_to_false():
-    p = SomeMetaStep(Pipeline([
+    p = MetaStep(Pipeline([
         Identity()
     ]))
 
@@ -27,7 +23,7 @@ def test_metastepmixin_set_train_should_set_train_to_false():
 
 
 def test_metastepmixin_set_train_should_set_train_to_true():
-    p = SomeMetaStep(Pipeline([
+    p = MetaStep(Pipeline([
         Identity()
     ]))
 
@@ -39,3 +35,26 @@ def test_metastepmixin_set_train_should_set_train_to_true():
 def test_basestep_str_representation_works_correctly():
     output = str(SomeMetaStepWithHyperparams())
     assert output == "SomeMetaStepWithHyperparams(SomeStepWithHyperparams(name='MockStep'), name='SomeMetaStepWithHyperparams')"
+
+
+def test_subtyping_of_metastep_works_correctly():
+    some_step: MetaStep[Identity] = MetaStep(Identity())
+
+    assert issubclass(MetaStep, Generic)
+    assert isinstance(some_step, MetaStep)
+    assert isinstance(some_step.get_step(), Identity)
+
+
+@pytest.mark.skipif(sys.version_info < (3, 8), reason="Python 3.8 or more needed")
+def test_typable_mixin_can_hold_type_annotation(tmpdir):
+    # Testing the type annotation "MetaStep[MyService]":
+    wrapped_service: MetaStep[Identity] = MetaStep(Identity())
+
+    g: Generic = wrapped_service.__orig_bases__[-1]
+    assert isinstance(wrapped_service.get_step(), g.__parameters__[0].__bound__)
+    bt: TypeVar = typing.get_args(g)[0]
+    assert isinstance(wrapped_service.get_step(), bt.__bound__)
+
+    assert isinstance(wrapped_service.get_step(), Identity)
+    assert isinstance(wrapped_service.get_step(), NonFittableMixin)
+    assert isinstance(wrapped_service.get_step(), BaseService)

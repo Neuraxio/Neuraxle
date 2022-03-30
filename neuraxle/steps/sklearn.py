@@ -25,17 +25,19 @@ Those steps works with scikit-learn (sklearn) transformers and estimators.
 """
 import functools
 import inspect
-from typing import Any
+from typing import Any, Tuple
+
+from neuraxle.base import BaseStep
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.hyperparams.distributions import Boolean, LogUniform
+from neuraxle.hyperparams.space import (HyperparameterSamples,
+                                        HyperparameterSpace, RecursiveDict)
+from neuraxle.steps.numpy import NumpyTranspose
+from neuraxle.union import ModelStacking
 
 from sklearn.base import BaseEstimator
 from sklearn.ensemble import BaseEnsemble
 from sklearn.linear_model import Ridge
-
-from neuraxle.base import BaseStep, ExecutionContext
-from neuraxle.hyperparams.distributions import LogUniform, Boolean
-from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
-from neuraxle.steps.numpy import NumpyTranspose
-from neuraxle.union import ModelStacking
 
 
 class SKLearnWrapper(BaseStep):
@@ -64,8 +66,8 @@ class SKLearnWrapper(BaseStep):
             self.partial_fit_kwargs = partial_fit_kwargs
         self.use_predict_proba: bool = use_predict_proba
 
-    def setup(self, context: ExecutionContext = None) -> 'SKLearnWrapper':
-        BaseStep.setup(self, context)
+    def _setup(self, context: CX = None) -> 'SKLearnWrapper':
+        BaseStep._setup(self, context)
         if self.use_partial_fit:
             self.wrapped_sklearn_predictor.fit = functools.partial(self.wrapped_sklearn_predictor.partial_fit,
                                                                    **self.partial_fit_kwargs)
@@ -79,7 +81,7 @@ class SKLearnWrapper(BaseStep):
             if isinstance(params[name], BaseEstimator):
                 del params[name]
 
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+    def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['BaseStep', Any]:
         if hasattr(self.wrapped_sklearn_predictor, 'fit_transform'):
             if expected_outputs is None or len(inspect.getfullargspec(self.wrapped_sklearn_predictor.fit).args) < 3:
                 out = self._sklearn_fit_transform_without_expected_outputs(data_inputs)

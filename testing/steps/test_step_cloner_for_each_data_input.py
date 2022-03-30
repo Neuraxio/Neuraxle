@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 
-from neuraxle.base import ExecutionContext
+from neuraxle.base import ExecutionContext as CX
 from neuraxle.hyperparams.distributions import Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
 from neuraxle.pipeline import Pipeline
@@ -75,7 +75,6 @@ def test_step_cloner_should_inverse_transform():
     expected_outputs = _create_data((2, 2))
 
     p, processed_outputs = p.fit_transform(data_inputs, expected_outputs)
-    p = p.reverse()
 
     assert np.array_equal(processed_outputs, data_inputs * 2)
     inverse_processed_outputs = p.inverse_transform(processed_outputs)
@@ -107,14 +106,13 @@ def test_step_cloner_should_save_sub_steps(tmpdir):
         Pipeline([
             FitCallbackStep(tape),
             MultiplyByN(2)
-        ]),
-        cache_folder_when_no_handle=tmpdir
-    )
+        ])
+    ).with_context(CX(tmpdir))
     data_inputs = _create_data((2, 2))
     expected_outputs = _create_data((2, 2))
     p, processed_outputs = p.fit_transform(data_inputs, expected_outputs)
 
-    p.save(ExecutionContext(tmpdir), full_dump=True)
+    p.save(CX(tmpdir), full_dump=True)
 
     saved_paths = [
         os.path.join(tmpdir, 'StepClonerForEachDataInput/Pipeline[0]/FitCallbackStep/FitCallbackStep.joblib'),
@@ -140,16 +138,15 @@ def test_step_cloner_should_load_sub_steps(tmpdir):
         Pipeline([
             FitCallbackStep(tape),
             MultiplyByN(2)
-        ]),
-        cache_folder_when_no_handle=tmpdir
-    )
+        ])
+    ).with_context(CX(tmpdir))
     data_inputs = _create_data((2, 2))
     expected_outputs = _create_data((2, 2))
-    p, processed_outputs = p.fit_transform(data_inputs, expected_outputs)
+    p, _ = p.fit_transform(data_inputs, expected_outputs)
 
-    p.save(ExecutionContext(tmpdir), full_dump=True)
+    p.save(CX(tmpdir), full_dump=True)
 
-    loaded_step_cloner = ExecutionContext(tmpdir).load('StepClonerForEachDataInput')
+    loaded_step_cloner = CX(tmpdir).load('StepClonerForEachDataInput')
     assert isinstance(loaded_step_cloner.wrapped, Pipeline)
     assert len(loaded_step_cloner.steps_as_tuple) == len(data_inputs)
     assert isinstance(loaded_step_cloner.steps_as_tuple[0][1], Pipeline)

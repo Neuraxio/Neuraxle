@@ -1,19 +1,10 @@
+import pytest
 from py._path.local import LocalPath
 
 
-def test_auto_ml_loop_clean_kara(tmpdir: LocalPath):
+def test_auto_ml_loop_clean_kata(tmpdir: LocalPath):
     from examples.auto_ml.plot_automl_loop_clean_kata import main
-    main()
-
-
-def test_auto_ml_checkpoint(tmpdir: LocalPath):
-    from examples.caching.plot_auto_ml_checkpoint import main
     main(tmpdir)
-
-
-def test_auto_ml_value_caching():
-    from examples.caching.plot_value_caching import main
-    main()
 
 
 def test_easy_rest_api_serving():
@@ -56,11 +47,6 @@ def test_apply():
     main()
 
 
-def test_mutate():
-    from examples.operations.plot_mutate import main
-    main()
-
-
 def test_parallel_streaming():
     from examples.parallel.plot_streaming_pipeline import main
     main()
@@ -79,3 +65,4 @@ def test_boston_housing_regression_with_model_stacking():
 def test_cyclical_feature_engineering():
     from examples.sklearn.plot_cyclical_feature_engineering import predictions
     print(predictions)
+    assert predictions is not None

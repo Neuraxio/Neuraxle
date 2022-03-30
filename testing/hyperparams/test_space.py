@@ -18,10 +18,13 @@ Tests for Hyperparameters Distribution Spaces
     limitations under the License.
 
 """
-
+import copy
 import pytest
+from collections import OrderedDict
+import scipy
 
 from neuraxle.hyperparams.distributions import *
+from neuraxle.hyperparams.scipy_distributions import *
 from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
 
 hyperparams_flat_and_dict_pairs = [
@@ -50,7 +53,7 @@ hyperparams_flat_and_dict_pairs = [
 ]
 
 
-@pytest.mark.parametrize("class_to_test", [RecursiveDict, HyperparameterSamples, HyperparameterSpace])
+@pytest.mark.parametrize("class_to_test", [RecursiveDict, HyperparameterSamples])
 @pytest.mark.parametrize("flat,expected_dic", hyperparams_flat_and_dict_pairs)
 def test_flat_to_dict_hyperparams(flat: dict, expected_dic: dict, class_to_test):
     from_flat_dic = class_to_test(flat)
@@ -63,7 +66,7 @@ def test_flat_to_dict_hyperparams(flat: dict, expected_dic: dict, class_to_test)
     assert from_flat_dic.to_nested_dict() == expected_dic
 
 
-HYPE_SPACE = HyperparameterSpace({
+HYPE_SPACE = HyperparameterSpace(OrderedDict({
     "a__test": Boolean(),
     "a__lr": Choice([0, 1, False, "Test"]),
     "a__b__c": PriorityChoice([0, 1, False, "Test"]),
@@ -73,10 +76,11 @@ HYPE_SPACE = HyperparameterSpace({
     "e__other": LogUniform(0.001, 10),
     "e__alpha": Normal(0.0, 1.0),
     "e__f__g": LogNormal(0.0, 2.0),
-    "p__other_nondistribution_params": "hey",
     "p__could_also_be_as_fixed": FixedHyperparameter("also hey"),
-    "p__its_over_9k": 9001
-})
+    "scipy__poisson": Poisson(1.0, 2.0),
+    "scipy__gaussian": Gaussian(-1, 1),
+    "scipy__scipy__gaussian": scipy.stats.randint(0, 10)
+}))
 
 
 def test_hyperparams_space_rvs_outputs_samples():
@@ -89,3 +93,12 @@ def test_hyperparams_space_rvs_outputs_samples():
     for k, v in samples.iter_flat():
         assert k in space
         assert not isinstance(v, HyperparameterDistribution)
+
+
+@pytest.mark.parametrize("hd", list(HYPE_SPACE.to_flat_dict().values()))
+def test_hyperparams_space_rvs_outputs_in_range(hd: HyperparameterDistribution):
+    for _ in range(20):
+
+        sample = hd.rvs()
+
+        assert sample in hd

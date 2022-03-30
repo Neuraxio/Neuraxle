@@ -63,15 +63,23 @@ ready to be sent to an instance of the pipeline to try and score it, for example
 """
 from collections import OrderedDict
 from copy import deepcopy
+from typing import Any, Dict, Iterable, Union
+import typing
 
+from neuraxle.hyperparams.distributions import (FixedHyperparameter,
+                                                HPSampledValue,
+                                                HyperparameterDistribution)
+from neuraxle.hyperparams.scipy_distributions import (
+    ScipyContinuousDistributionWrapper, ScipyDiscreteDistributionWrapper)
 from scipy.stats import rv_continuous, rv_discrete
 from scipy.stats._distn_infrastructure import rv_generic
 
-from neuraxle.hyperparams.distributions import HyperparameterDistribution
-from neuraxle.hyperparams.scipy_distributions import ScipyDiscreteDistributionWrapper, \
-    ScipyContinuousDistributionWrapper
+
+FlatDict = typing.OrderedDict[str, HPSampledValue]
+RecursiveDictValue = Union[Any, 'RecursiveDict']
 
 
+# class RecursiveDict(OrderedDict[str, RecursiveDictValue]):
 class RecursiveDict(OrderedDict):
     """
     A data structure that provides an interface to access nested dictionaries with "flattened keys", and a few more functions.
@@ -84,7 +92,7 @@ class RecursiveDict(OrderedDict):
 
     This class serves as a base for HyperparameterSamples and HyperparameterSpace
     """
-    DEFAULT_SEPARATOR = '__'
+    DEFAULT_SEPARATOR: str = '__'
 
     def __init__(self, *args, separator=None, **kwds):
 
@@ -128,25 +136,40 @@ class RecursiveDict(OrderedDict):
         """
         return arg, False
 
-    def __getitem__(self, key):
+    def get(self, key) -> RecursiveDictValue:
+        try:
+            return self[key]
+        except KeyError:
+            return self.same_class_new_instance()
+
+    def __getitem__(self, key) -> RecursiveDictValue:
         return self._rec_get(key)
 
-    def _rec_get(self, key):
+    def _rec_get(self, key) -> RecursiveDictValue:
         """
         Split the keys and call getter recursively until we get to the desired element.
         None returns every non-recursive elements.
         """
         if key is None:
-            return dict(filter(lambda x: not isinstance(x[1], RecursiveDict), self.items()))
+            return self.get_root_leaf_data()
+
         lkey, _, rkey = key.partition(self.separator)
-
-        if rkey == "":
-            return OrderedDict.__getitem__(self, lkey)
-
         rec_dict: RecursiveDict = OrderedDict.__getitem__(self, lkey)
-        return rec_dict._rec_get(rkey)
+        if rkey == "":
+            return rec_dict
+        else:
+            # Splitted on sep and recursively call getter
+            return rec_dict._rec_get(rkey)
 
-    def __setitem__(self, key, value):
+    def get_root_leaf_data(self) -> FlatDict:
+        """
+        Returns a dictionary of all the non-recursive elements.
+        That is, all the elements that are not RecursiveDict in the
+        current root OrderedDict.
+        """
+        return dict(filter(lambda x: not isinstance(x[1], RecursiveDict), self.items()))
+
+    def __setitem__(self, key: str, value: RecursiveDictValue):
         lkey, _, rkey = key.partition(self.separator)
         if rkey == "":
             if isinstance(value, dict) and not isinstance(value, RecursiveDict):
@@ -157,24 +180,19 @@ class RecursiveDict(OrderedDict):
                 OrderedDict.__setitem__(self, lkey, self.same_class_new_instance())
             self[lkey][rkey] = value
 
-    def __contains__(self, key) -> bool:
+    def __contains__(self, key: str) -> bool:
         try:
             _ = self[key]
             return True
         except KeyError:
             return False
 
-    def get(self, key):
-        try:
-            return self[key]
-        except KeyError:
-            return self.same_class_new_instance()
-
-    def iter_flat(self, pre_key="", values_only=False):
+    def iter_flat(self, pre_key="", values_only=False) -> Iterable:
         """
         Returns a generator which yield (flatenned_key, value) pairs. value is never a RecursiveDict instance.
+        Keys are sorted, then values are sorted as well.
         """
-        for k, v in self.items():
+        for k, v in sorted(self.items()):
             if isinstance(v, RecursiveDict):
                 yield from v.iter_flat(pre_key + k + self.separator, values_only=values_only)
             else:
@@ -183,13 +201,18 @@ class RecursiveDict(OrderedDict):
                 else:
                     yield (pre_key + k, v)
 
-    def to_flat_dict(self) -> dict:
+    def to_flat_dict(self) -> FlatDict:
         """
-        Returns a dictionary with no recursively nested elements, i.e. {flattened_key -> value}.
-        """
-        return dict(self.iter_flat())
+        Returns a FlatDict, that is a totally flatened OrderedDict[str, HPSampledValue],
+        with no recursively nested elements, i.e.: {fully__flattened__params: value}.
 
-    def to_nested_dict(self) -> dict:
+        .. info::
+            The returned FlatDict is sorted in a new alphabetical order.
+
+        """
+        return OrderedDict(self.iter_flat())
+
+    def to_nested_dict(self) -> Dict[str, RecursiveDictValue]:
         """
         Returns a dictionary counterpart which is still nested but that contains no RecursiveDict.
         """
@@ -200,18 +223,19 @@ class RecursiveDict(OrderedDict):
             out_dict[k] = v
         return out_dict
 
-    def with_separator(self, separator):
+    def with_separator(self, separator: str):
         """
-        Create a new recursive dict that uses the given separator at each level.
-
-        :param separator:
-        :return:
+        Create a new recursive dict (from copy) that uses the given separator at each level.
         """
         return type(self)(
-            separator=separator,
-            **{key: value if not isinstance(value, RecursiveDict) \
-                    else value.with_separator(separator) for key, value in self.items()
+            separator=separator, **{
+                key: value
+                if not isinstance(value, RecursiveDict)
+                else value.with_separator(separator) for key, value in self.items()
             })
+
+    def is_empty(self) -> bool:
+        return len(self) == 0 or len(self.to_flat_dict()) == 0
 
 
 class HyperparameterSamples(RecursiveDict):
@@ -243,14 +267,22 @@ class HyperparameterSpace(RecursiveDict):
     def _patch_arg(self, arg):
         """
         Override of the RecursiveDict's default _patch_arg(arg) method.
+
+        :param arg: arg to patch if needed.
+        :return: (patched_arg, did_patch)
         """
+        did_patch = False
         if hasattr(arg, 'dist') and isinstance(arg.dist, rv_generic):
-            if isinstance(arg.dist, rv_discrete):
-                return ScipyDiscreteDistributionWrapper(arg), True
             if isinstance(arg.dist, rv_continuous):
-                return ScipyContinuousDistributionWrapper(arg), True
-        else:
-            return arg, False
+                arg, did_patch = ScipyContinuousDistributionWrapper(arg), True
+            elif isinstance(arg.dist, rv_discrete):
+                arg, did_patch = ScipyDiscreteDistributionWrapper(arg), True
+        assert isinstance(arg, HyperparameterDistribution), (
+            f"Hyperparameter space's distributions must be a dict of `HyperparameterDistributions`. "
+            f"got `{arg}` of type `{type(arg)}` instead. You might consider using a "
+            f"{FixedHyperparameter.__name__} class like {FixedHyperparameter}({arg}) to have a fixed value."
+        )
+        return arg, did_patch
 
     def rvs(self) -> 'HyperparameterSamples':
         """
@@ -265,7 +297,7 @@ class HyperparameterSpace(RecursiveDict):
             new_items.append((k, v))
         return HyperparameterSamples(new_items)
 
-    # TODO : The following functions aren't used, or tested, anywhere. They should work though.
+    # TODO : The following functions aren't really used, or tested. They should work though.
 
     def nullify(self):
         new_items = []

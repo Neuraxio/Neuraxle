@@ -5,7 +5,7 @@ Usage of AutoML loop, and hyperparams with sklearn models.
 This demonstrates how you can build an AutoML loop that finds the best possible sklearn classifier.
 It also shows you how to add hyperparams to sklearn steps using SKLearnWrapper.
 This example has been derived and simplified from the following repository: https://github.com/Neuraxio/Kata-Clean-Machine-Learning-From-Dirty-Code
-Here, 2D data is fitted, whereas in the original example 3D (sequential / time series) data is preprocessed and then fitted with the same models. 
+Here, 2D data is fitted, whereas in the original example 3D (sequential / time series) data is preprocessed and then fitted with the same models.
 
 ..
     Copyright 2019, Neuraxio Inc.
@@ -25,28 +25,29 @@ Here, 2D data is fitted, whereas in the original example 3D (sequential / time s
 """
 import shutil
 
-from sklearn.datasets import make_classification
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import RidgeClassifier, LogisticRegression
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import train_test_split
-from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier
-
-from neuraxle.hyperparams.distributions import Choice, RandInt, Boolean, LogUniform
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.hyperparams.distributions import (Boolean, Choice, LogUniform,
+                                                RandInt)
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import AutoML, RandomSearchHyperparameterSelectionStrategy, ValidationSplitter, \
-    HyperparamsJSONRepository
+from neuraxle.metaopt.auto_ml import (AutoML, RandomSearchSampler,
+                                      ValidationSplitter)
 from neuraxle.metaopt.callbacks import ScoringCallback
+from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import ChooseOneStepOf
 from neuraxle.steps.numpy import NumpyRavel
 from neuraxle.steps.output_handlers import OutputTransformerWrapper
 from neuraxle.steps.sklearn import SKLearnWrapper
+from sklearn.datasets import make_classification
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression, RidgeClassifier
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier
 
 
-def main():
+def main(tmpdir: str):
     # Define classification models, and hyperparams.
-    # See also HyperparameterSpace documentation : https://www.neuraxle.org/stable/api/neuraxle.hyperparams.space.html#neuraxle.hyperparams.space.HyperparameterSpace
 
     decision_tree_classifier = SKLearnWrapper(
         DecisionTreeClassifier(),
@@ -97,7 +98,7 @@ def main():
     ]).set_name('RandomForestClassifier')
 
     # Define a classification pipeline that lets the AutoML loop choose one of the classifier.
-    # See also ChooseOneStepOf documentation : https://www.neuraxle.org/stable/api/neuraxle.steps.flow.html#neuraxle.steps.flow.ChooseOneStepOf
+    # See also ChooseOneStepOf documentation: https://www.neuraxle.org/stable/api/neuraxle.steps.flow.html#neuraxle.steps.flow.ChooseOneStepOf
 
     pipeline = Pipeline([
         ChooseOneStepOf([
@@ -110,17 +111,17 @@ def main():
     ])
 
     # Create the AutoML loop object.
-    # See also AutoML documentation : https://www.neuraxle.org/stable/api/neuraxle.metaopt.auto_ml.html#neuraxle.metaopt.auto_ml.AutoML
+    # See also AutoML documentation: https://www.neuraxle.org/stable/api/neuraxle.metaopt.auto_ml.html#neuraxle.metaopt.auto_ml.AutoML
 
     auto_ml = AutoML(
         pipeline=pipeline,
-        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
-        validation_splitter=ValidationSplitter(test_size=0.20),
+        hyperparams_optimizer=RandomSearchSampler(),
+        validation_splitter=ValidationSplitter(validation_size=0.20),
         scoring_callback=ScoringCallback(accuracy_score, higher_score_is_better=True),
         n_trials=7,
         epochs=1,
-        hyperparams_repository=HyperparamsJSONRepository(cache_folder='cache'),
-        refit_trial=True,
+        hyperparams_repository=HyperparamsOnDiskRepository(cache_folder=tmpdir),
+        refit_best_trial=True,
         continue_loop_on_error=False
     )
 
@@ -129,16 +130,13 @@ def main():
     X_train, y_train, X_test, y_test = generate_classification_data()
     auto_ml = auto_ml.fit(X_train, y_train)
 
-    # Get the model from the best trial, and make predictions using predict.
-    # See also predict documentation : https://www.neuraxle.org/stable/api/neuraxle.base.html#neuraxle.base.BaseStep.predict
-
-    best_pipeline = auto_ml.get_best_model()
-    y_pred = best_pipeline.predict(X_test)
+    # Get the model from the best trial, and make predictions using predict, as per the `refit_best_trial=True` argument to AutoML.
+    y_pred = auto_ml.predict(X_test)
 
     accuracy = accuracy_score(y_true=y_test, y_pred=y_pred)
     print("Test accuracy score:", accuracy)
 
-    shutil.rmtree('cache')
+    shutil.rmtree(tmpdir)
 
 
 def generate_classification_data():
@@ -163,4 +161,4 @@ def generate_classification_data():
 
 
 if __name__ == '__main__':
-    main()
+    main(CX.get_new_cache_folder())

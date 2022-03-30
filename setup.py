@@ -97,7 +97,8 @@ setup(
         'matplotlib==3.3.4',
         'joblib>=0.13.2',
         'Flask>=1.1.4',
-        'Flask-RESTful>=0.3.7',
+        'Flask-RESTful>=0.3.9',
+        'markupsafe==2.0.1',
     ],
     tests_require=[
         "pytest",

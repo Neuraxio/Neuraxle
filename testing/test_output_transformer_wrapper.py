@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from neuraxle.base import ExecutionContext, BaseTransformer, ForceHandleMixin
-from neuraxle.data_container import DataContainer
+from neuraxle.base import CX, BaseTransformer, ForceHandleMixin
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitCallbackStep, TapeCallbackFunction
@@ -55,10 +55,10 @@ def test_output_transformer_wrapper_should_fit_transform_with_data_inputs_and_ex
     p = OutputTransformerWrapper(Pipeline([MultiplyByN(2), FitCallbackStep(tape)]))
     data_inputs, expected_outputs = _create_data_source((10, 10))
 
-    p, data_container = p.handle_fit_transform(DataContainer(
+    p, data_container = p.handle_fit_transform(DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
-    ), ExecutionContext())
+    ), CX())
 
     assert np.array_equal(data_container.data_inputs, data_inputs)
     assert np.array_equal(data_container.expected_outputs, expected_outputs * 2)
@@ -71,10 +71,10 @@ def test_output_transformer_wrapper_should_transform_with_data_inputs_and_expect
     p = OutputTransformerWrapper(MultiplyByN(2))
     data_inputs, expected_outputs = _create_data_source((10, 10))
 
-    data_container = p.handle_transform(DataContainer(
+    data_container = p.handle_transform(DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
-    ), ExecutionContext())
+    ), CX())
 
     assert np.array_equal(data_container.data_inputs, data_inputs)
     assert np.array_equal(data_container.expected_outputs, expected_outputs * 2)
@@ -96,10 +96,10 @@ def test_input_and_output_transformer_wrapper_should_fit_transform_with_data_inp
     p = InputAndOutputTransformerWrapper(Pipeline([MultiplyByNInputAndOutput(2), FitCallbackStep(tape)]))
     data_inputs, expected_outputs = _create_data_source((10, 10))
 
-    p, data_container = p.handle_fit_transform(DataContainer(
+    p, data_container = p.handle_fit_transform(DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
-    ), ExecutionContext())
+    ), CX())
 
     assert np.array_equal(data_container.data_inputs, data_inputs * 2)
     assert np.array_equal(data_container.expected_outputs, expected_outputs * 2)
@@ -111,10 +111,10 @@ def test_input_and_output_transformer_wrapper_should_transform_with_data_inputs_
     p = InputAndOutputTransformerWrapper(MultiplyByNInputAndOutput(2))
     data_inputs, expected_outputs = _create_data_source((10, 10))
 
-    data_container = p.handle_transform(DataContainer(
+    data_container = p.handle_transform(DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
-    ), ExecutionContext())
+    ), CX())
 
     assert np.array_equal(data_container.data_inputs, data_inputs * 2)
     assert np.array_equal(data_container.expected_outputs, expected_outputs * 2)
@@ -124,6 +124,7 @@ class ChangeLenDataInputs(BaseTransformer):
     """
     This should raise an error because it does not return the same length for data_inputs and expected_outputs
     """
+
     def __init__(self):
         super().__init__()
 
@@ -134,8 +135,9 @@ class ChangeLenDataInputs(BaseTransformer):
 
 class ChangeLenDataInputsAndExpectedOutputs(BaseTransformer):
     """
-    This should raise an error because current_ids are not changed to fit the new length of data_inputs and expected_outputs
+    This should raise an error because ids are not changed to fit the new length of data_inputs and expected_outputs
     """
+
     def __init__(self):
         BaseTransformer.__init__(self)
 
@@ -143,56 +145,57 @@ class ChangeLenDataInputsAndExpectedOutputs(BaseTransformer):
         data_inputs, expected_outputs = data_inputs
         return data_inputs[0:int(len(data_inputs) / 2)], expected_outputs[0:int(len(data_inputs) / 2)]
 
+
 class DoubleData(ForceHandleMixin, BaseTransformer):
     """
     This should double the data given in entry. Expects to be wrapped in an InputAndOutputTransformerWrapper.
     """
+
     def __init__(self):
         BaseTransformer.__init__(self)
         ForceHandleMixin.__init__(self)
 
-    def _transform_data_container(self, data_container: DataContainer, context: ExecutionContext) -> DataContainer:
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         di, eo = data_container.data_inputs
-        return DataContainer(data_inputs=(di[0].tolist()*2, eo[0].tolist()*2),
-                      current_ids=data_container.current_ids*2)
+        return DACT(data_inputs=(di[0].tolist()*2, eo[0].tolist()*2),
+                             ids=data_container.ids*2)
+
 
 def test_input_and_output_transformer_wrapper_should_not_return_a_different_amount_of_data_inputs_and_expected_outputs():
     with pytest.raises(AssertionError):
         p = InputAndOutputTransformerWrapper(ChangeLenDataInputs())
         data_inputs, expected_outputs = _create_data_source((10, 10))
 
-        p.handle_transform(DataContainer(
+        p.handle_transform(DACT(
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
-        ), ExecutionContext())
-
-    # TODO: assert the error message is the right one (something about different length of di and eo)
+        ), CX())
 
 
-def test_input_and_output_transformer_wrapper_should_raise_an_assertion_error_if_current_ids_have_not_been_resampled_correctly():
+def test_input_and_output_transformer_wrapper_should_raise_an_assertion_error_if_ids_have_not_been_resampled_correctly():
     with pytest.raises(AssertionError) as e:
         p = InputAndOutputTransformerWrapper(ChangeLenDataInputsAndExpectedOutputs())
         data_inputs, expected_outputs = _create_data_source((10, 10))
 
-        p.handle_transform(DataContainer(
+        p.handle_transform(DACT(
             data_inputs=data_inputs,
             expected_outputs=expected_outputs
-        ), ExecutionContext())
-    # TODO: assert the error message is the right one (something about cache system and current_ids)
+        ), CX())
+
 
 def test_data_doubler():
     p = InputAndOutputTransformerWrapper(DoubleData())
     data_inputs, expected_outputs = _create_data_source((10, 10))
 
-    out = p.handle_transform(DataContainer(
+    out = p.handle_transform(DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
-    ), ExecutionContext())
+    ), CX())
 
     doubled_length = len(out.data_inputs)
     assert doubled_length == 2*len(data_inputs)
     assert doubled_length == len(out.expected_outputs)
-    assert doubled_length == len(out.current_ids)
+    assert doubled_length == len(out.ids)
 
 
 def _create_data_source(shape):

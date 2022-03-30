@@ -1,9 +1,12 @@
-from neuraxle.base import MetaStep, BaseStep, NonTransformableMixin
-from neuraxle.hyperparams.distributions import RandInt, Boolean
-from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples
+import pytest
+from typing import Callable
+from neuraxle.base import MetaStep, NonTransformableMixin
+from neuraxle.hyperparams.distributions import Boolean, RandInt
+from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace, RecursiveDict
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import StepClonerForEachDataInput
 from testing.test_pipeline import SomeStep
+
 
 SOME_STEP_HP_KEY = 'somestep_hyperparam'
 RAND_INT_SOME_STEP = RandInt(-10, 0)
@@ -24,7 +27,10 @@ HYPE_SAMPLE = HyperparameterSamples({
 
 
 class SomeMetaStep(NonTransformableMixin, MetaStep):
-    pass
+    def __init__(self, wrapped):
+        MetaStep.__init__(self, wrapped)
+        NonTransformableMixin.__init__(self)
+
 
 class SomeStepInverseTransform(SomeStep):
     def fit_transform(self, data_inputs, expected_outputs=None):
@@ -199,6 +205,41 @@ def test_pipeline_should_set_hyperparams():
     assert p[1].hyperparams['hp'] == 3
 
 
+def test_pipeline_should_get_set_config():
+    p = Pipeline([
+        SomeStep().set_name('step_1').set_config({'c2': 2}),
+        SomeStep().set_name('step_2')
+    ])
+
+    p.update_config({
+        'c1': 1,
+        'step_2__c3': 3
+    })
+    remade_config: RecursiveDict = p.get_config()
+
+    assert isinstance(remade_config, RecursiveDict)
+    assert remade_config['c1'] == 1
+    assert remade_config['step_1']['c2'] == 2
+    assert remade_config['step_2']['c3'] == 3
+
+
+def test_pipeline_should_not_set_hyperparams_for_unexisting_step():
+    p = Pipeline([
+        SomeStep().set_name('step_1'),
+        SomeStep().set_name('step_2')
+    ])
+
+    try:
+        p.set_hyperparams({
+            'hp': 1,
+            'step_3__hp': 2
+        })
+    except KeyError:
+        assert True
+    else:
+        assert False, "Should raise KeyError on step_3 that doesn't exist."
+
+
 def test_pipeline_should_get_hyperparams():
     p = Pipeline([
         SomeStep().set_name('step_1'),
@@ -292,6 +333,26 @@ def test_pipeline_should_update_hyperparams_space():
 
     assert p[1].hyperparams_space['hp'].min_included == 6
     assert p[1].hyperparams_space['hp'].max_included == 8
+
+
+@pytest.mark.parametrize('hyperparam_apply_func', [
+    'set_hyperparams_space', 'update_hyperparams_space'
+])
+def test_pipeline_wont_set_hyperparams_space_if_not_distribution_type(hyperparam_apply_func: str):
+    p = Pipeline([
+        SomeStep().set_name('step_1'),
+        SomeStep().set_name('step_2')
+    ])
+    not_a_distribution = [3, 4]  # will throw error.
+    space = {
+        'hp': RandInt(1, 2),
+        'step_1__hp': RandInt(2, 3),
+        'step_2__hp': not_a_distribution
+    }
+    with pytest.raises(AssertionError):
+        hyperparam_apply = getattr(p, hyperparam_apply_func)
+
+        hyperparam_apply(space)
 
 
 def test_meta_step_mixin_should_get_hyperparams():

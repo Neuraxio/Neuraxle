@@ -1,9 +1,8 @@
 import copy
-from typing import Any
+from typing import Any, Tuple
 
 import numpy as np
 import pytest
-
 from neuraxle.base import BaseStep
 from neuraxle.steps.column_transformer import ColumnTransformer
 
@@ -17,7 +16,7 @@ class MultiplyBy2(BaseStep):
         self._add_fitted_data(data_inputs, expected_outputs)
         return self
 
-    def fit_transform(self, data_inputs, expected_outputs=None) -> ('BaseStep', Any):
+    def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['BaseStep', Any]:
         self._add_fitted_data(data_inputs, expected_outputs)
         return self, self.transform(data_inputs)
 

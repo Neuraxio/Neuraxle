@@ -61,7 +61,7 @@ For example, you can build a time series processing pipeline as such:
 .. code:: python
 
     p = Pipeline([
-        TrainOnly(DataShuffler()),
+        TrainOnlyWrapper(DataShuffler()),
         WindowTimeSeries(),
         MiniBatchSequentialPipeline([
             Tensorflow2ModelStep(
@@ -113,7 +113,7 @@ You can also tune your hyperparameters using AutoML algorithms such as the TPE:
             use_linear_forgetting_weights=False,
             number_recent_trial_at_full_weights=25
         ),
-        validation_splitter=ValidationSplitter(test_size=0.20),
+        validation_splitter=ValidationSplitter(validation_size=0.20),
         scoring_callback=ScoringCallback(accuracy_score, higher_score_is_better=True),
         callbacks[
             MetricCallback(f1_score, higher_score_is_better=True),
@@ -122,8 +122,7 @@ You can also tune your hyperparameters using AutoML algorithms such as the TPE:
         ],
         n_trials=7,
         epochs=10,
-        hyperparams_repository=HyperparamsJSONRepository(cache_folder='cache'),
-        refit_trial=True,
+        refit_best_trial=True,
     )
 
     # Load data, and launch AutoML loop !
@@ -131,8 +130,7 @@ You can also tune your hyperparameters using AutoML algorithms such as the TPE:
     auto_ml = auto_ml.fit(X_train, y_train)
 
     # Get the model from the best trial, and make predictions using predict.
-    best_pipeline = auto_ml.get_best_model()
-    y_pred = best_pipeline.predict(X_test)
+    y_pred = auto_ml.predict(X_test)
 
 
 --------------

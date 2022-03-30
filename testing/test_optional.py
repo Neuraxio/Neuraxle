@@ -1,12 +1,12 @@
 import numpy as np
 
 from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.steps.flow import Optional
+from neuraxle.steps.flow import OptionalStep
 from neuraxle.steps.numpy import MultiplyByN
 
 
 def test_optional_should_disable_wrapped_step_when_disabled():
-    p = Optional(MultiplyByN(2), nullified_return_value=[]).set_hyperparams(HyperparameterSamples({
+    p = OptionalStep(MultiplyByN(2), nullified_return_value=[]).set_hyperparams(HyperparameterSamples({
         'enabled': False
     }))
     data_inputs = np.array(list(range(10)))
@@ -17,7 +17,7 @@ def test_optional_should_disable_wrapped_step_when_disabled():
 
 
 def test_optional_should_enable_wrapped_step_when_enabled():
-    p = Optional(MultiplyByN(2), nullified_return_value=[]).set_hyperparams(HyperparameterSamples({
+    p = OptionalStep(MultiplyByN(2), nullified_return_value=[]).set_hyperparams(HyperparameterSamples({
         'enabled': True
     }))
     data_inputs = np.array(list(range(10)))

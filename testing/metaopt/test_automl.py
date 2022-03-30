@@ -1,28 +1,36 @@
+from typing import List
+
 import numpy as np
 import pytest
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.data_container import DataContainer as DACT
+from neuraxle.hyperparams.distributions import FixedHyperparameter, RandInt
+from neuraxle.hyperparams.space import HyperparameterSpace
+from neuraxle.metaopt.auto_ml import AutoML, Trainer
+from neuraxle.metaopt.callbacks import (BestModelCheckpoint,
+                                        EarlyStoppingCallback, MetricCallback,
+                                        ScoringCallback)
+from neuraxle.metaopt.data.aggregates import MetricResults, Round, Trial
+from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
+from neuraxle.metaopt.data.vanilla import AutoMLContext, ScopedLocation
+from neuraxle.metaopt.validation import (GridExplorationSampler,
+                                         KFoldCrossValidationSplitter,
+                                         RandomSearchSampler,
+                                         ValidationSplitter)
+from neuraxle.pipeline import Pipeline
+from neuraxle.steps.flow import ChooseStepElseIdentity
+from neuraxle.steps.numpy import MultiplyByN, NumpyReshape
+from neuraxle.steps.sklearn import SKLearnWrapper
 from sklearn import linear_model
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.metrics import mean_squared_error
 from sklearn.svm import LinearSVC
 from sklearn.utils._testing import ignore_warnings
 
-from neuraxle.base import ExecutionContext
-from neuraxle.data_container import DataContainer
-from neuraxle.hyperparams.distributions import FixedHyperparameter, RandInt
-from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.auto_ml import InMemoryHyperparamsRepository, AutoML, RandomSearchHyperparameterSelectionStrategy, \
-    HyperparamsJSONRepository, \
-    ValidationSplitter, KFoldCrossValidationSplitter, Trainer
-from neuraxle.metaopt.callbacks import MetricCallback, ScoringCallback, EarlyStoppingCallback, BestModelCheckpoint
-from neuraxle.metaopt.trial import Trial, Trials
-from neuraxle.pipeline import Pipeline
-from neuraxle.steps.numpy import MultiplyByN, NumpyReshape
-from neuraxle.steps.sklearn import SKLearnWrapper
-
 
 def test_automl_early_stopping_callback(tmpdir):
     # Given
-    hp_repository = InMemoryHyperparamsRepository(cache_folder=str(tmpdir))
+    cx = AutoMLContext.from_context(CX(tmpdir))
     n_epochs = 10
     max_epochs_without_improvement = 3
     auto_ml = AutoML(
@@ -32,7 +40,7 @@ def test_automl_early_stopping_callback(tmpdir):
             })),
             NumpyReshape(new_shape=(-1, 1)),
         ]),
-        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        hyperparams_optimizer=RandomSearchSampler(),
         validation_splitter=ValidationSplitter(0.20),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
@@ -40,28 +48,29 @@ def test_automl_early_stopping_callback(tmpdir):
             EarlyStoppingCallback(max_epochs_without_improvement)
         ],
         n_trials=1,
-        refit_trial=True,
+        refit_best_trial=True,
         epochs=n_epochs,
-        hyperparams_repository=hp_repository,
         continue_loop_on_error=False
     )
 
     # When
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     expected_outputs = data_inputs * 2
-    auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
+    auto_ml.handle_fit(DACT(data_inputs=data_inputs, expected_outputs=expected_outputs), cx)
 
     # Then
-    trial = hp_repository.trials[0]
-    assert len(trial.validation_splits) == 1
-    validation_scores = trial.validation_splits[0].get_validation_scores()
+    round_scope: Round = cx.with_loc(ScopedLocation.default(0)).load_agg()
+    trial: Trial = round_scope.get_best_trial()
+    assert len(trial._validation_splits) == 1
+    validation_scores = trial._validation_splits[0].metric_result('mse').get_valid_scores()
     nepochs_executed = len(validation_scores)
     assert nepochs_executed == max_epochs_without_improvement + 1
 
 
+@pytest.mark.skip(reason="https://github.com/Neuraxio/Neuraxle/issues/522")
 def test_automl_savebestmodel_callback(tmpdir):
     # Given
-    hp_repository = HyperparamsJSONRepository(cache_folder=tmpdir)
+    cx = AutoMLContext.from_context(CX(tmpdir))
     validation_splitter = ValidationSplitter(0.20)
     auto_ml = AutoML(
         pipeline=Pipeline([
@@ -72,17 +81,16 @@ def test_automl_savebestmodel_callback(tmpdir):
             linear_model.LinearRegression()
         ]),
         validation_splitter=validation_splitter,
-        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        hyperparams_optimizer=RandomSearchSampler(),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
             BestModelCheckpoint()
         ],
         n_trials=3,
         epochs=1,
-        refit_trial=False,
-        hyperparams_repository=hp_repository,
+        refit_best_trial=False,
         continue_loop_on_error=False
-    ).with_context(ExecutionContext(tmpdir))
+    ).with_context(cx)
 
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     expected_outputs = data_inputs * 4
@@ -91,39 +99,38 @@ def test_automl_savebestmodel_callback(tmpdir):
     auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
-    trials: Trials = hp_repository.load_all_trials()
+    trials: Round = cx.with_loc(ScopedLocation.default(0)).load_agg()
     best_trial = trials.get_best_trial()
-    best_trial_score = best_trial.get_validation_score()
-    best_model = best_trial.get_model('best')
-    _, _, _, valid_inputs, valid_outputs, _ = validation_splitter.split(data_inputs=data_inputs, expected_outputs=expected_outputs)
+    best_trial_score = best_trial.get_avg_validation_score()
+    best_model = auto_ml.wrapped.wrapped
+    _, _, _, valid_inputs, valid_outputs, _ = validation_splitter.split(
+        data_inputs=data_inputs, expected_outputs=expected_outputs)
     predicted_output = best_model.predict(*valid_inputs)
     score = mean_squared_error(*valid_outputs, predicted_output)
 
     assert best_trial_score == score
 
 
-def test_automl_with_kfold(tmpdir):
+def test_automl_optional_linreg_mse(tmpdir):
     # Given
-    hp_repository = HyperparamsJSONRepository(cache_folder=tmpdir)
+    cx = AutoMLContext.from_context(CX(tmpdir))
     auto_ml = AutoML(
         pipeline=Pipeline([
-            MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
-                'multiply_by': FixedHyperparameter(2)
-            })),
-            NumpyReshape(new_shape=(-1, 1)),
-            linear_model.LinearRegression()
+            MultiplyByN(2).with_hp_range(range(1, 5)),
+            ChooseStepElseIdentity(
+                Pipeline([NumpyReshape(new_shape=(-1, 1)), linear_model.LinearRegression()]),
+            )
         ]),
         validation_splitter=ValidationSplitter(0.20),
-        hyperparams_optimizer=RandomSearchHyperparameterSelectionStrategy(),
+        hyperparams_optimizer=GridExplorationSampler(10),
         scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
         callbacks=[
             MetricCallback('mse', metric_function=mean_squared_error,
                            higher_score_is_better=False),
         ],
-        n_trials=1,
-        epochs=10,
-        refit_trial=True,
-        hyperparams_repository=hp_repository,
+        n_trials=10,
+        epochs=1,
+        refit_best_trial=True,
         continue_loop_on_error=False
     )
 
@@ -131,26 +138,26 @@ def test_automl_with_kfold(tmpdir):
     expected_outputs = data_inputs * 4
 
     # When
-    auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
+    auto_ml.handle_fit(DACT(di=data_inputs, eo=expected_outputs), cx)
 
     # Then
-    p = auto_ml.get_best_model()
+    p = auto_ml.wrapped
     outputs = p.transform(data_inputs)
     mse = mean_squared_error(expected_outputs, outputs)
 
-    assert mse < 1000
+    assert mse < 1e-10
 
 
 def test_validation_splitter_should_split_data_properly():
     # Given
     data_inputs = np.random.random((4, 2, 2048, 6)).astype(np.float32)
     expected_outputs = np.random.random((4, 2, 2048, 1)).astype(np.float32)
-    splitter = ValidationSplitter(test_size=0.2)
+    splitter = ValidationSplitter(validation_size=0.2)
 
     # When
-    validation_splits = splitter.split_data_container(
-        data_container=DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs),
-        context=ExecutionContext()
+    validation_splits = splitter.split_dact(
+        data_container=DACT(data_inputs=data_inputs, expected_outputs=expected_outputs),
+        context=CX()
     )
     train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 
@@ -179,9 +186,9 @@ def test_kfold_cross_validation_should_split_data_properly():
     splitter = KFoldCrossValidationSplitter(k_fold=4)
 
     # When
-    validation_splits = splitter.split_data_container(
-        data_container=DataContainer(data_inputs=data_inputs, expected_outputs=expected_outputs),
-        context=ExecutionContext()
+    validation_splits = splitter.split_dact(
+        data_container=DACT(data_inputs=data_inputs, expected_outputs=expected_outputs),
+        context=CX()
     )
     train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 
@@ -234,14 +241,14 @@ def test_kfold_cross_validation_should_split_data_properly():
 def test_kfold_cross_validation_should_split_data_properly_bug():
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     expected_outputs = np.array([0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40])
-    data_container = DataContainer(
+    data_container = DACT(
         data_inputs=data_inputs,
         expected_outputs=expected_outputs
     )
     splitter = KFoldCrossValidationSplitter(k_fold=2)
 
     # When
-    validation_splits = splitter.split_data_container(data_container, ExecutionContext())
+    validation_splits = splitter.split_dact(data_container, CX())
 
     train_di, train_eo, validation_di, validation_eo = extract_validation_split_data(validation_splits)
 
@@ -288,7 +295,7 @@ def extract_validation_split_data(validation_splits):
 
 
 @ignore_warnings(category=ConvergenceWarning)
-def test_automl_should_shallow_copy_data_before_each_epoch():
+def test_automl_should_shallow_copy_data_before_each_epoch(tmpdir):
     # see issue #332 https://github.com/Neuraxio/Neuraxle/issues/332
     data_inputs = np.random.randint(0, 100, (100, 3))
     expected_outputs = np.array(np.sum(data_inputs, axis=-1) / 100, dtype=int)
@@ -303,20 +310,19 @@ def test_automl_should_shallow_copy_data_before_each_epoch():
     auto_ml = AutoML(
         p,
         validation_splitter=ValidationSplitter(0.20),
-        refit_trial=True,
+        refit_best_trial=True,
         n_trials=10,
         epochs=1,
-        cache_folder_when_no_handle='cache',
-        scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
-        callbacks=[MetricCallback('mse', metric_function=mean_squared_error, higher_score_is_better=False)],
-        hyperparams_repository=InMemoryHyperparamsRepository(
-            cache_folder='cache'),
+        scoring_callback=ScoringCallback(
+            name='mse',
+            metric_function=mean_squared_error,
+            higher_score_is_better=False),
         continue_loop_on_error=False
     )
 
     random_search = auto_ml.fit(data_inputs, expected_outputs)
 
-    best_model = random_search.get_best_model()
+    best_model = random_search.wrapped
 
     assert isinstance(best_model, Pipeline)
 
@@ -324,6 +330,8 @@ def test_automl_should_shallow_copy_data_before_each_epoch():
 def test_trainer_train():
     data_inputs = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     expected_outputs = data_inputs * 4
+    dact = DACT(di=data_inputs, eo=expected_outputs)
+    ts: Trial = Trial.dummy()
     p = Pipeline([
         MultiplyByN(2).set_hyperparams_space(HyperparameterSpace({
             'multiply_by': FixedHyperparameter(2)
@@ -333,17 +341,15 @@ def test_trainer_train():
     ])
 
     trainer: Trainer = Trainer(
-        epochs=10,
-        scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
-        validation_splitter=ValidationSplitter(test_size=0.20)
+        n_epochs=10,
+        callbacks=[ScoringCallback(mean_squared_error, higher_score_is_better=False)],
+        validation_splitter=ValidationSplitter(validation_size=0.20)
     )
 
-    repo_trial: Trial = trainer.train(pipeline=p, data_inputs=data_inputs,
-                                      expected_outputs=expected_outputs, context=ExecutionContext())
+    trainer.train(p, dact, ts)
+    trained_pipeline = trainer.refit(p, dact, ts)
 
-    trained_pipeline = repo_trial.get_trained_pipeline(split_number=0)
+    outputs = trained_pipeline.transform(data_inputs * 3)
+    mse = mean_squared_error(expected_outputs * 3, outputs)
 
-    outputs = trained_pipeline.transform(data_inputs)
-    mse = mean_squared_error(expected_outputs, outputs)
-
-    assert mse < 1
+    assert mse < 0.01

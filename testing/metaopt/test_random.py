@@ -18,14 +18,16 @@ Tests for Metaopt
     limitations under the License.
 
 """
-import pytest
 import math
+
 import numpy as np
-from neuraxle.metaopt.random import WalkForwardTimeSeriesCrossValidationWrapper, AnchoredWalkForwardTimeSeriesCrossValidationWrapper
+import pytest
+from neuraxle.metaopt.validation import (
+    AnchoredWalkForwardTimeSeriesCrossValidationSplitter,
+    WalkForwardTimeSeriesCrossValidationSplitter)
 
-classic_walforward_parameters = {
+classic_walforward_parameters = [
     # (training_size, validation_size, padding_between_training_and_validation, drop_remainder)
-
     # Pair 1:
     (9, 3, 1, False),
     # Pair 2:
@@ -38,14 +40,18 @@ classic_walforward_parameters = {
     (5, 2, 3, True),
     # Pair 5 (Default Parameters):
     (2, None, 0, False),
-}
+]
 
 
-@pytest.mark.parametrize("training_window_size, validation_window_size, "
-                         "padding_between_training_and_validation, drop_remainder",
-                         classic_walforward_parameters)
-def test_classic_walkforward_crossvalidation_split(training_window_size: int, validation_window_size: int,
-                                                   padding_between_training_and_validation: int, drop_remainder: bool):
+@pytest.mark.parametrize(
+    "training_window_size, validation_window_size, padding_between_training_and_validation, drop_remainder",
+    classic_walforward_parameters)
+def test_classic_walkforward_crossvalidation_split(
+    training_window_size: int,
+    validation_window_size: int,
+    padding_between_training_and_validation: int,
+    drop_remainder: bool
+):
     # Arrange
     # set random seed
     np.random.seed(10)
@@ -74,7 +80,7 @@ def test_classic_walkforward_crossvalidation_split(training_window_size: int, va
 
     # Calculate the size of the remainder
     remainder_size = (time_series_size - training_window_size - padding_between_training_and_validation) % \
-                     validation_window_size_temp
+        validation_window_size_temp
     if remainder_size == 0:
         # Remainder of 0 means the data perfecftly fits in the number of fold and remainder should window_size instead.
         remainder_size = validation_window_size_temp
@@ -85,7 +91,7 @@ def test_classic_walkforward_crossvalidation_split(training_window_size: int, va
         .astype(float)
 
     # Initialize the class to test.
-    step = WalkForwardTimeSeriesCrossValidationWrapper(
+    step = WalkForwardTimeSeriesCrossValidationSplitter(
         validation_window_size=validation_window_size,
         training_window_size=training_window_size,
         padding_between_training_and_validation=padding_between_training_and_validation,
@@ -93,8 +99,8 @@ def test_classic_walkforward_crossvalidation_split(training_window_size: int, va
     )
 
     # Act
-    train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = \
-        step.split(data_inputs, expected_outputs)
+    train_data_inputs, train_expected_outputs, _, validation_data_inputs, validation_expected_outputs, _ = \
+        step.split(data_inputs, None, expected_outputs)
 
     # Assert
     assert len(train_data_inputs) == number_of_fold
@@ -128,9 +134,8 @@ def test_classic_walkforward_crossvalidation_split(training_window_size: int, va
         assert validation_expected_outputs[-1].shape == (batch_size, remainder_size, features_size)
 
 
-anchored_walforward_parameters = {
+anchored_walforward_parameters = [
     # (minimum_training_size, validation_window_size, padding_between_training_and_validation, drop_remainder)
-
     # Pair 1:
     (9, 3, 1, False),
     # Pair 2:
@@ -143,14 +148,18 @@ anchored_walforward_parameters = {
     (5, 2, 3, True),
     # Pair 5 (Default Parameters):
     (2, None, 0, False),
-}
+]
 
 
 @pytest.mark.parametrize(
     "minimum_training_size, validation_window_size, padding_between_training_and_validation, drop_remainder",
     anchored_walforward_parameters)
-def test_anchored_walkforward_crossvalidation_split(minimum_training_size: int, validation_window_size: int,
-                                                    padding_between_training_and_validation: int, drop_remainder: bool):
+def test_anchored_walkforward_crossvalidation_split(
+        minimum_training_size: int,
+        validation_window_size: int,
+        padding_between_training_and_validation: int,
+        drop_remainder: bool
+):
     # Arrange
     # set random seed
     np.random.seed(10)
@@ -179,7 +188,7 @@ def test_anchored_walkforward_crossvalidation_split(minimum_training_size: int, 
 
     # Calculate the size of the remainder
     remainder_size = (time_series_size - minimum_training_size - padding_between_training_and_validation) % \
-                     validation_window_size_temp
+        validation_window_size_temp
     if remainder_size == 0:
         # Remainder of 0 means the data perfectly fits in the number of fold and remainder should window_size instead.
         remainder_size = validation_window_size_temp
@@ -190,7 +199,7 @@ def test_anchored_walkforward_crossvalidation_split(minimum_training_size: int, 
         .astype(float)
 
     # Initialize the class to test.
-    step = AnchoredWalkForwardTimeSeriesCrossValidationWrapper(
+    step = AnchoredWalkForwardTimeSeriesCrossValidationSplitter(
         validation_window_size=validation_window_size,
         minimum_training_size=minimum_training_size,
         padding_between_training_and_validation=padding_between_training_and_validation,
@@ -198,8 +207,8 @@ def test_anchored_walkforward_crossvalidation_split(minimum_training_size: int, 
     )
 
     # Act
-    train_data_inputs, train_expected_outputs, validation_data_inputs, validation_expected_outputs = \
-        step.split(data_inputs, expected_outputs)
+    train_data_inputs, train_expected_outputs, _, validation_data_inputs, validation_expected_outputs, _ = \
+        step.split(data_inputs, None, expected_outputs)
 
     # Assert
     assert len(train_data_inputs) == number_of_fold

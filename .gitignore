@@ -46,6 +46,7 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+prof/
 
 # Translations
 *.mo
@@ -82,6 +83,7 @@ celerybeat-schedule
 *.sage.py
 
 # Environments
+venv
 .env
 .venv
 env/
@@ -106,11 +108,15 @@ venv.bak/
 # IDEs
 .idea
 .vscode
+.style.yapf
 vandelay-py.js
+appmap.yml
+tmp
 
 # Other
+.DS_Store
 ___*
-
+todo.txt
 **cache/**
 **caching/**
 cache/**
@@ -119,4 +125,5 @@ testing/examples/cache/**
 testing/cache/**
 testing/cache/*
 cov.xml
+profile.sh
 

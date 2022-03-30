@@ -1,3 +1,4 @@
+from typing import Callable
 import numpy as np
 import pytest
 
@@ -6,7 +7,7 @@ from neuraxle.hyperparams.distributions import Boolean
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import ChooseOneOrManyStepsOf, ChooseOneStepOf
-from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction, FitTransformCallbackStep
+from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction, FitTransformCallbackStep, AssertFalseStep
 from testing.steps.neuraxle_test_case import NeuraxleTestCase
 
 DATA_INPUTS = np.array(range(10))
@@ -123,7 +124,7 @@ def create_test_case_invalid_step_not_choosen():
 def test_choose_one_or_many_step_of_transform_should_choose_step(
         test_case: NeuraxleTestCase):
     p = test_case.pipeline
-    test =HyperparameterSpace(test_case.hyperparams_space)
+    test = HyperparameterSpace(test_case.hyperparams_space)
     p.set_hyperparams_space(test)
     p.set_hyperparams(test_case.hyperparams)
 
@@ -306,55 +307,62 @@ def test_choose_one_or_many_step_of_fit_should_choose_step(
     assert_callback_data_is_as_expected(test_case)
 
 
-def choose_one_step_single_step_chosen_fit_transform():
+def choose_one_step_single_step_chosen_fit_transform() -> NeuraxleTestCase:
     a_callback = TapeCallbackFunction()
     b_callback = TapeCallbackFunction()
-    c_callback = TapeCallbackFunction()
-    d_callback = TapeCallbackFunction()
+    a_fit_callback = TapeCallbackFunction()
+    b_fit_callback = TapeCallbackFunction()
 
-    return NeuraxleTestCase(
+    t = NeuraxleTestCase(
         pipeline=Pipeline([
             ChooseOneStepOf([
-                ('a', FitTransformCallbackStep(a_callback, c_callback, transform_function=lambda di: di * 2)),
-                ('b', FitTransformCallbackStep(b_callback, d_callback, transform_function=lambda di: di * 2))
+                ('a', Pipeline([
+                    FitTransformCallbackStep(a_callback, a_fit_callback, transform_function=lambda di: di * 2),
+                    AssertFalseStep("passage 'a' should not have been chosen.")
+                ])),
+                ('b', FitTransformCallbackStep(b_callback, b_fit_callback, transform_function=lambda di: di * 2))
             ]),
         ]),
-        callbacks=[a_callback, c_callback, b_callback, d_callback],
+        callbacks=[a_callback, a_fit_callback, b_callback, b_fit_callback],
         expected_callbacks_data=[
+            [],
+            [],
             DATA_INPUTS,
             (DATA_INPUTS, EXPECTED_OUTPUTS),
-            [],
-            []
         ],
         hyperparams={
-            'Pipeline__ChooseOneOrManyStepsOf__choice': 'a'
+            'ChooseOneStepOf__choice': 'b'
         },
         expected_processed_outputs=np.array([0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
     )
+    return t
 
 
 def choose_one_step_single_step_chosen_fit():
     a_callback = TapeCallbackFunction()
     b_callback = TapeCallbackFunction()
-    c_callback = TapeCallbackFunction()
-    d_callback = TapeCallbackFunction()
+    a_fit_callback = TapeCallbackFunction()
+    b_fit_callback = TapeCallbackFunction()
 
     return NeuraxleTestCase(
         pipeline=Pipeline([
             ChooseOneStepOf([
-                ('a', FitTransformCallbackStep(a_callback, c_callback, transform_function=lambda di: di * 2)),
-                ('b', FitTransformCallbackStep(b_callback, d_callback, transform_function=lambda di: di * 2))
+                ('a', Pipeline([
+                    FitTransformCallbackStep(a_callback, a_fit_callback, transform_function=lambda di: di * 2),
+                    AssertFalseStep("passage 'a' should not have been chosen.")
+                ])),
+                ('b', FitTransformCallbackStep(b_callback, b_fit_callback, transform_function=lambda di: di * 2))
             ]),
         ]),
-        callbacks=[a_callback, c_callback, b_callback, d_callback],
+        callbacks=[a_callback, a_fit_callback, b_callback, b_fit_callback],
         expected_callbacks_data=[
             [],
-            (DATA_INPUTS, EXPECTED_OUTPUTS),
             [],
-            []
+            [],
+            (DATA_INPUTS, EXPECTED_OUTPUTS),
         ],
         hyperparams={
-            'ChooseOneOrManyStepsOf__choice': 'a'
+            'ChooseOneStepOf__choice': 'b'
         },
         expected_processed_outputs=np.array([0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
     )
@@ -363,35 +371,35 @@ def choose_one_step_single_step_chosen_fit():
 def choose_one_step_single_step_chosen_transform():
     a_callback = TapeCallbackFunction()
     b_callback = TapeCallbackFunction()
-    c_callback = TapeCallbackFunction()
-    d_callback = TapeCallbackFunction()
+    a_fit_callback = TapeCallbackFunction()
+    b_fit_callback = TapeCallbackFunction()
 
     return NeuraxleTestCase(
         pipeline=Pipeline([
             ChooseOneStepOf([
-                ('a', FitTransformCallbackStep(a_callback, c_callback, transform_function=lambda di: di * 2)),
-                ('b', FitTransformCallbackStep(b_callback, d_callback, transform_function=lambda di: di * 2))
+                ('a', Pipeline([
+                    FitTransformCallbackStep(a_callback, a_fit_callback, transform_function=lambda di: di * 2),
+                    AssertFalseStep("passage 'a' should not have been chosen.")
+                ])),
+                ('b', FitTransformCallbackStep(b_callback, b_fit_callback, transform_function=lambda di: di * 2))
             ]),
         ]),
-        callbacks=[a_callback, c_callback, b_callback, d_callback],
+        callbacks=[a_callback, a_fit_callback, b_callback, b_fit_callback],
         expected_callbacks_data=[
+            [],
+            [],
             DATA_INPUTS,
-            [],
-            [],
             []
         ],
         hyperparams={
-            'ChooseOneOrManyStepsOf__choice': 'a'
+            'ChooseOneStepOf__choice': 'b'
         },
         expected_processed_outputs=np.array([0, 2, 4, 6, 8, 10, 12, 14, 16, 18])
     )
 
 
-@pytest.mark.parametrize('test_case', [
-    choose_one_step_single_step_chosen_fit_transform()
-])
-def test_choose_one_step_of_fit_transform_should_choose_step(
-        test_case: NeuraxleTestCase):
+def test_choose_one_step_of_fit_transform_should_choose_step_b():
+    test_case: NeuraxleTestCase = choose_one_step_single_step_chosen_fit_transform()
     p = test_case.pipeline
     p.set_hyperparams(test_case.hyperparams)
 
@@ -401,10 +409,8 @@ def test_choose_one_step_of_fit_transform_should_choose_step(
     assert_callback_data_is_as_expected(test_case)
 
 
-@pytest.mark.parametrize('test_case', [
-    choose_one_step_single_step_chosen_fit()
-])
-def test_choose_one_step_of_fit_should_choose_step(test_case: NeuraxleTestCase):
+def test_choose_one_step_of_fit_should_choose_step_b():
+    test_case: NeuraxleTestCase = choose_one_step_single_step_chosen_fit()
     p = test_case.pipeline
     p.set_hyperparams(test_case.hyperparams)
 
@@ -413,14 +419,12 @@ def test_choose_one_step_of_fit_should_choose_step(test_case: NeuraxleTestCase):
     assert_callback_data_is_as_expected(test_case)
 
 
-@pytest.mark.parametrize('test_case', [
-    choose_one_step_single_step_chosen_transform()
-])
-def test_choose_one_step_of_fit_should_choose_step(test_case: NeuraxleTestCase):
+def test_choose_one_step_of_transform_should_choose_step_b():
+    test_case: NeuraxleTestCase = choose_one_step_single_step_chosen_transform()
     p = test_case.pipeline
     p.set_hyperparams(test_case.hyperparams)
 
-    p = p.transform(DATA_INPUTS)
+    _ = p.transform(DATA_INPUTS)
 
     assert_callback_data_is_as_expected(test_case)
 
@@ -434,10 +438,12 @@ def test_choose_one_step_of_invalid_chosen_step():
             ]).set_hyperparams({'choice': 'c'}),
         ])
 
+
 @pytest.mark.parametrize("method_name, args, kwargs", [
     ("set_hyperparams", [{'choice': 'b'}], {}),
     ("update_hyperparams", [{'choice': 'b'}], {}),
-    ("apply", ["_update_hyperparams"], {"hyperparams":{'choice': 'b'}}) # This case correspond to the update in an AutoML loop.
+    ("apply", ["_update_hyperparams"], {"hyperparams": {'choice': 'b'}})
+    # This case correspond to the update in an AutoML loop.
 ])
 def test_choose_one_step_of_set_hyperparams(method_name, args, kwargs):
     a_callback = TapeCallbackFunction()
@@ -446,9 +452,9 @@ def test_choose_one_step_of_set_hyperparams(method_name, args, kwargs):
     d_callback = TapeCallbackFunction()
 
     choose_one_step_of = ChooseOneStepOf([
-            ('a', FitTransformCallbackStep(a_callback, c_callback, transform_function=lambda di: di * 2).set_name("step_1")),
-            ('b', FitTransformCallbackStep(b_callback, d_callback, transform_function=lambda di: di * 2).set_name("step_1"))
-        ])
+        ('a', FitTransformCallbackStep(a_callback, c_callback, transform_function=lambda di: di * 2).set_name("step_1")),
+        ('b', FitTransformCallbackStep(b_callback, d_callback, transform_function=lambda di: di * 2).set_name("step_1"))
+    ])
 
     p = Pipeline([
         choose_one_step_of
@@ -481,9 +487,9 @@ def test_choose_one_step_of_update_hyperparams():
     d_callback = TapeCallbackFunction()
 
     choose_one_step_of = ChooseOneStepOf([
-            ('a', FitTransformCallbackStep(a_callback, c_callback, transform_function=lambda di: di * 2).set_name("step_1")),
-            ('b', FitTransformCallbackStep(b_callback, d_callback, transform_function=lambda di: di * 2).set_name("step_1"))
-        ])
+        ('a', FitTransformCallbackStep(a_callback, c_callback, transform_function=lambda di: di * 2).set_name("step_1")),
+        ('b', FitTransformCallbackStep(b_callback, d_callback, transform_function=lambda di: di * 2).set_name("step_1"))
+    ])
 
     p = Pipeline([
         choose_one_step_of

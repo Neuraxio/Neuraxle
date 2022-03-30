@@ -5,13 +5,16 @@ from collections import Counter
 import joblib
 import numpy as np
 import pytest
-from scipy.stats import norm, randint, gamma, uniform
-
 from neuraxle.base import Identity
-from neuraxle.hyperparams.distributions import PriorityChoice
-from neuraxle.hyperparams.scipy_distributions import Gaussian, Histogram, Poisson, RandInt, Uniform, LogUniform, Normal, \
-    LogNormal, Choice, get_index_in_list_with_bool, ScipyDiscreteDistributionWrapper, ScipyContinuousDistributionWrapper
+from neuraxle.hyperparams.distributions import (Choice, LogNormal, LogUniform,
+                                                Normal, PriorityChoice,
+                                                RandInt, Uniform,
+                                                get_index_in_list_with_bool)
+from neuraxle.hyperparams.scipy_distributions import (
+    Gaussian, Histogram, Poisson, ScipyContinuousDistributionWrapper,
+    ScipyDiscreteDistributionWrapper, ScipyLogUniform, StdMeanLogNormal)
 from neuraxle.hyperparams.space import HyperparameterSpace
+from scipy.stats import gamma, norm, randint, uniform
 
 NUM_TRIALS = 100
 
@@ -30,8 +33,9 @@ def test_wrapped_sk_learn_distributions_should_be_able_to_use_sklearn_methods():
     assert np.all(wrapped_sklearn_distribution.ppf([0.0, 0.01, 0.05, 0.1, 1 - 0.10, 1 - 0.05, 1 - 0.01, 1.0], 10))
     assert 8 < wrapped_sklearn_distribution.isf(q=0.5) > 8
     assert wrapped_sklearn_distribution.moment(2) > 50
-    assert wrapped_sklearn_distribution.stats()[0]
-    assert wrapped_sklearn_distribution.stats()[1]
+    stats = wrapped_sklearn_distribution.stats()
+    assert stats[0]
+    assert stats[1]
     assert np.array_equal(wrapped_sklearn_distribution.entropy(), np.array(0.7094692666023363))
     assert wrapped_sklearn_distribution.median()
     assert wrapped_sklearn_distribution.mean() == 5.398942280397029
@@ -44,24 +48,26 @@ def test_wrapped_sk_learn_distributions_should_be_able_to_use_sklearn_methods():
     assert wrapped_sklearn_distribution.support() == (0, 10)
 
 
+HIST_DATA = norm.rvs(size=1000, loc=0, scale=1.5, random_state=123)
+
+
 def test_histogram():
     hist_dist = Histogram(
-        histogram=np.histogram(norm.rvs(size=10000, loc=0, scale=1.5, random_state=123), bins=100),
+        histogram=np.histogram(norm.rvs(size=1000, loc=0, scale=1.5, random_state=123), bins=10),
         null_default_value=0.0
     )
 
     _test_histogram(hist_dist)
 
 
-def _test_histogram(hist_dist):
-    data = norm.rvs(size=10000, loc=0, scale=1.5, random_state=123)
-    assert min(data) <= hist_dist.rvs() <= max(data)
+def _test_histogram(hist_dist: Histogram):
+    assert min(HIST_DATA) <= hist_dist.rvs() <= max(HIST_DATA)
     assert 1.0 > hist_dist.pdf(x=1.0) > 0.0
-    assert hist_dist.pdf(x=np.max(data)) == 0.0
-    assert hist_dist.pdf(x=np.min(data)) < 0.001
-    assert hist_dist.cdf(x=np.max(data)) == 1.0
-    assert 0.55 > hist_dist.cdf(x=np.median(data)) > 0.45
-    assert hist_dist.cdf(x=np.min(data)) == 0.0
+    assert hist_dist.pdf(x=np.max(HIST_DATA)) == 0.0
+    assert hist_dist.pdf(x=np.min(HIST_DATA)) < 0.05
+    assert hist_dist.cdf(x=np.max(HIST_DATA)) == 1.0
+    assert 0.55 > hist_dist.cdf(x=np.median(HIST_DATA)) > 0.45
+    assert hist_dist.cdf(x=np.min(HIST_DATA)) == 0.0
 
 
 def test_continuous_gaussian():
@@ -93,7 +99,7 @@ def test_discrete_poison():
     _test_discrete_poisson(poisson_distribution)
 
 
-def _test_discrete_poisson(poisson_distribution):
+def _test_discrete_poisson(poisson_distribution: Poisson):
     rvs = [poisson_distribution.rvs() for i in range(10)]
     assert not all(x == rvs[0] for x in rvs)
     assert 0.0 <= poisson_distribution.rvs() <= 10.0
@@ -110,37 +116,36 @@ def test_randint():
 
 
 def _test_randint(hd):
-    samples = hd.rvs(size=100)
+    samples = hd.rvs_many(size=100)
     samples_mean = np.abs(np.mean(samples))
+    invprob = 1 / (10 + 10 + 1)
     assert -5.0 < samples_mean < 5.0
     assert min(samples) >= -10.0
     assert max(samples) <= 10.0
     assert hd.pdf(-11) == 0.
-    assert abs(hd.pdf(-10) - 1 / (10 + 10 + 1)) == 0.0023809523809523864
-    assert abs(hd.pdf(0) - 1 / (10 + 10 + 1)) == 0.0023809523809523864
-    assert hd.pdf(5) == 0.05
-    assert abs(hd.pdf(10) - 1 / (10 + 10 + 1)) == 0.047619047619047616
+    assert hd.pdf(-10) == invprob
+    assert hd.pdf(0) == invprob
+    assert hd.pdf(5) == invprob
+    assert hd.pdf(10) == invprob
     assert hd.pdf(11) == 0.
     assert hd.cdf(-10.1) == 0.
-    assert abs(hd.cdf(-10) - 1 / (10 + 10 + 1)) == 0.0023809523809523864
-    assert abs(hd.cdf(0) - (0 + 10 + 1) / (10 + 10 + 1)) == 0.02619047619047621
-    assert abs(hd.cdf(5) - (5 + 10 + 1) / (10 + 10 + 1)) == 0.03809523809523818
+    assert hd.cdf(-10) == invprob
+    assert hd.cdf(5) == 16 * invprob
     assert abs(hd.cdf(10) - 1.) < 1e-6
     assert hd.cdf(10.1) == 1.
     assert hd.min() == -10
     assert hd.mean() == 0
-    assert hd.median() == 0
     assert hd.std() > 2
     assert hd.max() == 10
 
 
 def test_uniform():
-    hd = Uniform(min_included=-10, max_included=10)
+    hd = Uniform(-10, 10)
     _test_uniform(hd)
 
 
 def _test_uniform(hd):
-    samples = hd.rvs(size=100)
+    samples = hd.rvs_many(size=100)
     samples_mean = np.abs(np.mean(samples))
 
     assert samples_mean < 4.0
@@ -155,19 +160,19 @@ def _test_uniform(hd):
 
 
 def test_loguniform():
-    hd = LogUniform(min_included=0.001, max_included=10)
+    hd = ScipyLogUniform(min_included=0.001, max_included=10)
 
     _test_loguniform(hd)
 
 
-def _test_loguniform(hd):
-    samples = hd.rvs(size=100)
-    samples_mean = np.abs(np.mean(samples))
-    assert samples_mean < 1.15  # if it was just uniform, this assert would break.
+def _test_loguniform(hd: ScipyLogUniform):
+    samples = hd.rvs_many(size=100)
+    samples_mean = np.mean(samples)
+    assert samples_mean < 1.5
     assert min(samples) >= 0.001
     assert max(samples) <= 10.0
     assert hd.pdf(0.0001) == 0.
-    assert abs(hd.pdf(2) - 0.054286810237906484) < 1e-6
+    assert abs(hd.pdf(2) - 0.054286810237906484) < 2e-6
     assert hd.pdf(10.1) == 0.
     assert hd.cdf(0.0001) == 0.
     assert abs(hd.cdf(2) - (math.log2(2) - math.log2(0.001)) / (math.log2(10) - math.log2(0.001))) < 1e-6
@@ -187,7 +192,7 @@ def test_normal():
 
 
 def _test_normal(hd):
-    samples = hd.rvs(size=100)
+    samples = hd.rvs_many(size=100)
     samples_mean = np.abs(np.mean(samples))
     assert 0.6 > samples_mean > 0.4
     samples_std = np.std(samples)
@@ -201,7 +206,7 @@ def _test_normal(hd):
 
 
 def test_lognormal():
-    hd = LogNormal(
+    hd = StdMeanLogNormal(
         hard_clip_min=-5,
         hard_clip_max=5,
         log2_space_mean=0.0,
@@ -212,8 +217,8 @@ def test_lognormal():
     _test_lognormal(hd)
 
 
-def _test_lognormal(hd):
-    samples = hd.rvs(size=100)
+def _test_lognormal(hd: StdMeanLogNormal):
+    samples = hd.rvs_many(size=100)
     samples_median = np.median(samples)
     assert -5 < samples_median < 5
     samples_std = np.std(samples)
@@ -226,62 +231,16 @@ def _test_lognormal(hd):
     assert abs(hd.cdf(5.) - 0.8771717397015799) == 0.12282826029842009
 
 
-@pytest.mark.parametrize("ctor", [Choice])
-def test_choice_and_priority_choice(ctor):
-    choice_list = [0, 1, False, "Test"]
-    hd = ctor(choice_list)
-
-    samples = hd.rvs(size=1000)
-    z0 = Counter(samples).get(0)
-    z1 = Counter(samples).get(1)
-    zNone = Counter(samples).get(False)
-    zTest = Counter(samples).get("Test")
-
-    # You'd need to win the lotto for this test to fail. Or a broken random sampler. Or a bug.
-    assert z0 > NUM_TRIALS * 0.2
-    assert z1 > NUM_TRIALS * 0.2
-    assert zNone > NUM_TRIALS * 0.2
-    assert zTest > NUM_TRIALS * 0.2
-
-    assert (hd.pdf(0) - 1 / 4) < 1e-6
-    assert (hd.pdf(1) - 1 / 4) < 1e-6
-    assert (hd.pdf(False) - 1 / 4) < 1e-6
-    assert (hd.pdf("Test") - 1 / 4) < 1e-6
-    assert abs(hd.pdf(0) - 1 / 4) < 1e-6
-    assert abs(hd.pdf(1) - 1 / 4) < 1e-6
-    assert abs(hd.pdf(False) - 1 / 4) < 1e-6
-    assert abs(hd.pdf("Test") - 1 / 4) < 1e-6
-
-    assert abs(hd.cdf(0) - 1 / 4) < 1e-6
-    assert abs(hd.cdf(1) - 2 / 4) < 1e-6
-    assert abs(hd.cdf(False) - 3 / 4) < 1e-6
-    assert hd.cdf("Test") == 1.
-
-    with pytest.raises(ValueError):
-        assert hd.pdf(3) == 0.
-        assert hd.cdf(3) == 0.
-
-    assert hd.min() == 0
-    assert hd.max() == len(choice_list) - 1
-    assert abs(hd.mean() - (len(choice_list) - 1) / 2) < 1e-6
-    assert abs(hd.var() - (len(choice_list) ** 2 - 1) / 12) < 1e-6
-    assert abs(hd.std() - math.sqrt((len(choice_list) ** 2 - 1) / 12)) < 1e-6
-    # Convert samples in sample index
-    samples_index = [get_index_in_list_with_bool(choice_list, sample) for sample in samples]
-    # Verify that hd mean and variance also correspond to mean and variance of sampling.
-    assert abs((hd.mean() - np.mean(samples_index)) / hd.mean()) < 1e-1
-    assert abs((hd.var() - np.var(samples_index)) / hd.var()) < 1e-1
-
-
 @pytest.mark.parametrize("hd, test_method", [
     (RandInt(min_included=-10, max_included=10, null_default_value=0), _test_randint),
-    (LogNormal(hard_clip_min=-5, hard_clip_max=5, log2_space_mean=0.0, log2_space_std=2.0, null_default_value=-1.0), _test_lognormal),
+    (StdMeanLogNormal(hard_clip_min=-5, hard_clip_max=5, log2_space_mean=0.0,
+     log2_space_std=2.0, null_default_value=-1.0), _test_lognormal),
     (Normal(hard_clip_min=0.0, hard_clip_max=1.0, mean=0.5, std=0.2, null_default_value=0.0), _test_normal),
-    (LogUniform(min_included=0.001, max_included=10), _test_loguniform),
+    (ScipyLogUniform(min_included=0.001, max_included=10), _test_loguniform),
     (Uniform(min_included=-10, max_included=10), _test_uniform),
     (Poisson(min_included=0.0, max_included=10.0, null_default_value=0.0, mu=5.0), _test_discrete_poisson),
     (Gaussian(min_included=0, max_included=10, null_default_value=0.0), _test_gaussian),
-    (Histogram(histogram=np.histogram(norm.rvs(size=10000, loc=0, scale=1.5, random_state=123), bins=100), null_default_value=0.0), _test_histogram)
+    (Histogram(histogram=np.histogram(HIST_DATA, bins=10), null_default_value=0.0), _test_histogram)
 ])
 def test_after_serialization(hd, test_method, tmpdir):
     joblib.dump(hd, os.path.join(str(tmpdir), '{}.joblib'.format(hd.__class__.__name__)))
@@ -303,19 +262,29 @@ def test_discrete_probabilities(hd):
     assert sum_probas > 0.98
     assert len(probas) == 11
 
+
 def test_can_set_scipy_distribution():
-    p = Identity().set_hyperparams_space(HyperparameterSpace({
+    space = HyperparameterSpace({
         'rand_int_scipy': randint(low=2, high=5),  # scipy
         'rand_int_neuraxle': RandInt(2, 5),  # neuraxle
         'gamma_scipy': gamma(0.2),  # scipy
-    }))
+    })
 
-    assert isinstance(p.get_hyperparams_space()['rand_int_scipy'], ScipyDiscreteDistributionWrapper)
-    assert isinstance(p.get_hyperparams_space()['gamma_scipy'], ScipyContinuousDistributionWrapper)
-    randint_sample = p.get_hyperparams_space()['rand_int_scipy'].rvs()
-    gamma_sample = p.get_hyperparams_space()['gamma_scipy'].rvs()
-    assert 5 >= randint_sample >= 2
-    assert isinstance(gamma_sample, float)
+    p = Identity().set_hyperparams_space(space)
+
+    rand_int_scipy = p.get_hyperparams_space()['rand_int_scipy']
+    assert isinstance(rand_int_scipy, ScipyDiscreteDistributionWrapper)
+    for _ in range(20):
+        randint_sample = rand_int_scipy.rvs()
+        assert randint_sample in rand_int_scipy
+
+    gamma_scipy = p.get_hyperparams_space()['gamma_scipy']
+    assert isinstance(gamma_scipy, ScipyContinuousDistributionWrapper)
+    for _ in range(20):
+        gamma_sample = gamma_scipy.rvs()
+        assert isinstance(gamma_sample, float)
+        assert gamma_sample in gamma_scipy
+
 
 def test_can_update_scipy_distribution():
     p = Identity().set_hyperparams_space(HyperparameterSpace({
