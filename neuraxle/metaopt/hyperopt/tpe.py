@@ -12,7 +12,7 @@ from neuraxle.hyperparams.distributions import (
     Choice, DiscreteHyperparameterDistribution, DistributionMixture,
     HyperparameterDistribution, PriorityChoice,
     Quantized, LogSpaceDistributionMixin)
-from neuraxle.hyperparams.space import HPSampledValue, HyperparameterSamples
+from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.metaopt.data.aggregates import Round, Trial
 from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
 from neuraxle.metaopt.validation import GridExplorationSampler

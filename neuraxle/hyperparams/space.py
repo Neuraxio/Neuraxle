@@ -64,16 +64,18 @@ ready to be sent to an instance of the pipeline to try and score it, for example
 from collections import OrderedDict
 from copy import deepcopy
 from typing import Any, Dict, Iterable, Union
+import typing
 
 from neuraxle.hyperparams.distributions import (FixedHyperparameter,
+                                                HPSampledValue,
                                                 HyperparameterDistribution)
 from neuraxle.hyperparams.scipy_distributions import (
     ScipyContinuousDistributionWrapper, ScipyDiscreteDistributionWrapper)
 from scipy.stats import rv_continuous, rv_discrete
 from scipy.stats._distn_infrastructure import rv_generic
 
-# FlatDict needs to be a string for python under 3.9 because of the type hint:
-FlatDict = 'OrderedDict[str, HPSampledValue]'
+
+FlatDict = typing.OrderedDict[str, HPSampledValue]
 RecursiveDictValue = Union[Any, 'RecursiveDict']
 
 
