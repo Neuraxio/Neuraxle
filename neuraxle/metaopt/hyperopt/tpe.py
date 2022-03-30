@@ -10,13 +10,12 @@ from typing import Any, List, Tuple, Union
 import numpy as np
 from neuraxle.hyperparams.distributions import (
     Choice, DiscreteHyperparameterDistribution, DistributionMixture,
-    HyperparameterDistribution, PriorityChoice,
-    Quantized, LogSpaceDistributionMixin)
+    HPSampledValue, HyperparameterDistribution, LogSpaceDistributionMixin,
+    PriorityChoice, Quantized)
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.metaopt.data.aggregates import Round, Trial
 from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
 from neuraxle.metaopt.validation import GridExplorationSampler
-
 
 _QUANTIZED_DISTRIBUTION = (Quantized,)
 

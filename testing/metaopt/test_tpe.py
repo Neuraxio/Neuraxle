@@ -5,7 +5,7 @@ from typing import List
 import numpy as np
 import pytest
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.hyperparams.distributions import (Choice, ContinuousHyperparameterDistribution, DiscreteHyperparameterDistribution, DistributionMixture,
+from neuraxle.hyperparams.distributions import (Choice, DistributionMixture,
                                                 HPSampledValue,
                                                 HyperparameterDistribution,
                                                 LogNormal, LogUniform, Normal,
