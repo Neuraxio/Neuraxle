@@ -41,7 +41,6 @@ from json.encoder import JSONEncoder
 from typing import (Any, Dict, Generic, List, Optional, Sequence, Tuple, Type,
                     TypeVar, Union)
 
-import neuraxle.metaopt.data.aggregates as agg
 import numpy as np
 from neuraxle.base import CX, BaseService, ContextLock, TrialStatus
 from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
@@ -1096,4 +1095,7 @@ class AutoMLContext(CX):
         """
         Load the current agg from the repo.
         """
-        return agg.BaseAggregate.from_context(self, is_deep=deep)
+        import neuraxle.metaopt.data.aggregates as agg
+        aggregate: 'agg.BaseAggregate' = agg.BaseAggregate.from_context(
+            self, is_deep=deep)
+        return aggregate
