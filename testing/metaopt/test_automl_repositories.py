@@ -3,6 +3,7 @@ from typing import Callable, List
 
 import pytest
 from neuraxle.base import CX, synchroneous_flow_method
+# from neuraxle.metaopt.data.db_hp_repo import DatabaseHyperparamRepository
 from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            AutoMLContext, BaseDataclass,
@@ -33,7 +34,13 @@ def disk_repo_ctor(tmpdir: TmpDir = None) -> AutoMLContext:
     return AutoMLContext.from_context(cx, repo=HyperparamsOnDiskRepository(tmpdir))
 
 
-CX_WITH_REPO_CTORS: List[Callable[[TmpDir], AutoMLContext]] = [vanilla_repo_ctor, disk_repo_ctor]
+def db_repo_ctor(tmpdir: TmpDir = None) -> AutoMLContext:
+    cx = CX()
+    tmpdir = tmpdir or cx.get_new_cache_folder()
+    return AutoMLContext.from_context(cx, repo=DatabaseHyperparamRepository(tmpdir))
+
+
+CX_WITH_REPO_CTORS: List[Callable[[TmpDir], AutoMLContext]] = [vanilla_repo_ctor, disk_repo_ctor]  # , db_repo_ctor]
 
 
 @pytest.mark.parametrize('cx_repo_ctor', CX_WITH_REPO_CTORS)

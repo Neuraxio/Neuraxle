@@ -3,14 +3,6 @@ Neuraxle's SQLAlchemy Hyperparameter Repository Classes
 =================================================
 Data objects and related repositories used by AutoML, SQL version.
 
-Classes are splitted like this for the AutoML:
-- Projects
-- Clients
-- Rounds (runs)
-- Trials
-- TrialSplits
-- MetricResults
-
 ..
     Copyright 2021, Neuraxio Inc.
 
@@ -82,7 +74,7 @@ metrics_measurements = Table(
 )
 
 
-class InDatabaseHyperparamRepository(HyperparamsRepository):
+class DatabaseHyperparamRepository(HyperparamsRepository):
     def __init__(self, db_path):
         self.engine = create_engine(db_path, echo=True)
 
