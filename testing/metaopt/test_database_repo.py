@@ -1,137 +1,90 @@
 # from neuraxle.metaopt.data.db_hp_repo import DatabaseHyperparamRepository
 
 import os
+from dataclasses import dataclass
 
+from neuraxle.metaopt.data.db_hp_repo import (Base, ClientNode,
+                                              DatabaseHyperparamRepository,
+                                              DataClassNode, ProjectNode,
+                                              ScopedLocationTreeNode,
+                                              SQLLiteHyperparamsRepository)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            ClientDataclass, ProjectDataclass,
-                                           RootDataclass, to_json)
+                                           RootDataclass, ScopedLocation,
+                                           to_json)
 from sqlalchemy import (TEXT, Column, ForeignKey, Integer, String, Table, and_,
                         create_engine)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import backref, relationship, sessionmaker
+from sqlalchemy.orm.collections import attribute_mapped_collection
+from sqlalchemy.schema import Sequence
 from sqlalchemy.sql import asc, desc, func
+from testing.metaopt.test_automl_dataclasses import SOME_PROJECT_DATACLASS
 
 
-def test_sqlalchemy_sqllite(tmpdir):
-
-    Base = declarative_base()
-
-    project_client = Table(
-        "project_round",
-        Base.metadata,
-        Column("project_name", String, ForeignKey("project.project_name")),
-        Column("client_name", String, ForeignKey("client.client_name")),
-    )
-
-    # client_round = Table(
-    #     "client_round",
-    #     Base.metadata,
-    #     Column("client_name", String, ForeignKey("client.client_name")),
-    #     Column("round_number", Integer, ForeignKey("round.round_number")),
-    # )
-
-    class Project(Base):
-        __tablename__ = "project"
-        project_name = Column(String, primary_key=True)
-        clients = relationship(
-            "Client", secondary=project_client  # , back_populates="parent_project"
-        )
-
-    class Client(Base):
-        __tablename__ = "client"
-        project_name = Column(String, primary_key=True)
-        client_name = Column(String, primary_key=True)
-        # rounds = relationship(
-        #     "Round", secondary=client_round, back_populates="parent_client"
-        # )
-
-    # class Round(Base):
-    #     __tablename__ = "round"
-    #     round_number = Column(Integer, primary_key=True)
-    #     main_metric_name = Column(String)
-    #
-    #     # projects = relationship(
-    #     #     "Project", secondary=project_client, back_populates="rounds"
-    #     # )
-    #     # clients = relationship(
-    #     #     "Client", secondary=client_round, back_populates="rounds"
-    #     # )
-
+def get_sqlite_session_with_root(tmpdir):
     sqlite_filepath = os.path.join(tmpdir, "sqlite.db")
-    engine = create_engine(f"sqlite:///{sqlite_filepath}")
-    Session = sessionmaker()
-    Session.configure(bind=engine)
-    session = Session()
-    Base.metadata.create_all(engine)
-
-    session.commit()
-    client = Client(project_name="default_project", client_name="default_client")
-    session.add(client)
-    session.commit()
-    proj = Project(project_name="default_project")
-    proj.clients.append(client)
-    session.add(proj)
-    session.commit()
-
-    q = session.query(
-        Project.project_name, Client.client_name
-    )
-    print(q)
-    # q = session.query(
-    #     Project.project_name, Client.client_name,  # func.count(Round.main_metric_name).label("metrics_count")
-    # ).join(Project.clients)  # .order_by(asc("metrics_count"))
-    # print(q)
-
-
-def test_sqlalchemy_sqllite_starshema(tmpdir):
-
-    Base = declarative_base()
-
-    class AutoDataTable(Base):
-        __tablename__ = "autodatatable"
-
-        project_name = Column(String, primary_key=True, nullable=True, default=None)  # DEFAULT_PROJECT
-        client_name = Column(String, primary_key=True, nullable=True, default=None)  # DEFAULT_CLIENT
-        round_number = Column(Integer, primary_key=True, nullable=True, default=None)
-        trial_number = Column(Integer, primary_key=True, nullable=True, default=None)
-        split_number = Column(Integer, primary_key=True, nullable=True, default=None)
-        metric_name = Column(String, primary_key=True, nullable=True, default=None)
-
-        dataclass = Column(String)
-
-    sqlite_filepath = os.path.join(tmpdir, "sqlite.db")
-    engine = create_engine(f"sqlite:///{sqlite_filepath}")
+    engine = create_engine(f"sqlite:///{sqlite_filepath}", echo=True, future=True)
     Session = sessionmaker()
     Session.configure(bind=engine)
     session = Session()
     Base.metadata.create_all(engine)
     session.commit()
 
-    # root = AutoDataTable()
-    # root.dataclass = to_json(RootDataclass().shallow())
-    # session.add(root)
-    # session.commit()
+    root_dcn = DataClassNode(id="root")
+    root = ScopedLocationTreeNode(root_dcn, ScopedLocation(), None)
+    session.add(root)
 
-    proj = AutoDataTable(
-        project_name="default_project",
-    )
-    proj.dataclass = to_json(ProjectDataclass().shallow())
-    session.add(proj)
+    session.commit()
+    return session, root
+
+
+def test_sqlalchemy_sqllite_nodes_star_shema_joins(tmpdir):
+    session, root = get_sqlite_session_with_root(tmpdir)
+
+    def_proj = ProjectNode(id="def_proj")
+    session.add(def_proj)
+    session.commit()
+    project = ScopedLocationTreeNode(def_proj, ScopedLocation("def_proj"), parent=root)
+    session.add(project)
     session.commit()
 
-    client = AutoDataTable(
-        project_name="default_project",
-        client_name="default_client",
-    )
-    client.dataclass = to_json(ClientDataclass().shallow())
+    def_client = ClientNode(id="def_client")
+    session.add(def_client)
+    session.commit()
+    client = ScopedLocationTreeNode(def_client, ScopedLocation("def_proj", "def_client"), parent=project)
     session.add(client)
     session.commit()
 
+    session.expunge_all()
     q = session.query(
-        AutoDataTable.project_name, AutoDataTable.client_name
+        ScopedLocationTreeNode.project_name, ScopedLocationTreeNode.client_name
     )
-    print(q)
-    # q = session.query(
-    #     Project.project_name, Client.client_name,  # func.count(Round.main_metric_name).label("metrics_count")
-    # ).join(Project.clients)  # .order_by(asc("metrics_count"))
-    # print(q)
+    assert q[0] == (None, None)
+    assert q[1] == ("def_proj", None)
+    assert q[2] == ("def_proj", "def_client")
+
+
+def test_root_db_node_can_be_queried(tmpdir):
+    session = get_sqlite_session_with_root(tmpdir)[0]
+
+    root_tree_node = session.query(ScopedLocationTreeNode).filter(
+        and_(*[
+            getattr(ScopedLocationTreeNode, attr) == None
+            for attr in ScopedLocation.__dataclass_fields__
+        ])
+    ).one()
+
+    assert root_tree_node.project_name is None
+    assert root_tree_node.client_name is None
+    assert root_tree_node.round_number is None
+
+
+def test_can_use_sqlite_db_repo_to_save_and_load_and_overwrite_simple_project(tmpdir):
+    repo = SQLLiteHyperparamsRepository(tmpdir)
+    project: ProjectDataclass = SOME_PROJECT_DATACLASS
+    project_loc = ScopedLocation.default().at_dc(project)
+
+    repo.save(project, project_loc)
+    project_reloaded = repo.load(project_loc)
+    repo.save(project_reloaded, project_loc)
