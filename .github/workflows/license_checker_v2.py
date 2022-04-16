@@ -12,7 +12,7 @@ parser.add_argument('--dependencies', nargs='+', required=True,
                     help="A list of python library name you want to check the license of.")
 parser.add_argument('--accepted_licenses', nargs='*',
                     help="A list of license which are considered acceptable for your project.",
-                    default=["Apache Software License", "Apache 2.0", "BSD", "ZLIB", "MIT", "Unlicense", "CC0", "CC-BY","PSF", "MPL", "Mozilla Public License 2.0", "Historical Permission Notice and Disclaimer", "HPND"])
+                    default=["Apache Software License", "Apache 2.0", "BSD", "ZLIB", "MIT", "Unlicense", "CC0", "CC-BY", "PSF", "MPL", "Mozilla Public License 2.0", "Historical Permission Notice and Disclaimer", "HPND", "LGPL"])
 parser.add_argument('--forbidden_licenses', nargs='*',
                     help="A list of license which are considered problematic for your project.",
                     default=["GNU", "GPL", "Commons Clause", "BY-N"])
@@ -64,9 +64,11 @@ for library_name in python_dependencies:
         print(f"{library_name}: {library_license}")
         # First checks if its refused_licenses, then if its in accepted_licenses, else add in the maybe list
 
-        if is_license_in_list(library_license, args.forbidden_licenses):
+        is_forbidden = is_license_in_list(library_license, args.forbidden_licenses)
+        is_accepted = is_license_in_list(library_license, args.accepted_licenses)
+        if is_forbidden and not is_accepted:
             refused_libraries.append(library_name)
-        elif is_license_in_list(library_license, args.accepted_licenses):
+        elif is_accepted and not is_forbidden:
             accepted_libraries.append(library_name)
         else:
             maybe_libraries.append(library_name)
