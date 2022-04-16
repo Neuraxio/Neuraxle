@@ -535,7 +535,7 @@ class BaseTrialDataclassMixin:
     hyperparams: HyperparameterSamples = field(default_factory=HyperparameterSamples)
     status: TrialStatus = TrialStatus.PLANNED
     created_time: datetime.datetime = field(default_factory=datetime.datetime.now)
-    start_time: datetime.datetime = field(default_factory=datetime.datetime.now)
+    start_time: datetime.datetime = None
     end_time: datetime.datetime = None
     # error: str = None
     # error_traceback: str = None
@@ -566,6 +566,8 @@ class BaseTrialDataclassMixin:
     def end(self, status: TrialStatus) -> 'BaseTrialDataclassMixin':
         self.status = status
         self.end_time = datetime.datetime.now()
+        if self.start_time is None:
+            self.start_time = self.created_time
         self._validate()
         return self
 

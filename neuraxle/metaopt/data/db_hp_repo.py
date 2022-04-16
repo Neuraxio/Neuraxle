@@ -20,6 +20,7 @@ Data objects and related repositories used by AutoML, SQL version.
 
 
 """
+from email.policy import default
 import os
 import typing
 from dataclasses import dataclass
@@ -39,7 +40,7 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_METRIC_NAME,
                                            TrialSplitDataclass,
                                            dataclass_2_id_attr, to_json)
 from sqlalchemy import (TEXT, Boolean, Column, DateTime, Float, ForeignKey,
-                        Integer, MetaData, PickleType, String, Table, and_,
+                        Integer, MetaData, JSON, String, Table, and_,
                         create_engine)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import (backref, declarative_mixin, relationship,
@@ -236,7 +237,16 @@ class RoundNode(DataClassNode):
         return RoundDataclass(round_number=self.round_number, main_metric_name=self.main_metric_name)
 
 
-class TrialNode(DataClassNode):
+@declarative_mixin
+class BaseTrialNodeMixin:
+    hyperparams = Column(JSON, nullable=False, default=dict)
+    status = Column(String, nullable=False, default=TrialStatus.PLANNED)
+    created_time = Column(DateTime, nullable=False, default=func.now())
+    start_time = Column(DateTime, nullable=True, default=func.now())
+    end_time = Column(DateTime, nullable=True)
+
+
+class TrialNode(BaseTrialNodeMixin, DataClassNode):
     __tablename__ = 'trial'
     id = Column(String, ForeignKey('dataclassnode.tree_id'), primary_key=True)
     trial_number = Column(Integer, nullable=False, default=0)
@@ -258,7 +268,7 @@ class TrialNode(DataClassNode):
         return TrialDataclass(trial_number=self.trial_number, retrained_split=None)
 
 
-class TrialSplitNode(DataClassNode):
+class TrialSplitNode(BaseTrialNodeMixin, DataClassNode):
     __tablename__ = 'trialsplit'
     id = Column(String, ForeignKey('dataclassnode.tree_id'), primary_key=True)
     split_number = Column(Integer, nullable=False, default=0)
