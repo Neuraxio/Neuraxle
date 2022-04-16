@@ -31,8 +31,8 @@ def get_sqlite_session_with_root(tmpdir):
     Base.metadata.create_all(engine)
     session.commit()
 
-    root_dcn = DataClassNode(id="root")
-    root = ScopedLocationTreeNode(root_dcn, ScopedLocation(), None)
+    root_dcn = DataClassNode(RootDataclass())
+    root = ScopedLocationTreeNode(root_dcn, None)
     session.add(root)
 
     session.commit()
@@ -42,17 +42,13 @@ def get_sqlite_session_with_root(tmpdir):
 def test_sqlalchemy_sqllite_nodes_star_shema_joins(tmpdir):
     session, root = get_sqlite_session_with_root(tmpdir)
 
-    def_proj = ProjectNode(id="def_proj")
-    session.add(def_proj)
-    session.commit()
-    project = ScopedLocationTreeNode(def_proj, ScopedLocation("def_proj"), parent=root)
+    def_proj = ProjectNode(ProjectDataclass(project_name="def_proj"))
+    project = ScopedLocationTreeNode(def_proj, parent=root)
     session.add(project)
     session.commit()
 
-    def_client = ClientNode(id="def_client")
-    session.add(def_client)
-    session.commit()
-    client = ScopedLocationTreeNode(def_client, ScopedLocation("def_proj", "def_client"), parent=project)
+    def_client = ClientNode(ClientDataclass(client_name="def_client"))
+    client = ScopedLocationTreeNode(def_client, parent=project)
     session.add(client)
     session.commit()
 

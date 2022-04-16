@@ -29,7 +29,7 @@ from neuraxle.base import TrialStatus
 from neuraxle.logging.logging import NeuraxleLogger
 from neuraxle.metaopt.data.aggregates import Round, Trial
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
-                                           BaseDataclass, BaseDataclassT,
+                                           BaseDataclass, SubDataclassT,
                                            ClientDataclass,
                                            HyperparamsRepository,
                                            ProjectDataclass, RootDataclass,
@@ -88,9 +88,9 @@ class ScopedLocationTreeNode(Base):
         self.metric_name = parent.metric_name
 
         # Then override the location of the dataclass node:
-        dc_klass: Type[BaseDataclass] = sqlalchemy_node_2_dataclass[dataclass_node]
+        dc_klass: Type[BaseDataclass] = sqlalchemy_node_2_dataclass[dataclass_node.__class__]
         id_name: str = dataclass_2_id_attr[dc_klass]
-        setattr(self, id_name, getattr(dataclass_node, id_name))
+        setattr(self, id_name, str(getattr(dataclass_node, id_name)))
 
     @property
     def loc(self):
@@ -104,7 +104,7 @@ class ScopedLocationTreeNode(Base):
         )
 
     def to_dataclass(self, deep=False):
-        dc: BaseDataclassT = self.dataclass_node.to_empty_dataclass()
+        dc: SubDataclassT = self.dataclass_node.to_empty_dataclass()
 
         # TODO: int and str keys review.
         keys = self.subdataclasses.keys()
@@ -114,26 +114,29 @@ class ScopedLocationTreeNode(Base):
             dc.set_sublocation_values(sub_dcs)
         return dc
 
-    def update_dataclass(self, _dataclass: BaseDataclassT, deep: bool):
+    def update_dataclass(self, _dataclass: SubDataclassT, deep: bool):
         self.dataclass_node.update_dataclass(_dataclass)
         if deep:
             raise NotImplementedError("TODO: figure out how to deep update nodes.")
 
-    def add_dataclass(self, _dataclass: BaseDataclassT):
-        new_dataclass_node = ScopedLocationTreeNode(
+    def add_dataclass(self, _dataclass: SubDataclassT, deep: bool):
+        ScopedLocationTreeNode(
             dataclass_node=DataClassNode.from_dataclass(_dataclass),
-            parent=self
+            parent=self  # Linked parent makes the new node added to the session automatically.
         )
-        self.session.add(new_dataclass_node)
+        if deep is True:
+            raise NotImplementedError("TODO: figure out how to deep update nodes.")
 
 
 class DataClassNode(Base):
     __tablename__ = 'dataclassnode'
-    id = Column(String, primary_key=True, nullable=True)
+    # id = Column(String, primary_key=True, nullable=True)
+    # id = Column(String, ForeignKey('scopedlocationtreenode.id'), primary_key=True)
 
     type = Column(String(50))
 
-    tree_id = Column(ForeignKey('scopedlocationtreenode.id'))
+    # tree_id = Column(ForeignKey('scopedlocationtreenode.id'))
+    tree_id = Column(String, ForeignKey('scopedlocationtreenode.id'), primary_key=True)
     tree = relationship("ScopedLocationTreeNode", back_populates="dataclass_node")
 
     logs = relationship("AutoMLLog", back_populates="dataclass_node")
@@ -146,14 +149,14 @@ class DataClassNode(Base):
     @staticmethod
     def from_dataclass(_dataclass: BaseDataclass):
         _dc_klass: type = dataclass_2_sqlalchemy_node[_dataclass.__class__]
-        dc_node = _dc_klass(id=None, _dataclass=_dataclass)
+        dc_node = _dc_klass(_dataclass=_dataclass)
         return dc_node
 
-    def __init__(self, id=None, _dataclass: BaseDataclass = None):
-        self.id = str(id)
+    def __init__(self, _dataclass: BaseDataclass = None):
+        pass
 
     def update_dataclass(self, _dataclass: RootDataclass):
-        pass
+        raise NotImplementedError("TODO: implement.")
 
     def to_empty_dataclass(self) -> RootDataclass:
         return RootDataclass()
@@ -161,17 +164,17 @@ class DataClassNode(Base):
 
 class ProjectNode(DataClassNode):
     __tablename__ = 'project'
-    id = Column(String, ForeignKey('dataclassnode.id'), primary_key=True)
+    id = Column(String, ForeignKey('dataclassnode.tree_id'), primary_key=True)
     project_name = Column(String, nullable=True, default=None)
 
     __mapper_args__ = {
         'polymorphic_identity': 'projectdataclass',
     }
 
-    def __init__(self, id=None, _dataclass: ProjectDataclass = None):
+    def __init__(self, _dataclass: ProjectDataclass = None):
         if _dataclass is None:
             _dataclass = ProjectDataclass()
-        DataClassNode.__init__(self, id=id, _dataclass=_dataclass)
+        DataClassNode.__init__(self, _dataclass=_dataclass)
         self.project_name = _dataclass.project_name
 
     def update_dataclass(self, _dataclass: ProjectDataclass):
@@ -183,17 +186,17 @@ class ProjectNode(DataClassNode):
 
 class ClientNode(DataClassNode):
     __tablename__ = 'client'
-    id = Column(String, ForeignKey('dataclassnode.id'), primary_key=True)
+    id = Column(String, ForeignKey('dataclassnode.tree_id'), primary_key=True)
     client_name = Column(String)
 
     __mapper_args__ = {
         'polymorphic_identity': 'clientdataclass',
     }
 
-    def __init__(self, id=None, _dataclass: ClientDataclass = None):
+    def __init__(self, _dataclass: ClientDataclass = None):
         if _dataclass is None:
             _dataclass = ClientDataclass()
-        DataClassNode.__init__(self, id=id, _dataclass=_dataclass)
+        DataClassNode.__init__(self, _dataclass=_dataclass)
         self.client_name = _dataclass.client_name
 
     def to_empty_dataclass(self) -> ClientDataclass:
@@ -218,7 +221,7 @@ sqlalchemy_node_2_dataclass: typing.OrderedDict[Type[BaseDataclass], Type[DataCl
 class AutoMLLog(Base):
     __tablename__ = 'automllog'
     id = Column(Integer, Sequence('id_seq', metadata=Base.metadata), primary_key=True, index=True)
-    dataclass_node_id = Column(String, ForeignKey('dataclassnode.id'))
+    dataclass_node_id = Column(String, ForeignKey('dataclassnode.tree_id'))
     dataclass_node = relationship("DataClassNode", back_populates="logs", uselist=False)
     datetime = Column(DateTime, default=func.now())
 
@@ -244,11 +247,12 @@ class DatabaseHyperparamRepository(_DatabaseLoggerHandlerMixin, HyperparamsRepos
         self.engine = engine
         self.session = session
 
-    def create_db(self):
+    def create_db(self) -> 'DatabaseHyperparamRepository':
         Base.metadata.create_all(self.engine)
-        root_dcn = DataClassNode(id="root")
+        root_dcn = ScopedLocationTreeNode(DataClassNode(RootDataclass()), parent=None)
         self.session.add(root_dcn)
         self.session.commit()
+        return self
 
     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
 
@@ -269,7 +273,7 @@ class DatabaseHyperparamRepository(_DatabaseLoggerHandlerMixin, HyperparamsRepos
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
         try:
             query = self._build_scoped_query(scope)
-            if len(query) > 0:
+            if len(query.all()) > 0:
                 # Node exists, then update it:
                 tree_node: ScopedLocationTreeNode = query.one()
                 tree_node.update_dataclass(_dataclass, deep=deep)
