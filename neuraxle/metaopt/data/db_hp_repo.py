@@ -28,18 +28,22 @@ from typing import List, OrderedDict, Type
 from neuraxle.base import TrialStatus
 from neuraxle.logging.logging import NeuraxleLogger
 from neuraxle.metaopt.data.aggregates import Round, Trial
-from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
-                                           BaseDataclass, SubDataclassT,
+from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_METRIC_NAME,
+                                           DEFAULT_PROJECT, BaseDataclass,
                                            ClientDataclass,
                                            HyperparamsRepository,
+                                           MetricResultsDataclass,
                                            ProjectDataclass, RootDataclass,
-                                           ScopedLocation, SubDataclassT,
+                                           RoundDataclass, ScopedLocation,
+                                           SubDataclassT, TrialDataclass,
+                                           TrialSplitDataclass,
                                            dataclass_2_id_attr, to_json)
-from sqlalchemy import (TEXT, Boolean, Column, DateTime, ForeignKey, Integer,
-                        MetaData, PickleType, String, Table, and_,
+from sqlalchemy import (TEXT, Boolean, Column, DateTime, Float, ForeignKey,
+                        Integer, MetaData, PickleType, String, Table, and_,
                         create_engine)
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import backref, relationship, sessionmaker
+from sqlalchemy.orm import (backref, declarative_mixin, relationship,
+                            sessionmaker)
 from sqlalchemy.orm.collections import attribute_mapped_collection
 from sqlalchemy.schema import Sequence
 from sqlalchemy.sql import asc, desc, func
@@ -165,7 +169,7 @@ class DataClassNode(Base):
 class ProjectNode(DataClassNode):
     __tablename__ = 'project'
     id = Column(String, ForeignKey('dataclassnode.tree_id'), primary_key=True)
-    project_name = Column(String, nullable=True, default=None)
+    project_name = Column(String, nullable=False, default=DEFAULT_PROJECT)
 
     __mapper_args__ = {
         'polymorphic_identity': 'projectdataclass',
@@ -187,7 +191,7 @@ class ProjectNode(DataClassNode):
 class ClientNode(DataClassNode):
     __tablename__ = 'client'
     id = Column(String, ForeignKey('dataclassnode.tree_id'), primary_key=True)
-    client_name = Column(String)
+    client_name = Column(String, nullable=False, default=DEFAULT_CLIENT)
 
     __mapper_args__ = {
         'polymorphic_identity': 'clientdataclass',
@@ -199,18 +203,164 @@ class ClientNode(DataClassNode):
         DataClassNode.__init__(self, _dataclass=_dataclass)
         self.client_name = _dataclass.client_name
 
+    def update_dataclass(self, _dataclass: ClientDataclass):
+        self.client_name = _dataclass.client_name
+
     def to_empty_dataclass(self) -> ClientDataclass:
         return ClientDataclass(client_name=self.client_name)
+
+
+class RoundNode(DataClassNode):
+    __tablename__ = 'round'
+    # TODO: is it string or int? for all DC Nodes ids.
+    id = Column(String, ForeignKey('dataclassnode.tree_id'), primary_key=True)
+    round_number = Column(Integer, nullable=False, default=0)
+    main_metric_name = Column(String, nullable=True, default=None)
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'rounddataclass',
+    }
+
+    def __init__(self, _dataclass: RoundDataclass = None):
+        if _dataclass is None:
+            _dataclass = RoundDataclass()
+        DataClassNode.__init__(self, _dataclass=_dataclass)
+        self.round_number = _dataclass.round_number
+        self.main_metric_name = _dataclass.main_metric_name
+
+    def update_dataclass(self, _dataclass: RoundDataclass):
+        self.round_number = _dataclass.round_number
+        self.main_metric_name = _dataclass.main_metric_name
+
+    def to_empty_dataclass(self) -> RoundDataclass:
+        return RoundDataclass(round_number=self.round_number, main_metric_name=self.main_metric_name)
+
+
+class TrialNode(DataClassNode):
+    __tablename__ = 'trial'
+    id = Column(String, ForeignKey('dataclassnode.tree_id'), primary_key=True)
+    trial_number = Column(Integer, nullable=False, default=0)
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'trialdataclass',
+    }
+
+    def __init__(self, _dataclass: TrialDataclass = None):
+        if _dataclass is None:
+            _dataclass = TrialDataclass()
+        DataClassNode.__init__(self, _dataclass=_dataclass)
+        self.trial_number = _dataclass.trial_number
+
+    def update_dataclass(self, _dataclass: TrialDataclass):
+        self.trial_number = _dataclass.trial_number
+
+    def to_empty_dataclass(self) -> TrialDataclass:
+        return TrialDataclass(trial_number=self.trial_number, retrained_split=None)
+
+
+class TrialSplitNode(DataClassNode):
+    __tablename__ = 'trialsplit'
+    id = Column(String, ForeignKey('dataclassnode.tree_id'), primary_key=True)
+    split_number = Column(Integer, nullable=False, default=0)
+    # TODO: make split number unique per parent level class.
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'trialsplitdataclass',
+    }
+
+    def __init__(self, _dataclass: TrialSplitDataclass = None):
+        if _dataclass is None:
+            _dataclass = TrialSplitDataclass()
+        DataClassNode.__init__(self, _dataclass=_dataclass)
+        self.split_number = _dataclass.split_number
+
+    def update_dataclass(self, _dataclass: TrialSplitDataclass):
+        self.split_number = _dataclass.split_number
+
+    def to_empty_dataclass(self) -> TrialSplitDataclass:
+        return TrialSplitDataclass(split_number=self.split_number)
+
+
+class MetricResultsNode(DataClassNode):
+    __tablename__ = 'metricresults'
+    id = Column(String, ForeignKey('dataclassnode.tree_id'), primary_key=True)
+    metric_name = Column(String, nullable=False, default=DEFAULT_METRIC_NAME)
+
+    valid_values = relationship("ValidMetricResultsValues", back_populates="metric_results_node")
+    train_values = relationship("TrainMetricResultsValues", back_populates="metric_results_node")
+
+    higher_score_is_better = Column(Boolean, nullable=False, default=True)
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'metricresultsdataclass',
+    }
+
+    def __init__(self, _dataclass: MetricResultsDataclass = None):
+        if _dataclass is None:
+            _dataclass = MetricResultsDataclass()
+        DataClassNode.__init__(self, _dataclass=_dataclass)
+        self.metric_name = _dataclass.metric_name
+        self.valid_values = [ValidMetricResultsValues(value=v) for v in _dataclass.validation_values]
+        self.train_values = [TrainMetricResultsValues(value=v) for v in _dataclass.train_values]
+        self.higher_score_is_better = _dataclass.higher_score_is_better
+
+    def update_dataclass(self, _dataclass: MetricResultsDataclass):
+        self.metric_name = _dataclass.metric_name
+
+        # Extending the lists with new values from metric results value tables.
+        valid_missing_count: int = len(self.valid_values) - len(_dataclass.validation_values)
+        self.valid_values.extend([ValidMetricResultsValues(value=v)
+                                 for v in _dataclass.validation_values[-valid_missing_count:]])
+        train_missing_count: int = len(self.train_values) - len(_dataclass.train_values)
+        self.train_values.extend([TrainMetricResultsValues(value=v)
+                                 for v in _dataclass.train_values[-train_missing_count:]])
+
+        self.higher_score_is_better = _dataclass.higher_score_is_better
+
+    def to_empty_dataclass(self) -> MetricResultsDataclass:
+        return MetricResultsDataclass(
+            metric_name=self.metric_name,
+            validation_values=[v.value for v in self.valid_values],
+            train_values=[v.value for v in self.train_values],
+            higher_score_is_better=self.higher_score_is_better
+        )
+
+
+@declarative_mixin
+class MetricResultsValuesMixin:
+    id = Column(Integer, Sequence('id_seq', metadata=Base.metadata), primary_key=True, index=True)
+
+    value = Column(Float, nullable=False)
+    # TODO: add datetime to metric results dataclass?
+    datetime = Column(DateTime, default=func.now())
+
+    def __init__(self, value: float, datetime: datetime = None):
+        self.value = value
+        if datetime is None:
+            datetime = datetime.now()
+        self.datetime = datetime
+
+
+class TrainMetricResultsValues(MetricResultsValuesMixin, Base):
+    __tablename__ = 'trainmetricresultsvalues'
+    metric_results_node_id = Column(String, ForeignKey('dataclassnode.tree_id'))
+    metric_results_node = relationship("MetricResultsNode", back_populates="train_values", uselist=False)
+
+
+class ValidMetricResultsValues(MetricResultsValuesMixin, Base):
+    __tablename__ = 'validmetricresultsvalues'
+    metric_results_node_id = Column(String, ForeignKey('dataclassnode.tree_id'))
+    metric_results_node = relationship("MetricResultsNode", back_populates="valid_values", uselist=False)
 
 
 dataclass_2_sqlalchemy_node: typing.OrderedDict[Type[BaseDataclass], Type[DataClassNode]] = OrderedDict([
     (RootDataclass, DataClassNode),
     (ClientDataclass, ClientNode),
     (ProjectDataclass, ProjectNode),
-    # RoundDataclass: RoundNode,
-    # TrialDataclass: TrialNode,
-    # TrialSplitDataclass: SplitNode,
-    # MetricResultDataclass: MetricResultNode,
+    (RoundDataclass, RoundNode),
+    (TrialDataclass, TrialNode),
+    (TrialSplitDataclass, TrialSplitNode),
+    (MetricResultsDataclass, MetricResultsNode),
 ])
 
 sqlalchemy_node_2_dataclass: typing.OrderedDict[Type[BaseDataclass], Type[DataClassNode]] = OrderedDict([

@@ -659,6 +659,11 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
                 f"ShallowedRetrainedSplitWithId({shallowed.retrained_split.get_id()})")
         return shallowed
 
+    def empty(self) -> 'BaseDataclass':
+        emptied: TrialDataclass = super().empty()
+        emptied.retrained_split = None
+        return emptied
+
 
 RETRAIN_TRIAL_SPLIT_ID = -1
 
@@ -681,7 +686,7 @@ class MetricResultsDataclass(DataclassHasListMixin, BaseDataclass[float]):
     """
     MetricResult object used by AutoML algorithm classes.
     """
-    metric_name: ScopedLocationAttrStr = "main"
+    metric_name: ScopedLocationAttrStr = DEFAULT_METRIC_NAME
     validation_values: List[float] = field(default_factory=list)  # one per epoch.
     train_values: List[float] = field(default_factory=list)
     higher_score_is_better: bool = True

@@ -1,8 +1,7 @@
-# from neuraxle.metaopt.data.db_hp_repo import DatabaseHyperparamRepository
 
 import os
-from dataclasses import dataclass
 
+import pytest
 from neuraxle.metaopt.data.db_hp_repo import (Base, ClientNode,
                                               DatabaseHyperparamRepository,
                                               DataClassNode, ProjectNode,
@@ -10,8 +9,7 @@ from neuraxle.metaopt.data.db_hp_repo import (Base, ClientNode,
                                               SQLLiteHyperparamsRepository)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            ClientDataclass, ProjectDataclass,
-                                           RootDataclass, ScopedLocation,
-                                           to_json)
+                                           RootDataclass, ScopedLocation)
 from sqlalchemy import (TEXT, Column, ForeignKey, Integer, String, Table, and_,
                         create_engine)
 from sqlalchemy.ext.declarative import declarative_base
@@ -19,7 +17,12 @@ from sqlalchemy.orm import backref, relationship, sessionmaker
 from sqlalchemy.orm.collections import attribute_mapped_collection
 from sqlalchemy.schema import Sequence
 from sqlalchemy.sql import asc, desc, func
-from testing.metaopt.test_automl_dataclasses import SOME_PROJECT_DATACLASS
+from testing.metaopt.test_automl_dataclasses import (ALL_DATACLASSES,
+                                                     SOME_CLIENT_DATACLASS,
+                                                     SOME_FULL_SCOPED_LOCATION,
+                                                     SOME_PROJECT_DATACLASS,
+                                                     SOME_ROOT_DATACLASS,
+                                                     SOME_ROUND_DATACLASS)
 
 
 def get_sqlite_session_with_root(tmpdir):
@@ -76,11 +79,12 @@ def test_root_db_node_can_be_queried(tmpdir):
     assert root_tree_node.round_number is None
 
 
-def test_can_use_sqlite_db_repo_to_save_and_load_and_overwrite_simple_project(tmpdir):
+@pytest.mark.parametrize("deep", [True, False])
+def test_can_use_sqlite_db_repo_to_save_and_load_and_overwrite_simple_project(tmpdir, deep):
     repo = SQLLiteHyperparamsRepository(tmpdir)
     project: ProjectDataclass = SOME_PROJECT_DATACLASS
     project_loc = ScopedLocation.default().at_dc(project)
 
-    repo.save(project, project_loc)
-    project_reloaded = repo.load(project_loc)
-    repo.save(project_reloaded, project_loc)
+    repo.save(project, project_loc, deep=deep)
+    project_reloaded = repo.load(project_loc, deep=deep)
+    repo.save(project_reloaded, project_loc, deep=deep)
