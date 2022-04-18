@@ -5,7 +5,7 @@ Classes used to build any Automatic Machine Learning pipelines.
 Hyperparameter selection strategies are used to optimize the hyperparameters of given pipelines.
 
 ..
-    Copyright 2021, Neuraxio Inc.
+    Copyright 2022, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.

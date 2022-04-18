@@ -10,7 +10,7 @@ This is what is done here as the project gained in abstraction, and that the bas
 classes needed to compose other base classes.
 
 ..
-    Copyright 2021, Neuraxio Inc.
+    Copyright 2022, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.

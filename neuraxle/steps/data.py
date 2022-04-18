@@ -39,7 +39,7 @@ class DataShuffler(InputAndOutputTransformerMixin, BaseTransformer):
     .. code-block:: python
 
         p = Pipeline([
-            TrainOnlyWrapper(DataShuffler(seed=42, increment_seed_after_each_fit=True, increment_seed_after_each_fit=False)),
+            TrainOnlyWrapper(DataShuffler(seed=42, increment_seed_after_each_fit=True)),
             EpochRepeater(ForecastingPipeline(), epochs=EPOCHS, repeat_in_test_mode=False)
         ])
 
@@ -87,7 +87,7 @@ class EpochRepeater(ForceHandleOnlyMixin, MetaStep):
     .. code-block:: python
 
         p = Pipeline([
-            TrainOnlyWrapper(DataShuffler(seed=42, increment_seed_after_each_fit=True, increment_seed_after_each_fit=False)),
+            TrainOnlyWrapper(DataShuffler(seed=42, increment_seed_after_each_fit=True)),
             EpochRepeater(ForecastingPipeline(), epochs=EPOCHS, repeat_in_test_mode=False)
         ])
 

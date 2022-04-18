@@ -10,7 +10,7 @@ ForceHandleMixin as demonstrated here. Handler methods are useful when :
     - You want to change the pipeline execution flow based on the data container, and the execution context.
 
 ..
-    Copyright 2021, Neuraxio Inc.
+    Copyright 2022, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.

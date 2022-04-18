@@ -7,7 +7,7 @@ Not only a pipeline is defined, but also an hyperparameter space is defined for 
 performed to find the best possible combination of hyperparameters by sampling randomly in the hyperparameter space.
 
 ..
-    Copyright 2021, Neuraxio Inc.
+    Copyright 2022, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
