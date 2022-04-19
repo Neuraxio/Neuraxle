@@ -12,7 +12,7 @@ Classes are splitted like this for the AutoML:
 - MetricResults
 
 ..
-    Copyright 2021, Neuraxio Inc.
+    Copyright 2022, Neuraxio Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.

@@ -26,7 +26,7 @@ Code Machine Learning Pipelines - The Right Way.
     :alt: Neuraxle Logo
     :align: center
 
-Neuraxle is a Machine Learning (ML) library for building machine learning pipelines.
+Neuraxle is a Machine Learning (ML) library for building clean machine learning pipelines using the right abstractions.
 
 - **Component-Based**: Build encapsulated steps, then compose them to build complex pipelines.
 - **Evolving State**: Each pipeline step can fit, and evolve through the learning process
@@ -63,29 +63,7 @@ For example, you can build a time series processing pipeline as such:
     p = Pipeline([
         TrainOnlyWrapper(DataShuffler()),
         WindowTimeSeries(),
-        MiniBatchSequentialPipeline([
-            Tensorflow2ModelStep(
-                create_model=create_model,
-                create_optimizer=create_optimizer,
-                create_loss=create_loss
-            ).set_hyperparams(HyperparameterSpace({
-                'hidden_dim': 12,
-                'layers_stacked_count': 2,
-                'lambda_loss_amount': 0.0003,
-                'learning_rate': 0.001
-                'window_size_future': sequence_length,
-                'output_dim': output_dim,
-                'input_dim': input_dim
-            })).set_hyperparams_space(HyperparameterSpace({
-                'hidden_dim': RandInt(6, 750),
-                'layers_stacked_count': RandInt(1, 4),
-                'lambda_loss_amount': Uniform(0.0003, 0.001),
-                'learning_rate': Uniform(0.001, 0.01),
-                'window_size_future': FixedHyperparameter(sequence_length),
-                'output_dim': FixedHyperparameter(output_dim),
-                'input_dim': FixedHyperparameter(input_dim)
-            }))
-        ])
+        
     ])
 
     # Load data
@@ -102,35 +80,79 @@ You can also tune your hyperparameters using AutoML algorithms such as the TPE:
 
 .. code:: python
 
+    # Define classification models with hyperparams.
+
+    # All SKLearn models can be used and compared to each other.
+    # Define them an hyperparameter space like this:
+    decision_tree_classifier = SKLearnWrapper(
+        DecisionTreeClassifier(),
+        HyperparameterSpace({
+            'criterion': Choice(['gini', 'entropy']),
+            'splitter': Choice(['best', 'random']),
+            'min_samples_leaf': RandInt(2, 5),
+            'min_samples_split': RandInt(2, 4)
+        }))
+
+    # More SKLearn models can be added (code details skipped):
+    random_forest_classifier = ...
+    logistic_regression = ...
+
+    # It's possible to mix TensorFlow models into Neuraxle as well, 
+    # using Neuraxle-Tensorflow' Tensorflow2ModelStep class, passing in
+    # the TensorFlow functions like create_model and create_optimizer:
+    minibatched_tensorflow_classifier = EpochRepeater(MiniBatchSequentialPipeline([
+            Tensorflow2ModelStep(
+                create_model=create_linear_model,
+                create_optimizer=create_adam_optimizer,
+                create_loss=create_mse_loss_with_regularization
+            ).set_hyperparams_space(HyperparameterSpace({
+                'hidden_dim': RandInt(6, 750),
+                'layers_stacked_count': RandInt(1, 4),
+                'lambda_loss_amount': Uniform(0.0003, 0.001),
+                'learning_rate': Uniform(0.001, 0.01),
+                'window_size_future': FixedHyperparameter(sequence_length),
+                'output_dim': FixedHyperparameter(output_dim),
+                'input_dim': FixedHyperparameter(input_dim)
+            }))
+        ]), epochs=42)
+
+    # Define a classification pipeline that lets the AutoML loop choose one of the classifier.
+    # See also ChooseOneStepOf documentation: https://www.neuraxle.org/stable/api/steps/neuraxle.steps.flow.html#neuraxle.steps.flow.ChooseOneStepOf
+    pipeline = Pipeline([
+        ChooseOneStepOf([
+            decision_tree_classifier,
+            random_forest_classifier,
+            logistic_regression,
+            minibatched_tensorflow_classifier,
+        ])
+    ])
+
+    # Create the AutoML loop object.
+    # See also AutoML documentation: https://www.neuraxle.org/stable/api/metaopt/neuraxle.metaopt.auto_ml.html#neuraxle.metaopt.auto_ml.AutoML
     auto_ml = AutoML(
         pipeline=pipeline,
-        hyperparams_optimizer=TreeParzenEstimatorHyperparameterSelectionStrategy(
-            number_of_initial_random_step=10,
-            quantile_threshold=0.3,
-            number_good_trials_max_cap=25,
-            number_possible_hyperparams_candidates=100,
-            prior_weight=0.,
-            use_linear_forgetting_weights=False,
-            number_recent_trial_at_full_weights=25
+        hyperparams_optimizer=TreeParzenEstimator(
+            # This is the TPE as in Hyperopt.
+            number_of_initial_random_step=20,
         ),
         validation_splitter=ValidationSplitter(validation_size=0.20),
         scoring_callback=ScoringCallback(accuracy_score, higher_score_is_better=True),
-        callbacks[
-            MetricCallback(f1_score, higher_score_is_better=True),
-            MetricCallback(precision, higher_score_is_better=True),
-            MetricCallback(recall, higher_score_is_better=True)
-        ],
-        n_trials=7,
-        epochs=10,
+        n_trials=40,
+        epochs=1,  # Could be higher if only TF models were used.
+        hyperparams_repository=HyperparamsOnDiskRepository(cache_folder=neuraxle_dashboard),
         refit_best_trial=True,
+        continue_loop_on_error=False
     )
 
-    # Load data, and launch AutoML loop !
+    # Load data, and launch AutoML loop!
     X_train, y_train, X_test, y_test = generate_classification_data()
     auto_ml = auto_ml.fit(X_train, y_train)
 
-    # Get the model from the best trial, and make predictions using predict.
+    # Get the model from the best trial, and make predictions using predict, as per the `refit_best_trial=True` argument to AutoML.
     y_pred = auto_ml.predict(X_test)
+
+    accuracy = accuracy_score(y_true=y_test, y_pred=y_pred)
+    print("Test accuracy score:", accuracy)
 
 
 --------------

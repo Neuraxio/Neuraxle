@@ -98,7 +98,7 @@ def main(tmpdir: str):
     ]).set_name('RandomForestClassifier')
 
     # Define a classification pipeline that lets the AutoML loop choose one of the classifier.
-    # See also ChooseOneStepOf documentation: https://www.neuraxle.org/stable/api/neuraxle.steps.flow.html#neuraxle.steps.flow.ChooseOneStepOf
+    # See also ChooseOneStepOf documentation: https://www.neuraxle.org/stable/api/steps/neuraxle.steps.flow.html#neuraxle.steps.flow.ChooseOneStepOf
 
     pipeline = Pipeline([
         ChooseOneStepOf([
@@ -111,7 +111,7 @@ def main(tmpdir: str):
     ])
 
     # Create the AutoML loop object.
-    # See also AutoML documentation: https://www.neuraxle.org/stable/api/neuraxle.metaopt.auto_ml.html#neuraxle.metaopt.auto_ml.AutoML
+    # See also AutoML documentation: https://www.neuraxle.org/stable/api/metaopt/neuraxle.metaopt.auto_ml.html#neuraxle.metaopt.auto_ml.AutoML
 
     auto_ml = AutoML(
         pipeline=pipeline,
