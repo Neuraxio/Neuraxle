@@ -20,17 +20,20 @@ Data objects and related repositories used by AutoML, SQL version.
 
 
 """
-from email.policy import default
+from datetime import datetime
 import os
 import typing
 from dataclasses import dataclass
+from email.policy import default
 from typing import List, OrderedDict, Type
 
 from neuraxle.base import TrialStatus
+from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.logging.logging import NeuraxleLogger
 from neuraxle.metaopt.data.aggregates import Round, Trial
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_METRIC_NAME,
                                            DEFAULT_PROJECT, BaseDataclass,
+                                           BaseTrialDataclassMixin,
                                            ClientDataclass,
                                            HyperparamsRepository,
                                            MetricResultsDataclass,
@@ -39,8 +42,8 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_METRIC_NAME,
                                            SubDataclassT, TrialDataclass,
                                            TrialSplitDataclass,
                                            dataclass_2_id_attr, to_json)
-from sqlalchemy import (TEXT, Boolean, Column, DateTime, Float, ForeignKey,
-                        Integer, MetaData, JSON, String, Table, and_,
+from sqlalchemy import (JSON, TEXT, Boolean, Column, DateTime, Float,
+                        ForeignKey, Integer, MetaData, String, Table, and_,
                         create_engine)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import (backref, declarative_mixin, relationship,
@@ -72,16 +75,16 @@ class ScopedLocationTreeNode(Base):
     subdataclasses = relationship(
         "ScopedLocationTreeNode",
         backref=backref("parent", remote_side=id),
-        collection_class=attribute_mapped_collection("dataclass_node"),
+        collection_class=attribute_mapped_collection("dataclass_node.id_attr_value"),
     )
 
     def __init__(self, dataclass_node: 'DataClassNode', parent=None):
-        self.parent = parent
 
         if parent is not None:
             self._set_location_from(dataclass_node, parent)
 
         self.dataclass_node = dataclass_node
+        self.parent = parent
 
     def _set_location_from(self, dataclass_node: 'DataClassNode', parent=None):
         # Set the location of the dataclass node partially from the parent:
@@ -121,22 +124,42 @@ class ScopedLocationTreeNode(Base):
 
     def update_dataclass(self, _dataclass: SubDataclassT, deep: bool):
         self.dataclass_node.update_dataclass(_dataclass)
-        if deep:
-            raise NotImplementedError("TODO: figure out how to deep update nodes.")
+        if deep is True:
+            self._deep_save_sublocs_of_node_from_dataclass_sublocs(_dataclass)
 
-    def add_dataclass(self, _dataclass: SubDataclassT, deep: bool):
-        ScopedLocationTreeNode(
+    def add_subdataclass(self, _dataclass: SubDataclassT, deep: bool):
+        self._create_subloc_node_from_dc(_dataclass)
+        if deep is True:
+            self._deep_save_sublocs_of_node_from_dataclass_sublocs(_dataclass)
+
+    def _create_subloc_node_from_dc(self, _dataclass):
+        new_subloc = ScopedLocationTreeNode(
             dataclass_node=DataClassNode.from_dataclass(_dataclass),
             parent=self  # Linked parent makes the new node added to the session automatically.
         )
-        if deep is True:
-            raise NotImplementedError("TODO: figure out how to deep update nodes.")
+        # self.subdataclasses[new_subloc.dataclass_node.id_attr_value] = new_subloc
+        return new_subloc
+
+    def _deep_save_sublocs_of_node_from_dataclass_sublocs(self, _dataclass):
+        for sub_dc_key, sub_dc in _dataclass.get_sublocation_items():
+            if sub_dc_key in self.subdataclasses.keys():
+                # TODO: in an "add" call, this here is never done:
+                self.subdataclasses[sub_dc_key].update_dataclass(sub_dc, deep=True)
+            else:
+                self.add_subdataclass(sub_dc, deep=True)
+
+    def __str__(self):
+        return f"<{self.__class__.__name__}({self.loc.as_list()})>"
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__}({self.loc.as_list()}, ...)>"
 
 
 class DataClassNode(Base):
     __tablename__ = 'dataclassnode'
     # id = Column(String, primary_key=True, nullable=True)
     # id = Column(String, ForeignKey('scopedlocationtreenode.id'), primary_key=True)
+    id_attr_value = Column(String, nullable=True)
 
     type = Column(String(50))
 
@@ -158,7 +181,7 @@ class DataClassNode(Base):
         return dc_node
 
     def __init__(self, _dataclass: BaseDataclass = None):
-        pass
+        self.id_attr_value = str(_dataclass.get_id())
 
     def update_dataclass(self, _dataclass: RootDataclass):
         raise NotImplementedError("TODO: implement.")
@@ -245,6 +268,13 @@ class BaseTrialNodeMixin:
     start_time = Column(DateTime, nullable=True, default=func.now())
     end_time = Column(DateTime, nullable=True)
 
+    def __init__(self, _dataclass: BaseTrialDataclassMixin):
+        self.hyperparams = _dataclass.hyperparams.to_flat_dict()
+        self.status = _dataclass.status
+        self.created_time = _dataclass.created_time
+        self.start_time = _dataclass.start_time
+        self.end_time = _dataclass.end_time
+
 
 class TrialNode(BaseTrialNodeMixin, DataClassNode):
     __tablename__ = 'trial'
@@ -259,13 +289,19 @@ class TrialNode(BaseTrialNodeMixin, DataClassNode):
         if _dataclass is None:
             _dataclass = TrialDataclass()
         DataClassNode.__init__(self, _dataclass=_dataclass)
+        BaseTrialNodeMixin.__init__(self, _dataclass=_dataclass)
         self.trial_number = _dataclass.trial_number
 
     def update_dataclass(self, _dataclass: TrialDataclass):
         self.trial_number = _dataclass.trial_number
 
     def to_empty_dataclass(self) -> TrialDataclass:
-        return TrialDataclass(trial_number=self.trial_number, retrained_split=None)
+        return TrialDataclass(
+            trial_number=self.trial_number, retrained_split=None,
+            hyperparams=HyperparameterSamples(self.hyperparams), status=self.status,
+            created_time=self.created_time, start_time=self.start_time,
+            end_time=self.end_time
+        )
 
 
 class TrialSplitNode(BaseTrialNodeMixin, DataClassNode):
@@ -282,6 +318,7 @@ class TrialSplitNode(BaseTrialNodeMixin, DataClassNode):
         if _dataclass is None:
             _dataclass = TrialSplitDataclass()
         DataClassNode.__init__(self, _dataclass=_dataclass)
+        BaseTrialNodeMixin.__init__(self, _dataclass=_dataclass)
         self.split_number = _dataclass.split_number
 
     def update_dataclass(self, _dataclass: TrialSplitDataclass):
@@ -344,11 +381,11 @@ class MetricResultsValuesMixin:
     # TODO: add datetime to metric results dataclass?
     datetime = Column(DateTime, default=func.now())
 
-    def __init__(self, value: float, datetime: datetime = None):
+    def __init__(self, value: float, _datetime: datetime = None):
         self.value = value
-        if datetime is None:
-            datetime = datetime.now()
-        self.datetime = datetime
+        if _datetime is None:
+            _datetime = datetime.now()
+        self.datetime = _datetime
 
 
 class TrainMetricResultsValues(MetricResultsValuesMixin, Base):
@@ -441,7 +478,7 @@ class DatabaseHyperparamRepository(_DatabaseLoggerHandlerMixin, HyperparamsRepos
             else:
                 # Get parent to attach child by parsing the tree with popped scopedlocation attributes
                 parent_tree_node: ScopedLocationTreeNode = self._build_scoped_query(scope.popped()).one()
-                parent_tree_node.add_dataclass(_dataclass, deep=deep)
+                parent_tree_node.add_subdataclass(_dataclass, deep=deep)
 
             self.session.commit()
         except Exception as e:

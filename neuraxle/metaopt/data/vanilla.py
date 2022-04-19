@@ -337,6 +337,9 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
     def get_sublocation(self) -> Union[List[SubDataclassT], 'OrderedDict[str, SubDataclassT]']:
         return getattr(self, dataclass_2_subloc_attr[self.__class__])
 
+    def get_sublocation_items(self) -> List[Tuple[ScopedLocationAttr, SubDataclassT]]:
+        return [(k, v) for k, v in zip(self.get_sublocation_keys(), self.get_sublocation_values())]
+
     def set_sublocation(self, sublocation: Union[List[SubDataclassT], 'OrderedDict[str, SubDataclassT]']) -> 'BaseDataclass':
         setattr(self, dataclass_2_subloc_attr[self.__class__], sublocation)
         return self
