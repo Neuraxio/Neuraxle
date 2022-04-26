@@ -123,7 +123,9 @@ class ScopedLocationTreeNode(Base):
     def to_dataclass(self, deep=False):
         dc: SubDataclassT = self.dataclass_node.to_empty_dataclass()
 
-        if deep:
+        if dc.is_terminal_leaf():
+            pass
+        elif deep:
             items = [
                 (v.id_attr_value, v.to_dataclass(deep=deep)) for v in self.subdataclasses
             ]
@@ -231,7 +233,7 @@ class DataClassTreeNodeUpdater:
                     # TODO: what if parent wasn't deep? That is needed to access the subdataclasses.
                     self.update_dataclass(sub_dc, node.subdataclasses[_ids_stored.index(sub_dc_key)])
                 else:
-                    self.add_subdataclass(sub_dc, node)
+                    self.add_dataclass(sub_dc, node)
 
     def add_dataclass(
         self, _dataclass: SubDataclassT, parent: Optional[ScopedLocationTreeNode]
@@ -419,11 +421,11 @@ class MetricResultsNode(DataClassNode):
         self.metric_name = _dataclass.metric_name
 
         # Extending the lists with new values from metric results value tables.
-        valid_missing_count: int = len(self.valid_values) - len(_dataclass.validation_values)
+        valid_missing_count: int = len(_dataclass.validation_values) - len(self.valid_values)
         self.valid_values.extend([ValidMetricResultsValues(value=v)
                                  for v in _dataclass.validation_values[-valid_missing_count:]])
 
-        train_missing_count: int = len(self.train_values) - len(_dataclass.train_values)
+        train_missing_count: int = len(_dataclass.train_values) - len(self.train_values)
         self.train_values.extend([TrainMetricResultsValues(value=v)
                                  for v in _dataclass.train_values[-train_missing_count:]])
 
@@ -511,9 +513,11 @@ class DatabaseHyperparamRepository(_DatabaseLoggerHandlerMixin, HyperparamsRepos
 
     def create_db(self) -> 'DatabaseHyperparamRepository':
         Base.metadata.create_all(self.engine)
-        root_dcn = ScopedLocationTreeNode(DataClassNode(RootDataclass()), parent=None)
+        _root_dc = RootDataclass()
+        root_dcn = ScopedLocationTreeNode(DataClassNode(_root_dc), parent=None)
         self.session.add(root_dcn)
         self.session.commit()
+        self.save(_root_dc, ScopedLocation(), deep=True)
         return self
 
     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:

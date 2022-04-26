@@ -41,7 +41,7 @@ def db_repo_ctor(tmpdir: TmpDir = None) -> AutoMLContext:
     return AutoMLContext.from_context(cx, repo=SQLLiteHyperparamsRepository(tmpdir))
 
 
-CX_WITH_REPO_CTORS: List[Callable[[TmpDir], AutoMLContext]] = [vanilla_repo_ctor, disk_repo_ctor]  # , db_repo_ctor]
+CX_WITH_REPO_CTORS: List[Callable[[TmpDir], AutoMLContext]] = [vanilla_repo_ctor, disk_repo_ctor, db_repo_ctor]
 
 
 @pytest.mark.parametrize('cx_repo_ctor', CX_WITH_REPO_CTORS)
