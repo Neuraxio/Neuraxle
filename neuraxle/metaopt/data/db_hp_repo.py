@@ -20,17 +20,15 @@ Data objects and related repositories used by AutoML, SQL version.
 
 
 """
-from datetime import datetime
 import os
 import typing
-from dataclasses import dataclass
-from email.policy import default
-from typing import List, OrderedDict, Type
+from datetime import datetime
+from typing import Any, Dict, List, Optional, OrderedDict, Type
 
 from neuraxle.base import TrialStatus
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.logging.logging import NeuraxleLogger
-from neuraxle.metaopt.data.aggregates import Round, Trial
+from neuraxle.metaopt.data.aggregates import Round, Trial, TrialSplit
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_METRIC_NAME,
                                            DEFAULT_PROJECT, BaseDataclass,
                                            BaseTrialDataclassMixin,
@@ -46,9 +44,10 @@ from sqlalchemy import (JSON, TEXT, Boolean, Column, DateTime, Float,
                         ForeignKey, Integer, MetaData, String, Table, and_,
                         create_engine)
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import (backref, declarative_mixin, relationship,
-                            sessionmaker)
+from sqlalchemy.orm import (backref, declarative_mixin, joinedload,
+                            relationship, sessionmaker)
 from sqlalchemy.orm.collections import attribute_mapped_collection
+from sqlalchemy.orm.session import Session
 from sqlalchemy.schema import Sequence
 from sqlalchemy.sql import asc, desc, func
 
@@ -75,16 +74,22 @@ class ScopedLocationTreeNode(Base):
     subdataclasses = relationship(
         "ScopedLocationTreeNode",
         backref=backref("parent", remote_side=id),
-        collection_class=attribute_mapped_collection("dataclass_node.id_attr_value"),
+        # collection_class=attribute_mapped_collection("dataclass_node.id_attr_value"),
     )
 
-    def __init__(self, dataclass_node: 'DataClassNode', parent=None):
+    def __init__(
+        self, dataclass_node: 'DataClassNode', parent: 'ScopedLocationTreeNode' = None
+    ):
 
         if parent is not None:
             self._set_location_from(dataclass_node, parent)
 
         self.dataclass_node = dataclass_node
+
         self.parent = parent
+        # TODO: parent push self???
+        # if parent is not None:
+        #    self.parent.subdataclasses.set(self)
 
     def _set_location_from(self, dataclass_node: 'DataClassNode', parent=None):
         # Set the location of the dataclass node partially from the parent:
@@ -111,48 +116,143 @@ class ScopedLocationTreeNode(Base):
             metric_name=self.metric_name,
         )
 
+    @property
+    def id_attr_value(self):
+        return self.dataclass_node.id_attr_value
+
     def to_dataclass(self, deep=False):
         dc: SubDataclassT = self.dataclass_node.to_empty_dataclass()
 
-        # TODO: int and str keys review.
-        keys = self.subdataclasses.keys()
-        dc.set_sublocation_keys(keys)
         if deep:
-            sub_dcs = self.subdataclasses.values()
-            dc.set_sublocation_values(sub_dcs)
+            items = [
+                (v.id_attr_value, v.to_dataclass(deep=deep)) for v in self.subdataclasses
+            ]
+            dc.set_sublocation_items(items)
+        else:
+            dc.set_sublocation_keys([i.id_attr_value for i in self.subdataclasses])
+
         return dc
 
-    def update_dataclass(self, _dataclass: SubDataclassT, deep: bool):
-        self.dataclass_node.update_dataclass(_dataclass)
-        if deep is True:
-            self._deep_save_sublocs_of_node_from_dataclass_sublocs(_dataclass)
+    # def update_dataclass(self, _dataclass: SubDataclassT, deep: bool):
+    #     if not deep:
+    #         _dataclass = _dataclass.empty()
+    #     self.dataclass_node.update_dataclass(_dataclass)
 
-    def add_subdataclass(self, _dataclass: SubDataclassT, deep: bool):
-        self._create_subloc_node_from_dc(_dataclass)
-        if deep is True:
-            self._deep_save_sublocs_of_node_from_dataclass_sublocs(_dataclass)
+    # def add_subdataclass(self, _dataclass: SubDataclassT, deep: bool):
+    #     if not deep:
+    #         _dataclass = _dataclass.empty()
+    #     DataClassNode.add_dataclass(_dataclass=_dataclass, parent=self)
 
-    def _create_subloc_node_from_dc(self, _dataclass):
-        new_subloc = ScopedLocationTreeNode(
-            dataclass_node=DataClassNode.from_dataclass(_dataclass),
-            parent=self  # Linked parent makes the new node added to the session automatically.
+    @staticmethod
+    def query(session: Session, scope: ScopedLocation, deep=False) -> Optional['ScopedLocationTreeNode']:
+        query = session.query(ScopedLocationTreeNode).filter(
+            and_(*[
+                getattr(ScopedLocationTreeNode, attr) == str(getattr(scope, attr))
+                if getattr(scope, attr) is not None else getattr(ScopedLocationTreeNode, attr) == None
+                for attr in ScopedLocation.__dataclass_fields__
+            ])
         )
-        # self.subdataclasses[new_subloc.dataclass_node.id_attr_value] = new_subloc
-        return new_subloc
 
-    def _deep_save_sublocs_of_node_from_dataclass_sublocs(self, _dataclass):
-        for sub_dc_key, sub_dc in _dataclass.get_sublocation_items():
-            if sub_dc_key in self.subdataclasses.keys():
-                # TODO: in an "add" call, this here is never done:
-                self.subdataclasses[sub_dc_key].update_dataclass(sub_dc, deep=True)
-            else:
-                self.add_subdataclass(sub_dc, deep=True)
+        if deep:
+            n_levels_deeper_to_fetch = 6 - len(scope)
+            if n_levels_deeper_to_fetch > 0:
+                jl = joinedload(ScopedLocationTreeNode.subdataclasses)
+                for _ in range(n_levels_deeper_to_fetch - 1):
+                    jl = jl.joinedload(ScopedLocationTreeNode.subdataclasses)
+                query = query.options(jl)
+
+        query = query.all()
+
+        # the return value is optional:
+        if len(query) == 0:
+            return None  # TODO: create directly instead?
+        elif len(query) == 1:
+            return query[0]
+        else:
+            raise ValueError(f"More than one ScopedLocationTreeNode found for the given scope {scope}: {query}")
 
     def __str__(self):
         return f"<{self.__class__.__name__}({self.loc.as_list()})>"
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}({self.loc.as_list()}, ...)>"
+
+
+class DataClassTreeNodeUpdater:
+
+    def __init__(
+        self, session: Session, scope: ScopedLocation, deep: bool = False,
+    ):
+        self.session = session
+        self.scope = scope
+        self.deep = deep
+
+    def add_or_update_dataclass(
+        self, _dataclass: SubDataclassT, parent: Optional[ScopedLocationTreeNode]
+    ):
+        """
+        Add or update a dataclass in the database.
+
+        Possible scenarios:
+        - dataclass is not in the database:
+            - add it to the database. Recursively:
+                - add all subdataclasses
+        - dataclass is in the database:
+            - update it in the database. Recursively, for all subdataclasses wheter found or not:
+                - add all subdataclasses
+                - update all subdataclasses
+
+        This means we have the following methods chaining into each other:
+        - add or update dataclass
+        - update dataclass
+        - add dataclass
+        """
+        node: ScopedLocationTreeNode = ScopedLocationTreeNode.query(self.session, self.scope, self.deep)
+        if node is not None:
+            # The dataclass is already in the database. Update it:
+            self.update_dataclass(_dataclass, node)
+        else:
+            # Add the dataclass to the database:
+            self.add_dataclass(_dataclass, parent)
+
+    def update_dataclass(
+        self, _dataclass: SubDataclassT, node: ScopedLocationTreeNode
+    ):
+        self.scope = self.scope.with_dc(_dataclass)
+
+        node.dataclass_node._update_attrs_from_dataclass(_dataclass)
+        self.session.commit()  # TODO: REMOVE THAT DEBUGGING.
+
+        if self.deep and not _dataclass.is_terminal_leaf():
+            _ids_stored: List[str] = [v.id_attr_value for v in node.subdataclasses]
+            for sub_dc_key, sub_dc in _dataclass.get_sublocation_items():
+                sub_dc_key = str(sub_dc_key)
+                if sub_dc_key in _ids_stored:
+                    # TODO: what if parent wasn't deep? That is needed to access the subdataclasses.
+                    self.update_dataclass(sub_dc, node.subdataclasses[_ids_stored.index(sub_dc_key)])
+                else:
+                    self.add_subdataclass(sub_dc, node)
+
+    def add_dataclass(
+        self, _dataclass: SubDataclassT, parent: Optional[ScopedLocationTreeNode]
+    ):
+        self.scope = self.scope.with_dc(_dataclass)
+
+        # Create a new dataclass node:
+        _dc_klass: Type[DataClassNode] = dataclass_2_sqlalchemy_node[_dataclass.__class__]
+        dc_node = _dc_klass(_dataclass=_dataclass)
+
+        # Add the dataclass node to the tree's scope:
+        parent = parent or ScopedLocationTreeNode.query(self.session, self.scope.popped(), deep=False)
+        tree_node = ScopedLocationTreeNode(
+            dataclass_node=dc_node,
+            parent=parent  # Linked parent makes the new node added to the session automatically.
+        )
+        self.session.commit()  # TODO: REMOVE THAT DEBUGGING.
+
+        if self.deep and not _dataclass.is_terminal_leaf():
+            for sub_dc in _dataclass.get_sublocation_values():
+                self.add_dataclass(sub_dc, tree_node)
 
 
 class DataClassNode(Base):
@@ -174,17 +274,14 @@ class DataClassNode(Base):
         'polymorphic_on': type
     }
 
-    @staticmethod
-    def from_dataclass(_dataclass: BaseDataclass):
-        _dc_klass: type = dataclass_2_sqlalchemy_node[_dataclass.__class__]
-        dc_node = _dc_klass(_dataclass=_dataclass)
-        return dc_node
-
     def __init__(self, _dataclass: BaseDataclass = None):
+        if _dataclass is None:
+            _dataclass = sqlalchemy_node_2_dataclass[self.__class__]()
+        self._update_attrs_from_dataclass(_dataclass)
         self.id_attr_value = str(_dataclass.get_id())
 
-    def update_dataclass(self, _dataclass: RootDataclass):
-        raise NotImplementedError("TODO: implement.")
+    def _update_attrs_from_dataclass(self, _dataclass: BaseDataclass):
+        pass
 
     def to_empty_dataclass(self) -> RootDataclass:
         return RootDataclass()
@@ -199,13 +296,7 @@ class ProjectNode(DataClassNode):
         'polymorphic_identity': 'projectdataclass',
     }
 
-    def __init__(self, _dataclass: ProjectDataclass = None):
-        if _dataclass is None:
-            _dataclass = ProjectDataclass()
-        DataClassNode.__init__(self, _dataclass=_dataclass)
-        self.project_name = _dataclass.project_name
-
-    def update_dataclass(self, _dataclass: ProjectDataclass):
+    def _update_attrs_from_dataclass(self, _dataclass: ProjectDataclass):
         self.project_name = _dataclass.project_name
 
     def to_empty_dataclass(self) -> ProjectDataclass:
@@ -221,13 +312,7 @@ class ClientNode(DataClassNode):
         'polymorphic_identity': 'clientdataclass',
     }
 
-    def __init__(self, _dataclass: ClientDataclass = None):
-        if _dataclass is None:
-            _dataclass = ClientDataclass()
-        DataClassNode.__init__(self, _dataclass=_dataclass)
-        self.client_name = _dataclass.client_name
-
-    def update_dataclass(self, _dataclass: ClientDataclass):
+    def _update_attrs_from_dataclass(self, _dataclass: ClientDataclass):
         self.client_name = _dataclass.client_name
 
     def to_empty_dataclass(self) -> ClientDataclass:
@@ -245,14 +330,7 @@ class RoundNode(DataClassNode):
         'polymorphic_identity': 'rounddataclass',
     }
 
-    def __init__(self, _dataclass: RoundDataclass = None):
-        if _dataclass is None:
-            _dataclass = RoundDataclass()
-        DataClassNode.__init__(self, _dataclass=_dataclass)
-        self.round_number = _dataclass.round_number
-        self.main_metric_name = _dataclass.main_metric_name
-
-    def update_dataclass(self, _dataclass: RoundDataclass):
+    def _update_attrs_from_dataclass(self, _dataclass: RoundDataclass):
         self.round_number = _dataclass.round_number
         self.main_metric_name = _dataclass.main_metric_name
 
@@ -263,17 +341,26 @@ class RoundNode(DataClassNode):
 @declarative_mixin
 class BaseTrialNodeMixin:
     hyperparams = Column(JSON, nullable=False, default=dict)
-    status = Column(String, nullable=False, default=TrialStatus.PLANNED)
+    status = Column(String, nullable=False, default=TrialStatus.PLANNED.value)
     created_time = Column(DateTime, nullable=False, default=func.now())
     start_time = Column(DateTime, nullable=True, default=func.now())
     end_time = Column(DateTime, nullable=True)
 
-    def __init__(self, _dataclass: BaseTrialDataclassMixin):
-        self.hyperparams = _dataclass.hyperparams.to_flat_dict()
-        self.status = _dataclass.status
+    def _update_attrs_from_dataclass(self, _dataclass: BaseTrialDataclassMixin):
+        self.hyperparams = dict(_dataclass.hyperparams.to_flat_dict())
+        self.status = _dataclass.status.value
         self.created_time = _dataclass.created_time
         self.start_time = _dataclass.start_time
         self.end_time = _dataclass.end_time
+
+    def _attrs_for_to_dataclass(self) -> Dict[str, Any]:
+        return {
+            'hyperparams': HyperparameterSamples(self.hyperparams),
+            'status': TrialStatus(self.status),
+            'created_time': self.created_time,
+            'start_time': self.start_time,
+            'end_time': self.end_time,
+        }
 
 
 class TrialNode(BaseTrialNodeMixin, DataClassNode):
@@ -285,22 +372,14 @@ class TrialNode(BaseTrialNodeMixin, DataClassNode):
         'polymorphic_identity': 'trialdataclass',
     }
 
-    def __init__(self, _dataclass: TrialDataclass = None):
-        if _dataclass is None:
-            _dataclass = TrialDataclass()
-        DataClassNode.__init__(self, _dataclass=_dataclass)
-        BaseTrialNodeMixin.__init__(self, _dataclass=_dataclass)
-        self.trial_number = _dataclass.trial_number
-
-    def update_dataclass(self, _dataclass: TrialDataclass):
+    def _update_attrs_from_dataclass(self, _dataclass: TrialDataclass):
+        BaseTrialNodeMixin._update_attrs_from_dataclass(self, _dataclass=_dataclass)
         self.trial_number = _dataclass.trial_number
 
     def to_empty_dataclass(self) -> TrialDataclass:
         return TrialDataclass(
             trial_number=self.trial_number, retrained_split=None,
-            hyperparams=HyperparameterSamples(self.hyperparams), status=self.status,
-            created_time=self.created_time, start_time=self.start_time,
-            end_time=self.end_time
+            **self._attrs_for_to_dataclass()
         )
 
 
@@ -308,24 +387,18 @@ class TrialSplitNode(BaseTrialNodeMixin, DataClassNode):
     __tablename__ = 'trialsplit'
     id = Column(String, ForeignKey('dataclassnode.tree_id'), primary_key=True)
     split_number = Column(Integer, nullable=False, default=0)
-    # TODO: make split number unique per parent level class.
 
     __mapper_args__ = {
         'polymorphic_identity': 'trialsplitdataclass',
     }
 
-    def __init__(self, _dataclass: TrialSplitDataclass = None):
-        if _dataclass is None:
-            _dataclass = TrialSplitDataclass()
-        DataClassNode.__init__(self, _dataclass=_dataclass)
-        BaseTrialNodeMixin.__init__(self, _dataclass=_dataclass)
-        self.split_number = _dataclass.split_number
-
-    def update_dataclass(self, _dataclass: TrialSplitDataclass):
+    def _update_attrs_from_dataclass(self, _dataclass: TrialSplitDataclass):
+        BaseTrialNodeMixin._update_attrs_from_dataclass(self, _dataclass=_dataclass)
         self.split_number = _dataclass.split_number
 
     def to_empty_dataclass(self) -> TrialSplitDataclass:
-        return TrialSplitDataclass(split_number=self.split_number)
+        return TrialSplitDataclass(
+            split_number=self.split_number, **self._attrs_for_to_dataclass())
 
 
 class MetricResultsNode(DataClassNode):
@@ -342,22 +415,14 @@ class MetricResultsNode(DataClassNode):
         'polymorphic_identity': 'metricresultsdataclass',
     }
 
-    def __init__(self, _dataclass: MetricResultsDataclass = None):
-        if _dataclass is None:
-            _dataclass = MetricResultsDataclass()
-        DataClassNode.__init__(self, _dataclass=_dataclass)
-        self.metric_name = _dataclass.metric_name
-        self.valid_values = [ValidMetricResultsValues(value=v) for v in _dataclass.validation_values]
-        self.train_values = [TrainMetricResultsValues(value=v) for v in _dataclass.train_values]
-        self.higher_score_is_better = _dataclass.higher_score_is_better
-
-    def update_dataclass(self, _dataclass: MetricResultsDataclass):
+    def _update_attrs_from_dataclass(self, _dataclass: MetricResultsDataclass):
         self.metric_name = _dataclass.metric_name
 
         # Extending the lists with new values from metric results value tables.
         valid_missing_count: int = len(self.valid_values) - len(_dataclass.validation_values)
         self.valid_values.extend([ValidMetricResultsValues(value=v)
                                  for v in _dataclass.validation_values[-valid_missing_count:]])
+
         train_missing_count: int = len(self.train_values) - len(_dataclass.train_values)
         self.train_values.extend([TrainMetricResultsValues(value=v)
                                  for v in _dataclass.train_values[-train_missing_count:]])
@@ -454,45 +519,22 @@ class DatabaseHyperparamRepository(_DatabaseLoggerHandlerMixin, HyperparamsRepos
     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
 
         # Get DataClassNode by parsing the tree with scopedlocation attributes:
-        query = self._build_scoped_query(scope)
+        node: ScopedLocationTreeNode = ScopedLocationTreeNode.query(self.session, scope, deep=deep)
 
-        if deep:
-            n_levels_deeper_to_fetch = 6 - len(scope)
-            for i in range(n_levels_deeper_to_fetch):
-                query = query.joinedload(ScopedLocationTreeNode.subdataclasses)
-
-        tree_node: ScopedLocationTreeNode = query.one()
-        if tree_node is None:
+        if node is None:
             raise ValueError(f"No data found for {scope}")
 
-        return tree_node.to_dataclass(deep=deep)
+        return node.to_dataclass(deep=deep)
 
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
         try:
-            query = self._build_scoped_query(scope)
-            if len(query.all()) > 0:
-                # Node exists, then update it:
-                tree_node: ScopedLocationTreeNode = query.one()
-                tree_node.update_dataclass(_dataclass, deep=deep)
 
-            else:
-                # Get parent to attach child by parsing the tree with popped scopedlocation attributes
-                parent_tree_node: ScopedLocationTreeNode = self._build_scoped_query(scope.popped()).one()
-                parent_tree_node.add_subdataclass(_dataclass, deep=deep)
+            DataClassTreeNodeUpdater(self.session, scope, deep).add_or_update_dataclass(_dataclass, parent=None)
 
             self.session.commit()
         except Exception as e:
             self.session.rollback()
             raise e
-
-    def _build_scoped_query(self, scope):
-        return self.session.query(ScopedLocationTreeNode).filter(
-            and_(*[
-                getattr(ScopedLocationTreeNode, attr) == str(getattr(scope, attr))
-                if getattr(scope, attr) is not None else getattr(ScopedLocationTreeNode, attr) == None
-                for attr in ScopedLocation.__dataclass_fields__
-            ])
-        )
 
 
 class SQLLiteHyperparamsRepository(DatabaseHyperparamRepository):
@@ -501,9 +543,9 @@ class SQLLiteHyperparamsRepository(DatabaseHyperparamRepository):
         sqlite_filepath = os.path.join(sqllite_db_path, "sqlite.db")
         engine = create_engine(f"sqlite:///{sqlite_filepath}", echo=echo, future=True)
 
-        Session = sessionmaker()
-        Session.configure(bind=engine)
-        session = Session()
+        _Session = sessionmaker()
+        _Session.configure(bind=engine)
+        session = _Session()
 
         super().__init__(engine, session)
         self.create_db()

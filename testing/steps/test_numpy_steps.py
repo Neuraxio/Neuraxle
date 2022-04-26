@@ -22,7 +22,7 @@ Tests for NumPy Steps
 import numpy as np
 from neuraxle.steps.numpy import (NumpyConcatenateInnerFeatures,
                                   NumpyFlattenDatum, NumpyShapePrinter,
-                                  NumpyTranspose)
+                                  NumpyTranspose, NumpyFFT, NumpyRavel)
 
 
 def test_flatten_datum():
@@ -61,3 +61,14 @@ def test_numpy_transpose():
 def test_numpy_shape_printer():
     pr = NumpyShapePrinter()
     pr.fit_transform(np.ones((10, 11)))
+
+
+def test_numpy_fft():
+    fft = NumpyFFT()
+    fft.fit_transform(np.ones((10, 11)))
+
+
+def test_numpy_ravel():
+    nr = NumpyRavel()
+    nr, out = nr.fit_transform(np.ones((10, 11)))
+    assert out.shape == (110,)

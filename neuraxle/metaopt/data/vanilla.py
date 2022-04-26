@@ -194,15 +194,22 @@ class ScopedLocation(BaseService):
         """
         Set sublocation attr from the provided :class:`BaseMetadata` type.
         """
-        # Throw value error if the key's type is not yet to be defined:
         curr_attr_to_set_idx: int = len(self)
         key_idx: int = list(dataclass_2_id_attr.keys()).index(key)
-        if curr_attr_to_set_idx != key_idx:
+
+        if curr_attr_to_set_idx == key_idx + 1 and self[key] == value:
+            # operation is redundant but ok: no effect.
+            return
+        elif curr_attr_to_set_idx == key_idx:
+            # update as expected:
+            key_attr_name: str = dataclass_2_id_attr[key]
+            setattr(self, key_attr_name, value)
+        else:
+            # curr_attr_to_set_idx != key_idx:
+            # Throw value error if the key's type is not yet to be defined:
             raise ValueError(
                 f"{key} is not yet to be defined. Currently, "
                 f"{list(dataclass_2_id_attr.keys())[curr_attr_to_set_idx]} is the next to be set.")
-        key_attr_name: str = dataclass_2_id_attr[key]
-        setattr(self, key_attr_name, value)
 
     def peek(self) -> ScopedLocationAttr:
         """
@@ -421,6 +428,9 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
     def subdataclass_type(cls) -> Type[SubDataclassT]:
         return dataclass_2_subdataclass[cls]
 
+    def is_terminal_leaf(self) -> bool:
+        return self.__class__ == MetricResultsDataclass
+
 
 @dataclass(order=True)
 class DataclassHasOrderedDictMixin:
@@ -443,9 +453,17 @@ class DataclassHasOrderedDictMixin:
         self._validate()
 
     def set_sublocation_keys(self, keys: List[ScopedLocationAttr]) -> 'BaseDataclass':
-        _sublocation = OrderedDict([(k, None) for k in keys])
+        _sublocation = OrderedDict([(str(k), None) for k in keys])
         setattr(self, self._sublocation_attr_name, _sublocation)
         self._validate()
+
+    def set_sublocation_items(
+        self, items: List[Tuple[ScopedLocationAttr, SubDataclassT]]
+    ) -> 'BaseDataclass':
+        _sublocation = OrderedDict([(str(k), v) for k, v in items])
+        setattr(self, self._sublocation_attr_name, _sublocation)
+        self._validate()
+        return self
 
     def get_sublocation_values(self) -> List[SubDataclassT]:
         return list(self.get_sublocation().values())
@@ -492,6 +510,19 @@ class DataclassHasListMixin:
             [int(k) for k in keys])), f"Bad sublocation keys are being set into DataclassHasListMixin (type {self.__class__.__name__}, id={self.get_id()}) : {keys}."
         setattr(self, self._sublocation_attr_name, _sublocation)
         self._validate()
+
+    def set_sublocation_items(
+        self, items: List[Tuple[ScopedLocationAttr, SubDataclassT]]
+    ) -> 'BaseDataclass':
+        _sublocation = []
+        for i, (k, v) in enumerate(sorted(items)):
+            k = int(k)
+            assert k == v.get_id(
+            ) and (i == k or i - 1 == k), f"Bad sublocation keys are being set into DataclassHasListMixin (type {self.__class__.__name__}, id={self.get_id()}) : {items}."
+            _sublocation.append(v)
+        setattr(self, self._sublocation_attr_name, _sublocation)
+        self._validate()
+        return self
 
     def get_sublocation_values(self) -> List[SubDataclassT]:
         return self.get_sublocation()
