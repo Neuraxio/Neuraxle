@@ -48,8 +48,7 @@ from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
 from neuraxle.logging.logging import (LOGGING_DATETIME_STR_FORMAT,
                                       NeuraxleLogger)
 from neuraxle.logging.warnings import RaiseDeprecatedClass
-from neuraxle.metaopt.data import \
-    aggregates as agg  # import neuraxle.metaopt.data.aggregates as agg
+from neuraxle.metaopt.data import aggregates as agg
 from neuraxle.metaopt.observable import _ObservableRepo
 
 SubDataclassT = TypeVar('SubDataclassT', bound=Optional['BaseDataclass'])
