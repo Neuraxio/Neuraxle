@@ -3,8 +3,7 @@ from typing import Callable, List
 
 import pytest
 from neuraxle.base import CX, synchroneous_flow_method
-from neuraxle.metaopt.data.db_hp_repo import SQLLiteHyperparamsRepository
-# from neuraxle.metaopt.data.db_hp_repo import DatabaseHyperparamRepository
+from neuraxle.metaopt.data.db_repo import SQLLiteHyperparamsRepository
 from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            AutoMLContext, BaseDataclass,

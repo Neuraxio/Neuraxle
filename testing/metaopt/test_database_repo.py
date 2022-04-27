@@ -2,7 +2,7 @@
 import os
 
 import pytest
-from neuraxle.metaopt.data.db_hp_repo import (Base, ClientNode,
+from neuraxle.metaopt.data.db_repo import (Base, ClientNode,
                                               DatabaseHyperparamRepository,
                                               DataClassNode, ProjectNode,
                                               ScopedLocationTreeNode,

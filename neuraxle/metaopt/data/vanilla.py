@@ -48,6 +48,8 @@ from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
 from neuraxle.logging.logging import (LOGGING_DATETIME_STR_FORMAT,
                                       NeuraxleLogger)
 from neuraxle.logging.warnings import RaiseDeprecatedClass
+from neuraxle.metaopt.data import \
+    aggregates as agg  # import neuraxle.metaopt.data.aggregates as agg
 from neuraxle.metaopt.observable import _ObservableRepo
 
 SubDataclassT = TypeVar('SubDataclassT', bound=Optional['BaseDataclass'])
@@ -1201,7 +1203,6 @@ class AutoMLContext(CX):
         """
         Load the current agg from the repo.
         """
-        import neuraxle.metaopt.data.aggregates as agg
         aggregate: 'agg.BaseAggregate' = agg.BaseAggregate.from_context(
             self, is_deep=deep)
         return aggregate
