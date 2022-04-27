@@ -140,6 +140,10 @@ class ScopedLocation(BaseService):
         """
         if isinstance(dc, RootDataclass):
             return ScopedLocation()
+        elif dc.is_terminal_leaf():
+            cpy = self.copy()
+            cpy.metric_name = dc.get_id()
+            return cpy
         self_copy = self.copy()
         self_copy[dc.__class__] = dc.get_id()
         return self_copy
@@ -242,11 +246,10 @@ class ScopedLocation(BaseService):
             key_attr_name: str = dataclass_2_id_attr[key]
             setattr(self, key_attr_name, value)
         else:
-            # curr_attr_to_set_idx != key_idx:
             # Throw value error if the key's type is not yet to be defined:
+            # curr_attr_to_set_idx != key_idx:
             raise ValueError(
-                f"{key} is not yet to be defined. Currently, "
-                f"{list(dataclass_2_id_attr.keys())[curr_attr_to_set_idx]} is the next to be set.")
+                f"{key} is not yet to be defined into {self}.")
 
     def peek(self) -> ScopedLocationAttr:
         """
@@ -563,10 +566,14 @@ class DataclassHasListMixin:
         self, items: List[Tuple[ScopedLocationAttr, SubDataclassT]]
     ) -> 'BaseDataclass':
         _sublocation = []
+        items = [(int(k), v) for k, v in items]
         for i, (k, v) in enumerate(sorted(items)):
-            k = int(k)
-            assert k == v.get_id(
-            ) and (i == k or i - 1 == k), f"Bad sublocation keys are being set into DataclassHasListMixin (type {self.__class__.__name__}, id={self.get_id()}) : {items}."
+            if i != k:
+                raise ValueError(
+                    f"Bad sublocation keys are being set into DataclassHasListMixin (type {self.__class__.__name__}, id={self.get_id()}) : {items}.")
+            assert k == v.get_id() and (i == k), (
+                f"Bad sublocation keys are being set into DataclassHasListMixin of type {self.__class__.__name__}, id={self.get_id()} : {i} != {k} != {v.get_id()}. \n\nFor more context: {items}"
+            )
             _sublocation.append(v)
         setattr(self, self._sublocation_attr_name, _sublocation)
         self._validate()
@@ -733,8 +740,18 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
             return super().__getitem__(loc)
 
     def set_sublocation_keys(self, keys: List[ScopedLocationAttr]) -> 'BaseDataclass':
-        keys = [k for k in keys if int(k) != RETRAIN_TRIAL_SPLIT_ID]
+        keys = [int(k) for k in keys if int(k) != RETRAIN_TRIAL_SPLIT_ID]
         super().set_sublocation_keys(keys)
+
+    def set_sublocation_items(self, items: List[Tuple[ScopedLocationAttr, SubDataclassT]]) -> 'BaseDataclass':
+        items = [(int(k), v) for k, v in items]
+        items_filtered = []
+        for item in items:
+            if item[0] == RETRAIN_TRIAL_SPLIT_ID:
+                self.retrained_split = item[1]
+            else:
+                items_filtered.append(item)
+        super().set_sublocation_items(items_filtered)
 
     def shallow(self) -> 'BaseDataclass':
         shallowed: TrialDataclass = super().shallow()
