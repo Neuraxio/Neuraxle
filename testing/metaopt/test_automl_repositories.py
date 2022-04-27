@@ -140,7 +140,7 @@ def test_hyperparams_repository_saves_subsequent_data(
     loc: ScopedLocation = SOME_FULL_SCOPED_LOCATION.at_dc(_dataclass)
     cx: AutoMLContext = cx_repo_ctor(tmpdir).with_loc(loc)
     repo: HyperparamsRepository = cx.repo
-    repo.save(copy.deepcopy(SOME_ROOT_DATACLASS), scope=loc, deep=True)
+    repo.save(copy.deepcopy(SOME_ROOT_DATACLASS), scope=ScopedLocation(), deep=True)
     old_id = _dataclass.get_id()
     next_id = old_id + 1 if isinstance(old_id, int) else old_id + "_next"
     next_dataclass = copy.deepcopy(_dataclass).set_id(next_id)

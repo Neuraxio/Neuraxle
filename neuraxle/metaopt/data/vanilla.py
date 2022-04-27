@@ -32,6 +32,7 @@ import copy
 import datetime
 import json
 import logging
+import math
 import os
 import typing
 from abc import ABC, abstractmethod
@@ -61,6 +62,13 @@ DEFAULT_ROUND: ScopedLocationAttrInt = 0
 DEFAULT_TRIAL: ScopedLocationAttrInt = 0
 DEFAULT_TRIAL_SPLIT: ScopedLocationAttrInt = 0
 DEFAULT_METRIC_NAME: ScopedLocationAttrStr = "main"
+
+NULL_PROJECT = "NO_PROJECT"
+NULL_CLIENT = "NO_CLIENT"
+NULL_ROUND = -math.inf
+NULL_TRIAL = -math.inf
+NULL_TRIAL_SPLIT = -math.inf
+NULL_METRIC_NAME = "NO_METRIC"
 
 
 @dataclass(order=True)
@@ -134,6 +142,35 @@ class ScopedLocation(BaseService):
             return ScopedLocation()
         self_copy = self.copy()
         self_copy[dc.__class__] = dc.get_id()
+        return self_copy
+
+    def fill_to_dc(self, dc: 'BaseDataclass') -> 'ScopedLocation':
+        """
+        Returns a :class:`ScopedLocation` with the provided :class:`BaseDataclass` (dc) type's id added at the end, with the particularity that if some elements are missing, they are filled with the default null values.
+        """
+        expected_len = list(dataclass_2_subdataclass.keys()).index(dc.__class__)
+        _len = len(self)
+        # if the length is not the expected one, fill with None attrs (for the missing ones). Otherwise, return the current scoped location reduced at the good dc depth.
+        if _len > expected_len:
+            return self.at_dc(dc)
+        else:
+            return self.pad_nans().at_dc(dc).popped().with_dc(dc)
+
+    def pad_nans(self) -> 'ScopedLocation':
+        """
+        Returns a :class:`ScopedLocation` with the missing elements filled with the default null values.
+        """
+        self_copy = self.copy()
+        null_vals = [
+            NULL_PROJECT,
+            NULL_CLIENT,
+            NULL_ROUND,
+            NULL_TRIAL,
+            NULL_TRIAL_SPLIT,
+            NULL_METRIC_NAME,
+        ]
+        for i in range(len(self_copy), len(dataclass_2_id_attr)):
+            self_copy[list(dataclass_2_id_attr.keys())[i]] = null_vals[i]
         return self_copy
 
     def with_id(self, _id: ScopedLocationAttr) -> 'ScopedLocation':
@@ -430,6 +467,17 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
 
     def is_terminal_leaf(self) -> bool:
         return self.__class__ == MetricResultsDataclass
+
+    def _tree(self, _list: List[ScopedLocation], parent_scope: ScopedLocation) -> List[ScopedLocation]:
+        this_scope = parent_scope.fill_to_dc(self)
+        _list.append(this_scope)
+        if not self.is_terminal_leaf():
+            for _subloc in self.get_sublocation_values():
+                _subloc._tree(_list, this_scope)
+        return _list
+
+    def tree(self) -> List[ScopedLocation]:
+        return self._tree([], ScopedLocation())
 
 
 @dataclass(order=True)

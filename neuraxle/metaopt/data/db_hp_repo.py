@@ -421,13 +421,17 @@ class MetricResultsNode(DataClassNode):
         self.metric_name = _dataclass.metric_name
 
         # Extending the lists with new values from metric results value tables.
-        valid_missing_count: int = len(_dataclass.validation_values) - len(self.valid_values)
-        self.valid_values.extend([ValidMetricResultsValues(value=v)
-                                 for v in _dataclass.validation_values[-valid_missing_count:]])
+        start: int = len(self.valid_values)
+        self.valid_values.extend([
+            ValidMetricResultsValues(value=v)
+            for v in _dataclass.validation_values[start:]
+        ])
 
-        train_missing_count: int = len(_dataclass.train_values) - len(self.train_values)
-        self.train_values.extend([TrainMetricResultsValues(value=v)
-                                 for v in _dataclass.train_values[-train_missing_count:]])
+        start: int = len(self.train_values)
+        self.train_values.extend([
+            TrainMetricResultsValues(value=v)
+            for v in _dataclass.train_values[start:]
+        ])
 
         self.higher_score_is_better = _dataclass.higher_score_is_better
 
