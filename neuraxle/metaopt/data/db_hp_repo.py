@@ -549,6 +549,7 @@ class SQLLiteHyperparamsRepository(DatabaseHyperparamRepository):
     def __init__(self, sqllite_db_path, echo=True):
 
         sqlite_filepath = os.path.join(sqllite_db_path, "sqlite.db")
+        os.makedirs(sqllite_db_path, exist_ok=True)
         engine = create_engine(f"sqlite:///{sqlite_filepath}", echo=echo, future=True)
 
         _Session = sessionmaker()
