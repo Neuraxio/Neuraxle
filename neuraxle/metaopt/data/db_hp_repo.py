@@ -529,10 +529,10 @@ class DatabaseHyperparamRepository(_DatabaseLoggerHandlerMixin, HyperparamsRepos
         # Get DataClassNode by parsing the tree with scopedlocation attributes:
         node: ScopedLocationTreeNode = ScopedLocationTreeNode.query(self.session, scope, deep=deep)
 
-        if node is None:
-            raise ValueError(f"No data found for {scope}")
-
-        return node.to_dataclass(deep=deep)
+        if node is not None:
+            return node.to_dataclass(deep=deep)
+        else:
+            return scope.new_dataclass_from_id()
 
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
         try:
@@ -562,7 +562,7 @@ class SQLLiteHyperparamsRepository(DatabaseHyperparamRepository):
 
 class PostGreSQLHyperparamsRepository(DatabaseHyperparamRepository):
 
-    def __init__(self, postgresql_db_path, echo=True):
+    def __init__(self, postgresql_db_path, echo=False):
         raise NotImplementedError("TODO: implement this.")
 
     def get_database_path(self, user: str, password: str, host: str, dialect: str, driver: str = ''):
