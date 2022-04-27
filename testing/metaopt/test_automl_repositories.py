@@ -123,7 +123,7 @@ def test_hyperparams_repository_loads_stored_scoped_info(
     loc: ScopedLocation = SOME_FULL_SCOPED_LOCATION.at_dc(_dataclass)
     cx: AutoMLContext = cx_repo_ctor(tmpdir).with_loc(loc)
     repo: HyperparamsRepository = cx.repo
-    repo.save(copy.deepcopy(SOME_ROOT_DATACLASS), scope=loc, deep=True)
+    repo.save(copy.deepcopy(SOME_ROOT_DATACLASS), scope=ScopedLocation(), deep=True)
 
     restored_dataclass_deep = repo.load(loc, deep=True)
     restored_dataclass_shallow = repo.load(loc, deep=False)
