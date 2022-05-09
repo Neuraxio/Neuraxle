@@ -88,7 +88,7 @@ setup(
     author='Neuraxio Inc.',
     author_email='guillaume.chevalier@neuraxio.com',
     packages=find_packages(include=['neuraxle*']),
-    test_suite="testing",
+    test_suite="testing_neuraxle",
     setup_requires=["pytest-runner"],
     install_requires=[
         'numpy>=1.16.2',
