@@ -7,7 +7,7 @@ from neuraxle.base import Identity, MetaStep, NamedStepsList, _HasChildrenMixin
 from neuraxle.hyperparams.space import RecursiveDict
 from neuraxle.pipeline import Pipeline
 
-from testing.test_pipeline import SomeStep
+from testing_neuraxle.test_pipeline import SomeStep
 
 
 class SomePipeline(Pipeline):

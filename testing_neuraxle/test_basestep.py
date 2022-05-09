@@ -7,7 +7,7 @@ from neuraxle.steps.flow import TestOnlyWrapper, TrainOnlyWrapper
 from neuraxle.steps.misc import TapeCallbackFunction, CallbackWrapper
 from neuraxle.steps.numpy import MultiplyByN
 
-from testing.mocks.step_mocks import SomeStepWithHyperparams
+from testing_neuraxle.mocks.step_mocks import SomeStepWithHyperparams
 
 
 def test_basestep_print_str_representation_works_correctly():

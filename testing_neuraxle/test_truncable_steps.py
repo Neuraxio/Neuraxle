@@ -1,6 +1,6 @@
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import TrainOnlyWrapper
-from testing.mocks.step_mocks import SomeSplitStep, SomeStep, SomeTruncableStep
+from testing_neuraxle.mocks.step_mocks import SomeSplitStep, SomeStep, SomeTruncableStep
 
 
 def test_truncable_steps_should_split_by_type():

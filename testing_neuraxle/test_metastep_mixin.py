@@ -7,7 +7,7 @@ from neuraxle.base import BaseService, MetaStep, NonFittableMixin
 from neuraxle.pipeline import Pipeline
 from neuraxle.union import Identity
 
-from testing.mocks.step_mocks import SomeMetaStepWithHyperparams
+from testing_neuraxle.mocks.step_mocks import SomeMetaStepWithHyperparams
 
 
 def test_metastepmixin_set_train_should_set_train_to_false():

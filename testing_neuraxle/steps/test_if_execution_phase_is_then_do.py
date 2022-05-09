@@ -5,7 +5,7 @@ from pytest import skip
 from neuraxle.base import CX, ExecutionPhase
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.steps.flow import IfExecutionPhaseIsThen, ExecutionPhaseSwitch
-from testing.test_forcehandle_mixin import ForceHandleIdentity
+from testing_neuraxle.test_forcehandle_mixin import ForceHandleIdentity
 
 
 class SomeStep(ForceHandleIdentity):

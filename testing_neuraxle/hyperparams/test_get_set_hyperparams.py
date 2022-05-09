@@ -5,7 +5,7 @@ from neuraxle.hyperparams.distributions import Boolean, RandInt
 from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace, RecursiveDict
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import StepClonerForEachDataInput
-from testing.test_pipeline import SomeStep
+from testing_neuraxle.test_pipeline import SomeStep
 
 
 SOME_STEP_HP_KEY = 'somestep_hyperparam'

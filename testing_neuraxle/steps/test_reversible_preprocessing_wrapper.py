@@ -6,7 +6,7 @@ from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import ReversiblePreprocessingWrapper
 from neuraxle.steps.misc import TapeCallbackFunction, CallbackWrapper
 from neuraxle.steps.numpy import MultiplyByN, AddN
-from testing.steps.neuraxle_test_case import NeuraxleTestCase
+from testing_neuraxle.steps.neuraxle_test_case import NeuraxleTestCase
 
 DATA_INPUTS = np.array(range(5))
 EXPECTED_OUTPUTS = np.array(range(5, 10))

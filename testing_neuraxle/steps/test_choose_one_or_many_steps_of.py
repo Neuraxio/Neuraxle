@@ -8,7 +8,7 @@ from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import ChooseOneOrManyStepsOf, ChooseOneStepOf
 from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction, FitTransformCallbackStep, AssertFalseStep
-from testing.steps.neuraxle_test_case import NeuraxleTestCase
+from testing_neuraxle.steps.neuraxle_test_case import NeuraxleTestCase
 
 DATA_INPUTS = np.array(range(10))
 EXPECTED_OUTPUTS = np.array(range(10))

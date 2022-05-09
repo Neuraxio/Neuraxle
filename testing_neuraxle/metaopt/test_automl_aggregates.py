@@ -23,9 +23,9 @@ from neuraxle.metaopt.validation import GridExplorationSampler
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import AddN, MultiplyByN
 from sklearn.metrics import median_absolute_error
-from testing.metaopt.test_automl_dataclasses import (SOME_FULL_SCOPED_LOCATION,
+from testing_neuraxle.metaopt.test_automl_dataclasses import (SOME_FULL_SCOPED_LOCATION,
                                                      SOME_ROOT_DATACLASS)
-from testing.metaopt.test_automl_repositories import CX_WITH_REPO_CTORS, TmpDir
+from testing_neuraxle.metaopt.test_automl_repositories import CX_WITH_REPO_CTORS, TmpDir
 
 
 class SomeException(Exception):

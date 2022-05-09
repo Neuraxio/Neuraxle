@@ -17,7 +17,7 @@ from sqlalchemy.orm import backref, relationship, sessionmaker
 from sqlalchemy.orm.collections import attribute_mapped_collection
 from sqlalchemy.schema import Sequence
 from sqlalchemy.sql import asc, desc, func
-from testing.metaopt.test_automl_dataclasses import (ALL_DATACLASSES,
+from testing_neuraxle.metaopt.test_automl_dataclasses import (ALL_DATACLASSES,
                                                      SOME_CLIENT_DATACLASS,
                                                      SOME_FULL_SCOPED_LOCATION,
                                                      SOME_PROJECT_DATACLASS,

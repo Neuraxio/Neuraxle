@@ -21,7 +21,7 @@ from neuraxle.steps.sklearn import SKLearnWrapper
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, mean_squared_error
 from sklearn.preprocessing import StandardScaler
-from testing.metaopt.test_automl_repositories import CX_WITH_REPO_CTORS, TmpDir
+from testing_neuraxle.metaopt.test_automl_repositories import CX_WITH_REPO_CTORS, TmpDir
 
 
 def _create_data_source():

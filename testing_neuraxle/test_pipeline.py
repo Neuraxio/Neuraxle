@@ -31,7 +31,7 @@ from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction
 from neuraxle.steps.numpy import NumpyTranspose
 from neuraxle.union import Identity, AddFeatures, ModelStacking
-from testing.mocks.step_mocks import SomeStep, AN_INPUT, AN_EXPECTED_OUTPUT
+from testing_neuraxle.mocks.step_mocks import SomeStep, AN_INPUT, AN_EXPECTED_OUTPUT
 
 steps_lists = [
     [("just_one_step", SomeStep())],

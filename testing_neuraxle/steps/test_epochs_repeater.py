@@ -5,7 +5,7 @@ from neuraxle.base import ExecutionMode
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.data import EpochRepeater
 from neuraxle.steps.misc import TapeCallbackFunction, FitTransformCallbackStep
-from testing.steps.neuraxle_test_case import NeuraxleTestCase
+from testing_neuraxle.steps.neuraxle_test_case import NeuraxleTestCase
 
 DATA_INPUTS = np.array(range(10))
 EXPECTED_OUTPUTS = np.array(range(10, 20))
