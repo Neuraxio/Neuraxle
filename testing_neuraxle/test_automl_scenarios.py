@@ -2,7 +2,7 @@
 import copy
 from collections import defaultdict, namedtuple
 from dataclasses import dataclass, field
-from typing import Dict, List, Set, Tuple, Type, Any
+from typing import Any, Dict, List, Set, Tuple, Type
 
 import numpy as np
 import pytest
@@ -17,7 +17,7 @@ from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         HyperparameterSpace)
 from neuraxle.metaopt.auto_ml import ControlledAutoML, DefaultLoop, Trainer
 from neuraxle.metaopt.callbacks import MetricCallback
-from neuraxle.metaopt.data.aggregates import Round
+from neuraxle.metaopt.data.aggregates import BaseAggregate, Round
 from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, AutoMLContext,
                                            BaseDataclass, RoundDataclass,
@@ -64,7 +64,7 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
 
     pred: DACT = automl.handle_predict(dact.without_eo(), cx)
 
-    round_scope: Round = cx.with_loc(ScopedLocation.default(round_number=0)).load_agg()
+    round_scope: Round = BaseAggregate.from_context(cx.with_loc(ScopedLocation.default(round_number=0)), is_deep=True)
     best: Tuple[float, int, FlatDict] = round_scope.best_result_summary()
     best_score = best[0]
     assert best_score == 0
@@ -198,7 +198,7 @@ def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
         tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)
     automl_refiting_best, preds = automl_refiting_best.handle_fit_transform(dact, cx)
 
-    round_scope: Round = cx.with_loc(ScopedLocation.default(round_number=0)).load_agg()
+    round_scope: Round = BaseAggregate.from_context(cx.with_loc(ScopedLocation.default(round_number=0)), is_deep=True)
     bests: List[Tuple[float, int, FlatDict]] = round_scope.summary()
 
     assert len(bests) == n_trials
@@ -245,7 +245,7 @@ def test_automl_can_use_same_repo_in_parallel(tmpdir, use_processes=True):
         tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)
     automl_refiting_best, preds = automl_refiting_best.handle_fit_transform(dact, cx)
 
-    round_scope: Round = cx.with_loc(ScopedLocation.default(round_number=0)).load_agg()
+    round_scope: Round = BaseAggregate.from_context(cx.with_loc(ScopedLocation.default(round_number=0)), is_deep=True)
     bests: List[Tuple[float, int, FlatDict]] = round_scope.summary()
 
     assert len(bests) == n_trials
