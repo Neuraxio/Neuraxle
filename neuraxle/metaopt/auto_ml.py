@@ -428,6 +428,7 @@ class AutoML(ControlledAutoML):
         hyperparams_repository: HyperparamsRepository = None,
         n_trials: int = None,
         refit_best_trial: bool = True,
+        start_new_round=True,
         epochs: int = 1,
         n_jobs=1,
         continue_loop_on_error=True
@@ -466,6 +467,6 @@ class AutoML(ControlledAutoML):
             loop=controller_loop,
             repo=hyperparams_repository,
             main_metric_name=callbacks[0].name,
-            start_new_round=True,
+            start_new_round=start_new_round,
             refit_best_trial=refit_best_trial,
         )
