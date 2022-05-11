@@ -1,9 +1,12 @@
 import copy
-from typing import Type
+from typing import List, Type
 
 import pytest
 from neuraxle.base import TrialStatus, synchroneous_flow_method
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
+                                           NULL_CLIENT, NULL_PROJECT,
+                                           NULL_ROUND, NULL_TRIAL,
+                                           NULL_TRIAL_SPLIT,
                                            RETRAIN_TRIAL_SPLIT_ID,
                                            BaseDataclass, ClientDataclass,
                                            MetricResultsDataclass,
@@ -159,3 +162,28 @@ def test_trial_dataclass_can_store_and_contains_retrain_split():
     assert tsc.get_id() == RETRAIN_TRIAL_SPLIT_ID
     assert tc.retrained_split == tsc
     assert tc[sl] == tc.retrained_split
+
+
+def test_fill_to_dc():
+    nl = ScopedLocation().fill_to_dc(SOME_METRIC_RESULTS_DATACLASS)
+
+    assert nl == ScopedLocation(
+        NULL_PROJECT,
+        NULL_CLIENT,
+        NULL_ROUND,
+        NULL_TRIAL,
+        NULL_TRIAL_SPLIT,
+        SOME_METRIC_RESULTS_DATACLASS.get_id(),
+    )
+
+
+def test_dataclass_tree():
+    base_scope = ScopedLocation()
+    expected_result: List[ScopedLocation] = []
+    for dc in ALL_DATACLASSES:
+        base_scope = base_scope.fill_to_dc(dc)
+        expected_result.append(base_scope)
+
+    tree = SOME_ROOT_DATACLASS.tree()
+
+    assert tree == expected_result

@@ -2,17 +2,15 @@ import copy
 from typing import Callable, List
 
 import pytest
-from neuraxle.base import CX, synchroneous_flow_method
+from neuraxle.base import CX
+from neuraxle.metaopt.data.db_repo import SQLLiteHyperparamsRepository
 from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            AutoMLContext, BaseDataclass,
                                            ClientDataclass,
                                            HyperparamsRepository,
                                            ProjectDataclass, RootDataclass,
-                                           RoundDataclass, ScopedLocation,
-                                           VanillaHyperparamsRepository,
-                                           as_named_odict, from_json, to_json)
-from sklearn.metrics import median_absolute_error
+                                           RoundDataclass, ScopedLocation)
 from testing.metaopt.test_automl_dataclasses import (ALL_DATACLASSES,
                                                      SOME_CLIENT_DATACLASS,
                                                      SOME_FULL_SCOPED_LOCATION,
@@ -33,7 +31,13 @@ def disk_repo_ctor(tmpdir: TmpDir = None) -> AutoMLContext:
     return AutoMLContext.from_context(cx, repo=HyperparamsOnDiskRepository(tmpdir))
 
 
-CX_WITH_REPO_CTORS: List[Callable[[TmpDir], AutoMLContext]] = [vanilla_repo_ctor, disk_repo_ctor]
+def db_repo_ctor(tmpdir: TmpDir = None) -> AutoMLContext:
+    cx = CX()
+    tmpdir = tmpdir or cx.get_new_cache_folder()
+    return AutoMLContext.from_context(cx, repo=SQLLiteHyperparamsRepository(tmpdir))
+
+
+CX_WITH_REPO_CTORS: List[Callable[[TmpDir], AutoMLContext]] = [vanilla_repo_ctor, disk_repo_ctor, db_repo_ctor]
 
 
 @pytest.mark.parametrize('cx_repo_ctor', CX_WITH_REPO_CTORS)
@@ -115,7 +119,7 @@ def test_hyperparams_repository_loads_stored_scoped_info(
     loc: ScopedLocation = SOME_FULL_SCOPED_LOCATION.at_dc(_dataclass)
     cx: AutoMLContext = cx_repo_ctor(tmpdir).with_loc(loc)
     repo: HyperparamsRepository = cx.repo
-    repo.save(copy.deepcopy(SOME_ROOT_DATACLASS), scope=loc, deep=True)
+    repo.save(copy.deepcopy(SOME_ROOT_DATACLASS), scope=ScopedLocation(), deep=True)
 
     restored_dataclass_deep = repo.load(loc, deep=True)
     restored_dataclass_shallow = repo.load(loc, deep=False)
@@ -132,7 +136,7 @@ def test_hyperparams_repository_saves_subsequent_data(
     loc: ScopedLocation = SOME_FULL_SCOPED_LOCATION.at_dc(_dataclass)
     cx: AutoMLContext = cx_repo_ctor(tmpdir).with_loc(loc)
     repo: HyperparamsRepository = cx.repo
-    repo.save(copy.deepcopy(SOME_ROOT_DATACLASS), scope=loc, deep=True)
+    repo.save(copy.deepcopy(SOME_ROOT_DATACLASS), scope=ScopedLocation(), deep=True)
     old_id = _dataclass.get_id()
     next_id = old_id + 1 if isinstance(old_id, int) else old_id + "_next"
     next_dataclass = copy.deepcopy(_dataclass).set_id(next_id)

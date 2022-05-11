@@ -32,9 +32,9 @@ class SomeException(Exception):
     pass
 
 
-def _raise_if_is_at_level(aggregate: BaseAggregate, level_to_raise: Type[BaseAggregate], current_phase: str, phase_to_raise: str):
-    if isinstance(aggregate, level_to_raise) and phase_to_raise == current_phase:
-        raise SomeException(f"==> Raising at `{phase_to_raise}`of `{level_to_raise.__name__}` as planned. <==\n"
+def _raise_if_is_at_level(aggregate: BaseAggregate, level_type_to_raise: Type[BaseAggregate], current_phase: str, phase_to_raise: str):
+    if isinstance(aggregate, level_type_to_raise) and phase_to_raise == current_phase:
+        raise SomeException(f"==> Raising at `{phase_to_raise}`of `{level_type_to_raise.__name__}` as planned. <==\n"
                             f"(This should not be catched).")
     else:
         return

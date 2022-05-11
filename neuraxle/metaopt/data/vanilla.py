@@ -32,6 +32,7 @@ import copy
 import datetime
 import json
 import logging
+import math
 import os
 import typing
 from abc import ABC, abstractmethod
@@ -41,13 +42,13 @@ from json.encoder import JSONEncoder
 from typing import (Any, Dict, Generic, List, Optional, Sequence, Tuple, Type,
                     TypeVar, Union)
 
-import neuraxle.metaopt.data.aggregates as agg
 import numpy as np
 from neuraxle.base import CX, BaseService, ContextLock, TrialStatus
 from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
 from neuraxle.logging.logging import (LOGGING_DATETIME_STR_FORMAT,
                                       NeuraxleLogger)
 from neuraxle.logging.warnings import RaiseDeprecatedClass
+from neuraxle.metaopt.data import aggregates as agg
 from neuraxle.metaopt.observable import _ObservableRepo
 
 SubDataclassT = TypeVar('SubDataclassT', bound=Optional['BaseDataclass'])
@@ -62,6 +63,13 @@ DEFAULT_ROUND: ScopedLocationAttrInt = 0
 DEFAULT_TRIAL: ScopedLocationAttrInt = 0
 DEFAULT_TRIAL_SPLIT: ScopedLocationAttrInt = 0
 DEFAULT_METRIC_NAME: ScopedLocationAttrStr = "main"
+
+NULL_PROJECT = "NO_PROJECT"
+NULL_CLIENT = "NO_CLIENT"
+NULL_ROUND = -math.inf
+NULL_TRIAL = -math.inf
+NULL_TRIAL_SPLIT = -math.inf
+NULL_METRIC_NAME = "NO_METRIC"
 
 
 @dataclass(order=True)
@@ -133,8 +141,41 @@ class ScopedLocation(BaseService):
         """
         if isinstance(dc, RootDataclass):
             return ScopedLocation()
+        elif dc.is_terminal_leaf():
+            cpy = self.copy()
+            cpy.metric_name = dc.get_id()
+            return cpy
         self_copy = self.copy()
         self_copy[dc.__class__] = dc.get_id()
+        return self_copy
+
+    def fill_to_dc(self, dc: 'BaseDataclass') -> 'ScopedLocation':
+        """
+        Returns a :class:`ScopedLocation` with the provided :class:`BaseDataclass` (dc) type's id added at the end, with the particularity that if some elements are missing, they are filled with the default null values.
+        """
+        expected_len = list(dataclass_2_subdataclass.keys()).index(dc.__class__)
+        _len = len(self)
+        # if the length is not the expected one, fill with None attrs (for the missing ones). Otherwise, return the current scoped location reduced at the good dc depth.
+        if _len > expected_len:
+            return self.at_dc(dc)
+        else:
+            return self.pad_nans().at_dc(dc).popped().with_dc(dc)
+
+    def pad_nans(self) -> 'ScopedLocation':
+        """
+        Returns a :class:`ScopedLocation` with the missing elements filled with the default null values.
+        """
+        self_copy = self.copy()
+        null_vals = [
+            NULL_PROJECT,
+            NULL_CLIENT,
+            NULL_ROUND,
+            NULL_TRIAL,
+            NULL_TRIAL_SPLIT,
+            NULL_METRIC_NAME,
+        ]
+        for i in range(len(self_copy), len(dataclass_2_id_attr)):
+            self_copy[list(dataclass_2_id_attr.keys())[i]] = null_vals[i]
         return self_copy
 
     def with_id(self, _id: ScopedLocationAttr) -> 'ScopedLocation':
@@ -195,15 +236,21 @@ class ScopedLocation(BaseService):
         """
         Set sublocation attr from the provided :class:`BaseMetadata` type.
         """
-        # Throw value error if the key's type is not yet to be defined:
         curr_attr_to_set_idx: int = len(self)
         key_idx: int = list(dataclass_2_id_attr.keys()).index(key)
-        if curr_attr_to_set_idx != key_idx:
+
+        if curr_attr_to_set_idx == key_idx + 1 and self[key] == value:
+            # operation is redundant but ok: no effect.
+            return
+        elif curr_attr_to_set_idx == key_idx:
+            # update as expected:
+            key_attr_name: str = dataclass_2_id_attr[key]
+            setattr(self, key_attr_name, value)
+        else:
+            # Throw value error if the key's type is not yet to be defined:
+            # curr_attr_to_set_idx != key_idx:
             raise ValueError(
-                f"{key} is not yet to be defined. Currently, "
-                f"{list(dataclass_2_id_attr.keys())[curr_attr_to_set_idx]} is the next to be set.")
-        key_attr_name: str = dataclass_2_id_attr[key]
-        setattr(self, key_attr_name, value)
+                f"{key} is not yet to be defined into {self}.")
 
     def peek(self) -> ScopedLocationAttr:
         """
@@ -338,6 +385,9 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
     def get_sublocation(self) -> Union[List[SubDataclassT], 'OrderedDict[str, SubDataclassT]']:
         return getattr(self, dataclass_2_subloc_attr[self.__class__])
 
+    def get_sublocation_items(self) -> List[Tuple[ScopedLocationAttr, SubDataclassT]]:
+        return [(k, v) for k, v in zip(self.get_sublocation_keys(), self.get_sublocation_values())]
+
     def set_sublocation(self, sublocation: Union[List[SubDataclassT], 'OrderedDict[str, SubDataclassT]']) -> 'BaseDataclass':
         setattr(self, dataclass_2_subloc_attr[self.__class__], sublocation)
         return self
@@ -419,6 +469,20 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
     def subdataclass_type(cls) -> Type[SubDataclassT]:
         return dataclass_2_subdataclass[cls]
 
+    def is_terminal_leaf(self) -> bool:
+        return self.__class__ == MetricResultsDataclass
+
+    def _tree(self, _list: List[ScopedLocation], parent_scope: ScopedLocation) -> List[ScopedLocation]:
+        this_scope = parent_scope.fill_to_dc(self)
+        _list.append(this_scope)
+        if not self.is_terminal_leaf():
+            for _subloc in self.get_sublocation_values():
+                _subloc._tree(_list, this_scope)
+        return _list
+
+    def tree(self) -> List[ScopedLocation]:
+        return self._tree([], ScopedLocation())
+
 
 @dataclass(order=True)
 class DataclassHasOrderedDictMixin:
@@ -441,9 +505,17 @@ class DataclassHasOrderedDictMixin:
         self._validate()
 
     def set_sublocation_keys(self, keys: List[ScopedLocationAttr]) -> 'BaseDataclass':
-        _sublocation = OrderedDict([(k, None) for k in keys])
+        _sublocation = OrderedDict([(str(k), None) for k in keys])
         setattr(self, self._sublocation_attr_name, _sublocation)
         self._validate()
+
+    def set_sublocation_items(
+        self, items: List[Tuple[ScopedLocationAttr, SubDataclassT]]
+    ) -> 'BaseDataclass':
+        _sublocation = OrderedDict([(str(k), v) for k, v in items])
+        setattr(self, self._sublocation_attr_name, _sublocation)
+        self._validate()
+        return self
 
     def get_sublocation_values(self) -> List[SubDataclassT]:
         return list(self.get_sublocation().values())
@@ -491,6 +563,23 @@ class DataclassHasListMixin:
         setattr(self, self._sublocation_attr_name, _sublocation)
         self._validate()
 
+    def set_sublocation_items(
+        self, items: List[Tuple[ScopedLocationAttr, SubDataclassT]]
+    ) -> 'BaseDataclass':
+        _sublocation = []
+        items = [(int(k), v) for k, v in items]
+        for i, (k, v) in enumerate(sorted(items)):
+            if i != k:
+                raise ValueError(
+                    f"Bad sublocation keys are being set into DataclassHasListMixin (type {self.__class__.__name__}, id={self.get_id()}) : {items}.")
+            assert k == v.get_id() and (i == k), (
+                f"Bad sublocation keys are being set into DataclassHasListMixin of type {self.__class__.__name__}, id={self.get_id()} : {i} != {k} != {v.get_id()}. \n\nFor more context: {items}"
+            )
+            _sublocation.append(v)
+        setattr(self, self._sublocation_attr_name, _sublocation)
+        self._validate()
+        return self
+
     def get_sublocation_values(self) -> List[SubDataclassT]:
         return self.get_sublocation()
 
@@ -536,7 +625,7 @@ class BaseTrialDataclassMixin:
     hyperparams: HyperparameterSamples = field(default_factory=HyperparameterSamples)
     status: TrialStatus = TrialStatus.PLANNED
     created_time: datetime.datetime = field(default_factory=datetime.datetime.now)
-    start_time: datetime.datetime = field(default_factory=datetime.datetime.now)
+    start_time: datetime.datetime = None
     end_time: datetime.datetime = None
     # error: str = None
     # error_traceback: str = None
@@ -567,6 +656,8 @@ class BaseTrialDataclassMixin:
     def end(self, status: TrialStatus) -> 'BaseTrialDataclassMixin':
         self.status = status
         self.end_time = datetime.datetime.now()
+        if self.start_time is None:
+            self.start_time = self.created_time
         self._validate()
         return self
 
@@ -650,8 +741,18 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
             return super().__getitem__(loc)
 
     def set_sublocation_keys(self, keys: List[ScopedLocationAttr]) -> 'BaseDataclass':
-        keys = [k for k in keys if int(k) != RETRAIN_TRIAL_SPLIT_ID]
+        keys = [int(k) for k in keys if int(k) != RETRAIN_TRIAL_SPLIT_ID]
         super().set_sublocation_keys(keys)
+
+    def set_sublocation_items(self, items: List[Tuple[ScopedLocationAttr, SubDataclassT]]) -> 'BaseDataclass':
+        items = [(int(k), v) for k, v in items]
+        items_filtered = []
+        for item in items:
+            if item[0] == RETRAIN_TRIAL_SPLIT_ID:
+                self.retrained_split = item[1]
+            else:
+                items_filtered.append(item)
+        super().set_sublocation_items(items_filtered)
 
     def shallow(self) -> 'BaseDataclass':
         shallowed: TrialDataclass = super().shallow()
@@ -659,6 +760,11 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
             shallowed.retrained_split = (
                 f"ShallowedRetrainedSplitWithId({shallowed.retrained_split.get_id()})")
         return shallowed
+
+    def empty(self) -> 'BaseDataclass':
+        emptied: TrialDataclass = super().empty()
+        emptied.retrained_split = None
+        return emptied
 
 
 RETRAIN_TRIAL_SPLIT_ID = -1
@@ -682,7 +788,7 @@ class MetricResultsDataclass(DataclassHasListMixin, BaseDataclass[float]):
     """
     MetricResult object used by AutoML algorithm classes.
     """
-    metric_name: ScopedLocationAttrStr = "main"
+    metric_name: ScopedLocationAttrStr = DEFAULT_METRIC_NAME
     validation_values: List[float] = field(default_factory=list)  # one per epoch.
     train_values: List[float] = field(default_factory=list)
     higher_score_is_better: bool = True
@@ -1096,4 +1202,6 @@ class AutoMLContext(CX):
         """
         Load the current agg from the repo.
         """
-        return agg.BaseAggregate.from_context(self, is_deep=deep)
+        aggregate: 'agg.BaseAggregate' = agg.BaseAggregate.from_context(
+            self, is_deep=deep)
+        return aggregate
