@@ -71,6 +71,18 @@ NULL_TRIAL_SPLIT = -math.inf
 NULL_METRIC_NAME = "NO_METRIC"
 
 
+def to_int_if_not_float_or_none(attr) -> ScopedLocationAttrInt:
+    if isinstance(attr, float) or attr is None:
+        return attr
+    return int(attr)
+
+
+def to_str_if_not_none(attr) -> ScopedLocationAttrStr:
+    if attr is None or attr == '':
+        return None
+    return str(attr)
+
+
 @dataclass(order=True)
 class ScopedLocation(BaseService):
     """
@@ -84,6 +96,12 @@ class ScopedLocation(BaseService):
     metric_name: ScopedLocationAttrStr = None
 
     def __post_init__(self):
+        self.project_name = to_str_if_not_none(self.project_name)
+        self.client_name = to_str_if_not_none(self.client_name)
+        self.round_number = to_int_if_not_float_or_none(self.round_number)
+        self.trial_number = to_int_if_not_float_or_none(self.trial_number)
+        self.split_number = to_int_if_not_float_or_none(self.split_number)
+        self.metric_name = to_str_if_not_none(self.metric_name)
         BaseService.__init__(self)
 
     # get the field value from BaseMetadata subclass:
