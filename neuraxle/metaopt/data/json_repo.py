@@ -36,10 +36,9 @@ from typing import List
 from neuraxle.logging.logging import NeuraxleLogger
 from neuraxle.metaopt.data.vanilla import (BaseDataclass,
                                            HyperparamsRepository,
-                                           ScopedLocation, SubDataclassT,
-                                           VanillaHyperparamsRepository,
-                                           dataclass_2_id_attr, from_json,
-                                           to_json)
+                                           RootDataclass, ScopedLocation,
+                                           SubDataclassT, dataclass_2_id_attr,
+                                           from_json, to_json)
 
 ON_DISK_DELIM: str = "_"
 
@@ -87,7 +86,7 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
     def __init__(self, cache_folder: str = None):
         HyperparamsRepository.__init__(self)
         _OnDiskRepositoryLoggerHandlerMixin.__init__(self, cache_folder=cache_folder)
-        self._vanilla = VanillaHyperparamsRepository(cache_folder=cache_folder)
+        self._save_dc(RootDataclass(), scope=ScopedLocation(), deep=True)
 
     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
         """
@@ -99,8 +98,10 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         :param scope: scope to get metadata from.
         :return: metadata from scope.
         """
-        loaded = self._load_dc(scope=scope, deep=deep)
-        self._vanilla.save(loaded, scope=scope, deep=deep)
+        try:
+            loaded = self._load_dc(scope=scope, deep=deep)
+        except KeyError:
+            loaded: BaseDataclass = scope.new_dataclass_from_id()
         return loaded
 
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
@@ -111,7 +112,6 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         :param scope: scope to save metadata to.
         :param deep: if True, save metadata's sublocations recursively so as to update.
         """
-        self._vanilla.save(_dataclass=_dataclass, scope=scope, deep=deep)
         self._save_dc(_dataclass=_dataclass, scope=scope, deep=deep)
         return self
 
@@ -119,8 +119,7 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         scope, _, load_file = self._get_dataclass_filename_path(None, scope)
 
         if not os.path.exists(load_file):
-            # raise FileNotFoundError(f"{load_file} not found.")
-            return self._vanilla.load(scope=scope, deep=deep)
+            raise KeyError(f"{load_file} not found.")
 
         with open(load_file, 'r') as f:
             _dataclass: SubDataclassT = from_json(json.load(f))
