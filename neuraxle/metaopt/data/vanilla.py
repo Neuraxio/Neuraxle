@@ -648,6 +648,10 @@ class BaseTrialDataclassMixin:
     # error_traceback: str = None
     # logs: List[str] = field(default_factory=list)
 
+    def __post_init__(self):
+        self.hyperparams = HyperparameterSamples(self.hyperparams)
+        BaseDataclass.__post_init__(self)
+
     def _validate(self):
         super()._validate()
         if not isinstance(self.hyperparams, HyperparameterSamples):
