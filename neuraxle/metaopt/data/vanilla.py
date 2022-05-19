@@ -1166,7 +1166,7 @@ class AutoMLContext(CX):
             context if context is not None else AutoMLContext()
         )
         if disable_context_lock is True:
-            new_context.register_service(ContextLock, NoContextLock())
+            new_context.disable_context_lock()
         if not new_context.has_service(HyperparamsRepository):
             new_context.register_service(
                 HyperparamsRepository,
@@ -1187,6 +1187,10 @@ class AutoMLContext(CX):
     @property
     def lock(self):
         return self.synchroneous()
+
+    def disable_context_lock(self) -> 'AutoMLContext':
+        self.register_service(ContextLock, NoContextLock())
+        return self
 
     @property
     def loc(self) -> ScopedLocation:

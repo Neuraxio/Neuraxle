@@ -34,7 +34,7 @@ def disk_repo_ctor(tmpdir: TmpDir = None) -> AutoMLContext:
 def db_repo_ctor(tmpdir: TmpDir = None) -> AutoMLContext:
     cx = CX()
     tmpdir = tmpdir or cx.get_new_cache_folder()
-    return AutoMLContext.from_context(cx, repo=SQLLiteHyperparamsRepository(tmpdir))
+    return AutoMLContext.from_context(cx, repo=SQLLiteHyperparamsRepository(tmpdir)).disable_context_lock()
 
 
 CX_WITH_REPO_CTORS: List[Callable[[TmpDir], AutoMLContext]] = [vanilla_repo_ctor, disk_repo_ctor, db_repo_ctor]
