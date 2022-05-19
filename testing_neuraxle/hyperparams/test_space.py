@@ -24,12 +24,12 @@ from collections import OrderedDict
 import pytest
 import scipy
 from neuraxle.hyperparams.distributions import (Boolean, Choice,
-                                                FixedHyperparameter, Gaussian,
+                                                FixedHyperparameter,
                                                 HyperparameterDistribution,
                                                 LogNormal, LogUniform, Normal,
-                                                Poisson, PriorityChoice,
-                                                Quantized, RandInt, Uniform)
-# from neuraxle.hyperparams.scipy_distributions import *
+                                                PriorityChoice, Quantized,
+                                                RandInt, Uniform)
+from neuraxle.hyperparams.scipy_distributions import Gaussian, Poisson
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
 
@@ -73,20 +73,20 @@ def test_flat_to_dict_hyperparams(flat: dict, expected_dic: dict, class_to_test)
 
 
 HYPE_SPACE = HyperparameterSpace(OrderedDict({
-    "a__test": Boolean(),
-    "a__c": Choice([0, 1, False, "Test"]),
     "a__b__c": PriorityChoice([0, 1, False, "Test"]),
-    "a__b__q": Quantized(Uniform(-10, 10)),
     "a__b__q__c": Quantized(Uniform(-10, 10)),
     "a__b__q__q": Quantized(Uniform(-10, 10)),
+    "a__c": Choice([0, 1, False, "Test"]),
+    "a__e__q__c": Choice([0, 1, False, "Test"]),
+    "a__test": Boolean(),
     "d__param": RandInt(-10, 10),
     "d__u": Uniform(-10, 10),
-    "e__other": LogUniform(0.001, 10),
     "e__alpha": Normal(0.0, 1.0),
     "e__f__g": LogNormal(0.0, 2.0),
+    "e__other": LogUniform(0.001, 10),
     "p__could_also_be_as_fixed": FixedHyperparameter("also hey"),
-    "scipy__poisson": Poisson(1.0, 2.0),
     "scipy__gaussian": Gaussian(-1, 1),
+    "scipy__poisson": Poisson(1.0, 2.0),
     "scipy__scipy__gaussian": scipy.stats.randint(0, 10)
 }))
 
@@ -113,23 +113,27 @@ def test_hyperparams_space_rvs_outputs_in_range(hd: HyperparameterDistribution):
 
 
 def test_wildcards():
-    hp = HYPE_SPACE
-    wildcards: FlatDict = hp.to_wildcards()
-    expected_wildcards = [
-        "*test",
-        "a__c",
+    EXPECTED_WILDCARDS = [
         "*b__c",
-        "*b__q",
-        "*q__c",
-        "*q__q",
+        "*b*c",
+        "*q",
+        "a__c",
+        "*e*c",
+        "*test",
         "*param",
         "*u",
-        "*other",
         "*alpha",
         "*g",
+        "*other",
         "*could_also_be_as_fixed",
-        "*poisson",
         "scipy__gaussian",
-        "scipy__scipy__gaussian",
+        "*poisson",
+        "*scipy__gaussian",
     ]
-    assert wildcards == expected_wildcards
+
+    wildcards: FlatDict = HYPE_SPACE.to_wildcards()
+
+    for wc, ewc in zip(wildcards.keys(), EXPECTED_WILDCARDS):
+        assert wc == ewc, f"{wc} != {ewc}, but should be equal as expected."
+    for wv, ewv in zip(wildcards.values(), HYPE_SPACE.to_flat_dict().values()):
+        assert wv == ewv, f"{str(wv)} != {str(ewv)}, but should remain the same."
