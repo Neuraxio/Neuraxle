@@ -43,7 +43,7 @@ from typing import (Any, Dict, Generic, List, Optional, Sequence, Tuple, Type,
                     TypeVar, Union)
 
 import numpy as np
-from neuraxle.base import CX, BaseService, ContextLock, TrialStatus
+from neuraxle.base import CX, BaseService, ContextLock, NoContextLock, TrialStatus
 from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
 from neuraxle.logging.logging import (LOGGING_DATETIME_STR_FORMAT,
                                       NeuraxleLogger)
@@ -975,6 +975,13 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
         """
         raise NotImplementedError("Use a concrete class. This is an abstract class.")
 
+    @abstractmethod
+    def is_locking_required(self) -> bool:
+        """
+        Check if repository is locking required.
+        """
+        raise NotImplementedError("Use a concrete class. This is an abstract class.")
+
 
 class _InMemoryRepositoryLoggerHandlerMixin:
     """
@@ -1064,8 +1071,11 @@ class VanillaHyperparamsRepository(_InMemoryRepositoryLoggerHandlerMixin, Hyperp
             self.root[scope].store(_dataclass)
         return self
 
+    def is_locking_required(self) -> bool:
+        return False
 
-class InMemoryHyperparamsRepository(RaiseDeprecatedClass, _InMemoryRepositoryLoggerHandlerMixin, HyperparamsRepository):
+
+class InMemoryHyperparamsRepository(RaiseDeprecatedClass, VanillaHyperparamsRepository):
     """
     In memory hyperparams repository that can print information about trials.
     Useful for debugging.
@@ -1077,6 +1087,7 @@ class InMemoryHyperparamsRepository(RaiseDeprecatedClass, _InMemoryRepositoryLog
             replacement_class=VanillaHyperparamsRepository,
             since_version="0.7.0",
         )
+        VanillaHyperparamsRepository.__init__(self, *kargs, **kwargs)
 
 
 class BaseHyperparameterOptimizer(ABC):
@@ -1143,7 +1154,8 @@ class AutoMLContext(CX):
     def from_context(
         context: CX = None,
         repo: HyperparamsRepository = None,
-        loc: ScopedLocation = None
+        loc: ScopedLocation = None,
+        disable_context_lock: bool = False,
     ) -> 'AutoMLContext':
         """
         Create a new AutoMLContext from an ExecutionContext.
@@ -1153,6 +1165,8 @@ class AutoMLContext(CX):
         new_context: AutoMLContext = AutoMLContext.copy(
             context if context is not None else AutoMLContext()
         )
+        if disable_context_lock is True:
+            new_context.register_service(ContextLock, NoContextLock())
         if not new_context.has_service(HyperparamsRepository):
             new_context.register_service(
                 HyperparamsRepository,

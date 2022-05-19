@@ -203,7 +203,7 @@ class RecursiveDict(OrderedDict):
                 else:
                     yield (pre_key + k, v)
 
-    def to_flat_dict(self) -> FlatDict:
+    def to_flat_dict(self, use_wildcards=False) -> FlatDict:
         """
         Returns a FlatDict, that is a totally flatened OrderedDict[str, HPSampledValue],
         with no recursively nested elements, i.e.: {fully__flattened__params: value}.
@@ -211,7 +211,10 @@ class RecursiveDict(OrderedDict):
         .. info::
             The returned FlatDict is sorted in a new alphabetical order.
 
+        :param use_wildcards: If True, wildcards are used in the keys, as if calling self.to_wildcards() directly. See :func:`to_wildcards` for more info.
         """
+        if use_wildcards is True:
+            return self.to_wildcards()
         return OrderedDict(self.iter_flat())
 
     def to_nested_dict(self) -> Dict[str, RecursiveDictValue]:

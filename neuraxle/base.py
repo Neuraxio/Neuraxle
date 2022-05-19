@@ -1051,6 +1051,22 @@ class ContextLock(BaseService):
         return self._lock
 
 
+class PassthroughNullLock:
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+
+class NoContextLock(ContextLock):
+    """
+    NoContextLock is like a ContextLock but it does not lock anything.
+    """
+    def __init__(self):
+        ContextLock.__init__(self, PassthroughNullLock())
+
+
 class ExecutionContext(TruncableService):
     """
     Execution context object containing all of the pipeline hierarchy steps.

@@ -163,3 +163,6 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
             scope = scope.at_dc(_dataclass)
             setattr(scope, dataclass_2_id_attr[_dataclass.__class__], _dataclass.get_id())
         return scope
+
+    def is_locking_required(self) -> bool:
+        return True

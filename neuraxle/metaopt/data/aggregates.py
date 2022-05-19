@@ -48,7 +48,7 @@ from typing import (Callable, ContextManager, Dict, Generic, Iterable, List,
                     Optional, Tuple, Type, TypeVar)
 
 import numpy as np
-from neuraxle.base import BaseService
+from neuraxle.base import BaseService, PassthroughNullLock
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import Flow, TrialStatus, _CouldHaveContext
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
@@ -232,7 +232,8 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
         return metric_name or (self.parent.sanitize_metric_name(metric_name) if self.parent is not None else None)
 
     def refresh(self, deep: bool = True):
-        with self.context.lock:
+        _lock = self.context.lock if self.repo.is_locking_required() else PassthroughNullLock()
+        with _lock:
             _new_dc: SubDataclassT = self.repo.load(self.loc, deep=deep)
 
             def _fail_on_unsaved_changes(_self_now: SubDataclassT, _self_before: SubDataclassT, _self_new_loaded: SubDataclassT):
@@ -267,7 +268,8 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
         self._invariant()
         self._spare = copy.copy(self._dataclass).shallow()
 
-        with self.context.lock:
+        _lock = self.context.lock if self.repo.is_locking_required() else PassthroughNullLock()
+        with _lock:
             self.repo.save(self._dataclass, self.loc, deep=deep)
         return self
 
@@ -683,7 +685,7 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
         return self.summary(metric_name)[0]
 
     def summary(
-        self, metric_name: str = None
+        self, metric_name: str = None, use_wildcards: bool = False
     ) -> List[Tuple[float, ScopedLocationAttrInt, FlatDict]]:
         """
         Get a summary of the round. Best score is first.
@@ -700,7 +702,7 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
             # TODO: what happens to failed or ongoing trials?
             score = trial.get_avg_validation_score(metric_name)
             trial_number = trial._dataclass.trial_number
-            hp = trial.get_hyperparams().to_flat_dict()
+            hp = trial.get_hyperparams().to_flat_dict(use_wildcards=use_wildcards)
 
             results.append((score, trial_number, hp))
 
