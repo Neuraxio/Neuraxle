@@ -19,42 +19,48 @@ Tests for Hyperparameters Distribution Spaces
 
 """
 import copy
-import pytest
 from collections import OrderedDict
+
+import pytest
 import scipy
+from neuraxle.hyperparams.distributions import (Boolean, Choice,
+                                                FixedHyperparameter, Gaussian,
+                                                HyperparameterDistribution,
+                                                LogNormal, LogUniform, Normal,
+                                                Poisson, PriorityChoice,
+                                                Quantized, RandInt, Uniform)
+# from neuraxle.hyperparams.scipy_distributions import *
+from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
+                                        HyperparameterSpace, RecursiveDict)
 
-from neuraxle.hyperparams.distributions import *
-from neuraxle.hyperparams.scipy_distributions import *
-from neuraxle.hyperparams.space import HyperparameterSpace, HyperparameterSamples, RecursiveDict
-
-hyperparams_flat_and_dict_pairs = [
+HYPERPARAMS_FLAT_AND_DICT_PAIRS = [(
     # Pair 1:
-    ({
-         "a__learning_rate": 7
-     },
-     {
-         "a": {
-             "learning_rate": 7
-         }
-     }),
+    {
+        "a__learning_rate": 7
+    },
+    {
+        "a": {
+            "learning_rate": 7
+        }
+    }),
     # Pair 2:
     ({
-         "b__a__learning_rate": 7,
-         "b__learning_rate": 9
-     },
-     {
-         "b": {
-             "a": {
-                 "learning_rate": 7
-             },
-             "learning_rate": 9
-         }
-     }),
+        "b__a__learning_rate": 7,
+        "b__learning_rate": 9
+    },
+    {
+        "b": {
+            "a": {
+                "learning_rate": 7
+            },
+            "learning_rate": 9
+        }
+    }),
 ]
 
 
 @pytest.mark.parametrize("class_to_test", [RecursiveDict, HyperparameterSamples])
-@pytest.mark.parametrize("flat,expected_dic", hyperparams_flat_and_dict_pairs)
+@pytest.mark.parametrize("flat,expected_dic", HYPERPARAMS_FLAT_AND_DICT_PAIRS)
 def test_flat_to_dict_hyperparams(flat: dict, expected_dic: dict, class_to_test):
     from_flat_dic = class_to_test(flat)
     from_nested_dic = class_to_test(expected_dic)
@@ -68,9 +74,11 @@ def test_flat_to_dict_hyperparams(flat: dict, expected_dic: dict, class_to_test)
 
 HYPE_SPACE = HyperparameterSpace(OrderedDict({
     "a__test": Boolean(),
-    "a__lr": Choice([0, 1, False, "Test"]),
+    "a__c": Choice([0, 1, False, "Test"]),
     "a__b__c": PriorityChoice([0, 1, False, "Test"]),
     "a__b__q": Quantized(Uniform(-10, 10)),
+    "a__b__q__c": Quantized(Uniform(-10, 10)),
+    "a__b__q__q": Quantized(Uniform(-10, 10)),
     "d__param": RandInt(-10, 10),
     "d__u": Uniform(-10, 10),
     "e__other": LogUniform(0.001, 10),
@@ -102,3 +110,26 @@ def test_hyperparams_space_rvs_outputs_in_range(hd: HyperparameterDistribution):
         sample = hd.rvs()
 
         assert sample in hd
+
+
+def test_wildcards():
+    hp = HYPE_SPACE
+    wildcards: FlatDict = hp.to_wildcards()
+    expected_wildcards = [
+        "*test",
+        "a__c",
+        "*b__c",
+        "*b__q",
+        "*q__c",
+        "*q__q",
+        "*param",
+        "*u",
+        "*other",
+        "*alpha",
+        "*g",
+        "*could_also_be_as_fixed",
+        "*poisson",
+        "scipy__gaussian",
+        "scipy__scipy__gaussian",
+    ]
+    assert wildcards == expected_wildcards
