@@ -45,7 +45,7 @@ from abc import abstractmethod
 from collections import OrderedDict
 from types import TracebackType
 from typing import (Callable, ContextManager, Dict, Generic, Iterable, List,
-                    Optional, Tuple, Type, TypeVar)
+                    Optional, Tuple, Type, TypeVar, Union)
 
 import numpy as np
 from neuraxle.base import BaseService, PassthroughNullLock
@@ -848,23 +848,29 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
         """
         return all(not i.is_success() for i in self._validation_splits)
 
-    def get_avg_validation_score(self, metric_name: str = None) -> Optional[float]:
+    def get_avg_validation_score(self, metric_name: str = None, over_time=False) -> Optional[Union[float, List[float]]]:
         """
         Returns the average score for all validation splits's
         best validation score for the specified scoring metric.
 
+        :param metric_name: The name of the metric to use.
+        :param over_time: If true, return all the avg scores over time instead of the best avg score.
         :return: validation score
         """
         if self.is_success():
             metric_name = self.sanitize_metric_name(metric_name)
 
             scores = [
-                val_split[metric_name].get_best_validation_score()
+                (
+                    val_split[metric_name].get_valid_scores()  # List[float]
+                    if over_time is True else
+                    val_split[metric_name].get_best_validation_score()  # best float
+                )
                 for val_split in self._validation_splits
                 if val_split.is_success() and metric_name in val_split.get_metric_names()
             ]
             scores = [s for s in scores if s is not None]
-            return sum(scores) / len(scores) if len(scores) > 0 else None
+            return np.mean(scores, axis=-0) if len(scores) > 0 else None
 
     def get_avg_n_epoch_to_best_validation_score(self, metric_name: str = None) -> float:
         metric_name = self.sanitize_metric_name(metric_name)
@@ -905,16 +911,6 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
         self._dataclass.end(TrialStatus.FAILED)
         self.flow.log_failure(exception=error)
         return self
-
-    def get_trial_id(self, hp_dict: Dict):
-        """
-        Hash hyperparams with blake2s to create a trial hash.
-
-        :param hp_dict: hyperparams dict
-        :return:
-        """
-        current_hyperparameters_hash = hashlib.blake2s(str.encode(str(hp_dict))).hexdigest()
-        return f"{self._dataclass.trial_number}_{current_hyperparameters_hash}"
 
     def is_higher_score_better(self, metric_name: str = None) -> bool:
         """
