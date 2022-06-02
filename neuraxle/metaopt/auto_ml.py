@@ -36,7 +36,7 @@ from neuraxle.data_container import IDT
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.callbacks import (ARG_Y_EXPECTED, ARG_Y_PREDICTD,
-                                        BaseCallback, CallbackList,
+                                        BaseCallback, CallbackList, MetricCallback,
                                         ScoringCallback)
 from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
                                               Trial, TrialSplit)
@@ -442,6 +442,8 @@ class AutoML(ControlledAutoML):
             callbacks = [scoring_callback] + callbacks
         if len(callbacks) == 0:
             raise ValueError("At least one callback must be provided.")
+        if not isinstance(callbacks[0], MetricCallback):
+            raise ValueError("The first callback is the scoring callback and it must be a MetricCallback.")
 
         if n_trials is None or n_trials < 1:
             n_trials: int = GridExplorationSampler.estimate_ideal_n_trials(pipeline.get_hyperparams_space())

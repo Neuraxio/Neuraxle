@@ -15,18 +15,17 @@ from neuraxle.metaopt.data.vanilla import (AutoMLContext, ClientDataclass,
                                            TrialDataclass,
                                            VanillaHyperparamsRepository,
                                            from_json, to_json)
-from testing_neuraxle.metaopt.test_automl_dataclasses import (SOME_FULL_SCOPED_LOCATION,
-                                                   SOME_ROOT_DATACLASS,
-                                                   SOME_TRIAL_DATACLASS)
+from testing_neuraxle.metaopt.test_automl_dataclasses import (
+    SOME_FULL_SCOPED_LOCATION, SOME_ROOT_DATACLASS, SOME_TRIAL_DATACLASS)
 
-SOME_OTHER_METRIC_NAME = 'MSE'
+SOME_OTHER_METRIC_NAME_MSE = 'MSE'
 
 EXPECTED_ERROR_TRACEBACK = 'NoneType: None\n'
 
 EXPECTED_METRIC_RESULTS = {
-    SOME_OTHER_METRIC_NAME: {
+    SOME_OTHER_METRIC_NAME_MSE: {
         '__type__': MetricResultsDataclass.__name__,
-        'metric_name': SOME_OTHER_METRIC_NAME,
+        'metric_name': SOME_OTHER_METRIC_NAME_MSE,
         'validation_values': [0.5, 0.7, 0.4],
         'train_values': [0.45, 0.6, 0.4],
         'higher_score_is_better': False,
@@ -70,7 +69,7 @@ class TestTrials:
             trial_split: TrialSplit = trial_split.with_n_epochs(1)
 
             with trial_split.managed_metric(
-                SOME_OTHER_METRIC_NAME, higher_score_is_better=False
+                SOME_OTHER_METRIC_NAME_MSE, higher_score_is_better=False
             ) as metric:
                 metric: MetricResults = metric
 
@@ -86,7 +85,7 @@ class TestTrials:
 
             trial_split.next_epoch()
             with trial_split.managed_metric(
-                SOME_OTHER_METRIC_NAME, higher_score_is_better=False
+                SOME_OTHER_METRIC_NAME_MSE, higher_score_is_better=False
             ) as metric:
                 metric: MetricResults = metric
 
@@ -95,7 +94,7 @@ class TestTrials:
 
             trial_split.next_epoch()
             with trial_split.managed_metric(
-                SOME_OTHER_METRIC_NAME, higher_score_is_better=False
+                SOME_OTHER_METRIC_NAME_MSE, higher_score_is_better=False
             ) as metric:
                 metric: MetricResults = metric
 
@@ -114,9 +113,9 @@ class TestTrials:
         assert trial_json['status'] == TrialStatus.SUCCESS.value
 
         assert MetricResultsDataclass.from_dict(
-            trial_json['metric_results'][SOME_OTHER_METRIC_NAME]
+            trial_json['metric_results'][SOME_OTHER_METRIC_NAME_MSE]
         ) == MetricResultsDataclass.from_dict(
-            EXPECTED_METRIC_RESULTS[SOME_OTHER_METRIC_NAME])
+            EXPECTED_METRIC_RESULTS[SOME_OTHER_METRIC_NAME_MSE])
 
         start_time = datetime.datetime.strptime(
             trial_json['start_time'], LOGGING_DATETIME_STR_FORMAT)
@@ -149,7 +148,7 @@ class TestTrials:
     def test_success_trial_get_validation_score(self):
         self._given_success_trial_validation_split(self.trial, best_score=0.3)
 
-        validation_score = self.trial.get_avg_validation_score(SOME_OTHER_METRIC_NAME)
+        validation_score = self.trial.get_avg_validation_score(SOME_OTHER_METRIC_NAME_MSE)
 
         assert validation_score == 0.3
 
@@ -157,7 +156,7 @@ class TestTrials:
         self._given_success_trial_validation_split(self.trial, best_score=0.3)
         self._given_success_trial_validation_split(self.trial, best_score=0.1)
 
-        validation_score = self.trial.get_avg_validation_score(SOME_OTHER_METRIC_NAME)
+        validation_score = self.trial.get_avg_validation_score(SOME_OTHER_METRIC_NAME_MSE)
 
         assert validation_score == 0.2
 
@@ -166,17 +165,17 @@ class TestTrials:
         self._given_success_trial_validation_split(self.trial, best_score=0.01)
         self._given_failed_trial_split_that_continues_on_error(self.trial)
 
-        validation_score = self.trial.get_avg_validation_score(SOME_OTHER_METRIC_NAME)
+        validation_score = self.trial.get_avg_validation_score(SOME_OTHER_METRIC_NAME_MSE)
 
         assert validation_score == 0.02
 
     def _given_success_trial_validation_split(self, trial: Trial, best_score=0.4):
-        with trial.new_validation_split(False) as trial_split:
+        with trial.new_validation_split(continue_loop_on_error=False) as trial_split:
             trial_split: TrialSplit = trial_split.with_n_epochs(3)
 
             trial_split.next_epoch()
             with trial_split.managed_metric(
-                SOME_OTHER_METRIC_NAME, higher_score_is_better=False
+                SOME_OTHER_METRIC_NAME_MSE, higher_score_is_better=False
             ) as metric:
                 metric: MetricResults = metric
 
@@ -185,7 +184,7 @@ class TestTrials:
 
             trial_split.next_epoch()
             with trial_split.managed_metric(
-                SOME_OTHER_METRIC_NAME, higher_score_is_better=False
+                SOME_OTHER_METRIC_NAME_MSE, higher_score_is_better=False
             ) as metric:
                 metric: MetricResults = metric
 
@@ -194,7 +193,7 @@ class TestTrials:
 
             trial_split.next_epoch()
             with trial_split.managed_metric(
-                SOME_OTHER_METRIC_NAME, higher_score_is_better=False
+                SOME_OTHER_METRIC_NAME_MSE, higher_score_is_better=False
             ) as metric:
                 metric: MetricResults = metric
 
@@ -216,9 +215,9 @@ class TestTrials:
         # assert trial_json['error_traceback'] == EXPECTED_ERROR_TRACEBACK
 
         assert MetricResultsDataclass.from_dict(
-            trial_json['metric_results'][SOME_OTHER_METRIC_NAME]
+            trial_json['metric_results'][SOME_OTHER_METRIC_NAME_MSE]
         ) == MetricResultsDataclass.from_dict(
-            EXPECTED_METRIC_RESULTS[SOME_OTHER_METRIC_NAME])
+            EXPECTED_METRIC_RESULTS[SOME_OTHER_METRIC_NAME_MSE])
 
         start_time = datetime.datetime.strptime(
             trial_json['start_time'], LOGGING_DATETIME_STR_FORMAT)
@@ -254,7 +253,7 @@ class TestTrials:
 
                 trial_split.next_epoch()
                 with trial_split.managed_metric(
-                    SOME_OTHER_METRIC_NAME, higher_score_is_better=False
+                    SOME_OTHER_METRIC_NAME_MSE, higher_score_is_better=False
                 ) as metric:
                     metric: MetricResults = metric
 
@@ -263,7 +262,7 @@ class TestTrials:
 
                 trial_split.next_epoch()
                 with trial_split.managed_metric(
-                    SOME_OTHER_METRIC_NAME, higher_score_is_better=False
+                    SOME_OTHER_METRIC_NAME_MSE, higher_score_is_better=False
                 ) as metric:
                     metric: MetricResults = metric
 
@@ -272,7 +271,7 @@ class TestTrials:
 
                 trial_split.next_epoch()
                 with trial_split.managed_metric(
-                    SOME_OTHER_METRIC_NAME, higher_score_is_better=False
+                    SOME_OTHER_METRIC_NAME_MSE, higher_score_is_better=False
                 ) as metric:
                     metric: MetricResults = metric
 
@@ -294,15 +293,14 @@ class TestTrials:
 
         hp_trial_2 = HyperparameterSamples({'b': 3})
         trial_2 = Trial(
-            _dataclass=TrialDataclass(
-                trial_number=1,
-                hyperparams=hp_trial_2,
-            ).start(),
+            _dataclass=TrialDataclass(trial_number=1, hyperparams=hp_trial_2).start(),
             context=self.cx,
             is_deep=True)
-        self.cx.repo.save(trial_2._dataclass, SOME_FULL_SCOPED_LOCATION[:RoundDataclass].with_id(1))
-        trial__split_2 = self._given_success_trial_validation_split(trial_2, best_score=0.1)
-        self.cx.repo.save(trial_2._set_success()._dataclass, SOME_FULL_SCOPED_LOCATION[:RoundDataclass].with_id(1))
+        trial_2_scope = SOME_FULL_SCOPED_LOCATION[:RoundDataclass].with_id(1)
+        self.cx.repo.save(trial_2._dataclass, trial_2_scope)
+        trial_split_2 = self._given_success_trial_validation_split(trial_2, best_score=0.1)
+        trial_2._set_success()
+        self.cx.repo.save(trial_2._dataclass, trial_2_scope)
 
         trials = Round(
             RoundDataclass(trials=[trial_1._dataclass, trial_2._dataclass]),
@@ -310,7 +308,7 @@ class TestTrials:
             is_deep=True)
 
         # When
-        best_hyperparams = trials.get_best_hyperparams(SOME_OTHER_METRIC_NAME)
+        best_hyperparams = trials.get_best_hyperparams(SOME_OTHER_METRIC_NAME_MSE)
 
         # Then
         assert best_hyperparams == hp_trial_2

@@ -209,10 +209,11 @@ def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
     assert median_absolute_error(dact.eo, preds.di) == best_score
 
 
-def test_automl_can_use_same_repo_in_parallel(tmpdir, use_processes=True):
+def test_automl_can_use_same_on_disk_repo_in_parallel(use_processes=True):
     # @pytest.mark.parametrize("use_processes", [False, True])
+    tmpdir = CX.get_new_cache_folder()
     dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
-    cx = AutoMLContext.from_context(CX(root=tmpdir), repo=HyperparamsOnDiskRepository(tmpdir))
+    cx = AutoMLContext.from_context(repo=HyperparamsOnDiskRepository(tmpdir))
     # cx.add_scoped_logger_file_handler() TODO: use OnDiskRepo to test logging files with parallel.
     sleep_step = Sleep(0.25)
     automl: ControlledAutoML = _create_automl_test_loop(

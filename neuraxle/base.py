@@ -989,17 +989,18 @@ class Flow(BaseService):
         self.log('Finished!')
         self.log_status(status)
 
-    def log_success(self):
+    def log_success(self, best_val_score: float = None, n_epochs_to_val_score: int = None, metric_name: str = None):
         self.log_end(TrialStatus.SUCCESS)
-        # TODO: log all the following info:
-        #           context.logger.info('success trial {}\nbest score: {} at epoch {}'.format(
-        #               trial_split_description,
-        #               repo_trial_split.get_best_validation_score(),
-        #               repo_trial_split.get_n_epochs_to_best_validation_score()
-        #           ))
+        if best_val_score is not None:
+            self.log(f' ==> With best {metric_name} validation score: {best_val_score}')
+        if n_epochs_to_val_score is not None:
+            self.log(f' ==> At epoch: {n_epochs_to_val_score}')
 
-    def log_best_hps(self, main_metric_name, best_hps: HyperparameterSamples):
-        self.log(f"Best hyperparameters found for metric '{main_metric_name}':")
+    def log_best_hps(self, main_metric_name, best_hps: HyperparameterSamples, avg_validation_score: float, avg_n_epoch_to_best_validation_score: int):
+        self.log(
+            f"Best hyperparameters found for metric '{main_metric_name}' with "
+            f"best validation score {avg_validation_score} "
+            f"obtained at epoch {avg_n_epoch_to_best_validation_score}:")
         self.log_hps(best_hps)
 
     def log_failure(self, exception: Exception):
@@ -1010,6 +1011,9 @@ class Flow(BaseService):
         self.log(f'The following exception occurred: \n{exception}', level=logging.INFO)
         if exception is not None:
             self.logger.exception(exception)
+
+    def log_warning(self, message: str):
+        self.log(message, level=logging.WARNING)
 
     def log_aborted(self, exception: Exception):
         """

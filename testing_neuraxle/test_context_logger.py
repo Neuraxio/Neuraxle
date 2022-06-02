@@ -126,7 +126,7 @@ class TestTrialLogger:
         for f in file_paths:
             with open(f, 'r') as f:
                 log = f.readlines()
-                assert len(log) == 16, log
+                assert len(log) == 18, log
 
 
 def test_automl_context_has_loc():

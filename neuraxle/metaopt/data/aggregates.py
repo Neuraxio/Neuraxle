@@ -38,7 +38,6 @@ Classes are splitted like this for the AutoML:
 
 import copy
 import gc
-import hashlib
 import os
 import typing
 from abc import abstractmethod
@@ -48,9 +47,10 @@ from typing import (Callable, ContextManager, Dict, Generic, Iterable, List,
                     Optional, Tuple, Type, TypeVar, Union)
 
 import numpy as np
-from neuraxle.base import BaseService, PassthroughNullLock
+from neuraxle.base import BaseService
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.base import Flow, TrialStatus, _CouldHaveContext
+from neuraxle.base import (Flow, PassthroughNullLock, TrialStatus,
+                           _CouldHaveContext)
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
@@ -222,14 +222,17 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
 
     def sanitize_metric_name(self, metric_name: str = None):
         """
-        If the argument metric is None, the optimizer's metric is taken.
-        If the optimizer's metric is None, the parent metric is taken.
+        If the argument metric is None, the round's dataclass main metric is taken, assuming an access to a parent round.
+        Otherwise, is None.
         """
         if metric_name is not None:
             return metric_name
-        elif hasattr(self._dataclass, "main_metric_name") and self._dataclass.main_metric_name is not None:
-            return self._dataclass.main_metric_name
-        return metric_name or (self.parent.sanitize_metric_name(metric_name) if self.parent is not None else None)
+        elif hasattr(self, "main_metric_name") and self.main_metric_name is not None:
+            return self.main_metric_name
+        elif self.parent is not None:
+            return self.parent.sanitize_metric_name(metric_name)
+        else:
+            return None
 
     def refresh(self, deep: bool = True):
         _lock = self.context.lock if self.repo.is_locking_required() else PassthroughNullLock()
@@ -588,7 +591,9 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
                 self.flow.log('Finished round hp search!')
                 self.flow.log_best_hps(
                     main_metric_name,
-                    self.get_best_hyperparams(main_metric_name)
+                    self.get_best_hyperparams(main_metric_name),
+                    self.get_best_trial().get_avg_validation_score(main_metric_name),
+                    self.get_best_trial().get_avg_n_epoch_to_best_validation_score(main_metric_name)
                 )
             else:
                 self.flow.log_failure(e)
@@ -872,12 +877,15 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
             scores = [s for s in scores if s is not None]
             return np.mean(scores, axis=-0) if len(scores) > 0 else None
 
-    def get_avg_n_epoch_to_best_validation_score(self, metric_name: str = None) -> float:
+    def get_avg_n_epoch_to_best_validation_score(self, metric_name: str = None) -> Optional[float]:
         metric_name = self.sanitize_metric_name(metric_name)
+        if metric_name not in self._dataclass.get_sublocation_keys():
+            return None
 
         n_epochs = [
-            val_split.get_n_epochs_to_best_validation_score(metric_name)
+            val_split.metric_result(metric_name).get_n_epochs_to_best_validation_score()
             for val_split in self._validation_splits if val_split.is_success()
+            if val_split.is_success() and metric_name in val_split.get_metric_names()
         ]
 
         n_epochs = sum(n_epochs) / len(n_epochs) if len(n_epochs) > 0 else None
@@ -898,7 +906,11 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
         :return: self
         """
         self._dataclass.end(TrialStatus.SUCCESS)
-        self.flow.log_success()
+
+        metric_name = self.sanitize_metric_name()
+        avg_best_val_score = self.get_avg_validation_score(metric_name)
+        avg_n_epochs_to_val_score = self.get_avg_n_epoch_to_best_validation_score(metric_name)
+        self.flow.log_success(avg_best_val_score, avg_n_epochs_to_val_score, metric_name)
         return self
 
     def _set_failed(self, error: Exception) -> 'Trial':
@@ -1047,7 +1059,24 @@ class TrialSplit(BaseAggregate[Trial, 'MetricResults', TrialSplitDataclass]):
         :return: self
         """
         self._dataclass.end(status=TrialStatus.SUCCESS)
-        self.flow.log_success()
+
+        self_metrics = self.get_metric_names()
+
+        metric_name = self.sanitize_metric_name()
+        if metric_name not in self_metrics:
+            if len(self_metrics) == 0:
+                self.context.flow.log_warning(
+                    f"TrialSplit {self._dataclass.get_id()} has no metrics. Please add a metric before setting to success.")
+                metric_name = None
+            else:
+                metric_name = self_metrics[0]
+
+        best_val_score = self.metric_result(
+            metric_name).get_best_validation_score() if metric_name is not None else None
+        n_epochs_to_val_score = self.metric_result(
+            metric_name).get_n_epochs_to_best_validation_score() if metric_name is not None else None
+
+        self.flow.log_success(best_val_score, n_epochs_to_val_score, metric_name)
         return self
 
     def is_success(self):
@@ -1128,7 +1157,7 @@ class MetricResults(BaseAggregate[TrialSplit, None, MetricResultsDataclass]):
         """
         return self.get_valid_scores()[-1]
 
-    def get_best_validation_score(self) -> float:
+    def get_best_validation_score(self) -> Optional[float]:
         """
         Return the best validation score for the given scoring metric.
         """
@@ -1143,16 +1172,20 @@ class MetricResults(BaseAggregate[TrialSplit, None, MetricResultsDataclass]):
 
         return f(scores)
 
-    def get_n_epochs_to_best_validation_score(self) -> int:
+    def get_n_epochs_to_best_validation_score(self) -> Optional[int]:
         """
         Return the number of epochs
         """
+        scores = self.get_valid_scores()
+        if len(scores) == 0:
+            return None
+
         if self.is_higher_score_better():
             f = np.argmax
         else:
             f = np.argmin
 
-        return f(self.get_valid_scores())
+        return f(scores)
 
     def is_higher_score_better(self) -> bool:
         """

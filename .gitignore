@@ -121,9 +121,9 @@ todo.txt
 **caching/**
 cache/**
 caching/**
-testing/examples/cache/**
-testing/cache/**
-testing/cache/*
+testing_neuraxle/examples/cache/**
+testing_neuraxle/cache/**
+testing_neuraxle/cache/*
 cov.xml
 profile.sh
 
