@@ -875,7 +875,7 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
                 if val_split.is_success() and metric_name in val_split.get_metric_names()
             ]
             scores = [s for s in scores if s is not None]
-            return np.mean(scores, axis=-0) if len(scores) > 0 else None
+            return np.mean(scores, axis=0) if len(scores) > 0 else None
 
     def get_avg_n_epoch_to_best_validation_score(self, metric_name: str = None) -> Optional[float]:
         metric_name = self.sanitize_metric_name(metric_name)
