@@ -23,11 +23,13 @@ to log info in various folders.
 
 """
 import logging
+import re
 import sys
 from io import StringIO
 from typing import IO, Dict, List, Optional
 
-LOGGER_FORMAT = "[%(asctime)s][%(levelname)-8s][%(name)-8s][%(module)-1s.py:%(lineno)-1d]: %(message)s"
+LOGGER_FORMAT = "⠀[%(asctime)s][%(levelname)-8s][%(name)-8s][%(module)-1s.py:%(lineno)-1d]: %(message)s"
+LOGGER_FORMAT_PREFIX_REPLACE_REGEXPR = r"⠀(\[.*?\]): ", r"⠀"
 LOGGING_DATETIME_STR_FORMAT = '%Y-%m-%d_%H:%M:%S.%f'
 FORMATTER = logging.Formatter(fmt=LOGGER_FORMAT, datefmt=LOGGING_DATETIME_STR_FORMAT)
 if sys.version_info.major <= 3 and sys.version_info.minor <= 7:
@@ -148,6 +150,13 @@ class NeuraxleLogger(logging.Logger):
             handler.addFilter(_filter)
         self.addHandler(handler)
         return self
+
+    @staticmethod
+    def shorten_log_lines_prefixes(logs):
+        # This line is for retrocompability with old logs of 0.7.0.
+        logs = ("⠀" + logs.replace("\n", "\n⠀")).replace("⠀⠀", "⠀")
+        logs = re.sub(LOGGER_FORMAT_PREFIX_REPLACE_REGEXPR[0], LOGGER_FORMAT_PREFIX_REPLACE_REGEXPR[1], logs)
+        return logs
 
 
 logging.setLoggerClass(NeuraxleLogger)
