@@ -676,6 +676,12 @@ class ListDataContainer(DACT):
         :type other: DataContainer
         :return:
         """
+        if not isinstance(other, DACT):
+            if isinstance(other, Exception):
+                raise other
+            raise ValueError(
+                f'Expected data container of type {DACT.__name__}, got {other.__class__.__name__}: {other}'
+            )
         self.data_inputs.append(other)
         self._ids.append(other.get_ids_summary())
         return self
@@ -694,9 +700,9 @@ class ListDataContainer(DACT):
 
         return self
 
-    def concat(self, data_container: DACT):
+    def extend(self, data_container: DACT):
         """
-        Concat the given data container to the data container.
+        Concat the given data container at the end of self so as to extend IDs, DIs, and EOs.
 
         :param data_container: data container
         :type data_container: DataContainer

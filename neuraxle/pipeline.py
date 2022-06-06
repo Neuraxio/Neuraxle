@@ -565,7 +565,7 @@ class Joiner(Barrier):
 
         output_data_container = ListDataContainer.empty()
         for data_container_batch in data_container_batches:
-            output_data_container.concat(step._transform_data_container(data_container_batch, context))
+            output_data_container.extend(step._transform_data_container(data_container_batch, context))
 
         return output_data_container
 
@@ -592,7 +592,7 @@ class Joiner(Barrier):
         output_data_container = ListDataContainer.empty()
         for data_container_batch in data_container_batches:
             step, data_container_batch = step._fit_transform_data_container(data_container_batch, context)
-            output_data_container.concat(data_container_batch)
+            output_data_container.extend(data_container_batch)
 
         return step, output_data_container
 

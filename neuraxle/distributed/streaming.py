@@ -25,6 +25,7 @@ for the transformers.
     limitations under the License.
 
 """
+from collections import defaultdict
 import time
 import warnings
 from abc import abstractmethod
@@ -63,10 +64,10 @@ class ObservableQueueMixin(MixinForBaseTransformer):
         :class:`SequentialQueuedPipeline`
     """
 
-    def __init__(self, queue: Queue):
+    def __init__(self, queue: Queue = None):
         MixinForBaseTransformer.__init__(self)
-        self.queue = queue
-        self.observers = []
+        self.queue: Queue = queue or Queue()
+        self.observers: List[ObservableQueueMixin] = []
         self._add_observable_queue_step_saver()
 
     def _teardown(self):
@@ -124,8 +125,8 @@ class QueuedPipelineTask(object):
     """
 
     def __init__(self, data_container, step_name=None):
-        self.step_name = step_name
-        self.data_container = data_container
+        self.step_name: str = step_name
+        self.data_container: ListDataContainer = data_container
 
 
 class ObservableQueueStepSaver(BaseSaver):
@@ -363,12 +364,6 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
     :param default_value_expected_outputs: expected_outputs default fill value
     for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
     to trim absent values from the batch
-
-    .. seealso::
-        :class:`QueueWorker`,
-        :class:`QueueJoiner`,
-        :class:`CustomPipelineMixin`,
-        :class:`Pipeline`
     """
 
     def __init__(
@@ -630,9 +625,6 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
         :class:`QueueWorker`,
         :class:`BaseQueuedPipeline`,
         :class:`ParallelQueuedPipeline`,
-        :class:`QueueJoiner`,
-        :class:`Observer`,
-        :class:`Observable`
     """
 
     def get_n_batches(self, data_container) -> int:
@@ -676,9 +668,6 @@ class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
         :class:`QueueWorker`,
         :class:`BaseQueuedPipeline`,
         :class:`SequentialQueuedPipeline`,
-        :class:`QueueJoiner`,
-        :class:`Observer`,
-        :class:`Observable`
     """
 
     def get_n_batches(self, data_container):
@@ -724,12 +713,12 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
         :class:`DataContainer`
     """
 
-    def __init__(self, batch_size, n_batches=None):
+    def __init__(self, batch_size: int, n_batches: int = None):
+        Joiner.__init__(self, batch_size=batch_size)
+        ObservableQueueMixin.__init__(self)
         self.n_batches_left_to_do = n_batches
         self.summaries: List[str] = []
-        self.result = {}
-        Joiner.__init__(self, batch_size=batch_size)
-        ObservableQueueMixin.__init__(self, Queue())
+        self.result: Dict[str, ListDataContainer] = defaultdict(ListDataContainer.empty)
 
     def _teardown(self) -> 'BaseTransformer':
         """
@@ -739,8 +728,8 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
         """
         ObservableQueueMixin._teardown(self)
         Joiner._teardown(self)
-        self.summaries = []
-        self.result: Dict[str, ListDataContainer] = dict()
+        self.summaries: List[str] = []
+        self.result: Dict[str, ListDataContainer] = defaultdict(ListDataContainer.empty)
         return self
 
     def set_n_batches(self, n_batches):
@@ -756,20 +745,12 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
         while self.n_batches_left_to_do > 0:
             task: QueuedPipelineTask = self.get_task()
             self.n_batches_left_to_do -= 1
-            step_name = task.step_name
 
-            if step_name not in self.result:
-                self.result[step_name] = ListDataContainer(
-                    ids=[],
-                    data_inputs=[],
-                    expected_outputs=[]
-                )
+            self.result[task.step_name].append_data_container_in_data_inputs(task.data_container)
 
-            self.result[step_name].append_data_container_in_data_inputs(task.data_container)
-
-        data_containers = self._join_all_step_results()
-        self.result = {}
-        return original_data_container.set_data_inputs(data_containers)
+        list_dacts = self._join_all_step_results()
+        self.result = defaultdict(ListDataContainer.empty)
+        return original_data_container.set_data_inputs(list_dacts)
 
     def _join_all_step_results(self):
         """
@@ -778,26 +759,26 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
         :return:
         """
         results = []
-        for step_name, data_containers in self.result.items():
-            self._raise_exception_throwned_by_workers_if_needed(data_containers)
-            step_results = self._join_step_results(data_containers)
+        for step_name, list_dacts in self.result.items():
+            self._raise_exception_thrown_by_workers_if_needed(list_dacts)
+            step_results = self._join_step_results(list_dacts)
             results.append(step_results)
 
         return results
 
-    def _raise_exception_throwned_by_workers_if_needed(self, data_containers: ListDataContainer):
-        for dc in data_containers.data_inputs:
-            if isinstance(dc, Exception):
+    def _raise_exception_thrown_by_workers_if_needed(self, list_dacts: ListDataContainer):
+        for _dact in list_dacts.data_inputs:
+            if not isinstance(_dact, DACT):
                 # an exception has been throwned by the worker so reraise it here!
-                exception = dc
+                exception = _dact
                 raise exception
 
-    def _join_step_results(self, data_containers: ListDataContainer):
+    def _join_step_results(self, list_dacts: ListDataContainer) -> ListDataContainer:
         # reorder results by ids of summary
-        data_containers.data_inputs.sort(key=lambda dc: self.summaries.index(dc.get_ids_summary()))
+        list_dacts.data_inputs.sort(key=lambda dc: self.summaries.index(dc.get_ids_summary()))
 
         step_results = ListDataContainer.empty()
-        for data_container in data_containers.data_inputs:
-            step_results.concat(data_container)
+        for data_container in list_dacts.data_inputs:
+            step_results.extend(data_container)
 
         return step_results

@@ -214,7 +214,6 @@ def test_automl_can_use_same_on_disk_repo_in_parallel(use_processes=True):
     tmpdir = CX.get_new_cache_folder()
     dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
     cx = AutoMLContext.from_context(repo=HyperparamsOnDiskRepository(tmpdir))
-    # cx.add_scoped_logger_file_handler() TODO: use OnDiskRepo to test logging files with parallel.
     sleep_step = Sleep(0.25)
     automl: ControlledAutoML = _create_automl_test_loop(
         tmpdir, sleep_step, n_trials=1, start_new_round=False, refit_best_trial=False
@@ -234,7 +233,6 @@ def test_automl_can_use_same_on_disk_repo_in_parallel(use_processes=True):
         max_queue_size=1
     )
     parallel_automl.handle_fit_transform(dact, cx)
-
     # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
     # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
     # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)

@@ -61,7 +61,7 @@ def test_list_data_container_concat():
     )
 
     # When
-    data_container.concat(DACT(
+    data_container.extend(DACT(
         ids=[str(i) for i in range(100, 200)],
         data_inputs=np.array(list(range(100, 200))),
         expected_outputs=np.array(list(range(200, 300)))
