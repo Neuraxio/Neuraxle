@@ -18,7 +18,7 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
 
 SOME_METRIC_NAME = 'MAE'
 HYPERPARAMS = {'learning_rate': 0.01}
-
+HYPERPARAMS_DIMS = list(HYPERPARAMS.keys())
 
 SOME_METRIC_RESULTS_DATACLASS = MetricResultsDataclass(
     metric_name=SOME_METRIC_NAME,

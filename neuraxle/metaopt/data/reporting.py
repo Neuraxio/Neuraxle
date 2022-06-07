@@ -27,26 +27,28 @@ Classes are splitted like this for the metric analysis:
 
 
 """
-
 import json
+import pprint
 import typing
-from collections import OrderedDict
+from collections import Counter, OrderedDict, defaultdict
+from numbers import Number
 from typing import (Any, Dict, Generic, Iterable, List, Optional, Tuple, Type,
                     TypeVar, Union)
 
 import numpy as np
-from neuraxle.base import ExecutionContext as CX
+import pandas as pd
 from neuraxle.base import TrialStatus
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         RecursiveDict)
-from neuraxle.metaopt.data.vanilla import (ClientDataclass,
+from neuraxle.metaopt.data.vanilla import (BaseDataclass, ClientDataclass,
                                            MetricResultsDataclass,
                                            ProjectDataclass, RootDataclass,
-                                           RoundDataclass, ScopedLocation,
-                                           ScopedLocationAttr,
+                                           RoundDataclass, ScopedLocationAttr,
                                            ScopedLocationAttrInt,
                                            SubDataclassT, TrialDataclass,
-                                           TrialSplitDataclass, to_json)
+                                           TrialSplitDataclass,
+                                           dataclass_2_id_attr, from_json,
+                                           to_json)
 
 SubReportT = TypeVar('SubReportT', bound=Optional['BaseReport'])
 
@@ -55,14 +57,36 @@ class BaseReport(Generic[SubReportT, SubDataclassT]):
     def __init__(self, dc: SubDataclassT):
         self._dataclass: SubDataclassT = dc
 
+    @staticmethod
+    def from_dc(dc: SubDataclassT) -> SubReportT:
+        return dataclass_2_report[dc.__class__](dc)
+
+    @staticmethod
+    def from_json(json_dc_data: str) -> SubReportT:
+        return BaseReport.from_dc(from_json(json_dc_data))
+
     def get_id(self) -> ScopedLocationAttr:
         return self._dataclass.get_id()
 
-    def info(self) -> Dict[str, Any]:
-        _json: str = to_json(self._dataclass.shallow())
+    def info_df(self) -> pd.DataFrame:
+        _json: str = to_json(self._dataclass.empty())
+
         info: dict = json.loads(_json)
-        del info['__type__']  # deleting superfluous information
-        return info
+        del info['__type__']
+        del info[self._dataclass._sublocation_attr_name]
+        del info[self._dataclass._id_attr_name]
+        info = {k: pprint.pformat(v) if not isinstance(v, dict) else pprint.pformat(
+            dict(HyperparameterSamples(v).to_flat_dict(use_wildcards=True))) for k, v in info.items()}
+
+        column_names = ['Attribute', 'Value']
+        if len(info) == 0:
+            df = pd.DataFrame(columns=column_names)
+        else:
+            df = pd.DataFrame.from_records([info], columns=list(info.keys()))
+            df = df.transpose()
+            df = df.reset_index(level=0)
+            df.columns = column_names
+        return df
 
     def __len__(self) -> int:
         return len(self._dataclass.get_sublocation())
@@ -113,6 +137,7 @@ class ClientReport(BaseReport['RoundReport', ClientDataclass]):
 
 
 class RoundReport(BaseReport['TrialReport', RoundDataclass]):
+    SUMMARY_STATUS_COLUMNS_NAME = 'status'
 
     @property
     def main_metric_name(self) -> str:
@@ -187,10 +212,14 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
         """
         _metrics = []
         for i in self:
+            i: TrialReport = i
             _ms = i.get_metric_names()
             for m in _ms:
                 if m not in _metrics:
                     _metrics.append(m)
+        if self.main_metric_name in _metrics:
+            _metrics.remove(self.main_metric_name)
+            _metrics.insert(0, self.main_metric_name)
         return _metrics
 
     def best_result_summary(self, metric_name: str, use_wildcards: bool = False) -> Tuple[float, ScopedLocationAttrInt, TrialStatus, FlatDict]:
@@ -245,8 +274,84 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
 
         return hyperparams
 
+    def list_hyperparameters_wildcards(self, discard_singles=False) -> List[str]:
+        """
+        Returns a list of all the hyperparameters wildcards used in the round.
+        Discarding singles would prune out the hyperparameters with values that never vary.
+        """
+        trial_reports: List[TrialReport] = list(self)
+        trials_hps = [t.get_hyperparams().to_wildcards() for t in trial_reports]
+        trials_hps_keys = set()
+        trials_hps_values = defaultdict(set)
+        for hps in trials_hps:
+            for hp, hp_val in hps.items():
+                trials_hps_keys.add(hp)
+                trials_hps_values[hp].add(hp_val)
+        if discard_singles:
+            trials_hps_keys_step_2 = [k for k, v in trials_hps_values.items() if len(v) > 1]
+            return trials_hps_keys_step_2
+        return list(trials_hps_keys)
+
+    def to_round_scatterplot_df(self, metric_name: str = None, wildcards_to_keep: List[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Returns a dataframe with trial ids, the selected metric, and the wildcarded hyperparameters to keep.
+        """
+        summary: List[float, ScopedLocationAttrInt, FlatDict] = self.summary(
+            metric_name, use_wildcards=True)
+
+        splom_df = pd.DataFrame([
+            {**{TrialReport.TRIAL_ID_COLUMN_NAME: trial_id}, **{self.SUMMARY_STATUS_COLUMNS_NAME: status.value}, **{metric_name: score},
+                **self._filter_df_hps(hyperparams, wildcards_to_keep)}
+            for score, trial_id, status, hyperparams in summary
+        ])
+        splom_df.set_index(TrialReport.TRIAL_ID_COLUMN_NAME)
+
+        return splom_df
+
+    def _filter_df_hps(self, wildcarded_hps: FlatDict, wildcards_to_keep: List[str] = None) -> FlatDict:
+        """
+        Filters the hyperparameters so as to keep only the indicated wildcards to keep.
+        Also parses the hyperparameters to strings if not numeric.
+        """
+        def _to_str_if_not_number(value: Any) -> Union[str, Number]:
+            if isinstance(value, Number) and not isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                return repr(value)
+            return str(value)
+        return {
+            k: _to_str_if_not_number(v) for k, v in wildcarded_hps.items()
+            if wildcards_to_keep is None or k in wildcards_to_keep
+        }
+
+    def to_scores_over_time_df(self, metric_name: str = None, wildcards_to_keep: List[str] = None) -> pd.DataFrame:
+        """
+        Returns a dataframe with trial ids, epochs, the selected metric, and the wildcarded hyperparameters to keep.
+        """
+        _df_list: List[Dict(str, Any)] = []
+
+        trials: List[TrialReport] = list(self)
+        for trial in trials:
+            scores_over_time: List[float] = trial.get_avg_validation_score(metric_name, over_time=True)
+            if scores_over_time is None:
+                continue
+            hps = self._filter_df_hps(trial.get_hyperparams().to_wildcards(), wildcards_to_keep)
+            for epoch, s in enumerate(scores_over_time):
+                _df_list.append({
+                    TrialReport.TRIAL_ID_COLUMN_NAME: trial._dataclass.get_id(),
+                    MetricResultsReport.EPOCH_COLUMN_NAME: epoch,
+                    metric_name: s,
+                    **hps,
+                })
+
+        df = pd.DataFrame(_df_list)
+        df.set_index(TrialReport.TRIAL_ID_COLUMN_NAME)
+
+        return df
+
 
 class TrialReport(BaseReport['TrialSplitReport', TrialDataclass]):
+    TRIAL_ID_COLUMN_NAME = dataclass_2_id_attr[TrialDataclass]
 
     def get_metric_names(self) -> List[str]:
         """
@@ -254,6 +359,7 @@ class TrialReport(BaseReport['TrialSplitReport', TrialDataclass]):
         """
         _metrics = []
         for i in self:
+            i: TrialSplitReport = i
             _ms = i.get_metric_names()
             for m in _ms:
                 if m not in _metrics:
@@ -330,6 +436,7 @@ class TrialReport(BaseReport['TrialSplitReport', TrialDataclass]):
 
 
 class TrialSplitReport(BaseReport['MetricResultsReport', TrialSplitDataclass]):
+    TRIAL_SPLIT_ID_COLUMN_NAME = dataclass_2_id_attr[TrialSplitDataclass]
 
     def get_hyperparams(self) -> RecursiveDict:
         """
@@ -354,6 +461,8 @@ class TrialSplitReport(BaseReport['MetricResultsReport', TrialSplitDataclass]):
 
 
 class MetricResultsReport(BaseReport[None, MetricResultsDataclass]):
+    METRIC_COLUMN_NAME = "metric"
+    EPOCH_COLUMN_NAME = "epoch"
 
     @property
     def metric_name(self) -> str:
@@ -431,3 +540,17 @@ report_2_subreport: typing.OrderedDict[Type[BaseReport], Type[BaseReport]] = Ord
     (TrialSplitReport, MetricResultsReport),
     (MetricResultsReport, None),
 ])
+
+report_2_dataclass: typing.OrderedDict[Type[BaseReport], Type[BaseDataclass]] = OrderedDict([
+    (RootReport, RootDataclass),
+    (ProjectReport, ProjectDataclass),
+    (ClientReport, ClientDataclass),
+    (RoundReport, RoundDataclass),
+    (TrialReport, TrialDataclass),
+    (TrialSplitReport, TrialSplitDataclass),
+    (MetricResultsReport, MetricResultsDataclass),
+])
+dataclass_2_report: typing.OrderedDict[Type[BaseDataclass], Type[BaseReport]] = {
+    dc: repç
+    for repç, dc in report_2_dataclass.items()
+}
