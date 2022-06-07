@@ -2,7 +2,6 @@
 Neuraxle's AutoML Scope Manager Classes
 ====================================
 
-
 Scope manager objects used by AutoML algorithm classes.
 
 Although the name "manager" for a class is disliked by the Neuraxle community,
@@ -10,13 +9,13 @@ it is used as these are Pythonic context managers, as described in
 `Python's contextlib documentation <https://docs.python.org/3/library/contextlib.html>`__.
 
 Classes are splitted like this for the AutoML:
+
 - Projects
 - Clients
 - Rounds (runs)
 - Trials
 - TrialSplits
 - MetricResults
-
 
 ..
     Copyright 2022, Neuraxio Inc.
@@ -53,6 +52,11 @@ from neuraxle.base import (Flow, PassthroughNullLock, TrialStatus,
                            _CouldHaveContext)
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
+from neuraxle.metaopt.data.reporting import (BaseReport, ClientReport,
+                                             MetricResultsReport,
+                                             ProjectReport, RootReport,
+                                             RoundReport, SubReportT,
+                                             TrialReport, TrialSplitReport)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            RETRAIN_TRIAL_SPLIT_ID,
                                            AutoMLContext, BaseDataclass,
@@ -100,7 +104,7 @@ def _with_method_as_context_manager(
     return func
 
 
-class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT], Generic[ParentAggregateT, SubAggregateT, SubDataclassT]):
+class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT], Generic[ParentAggregateT, SubAggregateT, SubReportT, SubDataclassT]):
     """
     Base class for aggregated objects using the repo and the dataclasses to manipulate them.
 
@@ -213,12 +217,20 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
         return {v: k for k, v in aggregate_2_subaggregate.items()}[self.__class__]
 
     @property
+    def report(self) -> SubReportT:
+        return aggregate_2_report[self.__class__](self._dataclass)
+
+    @property
     def dataclass(self) -> Type[BaseDataclass]:
         return aggregate_2_dataclass[self.__class__]
 
     @property
     def subdataclass(self) -> Type[SubDataclassT]:
         return aggregate_2_dataclass[aggregate_2_subaggregate[self.__class__]]
+
+    @property
+    def get_id(self) -> int:
+        return self._dataclass.get_id()
 
     def sanitize_metric_name(self, metric_name: str = None):
         """
@@ -382,7 +394,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
         return self._dataclass == other._dataclass
 
 
-class Root(BaseAggregate[None, 'Project', RootDataclass]):
+class Root(BaseAggregate[None, 'Project', RootReport, RootDataclass]):
 
     def save(self, deep: bool = False):
         if deep:
@@ -422,7 +434,7 @@ class Root(BaseAggregate[None, 'Project', RootDataclass]):
         return super()._acquire_managed_subresource(project_loc)
 
 
-class Project(BaseAggregate[None, 'Client', ProjectDataclass]):
+class Project(BaseAggregate[None, 'Client', ProjectReport, ProjectDataclass]):
 
     @_with_method_as_context_manager
     def get_client(self, name: str) -> 'Project':
@@ -439,7 +451,7 @@ class Project(BaseAggregate[None, 'Client', ProjectDataclass]):
         return super()._acquire_managed_subresource(client_loc)
 
 
-class Client(BaseAggregate[Project, 'Round', ClientDataclass]):
+class Client(BaseAggregate[Project, 'Round', ClientReport, ClientDataclass]):
 
     @_with_method_as_context_manager
     def new_round(self, main_metric_name: str) -> 'Client':
@@ -479,7 +491,7 @@ class Client(BaseAggregate[Project, 'Round', ClientDataclass]):
             return subagg
 
 
-class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
+class Round(BaseAggregate[Client, 'Trial', RoundReport, RoundDataclass]):
 
     def with_optimizer(
         self,
@@ -493,10 +505,6 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
     def with_metric(self, metric_name: str) -> 'Round':
         self._dataclass.main_metric_name = metric_name
         return self.save(False)
-
-    @property
-    def main_metric_name(self) -> str:
-        return self._dataclass.main_metric_name
 
     @_with_method_as_context_manager
     def new_rvs_trial(self, continue_on_error: bool = False) -> 'Round':
@@ -520,10 +528,6 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
             self.refresh(True)
         return [Trial(t, self.context) for t in self._dataclass.get_sublocation()]
 
-    @property
-    def get_id(self) -> int:
-        return self._dataclass.get_id()
-
     def _acquire_managed_subresource(self, new_trial=True, continue_on_error: bool = False) -> 'Trial':
         """
         Get a trial.
@@ -539,7 +543,7 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
             # Get new trial loc:
             trial_id: int = self._dataclass.get_next_i()
             if new_trial is None:
-                trial_id: int = self.get_best_trial()._dataclass.get_id()
+                trial_id: int = self.get_best_trial(self.main_metric_name)._dataclass.get_id()
             elif not new_trial:
                 # Try get last trial
                 trial_id = max(0, trial_id - 1)
@@ -589,80 +593,18 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
             if not is_all_failure and len(self) > 0:
                 main_metric_name = self.main_metric_name
                 self.flow.log('Finished round hp search!')
+                _best_trial = self.get_best_trial(main_metric_name)
                 self.flow.log_best_hps(
                     main_metric_name,
-                    self.get_best_hyperparams(main_metric_name),
-                    self.get_best_trial().get_avg_validation_score(main_metric_name),
-                    self.get_best_trial().get_avg_n_epoch_to_best_validation_score(main_metric_name)
+                    _best_trial.get_hyperparams(),
+                    _best_trial.get_avg_validation_score(main_metric_name),
+                    _best_trial.get_avg_n_epoch_to_best_validation_score(main_metric_name)
                 )
             else:
                 self.flow.log_failure(e)
 
             self.save(False)
         return handled_exception
-
-    def get_best_hyperparams(self, metric_name: str = None) -> HyperparameterSamples:
-        """
-        Get best hyperparams from all trials.
-
-        :return:
-        """
-        if not self.is_deep:
-            self.refresh(True)
-        metric_name = self.sanitize_metric_name(metric_name)
-
-        if len(self) == 0:
-            return HyperparameterSamples()
-        elif len(self) == 1:
-            return self._trials[0].get_hyperparams()
-        else:
-            return self.get_best_trial(metric_name).get_hyperparams()
-
-    def get_best_trial(self, metric_name: str = None) -> Optional['Trial']:
-        """
-        :return: trial with best score from all trials
-        """
-        best_score, best_trial = None, None
-        metric_name = self.sanitize_metric_name(metric_name)
-
-        if len(self) == 0:
-            raise Exception('Could not get best trial because there were no successful trial.')
-
-        for trial in self._trials:
-            trial_score = trial.get_avg_validation_score(metric_name)
-
-            _has_better_score = best_score is None or (
-                trial_score is not None and trial.is_success() and (
-                    self.is_higher_score_better(metric_name) == (trial_score > best_score)
-                )
-            )
-
-            if _has_better_score:
-                best_score = trial_score
-                best_trial = trial
-
-        return best_trial
-
-    def is_higher_score_better(self, metric_name: str = None) -> bool:
-        """
-        Return true if higher score is better. If metric_name is None, the optimizer's
-        metric is taken.
-
-        :return
-        """
-        if len(self) == 0:
-            return False
-
-        metric_name = self.sanitize_metric_name(metric_name)
-
-        is_higher_score_better_attr = "is_higher_score_better_attr_" + metric_name
-        if not hasattr(self, is_higher_score_better_attr):
-            setattr(
-                self,
-                is_higher_score_better_attr,
-                self._trials[-1].is_higher_score_better(metric_name)
-            )
-        return getattr(self, is_higher_score_better_attr)
 
     def append(self, trial: 'Trial'):
         """
@@ -676,15 +618,34 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
     def copy(self) -> 'Round':
         return Round(copy.deepcopy(self._dataclass), self.context.copy().with_loc(self.loc.popped()))
 
+    @property
+    def main_metric_name(self) -> str:
+        return self._dataclass.main_metric_name
+
+    def get_best_trial(self, metric_name: str = None) -> Optional['Trial']:
+        if not self.is_deep:
+            self.refresh(True)
+        metric_name = self.sanitize_metric_name(metric_name)
+        _best_trial_id = self.report.get_best_trial_id(metric_name)
+        if _best_trial_id is None:
+            return None
+        return self[_best_trial_id]
+
+    def get_best_hyperparams(self, metric_name: str = None) -> HyperparameterSamples:
+        if not self.is_deep:
+            self.refresh(True)
+        metric_name = self.sanitize_metric_name(metric_name)
+        return self.report.get_best_hyperparams(metric_name)
+
+    def is_higher_score_better(self, metric_name: str = None) -> bool:
+        metric_name = self.sanitize_metric_name(metric_name)
+        return self.report.is_higher_score_better(metric_name)
+
     def get_number_of_split(self):
-        if len(self) > 0:
-            return len(self[0]._validation_splits)
-        return 0
+        return self.report.get_n_val_splits()
 
     def get_metric_names(self) -> List[str]:
-        if len(self) > 0:
-            return list(self[-1]._dataclass.validation_splits[-1].metric_results.keys())
-        return []
+        return self.report.get_metric_names()
 
     def best_result_summary(self, metric_name: str = None) -> Tuple[float, ScopedLocationAttrInt, FlatDict]:
         return self.summary(metric_name)[0]
@@ -700,37 +661,15 @@ class Round(BaseAggregate[Client, 'Trial', RoundDataclass]):
         if not self.is_deep:
             self.refresh(True)
         metric_name = self.sanitize_metric_name(metric_name)
+        return self.report.summary(metric_name, use_wildcards)
 
-        results: List[float, ScopedLocationAttrInt, FlatDict] = list()
-
-        for trial in self._trials:
-            # TODO: what happens to failed or ongoing trials?
-            score = trial.get_avg_validation_score(metric_name)
-            trial_number = trial._dataclass.trial_number
-            hp = trial.get_hyperparams().to_flat_dict(use_wildcards=use_wildcards)
-
-            results.append((score, trial_number, hp))
-
-        is_reverse: bool = self.is_higher_score_better(metric_name)
-        results = list(sorted(results, reverse=is_reverse))
-        return results
-
-    def get_all_hyperparams(self) -> List[FlatDict]:
-        """
-        Get all hyperparams from all trials.
-
-        :return:
-        """
-        self.refresh(True)
-
-        hyperparams: List[FlatDict] = list()
-        for trial in self._trials:
-            hyperparams.append(trial.get_hyperparams().to_flat_dict())
-
-        return hyperparams
+    def get_all_hyperparams(self, as_flat: bool = True, use_wildcards: bool = False) -> List[FlatDict]:
+        if not self.is_deep:
+            self.refresh(True)
+        return self.report.get_all_hyperparams(as_flat=as_flat, use_wildcards=use_wildcards)
 
 
-class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
+class Trial(BaseAggregate[Round, 'TrialSplit', TrialReport, TrialDataclass]):
     """
     This class is a sub-contextualization of the :class:`HyperparameterRepository`
     class for holding a trial and manipulating it within its context.
@@ -829,81 +768,9 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
 
         return handled_error
 
-    def is_success(self):
-        """
-        Checks if the trial is successful from its dataclass record.
-        """
-        return self._dataclass.status == TrialStatus.SUCCESS
-
-    def get_status(self) -> TrialStatus:
-        """
-        Get the status of the trial.
-        """
-        return self._dataclass.status
-
-    def are_all_splits_successful(self) -> bool:
-        """
-        Return true if all splits are successful.
-        """
-        return all(i.is_success() for i in self._validation_splits)
-
-    def are_all_splits_failures(self) -> bool:
-        """
-        Return true if all splits are failed.
-        """
-        return all(not i.is_success() for i in self._validation_splits)
-
-    def get_avg_validation_score(self, metric_name: str = None, over_time=False) -> Optional[Union[float, List[float]]]:
-        """
-        Returns the average score for all validation splits's
-        best validation score for the specified scoring metric.
-
-        :param metric_name: The name of the metric to use.
-        :param over_time: If true, return all the avg scores over time instead of the best avg score.
-        :return: validation score
-        """
-        if self.is_success():
-            metric_name = self.sanitize_metric_name(metric_name)
-
-            scores = [
-                (
-                    val_split[metric_name].get_valid_scores()  # List[float]
-                    if over_time is True else
-                    val_split[metric_name].get_best_validation_score()  # best float
-                )
-                for val_split in self._validation_splits
-                if val_split.is_success() and metric_name in val_split.get_metric_names()
-            ]
-            scores = [s for s in scores if s is not None]
-            return np.mean(scores, axis=0) if len(scores) > 0 else None
-
-    def get_avg_n_epoch_to_best_validation_score(self, metric_name: str = None) -> Optional[float]:
-        metric_name = self.sanitize_metric_name(metric_name)
-        if metric_name not in self._dataclass.get_sublocation_keys():
-            return None
-
-        n_epochs = [
-            val_split.metric_result(metric_name).get_n_epochs_to_best_validation_score()
-            for val_split in self._validation_splits if val_split.is_success()
-            if val_split.is_success() and metric_name in val_split.get_metric_names()
-        ]
-
-        n_epochs = sum(n_epochs) / len(n_epochs) if len(n_epochs) > 0 else None
-        return n_epochs
-
-    def get_hyperparams(self) -> HyperparameterSamples:
-        """
-        Return hyperparams dict.
-
-        :return: hyperparams dict
-        """
-        return self._dataclass.hyperparams
-
     def _set_success(self) -> 'Trial':
         """
         Set trial status to success. Must save after to ensure consistency.
-
-        :return: self
         """
         self._dataclass.end(TrialStatus.SUCCESS)
 
@@ -924,18 +791,35 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialDataclass]):
         self.flow.log_failure(exception=error)
         return self
 
-    def is_higher_score_better(self, metric_name: str = None) -> bool:
-        """
-        Return if the metric is higher score is better.
+    def is_success(self):
+        return self.report.is_success()
 
-        :param metric_name: metric name
-        :return: bool
-        """
+    def get_status(self) -> TrialStatus:
+        return self.report.get_status()
+
+    def are_all_splits_successful(self) -> bool:
+        return self.report.are_all_splits_successful()
+
+    def are_all_splits_failures(self) -> bool:
+        return self.report.are_all_splits_failures()
+
+    def get_avg_validation_score(self, metric_name: str = None, over_time=False) -> Optional[Union[float, List[float]]]:
         metric_name = self.sanitize_metric_name(metric_name)
-        return self._dataclass.validation_splits[-1].metric_results[metric_name].higher_score_is_better
+        return self.report.get_avg_validation_score(metric_name, over_time)
+
+    def get_avg_n_epoch_to_best_validation_score(self, metric_name: str = None) -> Optional[float]:
+        metric_name = self.sanitize_metric_name(metric_name)
+        return self.report.get_avg_n_epoch_to_best_validation_score(metric_name)
+
+    def is_higher_score_better(self, metric_name: str = None) -> bool:
+        metric_name = self.sanitize_metric_name(metric_name)
+        return self.report.is_higher_score_better(metric_name)
+
+    def get_hyperparams(self) -> HyperparameterSamples:
+        return self._dataclass.hyperparams
 
 
-class TrialSplit(BaseAggregate[Trial, 'MetricResults', TrialSplitDataclass]):
+class TrialSplit(BaseAggregate[Trial, 'MetricResults', TrialSplitReport, TrialSplitDataclass]):
     """
     One split of a trial. This is where a model is trained and evaluated on a specific dataset split.
     """
@@ -956,9 +840,6 @@ class TrialSplit(BaseAggregate[Trial, 'MetricResults', TrialSplitDataclass]):
     @property
     def main_metric_name(self) -> str:
         return self.parent.main_metric_name
-
-    def get_hyperparams(self) -> RecursiveDict:
-        return self._dataclass.hyperparams
 
     def with_n_epochs(self, n_epochs: int) -> 'TrialSplit':
         self.n_epochs: int = n_epochs
@@ -1043,15 +924,6 @@ class TrialSplit(BaseAggregate[Trial, 'MetricResults', TrialSplitDataclass]):
             self.save_subaggregate(resource, deep=True)
         return handled_error
 
-    def train_context(self) -> 'AutoMLContext':
-        return self.context.train()
-
-    def validation_context(self) -> 'AutoMLContext':
-        return self.context.validation()
-
-    def get_metric_names(self) -> List[str]:
-        return list(self._dataclass.metric_results.keys())
-
     def _set_success(self) -> 'TrialSplit':
         """
         Set trial status to success. Must save after to ensure consistency.
@@ -1079,12 +951,6 @@ class TrialSplit(BaseAggregate[Trial, 'MetricResults', TrialSplitDataclass]):
         self.flow.log_success(best_val_score, n_epochs_to_val_score, metric_name)
         return self
 
-    def is_success(self):
-        """
-        Set trial status to success.
-        """
-        return self._dataclass.status == TrialStatus.SUCCESS
-
     def _set_failed(self, error: Exception) -> 'TrialSplit':
         """
         Set failed trial with exception. Must save after to ensure consistency.
@@ -1100,8 +966,23 @@ class TrialSplit(BaseAggregate[Trial, 'MetricResults', TrialSplitDataclass]):
             self.flow.log_failure(error)
         return self
 
+    def train_context(self) -> 'AutoMLContext':
+        return self.context.train()
 
-class MetricResults(BaseAggregate[TrialSplit, None, MetricResultsDataclass]):
+    def validation_context(self) -> 'AutoMLContext':
+        return self.context.validation()
+
+    def get_metric_names(self) -> List[str]:
+        return self.report.get_metric_names()
+
+    def is_success(self):
+        return self.report.is_success()
+
+    def get_hyperparams(self) -> RecursiveDict:
+        return self._dataclass.hyperparams
+
+
+class MetricResults(BaseAggregate[TrialSplit, None, MetricResultsReport, MetricResultsDataclass]):
 
     def _invariant(self):
         self._assert(self.is_deep,
@@ -1143,67 +1024,25 @@ class MetricResults(BaseAggregate[TrialSplit, None, MetricResultsDataclass]):
             self.save(True)
 
     def get_train_scores(self) -> List[float]:
-        return self._dataclass.train_values
+        return self.report.get_train_scores()
 
     def get_valid_scores(self) -> List[float]:
-        """
-        Return the validation scores for the given scoring metric.
-        """
-        return self._dataclass.validation_values
+        return self.report.get_valid_scores()
 
     def get_final_validation_score(self) -> float:
-        """
-        Return the latest validation score for the given scoring metric.
-        """
-        return self.get_valid_scores()[-1]
+        return self.report.get_final_validation_score()
 
     def get_best_validation_score(self) -> Optional[float]:
-        """
-        Return the best validation score for the given scoring metric.
-        """
-        scores = self.get_valid_scores()
-        if len(scores) == 0:
-            return None
-
-        if self.is_higher_score_better():
-            f = np.max
-        else:
-            f = np.min
-
-        return f(scores)
+        return self.report.get_best_validation_score()
 
     def get_n_epochs_to_best_validation_score(self) -> Optional[int]:
-        """
-        Return the number of epochs
-        """
-        scores = self.get_valid_scores()
-        if len(scores) == 0:
-            return None
-
-        if self.is_higher_score_better():
-            f = np.argmax
-        else:
-            f = np.argmin
-
-        return f(scores)
+        return self.report.get_n_epochs_to_best_validation_score()
 
     def is_higher_score_better(self) -> bool:
-        """
-        Return True if higher scores are better for the main metric.
-
-        :return:
-        """
-        return self._dataclass.higher_score_is_better
+        return self.report.is_higher_score_better()
 
     def is_new_best_score(self) -> bool:
-        """
-        Return True if the latest validation score is the new best score.
-
-        :return:
-        """
-        if self.get_best_validation_score() in self.get_valid_scores()[:-1]:
-            return False
-        return True
+        return self.report.is_new_best_score()
 
     def __iter__(self) -> Iterable[SubAggregateT]:
         """
@@ -1221,6 +1060,16 @@ aggregate_2_subaggregate: typing.OrderedDict[Type[BaseAggregate], Type[BaseAggre
     (Trial, TrialSplit),
     (TrialSplit, MetricResults),
     (MetricResults, type(None)),
+])
+
+aggregate_2_report: typing.OrderedDict[Type[BaseAggregate], Type[BaseReport]] = OrderedDict([
+    (Root, RootReport),
+    (Project, ProjectReport),
+    (Client, ClientReport),
+    (Round, RoundReport),
+    (Trial, TrialReport),
+    (TrialSplit, TrialSplitReport),
+    (MetricResults, MetricResultsReport),
 ])
 
 aggregate_2_dataclass: typing.OrderedDict[BaseAggregate, BaseDataclass] = OrderedDict([

@@ -1,9 +1,11 @@
 """
 Neuraxle's Base Hyperparameter Repository Classes
 =================================================
+
 Data objects and related repositories used by AutoML.
 
 Classes are splitted like this for the AutoML:
+
 - Projects
 - Clients
 - Rounds (runs)

@@ -99,7 +99,7 @@ class TestTrialLogger:
             ]),
             hyperparams_optimizer=RandomSearchSampler(),
             validation_splitter=ValidationSplitter(0.20),
-            scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False),
+            scoring_callback=ScoringCallback(mean_squared_error, higher_score_is_better=False, name='MSE'),
             n_trials=n_trials,
             refit_best_trial=True,
             epochs=n_epochs,
