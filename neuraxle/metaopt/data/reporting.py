@@ -193,7 +193,7 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
                     _metrics.append(m)
         return _metrics
 
-    def best_result_summary(self, metric_name: str, use_wildcards: bool = False) -> Tuple[float, ScopedLocationAttrInt, FlatDict]:
+    def best_result_summary(self, metric_name: str, use_wildcards: bool = False) -> Tuple[float, ScopedLocationAttrInt, TrialStatus, FlatDict]:
         """
         Return the best result summary for the given metric, as the `[score, trial_number, hyperparams_flat_dict]`.
         """
@@ -207,19 +207,25 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
         Values in the returned triplet tuples are: (score, trial_number, hyperparams),
         sorted by score such that the best score is first.
         """
-        results: List[float, ScopedLocationAttrInt, FlatDict] = list()
+        results: List[float, ScopedLocationAttrInt, TrialStatus, FlatDict] = list()
+        results_not_success: List[float, ScopedLocationAttrInt, TrialStatus, FlatDict] = list()
 
         for trial in self:
-            # TODO: what happens to failed or ongoing trials?
+            trial: TrialReport = trial
             score = trial.get_avg_validation_score(metric_name)
             trial_number = trial._dataclass.trial_number
             hp = trial.get_hyperparams().to_flat_dict(use_wildcards=use_wildcards)
+            status = trial.get_status()
 
-            results.append((score, trial_number, hp))
+            _resultslist = results
+            if not status == TrialStatus.SUCCESS:
+                _resultslist = results_not_success
+            _resultslist.append((score, trial_number, status, hp))
 
         is_reverse: bool = self.is_higher_score_better(metric_name)
-        results = list(sorted(results, reverse=is_reverse))  # TODO: test sort order.
-        return results
+        results = list(sorted(results, reverse=is_reverse))
+        results_not_success = list(sorted(results_not_success, reverse=is_reverse))
+        return results + results_not_success
 
     def get_all_hyperparams(self, as_flat: bool = True, use_wildcards: bool = False) -> List[FlatDict]:
         """

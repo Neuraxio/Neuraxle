@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Set, Tuple, Type
 import numpy as np
 import pytest
 from neuraxle.base import (CX, BaseStep, HandleOnlyMixin, Identity, MetaStep,
-                           NonFittableMixin)
+                           NonFittableMixin, TrialStatus)
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.data_container import PredsDACT, TrainDACT
 from neuraxle.distributed.streaming import ParallelQueuedFeatureUnion
@@ -95,7 +95,7 @@ def _create_automl_test_loop(tmpdir, assertion_step: BaseStep, n_trials: int = 4
             trainer=Trainer(
                 validation_splitter=ValidationSplitter(validation_size=0.2),
                 n_epochs=4,
-                callbacks=[MetricCallback('MAE', median_absolute_error, False)],
+                callbacks=[MetricCallback('MAE', median_absolute_error, higher_score_is_better=False)],
             ),
             hp_optimizer=GridExplorationSampler(n_trials),
             n_trials=n_trials,
@@ -199,10 +199,10 @@ def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
     automl_refiting_best, preds = automl_refiting_best.handle_fit_transform(dact, cx)
 
     round_scope: Round = BaseAggregate.from_context(cx.with_loc(ScopedLocation.default(round_number=0)), is_deep=True)
-    bests: List[Tuple[float, int, FlatDict]] = round_scope.summary()
+    bests: List[Tuple[TrialStatus, float, int, FlatDict]] = round_scope.summary()
 
     assert len(bests) == n_trials
-    assert len(set(tuple(dict(hp).items()) for score, i, hp in bests)
+    assert len(set(tuple(dict(hp).items()) for score, i, status, hp in bests)
                ) == n_trials, f"Expecting unique hyperparams for the given n_trials={n_trials} and intelligent grid sampler."
 
     best_score = bests[0][0]
@@ -245,7 +245,7 @@ def test_automl_can_use_same_on_disk_repo_in_parallel(use_processes=True):
     automl_refiting_best, preds = automl_refiting_best.handle_fit_transform(dact, cx)
 
     round_scope: Round = BaseAggregate.from_context(cx.with_loc(ScopedLocation.default(round_number=0)), is_deep=True)
-    bests: List[Tuple[float, int, FlatDict]] = round_scope.summary()
+    bests: List[Tuple[float, int, TrialStatus, FlatDict]] = round_scope.summary()
 
     assert len(bests) == n_trials
 

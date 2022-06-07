@@ -647,12 +647,12 @@ class Round(BaseAggregate[Client, 'Trial', RoundReport, RoundDataclass]):
     def get_metric_names(self) -> List[str]:
         return self.report.get_metric_names()
 
-    def best_result_summary(self, metric_name: str = None) -> Tuple[float, ScopedLocationAttrInt, FlatDict]:
+    def best_result_summary(self, metric_name: str = None) -> Tuple[float, ScopedLocationAttrInt, TrialStatus, FlatDict]:
         return self.summary(metric_name)[0]
 
     def summary(
         self, metric_name: str = None, use_wildcards: bool = False
-    ) -> List[Tuple[float, ScopedLocationAttrInt, FlatDict]]:
+    ) -> List[Tuple[float, ScopedLocationAttrInt, TrialStatus, FlatDict]]:
         """
         Get a summary of the round. Best score is first.
         Values in the returned triplet tuples are: (score, trial_number, hyperparams),
