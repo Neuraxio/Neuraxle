@@ -53,6 +53,23 @@ from neuraxle.metaopt.data.vanilla import (BaseDataclass, ClientDataclass,
 SubReportT = TypeVar('SubReportT', bound=Optional['BaseReport'])
 
 
+def _filter_df_hps(wildcarded_hps: FlatDict, wildcards_to_keep: List[str] = None) -> FlatDict:
+    """
+    Filters the hyperparameters so as to keep only the indicated wildcards to keep.
+    Also parses the hyperparameters to strings if not numeric.
+    """
+    def _to_str_if_not_number(value: Any) -> Union[str, Number]:
+        if isinstance(value, Number) and not isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return repr(value)
+        return str(value)
+    return {
+        k: _to_str_if_not_number(v) for k, v in wildcarded_hps.items()
+        if wildcards_to_keep is None or k in wildcards_to_keep
+    }
+
+
 class BaseReport(Generic[SubReportT, SubDataclassT]):
     def __init__(self, dc: SubDataclassT):
         self._dataclass: SubDataclassT = dc
@@ -129,14 +146,59 @@ class RootReport(BaseReport['ProjectReport', RootDataclass]):
 
 
 class ProjectReport(BaseReport['ClientReport', ProjectDataclass]):
-    pass
+
+    def to_clients_with_best_scores_df(self) -> pd.DataFrame:
+        """
+        Get a dataframe with the info of each last round for each client.
+        """
+        df_data = []
+        for client_report in self:
+            client_report: ClientReport = client_report
+            last_round_report: RoundReport = client_report[-1]
+
+            last_best_result_summary: Tuple[float, ScopedLocationAttrInt, TrialStatus,
+                                            FlatDict] = last_round_report.best_result_summary(use_wildcards=True)
+            main_metric_name = last_round_report.main_metric_name
+            df_data.append({
+                ClientReport.CLIENT_ID_COLUMN_NAME: client_report.get_id(),
+                f"most recent {RoundReport.ROUND_ID_COLUMN_NAME}": last_round_report.get_id(),
+                'n trials for most recent round': len(last_round_report),
+                'main metric name': main_metric_name,
+                'best score for main metric': last_best_result_summary[0],
+                'best trial status': last_best_result_summary[2].value,
+                'best hyperparameters': pprint.pformat(last_best_result_summary[3])
+            })
+
+        return pd.DataFrame(df_data)
 
 
 class ClientReport(BaseReport['RoundReport', ClientDataclass]):
-    pass
+    CLIENT_ID_COLUMN_NAME = dataclass_2_id_attr[ClientDataclass]
+
+    def to_rounds_with_best_scores_df(self) -> pd.DataFrame:
+        """
+        Get a dataframe with the best scores for each round as well as the metric used for that round.
+        """
+        df_data = []
+        for round_report in self:
+            round_report: RoundReport = round_report
+            best_result_summary: Tuple[float, ScopedLocationAttrInt,
+                                       TrialStatus, FlatDict] = round_report.best_result_summary(use_wildcards=True)
+            main_metric_name = round_report.main_metric_name
+            df_data.append({
+                RoundReport.ROUND_ID_COLUMN_NAME: round_report.get_id(),
+                'n trials': len(round_report),
+                'main metric name': main_metric_name,
+                'best score for main metric': best_result_summary[0],
+                'best trial status': best_result_summary[2].value,
+                'best hyperparameters': pprint.pformat(best_result_summary[3])
+            })
+
+        return pd.DataFrame(df_data)
 
 
 class RoundReport(BaseReport['TrialReport', RoundDataclass]):
+    ROUND_ID_COLUMN_NAME = dataclass_2_id_attr[RoundDataclass]
     SUMMARY_STATUS_COLUMNS_NAME = 'status'
 
     @property
@@ -222,20 +284,24 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
             _metrics.insert(0, self.main_metric_name)
         return _metrics
 
-    def best_result_summary(self, metric_name: str, use_wildcards: bool = False) -> Tuple[float, ScopedLocationAttrInt, TrialStatus, FlatDict]:
+    def best_result_summary(self, metric_name: str = None, use_wildcards: bool = False) -> Tuple[float, ScopedLocationAttrInt, TrialStatus, FlatDict]:
         """
         Return the best result summary for the given metric, as the `[score, trial_number, hyperparams_flat_dict]`.
         """
+        if metric_name is None:
+            metric_name = self.main_metric_name
         return self.summary(metric_name, use_wildcards)[0]
 
     def summary(
-        self, metric_name, use_wildcards: bool = False
+        self, metric_name: str = None, use_wildcards: bool = False
     ) -> List[Tuple[float, ScopedLocationAttrInt, FlatDict]]:
         """
         Get a summary of the round. Best score is first.
         Values in the returned triplet tuples are: (score, trial_number, hyperparams),
         sorted by score such that the best score is first.
         """
+        if metric_name is None:
+            metric_name = self.main_metric_name
         results: List[float, ScopedLocationAttrInt, TrialStatus, FlatDict] = list()
         results_not_success: List[float, ScopedLocationAttrInt, TrialStatus, FlatDict] = list()
 
@@ -301,28 +367,12 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
 
         splom_df = pd.DataFrame([
             {**{TrialReport.TRIAL_ID_COLUMN_NAME: trial_id}, **{self.SUMMARY_STATUS_COLUMNS_NAME: status.value}, **{metric_name: score},
-                **self._filter_df_hps(hyperparams, wildcards_to_keep)}
+                **_filter_df_hps(hyperparams, wildcards_to_keep)}
             for score, trial_id, status, hyperparams in summary
         ])
         splom_df.set_index(TrialReport.TRIAL_ID_COLUMN_NAME)
 
         return splom_df
-
-    def _filter_df_hps(self, wildcarded_hps: FlatDict, wildcards_to_keep: List[str] = None) -> FlatDict:
-        """
-        Filters the hyperparameters so as to keep only the indicated wildcards to keep.
-        Also parses the hyperparameters to strings if not numeric.
-        """
-        def _to_str_if_not_number(value: Any) -> Union[str, Number]:
-            if isinstance(value, Number) and not isinstance(value, bool):
-                return value
-            if isinstance(value, str):
-                return repr(value)
-            return str(value)
-        return {
-            k: _to_str_if_not_number(v) for k, v in wildcarded_hps.items()
-            if wildcards_to_keep is None or k in wildcards_to_keep
-        }
 
     def to_scores_over_time_df(self, metric_name: str = None, wildcards_to_keep: List[str] = None) -> pd.DataFrame:
         """
@@ -335,7 +385,7 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
             scores_over_time: List[float] = trial.get_avg_validation_score(metric_name, over_time=True)
             if scores_over_time is None:
                 continue
-            hps = self._filter_df_hps(trial.get_hyperparams().to_wildcards(), wildcards_to_keep)
+            hps = _filter_df_hps(trial.get_hyperparams().to_wildcards(), wildcards_to_keep)
             for epoch, s in enumerate(scores_over_time):
                 _df_list.append({
                     TrialReport.TRIAL_ID_COLUMN_NAME: trial._dataclass.get_id(),
@@ -434,6 +484,21 @@ class TrialReport(BaseReport['TrialSplitReport', TrialDataclass]):
     def is_higher_score_better(self, metric_name: str) -> bool:
         return self[-1].is_higher_score_better(metric_name)
 
+    def to_scores_over_time_df(self, metric_name: str) -> pd.DataFrame:
+        """
+        Returns a dataframe with the trial id, the epoch, and the selected metric.
+        """
+        _df_list: List[Dict(str, Any)] = []
+        for trial_split in self:
+            trial_split: TrialSplitReport = trial_split
+
+            _split_df_list = trial_split._get_scores_over_time_train_val_df_list(metric_name)
+
+            _df_list.extend(_split_df_list)
+        df = pd.DataFrame(_df_list)
+        df.set_index(TrialSplitReport.TRIAL_SPLIT_ID_COLUMN_NAME)
+        return df
+
 
 class TrialSplitReport(BaseReport['MetricResultsReport', TrialSplitDataclass]):
     TRIAL_SPLIT_ID_COLUMN_NAME = dataclass_2_id_attr[TrialSplitDataclass]
@@ -459,10 +524,47 @@ class TrialSplitReport(BaseReport['MetricResultsReport', TrialSplitDataclass]):
     def is_higher_score_better(self, metric_name: str) -> bool:
         return self[metric_name].is_higher_score_better()
 
+    def to_scores_over_time_df(self, metric_name: str) -> pd.DataFrame:
+        """
+        Returns a dataframe with the trial id, the epoch, and the selected metric.
+        """
+        _df_list = self._get_scores_over_time_train_val_df_list(metric_name)
+        df = pd.DataFrame(_df_list)
+        df.set_index(TrialSplitReport.TRIAL_SPLIT_ID_COLUMN_NAME)
+        return df
+
+    def _get_scores_over_time_train_val_df_list(self, metric_name: str) -> List[Dict[str, Any]]:
+        _df_list: List[Dict(str, Any)] = []
+
+        train_scores_over_time: List[float] = self[metric_name].get_train_scores()
+        if train_scores_over_time is None:
+            return []
+        for epoch, s in enumerate(train_scores_over_time):
+            _df_list.append({
+                TrialSplitReport.TRIAL_SPLIT_ID_COLUMN_NAME: self.get_id(),
+                MetricResultsReport.EPOCH_COLUMN_NAME: epoch,
+                MetricResultsReport.TRAIN_VAL_COLUMN_NAME: 'train',
+                metric_name: s,
+            })
+
+        valid_scores_over_time: List[float] = self[metric_name].get_valid_scores()
+        if valid_scores_over_time is None:
+            return _df_list
+        for epoch, s in enumerate(valid_scores_over_time):
+            _df_list.append({
+                TrialSplitReport.TRIAL_SPLIT_ID_COLUMN_NAME: self.get_id(),
+                MetricResultsReport.EPOCH_COLUMN_NAME: epoch,
+                MetricResultsReport.TRAIN_VAL_COLUMN_NAME: 'validation',
+                metric_name: s,
+            })
+
+        return _df_list
+
 
 class MetricResultsReport(BaseReport[None, MetricResultsDataclass]):
     METRIC_COLUMN_NAME = "metric"
     EPOCH_COLUMN_NAME = "epoch"
+    TRAIN_VAL_COLUMN_NAME = "phase"
 
     @property
     def metric_name(self) -> str:
