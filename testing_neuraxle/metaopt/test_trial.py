@@ -2,19 +2,15 @@ import copy
 import datetime
 import json
 
-import pytest
-from neuraxle.base import Identity, TrialStatus
+from neuraxle.base import TrialStatus
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
 from neuraxle.metaopt.data.aggregates import (MetricResults, Round, Trial,
                                               TrialSplit)
 from neuraxle.metaopt.data.vanilla import (AutoMLContext, ClientDataclass,
-                                           HyperparamsRepository,
                                            MetricResultsDataclass,
                                            RoundDataclass, ScopedLocation,
-                                           TrialDataclass,
-                                           VanillaHyperparamsRepository,
-                                           from_json, to_json)
+                                           TrialDataclass, to_json)
 from testing_neuraxle.metaopt.test_automl_dataclasses import (
     SOME_FULL_SCOPED_LOCATION, SOME_ROOT_DATACLASS, SOME_TRIAL_DATACLASS)
 

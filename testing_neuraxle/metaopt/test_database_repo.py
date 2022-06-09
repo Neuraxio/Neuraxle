@@ -2,24 +2,16 @@
 import os
 
 import pytest
-from neuraxle.metaopt.data.db_repo import (Base, ClientNode,
-                                           DatabaseHyperparamRepository,
-                                           DataClassNode, ProjectNode,
-                                           ScopedLocationTreeNode,
+from neuraxle.metaopt.data.db_repo import (Base, ClientNode, DataClassNode,
+                                           ProjectNode, ScopedLocationTreeNode,
                                            SQLLiteHyperparamsRepository)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            ClientDataclass, ProjectDataclass,
                                            RootDataclass, ScopedLocation)
-from sqlalchemy import (TEXT, Column, ForeignKey, Integer, String, Table, and_,
-                        create_engine)
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import backref, relationship, sessionmaker
-from sqlalchemy.orm.collections import attribute_mapped_collection
-from sqlalchemy.schema import Sequence
-from sqlalchemy.sql import asc, desc, func
-from testing_neuraxle.metaopt.test_automl_dataclasses import (
-    ALL_DATACLASSES, SOME_CLIENT_DATACLASS, SOME_FULL_SCOPED_LOCATION,
-    SOME_PROJECT_DATACLASS, SOME_ROOT_DATACLASS, SOME_ROUND_DATACLASS)
+from sqlalchemy import and_, create_engine
+from sqlalchemy.orm import sessionmaker
+from testing_neuraxle.metaopt.test_automl_dataclasses import \
+    SOME_PROJECT_DATACLASS
 
 
 def get_sqlite_session_with_root(tmpdir):

@@ -752,13 +752,13 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
         self.result = defaultdict(ListDataContainer.empty)
         return original_data_container.set_data_inputs(list_dacts)
 
-    def _join_all_step_results(self):
+    def _join_all_step_results(self) -> List[ListDataContainer]:
         """
         Concatenate all resulting data containers together.
 
         :return:
         """
-        results = []
+        results: List[ListDataContainer] = []
         for step_name, list_dacts in self.result.items():
             self._raise_exception_thrown_by_workers_if_needed(list_dacts)
             step_results = self._join_step_results(list_dacts)

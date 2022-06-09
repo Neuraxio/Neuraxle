@@ -10,9 +10,7 @@ from neuraxle.metaopt.auto_ml import AutoML, Trainer
 from neuraxle.metaopt.callbacks import (BestModelCheckpoint,
                                         EarlyStoppingCallback, MetricCallback,
                                         ScoringCallback)
-from neuraxle.metaopt.data.aggregates import (BaseAggregate, MetricResults,
-                                              Round, Trial)
-from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
+from neuraxle.metaopt.data.aggregates import BaseAggregate, Round, Trial
 from neuraxle.metaopt.data.vanilla import AutoMLContext, ScopedLocation
 from neuraxle.metaopt.validation import (GridExplorationSampler,
                                          KFoldCrossValidationSplitter,
@@ -100,7 +98,7 @@ def test_automl_savebestmodel_callback(tmpdir):
     auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
-    trials: Round = BaseAggregate.from_context(cx.with_loc(ScopedLocation.default(0)), id_deep=True)
+    trials: Round = BaseAggregate.from_context(cx.with_loc(ScopedLocation.default(0)), is_deep=True)
     best_trial = trials.get_best_trial()
     best_trial_score = best_trial.get_avg_validation_score()
     best_model = auto_ml.wrapped.wrapped

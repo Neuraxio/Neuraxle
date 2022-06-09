@@ -61,10 +61,10 @@ ready to be sent to an instance of the pipeline to try and score it, for example
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-import itertools
+
 import typing
 from collections import Counter, OrderedDict, defaultdict
-from copy import copy, deepcopy
+from copy import copy
 from typing import Any, Dict, Iterable, List, Set, Union
 
 from neuraxle.hyperparams.distributions import (FixedHyperparameter,

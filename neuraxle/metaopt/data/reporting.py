@@ -30,7 +30,7 @@ Classes are splitted like this for the metric analysis:
 import json
 import pprint
 import typing
-from collections import Counter, OrderedDict, defaultdict
+from collections import OrderedDict, defaultdict
 from numbers import Number
 from typing import (Any, Dict, Generic, Iterable, List, Optional, Tuple, Type,
                     TypeVar, Union)
