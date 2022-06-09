@@ -358,6 +358,12 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
             return trials_hps_keys_step_2
         return list(trials_hps_keys)
 
+    def list_avg_validation_scores(self) -> List[float]:
+        """
+        Returns a list of all the average validation scores on record.
+        """
+        return [t.get_avg_validation_score() for t in self if t.is_success()]
+
     def to_round_scatterplot_df(self, metric_name: str = None, wildcards_to_keep: List[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Returns a dataframe with trial ids, the selected metric, and the wildcarded hyperparameters to keep.

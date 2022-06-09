@@ -17,6 +17,7 @@ from neuraxle.metaopt.auto_ml import (AutoML, BaseHyperparameterOptimizer,
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.aggregates import (MetricResults, Round, Trial,
                                               TrialSplit)
+from neuraxle.metaopt.data.reporting import RoundReport
 from neuraxle.metaopt.data.vanilla import (AutoMLContext,
                                            HyperparameterSamplerStub,
                                            MetricResultsDataclass,
@@ -121,10 +122,7 @@ def _score_trials(
     auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
-    cx = auto_ml.get_automl_context(CX()).with_loc(ScopedLocation.default(-1))
-    trials: Round = Round.from_context(cx)
-    #  hp_repository.load(ScopedLocation.default(-1)).filter(TrialStatus.SUCCESS)
-    trials_validation_scores: List[float] = [t.get_avg_validation_score() for t in trials]
+    trials_validation_scores: List[float] = auto_ml.report.list_avg_validation_scores()
     return trials_validation_scores
 
 

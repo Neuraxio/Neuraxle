@@ -64,8 +64,7 @@ def test_automl_context_is_correctly_specified_into_trial_with_full_automl_scena
 
     pred: DACT = automl.handle_predict(dact.without_eo(), cx)
 
-    round_scope: Round = BaseAggregate.from_context(cx.with_loc(ScopedLocation.default(round_number=0)), is_deep=True)
-    best: Tuple[float, int, FlatDict] = round_scope.best_result_summary()
+    best: Tuple[float, int, FlatDict] = automl.report.best_result_summary()
     best_score = best[0]
     assert best_score == 0
     best_add_n: int = list(best[-1].values())[0]
@@ -194,12 +193,11 @@ def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
     for _ in range(n_trials):
         copy.deepcopy(automl).handle_fit(dact, cx)
 
-    automl_refiting_best = _create_automl_test_loop(
+    automl_refiting_best: ControlledAutoML = _create_automl_test_loop(
         tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)
     automl_refiting_best, preds = automl_refiting_best.handle_fit_transform(dact, cx)
 
-    round_scope: Round = BaseAggregate.from_context(cx.with_loc(ScopedLocation.default(round_number=0)), is_deep=True)
-    bests: List[Tuple[TrialStatus, float, int, FlatDict]] = round_scope.summary()
+    bests: List[Tuple[TrialStatus, float, int, FlatDict]] = automl_refiting_best.report.summary()
 
     assert len(bests) == n_trials
     assert len(set(tuple(dict(hp).items()) for score, i, status, hp in bests)
@@ -240,12 +238,11 @@ def test_automl_can_use_same_on_disk_repo_in_parallel(use_processes=True):
     # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
     # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
 
-    automl_refiting_best = _create_automl_test_loop(
+    automl_refiting_best: ControlledAutoML = _create_automl_test_loop(
         tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)
     automl_refiting_best, preds = automl_refiting_best.handle_fit_transform(dact, cx)
 
-    round_scope: Round = BaseAggregate.from_context(cx.with_loc(ScopedLocation.default(round_number=0)), is_deep=True)
-    bests: List[Tuple[float, int, TrialStatus, FlatDict]] = round_scope.summary()
+    bests: List[Tuple[float, int, TrialStatus, FlatDict]] = automl_refiting_best.report.summary()
 
     assert len(bests) == n_trials
 

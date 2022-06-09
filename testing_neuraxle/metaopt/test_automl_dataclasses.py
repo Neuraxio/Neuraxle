@@ -3,6 +3,7 @@ from typing import List, Type
 
 import pytest
 from neuraxle.base import TrialStatus, synchroneous_flow_method
+from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            NULL_CLIENT, NULL_PROJECT,
                                            NULL_ROUND, NULL_TRIAL,
@@ -17,8 +18,9 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            from_json, to_json)
 
 SOME_METRIC_NAME = 'MAE'
-HYPERPARAMS = {'learning_rate': 0.01}
+HYPERPARAMS = HyperparameterSamples({'some_step__learning_rate': 0.01})
 HYPERPARAMS_DIMS = list(HYPERPARAMS.keys())
+HYPERPARAMS_DIMS_WILDCARDS = list(HYPERPARAMS.to_flat_dict(use_wildcards=True).keys())
 
 SOME_METRIC_RESULTS_DATACLASS = MetricResultsDataclass(
     metric_name=SOME_METRIC_NAME,

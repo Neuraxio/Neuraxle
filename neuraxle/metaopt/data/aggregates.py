@@ -528,6 +528,10 @@ class Round(BaseAggregate[Client, 'Trial', RoundReport, RoundDataclass]):
             self.refresh(True)
         return [Trial(t, self.context) for t in self._dataclass.get_sublocation()]
 
+    @property
+    def round_number(self) -> int:
+        return self._dataclass.round_number
+
     def _acquire_managed_subresource(self, new_trial=True, continue_on_error: bool = False) -> 'Trial':
         """
         Get a trial.
@@ -640,15 +644,6 @@ class Round(BaseAggregate[Client, 'Trial', RoundReport, RoundDataclass]):
     def is_higher_score_better(self, metric_name: str = None) -> bool:
         metric_name = self.sanitize_metric_name(metric_name)
         return self.report.is_higher_score_better(metric_name)
-
-    def get_number_of_split(self):
-        return self.report.get_n_val_splits()
-
-    def get_metric_names(self) -> List[str]:
-        return self.report.get_metric_names()
-
-    def best_result_summary(self, metric_name: str = None) -> Tuple[float, ScopedLocationAttrInt, TrialStatus, FlatDict]:
-        return self.summary(metric_name)[0]
 
     def summary(
         self, metric_name: str = None, use_wildcards: bool = False

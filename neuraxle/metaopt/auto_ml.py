@@ -40,9 +40,10 @@ from neuraxle.metaopt.callbacks import (ARG_Y_EXPECTED, ARG_Y_PREDICTD,
                                         ScoringCallback)
 from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
                                               Trial, TrialSplit)
+from neuraxle.metaopt.data.reporting import RoundReport
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            AutoMLContext,
-                                           HyperparamsRepository)
+                                           HyperparamsRepository, RoundDataclass, ScopedLocation)
 from neuraxle.metaopt.validation import (BaseHyperparameterOptimizer,
                                          BaseValidationSplitter,
                                          GridExplorationSampler,
@@ -328,6 +329,7 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
         self.refit_best_trial: bool = refit_best_trial
         self.project_name: str = project_name
         self.client_name: str = client_name
+        self._round_number: Optional[int] = None
 
         self.has_model_been_retrained: bool = False
 
@@ -367,7 +369,7 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
 
         :return: self
         """
-        automl_context: AutoMLContext = self.get_automl_context(context)
+        automl_context: AutoMLContext = self.get_automl_context(context, with_loc=False)
         root: Root = Root.from_context(automl_context)
 
         with root.get_project(self.project_name) as ps:
@@ -376,6 +378,7 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
                 cs: Client = cs
                 with cs.optim_round(self.start_new_round, self.main_metric_name) as rs:
                     rs: Round = rs
+                    self._round_number = rs.round_number
 
                     self.loop.run(self.pipeline, data_container, rs)
 
@@ -385,10 +388,28 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
 
         return self
 
-    def get_automl_context(self, context: ExecutionContext) -> AutoMLContext:
-        # if with_loc:
-        #     return AutoMLContext.from_context(context, repo=self.repo).with_loc(self.project_name, self.client_name, ???)
-        return AutoMLContext.from_context(context, repo=self.repo)
+    def get_automl_context(self, context: ExecutionContext, with_loc=True) -> AutoMLContext:
+        cx = AutoMLContext.from_context(context, repo=self.repo)
+        if self.repo is None:
+            self.repo = cx.repo
+        if with_loc and (self._round_number is not None or not self.start_new_round):
+            loc = ScopedLocation(self.project_name, self.client_name, self.round_number)
+            cx = cx.with_loc(loc)
+        return cx
+
+    @property
+    def round_number(self) -> Optional[int]:
+        if self._round_number is None:
+            if self.start_new_round:
+                raise ValueError("AutoML loop has not been run yet, cannot ask for report.")
+            else:
+                return len(self.repo.load(ScopedLocation(self.project_name, self.client_name))) - 1
+        return self._round_number
+
+    @property
+    def report(self) -> RoundReport:
+        dc: RoundDataclass = self.repo.load(ScopedLocation(self.project_name, self.client_name, self.round_number), deep=True)
+        return RoundReport(dc)
 
     def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         if not self.has_model_been_retrained:
