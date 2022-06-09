@@ -10,6 +10,8 @@ Classes are splitted like this for the metric analysis:
 - TrialReport
 - TrialSplitReport
 
+These AutoML reports are used to get information from the nested dataclasses, such as to create visuals.
+
 ..
     Copyright 2022, Neuraxio Inc.
 
@@ -71,6 +73,16 @@ def _filter_df_hps(wildcarded_hps: FlatDict, wildcards_to_keep: List[str] = None
 
 
 class BaseReport(Generic[SubReportT, SubDataclassT]):
+    """
+    A report contains a dataclass of the same subclass-level of itself, so as to be able to
+    dig into the dataclass so as to observe it, such as to generate statistics and query its information.
+    The dataclasses represent the results of an AutoML optimization round, even multiple rounds.
+    These AutoML reports are used to get information from the nested dataclasses, such as to create visuals.
+
+    .. seealso::
+        :class:`neuraxle.metaopt.data.vanilla.BaseDataclass`
+        :class:`neuraxle.metaopt.data.reporting.BaseAggregate`
+    """
     def __init__(self, dc: SubDataclassT):
         self._dataclass: SubDataclassT = dc
 

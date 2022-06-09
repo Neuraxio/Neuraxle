@@ -108,8 +108,17 @@ def _with_method_as_context_manager(
 class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[SubAggregateT], Generic[ParentAggregateT, SubAggregateT, SubReportT, SubDataclassT]):
     """
     Base class for aggregated objects using the repo and the dataclasses to manipulate them.
+    An aggregate is also a report, and can be used as a context manager for managing their children dataclasses,
+    acting like a tape logging the information to the AutoML repositories.
 
     For more information, read this `article by Martin Fowler on DDD Aggregates <https://martinfowler.com/bliki/DDD_Aggregate.html>`_.
+
+    .. seealso::
+        :class:`neuraxle.metaopt.data.vanilla.ScopedLocation`
+        :class:`neuraxle.metaopt.data.vanilla.BaseDataclass`
+        :class:`neuraxle.metaopt.data.vanilla.HyperparamsRepository`
+        :class:`neuraxle.metaopt.data.vanilla.AutoMLContext`
+        :class:`neuraxle.metaopt.data.reporting.BaseReport`
     """
 
     def __init__(self, _dataclass: SubDataclassT, context: AutoMLContext, is_deep=False, parent: ParentAggregateT = None):
