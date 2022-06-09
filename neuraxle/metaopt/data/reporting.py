@@ -238,24 +238,24 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
 
         return best_trial_id
 
-    def get_best_hyperparams(self, metric_name: str) -> HyperparameterSamples:
+    def get_best_hyperparams(self, metric_name: str = None) -> HyperparameterSamples:
         """
         Get best hyperparams from all trials.
-
-        : return:
         """
+        if metric_name is None:
+            metric_name = self.main_metric_name
         best_trial_report = self.get_best_trial_report(metric_name)
         if best_trial_report is None:
             return HyperparameterSamples()
         return best_trial_report.get_hyperparams()
 
-    def is_higher_score_better(self, metric_name: str) -> bool:
+    def is_higher_score_better(self, metric_name: str = None) -> bool:
         """
         Return true if higher score is better. If metric_name is None, the optimizer's
         metric is taken.
-
-        : return
         """
+        if metric_name is None:
+            metric_name = self.main_metric_name
         if len(self) == 0:
             return ValueError("No trial found, cannot determine if higher score is better.")
         return self[-1].is_higher_score_better(metric_name)
@@ -288,8 +288,7 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
         """
         Return the best result summary for the given metric, as the `[score, trial_number, hyperparams_flat_dict]`.
         """
-        if metric_name is None:
-            metric_name = self.main_metric_name
+        metric_name = metric_name or self.main_metric_name
         return self.summary(metric_name, use_wildcards)[0]
 
     def summary(
@@ -300,8 +299,7 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
         Values in the returned triplet tuples are: (score, trial_number, hyperparams),
         sorted by score such that the best score is first.
         """
-        if metric_name is None:
-            metric_name = self.main_metric_name
+        metric_name = metric_name or self.main_metric_name
         results: List[float, ScopedLocationAttrInt, TrialStatus, FlatDict] = list()
         results_not_success: List[float, ScopedLocationAttrInt, TrialStatus, FlatDict] = list()
 
@@ -358,18 +356,25 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
             return trials_hps_keys_step_2
         return list(trials_hps_keys)
 
-    def list_avg_validation_scores(self) -> List[float]:
+    def list_successful_avg_validation_scores(self) -> List[float]:
         """
-        Returns a list of all the average validation scores on record.
+        Returns a list of all the average validation scores on record, only for succesful trials.
         """
-        return [t.get_avg_validation_score() for t in self if t.is_success()]
+        return [t.get_avg_validation_score(self.main_metric_name) for t in self.successful_trials]
+
+    @property
+    def successful_trials(self) -> List['TrialReport']:
+        """
+        Returns a list of all the succesful trials on record.
+        """
+        return [t for t in self if t.is_success()]
 
     def to_round_scatterplot_df(self, metric_name: str = None, wildcards_to_keep: List[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Returns a dataframe with trial ids, the selected metric, and the wildcarded hyperparameters to keep.
         """
-        summary: List[float, ScopedLocationAttrInt, FlatDict] = self.summary(
-            metric_name, use_wildcards=True)
+        metric_name = metric_name or self.main_metric_name
+        summary: List[float, ScopedLocationAttrInt, FlatDict] = self.summary(metric_name, use_wildcards=True)
 
         splom_df = pd.DataFrame([
             {**{TrialReport.TRIAL_ID_COLUMN_NAME: trial_id}, **{self.SUMMARY_STATUS_COLUMNS_NAME: status.value}, **{metric_name: score},
@@ -384,6 +389,7 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
         """
         Returns a dataframe with trial ids, epochs, the selected metric, and the wildcarded hyperparameters to keep.
         """
+        metric_name = metric_name or self.main_metric_name
         _df_list: List[Dict(str, Any)] = []
 
         trials: List[TrialReport] = list(self)

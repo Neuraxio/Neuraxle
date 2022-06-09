@@ -14,6 +14,7 @@ from neuraxle.hyperparams.distributions import (
     PriorityChoice, Quantized)
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.metaopt.data.aggregates import Round, Trial
+from neuraxle.metaopt.data.reporting import RoundReport, TrialReport
 from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
 from neuraxle.metaopt.validation import GridExplorationSampler
 
@@ -139,11 +140,12 @@ class _DividedMixturesFactory:
         self,
         round_scope: Round,
     ) -> Tuple[List[str], List['_DividedTPEPosteriors']]:
+        # TODO: pass a RoundReport instead. This will require the ability to save hyperparameter spaces in round reports, and update them.
 
         # Split trials into good and bad using quantile threshold.
         good_trials: List[Trial] = []
         bad_trials: List[Trial] = []
-        good_trials, bad_trials = self._split_good_and_bad_trials(round_scope)
+        good_trials, bad_trials = self._split_good_and_bad_trials(round_scope.report)
 
         flat_hp_space_tuples: List[(str, HyperparameterDistribution)] = list(
             round_scope.hp_space.to_flat_dict().items())
@@ -162,17 +164,13 @@ class _DividedMixturesFactory:
 
         return hyperparams_keys, divided_good_and_bad_distrs
 
-    def _split_good_and_bad_trials(self, round_scope: Round) -> Tuple[List[Trial], List[Trial]]:
+    def _split_good_and_bad_trials(self, round_report: RoundReport) -> Tuple[List[TrialReport], List[TrialReport]]:
 
         # Split trials into good and bad using quantile threshold.
-        successful_trials: List[Trial] = [
-            trial for trial in round_scope._trials
-            if trial.is_success()
-        ]
-        trials_scores: List[Tuple[float, Trial]] = [t.get_avg_validation_score() for t in successful_trials]
+        trials_scores: List[float] = round_report.list_successful_avg_validation_scores()
 
         trial_sorted_indexes: List[int] = np.argsort(trials_scores)
-        if round_scope.is_higher_score_better():
+        if round_report.is_higher_score_better():
             trial_sorted_indexes = list(reversed(trial_sorted_indexes))
 
         # In hyperopt they use this to split, where default_gamma_cap = 25. They clip the max of item they use in the good item.
@@ -186,15 +184,15 @@ class _DividedMixturesFactory:
         good_trials_indexes = trial_sorted_indexes[:n_good]
         bad_trials_indexes = trial_sorted_indexes[n_good:]
 
-        good_trials: List[Trial] = [successful_trials[i] for i in good_trials_indexes]
-        bad_trials: List[Trial] = [successful_trials[i] for i in bad_trials_indexes]
+        good_trials: List[TrialReport] = [round_report.successful_trials[i] for i in good_trials_indexes]
+        bad_trials: List[TrialReport] = [round_report.successful_trials[i] for i in bad_trials_indexes]
 
         return good_trials, bad_trials
 
     def _create_posterior(
         self,
         flat_hp_space_tuples: List[Tuple[str, HyperparameterDistribution]],
-        trials: List[Trial],
+        trials: List[TrialReport],
     ) -> List[HyperparameterDistribution]:
 
         # Loop through all hyperparams

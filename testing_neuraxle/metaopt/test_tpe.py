@@ -122,7 +122,7 @@ def _score_trials(
     auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
-    trials_validation_scores: List[float] = auto_ml.report.list_avg_validation_scores()
+    trials_validation_scores: List[float] = auto_ml.report.list_successful_avg_validation_scores()
     return trials_validation_scores
 
 
