@@ -549,7 +549,7 @@ class Round(BaseAggregate[Client, 'Trial', RoundReport, RoundDataclass]):
             # Get new trial loc:
             trial_id: int = self._dataclass.get_next_i()
             if new_trial is None:
-                trial_id: int = self.get_best_trial(self.main_metric_name)._dataclass.get_id()
+                trial_id: int = self.report.get_best_trial().get_id()
             elif not new_trial:
                 # Try get last trial
                 trial_id = max(0, trial_id - 1)
@@ -599,7 +599,7 @@ class Round(BaseAggregate[Client, 'Trial', RoundReport, RoundDataclass]):
             if not is_all_failure and len(self) > 0:
                 main_metric_name = self.main_metric_name
                 self.flow.log('Finished round hp search!')
-                _best_trial = self.get_best_trial(main_metric_name)
+                _best_trial: TrialReport = self.report.get_best_trial(main_metric_name)
                 self.flow.log_best_hps(
                     main_metric_name,
                     _best_trial.get_hyperparams(),
@@ -627,12 +627,6 @@ class Round(BaseAggregate[Client, 'Trial', RoundReport, RoundDataclass]):
     @property
     def main_metric_name(self) -> str:
         return self._dataclass.main_metric_name
-
-    def get_best_trial(self, metric_name: str = None) -> Optional['Trial']:
-        _best_trial_id = self.report.get_best_trial_id(metric_name)
-        if _best_trial_id is None:
-            return None
-        return self[_best_trial_id]
 
 
 class Trial(BaseAggregate[Round, 'TrialSplit', TrialReport, TrialDataclass]):
@@ -673,6 +667,7 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialReport, TrialDataclass]):
         self._managed_subresource(continue_loop_on_error=continue_loop_on_error)
         return self
 
+    @_with_method_as_context_manager
     def retrain_split(self) -> 'Trial':
         self._managed_subresource(continue_loop_on_error=False, retrain_split=True)
         return self

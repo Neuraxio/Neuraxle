@@ -205,7 +205,7 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
     def main_metric_name(self) -> str:
         return self._dataclass.main_metric_name
 
-    def get_best_trial_report(self, metric_name: str = None) -> Optional['TrialReport']:
+    def get_best_trial(self, metric_name: str = None) -> Optional['TrialReport']:
         """
         Return trial report with best score from all trials, provided that this trial has a score and was successful.
         """
@@ -246,7 +246,7 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
         """
         if metric_name is None:
             metric_name = self.main_metric_name
-        best_trial_report = self.get_best_trial_report(metric_name)
+        best_trial_report = self.get_best_trial(metric_name)
         if best_trial_report is None:
             return HyperparameterSamples()
         return best_trial_report.get_hyperparams()
