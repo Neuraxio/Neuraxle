@@ -304,7 +304,7 @@ class TestTrials:
             is_deep=True)
 
         # When
-        best_hyperparams = trials.report.get_best_hyperparams(SOME_OTHER_METRIC_NAME_MSE)
+        best_hyperparams = trials.get_best_hyperparams(SOME_OTHER_METRIC_NAME_MSE)
 
         # Then
         assert best_hyperparams == hp_trial_2

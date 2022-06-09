@@ -128,7 +128,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
         :param round_scope: round scope
         :return: next hyperparams
         """
-        self._reinitialize_grid(round_scope.hp_space, round_scope.report.get_all_hyperparams())
+        self._reinitialize_grid(round_scope.hp_space, round_scope.get_all_hyperparams())
 
         _space_max = reduce(operator.mul, self.flat_hp_grid_lens, 1)
 

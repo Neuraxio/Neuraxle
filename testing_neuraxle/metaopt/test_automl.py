@@ -99,7 +99,7 @@ def test_automl_savebestmodel_callback(tmpdir):
     auto_ml = auto_ml.fit(data_inputs=data_inputs, expected_outputs=expected_outputs)
 
     # Then
-    best_trial = auto_ml.report.get_best_trial()
+    best_trial: TrialReport = auto_ml.report.get_best_trial()
     best_trial_score = best_trial.get_avg_validation_score()
     best_model = auto_ml.wrapped.wrapped
     _, _, _, valid_inputs, valid_outputs, _ = validation_splitter.split(

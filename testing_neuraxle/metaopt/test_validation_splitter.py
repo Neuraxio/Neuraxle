@@ -52,4 +52,4 @@ def test_validation_splitter_handler_methods_should_split_data(tmpdir):
     assert np.array_equal(transform_callback.data[2], data_inputs)
 
     with round_scope.last_trial() as trial_scope:
-        assert trial_scope.get_avg_validation_score() is not None
+        assert trial_scope.get_avg_validation_score(metric.name) is not None

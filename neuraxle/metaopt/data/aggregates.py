@@ -56,7 +56,8 @@ from neuraxle.metaopt.data.reporting import (BaseReport, ClientReport,
                                              MetricResultsReport,
                                              ProjectReport, RootReport,
                                              RoundReport, SubReportT,
-                                             TrialReport, TrialSplitReport)
+                                             TrialReport, TrialSplitReport,
+                                             dataclass_2_report)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            RETRAIN_TRIAL_SPLIT_ID,
                                            AutoMLContext, BaseDataclass,
@@ -104,7 +105,7 @@ def _with_method_as_context_manager(
     return func
 
 
-class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT], Generic[ParentAggregateT, SubAggregateT, SubReportT, SubDataclassT]):
+class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[SubAggregateT], Generic[ParentAggregateT, SubAggregateT, SubReportT, SubDataclassT]):
     """
     Base class for aggregated objects using the repo and the dataclasses to manipulate them.
 
@@ -114,6 +115,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
     def __init__(self, _dataclass: SubDataclassT, context: AutoMLContext, is_deep=False, parent: ParentAggregateT = None):
         BaseService.__init__(self, name=f"{self.__class__.__name__}_{_dataclass.get_id()}")
         _CouldHaveContext.__init__(self)
+        dataclass_2_report[_dataclass.__class__].__init__(self, _dataclass)
         self._dataclass: SubDataclassT = _dataclass
         self._spare: SubDataclassT = copy.copy(_dataclass).shallow()
         # TODO: pre-push context to allow for dc auto-loading and easier parent auto-loading?
@@ -227,24 +229,6 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
     @property
     def subdataclass(self) -> Type[SubDataclassT]:
         return aggregate_2_dataclass[aggregate_2_subaggregate[self.__class__]]
-
-    @property
-    def get_id(self) -> int:
-        return self._dataclass.get_id()
-
-    def sanitize_metric_name(self, metric_name: str = None):
-        """
-        If the argument metric is None, the round's dataclass main metric is taken, assuming an access to a parent round.
-        Otherwise, is None.
-        """
-        if metric_name is not None:
-            return metric_name
-        elif hasattr(self, "main_metric_name") and self.main_metric_name is not None:
-            return self.main_metric_name
-        elif self.parent is not None:
-            return self.parent.sanitize_metric_name(metric_name)
-        else:
-            return None
 
     def refresh(self, deep: bool = True):
         _lock = self.context.lock if self.repo.is_locking_required() else PassthroughNullLock()
@@ -394,7 +378,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
         return self._dataclass == other._dataclass
 
 
-class Root(BaseAggregate[None, 'Project', RootReport, RootDataclass]):
+class Root(RootReport, BaseAggregate[None, 'Project', RootReport, RootDataclass]):
 
     def save(self, deep: bool = False):
         if deep:
@@ -434,7 +418,7 @@ class Root(BaseAggregate[None, 'Project', RootReport, RootDataclass]):
         return super()._acquire_managed_subresource(project_loc)
 
 
-class Project(BaseAggregate[None, 'Client', ProjectReport, ProjectDataclass]):
+class Project(ProjectReport, BaseAggregate[None, 'Client', ProjectReport, ProjectDataclass]):
 
     @_with_method_as_context_manager
     def get_client(self, name: str) -> 'Project':
@@ -451,7 +435,7 @@ class Project(BaseAggregate[None, 'Client', ProjectReport, ProjectDataclass]):
         return super()._acquire_managed_subresource(client_loc)
 
 
-class Client(BaseAggregate[Project, 'Round', ClientReport, ClientDataclass]):
+class Client(ClientReport, BaseAggregate[Project, 'Round', ClientReport, ClientDataclass]):
 
     @_with_method_as_context_manager
     def new_round(self, main_metric_name: str) -> 'Client':
@@ -491,7 +475,7 @@ class Client(BaseAggregate[Project, 'Round', ClientReport, ClientDataclass]):
             return subagg
 
 
-class Round(BaseAggregate[Client, 'Trial', RoundReport, RoundDataclass]):
+class Round(RoundReport, BaseAggregate[Client, 'Trial', RoundReport, RoundDataclass]):
 
     def with_optimizer(
         self,
@@ -549,7 +533,7 @@ class Round(BaseAggregate[Client, 'Trial', RoundReport, RoundDataclass]):
             # Get new trial loc:
             trial_id: int = self._dataclass.get_next_i()
             if new_trial is None:
-                trial_id: int = self.report.get_best_trial().get_id()
+                trial_id: int = self.get_best_trial_id()
             elif not new_trial:
                 # Try get last trial
                 trial_id = max(0, trial_id - 1)
@@ -599,7 +583,7 @@ class Round(BaseAggregate[Client, 'Trial', RoundReport, RoundDataclass]):
             if not is_all_failure and len(self) > 0:
                 main_metric_name = self.main_metric_name
                 self.flow.log('Finished round hp search!')
-                _best_trial: TrialReport = self.report.get_best_trial(main_metric_name)
+                _best_trial: TrialReport = self.get_best_trial(main_metric_name)
                 self.flow.log_best_hps(
                     main_metric_name,
                     _best_trial.get_hyperparams(),
@@ -629,7 +613,7 @@ class Round(BaseAggregate[Client, 'Trial', RoundReport, RoundDataclass]):
         return self._dataclass.main_metric_name
 
 
-class Trial(BaseAggregate[Round, 'TrialSplit', TrialReport, TrialDataclass]):
+class Trial(TrialReport, BaseAggregate[Round, 'TrialSplit', TrialReport, TrialDataclass]):
     """
     This class is a sub-contextualization of the :class:`HyperparameterRepository`
     class for holding a trial and manipulating it within its context.
@@ -735,7 +719,7 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialReport, TrialDataclass]):
         """
         self._dataclass.end(TrialStatus.SUCCESS)
 
-        metric_name = self.sanitize_metric_name()
+        metric_name = self.parent.main_metric_name
         avg_best_val_score = self.get_avg_validation_score(metric_name)
         avg_n_epochs_to_val_score = self.get_avg_n_epoch_to_best_validation_score(metric_name)
         self.flow.log_success(avg_best_val_score, avg_n_epochs_to_val_score, metric_name)
@@ -752,35 +736,8 @@ class Trial(BaseAggregate[Round, 'TrialSplit', TrialReport, TrialDataclass]):
         self.flow.log_failure(exception=error)
         return self
 
-    def is_success(self):
-        return self.report.is_success()
 
-    def get_status(self) -> TrialStatus:
-        return self.report.get_status()
-
-    def are_all_splits_successful(self) -> bool:
-        return self.report.are_all_splits_successful()
-
-    def are_all_splits_failures(self) -> bool:
-        return self.report.are_all_splits_failures()
-
-    def get_avg_validation_score(self, metric_name: str = None, over_time=False) -> Optional[Union[float, List[float]]]:
-        metric_name = self.sanitize_metric_name(metric_name)
-        return self.report.get_avg_validation_score(metric_name, over_time)
-
-    def get_avg_n_epoch_to_best_validation_score(self, metric_name: str = None) -> Optional[float]:
-        metric_name = self.sanitize_metric_name(metric_name)
-        return self.report.get_avg_n_epoch_to_best_validation_score(metric_name)
-
-    def is_higher_score_better(self, metric_name: str = None) -> bool:
-        metric_name = self.sanitize_metric_name(metric_name)
-        return self.report.is_higher_score_better(metric_name)
-
-    def get_hyperparams(self) -> HyperparameterSamples:
-        return self._dataclass.hyperparams
-
-
-class TrialSplit(BaseAggregate[Trial, 'MetricResults', TrialSplitReport, TrialSplitDataclass]):
+class TrialSplit(TrialSplitReport, BaseAggregate[Trial, 'MetricResults', TrialSplitReport, TrialSplitDataclass]):
     """
     One split of a trial. This is where a model is trained and evaluated on a specific dataset split.
     """
@@ -841,7 +798,7 @@ class TrialSplit(BaseAggregate[Trial, 'MetricResults', TrialSplitReport, TrialSp
         """
         Get a metric result that is not managed with a "with" statement. Access it read-only.
         """
-        metric_name = self.sanitize_metric_name(metric_name)
+        metric_name = metric_name or self.parent.parent.main_metric_name
         mr: MetricResultsDataclass = self._dataclass.get_sublocation()[metric_name]
         return MetricResults(mr, self.context, is_deep=True)
 
@@ -863,16 +820,15 @@ class TrialSplit(BaseAggregate[Trial, 'MetricResults', TrialSplitReport, TrialSp
             subagg: MetricResults = self.subaggregate(subdataclass, self.context, is_deep=True, parent=self)
             return subagg
 
-    def _create_or_get_metric_results(self, name, higher_score_is_better):
-        name = self.sanitize_metric_name(name)
-        if name not in self._dataclass.metric_results:
-            self._dataclass.metric_results[name] = MetricResultsDataclass(
-                metric_name=name,
+    def _create_or_get_metric_results(self, metric_name, higher_score_is_better):
+        if metric_name not in self._dataclass.metric_results:
+            self._dataclass.metric_results[metric_name] = MetricResultsDataclass(
+                metric_name=metric_name,
                 validation_values=[],
                 train_values=[],
                 higher_score_is_better=higher_score_is_better,
             )
-        return self._dataclass.metric_results[name]
+        return self._dataclass.metric_results[metric_name]
 
     def _release_managed_subresource(self, resource: 'MetricResults', e: Exception = None) -> bool:
         handled_error = False
@@ -895,7 +851,7 @@ class TrialSplit(BaseAggregate[Trial, 'MetricResults', TrialSplitReport, TrialSp
 
         self_metrics = self.get_metric_names()
 
-        metric_name = self.sanitize_metric_name()
+        metric_name = self.parent.main_metric_name
         if metric_name not in self_metrics:
             if len(self_metrics) == 0:
                 self.context.flow.log_warning(
@@ -933,17 +889,8 @@ class TrialSplit(BaseAggregate[Trial, 'MetricResults', TrialSplitReport, TrialSp
     def validation_context(self) -> 'AutoMLContext':
         return self.context.validation()
 
-    def get_metric_names(self) -> List[str]:
-        return self.report.get_metric_names()
 
-    def is_success(self):
-        return self.report.is_success()
-
-    def get_hyperparams(self) -> RecursiveDict:
-        return self._dataclass.hyperparams
-
-
-class MetricResults(BaseAggregate[TrialSplit, None, MetricResultsReport, MetricResultsDataclass]):
+class MetricResults(MetricResultsReport, BaseAggregate[TrialSplit, None, MetricResultsReport, MetricResultsDataclass]):
 
     def _invariant(self):
         self._assert(self.is_deep,
@@ -983,27 +930,6 @@ class MetricResults(BaseAggregate[TrialSplit, None, MetricResultsReport, MetricR
             self._dataclass.validation_values.append(score)
             self.flow.log_valid_metric(self.metric_name, score)
             self.save(True)
-
-    def get_train_scores(self) -> List[float]:
-        return self.report.get_train_scores()
-
-    def get_valid_scores(self) -> List[float]:
-        return self.report.get_valid_scores()
-
-    def get_final_validation_score(self) -> float:
-        return self.report.get_final_validation_score()
-
-    def get_best_validation_score(self) -> Optional[float]:
-        return self.report.get_best_validation_score()
-
-    def get_n_epochs_to_best_validation_score(self) -> Optional[int]:
-        return self.report.get_n_epochs_to_best_validation_score()
-
-    def is_higher_score_better(self) -> bool:
-        return self.report.is_higher_score_better()
-
-    def is_new_best_score(self) -> bool:
-        return self.report.is_new_best_score()
 
     def __iter__(self) -> Iterable[SubAggregateT]:
         """
