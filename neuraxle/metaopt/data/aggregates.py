@@ -43,7 +43,7 @@ from abc import abstractmethod
 from collections import OrderedDict
 from types import TracebackType
 from typing import (Callable, ContextManager, Dict, Generic, Iterable, List,
-                    Optional, Tuple, Type, TypeVar, Union)
+                    Optional, Type, TypeVar)
 
 import numpy as np
 from neuraxle.base import BaseService
@@ -51,7 +51,7 @@ from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import (Flow, PassthroughNullLock, TrialStatus,
                            _CouldHaveContext)
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
-                                        HyperparameterSpace, RecursiveDict)
+                                        HyperparameterSpace)
 from neuraxle.metaopt.data.reporting import (BaseReport, ClientReport,
                                              MetricResultsReport,
                                              ProjectReport, RootReport,

@@ -4,7 +4,6 @@ from typing import List
 
 import numpy as np
 import pytest
-from neuraxle.base import ExecutionContext as CX
 from neuraxle.hyperparams.distributions import (Choice, DistributionMixture,
                                                 HPSampledValue,
                                                 HyperparameterDistribution,
@@ -17,12 +16,7 @@ from neuraxle.metaopt.auto_ml import (AutoML, BaseHyperparameterOptimizer,
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.aggregates import (MetricResults, Round, Trial,
                                               TrialSplit)
-from neuraxle.metaopt.data.reporting import RoundReport
-from neuraxle.metaopt.data.vanilla import (AutoMLContext,
-                                           HyperparameterSamplerStub,
-                                           MetricResultsDataclass,
-                                           RoundDataclass, ScopedLocation,
-                                           TrialDataclass, TrialSplitDataclass,
+from neuraxle.metaopt.data.vanilla import (HyperparameterSamplerStub,
                                            VanillaHyperparamsRepository)
 from neuraxle.metaopt.hyperopt.tpe import (TreeParzenEstimator,
                                            _DividedMixturesFactory,

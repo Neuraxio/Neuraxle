@@ -1,6 +1,6 @@
 
 import copy
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Set, Tuple, Type
 
@@ -17,7 +17,7 @@ from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         HyperparameterSpace)
 from neuraxle.metaopt.auto_ml import ControlledAutoML, DefaultLoop, Trainer
 from neuraxle.metaopt.callbacks import MetricCallback
-from neuraxle.metaopt.data.aggregates import BaseAggregate, Round
+from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, AutoMLContext,
                                            BaseDataclass, RoundDataclass,

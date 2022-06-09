@@ -9,7 +9,7 @@ from neuraxle.metaopt.data.reporting import (BaseReport, ClientReport,
                                              dataclass_2_report)
 from neuraxle.metaopt.data.vanilla import BaseDataclass
 from testing_neuraxle.metaopt.test_automl_dataclasses import (
-    ALL_DATACLASSES, HYPERPARAMS_DIMS, HYPERPARAMS_DIMS_WILDCARDS, SOME_CLIENT_DATACLASS,
+    ALL_DATACLASSES, HYPERPARAMS_DIMS_WILDCARDS, SOME_CLIENT_DATACLASS,
     SOME_METRIC_NAME, SOME_PROJECT_DATACLASS, SOME_ROUND_DATACLASS, SOME_TRIAL_DATACLASS)
 
 
