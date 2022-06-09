@@ -160,6 +160,10 @@ class RoundStub:
     def get_all_hyperparams(self):
         return self._all_tried_hyperparams
 
+    @property
+    def report(self):
+        return self
+
 
 def _get_optimization_scenario(n_trials):
     round_scope: Round = RoundStub(hp_space=HyperparameterSpace({

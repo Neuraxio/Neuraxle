@@ -162,7 +162,7 @@ class BaseAggregate(_CouldHaveContext, BaseService, ContextManager[SubAggregateT
 
         # create the aggregate:
         context.repo.save(root_dc, ScopedLocation(), deep=True)
-        return cls.from_context(context, is_deep=False)
+        return cls.from_context(context, is_deep=True)
 
     def _invariant(self):
         _type: Type[SubDataclassT] = self.dataclass
@@ -541,6 +541,8 @@ class Round(BaseAggregate[Client, 'Trial', RoundReport, RoundDataclass]):
                                   Otherwise, will let the exception be raised for the failure (won't catch).
         """
         with self.context.lock:
+            if not self.is_deep:
+                raise RuntimeError("Round must be deep to get a new trial.")
             self.refresh(self.is_deep)
             # self.context.add_scoped_logger_file_handler()
 
@@ -627,41 +629,10 @@ class Round(BaseAggregate[Client, 'Trial', RoundReport, RoundDataclass]):
         return self._dataclass.main_metric_name
 
     def get_best_trial(self, metric_name: str = None) -> Optional['Trial']:
-        if not self.is_deep:
-            self.refresh(True)
-        metric_name = self.sanitize_metric_name(metric_name)
         _best_trial_id = self.report.get_best_trial_id(metric_name)
         if _best_trial_id is None:
             return None
         return self[_best_trial_id]
-
-    def get_best_hyperparams(self, metric_name: str = None) -> HyperparameterSamples:
-        if not self.is_deep:
-            self.refresh(True)
-        metric_name = self.sanitize_metric_name(metric_name)
-        return self.report.get_best_hyperparams(metric_name)
-
-    def is_higher_score_better(self, metric_name: str = None) -> bool:
-        metric_name = self.sanitize_metric_name(metric_name)
-        return self.report.is_higher_score_better(metric_name)
-
-    def summary(
-        self, metric_name: str = None, use_wildcards: bool = False
-    ) -> List[Tuple[float, ScopedLocationAttrInt, TrialStatus, FlatDict]]:
-        """
-        Get a summary of the round. Best score is first.
-        Values in the returned triplet tuples are: (score, trial_number, hyperparams),
-        sorted by score such that the best score is first.
-        """
-        if not self.is_deep:
-            self.refresh(True)
-        metric_name = self.sanitize_metric_name(metric_name)
-        return self.report.summary(metric_name, use_wildcards)
-
-    def get_all_hyperparams(self, as_flat: bool = True, use_wildcards: bool = False) -> List[FlatDict]:
-        if not self.is_deep:
-            self.refresh(True)
-        return self.report.get_all_hyperparams(as_flat=as_flat, use_wildcards=use_wildcards)
 
 
 class Trial(BaseAggregate[Round, 'TrialSplit', TrialReport, TrialDataclass]):

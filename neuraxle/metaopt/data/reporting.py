@@ -205,19 +205,21 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
     def main_metric_name(self) -> str:
         return self._dataclass.main_metric_name
 
-    def get_best_trial_report(self, metric_name) -> Optional['TrialReport']:
+    def get_best_trial_report(self, metric_name: str = None) -> Optional['TrialReport']:
         """
         Return trial report with best score from all trials, provided that this trial has a score and was successful.
         """
+        metric_name = metric_name or self.main_metric_name
         best_trial_id = self.get_best_trial_id(metric_name)
         if best_trial_id is None:
             return None
         return self[best_trial_id]
 
-    def get_best_trial_id(self, metric_name) -> Optional[ScopedLocationAttr]:
+    def get_best_trial_id(self, metric_name: str = None) -> Optional[ScopedLocationAttr]:
         """
         Get best trial id from all trials. Will return None if there are no successful trial with such score.
         """
+        metric_name = metric_name or self.main_metric_name
         best_score, best_trial_id = None, None
         _is_higher_score_better = self.is_higher_score_better(metric_name)
 
