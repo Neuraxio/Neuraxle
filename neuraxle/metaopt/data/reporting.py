@@ -679,6 +679,6 @@ report_2_dataclass: typing.OrderedDict[Type[BaseReport], Type[BaseDataclass]] = 
     (MetricResultsReport, MetricResultsDataclass),
 ])
 dataclass_2_report: typing.OrderedDict[Type[BaseDataclass], Type[BaseReport]] = {
-    dc: repç
-    for repç, dc in report_2_dataclass.items()
+    dc: rep
+    for rep, dc in report_2_dataclass.items()
 }
