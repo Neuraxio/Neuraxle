@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.data_container import DACT, AbsentValuesNullObject
+from neuraxle.data_container import DACT, StripAbsentValues
 from neuraxle.distributed.streaming import SequentialQueuedPipeline, ParallelQueuedFeatureUnion, QueueJoiner
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
@@ -39,8 +39,8 @@ def test_queued_pipeline_with_included_incomplete_batch():
         ],
         batch_size=10,
         keep_incomplete_batch=True,
-        default_value_data_inputs=AbsentValuesNullObject(),
-        default_value_expected_outputs=AbsentValuesNullObject(),
+        default_value_data_inputs=StripAbsentValues(),
+        default_value_expected_outputs=StripAbsentValues(),
         n_workers_per_step=1,
         max_queue_size=5
     )

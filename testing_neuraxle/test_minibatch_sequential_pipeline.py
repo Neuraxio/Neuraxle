@@ -1,5 +1,6 @@
+import unittest
 import numpy as np
-from neuraxle.data_container import AbsentValuesNullObject
+from neuraxle.data_container import StripAbsentValues
 
 from neuraxle.pipeline import MiniBatchSequentialPipeline, Joiner, Pipeline
 from neuraxle.steps.misc import TransformCallbackStep, TapeCallbackFunction, FitTransformCallbackStep
@@ -129,3 +130,183 @@ def test_minibatch_sequential_pipeline_change_batch_size_works():
     ]
     assert tape2.name_tape == ["2", "2", "2", "2"]
 
+
+class TestMiniBatchSequentialPipelineBatchingBehavior(unittest.TestCase):
+
+    def setUp(self):
+        self.data = list(range(10))
+        self.tape_trs = TapeCallbackFunction()
+        self.tape_fit = TapeCallbackFunction()
+        self.tape_step = FitTransformCallbackStep(self.tape_trs, self.tape_fit, ["0"])
+
+    def test_batch_size_2(self):
+        pipeline = MiniBatchSequentialPipeline([
+            self.tape_step
+        ], batch_size=2)
+
+        pipeline.transform(self.data)
+
+        assert self.tape_trs.data == [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
+
+    def test_batch_size_3_discard_incomplete(self):
+        pipeline = MiniBatchSequentialPipeline([
+            self.tape_step
+        ], batch_size=3, keep_incomplete_batch=False)
+
+        pipeline.transform(self.data)
+
+        assert self.tape_trs.data == [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+
+    def test_batch_size_3_keep_incomplete_using_nones(self):
+        pipeline = MiniBatchSequentialPipeline(
+            [self.tape_step],
+            batch_size=3,
+            keep_incomplete_batch=True,
+            default_value_data_inputs=None,
+            default_value_expected_outputs=None
+        )
+
+        pipeline.transform(self.data)
+
+        assert self.tape_trs.data == [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, None, None]]
+
+    def test_batch_size_3_keep_incomplete_using_nones_and_absent_incomplete_batch_values(self):
+        pipeline = MiniBatchSequentialPipeline(
+            [self.tape_step],
+            batch_size=3,
+            keep_incomplete_batch=True,
+            default_value_data_inputs=StripAbsentValues()
+        )
+
+        pipeline.transform(self.data)
+
+        assert self.tape_trs.data == [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
+
+    def test_batch_size_2_using_joiner(self):
+        pipeline = MiniBatchSequentialPipeline([
+            self.tape_step,
+            Joiner(batch_size=2)
+        ])
+
+        pipeline.transform(self.data)
+
+        assert self.tape_trs.data == [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
+
+    def test_batch_size_3_using_joiner(self):
+        pipeline = MiniBatchSequentialPipeline([
+            self.tape_step,
+            Joiner(batch_size=3, keep_incomplete_batch=False)
+        ])
+
+        pipeline.transform(self.data)
+
+        assert self.tape_trs.data == [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+
+    def test_batch_size_3_using_joiner_keep_incomplete_using_nones(self):
+        pipeline = MiniBatchSequentialPipeline([
+            self.tape_step,
+            Joiner(
+                batch_size=3,
+                keep_incomplete_batch=True,
+                default_value_data_inputs=None,
+                default_value_expected_outputs=None
+            )
+        ])
+
+        pipeline.transform(self.data)
+
+        assert self.tape_trs.data == [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, None, None]]
+
+    def test_batch_size_3_using_joiner_keep_incomplete_using_absent_incomplete_batch_values(self):
+        pipeline = MiniBatchSequentialPipeline([
+            self.tape_step,
+            Joiner(
+                batch_size=3,
+                keep_incomplete_batch=True,
+                default_value_data_inputs=StripAbsentValues()
+            )
+        ])
+
+        pipeline.transform(self.data)
+
+        assert self.tape_trs.data == [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
+
+    def test_fit_with_keep_incomplete_batch_using_nones(self):
+        pipeline = MiniBatchSequentialPipeline([
+            self.tape_step,
+            Joiner(
+                batch_size=3,
+                keep_incomplete_batch=True,
+                default_value_data_inputs=None,
+                default_value_expected_outputs=None
+            )
+        ])
+
+        pipeline.fit(self.data, self.data)
+
+        assert self.tape_fit.data == [
+            ([0, 1, 2], [0, 1, 2]),
+            ([3, 4, 5], [3, 4, 5]),
+            ([6, 7, 8], [6, 7, 8]),
+            ([9, None, None], [9, None, None]),
+        ]
+
+    def test_fit_with_keep_incomplete_batch_using_partially_nones_in_inputs(self):
+        pipeline = MiniBatchSequentialPipeline([
+            self.tape_step,
+            Joiner(
+                batch_size=3,
+                keep_incomplete_batch=True,
+                default_value_data_inputs=None,
+                default_value_expected_outputs=StripAbsentValues()
+            )
+        ])
+
+        pipeline.fit(self.data, self.data)
+
+        assert self.tape_fit.data == [
+            ([0, 1, 2], [0, 1, 2]),
+            ([3, 4, 5], [3, 4, 5]),
+            ([6, 7, 8], [6, 7, 8]),
+            ([9, None, None], [9]),
+        ]
+
+    def test_fit_with_keep_incomplete_batch_using_partially_nones_in_outputs(self):
+        pipeline = MiniBatchSequentialPipeline([
+            self.tape_step,
+            Joiner(
+                batch_size=3,
+                keep_incomplete_batch=True,
+                default_value_data_inputs=StripAbsentValues(),
+                default_value_expected_outputs=None
+            )
+        ])
+
+        pipeline.fit(self.data, self.data)
+
+        assert self.tape_fit.data == [
+            ([0, 1, 2], [0, 1, 2]),
+            ([3, 4, 5], [3, 4, 5]),
+            ([6, 7, 8], [6, 7, 8]),
+            ([9], [9, None, None]),
+        ]
+
+    def test_fit_with_keep_incomplete_batch_using_absent_incomplete_batch_values(self):
+        pipeline = MiniBatchSequentialPipeline([
+            self.tape_step,
+            Joiner(
+                batch_size=3,
+                keep_incomplete_batch=True,
+                default_value_data_inputs=StripAbsentValues(),
+                default_value_expected_outputs=StripAbsentValues()
+            )
+        ])
+
+        pipeline.fit(self.data, self.data)
+
+        assert self.tape_fit.data == [
+            ([0, 1, 2], [0, 1, 2]),
+            ([3, 4, 5], [3, 4, 5]),
+            ([6, 7, 8], [6, 7, 8]),
+            ([9], [9]),
+        ]

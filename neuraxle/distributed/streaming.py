@@ -37,7 +37,7 @@ from neuraxle.base import BaseSaver, BaseTransformer
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import (MetaStep, MixinForBaseTransformer, NamedStepsList,
                            NonFittableMixin, _FittableStep)
-from neuraxle.data_container import (DACT, AbsentValuesNullObject,
+from neuraxle.data_container import (DACT, StripAbsentValues,
                                      ListDataContainer)
 from neuraxle.hyperparams.space import RecursiveDict
 from neuraxle.pipeline import Joiner, MiniBatchSequentialPipeline, Pipeline
@@ -361,10 +361,10 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
     or not the last batch should be dropped in the case it has fewer than
     `batch_size` elements; the default behavior is to keep the smaller batch.
     :param default_value_data_inputs: expected_outputs default fill value
-    for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+    for padding and values outside iteration range, or :class:`~neuraxle.data_container.StripAbsentValues`
     to trim absent values from the batch
     :param default_value_expected_outputs: expected_outputs default fill value
-    for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+    for padding and values outside iteration range, or :class:`~neuraxle.data_container.StripAbsentValues`
     to trim absent values from the batch
     """
 
@@ -378,8 +378,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             use_processes: bool = False,
             use_savers: bool = False,
             keep_incomplete_batch: bool = True,
-            default_value_data_inputs: Union[Any, AbsentValuesNullObject] = None,
-            default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = None,
+            default_value_data_inputs: Union[Any, StripAbsentValues] = None,
+            default_value_expected_outputs: Union[Any, StripAbsentValues] = None,
     ):
         if data_joiner is None:
             data_joiner = NumpyConcatenateOuterBatch()
@@ -391,8 +391,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
         self.batch_size: int = batch_size
         self.keep_incomplete_batch: bool = keep_incomplete_batch
-        self.default_value_data_inputs: Union[Any, AbsentValuesNullObject] = default_value_data_inputs
-        self.default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = default_value_expected_outputs
+        self.default_value_data_inputs: Union[Any, StripAbsentValues] = default_value_data_inputs
+        self.default_value_expected_outputs: Union[Any, StripAbsentValues] = default_value_expected_outputs
 
         MiniBatchSequentialPipeline.__init__(
             self,
@@ -623,7 +623,7 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
     .. seealso::
         :class:`~neuraxle.pipeline.BasePipeline`,
         :func:`~neuraxle.data_container.DataContainer.minibatches`,
-        :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`,
+        :class:`~neuraxle.data_container.StripAbsentValues`,
         :class:`QueueWorker`,
         :class:`BaseQueuedPipeline`,
         :class:`ParallelQueuedPipeline`,

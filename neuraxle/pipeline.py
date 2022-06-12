@@ -32,7 +32,7 @@ from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import (ExecutionMode, ForceHandleMixin, Identity,
                            NamedStepsList, TruncableSteps,
                            _CustomHandlerMethods)
-from neuraxle.data_container import AbsentValuesNullObject
+from neuraxle.data_container import StripAbsentValues
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.data_container import ListDataContainer, ZipDataContainer
 from neuraxle.logging.warnings import warn_deprecated_arg
@@ -220,12 +220,12 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
 
     .. code-block:: python
 
-        data_inputs = np.array(list(range(10)))
+        data_inputs = list(range(10))
         pipeline = MiniBatchSequentialPipeline([
             SomeStep()
         ], batch_size=2)
         pipeline.transform(data_inputs)
-        # SomeStep will receive [array([0, 1]), array([2, 3]), ..., array([8, 9])]
+        # SomeStep will receive [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
 
         pipeline = MiniBatchSequentialPipeline([
             SomeStep()
@@ -237,7 +237,6 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             [SomeStep()],
             batch_size=3,
             keep_incomplete_batch=True,
-            keep_incomplete_batch=True,
             default_value_data_inputs=None,
             default_value_expected_outputs=None
         )
@@ -248,7 +247,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             [SomeStep()],
             batch_size=3,
             keep_incomplete_batch=True,
-            default_value_data_inputs=AbsentValuesNullObject()
+            default_value_data_inputs=StripAbsentValues()
         )
         pipeline.transform(data_inputs)
         # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9])]
@@ -278,7 +277,6 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             Joiner(
                 batch_size=3,
                 keep_incomplete_batch=True,
-                keep_incomplete_batch=True,
                 default_value_data_inputs=None,
                 default_value_expected_outputs=None
             )
@@ -291,12 +289,13 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             Joiner(
                 batch_size=3,
                 keep_incomplete_batch=True,
-                default_value_data_inputs=AbsentValuesNullObject()
+                default_value_data_inputs=StripAbsentValues()
             )
         ])
         pipeline.transform(data_inputs)
         # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9])]
 
+    Note that the default value for non-striped ids is None if not stripping incomplete batches of data inputs or expected outputs.
 
     :param steps: pipeline steps
     :param batch_size: number of elements to combine into a single batch
@@ -305,10 +304,10 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
     `batch_size` elements; the default behavior is not to drop the smaller
     batch.
     :param default_value_data_inputs: expected_outputs default fill value
-    for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+    for padding and values outside iteration range, or :class:`~neuraxle.data_container.StripAbsentValues`
     to trim absent values from the batch
     :param default_value_expected_outputs: expected_outputs default fill value
-    for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+    for padding and values outside iteration range, or :class:`~neuraxle.data_container.StripAbsentValues`
     to trim absent values from the batch
     :param cache_folder: cache_folder if its at the root of the pipeline
     :param mute_joiner_batch_size_warning: If False, will log a warning when automatically setting the joiner batch_size attribute.
@@ -316,7 +315,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
     .. seealso::
         :class:`~neuraxle.data_container.DataContainer`,
         :func:`~neuraxle.data_container.DataContainer.minibatches`,
-        :class:`~neuraxle.data_container.AbsentValuesNullObject`,
+        :class:`~neuraxle.data_container.StripAbsentValues`,
         :class:`Pipeline`,
         :class:`Barrier`,
         :class:`Joiner`,
@@ -330,7 +329,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             steps: NamedStepsList,
             batch_size=None,
             keep_incomplete_batch: bool = None,
-            default_value_data_inputs=AbsentValuesNullObject(),
+            default_value_data_inputs=StripAbsentValues(),
             default_value_expected_outputs=None,
             mute_joiner_batch_size_warning: bool = True
     ):
@@ -377,8 +376,8 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             self,
             batch_size: int,
             keep_incomplete_batch: bool,
-            default_value_data_inputs: Union[Any, AbsentValuesNullObject] = None,
-            default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = None
+            default_value_data_inputs: Union[Any, StripAbsentValues] = None,
+            default_value_expected_outputs: Union[Any, StripAbsentValues] = None
     ):
         has_barrier: bool = False
 
@@ -524,7 +523,10 @@ class Barrier(Identity, ABC):
 
 class Joiner(Barrier):
     """
-    A Special Barrier step that joins the transformed mini batches together with list.extend method.
+    The Joiner step joins the transformed mini batches together with
+    mostly the DACT.minibatches and then DACT.extend method.
+    It is used in a minibatch sequential pipeline and streaming / queued pipeline
+    as a way to handle batches of previous steps in the pipeline.
 
     .. seealso::
         :class:`~neuraxle.data_container.DataContainer`,
@@ -535,14 +537,22 @@ class Joiner(Barrier):
             self,
             batch_size: int,
             keep_incomplete_batch: bool = True,
-            default_value_data_inputs=AbsentValuesNullObject(),
+            default_value_data_inputs=StripAbsentValues(),
             default_value_expected_outputs=None
     ):
+        """
+        The Joiner step joins the transformed mini batches together with DACT.minibatches and then DACT.extend method.
+        Note that the default value for IDs is None.
+
+        .. seealso::
+            :class:`~neuraxle.data_container.DataContainer`,
+            :func:`~neuraxle.data_container.DataContainer.minibatches`
+        """
         Barrier.__init__(self)
         self.batch_size: int = batch_size
         self.keep_incomplete_batch: bool = keep_incomplete_batch
-        self.default_value_data_inputs: Union[Any, AbsentValuesNullObject] = default_value_data_inputs
-        self.default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = default_value_expected_outputs
+        self.default_value_data_inputs: Union[Any, StripAbsentValues] = default_value_data_inputs
+        self.default_value_expected_outputs: Union[Any, StripAbsentValues] = default_value_expected_outputs
 
     def join_transform(self, step: Pipeline, data_container: DACT, context: CX) -> DACT:
         """

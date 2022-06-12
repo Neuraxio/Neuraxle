@@ -1,6 +1,6 @@
 import pytest
 
-from neuraxle.data_container import DACT, AbsentValuesNullObject
+from neuraxle.data_container import DACT, StripAbsentValues
 import numpy as np
 
 
@@ -66,7 +66,7 @@ def test_data_container_minibatch_should_be_lazy_and_use_getitem_when_data_is_la
         DACT(ids=[6, 7, 8], data_inputs=[6, 7, 8], expected_outputs=[16, 17, 18]),
         DACT(ids=[0, 1, 2], data_inputs=[9, 0, 0], expected_outputs=[19, 0, 0])
     ]),
-    (3, True, AbsentValuesNullObject(), [
+    (3, True, StripAbsentValues(), [
         DACT(ids=[0, 1, 2], data_inputs=[0, 1, 2], expected_outputs=[10, 11, 12]),
         DACT(ids=[3, 4, 5], data_inputs=[3, 4, 5], expected_outputs=[13, 14, 15]),
         DACT(ids=[6, 7, 8], data_inputs=[6, 7, 8], expected_outputs=[16, 17, 18]),
