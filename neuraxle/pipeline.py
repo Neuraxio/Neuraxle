@@ -225,13 +225,13 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             SomeStep()
         ], batch_size=2)
         pipeline.transform(data_inputs)
-        # SomeStep will receive [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
+        # SomeStep will receive: [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
 
         pipeline = MiniBatchSequentialPipeline([
             SomeStep()
         ], batch_size=3, keep_incomplete_batch=False)
         pipeline.transform(data_inputs)
-        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8])]
+        # SomeStep will receive: [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
 
         pipeline = MiniBatchSequentialPipeline(
             [SomeStep()],
@@ -241,7 +241,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             default_value_expected_outputs=None
         )
         pipeline.transform(data_inputs)
-        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9, None, None])]
+        # SomeStep will receive: [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, None, None]]
 
         pipeline = MiniBatchSequentialPipeline(
             [SomeStep()],
@@ -250,27 +250,27 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             default_value_data_inputs=StripAbsentValues()
         )
         pipeline.transform(data_inputs)
-        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9])]
+        # SomeStep will receive: [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
 
 
     Or manually add one or multiple :class`Barrier` steps to the mini batch sequential pipeline :
 
     .. code-block:: python
 
-        data_inputs = np.array(list(range(10)))
+        data_inputs = list(range(10))
         pipeline = MiniBatchSequentialPipeline([
             SomeStep(),
             Joiner(batch_size=2)
         ])
         pipeline.transform(data_inputs)
-        # SomeStep will receive [array([0, 1]), array([2, 3]), ..., array([8, 9])]
+        # SomeStep will receive: [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
 
         pipeline = MiniBatchSequentialPipeline([
             SomeStep(),
             Joiner(batch_size=3, keep_incomplete_batch=False)
         ])
         pipeline.transform(data_inputs)
-        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8])]
+        # SomeStep will receive: [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
 
         pipeline = MiniBatchSequentialPipeline([
             SomeStep(),
@@ -282,7 +282,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             )
         ])
         pipeline.transform(data_inputs)
-        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9, None, None])]
+        # SomeStep will receive: [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, None, None]]
 
         pipeline = MiniBatchSequentialPipeline([
             SomeStep(),
@@ -293,7 +293,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             )
         ])
         pipeline.transform(data_inputs)
-        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9])]
+        # SomeStep will receive: [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
 
     Note that the default value for non-striped ids is None if not stripping incomplete batches of data inputs or expected outputs.
 
