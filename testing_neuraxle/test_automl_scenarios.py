@@ -211,44 +211,41 @@ def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
     assert median_absolute_error(dact.eo, preds.di) == best_score
 
 
-def test_automl_can_use_same_on_disk_repo_in_parallel(use_processes=True):
-    # @pytest.mark.parametrize("use_processes", [False, True])
-    tmpdir = CX.get_new_cache_folder()
-    dact = DACT(di=list(range(10)), eo=list(range(10, 20)))
-    cx = AutoMLContext.from_context(repo=HyperparamsOnDiskRepository(tmpdir))
-    sleep_step = Sleep(0.25)
-    automl: ControlledAutoML = _create_automl_test_loop(
-        tmpdir, sleep_step, n_trials=1, start_new_round=False, refit_best_trial=False
-    )
-    n_trials = 3 * 2
-    parallel_automl = ParallelQueuedFeatureUnion(
-        # steps=[OnlyFitAtTransformTime(automl)],
-        steps=[
-            OnlyFitAtTransformTime(copy.deepcopy(automl)),
-            OnlyFitAtTransformTime(copy.deepcopy(automl)),
-            OnlyFitAtTransformTime(copy.deepcopy(automl))
-        ],
-        batch_size=int(len(dact) / 2),
-        n_workers_per_step=2,
-        use_processes=use_processes,
-        use_savers=False,
-        max_queue_size=1
-    )
-    parallel_automl.handle_fit_transform(dact, cx)
-    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
-    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
-    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
-    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
-    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
-    # OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+@pytest.mark.parametrize("use_processes", [True, False])
+def test_automl_can_use_same_on_disk_repo_in_parallel(use_processes):
+    for i in range(10):
+        # @pytest.mark.parametrize("use_processes", [False, True])
+        tmpdir = CX.get_new_cache_folder()
+        dact = DACT(di=list(range(20)), eo=list(range(20, 40)))
+        cx = AutoMLContext.from_context(repo=HyperparamsOnDiskRepository(tmpdir))
+        sleep_step = Sleep(0.125, add_random_quantity=0.250)
+        automl: ControlledAutoML = _create_automl_test_loop(
+            tmpdir, sleep_step, n_trials=1, start_new_round=False, refit_best_trial=False
+        )
+        n_sequential_steps = 3
+        n_workers_in_parallel_per_step = 1  # TODO: use something else, such as 2, 3 or 4.
+        n_minibatches_in_series = 5
+        n_trials = n_sequential_steps * n_workers_in_parallel_per_step * n_minibatches_in_series
+        parallel_automl = ParallelQueuedFeatureUnion(
+            # steps=[OnlyFitAtTransformTime(automl)],
+            steps=[OnlyFitAtTransformTime(copy.deepcopy(automl)) for _ in range(n_sequential_steps)],
+            batch_size=int(len(dact) / n_minibatches_in_series),
+            n_workers_per_step=n_workers_in_parallel_per_step,
+            use_processes=use_processes,
+            use_savers=False,
+            max_queue_size=1  # TODO: why 1 here?
+        )
+        parallel_automl.handle_fit_transform(dact, cx)
+        # for i in range(n_trials):
+        #     OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
 
-    automl_refiting_best: ControlledAutoML = _create_automl_test_loop(
-        tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)
-    automl_refiting_best, preds = automl_refiting_best.handle_fit_transform(dact, cx)
+        automl_refiting_best: ControlledAutoML = _create_automl_test_loop(
+            tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)
+        automl_refiting_best, preds = automl_refiting_best.handle_fit_transform(dact, cx)
 
-    bests: List[Tuple[float, int, TrialStatus, FlatDict]] = automl_refiting_best.report.summary()
+        bests: List[Tuple[float, int, TrialStatus, FlatDict]] = automl_refiting_best.report.summary()
 
-    assert len(bests) == n_trials
+        assert len(bests) == n_trials
 
-    best_score = bests[0][0]
-    assert median_absolute_error(dact.eo, preds.di) == best_score
+        best_score = bests[0][0]
+        assert median_absolute_error(dact.eo, preds.di) == best_score

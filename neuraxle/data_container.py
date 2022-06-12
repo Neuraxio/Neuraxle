@@ -677,11 +677,9 @@ class ListDataContainer(DACT):
         :return:
         """
         if not isinstance(other, DACT):
-            if isinstance(other, Exception):
-                raise other
             raise ValueError(
-                f'Expected data container of type {DACT.__name__}, got {other.__class__.__name__}: {other}'
-            )
+                f"Expected data container of type {DACT.__name__}, "
+                f"got {other.__class__.__name__}: {other}")
         self.data_inputs.append(other)
         self._ids.append(other.get_ids_summary())
         return self

@@ -24,6 +24,7 @@ You can find here misc. pipeline steps, for example, callbacks useful for debugg
 
 """
 
+import random
 import time
 from abc import ABC
 from typing import Any, Callable, List, Optional, Tuple
@@ -406,10 +407,19 @@ class HandleCallbackStep(ForceHandleOnlyMixin, BaseStep):
 
 
 class Sleep(BaseTransformer):
-    def __init__(self, sleep_time=0.1, hyperparams=None, hyperparams_space=None):
-        BaseTransformer.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
+    def __init__(self, sleep_time: float = 0.1, add_random_quantity: float = 0.0):
+        """
+        Sleep for a given time, given in seconds.
+        """
+        BaseTransformer.__init__(self)
         self.sleep_time = sleep_time
+        self.add_random_quantity = add_random_quantity
 
     def transform(self, data_inputs):
-        time.sleep(self.sleep_time)
+        seconds = (
+            self.sleep_time
+            if self.add_random_quantity == 0.0 else
+            self.sleep_time + random.random() * self.add_random_quantity
+        )
+        time.sleep(seconds)
         return data_inputs

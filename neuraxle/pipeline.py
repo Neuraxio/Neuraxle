@@ -314,12 +314,12 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
     :param mute_joiner_batch_size_warning: If False, will log a warning when automatically setting the joiner batch_size attribute.
 
     .. seealso::
+        :class:`~neuraxle.data_container.DataContainer`,
         :func:`~neuraxle.data_container.DataContainer.minibatches`,
-        :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`,
+        :class:`~neuraxle.data_container.AbsentValuesNullObject`,
         :class:`Pipeline`,
         :class:`Barrier`,
         :class:`Joiner`,
-        :class:`~neuraxle.data_container.DataContainer`,
         :class:`~neuraxle.base.ExecutionContext`,
         :class:`~neuraxle.distributed.streaming.SequentialQueuedPipeline`
 
@@ -338,20 +338,20 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         ForceHandleMixin.__init__(self)
         self.default_value_data_inputs = default_value_data_inputs
         self.default_value_expected_outputs = default_value_expected_outputs
-        self.__validate_barriers_batch_size(batch_size=batch_size)
-        self.__patch_missing_barrier(
+        self._validate_barriers_batch_size(batch_size=batch_size)
+        self._patch_missing_barrier(
             batch_size=batch_size,
             keep_incomplete_batch=keep_incomplete_batch,
             default_value_data_inputs=default_value_data_inputs,
             default_value_expected_outputs=default_value_expected_outputs
         )
         self.mute_joiner_batch_size_warning = mute_joiner_batch_size_warning
-        self.__patch_barriers_batch_size(batch_size)
+        self._patch_barriers_batch_size(batch_size)
 
     def set_batch_size(self, batch_size):
-        self.__patch_barriers_batch_size(batch_size)
+        self._patch_barriers_batch_size(batch_size)
 
-    def __validate_barriers_batch_size(self, batch_size):
+    def _validate_barriers_batch_size(self, batch_size):
         if batch_size is not None:
             return
 
@@ -362,7 +362,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
                         'Invalid Joiner batch size {}[{}]. Please provide a default batch size to MiniBatchSequentialPipeline, or add a batch size to {}[{}].'.format(
                             self.name, step.name, self.name, step.name))
 
-    def __patch_barriers_batch_size(self, batch_size):
+    def _patch_barriers_batch_size(self, batch_size):
         if batch_size is None:
             return
 
@@ -373,7 +373,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
                         'Replacing {}[{}].batch_size by {}.batch_size.'.format(self.name, step.name, self.name))
                 step.batch_size = batch_size
 
-    def __patch_missing_barrier(
+    def _patch_missing_barrier(
             self,
             batch_size: int,
             keep_incomplete_batch: bool,
@@ -409,7 +409,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         sub_pipelines = self._create_sub_pipelines()
 
         for sub_pipeline in sub_pipelines:
-            barrier = sub_pipeline[-1]
+            barrier: Barrier = sub_pipeline[-1]
             data_container = barrier.join_transform(
                 step=sub_pipeline,
                 data_container=data_container,
@@ -436,7 +436,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         :param context: execution context
         :return: data container
         """
-        sub_pipelines = self._create_sub_pipelines()
+        sub_pipelines: List['MiniBatchSequentialPipeline'] = self._create_sub_pipelines()
         index_start = 0
 
         for sub_pipeline in sub_pipelines:
@@ -466,7 +466,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         sub_pipelines: List[MiniBatchSequentialPipeline] = self.split(Barrier)
         for sub_pipeline in sub_pipelines:
             if not sub_pipeline.ends_with(Barrier):
-                raise Exception('At least one Barrier step needs to be at the end of a streaming pipeline.')
+                raise Exception('At least one Barrier/Joiner step needs to be at the end of a streaming pipeline.')
 
         return sub_pipelines
 
@@ -556,18 +556,19 @@ class Joiner(Barrier):
         :rtype: DataContainer
         """
         context = context.push(step)
-        data_container_batches = data_container.minibatches(
+        dact_batches = data_container.minibatches(
             batch_size=self.batch_size,
             keep_incomplete_batch=self.keep_incomplete_batch,
             default_value_data_inputs=self.default_value_data_inputs,
             default_value_expected_outputs=self.default_value_expected_outputs
         )
 
-        output_data_container = ListDataContainer.empty()
-        for data_container_batch in data_container_batches:
-            output_data_container.extend(step._transform_data_container(data_container_batch, context))
+        out_dact = ListDataContainer.empty()
+        for dact_batch in dact_batches:
+            processed_dact_batch = step._transform_data_container(dact_batch, context)
+            out_dact.extend(processed_dact_batch)
 
-        return output_data_container
+        return out_dact
 
     def join_fit_transform(self, step: Pipeline, data_container: DACT, context: CX) -> \
             Tuple['Any', DACT]:
@@ -582,19 +583,19 @@ class Joiner(Barrier):
         :rtype: Tuple[Any, DataContainer]
         """
         context = context.push(step)
-        data_container_batches = data_container.minibatches(
+        dact_batches = data_container.minibatches(
             batch_size=self.batch_size,
             keep_incomplete_batch=self.keep_incomplete_batch,
             default_value_data_inputs=self.default_value_data_inputs,
             default_value_expected_outputs=self.default_value_expected_outputs
         )
 
-        output_data_container = ListDataContainer.empty()
-        for data_container_batch in data_container_batches:
-            step, data_container_batch = step._fit_transform_data_container(data_container_batch, context)
-            output_data_container.extend(data_container_batch)
+        out_dact = ListDataContainer.empty()
+        for dact_batch in dact_batches:
+            step, dact_batch = step._fit_transform_data_container(dact_batch, context)
+            out_dact.extend(dact_batch)
 
-        return step, output_data_container
+        return step, out_dact
 
 
 class ZipMinibatchJoiner(Joiner):
