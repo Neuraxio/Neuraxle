@@ -281,11 +281,14 @@ def worker_function(queue_worker: QueueWorker, shared_lock: Lock, context: CX, u
         while True:
             try:
                 task: QueuedPipelineTask = queue_worker.get_task()
-                data_container = step.handle_transform(task.data_container, context)
+                if isinstance(task.data_container, Exception):
+                    data_container = task.data_container
+                else:
+                    data_container = step.handle_transform(task.data_container, context)
                 queue_worker.notify_step(data_container)
             except Exception as err:
                 context.flow.log_error(err)
-                queue_worker.notify_step(err)
+                queue_worker.notify_step(err)  # TODO: encapsulate streaming error with a traceback.
             finally:
                 time.sleep(0.005)  # Sleeping here empirically seems to improve overall computation time on MacOS M1.
     except Exception as err:

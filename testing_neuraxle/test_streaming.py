@@ -20,19 +20,17 @@ def test_queued_pipeline_with_excluded_incomplete_batch():
     p = SequentialQueuedPipeline([
         MultiplyByN(2),
         MultiplyByN(2),
-        MultiplyByN(2),
         MultiplyByN(2)
     ], batch_size=10, keep_incomplete_batch=False, n_workers_per_step=1, max_queue_size=5)
 
     outputs = p.transform(list(range(15)))
 
-    assert np.array_equal(outputs, np.array(list(range(10))) * 2 * 2 * 2 * 2)
+    assert np.array_equal(outputs, np.array(list(range(10))) * 2**3)
 
 
 def test_queued_pipeline_with_included_incomplete_batch():
     p = SequentialQueuedPipeline(
         [
-            MultiplyByN(2),
             MultiplyByN(2),
             MultiplyByN(2),
             MultiplyByN(2)
@@ -47,26 +45,27 @@ def test_queued_pipeline_with_included_incomplete_batch():
 
     outputs = p.transform(list(range(15)))
 
-    assert np.array_equal(outputs, np.array(list(range(15))) * 2 * 2 * 2 * 2)
+    assert np.array_equal(outputs, np.array(list(range(15))) * 2**3)
 
 
-def test_queued_pipeline_with_included_incomplete_batch_that_raises_an_exception():
-    with pytest.raises(AttributeError):
+def test_queued_pipeline_with_included_incomplete_batch_padded_with_nones():
+    with pytest.raises(TypeError):
         p = SequentialQueuedPipeline(
             [
-                MultiplyByN(2),
                 MultiplyByN(2),
                 MultiplyByN(2),
                 MultiplyByN(2)
             ],
             batch_size=10,
             keep_incomplete_batch=True,
-            default_value_data_inputs=None,  # this will raise an exception in the worker
-            default_value_expected_outputs=None,  # this will raise an exception in the worker
+            # This will raise an exception in the worker because MultiplyByN will not be able to multiply "None":
+            default_value_data_inputs=None,
+            default_value_expected_outputs=None,
             n_workers_per_step=1,
             max_queue_size=5
         )
         p.transform(list(range(15)))
+    pass
 
 
 def test_queued_pipeline_with_step_with_process():

@@ -974,9 +974,9 @@ class Flow(BaseService):
         self.log_hps(hps)
         self.log_status(TrialStatus.PLANNED)
 
-    def log_hps(self, hps: HyperparameterSamples):
-        hps_str = pprint.pformat(hps.to_flat_dict(), indent=4)
-        self.log(f'Hyperparameters: {hps_str}')
+    def log_hps(self, hps: HyperparameterSamples, use_wildcards=True):
+        hps_str = pprint.pformat(hps.to_flat_dict(use_wildcards=use_wildcards), indent=4)
+        self.log(f'Hyperparameters: \n{hps_str}')
 
     def log_start(self):
         self.log('Started!')
@@ -999,8 +999,8 @@ class Flow(BaseService):
     def log_best_hps(self, main_metric_name, best_hps: HyperparameterSamples, avg_validation_score: float, avg_n_epoch_to_best_validation_score: int):
         self.log(
             f"Best hyperparameters found for metric '{main_metric_name}' with "
-            f"best validation score {avg_validation_score} "
-            f"obtained at epoch {avg_n_epoch_to_best_validation_score}:")
+            f"best validation score '{avg_validation_score}' "
+            f"obtained at epoch '{avg_n_epoch_to_best_validation_score}':")
         self.log_hps(best_hps)
 
     def log_failure(self, exception: Exception):
@@ -1008,7 +1008,10 @@ class Flow(BaseService):
         self.log_end(TrialStatus.FAILED)
 
     def log_error(self, exception: Exception):
-        self.log(f'The following exception occurred: \n{exception}', level=logging.INFO)
+        """
+        Log an exception or error. The stack trace is logged as well.
+        """
+        self.log(f'The following {type(exception).__name__} occurred: {exception}', level=logging.INFO)
         if exception is not None:
             self.logger.exception(exception)
 
