@@ -29,16 +29,20 @@ from io import StringIO
 from typing import IO, Dict, List, Optional
 
 LOGGER_FORMAT = "⠀[%(asctime)s][%(levelname)-8s][%(name)-8s][%(module)-1s.py:%(lineno)-1d]: %(message)s"
-LOGGER_FORMAT_PREFIX_REPLACE_REGEXPR = r"⠀(\[.*?\]): ", r"⠀"
+LOGGER_FORMAT_PREFIX_REPLACE_REGEXPR = r"⠀(\[.*?\]): ", r""
+LOGGER_FORMAT_PREFIX_SEP_L = "["
+LOGGER_FORMAT_PREFIX_SEP_R = "]"
 LOGGING_DATETIME_STR_FORMAT = '%Y-%m-%d_%H:%M:%S.%f'
+
 FORMATTER = logging.Formatter(fmt=LOGGER_FORMAT, datefmt=LOGGING_DATETIME_STR_FORMAT)
+
 if sys.version_info.major <= 3 and sys.version_info.minor <= 7:
     logging.basicConfig(format=LOGGER_FORMAT, datefmt=LOGGING_DATETIME_STR_FORMAT, level=logging.INFO)
 else:
     logging.basicConfig(format=LOGGER_FORMAT, datefmt=LOGGING_DATETIME_STR_FORMAT, level=logging.INFO, force=True)
 
-
 NEURAXLE_LOGGER_NAME = "neuraxle"
+
 
 LOGGER_STRING_IO: Dict[str, StringIO] = {}
 LOGGER_FILE_HANDLERS: Dict[str, logging.FileHandler] = {}
@@ -121,6 +125,28 @@ class NeuraxleLogger(logging.Logger):
     def get_root_string_history(self) -> str:
         return LOGGER_STRING_IO[NEURAXLE_LOGGER_NAME].getvalue()
 
+    def get_short_scoped_logs(self) -> List[str]:
+        _logs = self.get_scoped_string_history()
+        _logs = self.shorten_log_lines_prefixes(_logs)
+        return _logs.split("\n")
+
+    def get_short_root_logs(self) -> List[str]:
+        _logs = self.get_root_string_history()
+        _logs = self.shorten_log_lines_prefixes(_logs)
+        return _logs.split("\n")
+
+    def __iter__(self):
+        """
+        Short method to access :func:`get_short_scoped_logs` 's iterator.
+        """
+        return self.get_short_scoped_logs().__iter__()
+
+    def __getitem__(self, item):
+        """
+        Short method to access :func:`get_short_scoped_logs` 's items.
+        """
+        return self.get_short_scoped_logs()[item]
+
     def print_root_string_history(self) -> None:
         print(f"{NEURAXLE_LOGGER_NAME} -> str:\n\n"
               f"{LOGGER_STRING_IO[NEURAXLE_LOGGER_NAME].getvalue()}")
@@ -156,7 +182,7 @@ class NeuraxleLogger(logging.Logger):
         # This line is for retrocompability with old logs of 0.7.0.
         logs = ("⠀" + logs.replace("\n", "\n⠀")).replace("⠀⠀", "⠀")
         logs = re.sub(LOGGER_FORMAT_PREFIX_REPLACE_REGEXPR[0], LOGGER_FORMAT_PREFIX_REPLACE_REGEXPR[1], logs)
-        return logs
+        return logs.strip()
 
 
 logging.setLoggerClass(NeuraxleLogger)

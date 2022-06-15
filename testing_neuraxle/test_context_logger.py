@@ -1,11 +1,13 @@
 import logging
+import logging.config
+import logging.handlers
 import os
-import shutil
-from typing import Set
+import threading
+from multiprocessing import Process, Queue
+from typing import List, Set
 
 import numpy as np
-import pytest
-from neuraxle.base import BaseStep
+from neuraxle.base import CX, BaseStep
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import HandleOnlyMixin, Identity, TrialStatus
 from neuraxle.data_container import DataContainer as DACT
@@ -15,12 +17,24 @@ from neuraxle.logging.logging import NEURAXLE_LOGGER_NAME, NeuraxleLogger
 from neuraxle.metaopt.auto_ml import AutoML
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
-from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT, AutoMLContext,
-                                           ProjectDataclass, ScopedLocation)
-from neuraxle.metaopt.validation import ValidationSplitter, RandomSearchSampler
+from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
+                                           AutoMLContext, ProjectDataclass,
+                                           ScopedLocation, TrialSplitDataclass)
+from neuraxle.metaopt.validation import RandomSearchSampler, ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import AddN, MultiplyByN, NumpyReshape
 from sklearn.metrics import mean_squared_error
+
+
+def test_root_neuraxle_logger_has_name_and_identifier():
+    cx = CX()
+    some_message = "some message."
+
+    nxl: NeuraxleLogger = cx.logger
+    nxl.info(some_message)
+
+    assert some_message in nxl.get_root_string_history()
+    assert nxl.name == NEURAXLE_LOGGER_NAME
 
 
 class FitTransformCounterLoggingStep(HandleOnlyMixin, BaseStep):
@@ -39,10 +53,10 @@ class FitTransformCounterLoggingStep(HandleOnlyMixin, BaseStep):
 
     def _fit_transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         self._log(context, "fit_transform")
-        return data_container
+        return self, data_container
 
     def _log(self, context, name):
-        context.logger.warning(f"{name} call - logging call # {self.logging_call_counter}")
+        context.logger.warning(f"{name} call - logging call #{self.logging_call_counter}")
         self.logging_call_counter += 1
 
 
@@ -130,9 +144,10 @@ class TestTrialLogger:
 
 
 def test_automl_context_has_loc():
+
     cx = AutoMLContext.from_context()
 
-    assert cx.loc is not None
+    assert cx.loc == ScopedLocation()
 
 
 def test_automl_context_pushes_loc_attr():
@@ -229,3 +244,106 @@ def test_automl_context_repo_service_config():
     }
     assert cx.has_service("HyperparamsRepository")
     assert cx.get_service("HyperparamsRepository").__class__.__name__ == "VanillaHyperparamsRepository"
+
+
+def test_logger_logs_error_stack_trace():
+    cx = CX()
+    expected_error_stack_trace = (
+        "raise ValueError('This is an error.')  # THIS COMMENT IS ALSO LOGGED"
+    )
+
+    try:
+        raise ValueError('This is an error.')  # THIS COMMENT IS ALSO LOGGED
+    except ValueError as e:
+        cx.flow.log_error(e)
+
+    assert expected_error_stack_trace in cx.logger.get_root_string_history()
+
+
+def test_scoped_logger_can_shorten_log_messages():
+    trial_scope = ScopedLocation.default_full()[:TrialSplitDataclass]
+    cx = AutoMLContext.from_context(loc=trial_scope)
+
+    cx.flow.log_status(TrialStatus.RUNNING)
+    cx.flow.log_end(TrialStatus.ABORTED)
+    short_logs_l: List[str] = cx.logger.get_short_scoped_logs()
+    short_logs = "\n".join(short_logs_l)
+    long_logs = cx.logger.get_scoped_string_history()
+
+    assert str(TrialStatus.RUNNING.value) in long_logs
+    assert str(TrialStatus.ABORTED.value) in long_logs
+    assert "[" in long_logs
+    assert "]" in long_logs
+    assert "INFO" in long_logs
+    assert str(TrialStatus.RUNNING.value) in short_logs
+    assert str(TrialStatus.ABORTED.value) in short_logs
+    assert "[" not in short_logs
+    assert "]" not in short_logs
+    assert "INFO" not in short_logs
+
+
+SOME_PARALLEL_LOG_MESSAGE = 'some message logged by worker process'
+
+
+def logger_consumer_thread(queue: Queue):
+    while True:
+        rec: logging.LogRecord = queue.get()
+
+        if rec is None:
+            break
+
+        logger = logging.getLogger(rec.name)
+        logger.handle(rec)
+
+
+def logger_producer_thread(queue: Queue):
+    queue_handler = logging.handlers.QueueHandler(queue)
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    root.addHandler(queue_handler)
+
+    logger = CX().logger
+    logger.log(logging.ERROR, SOME_PARALLEL_LOG_MESSAGE)
+
+    dact = DACT(di=range(10))
+    step, out = FitTransformCounterLoggingStep().handle_fit_transform(dact, CX())
+    return
+
+
+def test_neuraxle_logger_can_operate_in_parallel():
+    # TODO: test with disk files as well.
+    logging_queue = Queue()
+    workers = []
+    n_process = 5
+    for i in range(n_process):
+        proc = Process(target=logger_producer_thread, name=f"worker_{i}", args=(logging_queue,))
+        workers.append(proc)
+        proc.start()
+
+    # Start a thread to read the logs from the queue:
+    _logger_thread = threading.Thread(target=logger_consumer_thread, args=(logging_queue,))
+    _logger_thread.start()
+
+    # main thread can be used here as well:
+    pass
+    pass
+
+    for proc in workers:
+        proc.join()
+
+    pass
+    pass
+
+    # Stop the logger thread:
+    logging_queue.put(None)
+    _logger_thread.join()
+
+    assert 'neuraxle.FitTransformCounterLoggingStep' in CX().logger.get_root_string_history()
+    parallel_process_start_counter = 0
+    parallel_transform_counter = 0
+    for logged_line in CX().logger:
+        parallel_process_start_counter += int(SOME_PARALLEL_LOG_MESSAGE in logged_line)
+        parallel_transform_counter += int("logging call #0" in logged_line)
+    assert parallel_process_start_counter == n_process
+    assert parallel_transform_counter == n_process
+    assert False

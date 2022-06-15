@@ -48,7 +48,10 @@ def test_queued_pipeline_with_included_incomplete_batch():
     assert np.array_equal(outputs, np.array(list(range(15))) * 2**3)
 
 
-def test_queued_pipeline_with_included_incomplete_batch_padded_with_nones():
+@pytest.mark.parametrize('use_processes', [False, True])
+def test_queued_pipeline_with_included_incomplete_batch_padded_with_nones(use_processes: bool):
+    batch_size = 10
+    uneven_total_batch = 11
     with pytest.raises(TypeError):
         p = SequentialQueuedPipeline(
             [
@@ -56,16 +59,23 @@ def test_queued_pipeline_with_included_incomplete_batch_padded_with_nones():
                 MultiplyByN(2),
                 MultiplyByN(2)
             ],
-            batch_size=10,
+            batch_size=batch_size,
             keep_incomplete_batch=True,
-            # This will raise an exception in the worker because MultiplyByN will not be able to multiply "None":
+            # This will raise an exception in the worker because MultiplyByN will not be able to multiply the default value "None":
             default_value_data_inputs=None,
             default_value_expected_outputs=None,
             n_workers_per_step=1,
-            max_queue_size=5
+            max_queue_size=5,
+            use_processes=use_processes,
         )
-        p.transform(list(range(15)))
-    pass
+
+        p.transform(list(range(uneven_total_batch)))
+
+    log_history = CX().logger.get_root_string_history()
+    expected_error_logged = "unsupported operand type(s) for *: 'NoneType' and 'int'"
+    assert expected_error_logged in log_history
+    expected_error_stack_trace_line = "return data_inputs * self.hyperparams['multiply_by']"
+    assert expected_error_stack_trace_line in log_history
 
 
 def test_queued_pipeline_with_step_with_process():
