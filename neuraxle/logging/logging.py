@@ -25,7 +25,9 @@ to log info in various folders.
 import logging
 import re
 import sys
+import threading
 from io import StringIO
+from multiprocessing import Queue
 from typing import IO, Dict, List, Optional
 
 LOGGER_FORMAT = "⠀[%(asctime)s][%(levelname)-8s][%(name)-8s][%(module)-1s.py:%(lineno)-1d]: %(message)s"
@@ -190,3 +192,56 @@ logging.setLoggerClass(NeuraxleLogger)
 NEURAXLE_ROOT_LOGGER: NeuraxleLogger = NeuraxleLogger.from_identifier(NEURAXLE_LOGGER_NAME)
 NEURAXLE_ROOT_LOGGER.setLevel(logging.DEBUG)
 NEURAXLE_ROOT_LOGGER.with_std_handlers()
+
+
+class ParallelLoggingConsumerThread:
+    """
+    This class is used to receive logging messages sent from worker processes that
+    are running in different PROCESSES (not threads).
+
+    The logging will work when using threads. However, when using processes (multiprocessing.Process) :class:`multiprocessing.Process`
+    , the present class
+    is needed in the main process to receive the logging messages from the worker processes properly in the main console output.
+    """
+
+    def __init__(self, logging_queue: Queue):
+        # type is, to me more precise: Queue[logging.LogRecord]
+        self.logging_queue: Queue = logging_queue
+
+    def start(self):
+        """
+        Start the thread to read the logs from the queue.
+        """
+        _logger_thread = threading.Thread(
+            target=self.logger_consumer_thread_func,
+            args=(self.logging_queue,)
+        )
+        _logger_thread.start()
+        self.logger_consumer_thread_instance = _logger_thread
+
+    @staticmethod
+    def logger_consumer_thread_func(queue: Queue):
+        """
+        This function is destined to be run in a separate thread.
+        Receiving a None signal in the queue means it's time to finish and to break the
+        while True. This None signal is as sent from within the self. :func:`join` () method.
+        The Queue normally consumes logging.LogRecord items.
+        """
+        while True:
+            rec: logging.LogRecord = queue.get()
+
+            if rec is None:
+                break
+
+            logger = logging.getLogger(rec.name)
+            logger.handle(rec)
+
+    def join(self):
+        """
+        Send the None signal for the thread to finish, and join on the thread to finish it.
+        Note that once this method is called, the thread will finish and the threading.Thread
+        object will be destroyed. Therefore, this method should be called only once and after
+        the producers of parallel logging messages finished their job.
+        """
+        self.logging_queue.put(None)
+        self.logger_consumer_thread_instance.join()

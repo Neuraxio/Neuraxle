@@ -2,7 +2,6 @@ import logging
 import logging.config
 import logging.handlers
 import os
-import threading
 from multiprocessing import Process, Queue
 from typing import List, Set
 
@@ -13,7 +12,8 @@ from neuraxle.base import HandleOnlyMixin, Identity, TrialStatus
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.logging.logging import NEURAXLE_LOGGER_NAME, NeuraxleLogger
+from neuraxle.logging.logging import (NEURAXLE_LOGGER_NAME, NeuraxleLogger,
+                                      ParallelLoggingConsumerThread)
 from neuraxle.metaopt.auto_ml import AutoML
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
@@ -86,7 +86,7 @@ def test_context_logger_log_file(tmpdir):
 
         # Then
         log = ''.join(cx.logger.read_log_file())
-        assert "fit call - logging call # 0" in log
+        assert "fit call - logging call #0" in log
 
     # Teardown
     finally:
@@ -282,68 +282,61 @@ def test_scoped_logger_can_shorten_log_messages():
     assert "INFO" not in short_logs
 
 
-SOME_PARALLEL_LOG_MESSAGE = 'some message logged by worker process'
+class SomeParallelLogginWorkers:
+    LOG_MESSAGE = 'some message logged by worker process'
 
+    def __init__(self, logging_queue: Queue, n_process: int):
+        self.logging_queue: Queue = logging_queue
+        self.n_process: int = n_process
+        self.workers: List[Process] = []
 
-def logger_consumer_thread(queue: Queue):
-    while True:
-        rec: logging.LogRecord = queue.get()
+    def start(self):
+        for i in range(self.n_process):
+            proc = Process(
+                target=self.logger_producer_thread,
+                name=f"worker_{i}",
+                args=(self.logging_queue,)
+            )
+            self.workers.append(proc)
+            proc.start()
 
-        if rec is None:
-            break
+    @staticmethod
+    def logger_producer_thread(queue: Queue):
+        queue_handler = logging.handlers.QueueHandler(queue)
+        root = logging.getLogger()
+        root.setLevel(logging.DEBUG)
+        root.addHandler(queue_handler)
 
-        logger = logging.getLogger(rec.name)
-        logger.handle(rec)
+        logger = CX().logger
+        logger.log(logging.ERROR, SomeParallelLogginWorkers.LOG_MESSAGE)
 
+        dact = DACT(di=range(10))
+        step, out = FitTransformCounterLoggingStep().handle_fit_transform(dact, CX())
+        return
 
-def logger_producer_thread(queue: Queue):
-    queue_handler = logging.handlers.QueueHandler(queue)
-    root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
-    root.addHandler(queue_handler)
-
-    logger = CX().logger
-    logger.log(logging.ERROR, SOME_PARALLEL_LOG_MESSAGE)
-
-    dact = DACT(di=range(10))
-    step, out = FitTransformCounterLoggingStep().handle_fit_transform(dact, CX())
-    return
+    def join(self):
+        for worker in self.workers:
+            worker.join()
 
 
 def test_neuraxle_logger_can_operate_in_parallel():
-    # TODO: test with disk files as well.
+    # TODO: test with disk files as well?
     logging_queue = Queue()
-    workers = []
     n_process = 5
-    for i in range(n_process):
-        proc = Process(target=logger_producer_thread, name=f"worker_{i}", args=(logging_queue,))
-        workers.append(proc)
-        proc.start()
+    logger_thread = ParallelLoggingConsumerThread(logging_queue)
+    logger_thread.start()
+    workers = SomeParallelLogginWorkers(logging_queue, n_process)
+    workers.start()
 
-    # Start a thread to read the logs from the queue:
-    _logger_thread = threading.Thread(target=logger_consumer_thread, args=(logging_queue,))
-    _logger_thread.start()
+    pass  # main thread could be used here as well to be useful for other things.
 
-    # main thread can be used here as well:
-    pass
-    pass
-
-    for proc in workers:
-        proc.join()
-
-    pass
-    pass
-
-    # Stop the logger thread:
-    logging_queue.put(None)
-    _logger_thread.join()
-
+    workers.join()
+    logger_thread.join()
     assert 'neuraxle.FitTransformCounterLoggingStep' in CX().logger.get_root_string_history()
     parallel_process_start_counter = 0
     parallel_transform_counter = 0
     for logged_line in CX().logger:
-        parallel_process_start_counter += int(SOME_PARALLEL_LOG_MESSAGE in logged_line)
+        parallel_process_start_counter += int(SomeParallelLogginWorkers.LOG_MESSAGE in logged_line)
         parallel_transform_counter += int("logging call #0" in logged_line)
     assert parallel_process_start_counter == n_process
     assert parallel_transform_counter == n_process
-    assert False
