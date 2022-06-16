@@ -386,11 +386,11 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
     ):
         if data_joiner is None:
             data_joiner = NumpyConcatenateOuterBatch()
-        self.data_joiner = data_joiner
-        self.max_queue_size = max_queue_size
-        self.n_workers_per_step = n_workers_per_step
-        self.use_processes = use_processes
-        self.use_savers = use_savers
+        self.data_joiner: BaseTransformer = data_joiner
+        self.max_queue_size: int = max_queue_size
+        self.n_workers_per_step: int = n_workers_per_step
+        self.use_processes: bool = use_processes
+        self.use_savers: bool = use_savers
 
         self.batch_size: int = batch_size
         self.keep_incomplete_batch: bool = keep_incomplete_batch

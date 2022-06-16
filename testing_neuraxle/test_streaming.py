@@ -12,15 +12,17 @@ from neuraxle.steps.loop import ForEach
 from neuraxle.steps.misc import FitTransformCallbackStep, Sleep
 from neuraxle.steps.numpy import MultiplyByN
 
-EXPECTED_OUTPUTS = np.array(range(100)) * 2 * 2 * 2 * 2
-EXPECTED_OUTPUTS_PARALLEL = np.array((np.array(range(100)) * 2).tolist() * 4)
+
+GIVEN_INPUTS = list(range(100))
+EXPECTED_OUTPUTS_PIPELINE = MultiplyByN(2**3).transform(GIVEN_INPUTS).tolist()
+EXPECTED_OUTPUTS_FEATURE_UNION = sum([MultiplyByN(2).transform(GIVEN_INPUTS).tolist()] * 3, [])
 
 
 def test_queued_pipeline_with_excluded_incomplete_batch():
     p = SequentialQueuedPipeline([
         MultiplyByN(2),
         MultiplyByN(2),
-        MultiplyByN(2)
+        MultiplyByN(2),
     ], batch_size=10, keep_incomplete_batch=False, n_workers_per_step=1, max_queue_size=5)
 
     outputs = p.transform(list(range(15)))
@@ -33,7 +35,7 @@ def test_queued_pipeline_with_included_incomplete_batch():
         [
             MultiplyByN(2),
             MultiplyByN(2),
-            MultiplyByN(2)
+            MultiplyByN(2),
         ],
         batch_size=10,
         keep_incomplete_batch=True,
@@ -49,7 +51,7 @@ def test_queued_pipeline_with_included_incomplete_batch():
 
 
 @pytest.mark.parametrize('use_processes', [False, True])
-def test_queued_pipeline_with_included_incomplete_batch_padded_with_nones(use_processes: bool):
+def test_queued_pipeline_can_report_stack_trace_upon_failure(use_processes: bool):
     batch_size = 10
     uneven_total_batch = 11
     with pytest.raises(TypeError):
@@ -57,7 +59,7 @@ def test_queued_pipeline_with_included_incomplete_batch_padded_with_nones(use_pr
             [
                 MultiplyByN(2),
                 MultiplyByN(2),
-                MultiplyByN(2)
+                MultiplyByN(2),
             ],
             batch_size=batch_size,
             keep_incomplete_batch=True,
@@ -83,7 +85,6 @@ def test_queued_pipeline_with_step_with_process():
         MultiplyByN(2),
         MultiplyByN(2),
         MultiplyByN(2),
-        MultiplyByN(2)
     ], batch_size=10, n_workers_per_step=1, max_queue_size=5, use_processes=True)
 
     data_container = DACT(data_inputs=list(range(100)))
@@ -91,7 +92,7 @@ def test_queued_pipeline_with_step_with_process():
 
     outputs = p.handle_transform(data_container, context)
 
-    assert np.array_equal(outputs.data_inputs, EXPECTED_OUTPUTS)
+    assert np.array_equal(outputs.data_inputs, EXPECTED_OUTPUTS_PIPELINE)
 
 
 def test_queued_pipeline_with_step_with_threading():
@@ -99,7 +100,6 @@ def test_queued_pipeline_with_step_with_threading():
         MultiplyByN(2),
         MultiplyByN(2),
         MultiplyByN(2),
-        MultiplyByN(2)
     ], batch_size=10, n_workers_per_step=1, max_queue_size=5, use_processes=False)
 
     data_container = DACT(data_inputs=list(range(100)))
@@ -107,7 +107,7 @@ def test_queued_pipeline_with_step_with_threading():
 
     outputs = p.handle_transform(data_container, context)
 
-    assert np.array_equal(outputs.data_inputs, EXPECTED_OUTPUTS)
+    assert np.array_equal(outputs.data_inputs, EXPECTED_OUTPUTS_PIPELINE)
 
 
 def test_queued_pipeline_with_step_name_step():
@@ -115,12 +115,11 @@ def test_queued_pipeline_with_step_name_step():
         ('1', MultiplyByN(2)),
         ('2', MultiplyByN(2)),
         ('3', MultiplyByN(2)),
-        ('4', MultiplyByN(2))
     ], batch_size=10, n_workers_per_step=1, max_queue_size=5)
 
-    outputs = p.transform(list(range(100)))
+    outputs = p.transform(GIVEN_INPUTS)
 
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PIPELINE)
 
 
 def test_queued_pipeline_with_n_workers_step():
@@ -128,12 +127,11 @@ def test_queued_pipeline_with_n_workers_step():
         (1, MultiplyByN(2)),
         (1, MultiplyByN(2)),
         (1, MultiplyByN(2)),
-        (1, MultiplyByN(2))
     ], batch_size=10, max_queue_size=5)
 
-    outputs = p.transform(list(range(100)))
+    outputs = p.transform(GIVEN_INPUTS)
 
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PIPELINE)
 
 
 def test_wrapped_queued_pipeline_with_n_workers_step():
@@ -141,12 +139,11 @@ def test_wrapped_queued_pipeline_with_n_workers_step():
         (1, MultiplyByN(2)),
         (1, MultiplyByN(2)),
         (1, MultiplyByN(2)),
-        (1, MultiplyByN(2))
     ], batch_size=10, max_queue_size=5)])
 
-    outputs = p.transform(list(range(100)))
+    outputs = p.transform(GIVEN_INPUTS)
 
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PIPELINE)
 
 
 def test_queued_pipeline_with_step_name_n_worker_max_queue_size():
@@ -154,12 +151,11 @@ def test_queued_pipeline_with_step_name_n_worker_max_queue_size():
         ('1', 1, 5, MultiplyByN(2)),
         ('2', 1, 5, MultiplyByN(2)),
         ('3', 1, 5, MultiplyByN(2)),
-        ('4', 1, 5, MultiplyByN(2))
     ], batch_size=10)
 
-    outputs = p.transform(list(range(100)))
+    outputs = p.transform(GIVEN_INPUTS)
 
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PIPELINE)
 
 
 def test_queued_pipeline_with_step_name_n_worker_with_step_name_n_workers_and_default_max_queue_size():
@@ -167,12 +163,11 @@ def test_queued_pipeline_with_step_name_n_worker_with_step_name_n_workers_and_de
         ('1', 1, MultiplyByN(2)),
         ('2', 1, MultiplyByN(2)),
         ('3', 1, MultiplyByN(2)),
-        ('4', 1, MultiplyByN(2))
     ], max_queue_size=10, batch_size=10)
 
-    outputs = p.transform(list(range(100)))
+    outputs = p.transform(GIVEN_INPUTS)
 
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PIPELINE)
 
 
 def test_queued_pipeline_with_step_name_n_worker_with_default_n_workers_and_default_max_queue_size():
@@ -180,12 +175,11 @@ def test_queued_pipeline_with_step_name_n_worker_with_default_n_workers_and_defa
         ('1', MultiplyByN(2)),
         ('2', MultiplyByN(2)),
         ('3', MultiplyByN(2)),
-        ('4', MultiplyByN(2))
     ], n_workers_per_step=1, max_queue_size=10, batch_size=10)
 
-    outputs = p.transform(list(range(100)))
+    outputs = p.transform(GIVEN_INPUTS)
 
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PIPELINE)
 
 
 def test_parallel_queued_pipeline_with_step_name_n_worker_max_queue_size():
@@ -193,12 +187,11 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_max_queue_size():
         ('1', 1, 5, MultiplyByN(2)),
         ('2', 1, 5, MultiplyByN(2)),
         ('3', 1, 5, MultiplyByN(2)),
-        ('4', 1, 5, MultiplyByN(2))
     ], batch_size=10)
 
-    outputs = p.transform(list(range(100)))
+    outputs = p.transform(GIVEN_INPUTS)
 
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_FEATURE_UNION)
 
 
 def test_parallel_queued_threads_do_parallelize_sleep_correctly(tmpdir):
@@ -211,7 +204,7 @@ def test_parallel_queued_threads_do_parallelize_sleep_correctly(tmpdir):
     ], batch_size=10, use_processes=False, use_savers=False).with_context(CX(tmpdir))
 
     a = time.time()
-    outputs_streaming = p.transform(list(range(100)))
+    outputs_streaming = p.transform(GIVEN_INPUTS)
     b = time.time()
     time_queued_pipeline = b - a
 
@@ -223,7 +216,7 @@ def test_parallel_queued_threads_do_parallelize_sleep_correctly(tmpdir):
     ])
 
     a = time.time()
-    outputs_vanilla = p.transform(list(range(100)))
+    outputs_vanilla = p.transform(GIVEN_INPUTS)
     b = time.time()
     time_vanilla_pipeline = b - a
 
@@ -238,7 +231,7 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments_m
         ('1', n_workers, worker_arguments, 5, MultiplyByN()),
     ], batch_size=10)
 
-    outputs = p.transform(list(range(100)))
+    outputs = p.transform(GIVEN_INPUTS)
 
     expected = np.array(list(range(0, 200, 2)))
     assert np.array_equal(outputs, expected)
@@ -251,7 +244,7 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments()
         ('1', n_workers, worker_arguments, MultiplyByN()),
     ], batch_size=10, max_queue_size=5)
 
-    outputs = p.transform(list(range(100)))
+    outputs = p.transform(GIVEN_INPUTS)
 
     expected = np.array(list(range(0, 200, 2)))
     assert np.array_equal(outputs, expected)
@@ -262,52 +255,37 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_with_step_name_n_worke
         ('1', 1, MultiplyByN(2)),
         ('2', 1, MultiplyByN(2)),
         ('3', 1, MultiplyByN(2)),
-        ('4', 1, MultiplyByN(2)),
     ], max_queue_size=10, batch_size=10)
 
-    outputs = p.transform(list(range(100)))
+    outputs = p.transform(GIVEN_INPUTS)
 
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_FEATURE_UNION)
 
 
 @pytest.mark.parametrize('use_processes', [True, False])
 def test_parallel_queued_pipeline_with_2_workers_and_small_queue_size(use_processes: bool):
+    # TODO: cascading sleeps to make first steps process faster.
     p = ParallelQueuedFeatureUnion([
-        ('1', 1, MultiplyByN(2)),
-        ('2', 1, MultiplyByN(2)),
-        ('3', 1, MultiplyByN(2)),
-        ('4', 1, MultiplyByN(2)),
-    ], max_queue_size=3, batch_size=8, use_processes=use_processes, n_workers_per_step=2)
+        MultiplyByN(2),
+        MultiplyByN(2),
+        MultiplyByN(2),
+    ], max_queue_size=4, batch_size=10, use_processes=use_processes, n_workers_per_step=2)
 
-    outputs = p.transform(list(range(128)))
+    outputs = p.transform(GIVEN_INPUTS)
 
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
-
-
-def test_parallel_queued_pipeline_with_step_name_n_worker_with_default_n_workers_and_default_max_queue_size():
-    p = ParallelQueuedFeatureUnion([
-        ('1', MultiplyByN(2)),
-        ('2', MultiplyByN(2)),
-        ('3', MultiplyByN(2)),
-        ('4', MultiplyByN(2)),
-    ], n_workers_per_step=1, max_queue_size=10, batch_size=10)
-
-    outputs = p.transform(list(range(100)))
-
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_FEATURE_UNION)
 
 
-def test_parallel_queued_pipeline_step_name_n_worker_with_default_n_workers_and_default_max_queue_size():
+def test_parallel_queued_pipeline_with_workers_and_batch_and_queue_of_ample_size():
     p = ParallelQueuedFeatureUnion([
         ('1', MultiplyByN(2)),
         ('2', MultiplyByN(2)),
         ('3', MultiplyByN(2)),
-        ('4', MultiplyByN(2)),
     ], n_workers_per_step=1, max_queue_size=10, batch_size=10)
 
-    outputs = p.transform(list(range(100)))
+    outputs = p.transform(GIVEN_INPUTS)
 
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_FEATURE_UNION)
 
 
 @pytest.mark.parametrize("use_processes", [False, True])
@@ -315,10 +293,10 @@ def test_parallel_queued_pipeline_step_name_n_worker_with_default_n_workers_and_
 def test_queued_pipeline_multiple_workers(tmpdir, use_processes, use_savers):
     # Given
     p = ParallelQueuedFeatureUnion([
-        ('1', 4, 10, FitTransformCallbackStep()),
-        ('2', 4, 10, FitTransformCallbackStep()),
-        ('3', 4, 10, FitTransformCallbackStep()),
-        ('4', 4, 10, FitTransformCallbackStep()),
+        FitTransformCallbackStep(),
+        FitTransformCallbackStep(),
+        FitTransformCallbackStep(),
+        FitTransformCallbackStep(),
     ], n_workers_per_step=4, max_queue_size=10, batch_size=10,
         use_processes=use_processes, use_savers=use_savers).with_context(CX(tmpdir))
 
@@ -354,20 +332,20 @@ def test_queued_pipeline_multiple_workers(tmpdir, use_processes, use_savers):
 @pytest.mark.parametrize("use_processes", [False, True])
 def test_queued_pipeline_with_savers(tmpdir, use_processes: bool):
     # Given
+    context = CX()
     p = ParallelQueuedFeatureUnion([
         ('1', MultiplyByN(2)),
         ('2', MultiplyByN(2)),
         ('3', MultiplyByN(2)),
-        ('4', MultiplyByN(2)),
     ], n_workers_per_step=1, max_queue_size=10, batch_size=10,
         use_savers=True, use_processes=use_processes
-    ).with_context(CX(tmpdir))
+    ).with_context(context)
 
     # When
-    outputs = p.transform(list(range(100)))
+    outputs = p.transform(GIVEN_INPUTS)
 
     # Then
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_FEATURE_UNION)
 
 
 class QueueJoinerForTest(QueueJoiner):
@@ -404,14 +382,13 @@ def test_sequential_queued_pipeline_should_fit_transform_without_multiprocessing
         (1, FitTransformCallbackStep(transform_function=lambda di: np.array(di) * 2)),
         (1, FitTransformCallbackStep(transform_function=lambda di: np.array(di) * 2)),
         (1, FitTransformCallbackStep(transform_function=lambda di: np.array(di) * 2)),
-        (1, FitTransformCallbackStep(transform_function=lambda di: np.array(di) * 2))
     ], batch_size=batch_size, max_queue_size=5, use_processes=False, use_savers=False)
     queue_joiner_for_test = QueueJoinerForTest(batch_size=batch_size)
     p.steps[-1] = queue_joiner_for_test
     p.steps_as_tuple[-1] = (p.steps_as_tuple[-1][0], queue_joiner_for_test)
     p._refresh_steps()
 
-    p, outputs = p.fit_transform(list(range(100)), list(range(100)))
+    p, outputs = p.fit_transform(GIVEN_INPUTS, GIVEN_INPUTS)
 
     assert not p[-1].called_queue_joiner
-    assert np.array_equal(outputs, EXPECTED_OUTPUTS)
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PIPELINE)
