@@ -560,7 +560,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             self.send_batch_to_queued_pipeline(batch_index=batch_i, data_container=data_container_batch)
 
         # join output queues.
-        data_container = joiner.join(original_data_container=data_container, synchroneous_context=context)
+        data_container = joiner.join(original_dact=data_container, sync_context=context)
         return data_container
 
     def _did_transform(self, data_container: DACT, context: CX) -> DACT:
@@ -708,7 +708,7 @@ class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
 
 class QueueJoiner(ObservableQueueMixin, Joiner):
     """
-    Observe the results of the queue worker of type :class:`QueueWorker`.
+    Observe the results of the :class:`QueueWorker` to append them.
     Synchronize all of the workers together.
 
     .. seealso::
@@ -738,7 +738,7 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
     def set_n_batches(self, n_batches):
         self.n_batches_left_to_do = n_batches
 
-    def join(self, original_data_container: DACT, synchroneous_context: CX) -> DACT:
+    def join(self, original_dact: DACT, sync_context: CX) -> DACT:
         """
         Return the accumulated results received by the on next method of this observer.
 
@@ -752,42 +752,26 @@ class QueueJoiner(ObservableQueueMixin, Joiner):
             self.n_batches_left_to_do -= 1
 
             if isinstance(task.data_container, Exception):
-                synchroneous_context.flow.log_error(task.data_container)
+                sync_context.flow.log_error(task.data_container)
                 raise task.data_container
             results[task.step_name].append_data_container_in_data_inputs(task.data_container)
 
-        list_dacts = self._join_all_step_results(results, synchroneous_context)
-
-        return original_data_container.set_data_inputs(list_dacts)
-
-    def _join_all_step_results(self, results: Dict[str, ListDataContainer], synchroneous_context: CX) -> List[ListDataContainer]:
-        """
-        Concatenate all resulting data containers together.
-
-        :return:
-        """
         list_results: List[ListDataContainer] = []
         for step_name, list_dacts in results.items():
-            self._raise_exception_thrown_by_workers_if_needed(list_dacts, synchroneous_context)
-            step_results = self._join_step_results(list_dacts)
+
+            for _dact in list_dacts.data_inputs:
+                if not isinstance(_dact, DACT):
+                    # an exception has been throwned by the worker so reraise it here!
+                    exception = _dact
+                    sync_context.flow.log_error(exception)
+                    raise exception
+
+            # reorder results by ids of summary
+            list_dacts.data_inputs.sort(key=lambda dc: self.summaries.index(dc.get_ids_summary()))
+            step_results = ListDataContainer.empty()
+            for data_container in list_dacts.data_inputs:
+                step_results.extend(data_container)
+
             list_results.append(step_results)
 
-        return list_results
-
-    def _raise_exception_thrown_by_workers_if_needed(self, list_dacts: ListDataContainer, synchroneous_context: CX):
-        for _dact in list_dacts.data_inputs:
-            if not isinstance(_dact, DACT):
-                # an exception has been throwned by the worker so reraise it here!
-                exception = _dact
-                synchroneous_context.flow.log_error(exception)
-                raise exception
-
-    def _join_step_results(self, list_dacts: ListDataContainer) -> ListDataContainer:
-        # reorder results by ids of summary
-        list_dacts.data_inputs.sort(key=lambda dc: self.summaries.index(dc.get_ids_summary()))
-
-        step_results = ListDataContainer.empty()
-        for data_container in list_dacts.data_inputs:
-            step_results.extend(data_container)
-
-        return step_results
+        return original_dact.set_data_inputs(list_results)

@@ -270,6 +270,20 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_with_step_name_n_worke
     assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
 
 
+@pytest.mark.parametrize('use_processes', [True, False])
+def test_parallel_queued_pipeline_with_2_workers_and_small_queue_size(use_processes: bool):
+    p = ParallelQueuedFeatureUnion([
+        ('1', 1, MultiplyByN(2)),
+        ('2', 1, MultiplyByN(2)),
+        ('3', 1, MultiplyByN(2)),
+        ('4', 1, MultiplyByN(2)),
+    ], max_queue_size=3, batch_size=8, use_processes=use_processes, n_workers_per_step=2)
+
+    outputs = p.transform(list(range(128)))
+
+    assert np.array_equal(outputs, EXPECTED_OUTPUTS_PARALLEL)
+
+
 def test_parallel_queued_pipeline_with_step_name_n_worker_with_default_n_workers_and_default_max_queue_size():
     p = ParallelQueuedFeatureUnion([
         ('1', MultiplyByN(2)),
@@ -298,7 +312,7 @@ def test_parallel_queued_pipeline_step_name_n_worker_with_default_n_workers_and_
 
 @pytest.mark.parametrize("use_processes", [False, True])
 @pytest.mark.parametrize("use_savers", [False, True])
-def test_queued_pipeline_saving(tmpdir, use_processes, use_savers):
+def test_queued_pipeline_multiple_workers(tmpdir, use_processes, use_savers):
     # Given
     p = ParallelQueuedFeatureUnion([
         ('1', 4, 10, FitTransformCallbackStep()),
