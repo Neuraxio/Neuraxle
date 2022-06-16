@@ -64,8 +64,8 @@ def test_automl_api_entry_point(tmpdir, cx_repo_ctor: Callable[[Optional[TmpDir]
             EarlyStoppingCallback(max_epochs_without_improvement=3)
         ],
         continue_loop_on_error=True,
-        n_trials=17,
-        epochs=11,
+        n_trials=4,
+        epochs=5,
         refit_best_trial=True,
     )
 

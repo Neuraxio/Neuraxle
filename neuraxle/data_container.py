@@ -466,9 +466,21 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         and set the new values in self. Returns self.
         Conversion function must be able to handle None values.
         """
-        self.set_ids(conversion_function(self.ids))
-        self.set_data_inputs(conversion_function(self.data_inputs))
-        self.set_expected_outputs(conversion_function(self.expected_outputs))
+        self.set_ids(
+            conversion_function(self.ids)
+            if self.ids is not None
+            else None
+        )
+        self.set_data_inputs(
+            conversion_function(self.data_inputs)
+            if self.data_inputs is not None
+            else None
+        )
+        self.set_expected_outputs(
+            conversion_function(self.expected_outputs)
+            if self.expected_outputs is not None
+            else None
+        )
         return self
 
     def unpack(self) -> Tuple[IDT, DIT, EOT]:
@@ -699,19 +711,22 @@ class ListDataContainer(DACT):
 
         return self
 
-    def extend(self, data_container: DACT):
+    def extend(self, other: DACT):
         """
-        Concat the given data container at the end of self so as to extend IDs, DIs, and EOs.
+        Concat the given data container at the end of self so as to extend each IDs, DIs, and EOs.
 
         :param data_container: data container
         :type data_container: DataContainer
         :return:
         """
-        data_container.tolistshallow()
+        other.tolistshallow()
 
-        self._ids.extend(data_container._ids)
-        self.data_inputs.extend(data_container.data_inputs)
-        self.expected_outputs.extend(data_container.expected_outputs)
+        if self._ids is not None and other._ids is not None:
+            self._ids.extend(other._ids)
+        if self.data_inputs is not None and other.data_inputs is not None:
+            self.data_inputs.extend(other.data_inputs)
+        if self.expected_outputs is not None and other.expected_outputs is not None:
+            self.expected_outputs.extend(other.expected_outputs)
 
         return self
 
