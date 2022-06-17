@@ -1,11 +1,14 @@
+import copy
+import random
 import time
+from typing import List, Type
 
 import numpy as np
 import pytest
 
 from neuraxle.base import ExecutionContext as CX, NonFittableMixin
 from neuraxle.data_container import DACT, StripAbsentValues
-from neuraxle.distributed.streaming import SequentialQueuedPipeline, ParallelQueuedFeatureUnion, WorkersJoiner
+from neuraxle.distributed.streaming import BaseQueuedPipeline, SequentialQueuedPipeline, ParallelQueuedFeatureUnion, WorkersJoiner
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEach
@@ -14,9 +17,10 @@ from neuraxle.steps.numpy import MultiplyByN
 from testing_neuraxle.test_context_logger import FitTransformCounterLoggingStep
 
 
-GIVEN_INPUTS = list(range(100))
-EXPECTED_OUTPUTS_PIPELINE = MultiplyByN(2**3).transform(GIVEN_INPUTS).tolist()
-EXPECTED_OUTPUTS_FEATURE_UNION = sum([MultiplyByN(2).transform(GIVEN_INPUTS).tolist()] * 3, [])
+GIVEN_INPUTS: List[int] = list(range(100))
+EXPECTED_OUTPUTS_PIPELINE: List[int] = MultiplyByN(2**3).transform(GIVEN_INPUTS).tolist()
+EXPECTED_OUTPUTS_FEATURE_UNION: List[int] = MultiplyByN(2).transform(GIVEN_INPUTS).tolist(
+) + MultiplyByN(3).transform(GIVEN_INPUTS).tolist() + MultiplyByN(5).transform(GIVEN_INPUTS).tolist()
 
 
 def test_queued_pipeline_with_excluded_incomplete_batch():
@@ -186,13 +190,37 @@ def test_queued_pipeline_with_step_name_n_worker_with_default_n_workers_and_defa
 def test_parallel_queued_pipeline_with_step_name_n_worker_max_queued_minibatches():
     p = ParallelQueuedFeatureUnion([
         ('1', 1, 5, MultiplyByN(2)),
-        ('2', 1, 5, MultiplyByN(2)),
-        ('3', 1, 5, MultiplyByN(2)),
+        ('4', 1, 5, MultiplyByN(3)),
+        ('3', 1, 5, MultiplyByN(5)),
     ], batch_size=10)
 
     outputs = p.transform(GIVEN_INPUTS)
 
     assert np.array_equal(outputs, EXPECTED_OUTPUTS_FEATURE_UNION)
+
+
+# parametrize on SequentialQueuedPipeline and ParallelQueuedFeatureUnion:
+@pytest.mark.parametrize('pipeline_class,eo', [
+    (SequentialQueuedPipeline, MultiplyByN(2 * 3 * 5).transform(GIVEN_INPUTS).tolist()),
+    (ParallelQueuedFeatureUnion, EXPECTED_OUTPUTS_FEATURE_UNION),
+])
+def test_parallel_queued_pipeline_that_might_not_reorder_properly_due_to_named_step_order_and_delay(pipeline_class: Type[BaseQueuedPipeline], eo: List[int]):
+    # TODO: do same test for queued pipeline or parametrize test.
+    p = pipeline_class([
+        ('Step1', 1, 5, MultiplyByN(2)),
+        # The sleep may push this step named 'Step9' to the end of the processing queue.
+        # The name 'Step9' also doesn't sort alphabetically, so the reconstructed order
+        # of the steps is even more tested here.
+        ('Step9', 1, 5, Pipeline([MultiplyByN(3), Sleep(1.0)])),
+        ('Step2', 1, 5, MultiplyByN(5)),
+    ], batch_size=10, n_workers_per_step=2)
+    ids = copy.deepcopy(GIVEN_INPUTS)
+    random.shuffle(ids)
+
+    outputs: DACT = p.handle_transform(DACT(ids=ids, di=GIVEN_INPUTS), CX())
+
+    assert np.array_equal(outputs.ids, ids)
+    assert np.array_equal(outputs.di, eo)
 
 
 def test_parallel_queued_threads_do_parallelize_sleep_correctly(tmpdir):
@@ -254,8 +282,8 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments()
 def test_parallel_queued_pipeline_with_step_name_n_worker_with_step_name_n_workers_and_default_max_queued_minibatches():
     p = ParallelQueuedFeatureUnion([
         ('1', 1, MultiplyByN(2)),
-        ('2', 1, MultiplyByN(2)),
-        ('3', 1, MultiplyByN(2)),
+        ('2', 1, MultiplyByN(3)),
+        ('3', 1, MultiplyByN(5)),
     ], max_queued_minibatches=10, batch_size=10)
 
     outputs = p.transform(GIVEN_INPUTS)
@@ -268,8 +296,8 @@ def test_parallel_queued_pipeline_with_2_workers_and_small_queue_size(use_proces
     # TODO: cascading sleeps to make first steps process faster.
     p = ParallelQueuedFeatureUnion([
         MultiplyByN(2),
-        MultiplyByN(2),
-        MultiplyByN(2),
+        MultiplyByN(3),
+        MultiplyByN(5),
     ], max_queued_minibatches=4, batch_size=10, use_processes=use_processes, n_workers_per_step=2)
 
     outputs = p.transform(GIVEN_INPUTS)
@@ -280,8 +308,8 @@ def test_parallel_queued_pipeline_with_2_workers_and_small_queue_size(use_proces
 def test_parallel_queued_pipeline_with_workers_and_batch_and_queue_of_ample_size():
     p = ParallelQueuedFeatureUnion([
         ('1', MultiplyByN(2)),
-        ('2', MultiplyByN(2)),
-        ('3', MultiplyByN(2)),
+        ('2', MultiplyByN(3)),
+        ('3', MultiplyByN(5)),
     ], n_workers_per_step=1, max_queued_minibatches=10, batch_size=10)
 
     outputs = p.transform(GIVEN_INPUTS)
@@ -336,8 +364,8 @@ def test_queued_pipeline_with_savers(tmpdir, use_processes: bool):
     context = CX()
     p = ParallelQueuedFeatureUnion([
         ('1', MultiplyByN(2)),
-        ('2', MultiplyByN(2)),
-        ('3', MultiplyByN(2)),
+        ('2', MultiplyByN(3)),
+        ('3', MultiplyByN(5)),
     ], n_workers_per_step=1, max_queued_minibatches=10, batch_size=10,
         use_savers=True, use_processes=use_processes
     ).with_context(context)
@@ -420,8 +448,8 @@ def test_parallel_logging_works_with_streamed_steps(use_processes: bool):
     # Then
     log_history = list(CX().logger)
     n_calls = int(len(GIVEN_INPUTS) / minibatch_size) * 3
-    assert len(log_history) == n_calls
+    assert len(log_history) == n_calls, log_history
     for name in ['1', '2', '3']:
         log_line0 = f"{name} - transform call - logging call #0"
         log_line1 = f"{name} - transform call - logging call #1"
-        assert log_line0 in log_history or log_line1 in log_history
+        assert log_line0 in log_history or log_line1 in log_history, log_history

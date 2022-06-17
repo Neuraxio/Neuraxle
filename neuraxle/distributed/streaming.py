@@ -28,7 +28,7 @@ for the transformers.
 import logging
 import time
 from abc import abstractmethod
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from multiprocessing import Lock, Process, Queue, RLock
 from threading import Thread
 import traceback
@@ -742,7 +742,8 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
         workers_joiner: WorkersJoiner = self[-1]
 
         # TODO: extract method.
-        workers_joiner.summaries.append(task.minibatch_dact.get_ids_summary())
+        last_consumer_name: str = self.steps_as_tuple[-2][0]
+        workers_joiner.append_terminal_summary(last_consumer_name, task)
 
         first_consumer: _ProducerConsumerMixin = self[0]
         first_consumer.put_minibatch_produced(task)
@@ -784,7 +785,7 @@ class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
         """
         workers_joiner: WorkersJoiner = self[-1]
         for name, consumer in self[:-1]:
-            workers_joiner.summaries.append(task.minibatch_dact.get_ids_summary())
+            workers_joiner.append_terminal_summary(name, task)
             consumer: _ProducerConsumerMixin = consumer
             consumer.put_minibatch_produced(task)
 
@@ -799,6 +800,7 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
         Joiner.__init__(self, batch_size=batch_size)
         _ProducerConsumerMixin.__init__(self)
         self.n_parallel_workers_branches = n_batches
+        self.names: List[str] = []
         self.summaries: List[str] = []
 
     def _teardown(self) -> 'BaseTransformer':
@@ -809,11 +811,23 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
         """
         _ProducerConsumerMixin._teardown(self)
         Joiner._teardown(self)
-        self.summaries: List[str] = []
+        self.names = []
+        self.summaries = []
         return self
 
     def set_n_parallel_workers_branches(self, n_batches):
         self.n_parallel_workers_branches = n_batches
+
+    def append_terminal_summary(self, name: str, task: QueuedMinibatch):
+        """
+        Append the summary id of the worker to the list of summaries.
+
+        :param name: name of the worker
+        :param task: task
+        :return:
+        """
+        self.names.append(name)
+        self.summaries.append(task.minibatch_dact.get_ids_summary())
 
     def join(self, original_dact: DACT, sync_context: CX) -> DACT:
         """
@@ -838,21 +852,36 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
                 raise task.error
 
             step_to_minibatches_dacts[task.step_name].append_data_container_in_data_inputs(task.minibatch_dact)
-            # break  # TODO: REVISE THIS.
+
+        # Sort step_to_minibatches_dacts by step_name index in the step names list as like in the loop below but based on the order of steps. In the case of a pipeline, there will be only the last step anyway so the sort will return without even sorting. For feature union, there are many.
+        step_to_minibatches_dacts = OrderedDict(sorted(
+            step_to_minibatches_dacts.items(),
+            key=lambda str_dact_tup: self.names.index(str_dact_tup[0])
+        ))
 
         # Join all the results based on step name:
-        list_dact: List[ListDataContainer] = []  # TODO: revise this type.
-        for step_name, minibatches_list_dacts in step_to_minibatches_dacts.items():
+        list_dact: List[ListDataContainer] = []
+
+        for minibatches_list_dacts in step_to_minibatches_dacts.values():
+            minibatches_list_dacts: ListDataContainer = minibatches_list_dacts
 
             for _dact in minibatches_list_dacts.data_inputs:
+                _dact: DACT = _dact
+
                 if not isinstance(_dact, DACT):
                     # an exception has been throwned by the worker so reraise it here!
+
+                    # TODO: this IF looks like it's obsolete. from the introduction of the task.is_error() function handled earlier.
+                    raise ValueError("This IF should not be entered and is obsolete. To be fixed.")
+
                     exception = _dact
                     sync_context.flow.log_error(exception)
                     raise exception
 
             # reorder results by ids of summary
+            # TODO: check if could use original dact instead. or other batch count int number, that would be more efficient.
             minibatches_list_dacts.data_inputs.sort(key=lambda dc: self.summaries.index(dc.get_ids_summary()))
+
             sorted_step_dact = ListDataContainer.empty()
             for minibatch_dact in minibatches_list_dacts.data_inputs:
                 sorted_step_dact.extend(minibatch_dact)  # TODO: revise these types.
