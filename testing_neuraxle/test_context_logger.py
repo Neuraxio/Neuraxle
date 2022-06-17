@@ -57,7 +57,7 @@ class FitTransformCounterLoggingStep(HandleOnlyMixin, BaseStep):
         return self, data_container
 
     def _log(self, context, func_name):
-        context.logger.warning(f"{self.name} - {func_name} call - logging call #{self.logging_call_counter} with UUID={uuid.uuid4()}")
+        context.logger.info(f"{self.name} - {func_name} call - logging call #{self.logging_call_counter} with UUID={uuid.uuid4()}")
         self.logging_call_counter += 1
 
 

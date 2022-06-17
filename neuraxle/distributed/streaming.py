@@ -65,6 +65,13 @@ class _ProducerConsumerStepSaver(BaseSaver):
         return step
 
 
+class _QueueDestroyedError(EOFError):
+    """
+    Error raised when the queue is destroyed.
+    """
+    pass
+
+
 class _ProducerConsumerMixin(MixinForBaseTransformer):
     """
     A class to represent a step that can receive minibatches from a producer in its queue to consume them.
@@ -109,14 +116,25 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
         Put a minibatch in queue.
         The caller of this method is the producer of the minibatch and is external to self.
         """
-        self.input_queue.put(value)  # TODO: possibly copy DACT here.
+        try:
+            self.input_queue.put(value)  # TODO: possibly copy DACT here.
+        except:
+            raise _QueueDestroyedError("It seems like the queue to produce to has been destroyed.")
 
     def _get_minibatch_to_consume(self) -> 'QueuedMinibatch':
         """
         Get last minibatch in queue. The caller of this method is probably self,
         that is why the method is private (starts with an underscore).
+        This method can raise an EOFError.
         """
-        return self.input_queue.get()
+        try:
+            return self.input_queue.get(block=True)
+        except:
+            raise _QueueDestroyedError("It seems like the queue to consume from has been destroyed.")
+
+    def join(self):
+        self.input_queue.close()
+        self.input_queue.join_thread()
 
 
 class QueuedMinibatch:
@@ -252,6 +270,8 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
         #     worker.join()
         if self.logging_thread is not None:
             self.logging_thread.join(timeout=5.0)
+            self.logging_thread = None
+        _ProducerConsumerMixin.join(self)
 
     def _teardown(self):
         """
@@ -270,7 +290,8 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
         """
         if self.use_processes:
             [w.terminate() for w in self.running_workers]
-            self.logging_thread.join(timeout=5.0)
+            if self.logging_thread is not None:
+                self.logging_thread.join(timeout=5.0)
         self.running_workers = []
         self.logging_thread = None
         self.consumers = []
@@ -332,6 +353,9 @@ def worker_function(
                 if task.is_terminal():
                     break
 
+            except _QueueDestroyedError:
+                # This error can happen at the destruction of workers or processes.
+                return
             except Exception as err:
                 context.flow.log_error(err)
                 stack_trace = traceback.format_exc()

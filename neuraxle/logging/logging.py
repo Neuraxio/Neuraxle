@@ -245,8 +245,10 @@ class ParallelLoggingConsumerThread:
         Note that once this method is called, the thread will finish and the threading.Thread
         object will be destroyed. Therefore, this method should be called only once and after
         the producers of parallel logging messages finished their job.
-        
+
         Timeout is in seconds.
         """
         self.logging_queue.put(None)
         self.logging_thread.join(timeout=None)
+        self.logging_queue.close()
+        self.logging_queue.join_thread()

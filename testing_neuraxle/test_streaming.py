@@ -447,9 +447,10 @@ def test_parallel_logging_works_with_streamed_steps(use_processes: bool):
 
     # Then
     log_history = list(CX().logger)
+    shortened_log_history = [e[:e.index('#') + 1] for e in log_history]
     n_calls = int(len(GIVEN_INPUTS) / minibatch_size) * 3
     assert len(log_history) == n_calls, log_history
     for name in ['1', '2', '3']:
-        log_line0 = f"{name} - transform call - logging call #0"
-        log_line1 = f"{name} - transform call - logging call #1"
-        assert log_line0 in log_history or log_line1 in log_history, log_history
+        log_line = f"{name} - transform call - logging call #"
+        assert log_line in shortened_log_history
+    pass
