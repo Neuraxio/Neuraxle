@@ -4,6 +4,7 @@ import logging.handlers
 import os
 from multiprocessing import Process, Queue
 from typing import List, Set
+import uuid
 
 import numpy as np
 from neuraxle.base import CX, BaseStep
@@ -56,7 +57,7 @@ class FitTransformCounterLoggingStep(HandleOnlyMixin, BaseStep):
         return self, data_container
 
     def _log(self, context, func_name):
-        context.logger.warning(f"{self.name} - {func_name} call - logging call #{self.logging_call_counter}")
+        context.logger.warning(f"{self.name} - {func_name} call - logging call #{self.logging_call_counter} with UUID={uuid.uuid4()}")
         self.logging_call_counter += 1
 
 

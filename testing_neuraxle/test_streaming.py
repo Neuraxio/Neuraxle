@@ -211,7 +211,7 @@ def test_parallel_queued_pipeline_that_might_not_reorder_properly_due_to_named_s
         # The sleep may push this step named 'Step9' to the end of the processing queue.
         # The name 'Step9' also doesn't sort alphabetically, so the reconstructed order
         # of the steps is even more tested here.
-        ('Step9', 1, 5, Pipeline([MultiplyByN(3), Sleep(1.0)])),
+        ('Step9', 1, 5, Pipeline([MultiplyByN(3), Sleep(0.2)])),
         ('Step2', 1, 5, MultiplyByN(5)),
     ], batch_size=10, n_workers_per_step=2)
     ids = copy.deepcopy(GIVEN_INPUTS)
