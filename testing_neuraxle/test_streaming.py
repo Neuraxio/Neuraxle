@@ -223,34 +223,34 @@ def test_parallel_queued_pipeline_that_might_not_reorder_properly_due_to_named_s
     assert np.array_equal(outputs.di, eo)
 
 
-def test_parallel_queued_threads_do_parallelize_sleep_correctly(tmpdir):
+def test_parallel_queued_threads_do_parallelize_sleep_correctly():
     sleep_time = 0.01
-    p = SequentialQueuedPipeline([
-        ('1', 2, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
-        ('2', 2, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
-        ('3', 2, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])),
-        ('4', 2, 10, Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]))
-    ], batch_size=10, use_processes=False, use_savers=False).with_context(CX(tmpdir))
+    sleeper = Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])
+    sleepers_4 = copy.deepcopy([sleeper] * 4)
+    expected_outputs = MultiplyByN(2**4).transform(GIVEN_INPUTS).tolist()
+
+    p = SequentialQueuedPipeline(
+        sleepers_4,
+        batch_size=10, n_workers_per_step=2, use_processes=False, use_savers=False
+    ).with_context(CX())
 
     a = time.time()
     outputs_streaming = p.transform(GIVEN_INPUTS)
     b = time.time()
     time_queued_pipeline = b - a
 
-    p = Pipeline([
-        Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
-        Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
-        Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)]),
-        Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])
-    ])
+    p = Pipeline(
+        sleepers_4,
+    )
 
     a = time.time()
     outputs_vanilla = p.transform(GIVEN_INPUTS)
     b = time.time()
     time_vanilla_pipeline = b - a
 
+    assert np.array_equal(outputs_streaming, expected_outputs)
+    assert np.array_equal(outputs_vanilla, expected_outputs)
     assert time_queued_pipeline < time_vanilla_pipeline
-    assert np.array_equal(outputs_streaming, outputs_vanilla)
 
 
 def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments_max_queued_minibatches():

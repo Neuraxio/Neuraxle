@@ -109,8 +109,8 @@ venv.bak/
 .idea
 .vscode
 .style.yapf
-vandelay-py.js
-appmap.yml
+*-py.js
+*pmap.yml
 tmp
 
 # Other

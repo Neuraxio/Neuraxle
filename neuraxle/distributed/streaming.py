@@ -356,8 +356,9 @@ QueuedPipelineStepsTuple = Union[
     Tuple[str, int, BaseTransformer],  # (step_name, n_workers, step)
     Tuple[str, int, int, BaseTransformer],  # (step_name, n_workers, max_queued_minibatches, step)
     Tuple[str, int, List[Tuple], BaseTransformer],  # (step_name, n_workers, additional_worker_arguments, step)
-    Tuple[str, int, List[Tuple], BaseTransformer]  # (step_name, n_workers, additional_worker_arguments, step)
+    Tuple[str, int, int, List[Tuple], BaseTransformer]  # (step_name, n_workers, max_queued_minibatches, additional_worker_arguments, step)
 ]
+FullQueuedPipelineStepsTuple = Tuple[str, int, int, List[Tuple], BaseTransformer]
 
 
 class BaseQueuedPipeline(MiniBatchSequentialPipeline):
@@ -439,7 +440,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
     ):
         self.batch_size: int = batch_size
         self.n_workers_per_step: int = n_workers_per_step
-        self.max_queued_minibatches: int = max_queued_minibatches
+        self.max_queued_minibatches: int = max_queued_minibatches or 0
         if data_joiner is None:
             # Note that the data joiner differs from the workers joiner, in the sense that the
             # data joiner is applied after the data is joined by the workers joiner.
@@ -488,9 +489,9 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             max_queued_minibatches=max_queued_minibatches,
             additional_worker_arguments=additional_worker_arguments,
             use_savers=self.use_savers
-        ).set_name('QueueWorker{}'.format(name))
+        ).set_name(name)
 
-    def _parse_step_tuple(self, step_tuple: QueuedPipelineStepsTuple) -> Tuple[str, int, int, BaseTransformer]:
+    def _parse_step_tuple(self, step_tuple: QueuedPipelineStepsTuple) -> FullQueuedPipelineStepsTuple:
         """
         Return all params necessary to create the QueuedPipeline for the given step.
 
@@ -500,37 +501,34 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :rtype: Tuple[str, int, int, BaseStep]
         """
         if isinstance(step_tuple, BaseTransformer):
-            actual_step = step_tuple
-            name = step_tuple.name
-            max_queued_minibatches = self.max_queued_minibatches
-            n_workers = self.n_workers_per_step
-            additional_arguments = []
-        elif len(step_tuple) == 2:
-            if isinstance(step_tuple[0], str):
-                name, actual_step = step_tuple
-                n_workers = self.n_workers_per_step
-            else:
-                n_workers, actual_step = step_tuple
-                name = actual_step.name
-            max_queued_minibatches = self.max_queued_minibatches
-            additional_arguments = []
-        elif len(step_tuple) == 3:
-            name, n_workers, actual_step = step_tuple
-            max_queued_minibatches = self.max_queued_minibatches
-            additional_arguments = []
-        elif len(step_tuple) == 4:
-            if isinstance(step_tuple[2], Iterable):
-                name, n_workers, additional_arguments, actual_step = step_tuple
-                max_queued_minibatches = self.max_queued_minibatches
-            else:
-                name, n_workers, max_queued_minibatches, actual_step = step_tuple
-                additional_arguments = []
-        elif len(step_tuple) == 5:
-            name, n_workers, additional_arguments, max_queued_minibatches, actual_step = step_tuple
-        else:
-            raise Exception('Invalid Queued Pipeline Steps Shape.')
+            step_tuple = (step_tuple,)
+        elif len(step_tuple) > 5:
+            raise Exception(f'Invalid Queued Pipeline Steps Shape: {step_tuple}.')
+        actual_step: BaseTransformer = step_tuple[-1]
 
-        return name, n_workers, additional_arguments, max_queued_minibatches, actual_step
+        # Default values before parse, if missing:
+        name: str = actual_step.name
+        n_workers: int = self.n_workers_per_step
+        additional_arguments: List = []
+        max_queued_minibatches: int = self.max_queued_minibatches
+
+        if len(step_tuple) == 2:
+            if isinstance(step_tuple[0], str):
+                name = step_tuple[0]
+            else:
+                n_workers = step_tuple[0]
+        elif len(step_tuple) >= 3:
+            name = step_tuple[0]
+            n_workers = step_tuple[1]
+            if len(step_tuple) >= 4:
+                if isinstance(step_tuple[2], Iterable):
+                    additional_arguments = step_tuple[2]
+                    if len(step_tuple) == 5:
+                        max_queued_minibatches = step_tuple[3]
+                else:
+                    max_queued_minibatches = step_tuple[2]
+
+        return (name, n_workers, additional_arguments, max_queued_minibatches, actual_step)
 
     def _will_process(
         self, data_container: DACT, context: CX
