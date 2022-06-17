@@ -77,7 +77,7 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
     """
 
     def __init__(self, input_queue: Queue = None):
-        # TODO: two class for this: a producer class and a consumer class. Also remove all references to the word "observer"
+        # TODO: two class for this: a producer class and a consumer class perhaps?
         MixinForBaseTransformer.__init__(self)
         self.input_queue: Queue = input_queue or Queue()
         self.consumers: List[Queue] = []
@@ -791,14 +791,8 @@ class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
 
 class WorkersJoiner(_ProducerConsumerMixin, Joiner):
     """
-    Observe the results of the :class:`QueueWorker` to append them.
-    Synchronize all of the workers together.
-
-    .. seealso::
-        :class:`QueuedPipeline`,
-        :class:`Observer`,
-        :class:`ListDataContainer`,
-        :class:`DataContainer`
+    Consume the results of the other :class:`_ProducerConsumerMixin` workers to join their data.
+    Also do error handling.
     """
 
     def __init__(self, batch_size: int, n_batches: int = None):
@@ -823,7 +817,7 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
 
     def join(self, original_dact: DACT, sync_context: CX) -> DACT:
         """
-        Return the accumulated results received by the on next method of this observer.
+        Return the accumulated results of the workers.
 
         :return: transformed data container
         :rtype: DataContainer
