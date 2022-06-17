@@ -58,7 +58,7 @@ from neuraxle.data_container import DataContainer as DACT
 from neuraxle.data_container import PredsDACT, TrainDACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
-from neuraxle.logging.logging import NEURAXLE_LOGGER_NAME, NeuraxleLogger
+from neuraxle.logging.logging import NEURAXLE_LOGGER_NAME, NeuraxleLogger, ParallelLoggingConsumerThread
 from neuraxle.logging.warnings import warn_deprecated_arg
 
 
@@ -1296,7 +1296,7 @@ class ExecutionContext(TruncableService):
         self.flow.link_context(self)
         return self.get_service(ContextLock).synchroneous()
 
-    def thread_safe(self) -> Tuple[RLock, 'CX']:
+    def process_safe(self) -> Tuple[RLock, ParallelLoggingConsumerThread, 'CX']:
         """
         Prepare the context and its services to be thread safe and
         reduce the current context for parallelization.
@@ -1323,7 +1323,8 @@ class ExecutionContext(TruncableService):
             "self.thread_safe()[0] earlier before sending the context to "
             "the thread."
         )
-        return managed_thread_safe_lock, threaded_context
+        logging_thread = ParallelLoggingConsumerThread()
+        return managed_thread_safe_lock, logging_thread, threaded_context
 
     def restore_lock(self, managed_thread_safe_lock: RLock = None) -> 'CX':
         """

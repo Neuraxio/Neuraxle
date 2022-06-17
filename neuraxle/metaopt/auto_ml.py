@@ -201,7 +201,7 @@ class BaseControllerLoop(TruncableService):
         :return: the ID of the round that was executed (either created or continued from previous optimization).
         """
 
-        # thread_safe_lock, context = context.thread_safe() ??
+        # thread_safe_lock, ..., context = context.thread_safe() ??
 
         hp_optimizer: BaseHyperparameterOptimizer = self[BaseHyperparameterOptimizer]
         hp_space: HyperparameterSpace = pipeline.get_hyperparams_space()

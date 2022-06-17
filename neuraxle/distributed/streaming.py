@@ -25,6 +25,7 @@ for the transformers.
     limitations under the License.
 
 """
+import logging
 import time
 from abc import abstractmethod
 from collections import defaultdict
@@ -39,6 +40,7 @@ from neuraxle.base import (MetaStep, MixinForBaseTransformer, NamedStepsList,
                            NonFittableMixin, _FittableStep)
 from neuraxle.data_container import DACT, IDT, EOT, DIT, ListDataContainer, StripAbsentValues
 from neuraxle.hyperparams.space import RecursiveDict
+from neuraxle.logging.logging import ParallelLoggingConsumerThread
 from neuraxle.pipeline import Joiner, MiniBatchSequentialPipeline, Pipeline
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
@@ -174,18 +176,19 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
     """
 
     def __init__(
-            self,
-            wrapped: BaseTransformer,
-            max_queued_minibatches: int,
-            n_workers: int,
-            use_processes: bool = True,
-            additional_worker_arguments: List = None,
-            use_savers: bool = False
+        self,
+        wrapped: BaseTransformer,
+        max_queued_minibatches: int = None,
+        n_workers: int = 1,
+        use_processes: bool = True,
+        additional_worker_arguments: List = None,
+        use_savers: bool = False
     ):
         if not additional_worker_arguments:
             additional_worker_arguments = [[] for _ in range(n_workers)]
 
         MetaStep.__init__(self, wrapped)
+        max_queued_minibatches = max_queued_minibatches or 0
         _ProducerConsumerMixin.__init__(self, Queue(maxsize=max_queued_minibatches))
         self.n_workers: int = n_workers
         self.use_processes: bool = use_processes
@@ -193,6 +196,7 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
         self.use_savers = use_savers
 
         self.running_workers: List[Process] = []
+        self.logging_thread: ParallelLoggingConsumerThread = None
 
     def __getstate__(self):
         """
@@ -201,6 +205,7 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
         """
         state = self.__dict__.copy()
         state['running_workers'] = []  # delete self.workers in the process fork's pickling.
+        state["logging_thread"] = None
         return state
 
     def start(self, context: CX):
@@ -214,24 +219,39 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
             _ = self.save(context, full_dump=True)  # Cannot delete queue worker self.
             del self.wrapped  # that will be reloaded in the new thread or process.
 
-        thread_safe_context = context
+        process_safe_context = context
         thread_safe_lock: RLock = context.synchroneous()
         ParallelObj = Thread
+        logging_queue: Queue = None
         if self.use_processes:
             # New process requires trimming the references to other processes
             # when we create many processes: https://stackoverflow.com/a/65749012
-            thread_safe_lock, thread_safe_context = context.thread_safe()
+            thread_safe_lock, logging_thread, process_safe_context = context.process_safe()
+            logging_queue: Queue = logging_thread.logging_queue
             ParallelObj = Process
 
         self.running_workers = []
         for _, worker_arguments in zip(range(self.n_workers), self.additional_worker_arguments):
             p = ParallelObj(
                 target=worker_function,
-                args=(self, thread_safe_lock, thread_safe_context, self.use_savers, worker_arguments)
+                args=(self, thread_safe_lock, process_safe_context, self.use_savers, logging_queue, worker_arguments)
             )
             p.daemon = True
             self.running_workers.append(p)
             p.start()
+
+        if self.use_processes:
+            self.logging_thread = logging_thread
+            self.logging_thread.start()
+
+    def join(self):
+        """
+        Wait for workers to finish at least their capture of the logging calls.
+        """
+        # for worker in self.running_workers:
+        #     worker.join()
+        if self.logging_thread is not None:
+            self.logging_thread.join(timeout=5.0)
 
     def _teardown(self):
         """
@@ -250,13 +270,20 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
         """
         if self.use_processes:
             [w.terminate() for w in self.running_workers]
-
+            self.logging_thread.join(timeout=5.0)
         self.running_workers = []
+        self.logging_thread = None
         self.consumers = []
 
 
-def worker_function(parallel_worker_wrapper: ParallelWorkersWrapper, shared_lock: Lock, context: CX, use_savers: bool,
-                    additional_worker_arguments):
+def worker_function(
+    parallel_worker_wrapper: ParallelWorkersWrapper,
+    shared_lock: Lock,
+    context: CX,
+    use_savers: bool,
+    logging_queue: Queue,
+    additional_worker_arguments
+):
     """
     Worker function that transforms the items inside the queue of items to process.
 
@@ -281,6 +308,13 @@ def worker_function(parallel_worker_wrapper: ParallelWorkersWrapper, shared_lock
 
         for argument_name, argument_value in additional_worker_arguments:
             step.__dict__.update({argument_name: argument_value})
+
+        # TODO: extract this next logging_queue if to a separate function in logging.py:
+        if logging_queue is not None:
+            queue_handler = logging.handlers.QueueHandler(logging_queue)
+            root = logging.getLogger()
+            root.setLevel(logging.DEBUG)
+            root.addHandler(queue_handler)
 
         while True:
             try:
@@ -597,6 +631,12 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
         # join output queues.
         data_container = workers_joiner.join(data_container, context)
+
+        for step in list(self.values())[:-1]:
+            # TODO: accessor for these steps?
+            step: ParallelWorkersWrapper = step
+            step.join()
+
         return data_container
 
     def _did_transform(self, data_container: DACT, context: CX) -> DACT:

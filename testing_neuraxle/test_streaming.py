@@ -3,7 +3,7 @@ import time
 import numpy as np
 import pytest
 
-from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import ExecutionContext as CX, NonFittableMixin
 from neuraxle.data_container import DACT, StripAbsentValues
 from neuraxle.distributed.streaming import SequentialQueuedPipeline, ParallelQueuedFeatureUnion, WorkersJoiner
 from neuraxle.hyperparams.space import HyperparameterSamples
@@ -11,6 +11,7 @@ from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEach
 from neuraxle.steps.misc import FitTransformCallbackStep, Sleep
 from neuraxle.steps.numpy import MultiplyByN
+from testing_neuraxle.test_context_logger import FitTransformCounterLoggingStep
 
 
 GIVEN_INPUTS = list(range(100))
@@ -392,3 +393,35 @@ def test_sequential_queued_pipeline_should_fit_transform_without_multiprocessing
 
     assert not p[-1].called_queue_joiner
     assert np.array_equal(outputs, EXPECTED_OUTPUTS_PIPELINE)
+
+
+class TransformOnlyCounterLoggingStep(NonFittableMixin, FitTransformCounterLoggingStep):
+    def __init__(self):
+        FitTransformCounterLoggingStep.__init__(self)
+        NonFittableMixin.__init__(self)
+
+
+@pytest.mark.parametrize("use_processes", [False, True])
+def test_parallel_logging_works_with_streamed_steps(use_processes: bool):
+    # TODO: parametrize using SequentialQueuedPipeline as well instead of ParallelQueuedFeatureUnion
+    # Given
+    minibatch_size = 50
+    n_workers = 2
+    p = ParallelQueuedFeatureUnion([
+        TransformOnlyCounterLoggingStep().set_name('1'),
+        TransformOnlyCounterLoggingStep().set_name('2'),
+        TransformOnlyCounterLoggingStep().set_name('3'),
+    ], n_workers_per_step=n_workers, batch_size=minibatch_size,
+        use_processes=use_processes, use_savers=False)
+
+    # When
+    p.transform(GIVEN_INPUTS)
+
+    # Then
+    log_history = list(CX().logger)
+    n_calls = int(len(GIVEN_INPUTS) / minibatch_size) * 3
+    assert len(log_history) == n_calls
+    for name in ['1', '2', '3']:
+        log_line0 = f"{name} - transform call - logging call #0"
+        log_line1 = f"{name} - transform call - logging call #1"
+        assert log_line0 in log_history or log_line1 in log_history

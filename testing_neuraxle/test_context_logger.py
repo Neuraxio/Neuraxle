@@ -55,8 +55,8 @@ class FitTransformCounterLoggingStep(HandleOnlyMixin, BaseStep):
         self._log(context, "fit_transform")
         return self, data_container
 
-    def _log(self, context, name):
-        context.logger.warning(f"{name} call - logging call #{self.logging_call_counter}")
+    def _log(self, context, func_name):
+        context.logger.warning(f"{self.name} - {func_name} call - logging call #{self.logging_call_counter}")
         self.logging_call_counter += 1
 
 
@@ -301,8 +301,8 @@ class SomeParallelLogginWorkers:
             proc.start()
 
     @staticmethod
-    def logger_producer_thread(queue: Queue):
-        queue_handler = logging.handlers.QueueHandler(queue)
+    def logger_producer_thread(logging_queue: Queue):
+        queue_handler = logging.handlers.QueueHandler(logging_queue)
         root = logging.getLogger()
         root.setLevel(logging.DEBUG)
         root.addHandler(queue_handler)

@@ -25,7 +25,7 @@ to log info in various folders.
 import logging
 import re
 import sys
-import threading
+from threading import Thread
 from io import StringIO
 from multiprocessing import Queue
 from typing import IO, Dict, List, Optional
@@ -182,9 +182,10 @@ class NeuraxleLogger(logging.Logger):
     @staticmethod
     def shorten_log_lines_prefixes(logs):
         # This line is for retrocompability with old logs of 0.7.0.
-        logs = ("⠀" + logs.replace("\n", "\n⠀")).replace("⠀⠀", "⠀")
+        c = "⠀"
+        logs = (c + logs.replace("\n", "\n" + c)).replace(c + c, c)
         logs = re.sub(LOGGER_FORMAT_PREFIX_REPLACE_REGEXPR[0], LOGGER_FORMAT_PREFIX_REPLACE_REGEXPR[1], logs)
-        return logs.strip()
+        return logs.strip().rstrip(c).rstrip("\n")
 
 
 logging.setLoggerClass(NeuraxleLogger)
@@ -204,20 +205,22 @@ class ParallelLoggingConsumerThread:
     is needed in the main process to receive the logging messages from the worker processes properly in the main console output.
     """
 
-    def __init__(self, logging_queue: Queue):
+    def __init__(self, logging_queue: Queue = None):
         # type is, to me more precise: Queue[logging.LogRecord]
-        self.logging_queue: Queue = logging_queue
+        self.logging_queue: Queue = logging_queue or Queue()
+        self.logging_thread: Thread = None
 
     def start(self):
         """
         Start the thread to read the logs from the queue.
         """
-        _logger_thread = threading.Thread(
+        _logging_thread = Thread(
             target=self.logger_consumer_thread_func,
             args=(self.logging_queue,)
         )
-        _logger_thread.start()
-        self.logger_consumer_thread_instance = _logger_thread
+        _logging_thread.daemon = True
+        _logging_thread.start()
+        self.logging_thread = _logging_thread
 
     @staticmethod
     def logger_consumer_thread_func(queue: Queue):
@@ -236,12 +239,14 @@ class ParallelLoggingConsumerThread:
             logger = logging.getLogger(rec.name)
             logger.handle(rec)
 
-    def join(self):
+    def join(self, timeout: float = None):
         """
         Send the None signal for the thread to finish, and join on the thread to finish it.
         Note that once this method is called, the thread will finish and the threading.Thread
         object will be destroyed. Therefore, this method should be called only once and after
         the producers of parallel logging messages finished their job.
+        
+        Timeout is in seconds.
         """
         self.logging_queue.put(None)
-        self.logger_consumer_thread_instance.join()
+        self.logging_thread.join(timeout=None)
