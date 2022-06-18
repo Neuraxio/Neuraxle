@@ -212,23 +212,27 @@ def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
 
 
 @pytest.mark.parametrize("use_processes", [True, False])
-def test_automl_can_use_same_on_disk_repo_in_parallel(use_processes):
+def test_automl_can_reuse_same_on_disk_repo_in_parallel_for_same_round(use_processes):
     for i in range(10):
-        # @pytest.mark.parametrize("use_processes", [False, True])
         tmpdir = CX.get_new_cache_folder()
         dact = DACT(di=list(range(20)), eo=list(range(20, 40)))
-        cx = AutoMLContext.from_context(repo=HyperparamsOnDiskRepository(tmpdir))
+        repo = HyperparamsOnDiskRepository(tmpdir)
+        cx = AutoMLContext.from_context(repo=repo)
         sleep_step = Sleep(0.125, add_random_quantity=0.250)
         automl: ControlledAutoML = _create_automl_test_loop(
             tmpdir, sleep_step, n_trials=1, start_new_round=False, refit_best_trial=False
         )
         n_sequential_steps = 3
-        n_workers_in_parallel_per_step = 1  # TODO: use something else, such as 2, 3 or 4.
+        n_workers_in_parallel_per_step = 2  # TODO: use something else, such as 2, 3 or 4.
         n_minibatches_in_series = 5
         n_trials = n_sequential_steps * n_workers_in_parallel_per_step * n_minibatches_in_series
         parallel_automl = ParallelQueuedFeatureUnion(
             # steps=[OnlyFitAtTransformTime(automl)],
-            steps=[OnlyFitAtTransformTime(copy.deepcopy(automl)) for _ in range(n_sequential_steps)],
+            steps=[
+                # TODO: this test seems broken because it never creates the first rounds - always wants to extend it.
+                OnlyFitAtTransformTime(copy.deepcopy(automl))
+                for _ in range(n_sequential_steps)
+            ],
             batch_size=int(len(dact) / n_minibatches_in_series),
             n_workers_per_step=n_workers_in_parallel_per_step,
             use_processes=use_processes,

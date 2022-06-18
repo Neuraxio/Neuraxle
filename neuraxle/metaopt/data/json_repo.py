@@ -118,18 +118,31 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
     def _load_dc(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
         scope, _, load_file = self._get_dataclass_filename_path(None, scope)
 
+        _json_loaded = self._load_json_file(load_file)
+
+        _dataclass: SubDataclassT = from_json(_json_loaded)
+        if _dataclass.has_sublocation_dataclasses():
+            _dataclass = self._load_dc_sublocation_keys(_dataclass, scope)
+            if deep is True:
+                for sub_dc_id in _dataclass.get_sublocation_keys():
+                    sub_dc = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
+                    _dataclass.store(sub_dc)
+        return _dataclass
+
+    def _load_json_file(self, load_file: str):
         if not os.path.exists(load_file):
             raise KeyError(f"{load_file} not found.")
 
-        with open(load_file, 'r') as f:
-            _dataclass: SubDataclassT = from_json(json.load(f))
-            if _dataclass.has_sublocation_dataclasses():
-                _dataclass = self._load_dc_sublocation_keys(_dataclass, scope)
-                if deep is True:
-                    for sub_dc_id in _dataclass.get_sublocation_keys():
-                        sub_dc = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
-                        _dataclass.store(sub_dc)
-            return _dataclass
+        try:
+            with open(load_file, 'r') as f:
+                _file_content: str = f.read()
+            return json.loads(_file_content)
+        except json.decoder.JSONDecodeError as e:
+            # TODO: for trials only, use UUID mechanism that could be added to the dataclass or aggregate to resolve collisions. Or investigate and fix locking.
+            surrounding_files = os.listdir(os.path.dirname(load_file))
+            raise ValueError(
+                f"Invalid JSON file: {repr(_file_content)} in path {load_file} with folder ls={surrounding_files}."
+            ) from e
 
     def _load_dc_sublocation_keys(self, _dataclass: SubDataclassT, scope) -> SubDataclassT:
         dc_folder: str = self.get_folder_at_scope(scope)
