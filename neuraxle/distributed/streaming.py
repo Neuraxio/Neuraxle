@@ -869,6 +869,10 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
         :return: transformed data container
         :rtype: DataContainer
         """
+
+        if self.n_minibatches_per_worker == 0:
+            return original_dact
+
         # Fetch tasks to consume and organize them per step name:
         step_to_minibatches_dacts: Dict[str, ListDataContainer] = defaultdict(ListDataContainer.empty)
         while self.n_workers_remaining > 0:
