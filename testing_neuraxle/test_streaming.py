@@ -5,17 +5,22 @@ from typing import List, Type
 
 import numpy as np
 import pytest
-
-from neuraxle.base import ExecutionContext as CX, NonFittableMixin
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import NonFittableMixin
 from neuraxle.data_container import DACT, StripAbsentValues
-from neuraxle.distributed.streaming import BaseQueuedPipeline, SequentialQueuedPipeline, ParallelQueuedFeatureUnion, WorkersJoiner
+from neuraxle.distributed.streaming import (BaseQueuedPipeline,
+                                            ParallelQueuedFeatureUnion,
+                                            ParallelWorkersWrapper,
+                                            QueuedMinibatch,
+                                            SequentialQueuedPipeline,
+                                            WorkersJoiner)
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEach
 from neuraxle.steps.misc import FitTransformCallbackStep, Sleep
-from neuraxle.steps.numpy import MultiplyByN
-from testing_neuraxle.test_context_logger import FitTransformCounterLoggingStep
+from neuraxle.steps.numpy import AddN, MultiplyByN
 
+from testing_neuraxle.test_context_logger import FitTransformCounterLoggingStep
 
 GIVEN_INPUTS: List[int] = list(range(100))
 EXPECTED_OUTPUTS_PIPELINE: List[int] = MultiplyByN(2**3).transform(GIVEN_INPUTS).tolist()
@@ -199,7 +204,6 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_max_queued_minibatches
     assert np.array_equal(outputs, EXPECTED_OUTPUTS_FEATURE_UNION)
 
 
-# parametrize on SequentialQueuedPipeline and ParallelQueuedFeatureUnion:
 @pytest.mark.parametrize('pipeline_class,eo', [
     (SequentialQueuedPipeline, MultiplyByN(2 * 3 * 5).transform(GIVEN_INPUTS).tolist()),
     (ParallelQueuedFeatureUnion, EXPECTED_OUTPUTS_FEATURE_UNION),
@@ -224,32 +228,40 @@ def test_parallel_queued_pipeline_that_might_not_reorder_properly_due_to_named_s
 
 
 def test_parallel_queued_threads_do_parallelize_sleep_correctly():
-    sleep_time = 0.01
-    sleeper = Pipeline([ForEach(Sleep(sleep_time=sleep_time)), MultiplyByN(2)])
-    sleepers_4 = copy.deepcopy([sleeper] * 4)
-    expected_outputs = MultiplyByN(2**4).transform(GIVEN_INPUTS).tolist()
+    sleep_time = 0.001
+    data_inputs = range(1000)
+    expected_outputs = MultiplyByN(2**10).transform(data_inputs).tolist()
+    sleepers = [
+        Pipeline([
+            ForEach(Sleep(sleep_time=sleep_time / 2, add_random_quantity=sleep_time)),
+            MultiplyByN(2),
+            TransformOnlyCounterLoggingStep().set_name(f"SleeperLogger{i}"),
+        ])
+        for i in range(10)
+    ]
 
     p = SequentialQueuedPipeline(
-        sleepers_4,
-        batch_size=10, n_workers_per_step=2, use_processes=False, use_savers=False
+        sleepers,
+        batch_size=5, n_workers_per_step=4, use_processes=False, use_savers=False
     ).with_context(CX())
 
     a = time.time()
-    outputs_streaming = p.transform(GIVEN_INPUTS)
+    outputs_streaming = p.transform(data_inputs)
     b = time.time()
     time_queued_pipeline = b - a
 
     p = Pipeline(
-        sleepers_4,
+        sleepers,
     )
 
     a = time.time()
-    outputs_vanilla = p.transform(GIVEN_INPUTS)
+    outputs_vanilla = p.transform(data_inputs)
     b = time.time()
     time_vanilla_pipeline = b - a
 
-    assert np.array_equal(outputs_streaming, expected_outputs)
     assert np.array_equal(outputs_vanilla, expected_outputs)
+    assert len(outputs_streaming) == len(expected_outputs), (outputs_streaming, expected_outputs)
+    assert np.array_equal(outputs_streaming, expected_outputs)
     assert time_queued_pipeline < time_vanilla_pipeline
 
 
@@ -319,7 +331,8 @@ def test_parallel_queued_pipeline_with_workers_and_batch_and_queue_of_ample_size
 
 @pytest.mark.parametrize("use_processes", [False, True])
 @pytest.mark.parametrize("use_savers", [False, True])
-def test_queued_pipeline_multiple_workers(tmpdir, use_processes, use_savers):
+def test_queued_pipeline_multiple_workers(use_processes, use_savers):
+    cx = CX()
     # Given
     p = ParallelQueuedFeatureUnion([
         FitTransformCallbackStep(),
@@ -327,12 +340,12 @@ def test_queued_pipeline_multiple_workers(tmpdir, use_processes, use_savers):
         FitTransformCallbackStep(),
         FitTransformCallbackStep(),
     ], n_workers_per_step=4, max_queued_minibatches=10, batch_size=10,
-        use_processes=use_processes, use_savers=use_savers).with_context(CX(tmpdir))
+        use_processes=use_processes, use_savers=use_savers).with_context(cx)
 
     # When
     p, _ = p.fit_transform(list(range(200)), list(range(200)))
     p = p.wrapped  # clear execution context wrapper
-    p.save(CX(tmpdir))
+    p.save(cx)
     p.apply('clear_callbacks')
 
     # Then
@@ -346,7 +359,7 @@ def test_queued_pipeline_multiple_workers(tmpdir, use_processes, use_savers):
     assert len(p[3].wrapped.transform_callback_function.data) == 0
     assert len(p[3].wrapped.fit_callback_function.data) == 0
 
-    p = p.load(CX(tmpdir))
+    p = p.load(cx)
 
     assert len(p[0].wrapped.transform_callback_function.data) == 20
     assert len(p[0].wrapped.fit_callback_function.data) == 20
@@ -382,9 +395,9 @@ class QueueJoinerForTest(WorkersJoiner):
         super().__init__(batch_size)
         self.called_queue_joiner = False
 
-    def join(self, original_data_container: DACT) -> DACT:
+    def join_workers(self, original_data_container: DACT) -> DACT:
         self.called_queue_joiner = True
-        super().join(original_data_container)
+        super().join_workers(original_data_container)
 
 
 def test_sequential_queued_pipeline_should_fit_without_multiprocessing():
@@ -429,18 +442,21 @@ class TransformOnlyCounterLoggingStep(NonFittableMixin, FitTransformCounterLoggi
         NonFittableMixin.__init__(self)
 
 
+@pytest.mark.parametrize("use_savers", [False, True])
 @pytest.mark.parametrize("use_processes", [False, True])
-def test_parallel_logging_works_with_streamed_steps(use_processes: bool):
+@pytest.mark.parametrize('pipeline_class', [SequentialQueuedPipeline, ParallelQueuedFeatureUnion])
+def test_parallel_logging_works_with_streamed_steps(pipeline_class: BaseQueuedPipeline, use_processes: bool, use_savers: bool):
     # TODO: parametrize using SequentialQueuedPipeline as well instead of ParallelQueuedFeatureUnion
     # Given
     minibatch_size = 50
     n_workers = 2
-    p = ParallelQueuedFeatureUnion([
-        TransformOnlyCounterLoggingStep().set_name('1'),
-        TransformOnlyCounterLoggingStep().set_name('2'),
-        TransformOnlyCounterLoggingStep().set_name('3'),
+    names = [f"{i}-{pipeline_class.__name__}-{use_processes}-{use_savers}" for i in range(3)]
+    p = pipeline_class([
+        TransformOnlyCounterLoggingStep().set_name(names[0]),
+        TransformOnlyCounterLoggingStep().set_name(names[1]),
+        TransformOnlyCounterLoggingStep().set_name(names[2]),
     ], n_workers_per_step=n_workers, batch_size=minibatch_size,
-        use_processes=use_processes, use_savers=False)
+        use_processes=use_processes, use_savers=use_savers)
 
     # When
     p.transform(GIVEN_INPUTS)
@@ -448,11 +464,76 @@ def test_parallel_logging_works_with_streamed_steps(use_processes: bool):
     # Then
     log_history = list(CX().logger)
     n_calls = int(len(GIVEN_INPUTS) / minibatch_size) * 3
-    # TODO: fix the fact that sometimes logs are duplicated quite a lot of times in the history.
-    # assert len(log_history) == n_calls, log_history
+    # TODO: logs are duplicated by pytest-xdist's handlers or something, and polluted by other parallel tests. See: https://github.com/pytest-dev/pytest/issues/10062
     shortened_log_history = [e[:e.index('#') + 1] for e in set(log_history) if "logging call" in e]
     assert len(shortened_log_history) >= n_calls, str(shortened_log_history)
-    for name in ['1', '2', '3']:
-        log_line = f"{name} - transform call - logging call #"
+    for nm in names:
+        log_line = f"{nm} - transform call - logging call #"
         assert log_line in shortened_log_history, str(shortened_log_history)
     pass
+
+
+@pytest.mark.parametrize('batches_count', [1, 4, 8])
+@pytest.mark.parametrize('use_processes', [False, True])
+def test_parallel_workers_wrapper_for_some_batches(batches_count: int, use_processes: bool):
+    n_parallel_workers = 4
+    step = TransformOnlyCounterLoggingStep().set_name(f"{batches_count}BatchesLogger")
+    cx = CX()
+    cx.synchroneous()
+    worker = ParallelWorkersWrapper(
+        step,
+        n_workers=n_parallel_workers,
+        use_processes=use_processes,
+    )
+    joiner = WorkersJoiner(batch_size=10, n_worker_wrappers_to_join=1)
+    worker.register_consumer(joiner)
+    whole_batch_dact = DACT(di=list(range(10 * batches_count)))
+    minibatches_dacts = [DACT(di=list(range(i * 10, (i + 1) * 10))) for i in range(batches_count)]
+    minibatches_tasks = [QueuedMinibatch(minibatch_dact=dact, step_name=step.name) for dact in minibatches_dacts]
+    last_minibatches_task = minibatches_tasks[-1].as_terminal()
+    minibatches_tasks[-1] = last_minibatches_task
+    joiner.append_terminal_summary(worker.name, last_minibatches_task)
+    worker.start(cx)
+
+    for mbt in minibatches_tasks:
+        worker.put_minibatch_produced(mbt)
+    joiner.set_join_quantities(1, batches_count)
+    _out: DACT = joiner.join_workers(whole_batch_dact, cx)
+    worker.join()
+    worker.teardown()
+    joiner.teardown()
+
+    assert _out == whole_batch_dact
+    logs = "\n".join(cx.logger)
+    assert f"{step.name} - transform call - logging call" in logs
+
+
+def test_parallel_workers_wrapper_for_no_batches():
+    n_parallel_workers = 4
+    step = TransformOnlyCounterLoggingStep().set_name("NoBatchLogger")
+    cx = CX()
+    cx.synchroneous()
+    worker = ParallelWorkersWrapper(
+        step,
+        n_workers=n_parallel_workers,
+        use_processes=False,
+    )
+    joiner = WorkersJoiner(batch_size=10, n_worker_wrappers_to_join=0)
+    worker.register_consumer(joiner)
+    whole_batch_dact = DACT(di=[])
+    worker.start(cx)
+
+    joiner.set_join_quantities(1, 0)
+    _out: DACT = joiner.join_workers(whole_batch_dact, cx)
+    worker.join()
+    worker.teardown()
+    joiner.teardown()
+
+    assert _out == whole_batch_dact
+    logs = "\n".join(cx.logger)
+    assert f"{step.name} - transform call - logging call #" not in logs
+
+
+def test_can_reuse_streaming_step_with_several_varied_batches():
+    # test with different inputs and input sizes, reusing same pipeline, then assert is all ok.
+    assert False

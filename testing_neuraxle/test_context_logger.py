@@ -284,7 +284,8 @@ def test_scoped_logger_can_shorten_log_messages():
 
 
 class SomeParallelLogginWorkers:
-    LOG_MESSAGE = 'some message logged by worker process'
+    FIRST_LOG_MESSAGE = 'some message logged by worker process'
+    SECOND_LOG_MESSAGE = 'Producer - fit_transform call - logging call #0'
 
     def __init__(self, logging_queue: Queue, n_process: int):
         self.logging_queue: Queue = logging_queue
@@ -309,10 +310,10 @@ class SomeParallelLogginWorkers:
         root.addHandler(queue_handler)
 
         logger = CX().logger
-        logger.log(logging.ERROR, SomeParallelLogginWorkers.LOG_MESSAGE)
+        logger.log(logging.ERROR, SomeParallelLogginWorkers.FIRST_LOG_MESSAGE)
 
         dact = DACT(di=range(10))
-        step, out = FitTransformCounterLoggingStep().handle_fit_transform(dact, CX())
+        step, out = FitTransformCounterLoggingStep().set_name("Producer").handle_fit_transform(dact, CX())
         return
 
     def join(self):
@@ -333,11 +334,11 @@ def test_neuraxle_logger_can_operate_in_parallel():
 
     workers.join()
     logger_thread.join()
-    assert 'neuraxle.FitTransformCounterLoggingStep' in CX().logger.get_root_string_history()
+    assert '[neuraxle.Producer]' in CX().logger.get_root_string_history()
     parallel_process_start_counter = 0
     parallel_transform_counter = 0
     for logged_line in CX().logger:
-        parallel_process_start_counter += int(SomeParallelLogginWorkers.LOG_MESSAGE in logged_line)
-        parallel_transform_counter += int("logging call #0" in logged_line)
+        parallel_process_start_counter += int(SomeParallelLogginWorkers.FIRST_LOG_MESSAGE in logged_line)
+        parallel_transform_counter += int(SomeParallelLogginWorkers.SECOND_LOG_MESSAGE in logged_line)
     assert parallel_process_start_counter == n_process
     assert parallel_transform_counter == n_process

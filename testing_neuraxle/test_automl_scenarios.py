@@ -212,7 +212,7 @@ def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
 
 
 @pytest.mark.parametrize("use_processes", [True, False])
-def test_automl_can_reuse_same_on_disk_repo_in_parallel_for_same_round(use_processes):
+def test_automl_use_a_json_repo_in_parallelized_round(use_processes):
     for i in range(10):
         tmpdir = CX.get_new_cache_folder()
         dact = DACT(di=list(range(20)), eo=list(range(20, 40)))

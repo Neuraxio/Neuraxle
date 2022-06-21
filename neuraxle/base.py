@@ -498,14 +498,14 @@ class _HasRecursiveMethods:
 
         try:
             results = _method(*kargs, **ra.kwargs)
+            if results is None:
+                results = RecursiveDict()
             if not isinstance(results, RecursiveDict):
                 raise ValueError(
-                    'Method {} must return a RecursiveDict because it is applied recursively.'.format(method))
+                    f'Method {method} of {self} must return None or a RecursiveDict, as it is applied recursively.')
             return results
         except Exception as err:
-            print('{}: Failed to apply method {}.'.format(self.name, method))
-            print(traceback.format_stack())
-            raise err
+            raise RecursionError(f'{self.name}: Failed to apply method {method}.') from err
 
 
 class _HasConfig(ABC):
@@ -1517,7 +1517,7 @@ class _HasSetupTeardownLifecycle(MixinForBaseService):
         self.apply("_setup", context=context)
         return self
 
-    def _setup(self, context: 'CX' = None) -> 'BaseTransformer':
+    def _setup(self, context: 'CX' = None) -> Optional[RecursiveDict]:
         """
         Internal method to setup the step. May be used by :class:`~neuraxle.pipeline.Pipeline`
         to setup the pipeline progressively instead of all at once.
@@ -1533,7 +1533,7 @@ class _HasSetupTeardownLifecycle(MixinForBaseService):
         self.apply("_teardown")
         return self
 
-    def _teardown(self) -> 'BaseTransformer':
+    def _teardown(self) -> Optional[RecursiveDict]:
         """
         Teardown step after program execution. Inverse of setup, and it should clear memory.
         Override this method if you need to clear memory.
@@ -2462,7 +2462,7 @@ class _HasSavers(MixinForBaseService):
         self.apply(method='_invalidate')
         return self
 
-    def _invalidate(self):
+    def _invalidate(self) -> Optional[RecursiveDict]:
         self.is_invalidated = True
         return RecursiveDict()
 
@@ -2832,7 +2832,7 @@ class BaseTransformer(
         self.apply(method='_set_train', is_train=is_train)
         return self
 
-    def _set_train(self, is_train) -> RecursiveDict:
+    def _set_train(self, is_train) -> Optional[RecursiveDict]:
         self.is_train = is_train
         return RecursiveDict()
 
