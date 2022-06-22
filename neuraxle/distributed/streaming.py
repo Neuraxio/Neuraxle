@@ -211,6 +211,80 @@ class MinibatchError(LastQueuedMinibatch):
         return True
 
 
+def worker_function(
+    worker: 'ParallelWorkersWrapper',
+    shared_lock: Lock,
+    context: CX,
+    use_savers: bool,
+    logging_queue: Optional[Queue],
+    additional_worker_arguments
+):
+    """
+    Worker function that transforms the items inside the queue of items to process.
+
+    :param queue_worker: step to transform
+    :param context: execution context
+    :param use_savers: use savers
+    :param additional_worker_arguments: any additional arguments that need to be passed to the workers
+    :return:
+    """
+    name = worker.name
+    try:
+        context.restore_lock(shared_lock)
+        if use_savers:
+            saved_queue_worker: ParallelWorkersWrapper = context.load(worker.get_name())
+            worker.set_step(saved_queue_worker.get_step())
+            # TODO: what happens to the list of next consumers of the _ProducerConsumerMixin in self?
+        step = worker.get_step()
+
+        additional_worker_arguments = tuple(
+            additional_worker_arguments[i: i + 2] for i in range(0, len(additional_worker_arguments), 2)
+        )
+
+        for argument_name, argument_value in additional_worker_arguments:
+            step.__dict__.update({argument_name: argument_value})
+
+        register_log_producer_for_logger_thread_to_consume(logging_queue)
+
+        while True:
+            try:
+                task: QueuedMinibatch = worker._get_minibatch_to_consume()
+
+                if task.is_error():
+                    task.worker_name = name
+                    worker.put_minibatch_produced_to_next_consumers(task)
+                    break
+
+                data_container = step.handle_transform(task.minibatch_dact, context)
+                task.worker_name = name
+                task.minibatch_dact = data_container
+
+                worker.put_minibatch_produced_to_next_consumers(task)
+                if task.is_terminal():
+                    break
+
+            except _QueueDestroyedError:
+                # This error can happen at the destruction of workers or processes.
+                return
+            except Exception as err:
+                context.flow.log_error(err)
+                stack_trace = sys.exc_info()[2]
+                task = task.error(err, stack_trace)
+                worker.put_minibatch_produced_to_next_consumers(task)
+            finally:
+                worker.allow_exit_without_queue_flush()
+    except Exception as err:
+        context.flow.log_error(err)
+        stack_trace = sys.exc_info()[2]
+        worker.put_minibatch_produced_to_next_consumers(
+            MinibatchError(
+                None, name, err, stack_trace
+            )
+        )
+    finally:
+        worker.allow_exit_without_queue_flush()
+
+
 class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
     """
     Start multiple Process or Thread that consumes items from the minibatch DACT Queue, and produces them on the next registered consumers' queue.
@@ -322,80 +396,6 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
         self.running_workers = []
         self.logging_thread = None
         self.consumers = []
-
-
-def worker_function(
-    worker: ParallelWorkersWrapper,
-    shared_lock: Lock,
-    context: CX,
-    use_savers: bool,
-    logging_queue: Optional[Queue],
-    additional_worker_arguments
-):
-    """
-    Worker function that transforms the items inside the queue of items to process.
-
-    :param queue_worker: step to transform
-    :param context: execution context
-    :param use_savers: use savers
-    :param additional_worker_arguments: any additional arguments that need to be passed to the workers
-    :return:
-    """
-    name = worker.name
-    try:
-        context.restore_lock(shared_lock)
-        if use_savers:
-            saved_queue_worker: ParallelWorkersWrapper = context.load(worker.get_name())
-            worker.set_step(saved_queue_worker.get_step())
-            # TODO: what happens to the list of next consumers of the _ProducerConsumerMixin in self?
-        step = worker.get_step()
-
-        additional_worker_arguments = tuple(
-            additional_worker_arguments[i: i + 2] for i in range(0, len(additional_worker_arguments), 2)
-        )
-
-        for argument_name, argument_value in additional_worker_arguments:
-            step.__dict__.update({argument_name: argument_value})
-
-        register_log_producer_for_logger_thread_to_consume(logging_queue)
-
-        while True:
-            try:
-                task: QueuedMinibatch = worker._get_minibatch_to_consume()
-
-                if task.is_error():
-                    task.worker_name = name
-                    worker.put_minibatch_produced_to_next_consumers(task)
-                    break
-
-                data_container = step.handle_transform(task.minibatch_dact, context)
-                task.worker_name = name
-                task.minibatch_dact = data_container
-
-                worker.put_minibatch_produced_to_next_consumers(task)
-                if task.is_terminal():
-                    break
-
-            except _QueueDestroyedError:
-                # This error can happen at the destruction of workers or processes.
-                return
-            except Exception as err:
-                context.flow.log_error(err)
-                stack_trace = sys.exc_info()[2]
-                task = task.error(err, stack_trace)
-                worker.put_minibatch_produced_to_next_consumers(task)
-            finally:
-                worker.allow_exit_without_queue_flush()
-    except Exception as err:
-        context.flow.log_error(err)
-        stack_trace = sys.exc_info()[2]
-        worker.put_minibatch_produced_to_next_consumers(
-            MinibatchError(
-                None, name, err, stack_trace
-            )
-        )
-    finally:
-        worker.allow_exit_without_queue_flush()
 
 
 QueuedPipelineStepsTuple = Union[
