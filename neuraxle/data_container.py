@@ -638,7 +638,7 @@ class ZipDataContainer(DACT):
         self.set_data_inputs(new_data_inputs)
 
 
-class ListDataContainer(DACT):
+class ListDataContainer(DataContainer, Generic[IDT, DIT, EOT]):
     """
     Sub class of DataContainer to perform list operations.
     It allows to perform append, and concat operations on a DataContainer.

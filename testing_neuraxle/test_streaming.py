@@ -217,7 +217,6 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_max_queued_minibatches
     (ParallelQueuedFeatureUnion, EXPECTED_OUTPUTS_FEATURE_UNION),
 ])
 def test_parallel_queued_pipeline_that_might_not_reorder_properly_due_to_named_step_order_and_delay(pipeline_class: Type[BaseQueuedPipeline], eo: List[int]):
-    # TODO: do same test for queued pipeline or parametrize test.
     p = pipeline_class([
         ('Step1', 1, 5, MultiplyByN(2)),
         # The sleep may push this step named 'Step9' to the end of the processing queue.
@@ -313,7 +312,7 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_with_step_name_n_worke
 
 @pytest.mark.parametrize('use_processes', [True, False])
 def test_parallel_queued_pipeline_with_2_workers_and_small_queue_size(use_processes: bool):
-    # TODO: cascading sleeps to make first steps process faster to assert on logs.
+    # TODO: cascading sleeps to make first steps process faster to assert on logs that the next queued steps do wait with restricted queue sizes?
     p = ParallelQueuedFeatureUnion([
         MultiplyByN(2),
         MultiplyByN(3),
@@ -472,7 +471,7 @@ def test_parallel_logging_works_with_streamed_steps(pipeline_class: BaseQueuedPi
     # Then
     log_history = list(CX().logger)
     n_calls = int(len(GIVEN_INPUTS) / minibatch_size) * 3
-    # TODO: logs are duplicated by pytest-xdist's handlers or something, and polluted by other parallel tests. See: https://github.com/pytest-dev/pytest/issues/10062
+    # NOTE: logs are duplicated by pytest-xdist's handlers or something, and polluted by other parallel tests. See: https://github.com/pytest-dev/pytest/issues/10062
     shortened_log_history = [e[:e.index('#') + 1] for e in set(log_history) if "logging call" in e]
     assert len(shortened_log_history) >= n_calls, str(shortened_log_history)
     for nm in names:

@@ -862,6 +862,15 @@ class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
             consumer.put_minibatch_produced(task)
 
 
+MiniBatchDataContainer = ListDataContainer[IDT, DIT, EOT]
+SummaryIDStr = str  # Picture this as an IDT where each ID is a summary ID
+MetaListDataContainer = ListDataContainer[
+    List[SummaryIDStr],
+    MiniBatchDataContainer,
+    List[None]
+]
+
+
 class WorkersJoiner(_ProducerConsumerMixin, Joiner):
     """
     Consume the results of the other :class:`_ProducerConsumerMixin` workers to join their data.
@@ -920,10 +929,26 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
         if self.n_minibatches_per_worker == 0:
             return original_dact
 
-        # Fetch tasks to consume and organize them per step name:
-        step_to_minibatches_dacts: Dict[str, ListDataContainer] = defaultdict(ListDataContainer.empty)
-        while self.n_workers_remaining > 0:
+        # Gather minibatch tasks to consume and organize them per step name:
+        step_to_minibatches_dacts: Dict[str, MetaListDataContainer] = \
+            self._consume_enqueued_minibatches(sync_context)
 
+        # Sort step_to_minibatches_dacts by step_name index in the step names list as like in the loop below but based on the order of steps. In the case of a pipeline, there will be only the last step anyway so the sort will return without even sorting. For feature union, there are many.
+        list_dact: List[ListDataContainer] = \
+            self._merge_minibatches(step_to_minibatches_dacts)
+
+        _ProducerConsumerMixin.join(self)
+
+        return original_dact.set_data_inputs(list_dact)
+
+    def _consume_enqueued_minibatches(self, sync_context) -> Dict[str, MetaListDataContainer]:
+
+        step_to_minibatches_dacts: Dict[str, MetaListDataContainer] = \
+            defaultdict(MiniBatchDataContainer.empty)
+        # shape: [worker, minibatches, dact_of_a_minibatch]
+        # The shape is confusing because the ListDataContainer contains itself some other ListDataContainer.
+
+        while self.n_workers_remaining > 0:
             task: QueuedMinibatch = self._get_minibatch_to_consume()
 
             if task.is_error():
@@ -939,17 +964,19 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
                 if self.remaining_batches_per_workers[task.worker_name] == 0:
                     self.n_workers_remaining -= 1
 
-        # Sort step_to_minibatches_dacts by step_name index in the step names list as like in the loop below but based on the order of steps. In the case of a pipeline, there will be only the last step anyway so the sort will return without even sorting. For feature union, there are many.
+        return step_to_minibatches_dacts
+
+    def _merge_minibatches(self, step_to_minibatches_dacts: Dict[str, MetaListDataContainer]) -> List[ListDataContainer]:
         step_to_minibatches_dacts = OrderedDict(sorted(
             step_to_minibatches_dacts.items(),
             key=lambda str_dact_tup: self.names.index(str_dact_tup[0])
         ))
 
         # Join all the results based on step name:
-        list_dact: List[ListDataContainer] = []
+        list_dact: List[ListDataContainer] = []  # shape: [worker, regular_dact]
 
         for minibatches_list_dacts in step_to_minibatches_dacts.values():
-            minibatches_list_dacts: ListDataContainer = minibatches_list_dacts
+            minibatches_list_dacts: MetaListDataContainer = minibatches_list_dacts
 
             # reorder results by ids of summary
             # TODO: check if could use original dact instead. or other batch count int number, that would be more efficient.
@@ -957,13 +984,9 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
 
             sorted_step_dact = ListDataContainer.empty()
             for minibatch_dact in minibatches_list_dacts.data_inputs:
-                sorted_step_dact.extend(minibatch_dact)  # TODO: revise these types.
+                minibatch_dact: MiniBatchDataContainer = minibatch_dact
+                sorted_step_dact.extend(minibatch_dact)
 
             list_dact.append(sorted_step_dact)
 
-        _ProducerConsumerMixin.join(self)
-
-        return original_dact.set_data_inputs(list_dact)
-
-
-# TODO: have a null event to be passed from the input of the consumers, such as in _dispatch_minibatch_to_consumer_workers, to close the loop upon receiving an error or this null event, instead of relying on the joiner to close the loop with n_steps_left_to_do = 0. Perhaps?
+        return list_dact
