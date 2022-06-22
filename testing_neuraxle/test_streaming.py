@@ -555,6 +555,7 @@ def test_can_reuse_streaming_step_with_several_varied_batches(pipeline_class: Ba
         ('2', MultiplyByN(3)),
         ('3', MultiplyByN(5)),
     ], n_workers_per_step=2, max_queued_minibatches=10, batch_size=GIVEN_BATCH_SIZE, use_savers=use_savers, use_processes=use_processes)
+    given_inputs_1 = GIVEN_INPUTS
     given_inputs_2 = list(range(300, 350))
     if pipeline_class == SequentialQueuedPipeline:
         expected_outputs_1 = EXPECTED_OUTPUTS_PIPELINE_235
@@ -566,7 +567,7 @@ def test_can_reuse_streaming_step_with_several_varied_batches(pipeline_class: Ba
                 given_inputs_2).tolist() + MultiplyByN(5).transform(
                     given_inputs_2).tolist()
 
-    outputs_1 = p.transform(GIVEN_INPUTS)
+    outputs_1 = p.transform(given_inputs_1)
     outputs_2 = p.transform(given_inputs_2)
 
     assert np.array_equal(outputs_1, expected_outputs_1)

@@ -43,7 +43,7 @@ from neuraxle.data_container import (DACT, DIT, EOT, IDT, ListDataContainer, Pre
 from neuraxle.hyperparams.space import RecursiveDict
 from neuraxle.logging.logging import (
     ParallelLoggingConsumerThread,
-    register_log_producer_for_logger_thread_to_consume)
+    register_log_producer_for_main_logger_thread_to_consume)
 from neuraxle.pipeline import Joiner, MiniBatchSequentialPipeline, Pipeline
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
@@ -138,8 +138,8 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
         """
         try:
             self.input_queue.put(task)  # TODO: possibly copy DACT here.
-        except:
-            raise _QueueDestroyedError("It seems like the queue to produce to has been destroyed.")
+        except Exception as e:
+            raise _QueueDestroyedError("It seems like the queue to produce to has been destroyed.") from e
 
     def _get_minibatch_to_consume(self) -> 'QueuedMinibatch':
         """
@@ -152,13 +152,12 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
             # if task.is_terminal() or task.is_error():
             #     self.allow_exit_without_queue_flush()
             return task
-        except:
-            raise _QueueDestroyedError("It seems like the queue to consume from has been destroyed.")
+        except Exception as e:
+            raise _QueueDestroyedError("It seems like the queue to consume from has been destroyed.") from e
 
     def join(self):
         if self.input_queue is not None:
             self.input_queue.close()
-            # TODO: if we do it here, we can delete the method above and do it just here.
             self._allow_exit_without_queue_flush()
             self.input_queue.join_thread()
             self.input_queue = None
@@ -237,9 +236,9 @@ def worker_function(
     :param additional_worker_arguments: any additional arguments that need to be passed to the workers
     :return:
     """
-    name = worker.name
     try:
         context.restore_lock(shared_lock)
+
         if use_savers:
             worker.reload_post_saving(context)
         step = worker.get_step()
@@ -247,28 +246,23 @@ def worker_function(
         additional_worker_arguments = tuple(
             additional_worker_arguments[i: i + 2] for i in range(0, len(additional_worker_arguments), 2)
         )
-
         for argument_name, argument_value in additional_worker_arguments:
             step.__dict__.update({argument_name: argument_value})
 
-        register_log_producer_for_logger_thread_to_consume(logging_queue)
+        register_log_producer_for_main_logger_thread_to_consume(logging_queue)
 
         while True:
             try:
                 task: QueuedMinibatch = worker._get_minibatch_to_consume()
-
+                task.worker_name = worker.name
                 if task.is_error():
-                    task.worker_name = name
                     worker.put_minibatch_produced_to_next_consumers(task)
                     break
 
-                data_container = step.handle_transform(task.minibatch_dact, context)
-                task.worker_name = name
-                task.minibatch_dact = data_container
-
-                worker.put_minibatch_produced_to_next_consumers(task)
-                if task.is_terminal():
-                    break
+                else:
+                    task.minibatch_dact = step.handle_transform(
+                        task.minibatch_dact, context)
+                    worker.put_minibatch_produced_to_next_consumers(task)
 
             except _QueueDestroyedError:
                 # This error can happen at the destruction of workers or processes.
@@ -286,7 +280,7 @@ def worker_function(
         stack_trace = sys.exc_info()[2]
         worker.put_minibatch_produced_to_next_consumers(
             MinibatchError(
-                None, name, err, stack_trace
+                None, worker.name, err, stack_trace
             )
         )
     finally:
@@ -969,7 +963,6 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
 
             list_dact.append(sorted_step_dact)
 
-        self._allow_exit_without_queue_flush()
         _ProducerConsumerMixin.join(self)
 
         return original_dact.set_data_inputs(list_dact)

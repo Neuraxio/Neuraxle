@@ -254,7 +254,7 @@ class ParallelLoggingConsumerThread:
         self.logging_queue.join_thread()
 
 
-def register_log_producer_for_logger_thread_to_consume(logging_queue: Queue):
+def register_log_producer_for_main_logger_thread_to_consume(logging_queue: Queue):
     if logging_queue is not None:
         queue_handler = logging.handlers.QueueHandler(logging_queue)
         root = logging.getLogger()
