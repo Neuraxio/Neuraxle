@@ -379,9 +379,7 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
             "Don't reload when not using savers.",
             context)
         saved_worker: ParallelWorkersWrapper = context.load(self.get_name())
-        # TODO: couldn't the saved worker just replace the provided one?
         self.set_step(saved_worker.get_step())
-        # TODO: what happens to the list of next consumers of the _ProducerConsumerMixin in the reloaded worker when calling this from the worker_function?
 
     def join(self):
         """
@@ -406,9 +404,9 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
 
         :return:
         """
-        self.join()  # TODO: what if we join after terminating processes below?
         if self.use_processes:
             [w.terminate() for w in self.running_workers]
+        self.join()
         self.running_workers = []
         self.consumers = []
 
@@ -608,7 +606,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :return:
         """
         self._setup(context=context)
-        return data_container.copy(), context  # TODO: copy here, really? Do we copy also in each workers another time soon after?
+        return data_container.copy(), context
 
     def _setup(self, context: CX = None) -> 'BaseTransformer':
         """
@@ -620,7 +618,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         """
         workers_joiner: WorkersJoiner = self[-1]
         workers_joiner._setup(context=context)
-        for step in list(self.values())[:-1]:
+        for step in self.body:
             step: ParallelWorkersWrapper = step
             step._setup(context=context)
 
@@ -671,7 +669,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
         # start steps with parallelized context.
         context.synchroneous()
-        for step in list(self.values())[:-1]:
+        for step in self.body:
             step: ParallelWorkersWrapper = step
             step.start(context)
 
@@ -702,7 +700,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         # self._dispatch_minibatch_to_consumer_workers(
         #     minibatch_index=-1, task=LastQueuedMinibatch())
 
-        for step in list(self.values())[:-1]:
+        for step in self.body:
             # TODO: accessor for these steps?
             step: ParallelWorkersWrapper = step
             step.join()
@@ -753,7 +751,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         if self.is_pipeline_connected:
             workers_joiner: WorkersJoiner = self[-1]
             workers_joiner.join()
-            for step in list(self.values())[:-1]:
+            for step in self.body:
                 step: ParallelWorkersWrapper = step
                 step.join()
         self.is_pipeline_connected = False

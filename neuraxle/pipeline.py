@@ -27,7 +27,7 @@ import warnings
 from abc import ABC, abstractmethod
 from typing import Any, List, Tuple, Union
 
-from neuraxle.base import BaseStep
+from neuraxle.base import BaseStep, BaseTransformer
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import (ExecutionMode, ForceHandleMixin, Identity,
                            NamedStepsList, TruncableSteps,
@@ -398,6 +398,14 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
 
         self._refresh_steps()
 
+    @property
+    def joiner(self) -> 'Barrier':
+        return self[-1]
+
+    @property
+    def body(self) -> List[BaseTransformer]:
+        return list(self.values())[:-1]
+
     def transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
         Transform all sub pipelines splitted by the Barrier steps.
@@ -405,7 +413,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         :param context: execution context
         :return: data container
         """
-        sub_pipelines = self._create_sub_pipelines()
+        sub_pipelines: List['MiniBatchSequentialPipeline'] = self._split_on_barriers()
 
         for sub_pipeline in sub_pipelines:
             barrier: Barrier = sub_pipeline[-1]
@@ -435,13 +443,13 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         :param context: execution context
         :return: data container
         """
-        sub_pipelines: List['MiniBatchSequentialPipeline'] = self._create_sub_pipelines()
+        sub_pipelines: List['MiniBatchSequentialPipeline'] = self._split_on_barriers()
         index_start = 0
 
         for sub_pipeline in sub_pipelines:
             sub_pipeline._setup(context=context)
 
-            barrier = sub_pipeline[-1]
+            barrier: Barrier = sub_pipeline.joiner
             sub_pipeline, data_container = barrier.join_fit_transform(
                 step=sub_pipeline,
                 data_container=data_container,
@@ -457,7 +465,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
 
         return self, data_container
 
-    def _create_sub_pipelines(self) -> List['MiniBatchSequentialPipeline']:
+    def _split_on_barriers(self) -> List['MiniBatchSequentialPipeline']:
         """
         Create sub pipelines by splitting the steps by the join type name.
         :return: list of sub pipelines
