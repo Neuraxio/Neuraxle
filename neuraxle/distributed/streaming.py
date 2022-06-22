@@ -106,7 +106,7 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
 
     def _teardown(self) -> Optional[RecursiveDict]:
         self._allow_exit_without_queue_flush()
-        # TODO: join here?
+        self.join()
         self.input_queue = None
         return RecursiveDict()
 

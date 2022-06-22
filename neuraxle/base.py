@@ -496,16 +496,13 @@ class _HasRecursiveMethods:
             _method = method
             kargs = [self] + list(kargs)
 
-        try:
-            results = _method(*kargs, **ra.kwargs)
-            if results is None:
-                results = RecursiveDict()
-            if not isinstance(results, RecursiveDict):
-                raise ValueError(
-                    f'Method {method} of {self} must return None or a RecursiveDict, as it is applied recursively.')
-            return results
-        except Exception as err:
-            raise RecursionError(f'{self.name}: Failed to apply method {method}.') from err
+        results = _method(*kargs, **ra.kwargs)
+        if results is None:
+            results = RecursiveDict()
+        if not isinstance(results, RecursiveDict):
+            raise ValueError(
+                f'Method {method} of {self} must return None or a RecursiveDict, as it is applied recursively.')
+        return results
 
 
 class _HasConfig(ABC):
@@ -1070,6 +1067,7 @@ class NoContextLock(ContextLock):
     """
     NoContextLock is like a ContextLock but it does not lock anything.
     """
+
     def __init__(self):
         ContextLock.__init__(self, PassthroughNullLock())
 
