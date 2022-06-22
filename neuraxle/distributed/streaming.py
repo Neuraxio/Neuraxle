@@ -38,7 +38,7 @@ from neuraxle.base import BaseSaver, BaseTransformer
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import (MetaStep, MixinForBaseTransformer, NamedStepsList,
                            NonFittableMixin, _FittableStep)
-from neuraxle.data_container import (DACT, DIT, EOT, IDT, ListDataContainer,
+from neuraxle.data_container import (DACT, DIT, EOT, IDT, ListDataContainer, PredsDACT,
                                      StripAbsentValues)
 from neuraxle.hyperparams.space import RecursiveDict
 from neuraxle.logging.logging import (
@@ -55,6 +55,7 @@ class _ProducerConsumerStepSaver(BaseSaver):
 
     def save_step(self, step: BaseTransformer, context: 'CX') -> BaseTransformer:
         step: _ProducerConsumerMixin = step  # typing.
+        step._allow_exit_without_queue_flush()
         step.input_queue = None
         step.consumers = []
         return step
@@ -64,7 +65,7 @@ class _ProducerConsumerStepSaver(BaseSaver):
 
     def load_step(self, step: 'BaseTransformer', context: 'CX') -> 'BaseTransformer':
         step: _ProducerConsumerMixin = step  # typing.
-        step.input_queue = Queue()
+        step.input_queue = None
         return step
 
 
@@ -86,28 +87,35 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
     They will thus be used to consume the produced tasks added to them in their other threads or processes.
     """
 
-    def __init__(self, input_queue: Queue = None, max_queued_minibatches: int = 0):
+    def __init__(self, max_queued_minibatches: int = 0):
         # TODO: two class for this: a producer class and a consumer class perhaps?
         MixinForBaseTransformer.__init__(self)
-        self.max_queued_minibatches: int = max_queued_minibatches
-        self._init_queue(input_queue)
-        self.consumers: List[Queue] = []
         self.savers.append(_ProducerConsumerStepSaver())
 
-    def _setup(self, context: 'CX' = None) -> Optional[RecursiveDict]:
-        self._init_queue(self.input_queue)
+        self.max_queued_minibatches: int = max(0, max_queued_minibatches or 0)
 
-    def _init_queue(self, input_queue):
-        self.input_queue: Queue = input_queue or Queue(maxsize=self.max_queued_minibatches)
+        self.input_queue: Queue = None
+        self.consumers: List[Queue] = []
+
+    def _setup(self, context: 'CX' = None) -> Optional[RecursiveDict]:
+        self._init_queue()
+
+    def _init_queue(self):
+        if self.input_queue is None:
+            self.input_queue = Queue(maxsize=self.max_queued_minibatches)
 
     def _teardown(self) -> Optional[RecursiveDict]:
+        self._allow_exit_without_queue_flush()
+        # TODO: join here?
         self.input_queue = None
         return RecursiveDict()
 
     def register_consumer(self, recepient: '_ProducerConsumerMixin') -> '_ProducerConsumerMixin':
         """
-        Add a consumer to self.consumers so that when self produces a minibatch, it allws consumers to consume it.
+        Add a consumer to self.consumers so that when self produces a minibatch, it allows consumers to consume it.
         """
+        self._init_queue()
+        recepient._init_queue()
         self.consumers.append(recepient.input_queue)
         return self
 
@@ -120,8 +128,8 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
 
             consumers_of_self.put(task)
 
-        if task.is_terminal() or task.is_error():
-            self.allow_exit_without_queue_flush()
+        # if task.is_terminal() or task.is_error():
+        #     self.allow_exit_without_queue_flush()
 
     def put_minibatch_produced(self, task: 'QueuedMinibatch'):
         """
@@ -147,16 +155,17 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
         except:
             raise _QueueDestroyedError("It seems like the queue to consume from has been destroyed.")
 
-    def allow_exit_without_queue_flush(self):
-        if self.input_queue is not None:
-            self.input_queue.cancel_join_thread()
-
     def join(self):
         if self.input_queue is not None:
             self.input_queue.close()
-            self.allow_exit_without_queue_flush()  # TODO: if we do it here, we can delete the method above and do it just here.
+            # TODO: if we do it here, we can delete the method above and do it just here.
+            self._allow_exit_without_queue_flush()
             self.input_queue.join_thread()
             self.input_queue = None
+
+    def _allow_exit_without_queue_flush(self):
+        if self.input_queue is not None:
+            self.input_queue.cancel_join_thread()
 
 
 class QueuedMinibatch:
@@ -232,9 +241,7 @@ def worker_function(
     try:
         context.restore_lock(shared_lock)
         if use_savers:
-            saved_queue_worker: ParallelWorkersWrapper = context.load(worker.get_name())
-            worker.set_step(saved_queue_worker.get_step())
-            # TODO: what happens to the list of next consumers of the _ProducerConsumerMixin in self?
+            worker.reload_post_saving(context)
         step = worker.get_step()
 
         additional_worker_arguments = tuple(
@@ -272,7 +279,8 @@ def worker_function(
                 task = task.error(err, stack_trace)
                 worker.put_minibatch_produced_to_next_consumers(task)
             finally:
-                worker.allow_exit_without_queue_flush()
+                # worker.allow_exit_without_queue_flush()
+                pass
     except Exception as err:
         context.flow.log_error(err)
         stack_trace = sys.exc_info()[2]
@@ -282,7 +290,8 @@ def worker_function(
             )
         )
     finally:
-        worker.allow_exit_without_queue_flush()
+        # worker.allow_exit_without_queue_flush()
+        pass
 
 
 class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
@@ -304,7 +313,7 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
 
         MetaStep.__init__(self, wrapped)
         max_queued_minibatches = max_queued_minibatches or 0
-        _ProducerConsumerMixin.__init__(self, Queue(maxsize=max_queued_minibatches))
+        _ProducerConsumerMixin.__init__(self, max_queued_minibatches)
         self.n_workers: int = n_workers
         self.use_processes: bool = use_processes
         self.additional_worker_arguments = additional_worker_arguments
@@ -334,6 +343,8 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
         They are started as multiprocessing daemons, so that they will not block the main
         process if there is an error requiring to exit.
         """
+        if self.input_queue is None:
+            raise ValueError("Please call self._setup before and connect queues.")
         if self.use_savers:
             _ = self.save(context, full_dump=True)  # Cannot delete queue worker self.
             del self.wrapped  # that will be reloaded in the new thread or process.
@@ -364,6 +375,20 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
             self.logging_thread = logging_thread
             self.logging_thread.start()
 
+        if self.use_savers:
+            self.reload_post_saving(context)
+
+    def reload_post_saving(self, context: CX) -> 'ParallelWorkersWrapper':
+        self._assert(
+            self.use_savers,
+            "Attempted to reload post saving whilst not using savers."
+            "Don't reload when not using savers.",
+            context)
+        saved_worker: ParallelWorkersWrapper = context.load(self.get_name())
+        # TODO: couldn't the saved worker just replace the provided one?
+        self.set_step(saved_worker.get_step())
+        # TODO: what happens to the list of next consumers of the _ProducerConsumerMixin in the reloaded worker when calling this from the worker_function?
+
     def join(self):
         """
         Wait for workers to finish at least their capture of the logging calls.
@@ -387,14 +412,10 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
 
         :return:
         """
-        self.allow_exit_without_queue_flush()
-
+        self.join()  # TODO: what if we join after terminating processes below?
         if self.use_processes:
             [w.terminate() for w in self.running_workers]
-            if self.logging_thread is not None:
-                self.logging_thread.join(timeout=5.0)
         self.running_workers = []
-        self.logging_thread = None
         self.consumers = []
 
 
@@ -405,7 +426,8 @@ QueuedPipelineStepsTuple = Union[
     Tuple[str, int, BaseTransformer],  # (step_name, n_workers, step)
     Tuple[str, int, int, BaseTransformer],  # (step_name, n_workers, max_queued_minibatches, step)
     Tuple[str, int, List[Tuple], BaseTransformer],  # (step_name, n_workers, additional_worker_arguments, step)
-    Tuple[str, int, int, List[Tuple], BaseTransformer]  # (step_name, n_workers, max_queued_minibatches, additional_worker_arguments, step)
+    # (step_name, n_workers, max_queued_minibatches, additional_worker_arguments, step)
+    Tuple[str, int, int, List[Tuple], BaseTransformer]
 ]
 FullQueuedPipelineStepsTuple = Tuple[str, int, int, List[Tuple], BaseTransformer]
 
@@ -500,6 +522,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         self.keep_incomplete_batch: bool = keep_incomplete_batch
         self.default_value_data_inputs: Union[Any, StripAbsentValues] = default_value_data_inputs
         self.default_value_expected_outputs: Union[Any, StripAbsentValues] = default_value_expected_outputs
+
+        self.is_pipeline_connected = False
 
         MiniBatchSequentialPipeline.__init__(
             self,
@@ -600,9 +624,15 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :return: step
         :rtype: BaseStep
         """
-        if not self.is_initialized:
-            self._connect_queued_pipeline()
-        return super()._setup(context=context)
+        workers_joiner: WorkersJoiner = self[-1]
+        workers_joiner._setup(context=context)
+        for step in list(self.values())[:-1]:
+            step: ParallelWorkersWrapper = step
+            step._setup(context=context)
+
+        self._connect_queued_pipeline()
+
+        return MiniBatchSequentialPipeline._setup(self, context=context)
 
     def fit_transform_data_container(
         self, data_container: DACT, context: CX
@@ -641,7 +671,9 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :type context: ExecutionContext
         :return: data container
         """
-        workers_joiner: WorkersJoiner = self[-1]
+        for step in self.values():
+            if step.input_queue is None:
+                raise ValueError("Please connect queues and do the self._setup before attempting to join.")
 
         # start steps with parallelized context.
         context.synchroneous()
@@ -669,6 +701,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
         # join output queues.
         n_workers = self.get_n_workers_to_join()
+        workers_joiner: WorkersJoiner = self[-1]
         workers_joiner.set_join_quantities(n_workers, n_minibatches_per_worker)
         data_container = workers_joiner.join_workers(data_container, context)
 
@@ -699,6 +732,10 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
         return self.data_joiner.handle_transform(data_container, context)
 
+    def _did_process(self, data_container: PredsDACT, context: CX) -> PredsDACT:
+        self._disconnect_queued_pipeline()
+        return super()._did_process(data_container, context)
+
     @abstractmethod
     def get_n_workers_to_join(self) -> int:
         """
@@ -713,7 +750,19 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
         :return:
         """
+        if not self.is_pipeline_connected:
+            # register queues and summaries in workers_joiner...
+            self.is_pipeline_connected = True
         raise NotImplementedError()
+
+    def _disconnect_queued_pipeline(self):
+        if self.is_pipeline_connected:
+            workers_joiner: WorkersJoiner = self[-1]
+            workers_joiner.join()
+            for step in list(self.values())[:-1]:
+                step: ParallelWorkersWrapper = step
+                step.join()
+        self.is_pipeline_connected = False
 
     @abstractmethod
     def _dispatch_minibatch_to_consumer_workers(self, minibatch_index: int, task: QueuedMinibatch):
@@ -757,9 +806,11 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
 
         :return:
         """
-        for i, (name, consumer) in enumerate(self[1:]):
-            producer: _ProducerConsumerMixin = self[i]
-            producer.register_consumer(consumer)
+        if not self.is_pipeline_connected:
+            for i, (name, consumer) in enumerate(self[1:]):
+                producer: _ProducerConsumerMixin = self[i]
+                producer.register_consumer(consumer)
+            self.is_pipeline_connected = True
 
     def _dispatch_minibatch_to_consumer_workers(self, minibatch_index: int, task: QueuedMinibatch):
         """
@@ -799,10 +850,12 @@ class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
 
         :return:
         """
-        joiner_consumer: _ProducerConsumerMixin = self[-1]
-        for name, producer in self[:-1]:
-            producer: _ProducerConsumerMixin = producer
-            producer.register_consumer(joiner_consumer)
+        if not self.is_pipeline_connected:
+            joiner_consumer: _ProducerConsumerMixin = self[-1]
+            for name, producer in self[:-1]:
+                producer: _ProducerConsumerMixin = producer
+                producer.register_consumer(joiner_consumer)
+            self.is_pipeline_connected = True
 
     def _dispatch_minibatch_to_consumer_workers(self, minibatch_index: int, task: QueuedMinibatch):
         """
@@ -869,6 +922,8 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
         :return: transformed data container
         :rtype: DataContainer
         """
+        if self.input_queue is None:
+            raise ValueError("Please connect queues and do the self._setup before attempting to join.")
 
         if self.n_minibatches_per_worker == 0:
             return original_dact
@@ -914,7 +969,7 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
 
             list_dact.append(sorted_step_dact)
 
-        self.allow_exit_without_queue_flush()
+        self._allow_exit_without_queue_flush()
         _ProducerConsumerMixin.join(self)
 
         return original_dact.set_data_inputs(list_dact)

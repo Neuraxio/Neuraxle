@@ -24,8 +24,13 @@ from testing_neuraxle.test_context_logger import FitTransformCounterLoggingStep
 
 GIVEN_INPUTS: List[int] = list(range(100))
 EXPECTED_OUTPUTS_PIPELINE: List[int] = MultiplyByN(2**3).transform(GIVEN_INPUTS).tolist()
-EXPECTED_OUTPUTS_FEATURE_UNION: List[int] = MultiplyByN(2).transform(GIVEN_INPUTS).tolist(
-) + MultiplyByN(3).transform(GIVEN_INPUTS).tolist() + MultiplyByN(5).transform(GIVEN_INPUTS).tolist()
+EXPECTED_OUTPUTS_PIPELINE_235 = MultiplyByN(2 * 3 * 5).transform(GIVEN_INPUTS).tolist()
+EXPECTED_OUTPUTS_FEATURE_UNION: List[int] = (
+    MultiplyByN(2).transform(
+        GIVEN_INPUTS).tolist() + MultiplyByN(3).transform(
+            GIVEN_INPUTS).tolist() + MultiplyByN(5).transform(
+                GIVEN_INPUTS).tolist()
+)
 
 
 def test_queued_pipeline_with_excluded_incomplete_batch():
@@ -62,6 +67,7 @@ def test_queued_pipeline_with_included_incomplete_batch():
 
 @pytest.mark.parametrize('use_processes', [False, True])
 def test_queued_pipeline_can_report_stack_trace_upon_failure(use_processes: bool):
+    # TODO: this test runs infinite.
     batch_size = 10
     uneven_total_batch = 11
     with pytest.raises(TypeError):
@@ -205,7 +211,7 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_max_queued_minibatches
 
 
 @pytest.mark.parametrize('pipeline_class,eo', [
-    (SequentialQueuedPipeline, MultiplyByN(2 * 3 * 5).transform(GIVEN_INPUTS).tolist()),
+    (SequentialQueuedPipeline, EXPECTED_OUTPUTS_PIPELINE_235),
     (ParallelQueuedFeatureUnion, EXPECTED_OUTPUTS_FEATURE_UNION),
 ])
 def test_parallel_queued_pipeline_that_might_not_reorder_properly_due_to_named_step_order_and_delay(pipeline_class: Type[BaseQueuedPipeline], eo: List[int]):
@@ -305,7 +311,7 @@ def test_parallel_queued_pipeline_with_step_name_n_worker_with_step_name_n_worke
 
 @pytest.mark.parametrize('use_processes', [True, False])
 def test_parallel_queued_pipeline_with_2_workers_and_small_queue_size(use_processes: bool):
-    # TODO: cascading sleeps to make first steps process faster.
+    # TODO: cascading sleeps to make first steps process faster to assert on logs.
     p = ParallelQueuedFeatureUnion([
         MultiplyByN(2),
         MultiplyByN(3),
@@ -485,7 +491,9 @@ def test_parallel_workers_wrapper_for_some_batches(batches_count: int, use_proce
         n_workers=n_parallel_workers,
         use_processes=use_processes,
     )
+    worker._setup(context=cx)
     joiner = WorkersJoiner(batch_size=10, n_worker_wrappers_to_join=1)
+    joiner._setup(context=cx)
     worker.register_consumer(joiner)
     whole_batch_dact = DACT(di=list(range(10 * batches_count)))
     minibatches_dacts = [DACT(di=list(range(i * 10, (i + 1) * 10))) for i in range(batches_count)]
@@ -518,7 +526,9 @@ def test_parallel_workers_wrapper_for_no_batches():
         n_workers=n_parallel_workers,
         use_processes=False,
     )
+    worker._setup(context=cx)
     joiner = WorkersJoiner(batch_size=10, n_worker_wrappers_to_join=0)
+    joiner._setup(context=cx)
     worker.register_consumer(joiner)
     whole_batch_dact = DACT(di=[])
     worker.start(cx)
@@ -534,6 +544,29 @@ def test_parallel_workers_wrapper_for_no_batches():
     assert f"{step.name} - transform call - logging call #" not in logs
 
 
-def test_can_reuse_streaming_step_with_several_varied_batches():
-    # test with different inputs and input sizes, reusing same pipeline, then assert is all ok.
-    assert False
+@pytest.mark.parametrize("use_savers", [False, True])
+@pytest.mark.parametrize("use_processes", [False, True])
+@pytest.mark.parametrize('pipeline_class', [SequentialQueuedPipeline, ParallelQueuedFeatureUnion])
+def test_can_reuse_streaming_step_with_several_varied_batches(pipeline_class: BaseQueuedPipeline, use_savers: bool, use_processes: bool):
+    p = pipeline_class([
+        ('1', MultiplyByN(2)),
+        ('2', MultiplyByN(3)),
+        ('3', MultiplyByN(5)),
+    ], n_workers_per_step=1, max_queued_minibatches=10, batch_size=10, use_savers=use_savers, use_processes=use_processes)
+    given_inputs_2 = list(range(300, 350))
+    if pipeline_class == SequentialQueuedPipeline:
+        expected_outputs_1 = EXPECTED_OUTPUTS_PIPELINE_235
+        expected_outputs_2 = MultiplyByN(2 * 3 * 5).transform(given_inputs_2).tolist()
+    else:
+        expected_outputs_1 = EXPECTED_OUTPUTS_FEATURE_UNION
+        expected_outputs_2 = MultiplyByN(2).transform(
+            given_inputs_2).tolist() + MultiplyByN(3).transform(
+                given_inputs_2).tolist() + MultiplyByN(5).transform(
+                    given_inputs_2).tolist()
+
+    outputs_1 = p.transform(GIVEN_INPUTS)
+    outputs_2 = p.transform(given_inputs_2)
+
+    assert np.array_equal(outputs_1, expected_outputs_1)
+    # TODO: complete test.
+    assert np.array_equal(outputs_2, expected_outputs_2)

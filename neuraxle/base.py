@@ -1594,7 +1594,7 @@ class _TransformerStep(MixinForBaseService):
             self._setup(context)
 
         data_container, context = self._will_process(data_container, context)
-        data_container, context = self._will_transform_data_container(data_container, context)
+        data_container, context = self._will_transform(data_container, context)
         # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
         # Documentation: https://www.neuraxle.org/stable/handler_methods.html
         data_container = self._transform_data_container(data_container, context)
@@ -1604,7 +1604,7 @@ class _TransformerStep(MixinForBaseService):
 
         return data_container
 
-    def _will_transform_data_container(
+    def _will_transform(
         self, data_container: TrainDACT, context: CX
     ) -> Tuple[TrainDACT, CX]:
         """
@@ -1615,6 +1615,18 @@ class _TransformerStep(MixinForBaseService):
         :return: (data container, execution context)
         """
         return data_container, context.push(self)
+
+    def _will_transform_data_container(
+        self, data_container: TrainDACT, context: CX
+    ) -> Tuple[TrainDACT, CX]:
+        """
+        This method is deprecated and will redirect to `_will_transform`. Use `_will_transform` instead.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (data container, execution context)
+        """
+        return self._will_transform(data_container, context)
 
     def _transform_data_container(self, data_container: TrainDACT, context: CX) -> PredsDACT:
         """
@@ -2052,7 +2064,7 @@ class _CustomHandlerMethods(MixinForBaseService):
             self._setup(context)
 
         data_container, context = self._will_process(data_container, context)
-        data_container, context = self._will_transform_data_container(data_container, context)
+        data_container, context = self._will_transform(data_container, context)
         # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
         # Documentation: https://www.neuraxle.org/stable/handler_methods.html
         data_container = self.transform_data_container(data_container, context)
