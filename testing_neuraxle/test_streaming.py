@@ -5,10 +5,10 @@ from typing import List, Type
 
 import numpy as np
 import pytest
-from neuraxle.base import BaseStep, ExecutionContext as CX
+from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import NonFittableMixin
 from neuraxle.data_container import DACT, StripAbsentValues
-from neuraxle.distributed.streaming import (_QueueDestroyedError, BaseQueuedPipeline,
+from neuraxle.distributed.streaming import (BaseQueuedPipeline,
                                             ParallelQueuedFeatureUnion,
                                             ParallelWorkersWrapper,
                                             QueuedMinibatchTask,
@@ -18,7 +18,7 @@ from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEach
 from neuraxle.steps.misc import FitTransformCallbackStep, Sleep
-from neuraxle.steps.numpy import AddN, MultiplyByN
+from neuraxle.steps.numpy import MultiplyByN
 
 from testing_neuraxle.test_context_logger import FitTransformCounterLoggingStep
 
@@ -505,7 +505,7 @@ def test_parallel_workers_wrapper_for_some_batches(batches_count: int, use_proce
     for mbt in minibatches_tasks:
         worker.put_minibatch_produced(mbt)
     joiner.set_join_quantities(1, batches_count)
-    _out: DACT = joiner.join_workers(worker.running_workers, whole_batch_dact, cx)
+    _out: DACT = joiner.join_workers(whole_batch_dact, cx)
     worker.join()
     worker.teardown()
     joiner.teardown()
@@ -533,7 +533,7 @@ def test_parallel_workers_wrapper_for_no_batches():
     worker.start(cx)
 
     joiner.set_join_quantities(1, 0)
-    _out: DACT = joiner.join_workers(worker.running_workers, whole_batch_dact, cx)
+    _out: DACT = joiner.join_workers(whole_batch_dact, cx)
     worker.join()
     worker.teardown()
     joiner.teardown()
@@ -569,31 +569,3 @@ def test_can_reuse_streaming_step_with_several_varied_batches(pipeline_class: Ba
 
     assert np.array_equal(outputs_1, expected_outputs_1)
     assert np.array_equal(outputs_2, expected_outputs_2)
-
-
-class StepThatKillsProcessAndThread(NonFittableMixin, BaseStep):
-    def __init__(self):
-        BaseStep.__init__(self)
-        NonFittableMixin.__init__(self)
-
-    def transform(self, data_inputs):
-        raise _QueueDestroyedError(
-            "That will kill every worker even before they can publish the error to the next one.")
-
-
-@pytest.mark.parametrize('use_processes', [True, False])
-# @pytest.mark.timeout(20)
-def test_parallel_step_that_quits_threads_doesnt_deadlock(use_processes: bool):
-    context = CX()
-    with pytest.raises(ChildProcessError):
-        p = ParallelQueuedFeatureUnion([
-            StepThatKillsProcessAndThread(),
-        ], n_workers_per_step=1, max_queued_minibatches=10, batch_size=GIVEN_BATCH_SIZE,
-            use_savers=True, use_processes=use_processes
-        ).with_context(context)
-
-        p.transform(GIVEN_INPUTS)
-
-        assert False, (
-            f'A {ChildProcessError.__name__} was supposed to be thrown. '
-            f'Logs:\n{context.logger.get_root_string_history()}')
