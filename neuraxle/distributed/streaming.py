@@ -25,7 +25,6 @@ for the transformers.
     limitations under the License.
 
 """
-import queue
 import traceback
 from abc import abstractmethod
 from collections import OrderedDict, defaultdict
@@ -51,6 +50,8 @@ from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 class _ProducerConsumerStepSaver(BaseSaver):
     """
     Saver for :class:`_ProducerConsumerMixin`.
+    This saver class makes sure that the non-picklable queue
+    is deleted upon saving for multiprocessing steps.
     """
 
     def save_step(self, step: BaseTransformer, context: 'CX') -> BaseTransformer:

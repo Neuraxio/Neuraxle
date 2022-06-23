@@ -307,7 +307,6 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
         .. note::
             Usage of a multiprocess-safe hyperparams repository is recommended,
             although it is, most of the time, not necessary.
-            Beware of the behaviour of HyperparamsRepository's observers/subscribers.
             Context instances are not shared between trial but copied.
             So is the AutoML loop and the DACTs.
 

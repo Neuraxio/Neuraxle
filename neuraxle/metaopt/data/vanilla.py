@@ -45,12 +45,12 @@ from typing import (Any, Dict, Generic, List, Optional, Sequence, Tuple, Type,
                     TypeVar, Union)
 
 import numpy as np
-from neuraxle.base import CX, BaseService, ContextLock, NoContextLock, TrialStatus
+from neuraxle.base import (CX, BaseService, ContextLock, NoContextLock,
+                           TrialStatus)
 from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
 from neuraxle.logging.logging import (LOGGING_DATETIME_STR_FORMAT,
                                       NeuraxleLogger)
 from neuraxle.logging.warnings import RaiseDeprecatedClass
-from neuraxle.metaopt.observable import _ObservableRepo
 
 SubDataclassT = TypeVar('SubDataclassT', bound=Optional['BaseDataclass'])
 ScopedLocationAttrInt = int
@@ -915,7 +915,7 @@ def from_json(_json: str) -> BaseDataclass:
     return json.loads(_json, object_pairs_hook=object_pairs_decoder, object_hook=object_decoder)
 
 
-class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseDataclass]], BaseService):
+class HyperparamsRepository(BaseService):
     """
     Hyperparams repository that saves hyperparams, and scores for every AutoML trial.
     Cache folder can be changed to do different round numbers.
@@ -929,7 +929,6 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
 
     def __init__(self):
         BaseService.__init__(self)
-        _ObservableRepo.__init__(self)
 
     @abstractmethod
     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
