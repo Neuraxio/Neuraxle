@@ -30,7 +30,7 @@ from io import StringIO
 from multiprocessing import Queue
 from typing import IO, Dict, List, Optional
 
-LOGGER_FORMAT = "⠀[%(asctime)s][%(levelname)-8s][%(name)-8s][%(module)-1s.py:%(lineno)-1d][%(threadName)s]: %(message)s"
+LOGGER_FORMAT = "⠀[%(asctime)s][%(levelname)-8s][%(name)-8s][%(module)-1s.py:%(lineno)-1d][%(processName)s:%(threadName)s]: %(message)s"
 LOGGER_FORMAT_PREFIX_REPLACE_REGEXPR = r"⠀(\[.*?\]): ", r""
 LOGGER_FORMAT_PREFIX_SEP_L = "["
 LOGGER_FORMAT_PREFIX_SEP_R = "]"

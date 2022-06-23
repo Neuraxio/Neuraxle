@@ -26,12 +26,15 @@ for the transformers.
 
 """
 import logging
+from multiprocessing.dummy import current_process
 import sys
 import time
+import traceback
 from abc import abstractmethod
 from collections import OrderedDict, defaultdict
 from multiprocessing import Lock, Process, Queue, RLock
-from threading import Thread
+from threading import Thread, current_thread
+from types import TracebackType
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 from neuraxle.base import BaseSaver, BaseTransformer
@@ -119,10 +122,11 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
         self.consumers.append(recepient.input_queue)
         return self
 
-    def put_minibatch_produced_to_next_consumers(self, task: 'QueuedMinibatch'):
+    def put_minibatch_produced_to_next_consumers(self, task: 'QueuedMinibatchTask'):
         """
         Push a minibatch to all subsequent consumers to allow them to consume it. If the task is terminal, close our own queue.
         """
+        task.worker_name = self.name
         for consumers_of_self in self.consumers:
             consumers_of_self: _ProducerConsumerMixin  # typing...
 
@@ -131,7 +135,7 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
         # if task.is_terminal() or task.is_error():
         #     self.allow_exit_without_queue_flush()
 
-    def put_minibatch_produced(self, task: 'QueuedMinibatch'):
+    def put_minibatch_produced(self, task: 'QueuedMinibatchTask'):
         """
         Put a minibatch in queue.
         The caller of this method is the producer of the minibatch and is external to self.
@@ -141,14 +145,14 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
         except Exception as e:
             raise _QueueDestroyedError("It seems like the queue to produce to has been destroyed.") from e
 
-    def _get_minibatch_to_consume(self) -> 'QueuedMinibatch':
+    def _get_minibatch_to_consume(self) -> 'QueuedMinibatchTask':
         """
         Get last minibatch in queue. The caller of this method is probably self,
         that is why the method is private (starts with an underscore).
         This method can raise an EOFError.
         """
         try:
-            task: QueuedMinibatch = self.input_queue.get(block=True)
+            task: QueuedMinibatchTask = self.input_queue.get(block=True)
             # if task.is_terminal() or task.is_error():
             #     self.allow_exit_without_queue_flush()
             return task
@@ -167,7 +171,7 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
             self.input_queue.cancel_join_thread()
 
 
-class QueuedMinibatch:
+class QueuedMinibatchTask:
     """
     Data object to contain the minibatch processed by producers and consumers.
     """
@@ -176,47 +180,39 @@ class QueuedMinibatch:
         self.worker_name: str = step_name
         self.minibatch_dact: ListDataContainer = minibatch_dact
 
-    def is_terminal(self) -> bool:
-        return False
-
     def is_error(self) -> bool:
         return False
 
-    def as_terminal(self) -> 'LastQueuedMinibatch':
-        return LastQueuedMinibatch(
-            minibatch_dact=self.minibatch_dact,
-            step_name=self.worker_name)
+    def to_error(self, error: Exception) -> 'MinibatchError':
+        _tb_str: str = traceback.format_exc()
+        _thread_name: str = current_thread().name
+        _process_name: str = current_process().name
+        traceback_msg = f'{error}\n\nProcess:Thread "{_process_name}:{_thread_name}" {_tb_str}'
 
-    def error(self, error: Exception, _traceback=None) -> 'MinibatchError':
         return MinibatchError(
             minibatch_dact=self.minibatch_dact,
             step_name=self.worker_name,
             err=error,
-            _traceback=_traceback)
+            traceback_msg=traceback_msg)
 
 
-class LastQueuedMinibatch(QueuedMinibatch):
-    """
-    This is a :class:`QueuedMinibatch` that is the last one sent in the queue.
-    """
-    # TODO: delete.
-
-    def is_terminal(self) -> bool:
-        return True
-
-
-class MinibatchError(LastQueuedMinibatch):
+class MinibatchError(QueuedMinibatchTask):
     """
     Data object to represent an error in a minibatch.
     """
 
-    def __init__(self, minibatch_dact: DACT, step_name: str, err: Exception, _traceback=None):
+    def __init__(self, minibatch_dact: DACT, step_name: str, err: Exception, traceback_msg=None):
         super().__init__(minibatch_dact, step_name)
         self.err: Exception = err
-        self.traceback = _traceback
+        self.traceback_msg: str = traceback_msg
 
     def is_error(self) -> bool:
         return True
+
+    def get_err(self) -> Exception:
+        if self.traceback_msg is not None:
+            return type(self.err)(self.traceback_msg)
+        return self.err
 
 
 def worker_function(
@@ -252,40 +248,37 @@ def worker_function(
         register_log_producer_for_main_logger_thread_to_consume(logging_queue)
 
         while True:
+            task: QueuedMinibatchTask = None
             try:
-                task: QueuedMinibatch = worker._get_minibatch_to_consume()
-                task.worker_name = worker.name
+                task = worker._get_minibatch_to_consume()
                 if task.is_error():
-                    worker.put_minibatch_produced_to_next_consumers(task)
                     break
-
-                else:
-                    task.minibatch_dact = step.handle_transform(
-                        task.minibatch_dact, context)
-                    worker.put_minibatch_produced_to_next_consumers(task)
+                task.minibatch_dact = step.handle_transform(
+                    task.minibatch_dact, context)
 
             except _QueueDestroyedError:
                 # This error can happen at the destruction of workers or processes.
                 return
             except Exception as err:
                 context.flow.log_error(err)
-                stack_trace = sys.exc_info()[2]
-                task = task.error(err, stack_trace)
-                worker.put_minibatch_produced_to_next_consumers(task)
-            finally:
-                # worker.allow_exit_without_queue_flush()
+                task = pickle_exception_into_task(task, err)
                 pass
+            finally:
+                if task is not None:
+                    worker.put_minibatch_produced_to_next_consumers(task)
     except Exception as err:
         context.flow.log_error(err)
-        stack_trace = sys.exc_info()[2]
-        worker.put_minibatch_produced_to_next_consumers(
-            MinibatchError(
-                None, worker.name, err, stack_trace
-            )
-        )
+        task = pickle_exception_into_task(task, err)
+        worker.put_minibatch_produced_to_next_consumers(task)
     finally:
         # worker.allow_exit_without_queue_flush()
         pass
+
+
+def pickle_exception_into_task(task, err) -> MinibatchError:
+    if task is None:
+        task = QueuedMinibatchTask(None, None)
+    return task.to_error(err)
 
 
 class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
@@ -684,7 +677,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         # send batches to input queues and label queue output expected summaries.
         n_minibatches_per_worker = 0
         for minibatch_index, minibatch_dact in enumerate(minibatch_iterator):
-            task = QueuedMinibatch(minibatch_dact, self.name)
+            task = QueuedMinibatchTask(minibatch_dact, self.name)
 
             self._dispatch_minibatch_to_consumer_workers(
                 minibatch_index=minibatch_index, task=task)
@@ -757,7 +750,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         self.is_pipeline_connected = False
 
     @abstractmethod
-    def _dispatch_minibatch_to_consumer_workers(self, minibatch_index: int, task: QueuedMinibatch):
+    def _dispatch_minibatch_to_consumer_workers(self, minibatch_index: int, task: QueuedMinibatchTask):
         """
         Send batches to queued pipeline. It is blocking if there is no more space available in the multiprocessing queues.
         Workers might return batches in a different order, but the queue joiner will reorder them at the end.
@@ -804,7 +797,7 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
                 producer.register_consumer(consumer)
             self.is_pipeline_connected = True
 
-    def _dispatch_minibatch_to_consumer_workers(self, minibatch_index: int, task: QueuedMinibatch):
+    def _dispatch_minibatch_to_consumer_workers(self, minibatch_index: int, task: QueuedMinibatchTask):
         """
         Send batches to process to the first queued worker.
 
@@ -849,7 +842,7 @@ class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
                 producer.register_consumer(joiner_consumer)
             self.is_pipeline_connected = True
 
-    def _dispatch_minibatch_to_consumer_workers(self, minibatch_index: int, task: QueuedMinibatch):
+    def _dispatch_minibatch_to_consumer_workers(self, minibatch_index: int, task: QueuedMinibatchTask):
         """
         In the case of the feature union, sending a batch to the workers is done by sending the batch
         to each of the workers that will work in parallel to consume the same copy sent to all.
@@ -905,7 +898,7 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
         self.n_minibatches_per_worker = n_minibatches_per_worker
         self.remaining_batches_per_workers: Dict[str, int] = defaultdict(lambda: self.n_minibatches_per_worker)
 
-    def append_terminal_summary(self, name: str, task: QueuedMinibatch):
+    def append_terminal_summary(self, name: str, task: QueuedMinibatchTask):
         """
         Append the summary id of the worker to the list of summaries.
 
@@ -949,13 +942,12 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
         # The shape is confusing because the ListDataContainer contains itself some other ListDataContainer.
 
         while self.n_workers_remaining > 0:
-            task: QueuedMinibatch = self._get_minibatch_to_consume()
+            task: QueuedMinibatchTask = self._get_minibatch_to_consume()
 
             if task.is_error():
                 task: MinibatchError = task
-                err = task.err.with_traceback(task.traceback)
-                sync_context.flow.log_error(err)
-                raise err from err
+                err = task.get_err()
+                raise err
             else:
                 step_to_minibatches_dacts[task.worker_name].append_data_container_in_data_inputs(
                     task.minibatch_dact)

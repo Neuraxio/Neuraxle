@@ -11,7 +11,7 @@ from neuraxle.data_container import DACT, StripAbsentValues
 from neuraxle.distributed.streaming import (BaseQueuedPipeline,
                                             ParallelQueuedFeatureUnion,
                                             ParallelWorkersWrapper,
-                                            QueuedMinibatch,
+                                            QueuedMinibatchTask,
                                             SequentialQueuedPipeline,
                                             WorkersJoiner)
 from neuraxle.hyperparams.space import HyperparameterSamples
@@ -66,7 +66,7 @@ def test_queued_pipeline_with_included_incomplete_batch():
     assert np.array_equal(outputs, np.array(list(range(15))) * 2**3)
 
 
-@pytest.mark.skip()
+# TODO: @pytest.mark.skip()
 @pytest.mark.parametrize('use_processes', [False, True])
 def test_queued_pipeline_can_report_stack_trace_upon_failure(use_processes: bool):
     # TODO: this test runs infinite, it hangs and never ends.
@@ -498,10 +498,8 @@ def test_parallel_workers_wrapper_for_some_batches(batches_count: int, use_proce
     worker.register_consumer(joiner)
     whole_batch_dact = DACT(di=list(range(10 * batches_count)))
     minibatches_dacts = [DACT(di=list(range(i * 10, (i + 1) * 10))) for i in range(batches_count)]
-    minibatches_tasks = [QueuedMinibatch(minibatch_dact=dact, step_name=step.name) for dact in minibatches_dacts]
-    last_minibatches_task = minibatches_tasks[-1].as_terminal()
-    minibatches_tasks[-1] = last_minibatches_task
-    joiner.append_terminal_summary(worker.name, last_minibatches_task)
+    minibatches_tasks = [QueuedMinibatchTask(minibatch_dact=dact, step_name=step.name) for dact in minibatches_dacts]
+    joiner.append_terminal_summary(worker.name, minibatches_tasks[-1])
     worker.start(cx)
 
     for mbt in minibatches_tasks:
