@@ -26,8 +26,11 @@ for the transformers.
 
 """
 import logging
+import multiprocessing
 from multiprocessing.dummy import current_process
 import sys
+
+import queue
 import time
 import traceback
 from abc import abstractmethod
@@ -108,7 +111,6 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
             self.input_queue = Queue(maxsize=self.max_queued_minibatches)
 
     def _teardown(self) -> Optional[RecursiveDict]:
-        self._allow_exit_without_queue_flush()
         self.join()
         self.input_queue = None
         return RecursiveDict()
@@ -129,11 +131,7 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
         task.worker_name = self.name
         for consumers_of_self in self.consumers:
             consumers_of_self: _ProducerConsumerMixin  # typing...
-
             consumers_of_self.put(task)
-
-        # if task.is_terminal() or task.is_error():
-        #     self.allow_exit_without_queue_flush()
 
     def put_minibatch_produced(self, task: 'QueuedMinibatchTask'):
         """
@@ -141,21 +139,25 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
         The caller of this method is the producer of the minibatch and is external to self.
         """
         try:
-            self.input_queue.put(task)  # TODO: possibly copy DACT here.
+            self.input_queue.put(task)
+            if task.is_error():
+                self._allow_exit_without_queue_flush()
         except Exception as e:
             raise _QueueDestroyedError("It seems like the queue to produce to has been destroyed.") from e
 
-    def _get_minibatch_to_consume(self) -> 'QueuedMinibatchTask':
+    def _get_minibatch_to_consume(self, block=True) -> 'QueuedMinibatchTask':
         """
         Get last minibatch in queue. The caller of this method is probably self,
         that is why the method is private (starts with an underscore).
         This method can raise an EOFError.
         """
         try:
-            task: QueuedMinibatchTask = self.input_queue.get(block=True)
-            # if task.is_terminal() or task.is_error():
-            #     self.allow_exit_without_queue_flush()
+            task: QueuedMinibatchTask = self.input_queue.get(block=block)
+            if task.is_error():
+                self._allow_exit_without_queue_flush()
             return task
+        except queue.Empty as e:
+            raise e from e  # only happens when block=False
         except Exception as e:
             raise _QueueDestroyedError("It seems like the queue to consume from has been destroyed.") from e
 
@@ -258,6 +260,7 @@ def worker_function(
 
             except _QueueDestroyedError:
                 # This error can happen at the destruction of workers or processes.
+                task = None
                 return
             except Exception as err:
                 context.flow.log_error(err)
@@ -270,6 +273,8 @@ def worker_function(
         context.flow.log_error(err)
         task = pickle_exception_into_task(task, err)
         worker.put_minibatch_produced_to_next_consumers(task)
+    else:
+        pass
     finally:
         # worker.allow_exit_without_queue_flush()
         pass
@@ -688,13 +693,10 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         n_workers = self.get_n_workers_to_join()
         workers_joiner: WorkersJoiner = self[-1]
         workers_joiner.set_join_quantities(n_workers, n_minibatches_per_worker)
-        data_container = workers_joiner.join_workers(data_container, context)
-
-        # self._dispatch_minibatch_to_consumer_workers(
-        #     minibatch_index=-1, task=LastQueuedMinibatch())
+        all_workers: Union[Thread, Process] = [w for w in step.running_workers for step in self.body]
+        data_container = workers_joiner.join_workers(all_workers, data_container, context)
 
         for step in self.body:
-            # TODO: accessor for these steps?
             step: ParallelWorkersWrapper = step
             step.join()
 
@@ -909,7 +911,7 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
         self.names.append(name)
         self.summaries.append(task.minibatch_dact.get_ids_summary())
 
-    def join_workers(self, original_dact: DACT, sync_context: CX) -> DACT:
+    def join_workers(self, all_workers: Union[Thread, Process], original_dact: DACT, sync_context: CX) -> DACT:
         """
         Return the accumulated results of the workers.
 
@@ -924,7 +926,7 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
 
         # Gather minibatch tasks to consume and organize them per step name:
         step_to_minibatches_dacts: Dict[str, MetaListDataContainer] = \
-            self._consume_enqueued_minibatches(sync_context)
+            self._consume_enqueued_minibatches(all_workers, sync_context)
 
         # Sort step_to_minibatches_dacts by step_name index in the step names list as like in the loop below but based on the order of steps. In the case of a pipeline, there will be only the last step anyway so the sort will return without even sorting. For feature union, there are many.
         list_dact: List[ListDataContainer] = \
@@ -934,7 +936,7 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
 
         return original_dact.set_data_inputs(list_dact)
 
-    def _consume_enqueued_minibatches(self, sync_context) -> Dict[str, MetaListDataContainer]:
+    def _consume_enqueued_minibatches(self, all_workers: Union[Thread, Process], sync_context) -> Dict[str, MetaListDataContainer]:
 
         step_to_minibatches_dacts: Dict[str, MetaListDataContainer] = \
             defaultdict(MiniBatchDataContainer.empty)
@@ -942,7 +944,14 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
         # The shape is confusing because the ListDataContainer contains itself some other ListDataContainer.
 
         while self.n_workers_remaining > 0:
-            task: QueuedMinibatchTask = self._get_minibatch_to_consume()
+            # TODO: this could be a non-blocking call, while also checking if all threads are alive. Could try testing with a step that raises a _QueueDestroyedError directly to see how the present thread would handle it.
+            try:
+                task: QueuedMinibatchTask = self._get_minibatch_to_consume(block=False)
+            except queue.Empty:
+                time.sleep(0.005)
+                if any([not w.is_alive() for w in all_workers]):
+                    raise ChildProcessError(f'A child process or thread died without known cause. You might want to try debugging the function named "{worker_function.__name__}" that is used in parallel workers to see why it ended.')
+                continue
 
             if task.is_error():
                 task: MinibatchError = task

@@ -103,6 +103,7 @@ setup(
     tests_require=[
         "pytest",
         "pytest-cov",
+        "pytest-timeout>=2.1.0",
         "scikit-learn>=0.24.1"
     ],
     include_package_data=True,

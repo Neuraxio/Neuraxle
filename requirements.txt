@@ -5,10 +5,10 @@ numpy>=1.16.2
 matplotlib==3.3.4
 scikit-learn>=0.24.1
 scipy>=1.4.1
-pandas
+pandas>=1.4.1
 joblib>=0.13.2
 flask==1.1.4
 flask-restful>=0.3.9
 SQLAlchemy==1.4.26
 markupsafe==2.0.1
-
+pytest-timeout>=2.1.0
