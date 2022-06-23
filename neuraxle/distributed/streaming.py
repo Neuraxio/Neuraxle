@@ -255,7 +255,9 @@ def worker_function(
             except _QueueDestroyedError:
                 # This error can happen at the destruction of workers or processes.
                 task = None
-                return
+                # Note: the exit here is most likely the reason for
+                #       deadlocks if something weird happened
+                return  # breakpoint here.
             except Exception as err:
                 context.flow.log_error(err)
                 task = pickle_exception_into_task(task, err)
@@ -268,10 +270,9 @@ def worker_function(
         task = pickle_exception_into_task(task, err)
         worker.put_minibatch_produced_to_next_consumers(task)
     else:
-        pass
+        pass  # This pass is for breakpoints to be set if needed.
     finally:
-        # worker.allow_exit_without_queue_flush()
-        pass
+        pass  # This pass is for breakpoints to be set if needed.
 
 
 def pickle_exception_into_task(task, err) -> MinibatchError:
@@ -939,7 +940,7 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
         while self.n_workers_remaining > 0:
             # Note: the call here is most likely the reason for
             #       deadlocks if something weird happened in the worker_function.
-            task: QueuedMinibatchTask = self._get_minibatch_to_consume()
+            task: QueuedMinibatchTask = self._get_minibatch_to_consume()  # breakpoint here.
 
             if task.is_error():
                 task: MinibatchError = task
