@@ -6,7 +6,6 @@ from typing import List, Type
 import numpy as np
 import pytest
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.base import NonFittableMixin
 from neuraxle.data_container import DACT, StripAbsentValues
 from neuraxle.distributed.streaming import (BaseQueuedPipeline,
                                             ParallelQueuedFeatureUnion,
@@ -17,10 +16,9 @@ from neuraxle.distributed.streaming import (BaseQueuedPipeline,
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEach
-from neuraxle.steps.misc import FitTransformCallbackStep, Sleep
+from neuraxle.steps.misc import (FitTransformCallbackStep, Sleep,
+                                 TransformOnlyCounterLoggingStep)
 from neuraxle.steps.numpy import MultiplyByN
-
-from testing_neuraxle.test_context_logger import FitTransformCounterLoggingStep
 
 GIVEN_BATCH_SIZE = 10
 GIVEN_INPUTS: List[int] = list(range(100))
@@ -443,12 +441,6 @@ def test_sequential_queued_pipeline_should_fit_transform_without_multiprocessing
     assert np.array_equal(outputs, EXPECTED_OUTPUTS_PIPELINE)
 
 
-class TransformOnlyCounterLoggingStep(NonFittableMixin, FitTransformCounterLoggingStep):
-    def __init__(self):
-        FitTransformCounterLoggingStep.__init__(self)
-        NonFittableMixin.__init__(self)
-
-
 @pytest.mark.parametrize("use_savers", [False, True])
 @pytest.mark.parametrize("use_processes", [False, True])
 @pytest.mark.parametrize('pipeline_class', [SequentialQueuedPipeline, ParallelQueuedFeatureUnion])
@@ -569,3 +561,13 @@ def test_can_reuse_streaming_step_with_several_varied_batches(pipeline_class: Ba
 
     assert np.array_equal(outputs_1, expected_outputs_1)
     assert np.array_equal(outputs_2, expected_outputs_2)
+
+
+def test_wrapped_queued_pipeline_with_0_workers_still_uses_1_worker():
+    p = SequentialQueuedPipeline([
+        MultiplyByN(2),
+        MultiplyByN(2),
+        MultiplyByN(2),
+    ], batch_size=GIVEN_BATCH_SIZE, max_queued_minibatches=5, n_workers_per_step=0)
+
+    assert all(1 == b.n_workers for b in p.body)

@@ -1,7 +1,7 @@
 """
 Miscelaneous Pipeline Steps
 ====================================
-You can find here misc. pipeline steps, for example, callbacks useful for debugging, and a step cloner.
+You can find here misc. pipeline steps, for example, callbacks useful for debugging, testing, and so forth.
 
 ..
     Copyright 2019, Neuraxio Inc.
@@ -28,8 +28,9 @@ import random
 import time
 from abc import ABC
 from typing import Any, Callable, List, Optional, Tuple
+import uuid
 
-from neuraxle.base import BaseStep, BaseTransformer
+from neuraxle.base import BaseStep, BaseTransformer, NonFittableMixin
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import ForceHandleOnlyMixin, HandleOnlyMixin, MetaStep
 from neuraxle.data_container import DataContainer as DACT
@@ -423,3 +424,33 @@ class Sleep(BaseTransformer):
         )
         time.sleep(seconds)
         return data_inputs
+
+
+class FitTransformCounterLoggingStep(HandleOnlyMixin, BaseStep):
+    def __init__(self):
+        BaseStep.__init__(self)
+        HandleOnlyMixin.__init__(self)
+        self.logging_call_counter = 0
+
+    def _fit_data_container(self, data_container: DACT, context: CX) -> BaseStep:
+        self._log(context, "fit")
+        return self
+
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
+        self._log(context, "transform")
+        return data_container
+
+    def _fit_transform_data_container(self, data_container: DACT, context: CX) -> DACT:
+        self._log(context, "fit_transform")
+        return self, data_container
+
+    def _log(self, context, func_name):
+        context.logger.info(
+            f"{self.name} - {func_name} call - logging call #{self.logging_call_counter} with UUID={uuid.uuid4()}")
+        self.logging_call_counter += 1
+
+
+class TransformOnlyCounterLoggingStep(NonFittableMixin, FitTransformCounterLoggingStep):
+    def __init__(self):
+        FitTransformCounterLoggingStep.__init__(self)
+        NonFittableMixin.__init__(self)

@@ -300,7 +300,6 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
             additional_worker_arguments = [[] for _ in range(n_workers)]
 
         MetaStep.__init__(self, wrapped)
-        max_queued_minibatches = max_queued_minibatches or 0
         _ProducerConsumerMixin.__init__(self, max_queued_minibatches)
         self.n_workers: int = n_workers
         self.use_processes: bool = use_processes
@@ -567,7 +566,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
         # Default values before parse, if missing:
         name: str = actual_step.name
-        n_workers: int = self.n_workers_per_step
+        n_workers: int = max(1, self.n_workers_per_step or 1)
         additional_arguments: List = []
         max_queued_minibatches: int = self.max_queued_minibatches
 

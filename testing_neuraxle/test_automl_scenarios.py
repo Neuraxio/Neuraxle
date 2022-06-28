@@ -243,8 +243,9 @@ def test_automl_use_a_json_repo_in_parallelized_round(use_processes):
         # for i in range(n_trials):
         #     OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
 
-        automl_refiting_best: ControlledAutoML = _create_automl_test_loop(
-            tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)
+        # automl_refiting_best: ControlledAutoML = _create_automl_test_loop(
+        #     tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)
+        automl_refiting_best = automl.to_force_refit_best_trial()
         automl_refiting_best, preds = automl_refiting_best.handle_fit_transform(dact, cx)
 
         bests: List[Tuple[float, int, TrialStatus, FlatDict]] = automl_refiting_best.report.summary()

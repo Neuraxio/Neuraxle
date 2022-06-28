@@ -4,12 +4,10 @@ import logging.handlers
 import os
 from multiprocessing import Process, Queue
 from typing import List, Set
-import uuid
 
 import numpy as np
-from neuraxle.base import CX, BaseStep
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.base import HandleOnlyMixin, Identity, TrialStatus
+from neuraxle.base import Identity, TrialStatus
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import FixedHyperparameter
 from neuraxle.hyperparams.space import HyperparameterSpace
@@ -23,7 +21,8 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            ScopedLocation, TrialSplitDataclass)
 from neuraxle.metaopt.validation import RandomSearchSampler, ValidationSplitter
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.numpy import AddN, MultiplyByN, NumpyReshape
+from neuraxle.steps.misc import FitTransformCounterLoggingStep
+from neuraxle.steps.numpy import MultiplyByN, NumpyReshape
 from sklearn.metrics import mean_squared_error
 
 
@@ -36,29 +35,6 @@ def test_root_neuraxle_logger_has_name_and_identifier():
 
     assert some_message in nxl.get_root_string_history()
     assert nxl.name == NEURAXLE_LOGGER_NAME
-
-
-class FitTransformCounterLoggingStep(HandleOnlyMixin, BaseStep):
-    def __init__(self):
-        BaseStep.__init__(self)
-        HandleOnlyMixin.__init__(self)
-        self.logging_call_counter = 0
-
-    def _fit_data_container(self, data_container: DACT, context: CX) -> BaseStep:
-        self._log(context, "fit")
-        return self
-
-    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
-        self._log(context, "transform")
-        return data_container
-
-    def _fit_transform_data_container(self, data_container: DACT, context: CX) -> DACT:
-        self._log(context, "fit_transform")
-        return self, data_container
-
-    def _log(self, context, func_name):
-        context.logger.info(f"{self.name} - {func_name} call - logging call #{self.logging_call_counter} with UUID={uuid.uuid4()}")
-        self.logging_call_counter += 1
 
 
 def test_context_logger_log_file(tmpdir):
