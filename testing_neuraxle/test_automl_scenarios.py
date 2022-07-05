@@ -254,3 +254,4 @@ def test_automl_use_a_json_repo_in_parallelized_round(use_processes):
 
         best_score = bests[0][0]
         assert median_absolute_error(dact.eo, preds.di) == best_score
+        pass

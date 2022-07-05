@@ -34,11 +34,9 @@ from copy import deepcopy
 from typing import List
 
 from neuraxle.logging.logging import NeuraxleLogger
-from neuraxle.metaopt.data.vanilla import (BaseDataclass,
-                                           HyperparamsRepository,
-                                           RootDataclass, ScopedLocation,
-                                           SubDataclassT, dataclass_2_id_attr,
-                                           from_json, to_json)
+from neuraxle.metaopt.data.vanilla import (BaseDataclass, dataclass_2_id_attr,
+    DataclassHasListMixin, from_json, HyperparamsRepository, RootDataclass, ScopedLocation,
+    SubDataclassT, to_json)
 
 ON_DISK_DELIM: str = "_"
 
@@ -104,7 +102,7 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
             try:
                 loaded: BaseDataclass = scope.new_dataclass_from_id()
             except Exception as err:
-                x = 1
+                raise err from err
         return loaded
 
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
@@ -150,8 +148,17 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
     def _load_dc_sublocation_keys(self, _dataclass: SubDataclassT, scope) -> SubDataclassT:
         dc_folder: str = self.get_folder_at_scope(scope)
         sublocs: List[str] = os.listdir(dc_folder)
-        sublocs = [s[len(ON_DISK_DELIM):] for s in sublocs if s.startswith(ON_DISK_DELIM)]
-        _dataclass.set_sublocation_keys(sublocs)
+        # TODO: loaded keys are simply sorted. That is a problem and doesn't respect the dataclass' OrderedDict (e.g.: metrics' sorting).
+        sublocs = list(sorted(
+            [s[len(ON_DISK_DELIM):] for s in sublocs if s.startswith(ON_DISK_DELIM)]
+        ))
+        if isinstance(_dataclass, DataclassHasListMixin):
+            sublocs = [int(i) for i in sublocs]
+        try:
+            _dataclass.set_sublocation_keys(sublocs)
+        except AssertionError as e:
+            raise e from e
+
         return _dataclass
 
     def _save_dc(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False):

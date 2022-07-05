@@ -244,6 +244,7 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         with _lock:
             _new_dc: SubDataclassT = self.repo.load(self.loc, deep=deep)
             if len(_new_dc) < len(self._dataclass):
+                _new_dc: SubDataclassT = self.repo.load(self.loc, deep=deep)
                 raise ValueError("Loaded dataclass can't have shorter sublocation than it already did.")
 
             def _fail_on_unsaved_changes(_self_now: SubDataclassT, _self_before: SubDataclassT, _self_new_loaded: SubDataclassT):
@@ -289,6 +290,15 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         with self.context.lock:
             self.save(deep=False)
             subagg.save(deep=deep)
+
+            _spare_reloaded = self.repo.load(self.loc, deep=deep)
+            try:
+                assert _spare_reloaded.shallow() == self._spare, ("reloaded spare different than spare", _spare_reloaded.shallow(), self._spare)
+                assert _spare_reloaded.shallow() == self._dataclass.shallow(), ("reloaded spare different than self", self._dataclass.shallow(), self._spare)
+            except Exception as e:
+                _spare_reloaded = self.repo.load(self.loc, deep=deep)
+                raise e from e
+
         return self
 
     def __enter__(self) -> SubAggregateT:

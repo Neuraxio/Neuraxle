@@ -524,6 +524,7 @@ class DataclassHasOrderedDictMixin:
         self._validate()
 
     def set_sublocation_keys(self, keys: List[ScopedLocationAttr]) -> 'BaseDataclass':
+        # TODO: when using a JSON repo, loaded keys are simply sorted alphabetically. That may be a problem for the main metric and metrics' sorting in the future.
         _sublocation = OrderedDict([(str(k), None) for k in keys])
         setattr(self, self._sublocation_attr_name, _sublocation)
         self._validate()
