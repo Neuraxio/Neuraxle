@@ -152,12 +152,12 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
         This method can raise an EOFError.
         """
         try:
-            task: QueuedMinibatchTask = self.input_queue.get(block=False, timeout=EMPTY_CONSUMER_QUEUE_TIMEOUT_SECS)
+            task: QueuedMinibatchTask = self.input_queue.get(block=True, timeout=EMPTY_CONSUMER_QUEUE_TIMEOUT_SECS)
             if task.is_error():
                 self._allow_exit_without_queue_flush()
             return task
         except queue.Empty as e:
-            # only happens when block=False:
+            # only happens when block=False or with a timeout:
             raise e from e
         except Exception as e:
             raise _QueueDestroyedError("It seems like the queue to consume from has been destroyed.") from e

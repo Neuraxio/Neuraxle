@@ -17,6 +17,7 @@ from neuraxle.metaopt.data.aggregates import (BaseAggregate, Client,
                                               Round, Trial, TrialSplit,
                                               aggregate_2_dataclass,
                                               aggregate_2_subaggregate)
+from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            DEFAULT_ROUND, AutoMLContext,
                                            BaseDataclass,
@@ -267,17 +268,18 @@ class NewTrialAtTransform(NonFittableMixin, BaseStep):
         return data_container
 
 
-def test_trial_aggregates_wait_before_locking_in_parallel():
+def test_trial_aggregates_wait_before_locking_in_parallel_processes():
     # setup
-    cx = AutoMLContext.from_context()
+    tmpdir = CX.get_new_cache_folder()
+    cx = AutoMLContext.from_context(repo=HyperparamsOnDiskRepository(tmpdir))
     loc = ScopedLocation.default(DEFAULT_ROUND)
     step = NewTrialAtTransform(loc, sleep_time_secs=1)
     batch_size = 10
     one_batch = DACT(di=list(range(batch_size)))
-    n_trials = 5
+    n_trials = 3
 
     # act
-    stream = ParallelQueuedFeatureUnion([step] * n_trials, n_workers_per_step=1, batch_size=batch_size, use_processes=False)
+    stream = ParallelQueuedFeatureUnion([step] * n_trials, n_workers_per_step=1, batch_size=batch_size, use_processes=True)
     stream.handle_transform(one_batch, cx)
     # # Here is the non-parallel equivalent, for debugging:
     # for _ in range(n_trials):
