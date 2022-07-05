@@ -1,12 +1,15 @@
 import copy
+from pickle import PickleError
 import random
 import time
 from typing import List, Type
 
 import numpy as np
 import pytest
+from neuraxle.base import BaseStep, NonFittableMixin
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.data_container import DACT, StripAbsentValues
+from neuraxle.data_container import TrainDACT, PredsDACT
 from neuraxle.distributed.streaming import (BaseQueuedPipeline,
                                             ParallelQueuedFeatureUnion,
                                             ParallelWorkersWrapper,
@@ -571,3 +574,27 @@ def test_wrapped_queued_pipeline_with_0_workers_still_uses_1_worker():
     ], batch_size=GIVEN_BATCH_SIZE, max_queued_minibatches=5, n_workers_per_step=0)
 
     assert all(1 == b.n_workers for b in p.body)
+
+
+class UnpicklableContextReturnedAsTransformDact(NonFittableMixin, BaseStep):
+    def __init__(self):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+
+    def _transform_data_container(self, data_container: TrainDACT, context: CX) -> PredsDACT:
+        return context
+
+
+@pytest.mark.timeout(10)
+def test_worker_unpicklable_data():
+    unpicklable_cx = CX()
+    unpicklable_cx.synchroneous()
+    batch_size = 10
+    p = SequentialQueuedPipeline([
+        UnpicklableContextReturnedAsTransformDact()
+    ], batch_size=batch_size, n_workers_per_step=2)
+
+    with pytest.raises(PickleError):
+        # If it doesn't raise the PickleError, then the thread will probably wait forever.
+        # That is why a timeout needs to be used for this test.
+        p.handle_transform(DACT(di=list(range(batch_size))), unpicklable_cx)

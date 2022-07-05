@@ -615,7 +615,7 @@ class DataclassHasListMixin:
         elif _id < self.get_next_i():
             self.get_sublocation()[dc.get_id()] = dc
         else:
-            raise ValueError(f"{dc} has id {dc.get_id()} which is greater than the next id {self.get_next_i()}.")
+            raise ValueError(f"{dc.shallow()} has id {dc.get_id()} which is greater than the next id {self.get_next_i()}.")
         self._validate()
         return _id
 

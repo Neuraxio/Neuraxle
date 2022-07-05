@@ -101,7 +101,10 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         try:
             loaded = self._load_dc(scope=scope, deep=deep)
         except KeyError:
-            loaded: BaseDataclass = scope.new_dataclass_from_id()
+            try:
+                loaded: BaseDataclass = scope.new_dataclass_from_id()
+            except Exception as err:
+                x = 1
         return loaded
 
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':

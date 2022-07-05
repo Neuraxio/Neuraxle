@@ -243,6 +243,8 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         _lock = self.context.lock if self.repo.is_locking_required() else PassthroughNullLock()
         with _lock:
             _new_dc: SubDataclassT = self.repo.load(self.loc, deep=deep)
+            if len(_new_dc) < len(self._dataclass):
+                raise ValueError("Loaded dataclass can't have shorter sublocation than it already did.")
 
             def _fail_on_unsaved_changes(_self_now: SubDataclassT, _self_before: SubDataclassT, _self_new_loaded: SubDataclassT):
                 _has_self_changed = _self_now != _self_before
@@ -477,6 +479,7 @@ class Client(ClientReport, BaseAggregate[Project, 'Round', ClientReport, ClientD
             _round_dataclass: RoundDataclass = self.repo.load(round_loc, deep=True)
             if main_metric_name is not None:
                 _round_dataclass.main_metric_name = main_metric_name
+                self.repo.save(_round_dataclass, round_loc, deep=False)
 
             subagg: Round = Round(_round_dataclass, self.context, is_deep=True)
             if new_round:
@@ -546,6 +549,9 @@ class Round(RoundReport, BaseAggregate[Client, 'Trial', RoundReport, RoundDatacl
             elif not new_trial:
                 # Try get last trial
                 trial_id = max(0, trial_id - 1)
+            if trial_id > len(self._dataclass) + 1:
+                raise ValueError(
+                    f"Can't create a trial with id {trial_id} when Round contains only {len(self._dataclass)} trials.")
             trial_loc = self.loc.with_id(trial_id)
 
             # Get trial to return:
@@ -592,7 +598,10 @@ class Round(RoundReport, BaseAggregate[Client, 'Trial', RoundReport, RoundDatacl
             if not is_all_failure and len(self) > 0:
                 main_metric_name = self.main_metric_name
                 self.flow.log('Finished round hp search!')
-                _best_trial: TrialReport = self.get_best_trial(main_metric_name)
+                try:
+                    _best_trial: TrialReport = self.get_best_trial(main_metric_name)
+                except Exception as err:
+                    raise err from err
                 self.flow.log_best_hps(
                     main_metric_name,
                     _best_trial.get_hyperparams(),
@@ -600,7 +609,8 @@ class Round(RoundReport, BaseAggregate[Client, 'Trial', RoundReport, RoundDatacl
                     _best_trial.get_avg_n_epoch_to_best_validation_score(main_metric_name)
                 )
             else:
-                self.flow.log_failure(e)
+                self.flow.log_failure(e or ValueError(
+                    f"The current Round #{self.get_id()} of length {len(self.report)} seems to contains only failed trials."))
 
             self.save(False)
         return handled_exception

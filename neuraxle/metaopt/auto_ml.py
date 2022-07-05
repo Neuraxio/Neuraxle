@@ -351,7 +351,7 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
         return self, data_container
 
     def to_force_refit_best_trial(self) -> 'ControlledAutoML':
-        self_copy = copy.copy(self)
+        self_copy = copy(self)
         self_copy.refit_best_trial = True
         self_copy.has_model_been_retrained = False
         self_copy.loop = self_copy.loop.for_refit_only()

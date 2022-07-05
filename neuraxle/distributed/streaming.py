@@ -25,6 +25,8 @@ for the transformers.
     limitations under the License.
 
 """
+import pickle
+import queue
 import traceback
 from abc import abstractmethod
 from collections import OrderedDict, defaultdict
@@ -75,6 +77,9 @@ class _QueueDestroyedError(EOFError):
     Error raised when the queue is destroyed.
     """
     pass
+
+
+EMPTY_CONSUMER_QUEUE_TIMEOUT_SECS = 0.1
 
 
 class _ProducerConsumerMixin(MixinForBaseTransformer):
@@ -147,12 +152,13 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
         This method can raise an EOFError.
         """
         try:
-            task: QueuedMinibatchTask = self.input_queue.get(block=True)
+            task: QueuedMinibatchTask = self.input_queue.get(block=False, timeout=EMPTY_CONSUMER_QUEUE_TIMEOUT_SECS)
             if task.is_error():
                 self._allow_exit_without_queue_flush()
             return task
-        # except queue.Empty as e:
-        #     raise e from e  # only happens when block=False
+        except queue.Empty as e:
+            # only happens when block=False:
+            raise e from e
         except Exception as e:
             raise _QueueDestroyedError("It seems like the queue to consume from has been destroyed.") from e
 
@@ -253,6 +259,19 @@ def worker_function(
                 task.minibatch_dact = step.handle_transform(
                     task.minibatch_dact, context)
 
+                # Error catching starts here:
+                try:
+                    if not isinstance(task.minibatch_dact, DACT):
+                        raise ValueError(
+                            f"Minibatch DACT is not of good type. Received {type( task.minibatch_dact)}: {str( task.minibatch_dact)}.")
+                    pickle.dumps(task)
+                except Exception as e:
+                    raise pickle.PickleError(
+                        f"Couldn't pickle processed task {task} to send it to the next consumers.") from e
+
+            except queue.Empty:
+                task = None
+                continue
             except _QueueDestroyedError:
                 # This error can happen at the destruction of workers or processes.
                 task = None
@@ -261,6 +280,7 @@ def worker_function(
                 return  # breakpoint here.
             except Exception as err:
                 context.flow.log_error(err)
+                task.minibatch_dact = None
                 task = pickle_exception_into_task(task, err)
                 pass
             finally:
@@ -940,19 +960,23 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
         while self.n_workers_remaining > 0:
             # Note: the call here is most likely the reason for
             #       deadlocks if something weird happened in the worker_function.
-            task: QueuedMinibatchTask = self._get_minibatch_to_consume()  # breakpoint here.
 
-            if task.is_error():
-                task: MinibatchError = task
-                err = task.get_err()
-                raise err
-            else:
-                step_to_minibatches_dacts[task.worker_name].append_data_container_in_data_inputs(
-                    task.minibatch_dact)
+            try:
+                task: QueuedMinibatchTask = self._get_minibatch_to_consume()  # breakpoint here.
 
-                self.remaining_batches_per_workers[task.worker_name] -= 1
-                if self.remaining_batches_per_workers[task.worker_name] == 0:
-                    self.n_workers_remaining -= 1
+                if task.is_error():
+                    task: MinibatchError = task
+                    err = task.get_err()
+                    raise err from err
+                else:
+                    step_to_minibatches_dacts[task.worker_name].append_data_container_in_data_inputs(
+                        task.minibatch_dact)
+
+                    self.remaining_batches_per_workers[task.worker_name] -= 1
+                    if self.remaining_batches_per_workers[task.worker_name] == 0:
+                        self.n_workers_remaining -= 1
+            except queue.Empty:
+                continue
 
         return step_to_minibatches_dacts
 

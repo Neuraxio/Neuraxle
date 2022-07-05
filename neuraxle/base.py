@@ -1001,15 +1001,16 @@ class Flow(BaseService):
         self.log_hps(best_hps)
 
     def log_failure(self, exception: Exception):
-        self.log_error(exception)
+        if exception is not None:
+            self.log_error(exception)
         self.log_end(TrialStatus.FAILED)
 
     def log_error(self, exception: Exception):
         """
         Log an exception or error. The stack trace is logged as well.
         """
-        self.log(f'The following {type(exception).__name__} occurred: {exception}', level=logging.INFO)
-        if exception is not None:
+        self.log(f'The following {type(exception).__name__} occurred: {exception}', level=logging.ERROR)
+        if exception is not None and exception.__traceback__ is not None:
             self.logger.exception(exception)
 
     def log_warning(self, message: str):

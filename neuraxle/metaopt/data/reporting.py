@@ -268,11 +268,27 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
         Return true if higher score is better. If metric_name is None, the optimizer's
         metric is taken.
         """
+        metric_name = metric_name or self.main_metric_name
         if metric_name is None:
-            metric_name = self.main_metric_name
+            raise ValueError("metric name and main metric name are not defined.")
+
         if len(self) == 0:
             return ValueError("No trial found, cannot determine if higher score is better.")
-        return self[-1].is_higher_score_better(metric_name)
+
+        all_metric_names: List[List[str]] = [t.get_metric_names() for t in self]
+        if metric_name not in sum(all_metric_names, []):
+            raise ValueError(
+                f"No trial found with the metric {metric_name}. "
+                f"Trials for round {self.get_id()} have the "
+                f"respective following metrics: {all_metric_names}")
+
+        for i in reversed(range(len(self))):
+            if metric_name in all_metric_names[i]:
+                break
+        try:
+            return self[i].is_higher_score_better(metric_name)
+        except Exception as err:
+            pass
 
     def get_n_val_splits(self):
         """

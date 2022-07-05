@@ -1,10 +1,14 @@
-from cmath import phase
-from copy import deepcopy
+import time
 from typing import Callable, Optional, Type
 
 import pytest
+from neuraxle.base import BaseStep
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import NonFittableMixin
 from neuraxle.data_container import ARG_X_INPUTTED, ARG_Y_PREDICTD, IDT
 from neuraxle.data_container import DataContainer as DACT
+from neuraxle.data_container import PredsDACT, TrainDACT
+from neuraxle.distributed.streaming import ParallelQueuedFeatureUnion
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.callbacks import (CallbackList, EarlyStoppingCallback,
                                         MetricCallback)
@@ -14,18 +18,21 @@ from neuraxle.metaopt.data.aggregates import (BaseAggregate, Client,
                                               aggregate_2_dataclass,
                                               aggregate_2_subaggregate)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
-                                           AutoMLContext, BaseDataclass,
+                                           DEFAULT_ROUND, AutoMLContext,
+                                           BaseDataclass,
                                            BaseHyperparameterOptimizer,
                                            MetricResultsDataclass,
                                            ScopedLocation, dataclass_2_id_attr,
                                            dataclass_2_subdataclass)
-from neuraxle.metaopt.validation import GridExplorationSampler
+from neuraxle.metaopt.validation import (GridExplorationSampler,
+                                         RandomSearchSampler)
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import AddN, MultiplyByN
 from sklearn.metrics import median_absolute_error
-from testing_neuraxle.metaopt.test_automl_dataclasses import (SOME_FULL_SCOPED_LOCATION,
-                                                     SOME_ROOT_DATACLASS)
-from testing_neuraxle.metaopt.test_automl_repositories import CX_WITH_REPO_CTORS, TmpDir
+from testing_neuraxle.metaopt.test_automl_dataclasses import (
+    SOME_FULL_SCOPED_LOCATION, SOME_ROOT_DATACLASS, SOME_ROUND_DATACLASS)
+from testing_neuraxle.metaopt.test_automl_repositories import (
+    CX_WITH_REPO_CTORS, TmpDir)
 
 
 class SomeException(Exception):
@@ -227,3 +234,55 @@ def test_aggregates_creation(
 
     # try to load its dataclass back to ensure consistency
     assert aggregate._dataclass == context.repo.load(scoped_loc, deep=is_deep)
+
+
+class RandomSearchSamplerThatSleeps(RandomSearchSampler):
+
+    def __init__(self, sleep_time_secs: int):
+        RandomSearchSampler.__init__(self)
+        self.sleep_time_secs: int = sleep_time_secs
+        self.called = False
+
+    def find_next_best_hyperparams(self, *args, **kwargs):
+        time.sleep(self.sleep_time_secs)
+        self.called = True
+        return RandomSearchSampler.find_next_best_hyperparams(self, *args, **kwargs)
+
+
+class NewTrialAtTransform(NonFittableMixin, BaseStep):
+    def __init__(self, round_loc: ScopedLocation, sleep_time_secs: int):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+        self.sleep_time_secs: int = sleep_time_secs
+        self.round_loc: ScopedLocation = round_loc
+
+    def _transform_data_container(self, data_container: TrainDACT, context: CX) -> PredsDACT:
+        round: Round = Round.from_context(context.with_loc(self.round_loc))
+        round.with_optimizer(RandomSearchSamplerThatSleeps(self.sleep_time_secs), HyperparameterSpace())
+        assert round.hp_optimizer.called == False
+        with round.new_rvs_trial() as ts:
+            assert round.hp_optimizer.called == True
+            ts: Trial = ts
+            time.sleep(self.sleep_time_secs)
+        return data_container
+
+
+def test_trial_aggregates_wait_before_locking_in_parallel():
+    # setup
+    cx = AutoMLContext.from_context()
+    loc = ScopedLocation.default(DEFAULT_ROUND)
+    step = NewTrialAtTransform(loc, sleep_time_secs=1)
+    batch_size = 10
+    one_batch = DACT(di=list(range(batch_size)))
+    n_trials = 5
+
+    # act
+    stream = ParallelQueuedFeatureUnion([step] * n_trials, n_workers_per_step=1, batch_size=batch_size, use_processes=False)
+    stream.handle_transform(one_batch, cx)
+    # # Here is the non-parallel equivalent, for debugging:
+    # for _ in range(n_trials):
+    #     step.handle_transform(one_batch, cx)
+
+    # assert
+    round_dc = cx.repo.load(loc, deep=True)
+    assert len(round_dc) == n_trials
