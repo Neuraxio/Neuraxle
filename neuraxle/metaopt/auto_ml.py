@@ -252,7 +252,7 @@ class BaseControllerLoop(TruncableService):
         Create a controller loop configured with zero iterations
         so as to only make the "refit_best_trial" possible.
         """
-        self_copy = copy.copy(self)
+        self_copy = copy(self)
         self_copy.n_trials = 0
         return self_copy
 

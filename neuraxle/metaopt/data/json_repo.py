@@ -31,7 +31,7 @@ Classes are splitted like this for the AutoML:
 import json
 import os
 from copy import deepcopy
-from typing import List
+from typing import List, Optional
 
 from neuraxle.logging.logging import NeuraxleLogger
 from neuraxle.metaopt.data.vanilla import (BaseDataclass, dataclass_2_id_attr,
@@ -98,7 +98,7 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         """
         try:
             loaded = self._load_dc(scope=scope, deep=deep)
-        except KeyError:
+        except (KeyError, FileNotFoundError):
             try:
                 loaded: BaseDataclass = scope.new_dataclass_from_id()
             except Exception as err:
@@ -117,7 +117,7 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         return self
 
     def _load_dc(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
-        scope, _, load_file = self._get_dataclass_filename_path(None, scope)
+        scope, _, load_file = self._get_dataclass_filename_path(scope)
 
         _json_loaded = self._load_json_file(load_file)
 
@@ -126,13 +126,14 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
             _dataclass = self._load_dc_sublocation_keys(_dataclass, scope)
             if deep is True:
                 for sub_dc_id in _dataclass.get_sublocation_keys():
+                    # TODO: could catch errors there and pass.
                     sub_dc = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
                     _dataclass.store(sub_dc)
         return _dataclass
 
     def _load_json_file(self, load_file: str):
         if not os.path.exists(load_file):
-            raise KeyError(f"{load_file} not found.")
+            raise FileNotFoundError(f"{load_file} not found.")
 
         try:
             with open(load_file, 'r') as f:
@@ -145,7 +146,7 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
                 f"Invalid JSON file: {repr(_file_content)} in path {load_file} with folder ls={surrounding_files}."
             ) from e
 
-    def _load_dc_sublocation_keys(self, _dataclass: SubDataclassT, scope) -> SubDataclassT:
+    def _load_dc_sublocation_keys(self, _dataclass: SubDataclassT, scope: ScopedLocation) -> SubDataclassT:
         dc_folder: str = self.get_folder_at_scope(scope)
         sublocs: List[str] = os.listdir(dc_folder)
         # TODO: loaded keys are simply sorted. That is a problem and doesn't respect the dataclass' OrderedDict (e.g.: metrics' sorting).
@@ -154,6 +155,12 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         ))
         if isinstance(_dataclass, DataclassHasListMixin):
             sublocs = [int(i) for i in sublocs]
+        sublocs = [
+            s for s in sublocs
+            if os.path.exists(
+                self._get_dataclass_filename_path(scope.with_id(s))[-1]
+            )
+        ]
         try:
             _dataclass.set_sublocation_keys(sublocs)
         except AssertionError as e:
@@ -162,7 +169,7 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         return _dataclass
 
     def _save_dc(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False):
-        scope, save_folder, save_file = self._get_dataclass_filename_path(_dataclass, scope)
+        scope, save_folder, save_file = self._get_dataclass_filename_path(scope, _dataclass)
 
         os.makedirs(save_folder, exist_ok=True)
         with open(save_file, 'w') as f:
@@ -172,15 +179,15 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
             for sub_dc in _dataclass.get_sublocation_values():
                 self._save_dc(sub_dc, scope=scope, deep=deep)
 
-    def _get_dataclass_filename_path(self, _dataclass: SubDataclassT, scope: ScopedLocation):
-        scope = self._patch_scope_for_dataclass(_dataclass, scope)
+    def _get_dataclass_filename_path(self, scope: ScopedLocation, _dataclass: Optional[SubDataclassT] = None):
+        scope = self._patch_scope_for_dataclass(scope, _dataclass)
 
         save_folder = self.get_folder_at_scope(scope)
         save_file = os.path.join(save_folder, 'metadata.json')
 
         return scope, save_folder, save_file
 
-    def _patch_scope_for_dataclass(self, _dataclass: BaseDataclass, scope: ScopedLocation):
+    def _patch_scope_for_dataclass(self, scope: ScopedLocation, _dataclass: Optional[BaseDataclass] = None):
         scope = deepcopy(scope)
         if _dataclass is not None and _dataclass.get_id() is not None:
             scope = scope.at_dc(_dataclass)

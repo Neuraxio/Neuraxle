@@ -765,7 +765,11 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
             return super().__getitem__(loc)
 
     def set_sublocation_keys(self, keys: List[ScopedLocationAttr]) -> 'BaseDataclass':
-        keys = [int(k) for k in keys if int(k) != RETRAIN_TRIAL_SPLIT_ID]
+        keys = [int(k) for k in keys]
+        if RETRAIN_TRIAL_SPLIT_ID in keys:
+            # TODO: should getters take into account RETRAIN_TRIAL_SPLIT_ID as well?
+            self._set_shallow_retrained_split_id()
+            keys.remove(RETRAIN_TRIAL_SPLIT_ID)
         super().set_sublocation_keys(keys)
 
     def set_sublocation_items(self, items: List[Tuple[ScopedLocationAttr, SubDataclassT]]) -> 'BaseDataclass':
@@ -781,9 +785,13 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
     def shallow(self) -> 'BaseDataclass':
         shallowed: TrialDataclass = super().shallow()
         if shallowed.retrained_split is not None and not isinstance(shallowed.retrained_split, str):
-            shallowed.retrained_split = (
-                f"ShallowedRetrainedSplitWithId({shallowed.retrained_split.get_id()})")
+            assert shallowed.retrained_split.get_id() == RETRAIN_TRIAL_SPLIT_ID, (
+                f"Retrain split has a id != -1: {shallowed.retrained_split}")
+            shallowed._set_shallow_retrained_split_id()
         return shallowed
+
+    def _set_shallow_retrained_split_id(self):
+        self.retrained_split = "ShallowedRetrainedSplitWithId(-1)"
 
     def empty(self) -> 'BaseDataclass':
         emptied: TrialDataclass = super().empty()

@@ -287,7 +287,7 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
     def save_subaggregate(self, subagg: SubAggregateT, deep=False) -> 'BaseAggregate':
         self._dataclass.store(subagg._dataclass)
 
-        with self.context.lock:
+        with self.context.lock:  # TODO: maybe? self.lock to be: = self.context.lock if self.repo.is_locking_required() else PassthroughNullLock()
             self.save(deep=False)
             subagg.save(deep=deep)
 
@@ -329,8 +329,12 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
 
     def _managed_subresource(self, *args, **kwds) -> ContextManager[SubAggregateT]:
         self._invariant()
-        self._managed_resource: SubAggregateT = self._acquire_managed_subresource(
-            *args, **kwds)
+        # TODO: lock here and in the release func to never have to lock elsewhere again.
+        with self.context.lock:
+            self.refresh(self.is_deep)
+            self._managed_resource: SubAggregateT = self._acquire_managed_subresource(
+                *args, **kwds)
+            self.save_subaggregate(self._managed_resource, deep=False)
         return self
 
     @abstractmethod
@@ -338,14 +342,15 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         """
         Acquire a new subaggregate that is managed such that it is deep saved at the
         beginning.
+        Generally:
+            1. Refresh self,
+            2. load subagg to fetch or create it,
+            3. save loaded subagg in case it changed, and return it.
         """
         # Create subaggregate:
-        with self.context.lock:
-            self.refresh(self.is_deep)
-            subdataclass: SubDataclassT = self.repo.load(*args, **kwds)
-            subagg: SubAggregateT = self.subaggregate(subdataclass, self.context)
-            self.save_subaggregate(subagg, deep=False)
-            return subagg
+        subdataclass: SubDataclassT = self.repo.load(*args, **kwds)
+        subagg: SubAggregateT = self.subaggregate(subdataclass, self.context, is_deep=False, parent=self)
+        return subagg
 
     def _release_managed_subresource(self, resource: SubAggregateT, e: Exception = None) -> bool:
         """
@@ -356,7 +361,7 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         """
         with self.context.lock:
             self.refresh(self.is_deep)
-            self.save(False)
+            self.save(False)  # TODO: is this bad?
         handled_error = e is None
         return handled_error
 
@@ -377,7 +382,7 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         :param item: trial index
         :return:
         """
-        return self.subaggregate(self._dataclass.get_sublocation()[item], self.context, self.is_deep, self)
+        return self.subaggregate(self._dataclass.get_sublocation()[item], self.context, is_deep=True, parent=self)
 
     def __str__(self) -> str:
         return self.__repr__()
@@ -474,27 +479,21 @@ class Client(ClientReport, BaseAggregate[Project, 'Round', ClientReport, ClientD
         return self
 
     def _acquire_managed_subresource(self, new_round: bool = True, main_metric_name: str = None) -> 'Round':
-        with self.context.lock:
-            self.refresh(self.is_deep)
+        # Get new round loc:
+        round_id: int = self._dataclass.get_next_i()
+        if not new_round:
+            round_id = max(0, round_id - 1)
+        if round_id == 0:
+            new_round = True
+        round_loc: ScopedLocation = self.loc.with_id(round_id)
 
-            # Get new round loc:
-            round_id: int = self._dataclass.get_next_i()
-            if not new_round:
-                round_id = max(0, round_id - 1)
-            if round_id == 0:
-                new_round = True
-            round_loc: ScopedLocation = self.loc.with_id(round_id)
+        # Get round to save it and return:
+        _round_dataclass: RoundDataclass = self.repo.load(round_loc, deep=True)
+        if main_metric_name is not None:
+            _round_dataclass.main_metric_name = main_metric_name
 
-            # Get round to return:
-            _round_dataclass: RoundDataclass = self.repo.load(round_loc, deep=True)
-            if main_metric_name is not None:
-                _round_dataclass.main_metric_name = main_metric_name
-                self.repo.save(_round_dataclass, round_loc, deep=False)
-
-            subagg: Round = Round(_round_dataclass, self.context, is_deep=True)
-            if new_round:
-                self.save_subaggregate(subagg, deep=True)
-            return subagg
+        subagg: Round = Round(_round_dataclass, self.context, is_deep=True)
+        return subagg
 
 
 class Round(RoundReport, BaseAggregate[Client, 'Trial', RoundReport, RoundDataclass]):
@@ -546,37 +545,31 @@ class Round(RoundReport, BaseAggregate[Client, 'Trial', RoundReport, RoundDatacl
         :param continue_on_error: If True, will continue to the next trial if the current trial fails.
                                   Otherwise, will let the exception be raised for the failure (won't catch).
         """
-        with self.context.lock:
-            if not self.is_deep:
-                raise RuntimeError("Round must be deep to get a new trial.")
-            self.refresh(self.is_deep)
-            # self.context.add_scoped_logger_file_handler()
+        if not self.is_deep:
+            raise RuntimeError("Round must be deep to get a trial.")
 
-            # Get new trial loc:
-            trial_id: int = self._dataclass.get_next_i()
-            if new_trial is None:
-                trial_id: int = self.get_best_trial_id()
-            elif not new_trial:
-                # Try get last trial
-                trial_id = max(0, trial_id - 1)
-            if trial_id > len(self._dataclass) + 1:
-                raise ValueError(
-                    f"Can't create a trial with id {trial_id} when Round contains only {len(self._dataclass)} trials.")
-            trial_loc = self.loc.with_id(trial_id)
+        # Get new trial loc:
+        trial_id: int = self._dataclass.get_next_i()
+        if new_trial is None:
+            trial_id: int = self.get_best_trial_id()
+        elif not new_trial:
+            # Try get last trial
+            trial_id = max(0, trial_id - 1)
+        if trial_id > len(self._dataclass) + 1:
+            raise ValueError(
+                f"Can't create a trial with id {trial_id} when Round contains only {len(self._dataclass)} trials.")
+        trial_loc = self.loc.with_id(trial_id)
 
-            # Get trial to return:
-            _trial_dataclass: TrialDataclass = self.repo.load(trial_loc, deep=True)
-            new_hps: HyperparameterSamples = self.hp_optimizer.find_next_best_hyperparams(self)
-            _trial_dataclass.hyperparams = new_hps
-            self.flow.log_planned(new_hps)
-            subagg: Trial = Trial(_trial_dataclass, self.context, is_deep=True)
+        # Get trial to return, and save it if new:
+        _trial_dataclass: TrialDataclass = self.repo.load(trial_loc, deep=True)
+        new_hps: HyperparameterSamples = self.hp_optimizer.find_next_best_hyperparams(self)
+        _trial_dataclass.hyperparams = new_hps
+        self.flow.log_planned(new_hps)
 
-            if continue_on_error:
-                subagg.continue_loop_on_error()
-
-            if new_trial or trial_id == 0:
-                self.save_subaggregate(subagg, deep=True)
-            return subagg
+        subagg: Trial = Trial(_trial_dataclass, self.context, is_deep=True)
+        if continue_on_error:
+            subagg.continue_loop_on_error()
+        return subagg
 
     def _release_managed_subresource(self, resource: 'Trial', e: Exception = None) -> bool:
         """
@@ -686,32 +679,26 @@ class Trial(TrialReport, BaseAggregate[Round, 'TrialSplit', TrialReport, TrialDa
         return self
 
     def _acquire_managed_subresource(self, continue_loop_on_error: bool, retrain_split=False) -> 'TrialSplit':
-
         self.error_types_to_raise = (
             SystemError, SystemExit, EOFError, KeyboardInterrupt
         ) if continue_loop_on_error else (Exception,)
 
-        with self.context.lock:
-            self.refresh(self.is_deep)
-            # self.context.add_scoped_logger_file_handler()
+        # Get new split loc:
+        if retrain_split:
+            split_id = RETRAIN_TRIAL_SPLIT_ID
+        else:
+            split_id: int = self._dataclass.get_next_i()
+            split_id = max(0, split_id)
+            if split_id == 0:
+                self.flow.log_start()
+        split_loc = self.loc.with_id(split_id)
 
-            # Get new split loc:
-            if retrain_split:
-                split_id = RETRAIN_TRIAL_SPLIT_ID
-            else:
-                split_id: int = self._dataclass.get_next_i()
-                split_id = max(0, split_id)
-                if split_id == 0:
-                    self.flow.log_start()
-            split_loc = self.loc.with_id(split_id)
+        # Get split to save and return it:
+        _split_dataclass: TrialSplitDataclass = self.repo.load(split_loc)
+        _split_dataclass.hyperparams = self.get_hyperparams()
 
-            # Get split to return:
-            _split_dataclass: TrialSplitDataclass = self.repo.load(split_loc)
-            _split_dataclass.hyperparams = self.get_hyperparams()
-            subagg: TrialSplit = TrialSplit(_split_dataclass, self.context, is_deep=True)
-
-            self.save_subaggregate(subagg, deep=True)
-            return subagg
+        subagg: TrialSplit = TrialSplit(_split_dataclass, self.context, is_deep=True)
+        return subagg
 
     def _release_managed_subresource(self, resource: 'TrialSplit', e: Exception = None) -> bool:
         gc.collect()
@@ -840,14 +827,11 @@ class TrialSplit(TrialSplitReport, BaseAggregate[Trial, 'MetricResults', TrialSp
         return self
 
     def _acquire_managed_subresource(self, metric_name: str, higher_score_is_better: bool) -> 'MetricResults':
-        with self.context.lock:
-            self.refresh(True)
+        subdataclass: MetricResultsDataclass = self._create_or_get_metric_results(
+            metric_name, higher_score_is_better)
 
-            subdataclass: MetricResultsDataclass = self._create_or_get_metric_results(
-                metric_name, higher_score_is_better)
-
-            subagg: MetricResults = self.subaggregate(subdataclass, self.context, is_deep=True, parent=self)
-            return subagg
+        subagg: MetricResults = self.subaggregate(subdataclass, self.context, is_deep=True, parent=self)
+        return subagg
 
     def _create_or_get_metric_results(self, metric_name, higher_score_is_better):
         if metric_name not in self._dataclass.metric_results:
