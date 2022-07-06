@@ -507,6 +507,7 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
 class DataclassHasOrderedDictMixin:
 
     def _validate(self):
+        self._sort()
         super()._validate()
         if not isinstance(self.get_sublocation(), OrderedDict):
             raise ValueError(f"{self.__class__.__name__} must have an OrderedDict as sublocation.")
@@ -559,6 +560,11 @@ class DataclassHasOrderedDictMixin:
         self_copy = copy.copy(self)
         self_copy.set_sublocation(OrderedDict())
         return copy.deepcopy(self_copy)
+
+    def _sort(self):
+        _sublocation = self.get_sublocation()
+        _sublocation = OrderedDict(list(sorted(_sublocation.items())))
+        setattr(self, self._sublocation_attr_name, _sublocation)
 
 
 @dataclass(order=True)

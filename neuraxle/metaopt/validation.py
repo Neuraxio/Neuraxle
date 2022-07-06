@@ -198,13 +198,15 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
                 self.flat_hp_grid_lens.append(len(hp_samples))
 
         _estimated_ideal_n_trials: int = sum(self.flat_hp_grid_lens)
+        _space_max = reduce(operator.mul, self.flat_hp_grid_lens, 1)
 
-        if self.expected_n_trials != _estimated_ideal_n_trials:
+        if not (_estimated_ideal_n_trials <= self.expected_n_trials <= _space_max):
+            _new_val = max(min(_space_max, self.expected_n_trials), _estimated_ideal_n_trials)
             warnings.warn(
                 f"Warning: changed {self.__class__.__name__}.expected_n_trials from "
-                f"{self.expected_n_trials} to {_estimated_ideal_n_trials} due to high amount of trials. "
-                f"This may lead to a non-reproducible search using RandomSearch as a fallback past this point.")
-            self.expected_n_trials = _estimated_ideal_n_trials
+                f"{self.expected_n_trials} to {_new_val}. RandomSearch will be used "
+                f"as a fallback past this point if needed.")
+            self.expected_n_trials = _new_val
 
         self._i = 1
 

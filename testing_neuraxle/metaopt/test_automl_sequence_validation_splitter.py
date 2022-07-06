@@ -6,7 +6,8 @@ from neuraxle.base import ExecutionContext as CX
 from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.callbacks import MetricCallback
-from neuraxle.metaopt.validation import KFoldCrossValidationSplitter, ValidationSplitter, RandomSearchSampler
+from neuraxle.metaopt.data.vanilla import AutoMLContext, InMemoryHyperparamsRepository
+from neuraxle.metaopt.validation import GridExplorationSampler, KFoldCrossValidationSplitter, ValidationSplitter, RandomSearchSampler
 from neuraxle.metaopt.auto_ml import AutoML
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import MultiplyByN
@@ -54,15 +55,14 @@ def test_automl_validation_splitter(tmpdir):
     # Setting seed for reproducibility
     np.random.seed(75)
     # Given
+    cx = AutoMLContext.from_context()
     data_inputs = np.array(range(1000, 1020))
     expected_outputs = np.array(range(2020, 2040))
-
     hyperparameter_space = HyperparameterSpace({
         'multiplication_1__multiply_by': RandInt(1, 3),
         'multiplication_2__multiply_by': RandInt(1, 3),
         'multiplication_3__multiply_by': RandInt(1, 3),
     })
-
     pipeline = Pipeline([
         ('multiplication_1', MultiplyByN()),
         ('multiplication_2', MultiplyByN()),
@@ -73,14 +73,15 @@ def test_automl_validation_splitter(tmpdir):
         pipeline=pipeline,
         validation_splitter=ValidationSplitter(validation_size=0.2),
         scoring_callback=MetricCallback("MSE", mean_squared_error, False),
-        n_trials=18,
-    ).with_context(CX(tmpdir))
+        hyperparams_optimizer=GridExplorationSampler(27),
+        n_trials=27,
+    ).with_context(cx)
 
     # When
-    mse_before = ((data_inputs - expected_outputs) ** 2).mean()
     hp_search = hp_search.fit(data_inputs, expected_outputs)
     predicted_outputs = hp_search.transform(data_inputs)
 
     # Then
-    actual_mse = ((predicted_outputs - expected_outputs) ** 2).mean()
-    assert actual_mse < mse_before
+    optimal_mse = mean_squared_error(expected_outputs, data_inputs * 2)
+    actual_mse = mean_squared_error(expected_outputs, predicted_outputs)
+    assert actual_mse == optimal_mse
