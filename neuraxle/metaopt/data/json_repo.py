@@ -31,6 +31,7 @@ Classes are splitted like this for the AutoML:
 import json
 import os
 from copy import deepcopy
+import shutil
 from typing import List, Optional
 
 from neuraxle.logging.logging import NeuraxleLogger
@@ -172,8 +173,12 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         scope, save_folder, save_file = self._get_dataclass_filename_path(scope, _dataclass)
 
         os.makedirs(save_folder, exist_ok=True)
-        with open(save_file, 'w') as f:
+        tmp_save_file = save_file + '.tmp'
+        with open(tmp_save_file, 'w') as f:
             json.dump(to_json(_dataclass.empty()), f, indent=4)
+        if os.path.exists(save_file):
+            os.remove(save_file)
+        shutil.move(tmp_save_file, save_file)
 
         if deep is True and _dataclass.has_sublocation_dataclasses():
             for sub_dc in _dataclass.get_sublocation_values():
