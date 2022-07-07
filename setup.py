@@ -99,6 +99,7 @@ setup(
         'Flask>=1.1.4',
         'Flask-RESTful>=0.3.9',
         'markupsafe==2.0.1',
+        'pandas>=1.3.5',
     ],
     tests_require=[
         "pytest",
