@@ -197,12 +197,12 @@ def _test_normal(hd):
     assert 0.6 > samples_mean > 0.4
     samples_std = np.std(samples)
     assert 0.1 < samples_std < 0.6
-    assert abs(hd.pdf(-1.) - 0.24) == 0.24
-    assert abs(hd.pdf(0.) - 0.40) == 0.31125636093539194
-    assert abs(hd.pdf(1.)) == 0.08874363906460808
-    assert abs(hd.cdf(-1.) - 0.15) == 0.15
-    assert abs(hd.cdf(0.) - 0.5) == 0.5
-    assert abs(hd.cdf(1.) - 0.85) == 0.15000000000000002
+    assert (abs(hd.pdf(-1.) - 0.24) - 0.24) < 1e-10
+    assert (abs(hd.pdf(0.) - 0.40) - 0.31125636093539194) < 1e-10
+    assert (abs(hd.pdf(1.)) - 0.08874363906460808) < 1e-10
+    assert (abs(hd.cdf(-1.) - 0.15) - 0.15) < 1e-10
+    assert (abs(hd.cdf(+0.) - 0.5) - 0.5) < 1e-10
+    assert (abs(hd.cdf(+1.) - 0.85) - 0.15000000000000002) < 1e-10
 
 
 def test_lognormal():
