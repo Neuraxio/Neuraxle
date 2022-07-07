@@ -35,8 +35,8 @@ from typing import List, Optional
 
 from neuraxle.logging.logging import NeuraxleLogger
 from neuraxle.metaopt.data.vanilla import (BaseDataclass, dataclass_2_id_attr,
-    DataclassHasListMixin, from_json, HyperparamsRepository, RootDataclass, ScopedLocation,
-    SubDataclassT, to_json)
+                                           DataclassHasListMixin, from_json, HyperparamsRepository, RootDataclass, ScopedLocation,
+                                           SubDataclassT, to_json)
 
 ON_DISK_DELIM: str = "_"
 
@@ -120,8 +120,8 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         scope, _, load_file = self._get_dataclass_filename_path(scope)
 
         _json_loaded = self._load_json_file(load_file)
-
         _dataclass: SubDataclassT = from_json(_json_loaded)
+
         if _dataclass.has_sublocation_dataclasses():
             _dataclass = self._load_dc_sublocation_keys(_dataclass, scope)
             if deep is True:
@@ -134,12 +134,12 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
     def _load_json_file(self, load_file: str):
         if not os.path.exists(load_file):
             raise FileNotFoundError(f"{load_file} not found.")
-
         try:
             with open(load_file, 'r') as f:
-                _file_content: str = f.read()
-            return json.loads(_file_content)
+                return json.load(f)
         except json.decoder.JSONDecodeError as e:
+            with open(load_file, 'r') as f:
+                _file_content: str = f.read()
             # TODO: for trials only, use UUID mechanism that could be added to the dataclass or aggregate to resolve collisions. Or investigate and fix locking.
             surrounding_files = os.listdir(os.path.dirname(load_file))
             raise ValueError(
