@@ -33,7 +33,6 @@ import os
 from copy import deepcopy
 import shutil
 from typing import List, Optional
-import multiprocessing
 
 from neuraxle.logging.logging import NeuraxleLogger
 from neuraxle.metaopt.data.vanilla import (BaseDataclass, dataclass_2_id_attr,
@@ -204,6 +203,7 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         return True
 
 
+# import multiprocessing
 # def with_lock(lock: multiprocessing.Lock):
 #     def decorator(func):
 #         def f(*args, **kwargs):

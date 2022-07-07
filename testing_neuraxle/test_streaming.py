@@ -403,9 +403,10 @@ class QueueJoinerForTest(WorkersJoiner):
         super().__init__(batch_size)
         self.called_queue_joiner = False
 
-    def join_workers(self, original_data_container: DACT) -> DACT:
+    def join_workers(self, original_dact: DACT, sync_context: CX) -> DACT:
         self.called_queue_joiner = True
-        super().join_workers(original_data_container)
+        raise NotImplementedError("This method should not be called.")
+        # super().join_workers(original_dact, sync_context)
 
 
 def test_sequential_queued_pipeline_should_fit_without_multiprocessing():

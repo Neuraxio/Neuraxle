@@ -418,7 +418,8 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
         :return:
         """
         if self.use_processes:
-            [w.terminate() for w in self.running_workers]
+            for w in self.running_workers:
+                w.terminate()
         self.join()
         self.running_workers = []
         self.consumers = []

@@ -31,7 +31,7 @@ from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import AddN, MultiplyByN
 from sklearn.metrics import median_absolute_error
 from testing_neuraxle.metaopt.test_automl_dataclasses import (
-    SOME_FULL_SCOPED_LOCATION, SOME_ROOT_DATACLASS, SOME_ROUND_DATACLASS)
+    SOME_FULL_SCOPED_LOCATION, SOME_ROOT_DATACLASS)
 from testing_neuraxle.metaopt.test_automl_repositories import (
     CX_WITH_REPO_CTORS, TmpDir)
 
@@ -258,11 +258,11 @@ class NewTrialAtTransform(NonFittableMixin, BaseStep):
         self.round_loc: ScopedLocation = round_loc
 
     def _transform_data_container(self, data_container: TrainDACT, context: CX) -> PredsDACT:
-        round: Round = Round.from_context(context.with_loc(self.round_loc))
-        round.with_optimizer(RandomSearchSamplerThatSleeps(self.sleep_time_secs), HyperparameterSpace())
-        assert round.hp_optimizer.called == False
-        with round.new_rvs_trial() as ts:
-            assert round.hp_optimizer.called == True
+        _round: Round = Round.from_context(context.with_loc(self.round_loc))
+        _round.with_optimizer(RandomSearchSamplerThatSleeps(self.sleep_time_secs), HyperparameterSpace())
+        assert _round.hp_optimizer.called is False
+        with _round.new_rvs_trial() as ts:
+            assert _round.hp_optimizer.called is True
             ts: Trial = ts
             time.sleep(self.sleep_time_secs)
         return data_container

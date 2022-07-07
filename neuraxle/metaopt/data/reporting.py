@@ -282,13 +282,12 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
                 f"Trials for round {self.get_id()} have the "
                 f"respective following metrics: {all_metric_names}")
 
-        for i in reversed(range(len(self))):
-            if metric_name in all_metric_names[i]:
+        for last_with_score in reversed(range(len(self))):
+            if metric_name in all_metric_names[last_with_score]:
                 break
-        try:
-            return self[i].is_higher_score_better(metric_name)
-        except Exception as err:
-            pass
+
+        last_trial_with_score = self[last_with_score]
+        return last_trial_with_score.is_higher_score_better(metric_name)
 
     def get_n_val_splits(self):
         """

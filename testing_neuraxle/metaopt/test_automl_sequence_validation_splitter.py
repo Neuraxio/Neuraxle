@@ -1,7 +1,6 @@
 from typing import List
 
 import numpy as np
-import pytest
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import RandInt
@@ -98,13 +97,13 @@ def test_grid_exploration_sampler_can_try_everything():
     })
     max_trials = 3 * 3 * 3
     ges = GridExplorationSampler(max_trials)
-    round: Round = Round.from_context(AutoMLContext.from_context(loc=ScopedLocation.default(0)))
-    round.with_optimizer(ges, hp_space)
+    _round: Round = Round.from_context(AutoMLContext.from_context(loc=ScopedLocation.default(0)))
+    _round.with_optimizer(ges, hp_space)
 
     for _ in range(max_trials):
-        with round.new_rvs_trial():
+        with _round.new_rvs_trial():
             pass
 
-    trials_hps: List[FlatDict] = round.report.get_all_hyperparams(as_flat=True)
+    trials_hps: List[FlatDict] = _round.report.get_all_hyperparams(as_flat=True)
     unique_trials = set([tuple(r.items()) for r in trials_hps])
     assert len(unique_trials) == max_trials

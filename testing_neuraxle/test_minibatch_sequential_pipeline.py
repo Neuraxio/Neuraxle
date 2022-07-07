@@ -1,5 +1,4 @@
 import unittest
-import numpy as np
 from neuraxle.data_container import StripAbsentValues
 
 from neuraxle.pipeline import MiniBatchSequentialPipeline, Joiner, Pipeline
@@ -102,10 +101,9 @@ def test_minibatch_sequential_pipeline_change_batch_size_works():
     # When
     p, outputs = p.fit_transform(list(range(20)), list(range(20)))
     p.set_batch_size(5)
-    p, outputs = p.fit_transform(list(range(20, 30)), list(range(20, 30)))
+    p, _ = p.fit_transform(list(range(20, 30)), list(range(20, 30)))
 
     # Then
-
     assert tape1.data == [
         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
         [20, 21, 22, 23, 24], [25, 26, 27, 28, 29]
