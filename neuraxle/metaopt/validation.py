@@ -26,7 +26,9 @@ Classes for hyperparameter tuning, such as random search.
 import copy
 import math
 import operator
+import random
 import warnings
+import itertools
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from functools import reduce
@@ -109,7 +111,7 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
         :return: next random hyperparams
         """
         self._n_sampled = 0
-        self.flat_hp_grid_values: OrderedDict[str, List[Any]] = {}
+        self.flat_hp_grid_values: OrderedDict[str, List[Any]] = OrderedDict()
         self.flat_hp_grid_lens: List[int] = []
         # TODO: could make use of a ND array here to keep track of the grid exploration instead of using random too much. And a walk method picking the most L2-distant point, permutated over the last mod 3 samples to walk awkwardly like [mid, begin, fartest, side, other side] in the ND cube, also avoiding same-seen values.
         self._seen_hp_grid_values: Set[Tuple[int]] = set()
@@ -136,15 +138,34 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
             return RandomSearchSampler().find_next_best_hyperparams(round_scope)
         for _ in range(_space_max):
             i_grid_keys: Tuple[int] = tuple(self._gen_keys_for_grid())
-            if i_grid_keys in self._seen_hp_grid_values:
+            grid_values: OrderedDict[str, Any] = tuple(self[i_grid_keys].values())
+            if grid_values in self._seen_hp_grid_values:
                 self._reshuffle_grid()
                 self._i += 1
             else:
-                self._seen_hp_grid_values.add(i_grid_keys)
                 break
 
-        flat_result: OrderedDict[str, Any] = self[i_grid_keys]
-        return HyperparameterSamples(flat_result)
+        # Second chance at picking unseen value yet.
+        if grid_values in self._seen_hp_grid_values:
+            # overwrite it:
+            prod_values = list(itertools.product(*self.flat_hp_grid_values.values()))
+            generator = random.Random(self._i)
+            generator.shuffle(prod_values)
+            for grid_values in prod_values:
+                if grid_values not in self._seen_hp_grid_values:
+                    break
+            if grid_values in self._seen_hp_grid_values:
+                grid_values = generator.choice(prod_values)
+
+        # assert grid_values not in self._seen_hp_grid_values  # TODO: TMP.
+
+        # value is finally chosen:
+        self._seen_hp_grid_values.add(grid_values)
+        _full_dict = OrderedDict([(a, b) for a, b in zip(
+            self.flat_hp_grid_values.keys(),
+            grid_values
+        )])
+        return HyperparameterSamples(_full_dict)
 
     def _generate_grid(self, hp_space: HyperparameterSpace):
         """

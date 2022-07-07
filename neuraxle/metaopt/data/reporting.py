@@ -352,9 +352,7 @@ class RoundReport(BaseReport['TrialReport', RoundDataclass]):
 
     def get_all_hyperparams(self, as_flat: bool = True, use_wildcards: bool = False) -> List[FlatDict]:
         """
-        Get all hyperparams from all trials.
-
-        : return:
+        Get the list of hyperparams for all trials.
         """
         if use_wildcards and not as_flat:
             raise ValueError("Cannot use wildcards with non-flat hyperparams.")

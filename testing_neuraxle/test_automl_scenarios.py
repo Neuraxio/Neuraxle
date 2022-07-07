@@ -202,8 +202,10 @@ def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
     automl_refiting_best, preds = automl_refiting_best.handle_fit_transform(dact, cx)
 
     bests: List[Tuple[TrialStatus, float, int, FlatDict]] = automl_refiting_best.report.summary()
+    hps: List[FlatDict] = automl_refiting_best.report.get_all_hyperparams()
 
     assert len(bests) == n_trials
+    assert len(set(tuple(hp.items()) for hp in hps)) == n_trials
     assert len(set(tuple(dict(hp).items()) for score, i, status, hp in bests)
                ) == n_trials, f"Expecting unique hyperparams for the given n_trials={n_trials} and intelligent grid sampler."
 

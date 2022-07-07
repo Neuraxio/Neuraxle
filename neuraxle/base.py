@@ -966,8 +966,16 @@ class Flow(BaseService):
     def log_status(self, status: TrialStatus):
         self.log(f'Status: {status}')
 
-    def log_planned(self, hps: HyperparameterSamples):
-        self.log('Planned!')
+    def log_planned(self, trial_id: int, hps: HyperparameterSamples):
+        self.log(f'Trial #{trial_id} planned!')
+        self.log_hps(hps)
+        self.log_status(TrialStatus.PLANNED)
+
+    def log_continued(self, trial_id: int):
+        self.log(f'Trial #{trial_id} continued!')
+
+    def log_retraining(self, trial_id: int, hps: HyperparameterSamples):
+        self.log(f'Trial #{trial_id} will retrain!')
         self.log_hps(hps)
         self.log_status(TrialStatus.PLANNED)
 

@@ -537,9 +537,9 @@ class Round(RoundReport, BaseAggregate[Client, 'Trial', RoundReport, RoundDatacl
     def round_number(self) -> int:
         return self._dataclass.round_number
 
-    def _acquire_managed_subresource(self, new_trial=True, continue_on_error: bool = False) -> 'Trial':
+    def _acquire_managed_subresource(self, new_trial: Optional[bool] = True, continue_on_error: bool = False) -> 'Trial':
         """
-        Get a trial.
+        Get a trial. If new_trial is None, refit the best trial.
 
         :param new_trial: If True, will create a new trial. If false, will load the last trial. If None, will load the best trial.
         :param continue_on_error: If True, will continue to the next trial if the current trial fails.
@@ -560,11 +560,18 @@ class Round(RoundReport, BaseAggregate[Client, 'Trial', RoundReport, RoundDatacl
                 f"Can't create a trial with id {trial_id} when Round contains only {len(self._dataclass)} trials.")
         trial_loc = self.loc.with_id(trial_id)
 
-        # Get trial to return, and save it if new:
+        # Get trial to return, log it, and save it if new:
         _trial_dataclass: TrialDataclass = self.repo.load(trial_loc, deep=True)
-        new_hps: HyperparameterSamples = self.hp_optimizer.find_next_best_hyperparams(self)
-        _trial_dataclass.hyperparams = new_hps
-        self.flow.log_planned(new_hps)
+        if new_trial is True:
+            # TODO: pass self.report as arg instead in the find_next_best_hyperparams method, but for this we need space stored in report as well:
+            new_hps: HyperparameterSamples = self.hp_optimizer.find_next_best_hyperparams(self)
+            # assert new_hps.to_flat_dict() not in self.report.get_all_hyperparams(as_flat=True, use_wildcards=False)  # TODO: TMP.
+            _trial_dataclass.hyperparams = new_hps
+            self.flow.log_planned(trial_id, _trial_dataclass.hyperparams)
+        elif new_trial is False:
+            self.flow.log_continued(trial_id)
+        else:
+            self.flow.log_retraining(trial_id, _trial_dataclass.hyperparams)
 
         subagg: Trial = Trial(_trial_dataclass, self.context, is_deep=True)
         if continue_on_error:
