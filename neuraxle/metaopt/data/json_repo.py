@@ -33,6 +33,7 @@ import os
 from copy import deepcopy
 import shutil
 from typing import List, Optional
+import multiprocessing
 
 from neuraxle.logging.logging import NeuraxleLogger
 from neuraxle.metaopt.data.vanilla import (BaseDataclass, dataclass_2_id_attr,
@@ -201,3 +202,20 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
 
     def is_locking_required(self) -> bool:
         return True
+
+
+# def with_lock(lock: multiprocessing.Lock):
+#     def decorator(func):
+#         def f(*args, **kwargs):
+#             with lock:
+#                 return func(*args, **kwargs)
+#         return f
+#     return decorator
+# class ThreadSafeHyperparamsOnDiskRepository(HyperparamsOnDiskRepository):
+#     lock = multiprocessing.Manager().Lock()
+#     @with_lock(lock)
+#     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
+#         return HyperparamsOnDiskRepository.load(scope, deep)
+#     @with_lock(lock)
+#     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
+#         return HyperparamsOnDiskRepository.save(_dataclass, scope, deep)
