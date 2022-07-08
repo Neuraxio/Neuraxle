@@ -267,6 +267,9 @@ class NewTrialAtTransform(NonFittableMixin, BaseStep):
             time.sleep(self.sleep_time_secs)
         return data_container
 
+    def transform(self, data_inputs: ARG_X_INPUTTED) -> ARG_Y_PREDICTD:
+        raise NotImplementedError("Must use handle_transform method.")
+
 
 def test_trial_aggregates_wait_before_locking_in_parallel_processes():
     # setup

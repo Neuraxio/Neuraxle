@@ -99,7 +99,7 @@ def test_minibatch_sequential_pipeline_change_batch_size_works():
     ])
 
     # When
-    p, outputs = p.fit_transform(list(range(20)), list(range(20)))
+    p, _ = p.fit_transform(list(range(20)), list(range(20)))
     p.set_batch_size(5)
     p, _ = p.fit_transform(list(range(20, 30)), list(range(20, 30)))
 

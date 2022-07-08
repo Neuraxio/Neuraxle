@@ -1,15 +1,16 @@
 import copy
-from pickle import PickleError
 import random
 import time
+from pickle import PickleError
 from typing import List, Type
 
 import numpy as np
 import pytest
-from neuraxle.base import BaseStep, NonFittableMixin
+from neuraxle.base import BaseStep
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.data_container import DACT, StripAbsentValues
-from neuraxle.data_container import TrainDACT, PredsDACT
+from neuraxle.base import NonFittableMixin
+from neuraxle.data_container import (ARG_X_INPUTTED, ARG_Y_PREDICTD, DACT,
+                                     PredsDACT, StripAbsentValues, TrainDACT)
 from neuraxle.distributed.streaming import (BaseQueuedPipeline,
                                             ParallelQueuedFeatureUnion,
                                             ParallelWorkersWrapper,
@@ -584,6 +585,11 @@ class UnpicklableContextReturnedAsTransformDact(NonFittableMixin, BaseStep):
 
     def _transform_data_container(self, data_container: TrainDACT, context: CX) -> PredsDACT:
         return context
+
+    def transform(self, data_inputs: ARG_X_INPUTTED) -> ARG_Y_PREDICTD:
+        cx = CX()
+        cx.synchroneous()
+        return cx
 
 
 @pytest.mark.timeout(10)

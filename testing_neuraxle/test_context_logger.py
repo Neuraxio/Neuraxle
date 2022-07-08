@@ -289,7 +289,7 @@ class SomeParallelLogginWorkers:
         logger.log(logging.ERROR, SomeParallelLogginWorkers.FIRST_LOG_MESSAGE)
 
         dact = DACT(di=range(10))
-        step, out = FitTransformCounterLoggingStep().set_name("Producer").handle_fit_transform(dact, CX())
+        _, out = FitTransformCounterLoggingStep().set_name("Producer").handle_fit_transform(dact, CX())
         return
 
     def join(self):

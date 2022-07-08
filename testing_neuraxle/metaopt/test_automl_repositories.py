@@ -11,12 +11,9 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            HyperparamsRepository,
                                            ProjectDataclass, RootDataclass,
                                            RoundDataclass, ScopedLocation)
-from testing_neuraxle.metaopt.test_automl_dataclasses import (ALL_DATACLASSES,
-                                                     SOME_CLIENT_DATACLASS,
-                                                     SOME_FULL_SCOPED_LOCATION,
-                                                     SOME_PROJECT_DATACLASS,
-                                                     SOME_ROOT_DATACLASS,
-                                                     SOME_ROUND_DATACLASS)
+from testing_neuraxle.metaopt.test_automl_dataclasses import (
+    ALL_DATACLASSES, SOME_CLIENT_DATACLASS, SOME_FULL_SCOPED_LOCATION,
+    SOME_PROJECT_DATACLASS, SOME_ROOT_DATACLASS, SOME_ROUND_DATACLASS)
 
 TmpDir = str
 
