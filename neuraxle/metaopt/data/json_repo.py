@@ -99,11 +99,13 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         """
         try:
             loaded = self._load_dc(scope=scope, deep=deep)
-        except (KeyError, FileNotFoundError):
+        except (KeyError, FileNotFoundError) as e:
+            if scope == ScopedLocation():
+                raise ValueError("An error occured: should be able to load Root from json repo without problems.") from e
             try:
                 loaded: BaseDataclass = scope.new_dataclass_from_id()
             except Exception as err:
-                raise err from err
+                raise err from e
         return loaded
 
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
