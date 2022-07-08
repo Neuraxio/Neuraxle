@@ -129,9 +129,11 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
             _dataclass = self._load_dc_sublocation_keys(_dataclass, scope)
             if deep is True:
                 for sub_dc_id in _dataclass.get_sublocation_keys():
-                    # TODO: could catch errors there and pass.
-                    sub_dc = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
-                    _dataclass.store(sub_dc)
+                    try:
+                        sub_dc = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
+                        _dataclass.store(sub_dc)
+                    except (FileNotFoundError, ValueError):
+                        continue
         return _dataclass
 
     def _load_json_file(self, load_file: str):
