@@ -584,8 +584,9 @@ class DataclassHasListMixin:
 
     def set_sublocation_keys(self, keys: List[ScopedLocationAttr]) -> 'BaseDataclass':
         _sublocation = [None for k in keys]
-        assert (set(range(len(_sublocation))) == set(
-            [int(k) for k in keys])), f"Bad sublocation keys are being set into DataclassHasListMixin (type {self.__class__.__name__}, id={self.get_id()}) : {keys}."
+        # assert (set(range(len(_sublocation))) == set([int(k) for k in keys])), (
+        #     f"Bad sublocation keys are being set into DataclassHasListMixin "
+        #     f"(type {self.__class__.__name__}, id={self.get_id()}) : {keys}.")
         setattr(self, self._sublocation_attr_name, _sublocation)
         self._validate()
 

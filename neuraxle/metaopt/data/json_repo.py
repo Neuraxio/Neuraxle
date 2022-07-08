@@ -151,9 +151,7 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         dc_folder: str = self.get_folder_at_scope(scope)
         sublocs: List[str] = os.listdir(dc_folder)
         # TODO: loaded keys are simply sorted. That is a problem and doesn't respect the dataclass' OrderedDict (e.g.: metrics' sorting).
-        sublocs = list(sorted(
-            [s[len(ON_DISK_DELIM):] for s in sublocs if s.startswith(ON_DISK_DELIM)]
-        ))
+        sublocs = [s[len(ON_DISK_DELIM):] for s in sublocs if s.startswith(ON_DISK_DELIM)]
         if isinstance(_dataclass, DataclassHasListMixin):
             sublocs = [int(i) for i in sublocs]
         sublocs = [
@@ -162,6 +160,7 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
                 self._get_dataclass_filename_path(scope.with_id(s))[-1]
             )
         ]
+        sublocs = list(sorted(sublocs))
         try:
             _dataclass.set_sublocation_keys(sublocs)
         except AssertionError as e:
