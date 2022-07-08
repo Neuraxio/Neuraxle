@@ -605,3 +605,7 @@ def test_worker_unpicklable_data():
         # If it doesn't raise the PickleError, then the thread will probably wait forever.
         # That is why a timeout needs to be used for this test.
         p.handle_transform(DACT(di=list(range(batch_size))), unpicklable_cx)
+
+
+def test_services_process_safe_items():
+    pass

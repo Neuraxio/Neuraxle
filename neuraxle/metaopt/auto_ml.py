@@ -369,7 +369,7 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
         :return: self
         """
         automl_context: AutoMLContext = self.get_automl_context(context, with_loc=False)
-        root: Root = Root.from_context(automl_context)
+        root: Root = Root.from_context(automl_context, is_deep=False)
 
         with root.get_project(self.project_name) as ps:
             ps: Project = ps
