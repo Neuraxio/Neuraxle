@@ -326,11 +326,15 @@ class ScopedLocation(BaseService):
         Creates a new :class:`BaseDataclass` of the right type with
         just the provided ID filled.
         """
+        if len(self) == 0:
+            return RootDataclass()
         dataklass = self.last_dc_type()
 
         return dataklass().set_id(self.as_list()[-1])
 
     def last_dc_type(self) -> Type['BaseDataclass']:
+        if len(self) == 0:
+            return RootDataclass
         dataklass: Type[BaseDataclass] = list(dataclass_2_id_attr.keys())[len(self) - 1]
         return dataklass
 
