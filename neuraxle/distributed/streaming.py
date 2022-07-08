@@ -489,7 +489,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
     :param n_workers_per_step: number of workers to spawn per step.
     :param max_queued_minibatches: max number of batches inside the processing queue between the workers.
     :param data_joiner: transformer step to join streamed batches together at the end of the pipeline.
-    :param use_processes: use processes instead of threads for parallel processing. multiprocessing.context.Process is used by default.
+    :param use_processes: use processes instead of threads for parallel processing. multiprocessing.Process is used by default.
     :param use_savers: use savers to serialize steps for parallel processing. Recommended if using processes instead of threads.
     :param keep_incomplete_batch: (Optional.) A bool that indicates whether
     or not the last batch should be dropped in the case it has fewer than

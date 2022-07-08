@@ -1053,7 +1053,7 @@ class ContextLock(BaseService):
 
     def synchroneous(self):
         if self._lock is None:
-            self._lock = Manager().RLock()
+            self._lock = RLock()
         return self._lock
 
     def copy(self):
