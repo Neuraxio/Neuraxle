@@ -33,6 +33,7 @@ import datetime
 import inspect
 import logging
 import os
+import pickle
 import pprint
 import shutil
 import sys
@@ -58,7 +59,8 @@ from neuraxle.data_container import DataContainer as DACT
 from neuraxle.data_container import PredsDACT, TrainDACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
-from neuraxle.logging.logging import NEURAXLE_LOGGER_NAME, NeuraxleLogger, ParallelLoggingConsumerThread
+from neuraxle.logging.logging import (NEURAXLE_LOGGER_NAME, NeuraxleLogger,
+                                      ParallelLoggingConsumerThread)
 from neuraxle.logging.warnings import warn_deprecated_arg
 
 
@@ -1300,18 +1302,15 @@ class ExecutionContext(TruncableService):
             self.register_service(ContextLock, ContextLock())
         if isinstance(self.get_service(ContextLock).lock, str):
             raise RuntimeError(self.get_service(ContextLock).lock)
-        self.flow.link_context(self)
+        self.flow.unlink_context()
         return self.get_service(ContextLock).synchroneous()
 
-    def process_safe(self) -> Tuple[RLock, ParallelLoggingConsumerThread, 'CX']:
+    def thread_safe(self) -> Tuple[RLock, 'CX']:
         """
-        Prepare the context and its services to be thread safe and
-        reduce the current context for parallelization.
+        Prepare the context and its services to be thread safe
 
         :return: a tuple of the recursive dict to apply within thread, and the thread safe context
         """
-        # TODO: eventually this will be an apply that returns a recursive dict of managed locks/things?
-
         managed_thread_safe_lock: RLock = self.synchroneous()
 
         threaded_context = self.copy()
@@ -1330,8 +1329,54 @@ class ExecutionContext(TruncableService):
             "self.thread_safe()[0] earlier before sending the context to "
             "the thread."
         )
+
+        _cx2 = threaded_context.copy()
+        try:
+            for parent in reversed(_cx2.parents):
+                pickle.dumps(parent.__reduce__())
+        except Exception as e:
+            raise pickle.PickleError(
+                f"Couldn't pickle {parent} to send it to the next consumers, but its services are picklable. "
+                f"From error: {e}"
+            ) from e
+
+        return managed_thread_safe_lock, threaded_context
+
+    def process_safe(self) -> Tuple[ParallelLoggingConsumerThread, 'CX']:
+        """
+        Prepare the context and its services to be process safe and
+        reduce the current context for parallelization.
+
+        :return: a tuple of the recursive dict to apply within thread, and the thread safe context
+        """
+        # TODO: eventually this and the other method above will be an apply that returns a recursive dict of managed locks/things?
+        assert isinstance(self.get_service(ContextLock)._lock, str), "Must first call cx.thread_safe() before calling cx.process_safe()."
+
+        process_safe_context = self.copy()
+        self.flow.unlink_context()
+        process_safe_context.flow.unlink_context()
+
+        # TODO: code a way to serialize and deserialize such context services. Maybe use some new apply functions in context.process_safe() to pack and then un-pack within thread.
+        process_safe_context.flow.unlink_context()
+        _cx2 = process_safe_context.copy()
+        try:
+            for service in _cx2.get_services().values():
+                if 'ContextLock' in str(service) or 'Flow' in str(service):
+                    continue
+                pickle.dumps(service.__reduce__())
+        except Exception as e:
+            raise pickle.PickleError(f"Couldn't pickle service {service} to send context to other thread.") from e
+        try:
+            _cx2.set_services(dict())
+            pickle.dumps(_cx2.__reduce__())
+        except Exception as e:
+            raise pickle.PickleError(
+                f"Couldn't pickle {process_safe_context} to send it to the next consumers, but its services are picklable. "
+                f"From error: {e}"
+            ) from e
+
         logging_thread = ParallelLoggingConsumerThread()
-        return managed_thread_safe_lock, logging_thread, threaded_context
+        return logging_thread, process_safe_context
 
     def restore_lock(self, managed_thread_safe_lock: RLock = None) -> 'CX':
         """

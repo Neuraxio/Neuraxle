@@ -68,7 +68,7 @@ def test_queued_pipeline_with_included_incomplete_batch():
     assert np.array_equal(outputs, np.array(list(range(15))) * 2**3)
 
 
-# TODO: @pytest.mark.skip()
+@pytest.mark.timeout(10)
 @pytest.mark.parametrize('use_processes', [False, True])
 def test_queued_pipeline_can_report_stack_trace_upon_failure(use_processes: bool):
     # TODO: this test runs infinite, it hangs and never ends.
@@ -272,32 +272,6 @@ def test_parallel_queued_threads_do_parallelize_sleep_correctly():
     assert len(outputs_streaming) == len(expected_outputs), (outputs_streaming, expected_outputs)
     assert np.array_equal(outputs_streaming, expected_outputs)
     assert time_queued_pipeline < time_vanilla_pipeline
-
-
-def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments_max_queued_minibatches():
-    n_workers = 4
-    worker_arguments = [('hyperparams', HyperparameterSamples({'multiply_by': 2})) for _ in range(n_workers)]
-    p = ParallelQueuedFeatureUnion([
-        ('1', n_workers, worker_arguments, 5, MultiplyByN()),
-    ], batch_size=GIVEN_BATCH_SIZE)
-
-    outputs = p.transform(GIVEN_INPUTS)
-
-    expected = np.array(list(range(0, 200, 2)))
-    assert np.array_equal(outputs, expected)
-
-
-def test_parallel_queued_pipeline_with_step_name_n_worker_additional_arguments():
-    n_workers = 4
-    worker_arguments = [('hyperparams', HyperparameterSamples({'multiply_by': 2})) for _ in range(n_workers)]
-    p = ParallelQueuedFeatureUnion([
-        ('1', n_workers, worker_arguments, MultiplyByN()),
-    ], batch_size=GIVEN_BATCH_SIZE, max_queued_minibatches=5)
-
-    outputs = p.transform(GIVEN_INPUTS)
-
-    expected = np.array(list(range(0, 200, 2)))
-    assert np.array_equal(outputs, expected)
 
 
 def test_parallel_queued_pipeline_with_step_name_n_worker_with_step_name_n_workers_and_default_max_queued_minibatches():
@@ -601,7 +575,7 @@ def test_worker_unpicklable_data():
         UnpicklableContextReturnedAsTransformDact()
     ], batch_size=batch_size, n_workers_per_step=2)
 
-    with pytest.raises(PickleError):
+    with pytest.raises(ValueError):
         # If it doesn't raise the PickleError, then the thread will probably wait forever.
         # That is why a timeout needs to be used for this test.
         p.handle_transform(DACT(di=list(range(batch_size))), unpicklable_cx)

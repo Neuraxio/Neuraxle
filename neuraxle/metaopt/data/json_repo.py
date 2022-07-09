@@ -215,7 +215,7 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
 #         return f
 #     return decorator
 # class ThreadSafeHyperparamsOnDiskRepository(HyperparamsOnDiskRepository):
-#     lock = multiprocessing.Manager().Lock()
+#     lock = multiprocessing.Lock()
 #     @with_lock(lock)
 #     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
 #         return HyperparamsOnDiskRepository.load(scope, deep)

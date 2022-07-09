@@ -129,6 +129,7 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
         Push a minibatch to all subsequent consumers to allow them to consume it. If the task is terminal, close our own queue.
         """
         task.worker_name = self.name
+        self._ensure_task_picklable(task)
         for consumers_of_self in self.consumers:
             consumers_of_self: _ProducerConsumerMixin  # typing...
             consumers_of_self.put(task)
@@ -138,12 +139,20 @@ class _ProducerConsumerMixin(MixinForBaseTransformer):
         Put a minibatch in queue.
         The caller of this method is the producer of the minibatch and is external to self.
         """
+        self._ensure_task_picklable(task)
         try:
             self.input_queue.put(task)
             if task.is_error():
                 self._allow_exit_without_queue_flush()
         except Exception as e:
             raise _QueueDestroyedError("It seems like the queue to produce to has been destroyed.") from e
+
+    def _ensure_task_picklable(self, task: 'QueuedMinibatchTask'):
+        try:
+            pickle.dumps(task)
+        except Exception as e:
+            # See: https://github.com/python/cpython/issues/79423
+            raise pickle.PickleError(f"Couldn't pickle task {task} to send it to the next consumers.") from e
 
     def _get_minibatch_to_consume(self) -> 'QueuedMinibatchTask':
         """
@@ -224,7 +233,6 @@ def worker_function(
     context: CX,
     use_savers: bool,
     logging_queue: Optional[Queue],
-    additional_worker_arguments
 ):
     """
     Worker function that transforms the items inside the queue of items to process.
@@ -232,7 +240,6 @@ def worker_function(
     :param queue_worker: step to transform
     :param context: execution context
     :param use_savers: use savers
-    :param additional_worker_arguments: any additional arguments that need to be passed to the workers
     :return:
     """
     try:
@@ -241,12 +248,6 @@ def worker_function(
         if use_savers:
             worker.reload_post_saving(context)
         step = worker.get_step()
-
-        additional_worker_arguments = tuple(
-            additional_worker_arguments[i: i + 2] for i in range(0, len(additional_worker_arguments), 2)
-        )
-        for argument_name, argument_value in additional_worker_arguments:
-            step.__dict__.update({argument_name: argument_value})
 
         register_log_producer_for_main_logger_thread_to_consume(logging_queue)
 
@@ -259,24 +260,18 @@ def worker_function(
                 task.minibatch_dact = step.handle_transform(
                     task.minibatch_dact, context)
 
-                # Error catching starts here:
-                try:
-                    if not isinstance(task.minibatch_dact, DACT):
-                        raise ValueError(
-                            f"Minibatch DACT is not of good type. Received {type( task.minibatch_dact)}: {str( task.minibatch_dact)}.")
+                if not isinstance(task.minibatch_dact, DACT):
+                    raise ValueError(
+                        f"Minibatch DACT is not of good type. Received {type( task.minibatch_dact)}: {str( task.minibatch_dact)}.")
                     pickle.dumps(task)
-                except Exception as e:
-                    raise pickle.PickleError(
-                        f"Couldn't pickle processed task {task} to send it to the next consumers.") from e
 
             except queue.Empty:
+                # Queue did a timeout, continuing.
                 task = None
-                continue
+                continue  # breakpoint here.
             except _QueueDestroyedError:
                 # This error can happen at the destruction of workers or processes.
                 task = None
-                # Note: the exit here is most likely the reason for
-                #       deadlocks if something weird happened
                 return  # breakpoint here.
             except Exception as err:
                 context.flow.log_error(err)
@@ -313,17 +308,12 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
         max_queued_minibatches: int = None,
         n_workers: int = 1,
         use_processes: bool = True,
-        additional_worker_arguments: List = None,
         use_savers: bool = False
     ):
-        if not additional_worker_arguments:
-            additional_worker_arguments = [[] for _ in range(n_workers)]
-
         MetaStep.__init__(self, wrapped)
         _ProducerConsumerMixin.__init__(self, max_queued_minibatches)
         self.n_workers: int = n_workers
         self.use_processes: bool = use_processes
-        self.additional_worker_arguments = additional_worker_arguments
         self.use_savers = use_savers
 
         self.running_workers: List[Process] = []
@@ -356,23 +346,26 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
             _ = self.save(context, full_dump=True)  # Cannot delete queue worker self.
             del self.wrapped  # that will be reloaded in the new thread or process.
 
-        process_safe_context = context
-        thread_safe_lock: RLock = context.synchroneous()
+        thread_safe_lock: RLock = None
+        process_safe_context: CX = context
+        thread_safe_lock, process_safe_context = process_safe_context.thread_safe()
         ParallelObj = Thread
         logging_queue: Optional[Queue] = None
-        if self.use_processes:
+        if self.use_processes:  # TODO: that was to debug pickles.
             # New process requires trimming the references to other processes
             # when we create many processes: https://stackoverflow.com/a/65749012
-            thread_safe_lock, logging_thread, process_safe_context = context.process_safe()
+            logging_thread, process_safe_context = process_safe_context.process_safe()
             logging_queue = logging_thread.logging_queue
             ParallelObj = Process
 
+        # Important check to avoid this cPython issue to cause a deadlock: https://github.com/python/cpython/issues/79423
+
         self.running_workers = []
-        for i, worker_arguments in zip(range(self.n_workers), self.additional_worker_arguments):
+        for i in range(self.n_workers):
             p = ParallelObj(
                 target=worker_function,
                 name=self.name + f"__worker_function{i}",
-                args=(self, thread_safe_lock, process_safe_context, self.use_savers, logging_queue, worker_arguments)
+                args=(self, thread_safe_lock, process_safe_context, self.use_savers, logging_queue)
             )
             p.daemon = True
             self.running_workers.append(p)
@@ -431,9 +424,6 @@ QueuedPipelineStepsTuple = Union[
     Tuple[str, BaseTransformer],  # (step_name, step)
     Tuple[str, int, BaseTransformer],  # (step_name, n_workers, step)
     Tuple[str, int, int, BaseTransformer],  # (step_name, n_workers, max_queued_minibatches, step)
-    Tuple[str, int, List[Tuple], BaseTransformer],  # (step_name, n_workers, additional_worker_arguments, step)
-    # (step_name, n_workers, max_queued_minibatches, additional_worker_arguments, step)
-    Tuple[str, int, int, List[Tuple], BaseTransformer]
 ]
 FullQueuedPipelineStepsTuple = Tuple[str, int, int, List[Tuple], BaseTransformer]
 
@@ -558,7 +548,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         return steps_as_tuple
 
     def _parallel_wrap_step_tuple(self, step_tuple: QueuedPipelineStepsTuple):
-        name, n_workers, additional_worker_arguments, max_queued_minibatches, actual_step = self._parse_step_tuple(
+        name, n_workers, max_queued_minibatches, actual_step = self._parse_step_tuple(
             step_tuple)
 
         return ParallelWorkersWrapper(
@@ -566,7 +556,6 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             n_workers=n_workers,
             use_processes=self.use_processes,
             max_queued_minibatches=max_queued_minibatches,
-            additional_worker_arguments=additional_worker_arguments,
             use_savers=self.use_savers
         ).set_name(name)
 
@@ -588,7 +577,6 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         # Default values before parse, if missing:
         name: str = actual_step.name
         n_workers: int = max(1, self.n_workers_per_step or 1)
-        additional_arguments: List = []
         max_queued_minibatches: int = self.max_queued_minibatches
 
         if len(step_tuple) == 2:
@@ -599,15 +587,10 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         elif len(step_tuple) >= 3:
             name = step_tuple[0]
             n_workers = step_tuple[1]
-            if len(step_tuple) >= 4:
-                if isinstance(step_tuple[2], Iterable):
-                    additional_arguments = step_tuple[2]
-                    if len(step_tuple) == 5:
-                        max_queued_minibatches = step_tuple[3]
-                else:
-                    max_queued_minibatches = step_tuple[2]
+            if len(step_tuple) == 4:
+                max_queued_minibatches = step_tuple[2]
 
-        return (name, n_workers, additional_arguments, max_queued_minibatches, actual_step)
+        return (name, n_workers, max_queued_minibatches, actual_step)
 
     def _will_process(
         self, data_container: DACT, context: CX
