@@ -107,10 +107,10 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
             except Exception as err:
                 raise err from e
         if (scope == ScopedLocation() or scope == ScopedLocation.default().popped()) and len(loaded) == 0:
-            loaded2 = self._load_dc(scope=scope, deep=deep)
-            loaded3 = self._load_dc(scope=scope, deep=deep)
-            loaded4 = self._load_dc(scope=scope, deep=deep)
-            loaded5 = self._load_dc(scope=scope, deep=deep)
+            # loaded2 = self._load_dc(scope=scope, deep=deep)
+            # loaded3 = self._load_dc(scope=scope, deep=deep)
+            # loaded4 = self._load_dc(scope=scope, deep=deep)
+            # loaded5 = self._load_dc(scope=scope, deep=deep)
             raise ValueError("Len 0 while it should be longer: " + str(loaded))
         return loaded
 
@@ -139,10 +139,10 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
                         sub_dc = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
                         _dataclass.store(sub_dc)
                     except (FileNotFoundError, ValueError) as e:
-                        sub_dc2 = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
-                        sub_dc3 = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
-                        sub_dc4 = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
-                        sub_dc5 = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
+                        # sub_dc2 = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
+                        # sub_dc3 = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
+                        # sub_dc4 = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
+                        # sub_dc5 = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
                         raise e from e
         return _dataclass
 

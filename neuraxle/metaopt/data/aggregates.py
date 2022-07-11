@@ -212,6 +212,10 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         return self_copy
 
     @property
+    def flow(self) -> Flow:
+        return self.context.flow
+
+    @property
     def repo(self) -> HyperparamsRepository:
         return self.context.repo
 
@@ -571,11 +575,11 @@ class Round(RoundReport, BaseAggregate[Client, 'Trial', RoundReport, RoundDatacl
             new_hps: HyperparameterSamples = self.hp_optimizer.find_next_best_hyperparams(self)
             # assert new_hps.to_flat_dict() not in self.report.get_all_hyperparams(as_flat=True, use_wildcards=False)  # TODO: TMP.
             _trial_dataclass.hyperparams = new_hps
-            self.context.flow.log_planned(trial_id, _trial_dataclass.hyperparams)
+            self.flow.log_planned(trial_id, _trial_dataclass.hyperparams)
         elif new_trial is False:
-            self.context.flow.log_continued(trial_id)
+            self.flow.log_continued(trial_id)
         else:
-            self.context.flow.log_retraining(trial_id, _trial_dataclass.hyperparams)
+            self.flow.log_retraining(trial_id, _trial_dataclass.hyperparams)
 
         subagg: Trial = Trial(_trial_dataclass, self.context, is_deep=True)
         if continue_on_error:
@@ -611,19 +615,19 @@ class Round(RoundReport, BaseAggregate[Client, 'Trial', RoundReport, RoundDatacl
 
             if not is_all_failure and len(self) > 0:
                 main_metric_name = self.main_metric_name
-                self.context.flow.log('Finished round hp search!')
+                self.flow.log('Finished round hp search!')
                 try:
                     _best_trial: TrialReport = self.get_best_trial(main_metric_name)
                 except Exception as err:
                     raise err from err
-                self.context.flow.log_best_hps(
+                self.flow.log_best_hps(
                     main_metric_name,
                     _best_trial.get_hyperparams(),
                     _best_trial.get_avg_validation_score(main_metric_name),
                     _best_trial.get_avg_n_epoch_to_best_validation_score(main_metric_name)
                 )
             else:
-                self.context.flow.log_failure(e or ValueError(
+                self.flow.log_failure(e or ValueError(
                     f"The current Round #{self.get_id()} of length {len(self.report)} seems to contains only failed trials."))
 
             self.save(False)
@@ -701,7 +705,7 @@ class Trial(TrialReport, BaseAggregate[Round, 'TrialSplit', TrialReport, TrialDa
             split_id: int = self._dataclass.get_next_i()
             split_id = max(0, split_id)
             if split_id == 0:
-                self.context.flow.log_start()
+                self.flow.log_start()
         split_loc = self.loc.with_id(split_id)
 
         # Get split to save and return it:
@@ -749,7 +753,7 @@ class Trial(TrialReport, BaseAggregate[Round, 'TrialSplit', TrialReport, TrialDa
         metric_name = self.parent.main_metric_name
         avg_best_val_score = self.get_avg_validation_score(metric_name)
         avg_n_epochs_to_val_score = self.get_avg_n_epoch_to_best_validation_score(metric_name)
-        self.context.flow.log_success(avg_best_val_score, avg_n_epochs_to_val_score, metric_name)
+        self.flow.log_success(avg_best_val_score, avg_n_epochs_to_val_score, metric_name)
         return self
 
     def _set_failed(self, error: Exception) -> 'Trial':
@@ -760,7 +764,7 @@ class Trial(TrialReport, BaseAggregate[Round, 'TrialSplit', TrialReport, TrialDa
         :return: self
         """
         self._dataclass.end(TrialStatus.FAILED)
-        self.context.flow.log_failure(exception=error)
+        self.flow.log_failure(exception=error)
         return self
 
 
@@ -801,14 +805,14 @@ class TrialSplit(TrialSplitReport, BaseAggregate[Trial, 'MetricResults', TrialSp
         if self.epoch == 0:
             self.start()
         self.epoch: int = self.epoch + 1
-        self.context.flow.log_epoch(self.epoch, self.n_epochs)
+        self.flow.log_epoch(self.epoch, self.n_epochs)
         return self.epoch
 
     def start(self) -> 'TrialSplit':
         """
         Start the trial split.
         """
-        self.context.flow.log_start()
+        self.flow.log_start()
         with self.context.lock:
             self._dataclass.start()
             self.save(False)
@@ -859,7 +863,7 @@ class TrialSplit(TrialSplitReport, BaseAggregate[Trial, 'MetricResults', TrialSp
         with self.context.lock:
             if e is not None:
                 handled_error = False
-                self.context.flow.log_error(e)
+                self.flow.log_error(e)
             else:
                 handled_error = True
             self.save_subaggregate(resource, deep=True)
@@ -878,7 +882,7 @@ class TrialSplit(TrialSplitReport, BaseAggregate[Trial, 'MetricResults', TrialSp
         metric_name = self.parent.main_metric_name
         if metric_name not in self_metrics:
             if len(self_metrics) == 0:
-                self.context.flow.log_warning(
+                self.flow.log_warning(
                     f"TrialSplit {self._dataclass.get_id()} has no metrics. Please add a metric before setting to success.")
                 metric_name = None
             else:
@@ -889,7 +893,7 @@ class TrialSplit(TrialSplitReport, BaseAggregate[Trial, 'MetricResults', TrialSp
         n_epochs_to_val_score = self.metric_result(
             metric_name).get_n_epochs_to_best_validation_score() if metric_name is not None else None
 
-        self.context.flow.log_success(best_val_score, n_epochs_to_val_score, metric_name)
+        self.flow.log_success(best_val_score, n_epochs_to_val_score, metric_name)
         return self
 
     def _set_failed(self, error: Exception) -> 'TrialSplit':
@@ -901,10 +905,10 @@ class TrialSplit(TrialSplitReport, BaseAggregate[Trial, 'MetricResults', TrialSp
         """
         if isinstance(error, SystemExit) or isinstance(error, KeyboardInterrupt):
             self._dataclass.end(TrialStatus.ABORTED)
-            self.context.flow.log_aborted(error)
+            self.flow.log_aborted(error)
         else:
             self._dataclass.end(TrialStatus.FAILED)
-            self.context.flow.log_failure(error)
+            self.flow.log_failure(error)
         return self
 
     def train_context(self) -> 'AutoMLContext':
@@ -939,7 +943,7 @@ class MetricResults(MetricResultsReport, BaseAggregate[TrialSplit, None, MetricR
         """
         with self.context.lock:
             self._dataclass.train_values.append(score)
-            self.context.flow.log_train_metric(self.metric_name, score)
+            self.flow.log_train_metric(self.metric_name, score)
             self.save(True)
 
     def add_valid_result(self, score: float):
@@ -952,7 +956,7 @@ class MetricResults(MetricResultsReport, BaseAggregate[TrialSplit, None, MetricR
         """
         with self.context.lock:
             self._dataclass.validation_values.append(score)
-            self.context.flow.log_valid_metric(self.metric_name, score)
+            self.flow.log_valid_metric(self.metric_name, score)
             self.save(True)
 
     def __iter__(self) -> Iterable[SubAggregateT]:
