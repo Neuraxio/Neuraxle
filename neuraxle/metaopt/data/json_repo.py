@@ -189,10 +189,10 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
             os.remove(save_file)
             with open(save_file, 'w') as f:
                 import threading
-                import psutil
-                process_name = psutil.Process(os.getpid()).name()
+                # import psutil
+                # process_name = psutil.Process(os.getpid()).name()
                 thread_name = threading.current_thread().name
-                json.dump(f'being overwritten by process "{process_name}", thread "{thread_name}".', f, indent=4)
+                json.dump(f'being overwritten by thread "{thread_name}".', f, indent=4)
 
         os.makedirs(save_folder, exist_ok=True)
         tmp_save_file = save_file + '.tmp'
