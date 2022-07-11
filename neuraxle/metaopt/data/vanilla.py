@@ -716,12 +716,22 @@ class RootDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ProjectDataclas
     def get_sublocation(self) -> 'OrderedDict[str, SubDataclassT]':
         return self.projects
 
+    # def _validate(self):
+    #     super()._validate()
+    #     if DEFAULT_PROJECT not in self.get_sublocation_keys():
+    #         raise ValueError(f"{DEFAULT_PROJECT} should be in {self.__class__.__name__}. Got {self}.")
+
 
 @dataclass(order=True)
 class ProjectDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ClientDataclass']):
     project_name: str = DEFAULT_PROJECT
     clients: typing.OrderedDict[str, 'ClientDataclass'] = field(
         default_factory=lambda: OrderedDict({DEFAULT_CLIENT: ClientDataclass()}))
+
+    # def _validate(self):
+    #     super()._validate()
+    #     if DEFAULT_CLIENT not in self.get_sublocation_keys():
+    #         raise ValueError(f"{DEFAULT_CLIENT} should be in {self.__class__.__name__}. Got {self}.")
 
 
 @dataclass(order=True)
@@ -1138,7 +1148,7 @@ class AutoMLContext(CX):
 
     @property
     def logger(self) -> NeuraxleLogger:
-        self.add_scoped_logger_file_handler()
+        self.add_scoped_logger_file_handler()  # TODO: this is perhaps why logs are duplicated.
         return CX.logger.fget(self)
 
     @property
@@ -1150,6 +1160,7 @@ class AutoMLContext(CX):
         Add a file handler to the logger at the current scoped location to capture logs
         at this scope and below this scope.
         """
+        # TODO: with self.lock:
         self.repo.add_logging_handler(self.logger_at_scoped_loc, self.loc)
 
     def free_scoped_logger_file_handler(self):
@@ -1162,6 +1173,7 @@ class AutoMLContext(CX):
         """
         Read the scoped logger file.
         """
+        # TODO: with self.lock:
         return self.repo.get_log_from_logging_handler(self.logger, self.loc)
 
     def copy(self):
@@ -1207,6 +1219,7 @@ class AutoMLContext(CX):
 
     @property
     def lock(self):
+        # TODO: Global locks are known to be something to get rid of, such as Python's GIL. Use service locks. Rm this.
         return self.synchroneous()
 
     def disable_context_lock(self) -> 'AutoMLContext':
@@ -1256,4 +1269,5 @@ class AutoMLContext(CX):
         """
         Load the current dc from the repo.
         """
-        return self.repo.load(self.loc, deep)
+        with self.lock:
+            return self.repo.load(self.loc, deep)

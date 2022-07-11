@@ -21,7 +21,7 @@ from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, AutoMLContext,
                                            BaseDataclass, RoundDataclass,
-                                           ScopedLocation)
+                                           ScopedLocation, VanillaHyperparamsRepository)
 from neuraxle.metaopt.validation import (GridExplorationSampler,
                                          ValidationSplitter)
 from neuraxle.pipeline import Pipeline
@@ -213,12 +213,16 @@ def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
     assert median_absolute_error(dact.eo, preds.di) == best_score
 
 
-@pytest.mark.parametrize("use_processes", [True, False])
-def test_automl_use_a_json_repo_in_parallelized_round(use_processes):
+@pytest.mark.parametrize("use_processes,repoclass", [
+    [False, VanillaHyperparamsRepository],  # TODO: sql repo as well.
+    [False, HyperparamsOnDiskRepository],
+    [True, HyperparamsOnDiskRepository],
+])
+def test_automl_use_a_json_repo_in_parallelized_round(use_processes, repoclass):
     tmpdir = CX.get_new_cache_folder()
     len_x = 2 * 3 * 4 * 5
     dact = DACT(di=list(range(len_x)), eo=list(range(10, 10 + len_x)))
-    repo = HyperparamsOnDiskRepository(tmpdir)
+    repo = repoclass(tmpdir)
     cx = AutoMLContext.from_context(repo=repo)
     sleep_step = Sleep(0.125, add_random_quantity=0.250)
     automl: ControlledAutoML = _create_automl_test_loop(

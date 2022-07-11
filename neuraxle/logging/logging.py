@@ -251,6 +251,7 @@ class ParallelLoggingConsumerThread:
         self.logging_queue.put(None)
         self.logging_thread.join(timeout=timeout)
         self.logging_queue.close()
+        self.logging_queue.cancel_join_thread()
         self.logging_queue.join_thread()
 
 

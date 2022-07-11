@@ -106,6 +106,12 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
                 loaded: BaseDataclass = scope.new_dataclass_from_id()
             except Exception as err:
                 raise err from e
+        if (scope == ScopedLocation() or scope == ScopedLocation.default().popped()) and len(loaded) == 0:
+            loaded2 = self._load_dc(scope=scope, deep=deep)
+            loaded3 = self._load_dc(scope=scope, deep=deep)
+            loaded4 = self._load_dc(scope=scope, deep=deep)
+            loaded5 = self._load_dc(scope=scope, deep=deep)
+            raise ValueError("Len 0 while it should be longer: " + str(loaded))
         return loaded
 
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
@@ -132,8 +138,12 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
                     try:
                         sub_dc = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
                         _dataclass.store(sub_dc)
-                    except (FileNotFoundError, ValueError):
-                        continue
+                    except (FileNotFoundError, ValueError) as e:
+                        sub_dc2 = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
+                        sub_dc3 = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
+                        sub_dc4 = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
+                        sub_dc5 = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
+                        raise e from e
         return _dataclass
 
     def _load_json_file(self, load_file: str):
@@ -175,10 +185,23 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
     def _save_dc(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False):
         scope, save_folder, save_file = self._get_dataclass_filename_path(scope, _dataclass)
 
+        if os.path.exists(save_file):
+            os.remove(save_file)
+            with open(save_file, 'w') as f:
+                import threading
+                import psutil
+                process_name = psutil.Process(os.getpid()).name()
+                thread_name = threading.current_thread().name
+                json.dump(f'being overwritten by process "{process_name}", thread "{thread_name}".', f, indent=4)
+
         os.makedirs(save_folder, exist_ok=True)
         tmp_save_file = save_file + '.tmp'
         with open(tmp_save_file, 'w') as f:
-            json.dump(to_json(_dataclass.empty()), f, indent=4)
+            json_content = to_json(_dataclass.empty())
+            if len(json_content) == 0:
+                raise ValueError(f"Can't possibly save an empty dataclass. Something went wrong with dataclass {_dataclass} at scope {scope}.")
+            json.dump(json_content, f, indent=4)
+
         if os.path.exists(save_file):
             os.remove(save_file)
         shutil.move(tmp_save_file, save_file)

@@ -317,6 +317,7 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
         self.use_savers = use_savers
 
         self.running_workers: List[Process] = []
+        # TODO: maybe start this thread in the main instead than in every worker's main.
         self.logging_thread: ParallelLoggingConsumerThread = None
 
     def _setup(self, context: 'CX' = None) -> Optional[RecursiveDict]:
@@ -871,6 +872,7 @@ class WorkersJoiner(_ProducerConsumerMixin, Joiner):
     """
 
     def __init__(self, batch_size: int, n_worker_wrappers_to_join: int = None):
+        # TODO: the present class could be renamed to WorkersTerminalConsumer or so. The [-1] item of the pipeline should be the data joiner instead.
         Joiner.__init__(self, batch_size=batch_size)
         _ProducerConsumerMixin.__init__(self)
         self.n_workers = n_worker_wrappers_to_join

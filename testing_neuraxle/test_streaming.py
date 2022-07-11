@@ -68,7 +68,7 @@ def test_queued_pipeline_with_included_incomplete_batch():
     assert np.array_equal(outputs, np.array(list(range(15))) * 2**3)
 
 
-@pytest.mark.timeout(10)
+# @pytest.mark.timeout(10)
 @pytest.mark.parametrize('use_processes', [False, True])
 def test_queued_pipeline_can_report_stack_trace_upon_failure(use_processes: bool):
     # TODO: this test runs infinite, it hangs and never ends.
