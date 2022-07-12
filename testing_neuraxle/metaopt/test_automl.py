@@ -9,9 +9,9 @@ from neuraxle.metaopt.auto_ml import AutoML, ControlledAutoML, Trainer
 from neuraxle.metaopt.callbacks import (BestModelCheckpoint,
                                         EarlyStoppingCallback, MetricCallback,
                                         ScoringCallback)
+from neuraxle.metaopt.context import AutoMLContext
 from neuraxle.metaopt.data.aggregates import Trial
 from neuraxle.metaopt.data.reporting import RoundReport, TrialReport
-from neuraxle.metaopt.data.vanilla import AutoMLContext
 from neuraxle.metaopt.validation import (GridExplorationSampler,
                                          KFoldCrossValidationSplitter,
                                          RandomSearchSampler,

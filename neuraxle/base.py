@@ -45,7 +45,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from copy import copy, deepcopy
 from enum import Enum
-from multiprocessing import Manager, RLock
+from multiprocessing import RLock
 from operator import attrgetter
 from typing import (Any, Callable, Dict, Generic, ItemsView, Iterable,
                     KeysView, List, Optional, Set, Tuple, Type, TypeVar, Union,

@@ -10,8 +10,8 @@ from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler
 from neuraxle.metaopt.callbacks import (EarlyStoppingCallback, MetricCallback,
                                         ScoringCallback)
-from neuraxle.metaopt.data.vanilla import (AutoMLContext,
-                                           VanillaHyperparamsRepository)
+from neuraxle.metaopt.context import AutoMLContext
+from neuraxle.metaopt.repositories.repo import VanillaHyperparamsRepository
 from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyRavel

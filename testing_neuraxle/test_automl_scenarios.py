@@ -17,11 +17,12 @@ from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         HyperparameterSpace)
 from neuraxle.metaopt.auto_ml import ControlledAutoML, DefaultLoop, Trainer
 from neuraxle.metaopt.callbacks import MetricCallback
+from neuraxle.metaopt.context import AutoMLContext
 from neuraxle.metaopt.data.aggregates import Round
-from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
-from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, AutoMLContext,
-                                           BaseDataclass, RoundDataclass,
-                                           ScopedLocation, VanillaHyperparamsRepository)
+from neuraxle.metaopt.data.vanilla import (BaseDataclass, RoundDataclass,
+                                           ScopedLocation)
+from neuraxle.metaopt.repositories.json import HyperparamsOnDiskRepository
+from neuraxle.metaopt.repositories.repo import VanillaHyperparamsRepository
 from neuraxle.metaopt.validation import (GridExplorationSampler,
                                          ValidationSplitter)
 from neuraxle.pipeline import Pipeline

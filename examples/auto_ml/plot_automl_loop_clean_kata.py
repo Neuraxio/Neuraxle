@@ -32,7 +32,7 @@ from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import (AutoML, RandomSearchSampler,
                                       ValidationSplitter)
 from neuraxle.metaopt.callbacks import ScoringCallback
-from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
+from neuraxle.metaopt.repositories.json import HyperparamsOnDiskRepository
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import ChooseOneStepOf
 from neuraxle.steps.numpy import NumpyRavel

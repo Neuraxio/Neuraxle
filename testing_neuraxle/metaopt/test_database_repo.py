@@ -2,12 +2,13 @@
 import os
 
 import pytest
-from neuraxle.metaopt.data.db_repo import (Base, ClientNode, DataClassNode,
-                                           ProjectNode, ScopedLocationTreeNode,
-                                           SQLLiteHyperparamsRepository)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            ClientDataclass, ProjectDataclass,
                                            RootDataclass, ScopedLocation)
+from neuraxle.metaopt.repositories.db import (Base, ClientNode, DataClassNode,
+                                              ProjectNode,
+                                              ScopedLocationTreeNode,
+                                              SQLLiteHyperparamsRepository)
 from sqlalchemy import and_, create_engine
 from sqlalchemy.orm import sessionmaker
 from testing_neuraxle.metaopt.test_automl_dataclasses import \

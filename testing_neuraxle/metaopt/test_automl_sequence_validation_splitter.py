@@ -7,8 +7,9 @@ from neuraxle.hyperparams.distributions import RandInt
 from neuraxle.hyperparams.space import FlatDict, HyperparameterSpace
 from neuraxle.metaopt.auto_ml import AutoML
 from neuraxle.metaopt.callbacks import MetricCallback
+from neuraxle.metaopt.context import AutoMLContext
 from neuraxle.metaopt.data.aggregates import Round
-from neuraxle.metaopt.data.vanilla import AutoMLContext, ScopedLocation
+from neuraxle.metaopt.data.vanilla import ScopedLocation
 from neuraxle.metaopt.validation import (GridExplorationSampler,
                                          KFoldCrossValidationSplitter,
                                          RandomSearchSampler,

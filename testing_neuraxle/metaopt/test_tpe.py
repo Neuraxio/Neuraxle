@@ -11,16 +11,16 @@ from neuraxle.hyperparams.distributions import (Choice, DistributionMixture,
                                                 Quantized, RandInt, Uniform)
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
-from neuraxle.metaopt.auto_ml import (AutoML, BaseHyperparameterOptimizer,
-                                      ControlledAutoML)
+from neuraxle.metaopt.auto_ml import AutoML, ControlledAutoML
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.aggregates import (MetricResults, Round, Trial,
                                               TrialSplit)
-from neuraxle.metaopt.data.vanilla import (HyperparameterSamplerStub,
-                                           VanillaHyperparamsRepository)
 from neuraxle.metaopt.hyperopt.tpe import (TreeParzenEstimator,
                                            _DividedMixturesFactory,
                                            _DividedTPEPosteriors)
+from neuraxle.metaopt.optimizer import (BaseHyperparameterOptimizer,
+                                        HyperparameterSamplerStub)
+from neuraxle.metaopt.repositories.repo import VanillaHyperparamsRepository
 from neuraxle.metaopt.validation import (GridExplorationSampler,
                                          ValidationSplitter)
 from neuraxle.pipeline import Pipeline

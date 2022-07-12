@@ -28,25 +28,22 @@ from typing import Any, Dict, List, Optional, OrderedDict, Type
 from neuraxle.base import TrialStatus
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.logging.logging import NeuraxleLogger
-from neuraxle.metaopt.data.aggregates import Round, Trial, TrialSplit
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_METRIC_NAME,
                                            DEFAULT_PROJECT, BaseDataclass,
                                            BaseTrialDataclassMixin,
                                            ClientDataclass,
-                                           HyperparamsRepository,
                                            MetricResultsDataclass,
                                            ProjectDataclass, RootDataclass,
                                            RoundDataclass, ScopedLocation,
                                            SubDataclassT, TrialDataclass,
                                            TrialSplitDataclass,
-                                           dataclass_2_id_attr, to_json)
+                                           dataclass_2_id_attr)
+from neuraxle.metaopt.repositories.repo import HyperparamsRepository
 from sqlalchemy import (JSON, TEXT, Boolean, Column, DateTime, Float,
-                        ForeignKey, Integer, MetaData, String, Table, and_,
-                        create_engine)
+                        ForeignKey, Integer, String, and_, create_engine)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import (backref, declarative_mixin, joinedload,
                             relationship, sessionmaker)
-from sqlalchemy.orm.collections import attribute_mapped_collection
 from sqlalchemy.orm.session import Session
 from sqlalchemy.schema import Sequence
 from sqlalchemy.sql import asc, desc, func

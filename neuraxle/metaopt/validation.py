@@ -44,7 +44,7 @@ from neuraxle.hyperparams.distributions import (
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         HyperparameterSpace)
 from neuraxle.metaopt.data.aggregates import Round
-from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
+from neuraxle.metaopt.optimizer import BaseHyperparameterOptimizer
 
 
 class RandomSearchSampler(BaseHyperparameterOptimizer):

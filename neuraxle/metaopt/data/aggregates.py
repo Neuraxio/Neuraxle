@@ -52,6 +52,7 @@ from neuraxle.base import (Flow, PassthroughNullLock, TrialStatus,
                            _CouldHaveContext)
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         HyperparameterSpace)
+from neuraxle.metaopt.context import AutoMLContext
 from neuraxle.metaopt.data.reporting import (BaseReport, ClientReport,
                                              MetricResultsReport,
                                              ProjectReport, RootReport,
@@ -60,10 +61,7 @@ from neuraxle.metaopt.data.reporting import (BaseReport, ClientReport,
                                              dataclass_2_report)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            RETRAIN_TRIAL_SPLIT_ID,
-                                           AutoMLContext, BaseDataclass,
-                                           BaseHyperparameterOptimizer,
-                                           ClientDataclass,
-                                           HyperparamsRepository,
+                                           BaseDataclass, ClientDataclass,
                                            MetricResultsDataclass,
                                            ProjectDataclass, RootDataclass,
                                            RoundDataclass, ScopedLocation,
@@ -71,8 +69,10 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            ScopedLocationAttrInt,
                                            SubDataclassT, TrialDataclass,
                                            TrialSplitDataclass,
-                                           VanillaHyperparamsRepository,
                                            dataclass_2_id_attr)
+from neuraxle.metaopt.optimizer import BaseHyperparameterOptimizer
+from neuraxle.metaopt.repositories.repo import (HyperparamsRepository,
+                                                VanillaHyperparamsRepository)
 
 SubAggregateT = TypeVar('SubAggregateT', bound=Optional['BaseAggregate'])
 ParentAggregateT = TypeVar('ParentAggregateT', bound=Optional['BaseAggregate'])

@@ -15,10 +15,11 @@ from neuraxle.logging.logging import (NEURAXLE_LOGGER_NAME, NeuraxleLogger,
                                       ParallelLoggingConsumerThread)
 from neuraxle.metaopt.auto_ml import AutoML
 from neuraxle.metaopt.callbacks import ScoringCallback
-from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
+from neuraxle.metaopt.context import AutoMLContext
+from neuraxle.metaopt.repositories.json import HyperparamsOnDiskRepository
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
-                                           AutoMLContext, ProjectDataclass,
-                                           ScopedLocation, TrialSplitDataclass)
+                                           ProjectDataclass, ScopedLocation,
+                                           TrialSplitDataclass)
 from neuraxle.metaopt.validation import RandomSearchSampler, ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCounterLoggingStep

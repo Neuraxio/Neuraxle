@@ -28,18 +28,19 @@ Classes are splitted like this for the AutoML:
 
 
 """
-import multiprocessing
 import json
 import os
-from copy import deepcopy
 import shutil
+from copy import deepcopy
 from typing import List, Optional
-from neuraxle.base import MetaServiceMixin
 
 from neuraxle.logging.logging import NeuraxleLogger
-from neuraxle.metaopt.data.vanilla import (BaseDataclass, dataclass_2_id_attr,
-                                           DataclassHasListMixin, from_json, HyperparamsRepository, RootDataclass, ScopedLocation,
-                                           SubDataclassT, to_json)
+from neuraxle.metaopt.data.vanilla import (BaseDataclass,
+                                           DataclassHasListMixin,
+                                           RootDataclass, ScopedLocation,
+                                           SubDataclassT, dataclass_2_id_attr,
+                                           from_json, to_json)
+from neuraxle.metaopt.repositories.repo import HyperparamsRepository
 
 ON_DISK_DELIM: str = "_"
 
@@ -84,13 +85,11 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         :class:`Trainer`,
     """
 
-    @init_with_rlock()
     def __init__(self, cache_folder: str = None):
         HyperparamsRepository.__init__(self)
         _OnDiskRepositoryLoggerHandlerMixin.__init__(self, cache_folder=cache_folder)
         self._save_dc(RootDataclass(), scope=ScopedLocation(), deep=True)
 
-    @func_with_rlock()
     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
         """
         Get metadata from scope.
@@ -118,7 +117,6 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
             raise ValueError("Len 0 while it should be longer: " + str(loaded))
         return loaded
 
-    @func_with_rlock()
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
         """
         Save metadata to scope.
@@ -194,6 +192,7 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
             os.remove(save_file)
             with open(save_file, 'w') as f:
                 import threading
+
                 # import psutil
                 # process_name = psutil.Process(os.getpid()).name()
                 thread_name = threading.current_thread().name
@@ -234,67 +233,3 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
     def is_locking_required(self) -> bool:
         # TODO: refacto.
         return True
-
-
-def init_with_rlock():
-    def decorator(_init_):
-        def f(self, *args, **kwargs):
-            _init_(self, *args, **kwargs)
-            self.lock = multiprocessing.RLock()
-            return None
-        return f
-    return decorator
-
-
-def func_with_rlock():
-    def decorator(func):
-        def f(self, *args, **kwargs):
-            with self.lock:
-                return func(self, *args, **kwargs)
-        return f
-    return decorator
-
-
-class SynchronizedHyperparamsRepositoryWrapper(MetaServiceMixin, HyperparamsRepository):
-    """
-    A wrapper that makes any HyperparamsRepository thread-safe using locking.
-    """
-
-    @init_with_rlock
-    def __init__(self, wrapped: HyperparamsRepository):
-        MetaServiceMixin.__init__(self, wrapped)
-        HyperparamsRepository.__init__(self)
-
-    @func_with_rlock()
-    def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
-        repo: HyperparamsRepository = self.get_step()
-        return repo.load(scope, deep)
-
-    @func_with_rlock()
-    def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
-        repo: HyperparamsRepository = self.get_step()
-        return repo.save(_dataclass, scope, deep)
-
-    @func_with_rlock()
-    def add_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> 'HyperparamsRepository':
-        repo: HyperparamsRepository = self.get_step()
-        return repo.add_logging_handler(logger, scope)
-
-    @func_with_rlock()
-    def get_log_from_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> str:
-        repo: HyperparamsRepository = self.get_step()
-        return repo.get_log_from_logging_handler(logger, scope)
-
-    @func_with_rlock()
-    def is_locking_required(self) -> bool:
-        repo: HyperparamsRepository = self.get_step()
-        return repo.is_locking_required()
-
-#     def _get_thread_safe(self):
-#         pass
-# 
-#     def _get_pickle_safe(self):
-#         pass
-# 
-#     def set_thread_safe():
-#         pass
