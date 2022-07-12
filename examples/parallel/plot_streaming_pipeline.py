@@ -71,22 +71,22 @@ def main():
     time_vanilla_pipeline, output_classical = eval_run_time(p)
     print(f"Classical 'Pipeline' execution time: {time_vanilla_pipeline} seconds.")
 
-    # Classical minibatch pipeline - minibatch size 25:
+    # Classical minibatch pipeline - minibatch size 5:
     p = MiniBatchSequentialPipeline(preprocessing_and_model_steps,
-                                    batch_size=25)
+                                    batch_size=5)
     time_minibatch_pipeline, output_minibatch = eval_run_time(p)
     print(f"Minibatched 'MiniBatchSequentialPipeline' execution time: {time_minibatch_pipeline} seconds.")
 
-    # Parallel pipeline - minibatch size 25 with 4 parallel workers per step that
+    # Parallel pipeline - minibatch size 5 with 4 parallel workers per step that
     # have a max queue size of 10 batches between preprocessing and the model:
     p = SequentialQueuedPipeline(preprocessing_and_model_steps,
-                                 n_workers_per_step=4, max_queue_size=10, batch_size=25)
+                                 n_workers_per_step=4, max_queued_minibatches=10, batch_size=5)
     time_parallel_pipeline, output_parallel = eval_run_time(p)
     print(f"Parallel 'SequentialQueuedPipeline' execution time: {time_parallel_pipeline} seconds.")
 
-    assert time_parallel_pipeline < time_minibatch_pipeline, str((time_parallel_pipeline, time_vanilla_pipeline))
     assert np.array_equal(output_classical, output_minibatch)
     assert np.array_equal(output_classical, output_parallel)
+    assert time_parallel_pipeline < time_minibatch_pipeline, str((time_parallel_pipeline, time_vanilla_pipeline))
 
 
 if __name__ == '__main__':

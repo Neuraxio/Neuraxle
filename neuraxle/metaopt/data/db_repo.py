@@ -546,7 +546,7 @@ class DatabaseHyperparamRepository(_DatabaseLoggerHandlerMixin, HyperparamsRepos
 
 
 class SQLLiteHyperparamsRepository(DatabaseHyperparamRepository):
-    def __init__(self, sqllite_db_path, echo=True):
+    def __init__(self, sqllite_db_path, echo=False):
 
         sqlite_filepath = os.path.join(sqllite_db_path, "sqlite.db")
         os.makedirs(sqllite_db_path, exist_ok=True)
@@ -558,6 +558,9 @@ class SQLLiteHyperparamsRepository(DatabaseHyperparamRepository):
 
         super().__init__(engine, session)
         self.create_db()
+
+    def is_locking_required(self) -> bool:
+        return True
 
 
 class PostGreSQLHyperparamsRepository(DatabaseHyperparamRepository):

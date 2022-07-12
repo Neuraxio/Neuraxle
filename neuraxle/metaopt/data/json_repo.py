@@ -31,15 +31,13 @@ Classes are splitted like this for the AutoML:
 import json
 import os
 from copy import deepcopy
-from typing import List
+import shutil
+from typing import List, Optional
 
 from neuraxle.logging.logging import NeuraxleLogger
-from neuraxle.metaopt.data.vanilla import (BaseDataclass,
-                                           HyperparamsRepository,
-                                           ScopedLocation, SubDataclassT,
-                                           VanillaHyperparamsRepository,
-                                           dataclass_2_id_attr, from_json,
-                                           to_json)
+from neuraxle.metaopt.data.vanilla import (BaseDataclass, dataclass_2_id_attr,
+                                           DataclassHasListMixin, from_json, HyperparamsRepository, RootDataclass, ScopedLocation,
+                                           SubDataclassT, to_json)
 
 ON_DISK_DELIM: str = "_"
 
@@ -87,7 +85,7 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
     def __init__(self, cache_folder: str = None):
         HyperparamsRepository.__init__(self)
         _OnDiskRepositoryLoggerHandlerMixin.__init__(self, cache_folder=cache_folder)
-        self._vanilla = VanillaHyperparamsRepository(cache_folder=cache_folder)
+        self._save_dc(RootDataclass(), scope=ScopedLocation(), deep=True)
 
     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
         """
@@ -99,8 +97,21 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         :param scope: scope to get metadata from.
         :return: metadata from scope.
         """
-        loaded = self._load_dc(scope=scope, deep=deep)
-        self._vanilla.save(loaded, scope=scope, deep=deep)
+        try:
+            loaded = self._load_dc(scope=scope, deep=deep)
+        except (KeyError, FileNotFoundError) as e:
+            if scope == ScopedLocation():
+                raise ValueError("An error occured: should be able to load Root from json repo without problems.") from e
+            try:
+                loaded: BaseDataclass = scope.new_dataclass_from_id()
+            except Exception as err:
+                raise err from e
+        if (scope == ScopedLocation() or scope == ScopedLocation.default().popped()) and len(loaded) == 0:
+            # loaded2 = self._load_dc(scope=scope, deep=deep)
+            # loaded3 = self._load_dc(scope=scope, deep=deep)
+            # loaded4 = self._load_dc(scope=scope, deep=deep)
+            # loaded5 = self._load_dc(scope=scope, deep=deep)
+            raise ValueError("Len 0 while it should be longer: " + str(loaded))
         return loaded
 
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
@@ -111,56 +122,126 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         :param scope: scope to save metadata to.
         :param deep: if True, save metadata's sublocations recursively so as to update.
         """
-        self._vanilla.save(_dataclass=_dataclass, scope=scope, deep=deep)
         self._save_dc(_dataclass=_dataclass, scope=scope, deep=deep)
         return self
 
     def _load_dc(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
-        scope, _, load_file = self._get_dataclass_filename_path(None, scope)
+        scope, _, load_file = self._get_dataclass_filename_path(scope)
 
-        if not os.path.exists(load_file):
-            # raise FileNotFoundError(f"{load_file} not found.")
-            return self._vanilla.load(scope=scope, deep=deep)
+        _json_loaded = self._load_json_file(load_file)
+        _dataclass: SubDataclassT = from_json(_json_loaded)
 
-        with open(load_file, 'r') as f:
-            _dataclass: SubDataclassT = from_json(json.load(f))
-            if _dataclass.has_sublocation_dataclasses():
-                _dataclass = self._load_dc_sublocation_keys(_dataclass, scope)
-                if deep is True:
-                    for sub_dc_id in _dataclass.get_sublocation_keys():
+        if _dataclass.has_sublocation_dataclasses():
+            _dataclass = self._load_dc_sublocation_keys(_dataclass, scope)
+            if deep is True:
+                for sub_dc_id in _dataclass.get_sublocation_keys():
+                    try:
                         sub_dc = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
                         _dataclass.store(sub_dc)
-            return _dataclass
+                    except (FileNotFoundError, ValueError) as e:
+                        # sub_dc2 = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
+                        # sub_dc3 = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
+                        # sub_dc4 = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
+                        # sub_dc5 = self._load_dc(scope=scope.with_id(sub_dc_id), deep=deep)
+                        raise e from e
+        return _dataclass
 
-    def _load_dc_sublocation_keys(self, _dataclass: SubDataclassT, scope) -> SubDataclassT:
+    def _load_json_file(self, load_file: str):
+        if not os.path.exists(load_file):
+            raise FileNotFoundError(f"{load_file} not found.")
+        try:
+            with open(load_file, 'r') as f:
+                return json.load(f)
+        except json.decoder.JSONDecodeError as e:
+            with open(load_file, 'r') as f:
+                _file_content: str = f.read()
+            # TODO: for trials only, use UUID mechanism that could be added to the dataclass or aggregate to resolve collisions. Or investigate and fix locking.
+            surrounding_files = os.listdir(os.path.dirname(load_file))
+            raise ValueError(
+                f"Invalid JSON file: {repr(_file_content)} in path {load_file} with folder ls={surrounding_files}."
+            ) from e
+
+    def _load_dc_sublocation_keys(self, _dataclass: SubDataclassT, scope: ScopedLocation) -> SubDataclassT:
         dc_folder: str = self.get_folder_at_scope(scope)
         sublocs: List[str] = os.listdir(dc_folder)
+        # TODO: loaded keys are simply sorted. That is a problem and doesn't respect the dataclass' OrderedDict (e.g.: metrics' sorting).
         sublocs = [s[len(ON_DISK_DELIM):] for s in sublocs if s.startswith(ON_DISK_DELIM)]
-        _dataclass.set_sublocation_keys(sublocs)
+        if isinstance(_dataclass, DataclassHasListMixin):
+            sublocs = [int(i) for i in sublocs]
+        sublocs = [
+            s for s in sublocs
+            if os.path.exists(
+                self._get_dataclass_filename_path(scope.with_id(s))[-1]
+            )
+        ]
+        sublocs = list(sorted(sublocs))
+        try:
+            _dataclass.set_sublocation_keys(sublocs)
+        except AssertionError as e:
+            raise e from e
+
         return _dataclass
 
     def _save_dc(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False):
-        scope, save_folder, save_file = self._get_dataclass_filename_path(_dataclass, scope)
+        scope, save_folder, save_file = self._get_dataclass_filename_path(scope, _dataclass)
+
+        if os.path.exists(save_file):
+            os.remove(save_file)
+            with open(save_file, 'w') as f:
+                import threading
+                # import psutil
+                # process_name = psutil.Process(os.getpid()).name()
+                thread_name = threading.current_thread().name
+                json.dump(f'being overwritten by thread "{thread_name}".', f, indent=4)
 
         os.makedirs(save_folder, exist_ok=True)
-        with open(save_file, 'w') as f:
-            json.dump(to_json(_dataclass.empty()), f, indent=4)
+        tmp_save_file = save_file + '.tmp'
+        with open(tmp_save_file, 'w') as f:
+            json_content = to_json(_dataclass.empty())
+            if len(json_content) == 0:
+                raise ValueError(f"Can't possibly save an empty dataclass. Something went wrong with dataclass {_dataclass} at scope {scope}.")
+            json.dump(json_content, f, indent=4)
+
+        if os.path.exists(save_file):
+            os.remove(save_file)
+        shutil.move(tmp_save_file, save_file)
 
         if deep is True and _dataclass.has_sublocation_dataclasses():
             for sub_dc in _dataclass.get_sublocation_values():
                 self._save_dc(sub_dc, scope=scope, deep=deep)
 
-    def _get_dataclass_filename_path(self, _dataclass: SubDataclassT, scope: ScopedLocation):
-        scope = self._patch_scope_for_dataclass(_dataclass, scope)
+    def _get_dataclass_filename_path(self, scope: ScopedLocation, _dataclass: Optional[SubDataclassT] = None):
+        scope = self._patch_scope_for_dataclass(scope, _dataclass)
 
         save_folder = self.get_folder_at_scope(scope)
         save_file = os.path.join(save_folder, 'metadata.json')
 
         return scope, save_folder, save_file
 
-    def _patch_scope_for_dataclass(self, _dataclass: BaseDataclass, scope: ScopedLocation):
+    def _patch_scope_for_dataclass(self, scope: ScopedLocation, _dataclass: Optional[BaseDataclass] = None):
         scope = deepcopy(scope)
         if _dataclass is not None and _dataclass.get_id() is not None:
             scope = scope.at_dc(_dataclass)
             setattr(scope, dataclass_2_id_attr[_dataclass.__class__], _dataclass.get_id())
         return scope
+
+    def is_locking_required(self) -> bool:
+        return True
+
+
+# import multiprocessing
+# def with_lock(lock: multiprocessing.Lock):
+#     def decorator(func):
+#         def f(*args, **kwargs):
+#             with lock:
+#                 return func(*args, **kwargs)
+#         return f
+#     return decorator
+# class ThreadSafeHyperparamsOnDiskRepository(HyperparamsOnDiskRepository):
+#     lock = multiprocessing.Lock()
+#     @with_lock(lock)
+#     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
+#         return HyperparamsOnDiskRepository.load(scope, deep)
+#     @with_lock(lock)
+#     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
+#         return HyperparamsOnDiskRepository.save(_dataclass, scope, deep)

@@ -1,0 +1,13 @@
+[run]
+parallel = True
+concurrency = multiprocessing, thread
+
+[report]
+exclude_lines =
+    raise NotImplementedError.*
+    if False:
+    if 0:
+    raise AssertionError.*
+    @(abc\.)?abstractmethod
+    if __name__ == __main__:
+

@@ -88,7 +88,7 @@ setup(
     author='Neuraxio Inc.',
     author_email='guillaume.chevalier@neuraxio.com',
     packages=find_packages(include=['neuraxle*']),
-    test_suite="testing",
+    test_suite="testing_neuraxle",
     setup_requires=["pytest-runner"],
     install_requires=[
         'numpy>=1.16.2',
@@ -99,10 +99,12 @@ setup(
         'Flask>=1.1.4',
         'Flask-RESTful>=0.3.9',
         'markupsafe==2.0.1',
+        'pandas>=1.3.5',
     ],
     tests_require=[
         "pytest",
         "pytest-cov",
+        "pytest-timeout>=2.1.0",
         "scikit-learn>=0.24.1"
     ],
     include_package_data=True,

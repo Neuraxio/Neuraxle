@@ -33,6 +33,7 @@ import datetime
 import inspect
 import logging
 import os
+import pickle
 import pprint
 import shutil
 import sys
@@ -58,7 +59,8 @@ from neuraxle.data_container import DataContainer as DACT
 from neuraxle.data_container import PredsDACT, TrainDACT
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace, RecursiveDict)
-from neuraxle.logging.logging import NEURAXLE_LOGGER_NAME, NeuraxleLogger
+from neuraxle.logging.logging import (NEURAXLE_LOGGER_NAME, NeuraxleLogger,
+                                      ParallelLoggingConsumerThread)
 from neuraxle.logging.warnings import warn_deprecated_arg
 
 
@@ -496,16 +498,13 @@ class _HasRecursiveMethods:
             _method = method
             kargs = [self] + list(kargs)
 
-        try:
-            results = _method(*kargs, **ra.kwargs)
-            if not isinstance(results, RecursiveDict):
-                raise ValueError(
-                    'Method {} must return a RecursiveDict because it is applied recursively.'.format(method))
-            return results
-        except Exception as err:
-            print('{}: Failed to apply method {}.'.format(self.name, method))
-            print(traceback.format_stack())
-            raise err
+        results = _method(*kargs, **ra.kwargs)
+        if results is None:
+            results = RecursiveDict()
+        if not isinstance(results, RecursiveDict):
+            raise ValueError(
+                f'Method {method} of {self} must return None or a RecursiveDict, as it is applied recursively.')
+        return results
 
 
 class _HasConfig(ABC):
@@ -969,14 +968,22 @@ class Flow(BaseService):
     def log_status(self, status: TrialStatus):
         self.log(f'Status: {status}')
 
-    def log_planned(self, hps: HyperparameterSamples):
-        self.log('Planned!')
+    def log_planned(self, trial_id: int, hps: HyperparameterSamples):
+        self.log(f'Trial #{trial_id} planned!')
         self.log_hps(hps)
         self.log_status(TrialStatus.PLANNED)
 
-    def log_hps(self, hps: HyperparameterSamples):
-        hps_str = pprint.pformat(hps.to_flat_dict(), indent=4)
-        self.log(f'Hyperparameters: {hps_str}')
+    def log_continued(self, trial_id: int):
+        self.log(f'Trial #{trial_id} continued!')
+
+    def log_retraining(self, trial_id: int, hps: HyperparameterSamples):
+        self.log(f'Trial #{trial_id} will retrain!')
+        self.log_hps(hps)
+        self.log_status(TrialStatus.PLANNED)
+
+    def log_hps(self, hps: HyperparameterSamples, use_wildcards=True):
+        hps_str = pprint.pformat(hps.to_flat_dict(use_wildcards=use_wildcards), indent=4)
+        self.log(f'Hyperparameters: \n{hps_str}')
 
     def log_start(self):
         self.log('Started!')
@@ -989,27 +996,35 @@ class Flow(BaseService):
         self.log('Finished!')
         self.log_status(status)
 
-    def log_success(self):
+    def log_success(self, best_val_score: float = None, n_epochs_to_val_score: int = None, metric_name: str = None):
         self.log_end(TrialStatus.SUCCESS)
-        # TODO: log all the following info:
-        #           context.logger.info('success trial {}\nbest score: {} at epoch {}'.format(
-        #               trial_split_description,
-        #               repo_trial_split.get_best_validation_score(),
-        #               repo_trial_split.get_n_epochs_to_best_validation_score()
-        #           ))
+        if best_val_score is not None:
+            self.log(f' ==> With best {metric_name} validation score: {best_val_score}')
+        if n_epochs_to_val_score is not None:
+            self.log(f' ==> At epoch: {n_epochs_to_val_score}')
 
-    def log_best_hps(self, main_metric_name, best_hps: HyperparameterSamples):
-        self.log(f"Best hyperparameters found for metric '{main_metric_name}':")
+    def log_best_hps(self, main_metric_name, best_hps: HyperparameterSamples, avg_validation_score: float, avg_n_epoch_to_best_validation_score: int):
+        self.log(
+            f"Best hyperparameters found for metric '{main_metric_name}' with "
+            f"best validation score '{avg_validation_score}' "
+            f"obtained at epoch '{avg_n_epoch_to_best_validation_score}':")
         self.log_hps(best_hps)
 
     def log_failure(self, exception: Exception):
-        self.log_error(exception)
+        if exception is not None:
+            self.log_error(exception)
         self.log_end(TrialStatus.FAILED)
 
     def log_error(self, exception: Exception):
-        self.log(f'The following exception occurred: \n{exception}', level=logging.INFO)
-        if exception is not None:
+        """
+        Log an exception or error. The stack trace is logged as well.
+        """
+        self.log(f'The following {type(exception).__name__} occurred: {exception}', level=logging.ERROR)
+        if exception is not None and exception.__traceback__ is not None:
             self.logger.exception(exception)
+
+    def log_warning(self, message: str):
+        self.log(message, level=logging.WARNING)
 
     def log_aborted(self, exception: Exception):
         """
@@ -1040,7 +1055,7 @@ class ContextLock(BaseService):
 
     def synchroneous(self):
         if self._lock is None:
-            self._lock = Manager().RLock()
+            self._lock = RLock()
         return self._lock
 
     def copy(self):
@@ -1049,6 +1064,23 @@ class ContextLock(BaseService):
     @property
     def lock(self):
         return self._lock
+
+
+class PassthroughNullLock:
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+
+class NoContextLock(ContextLock):
+    """
+    NoContextLock is like a ContextLock but it does not lock anything.
+    """
+
+    def __init__(self):
+        ContextLock.__init__(self, PassthroughNullLock())
 
 
 class ExecutionContext(TruncableService):
@@ -1270,18 +1302,15 @@ class ExecutionContext(TruncableService):
             self.register_service(ContextLock, ContextLock())
         if isinstance(self.get_service(ContextLock).lock, str):
             raise RuntimeError(self.get_service(ContextLock).lock)
-        self.flow.link_context(self)
+        self.flow.unlink_context()
         return self.get_service(ContextLock).synchroneous()
 
     def thread_safe(self) -> Tuple[RLock, 'CX']:
         """
-        Prepare the context and its services to be thread safe and
-        reduce the current context for parallelization.
+        Prepare the context and its services to be thread safe
 
         :return: a tuple of the recursive dict to apply within thread, and the thread safe context
         """
-        # TODO: eventually this will be an apply that returns a recursive dict of managed locks/things?
-
         managed_thread_safe_lock: RLock = self.synchroneous()
 
         threaded_context = self.copy()
@@ -1300,7 +1329,54 @@ class ExecutionContext(TruncableService):
             "self.thread_safe()[0] earlier before sending the context to "
             "the thread."
         )
+
+        _cx2 = threaded_context.copy()
+        try:
+            for parent in reversed(_cx2.parents):
+                pickle.dumps(parent.__reduce__())
+        except Exception as e:
+            raise pickle.PickleError(
+                f"Couldn't pickle {parent} to send it to the next consumers, but its services are picklable. "
+                f"From error: {e}"
+            ) from e
+
         return managed_thread_safe_lock, threaded_context
+
+    def process_safe(self) -> Tuple[ParallelLoggingConsumerThread, 'CX']:
+        """
+        Prepare the context and its services to be process safe and
+        reduce the current context for parallelization.
+
+        :return: a tuple of the recursive dict to apply within thread, and the thread safe context
+        """
+        # TODO: eventually this and the other method above will be an apply that returns a recursive dict of managed locks/things?
+        assert isinstance(self.get_service(ContextLock)._lock, str), "Must first call cx.thread_safe() before calling cx.process_safe()."
+
+        process_safe_context = self.copy()
+        self.flow.unlink_context()
+        process_safe_context.flow.unlink_context()
+
+        # TODO: code a way to serialize and deserialize such context services. Maybe use some new apply functions in context.process_safe() to pack and then un-pack within thread.
+        process_safe_context.flow.unlink_context()
+        _cx2 = process_safe_context.copy()
+        try:
+            for service in _cx2.get_services().values():
+                if 'ContextLock' in str(service) or 'Flow' in str(service):
+                    continue
+                pickle.dumps(service.__reduce__())
+        except Exception as e:
+            raise pickle.PickleError(f"Couldn't pickle service {service} to send context to other thread.") from e
+        try:
+            _cx2.set_services(dict())
+            pickle.dumps(_cx2.__reduce__())
+        except Exception as e:
+            raise pickle.PickleError(
+                f"Couldn't pickle {process_safe_context} to send it to the next consumers, but its services are picklable. "
+                f"From error: {e}"
+            ) from e
+
+        logging_thread = ParallelLoggingConsumerThread()
+        return logging_thread, process_safe_context
 
     def restore_lock(self, managed_thread_safe_lock: RLock = None) -> 'CX':
         """
@@ -1493,7 +1569,7 @@ class _HasSetupTeardownLifecycle(MixinForBaseService):
         self.apply("_setup", context=context)
         return self
 
-    def _setup(self, context: 'CX' = None) -> 'BaseTransformer':
+    def _setup(self, context: 'CX' = None) -> Optional[RecursiveDict]:
         """
         Internal method to setup the step. May be used by :class:`~neuraxle.pipeline.Pipeline`
         to setup the pipeline progressively instead of all at once.
@@ -1509,7 +1585,7 @@ class _HasSetupTeardownLifecycle(MixinForBaseService):
         self.apply("_teardown")
         return self
 
-    def _teardown(self) -> 'BaseTransformer':
+    def _teardown(self) -> Optional[RecursiveDict]:
         """
         Teardown step after program execution. Inverse of setup, and it should clear memory.
         Override this method if you need to clear memory.
@@ -1570,7 +1646,7 @@ class _TransformerStep(MixinForBaseService):
             self._setup(context)
 
         data_container, context = self._will_process(data_container, context)
-        data_container, context = self._will_transform_data_container(data_container, context)
+        data_container, context = self._will_transform(data_container, context)
         # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
         # Documentation: https://www.neuraxle.org/stable/handler_methods.html
         data_container = self._transform_data_container(data_container, context)
@@ -1580,7 +1656,7 @@ class _TransformerStep(MixinForBaseService):
 
         return data_container
 
-    def _will_transform_data_container(
+    def _will_transform(
         self, data_container: TrainDACT, context: CX
     ) -> Tuple[TrainDACT, CX]:
         """
@@ -1591,6 +1667,18 @@ class _TransformerStep(MixinForBaseService):
         :return: (data container, execution context)
         """
         return data_container, context.push(self)
+
+    def _will_transform_data_container(
+        self, data_container: TrainDACT, context: CX
+    ) -> Tuple[TrainDACT, CX]:
+        """
+        This method is deprecated and will redirect to `_will_transform`. Use `_will_transform` instead.
+
+        :param data_container: data container
+        :param context: execution context
+        :return: (data container, execution context)
+        """
+        return self._will_transform(data_container, context)
 
     def _transform_data_container(self, data_container: TrainDACT, context: CX) -> PredsDACT:
         """
@@ -2028,7 +2116,7 @@ class _CustomHandlerMethods(MixinForBaseService):
             self._setup(context)
 
         data_container, context = self._will_process(data_container, context)
-        data_container, context = self._will_transform_data_container(data_container, context)
+        data_container, context = self._will_transform(data_container, context)
         # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
         # Documentation: https://www.neuraxle.org/stable/handler_methods.html
         data_container = self.transform_data_container(data_container, context)
@@ -2438,7 +2526,7 @@ class _HasSavers(MixinForBaseService):
         self.apply(method='_invalidate')
         return self
 
-    def _invalidate(self):
+    def _invalidate(self) -> Optional[RecursiveDict]:
         self.is_invalidated = True
         return RecursiveDict()
 
@@ -2808,7 +2896,7 @@ class BaseTransformer(
         self.apply(method='_set_train', is_train=is_train)
         return self
 
-    def _set_train(self, is_train) -> RecursiveDict:
+    def _set_train(self, is_train) -> Optional[RecursiveDict]:
         self.is_train = is_train
         return RecursiveDict()
 

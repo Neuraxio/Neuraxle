@@ -36,13 +36,14 @@ from neuraxle.data_container import IDT
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.callbacks import (ARG_Y_EXPECTED, ARG_Y_PREDICTD,
-                                        BaseCallback, CallbackList,
+                                        BaseCallback, CallbackList, MetricCallback,
                                         ScoringCallback)
 from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
                                               Trial, TrialSplit)
+from neuraxle.metaopt.data.reporting import RoundReport
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            AutoMLContext,
-                                           HyperparamsRepository)
+                                           HyperparamsRepository, RoundDataclass, ScopedLocation)
 from neuraxle.metaopt.validation import (BaseHyperparameterOptimizer,
                                          BaseValidationSplitter,
                                          GridExplorationSampler,
@@ -200,7 +201,7 @@ class BaseControllerLoop(TruncableService):
         :return: the ID of the round that was executed (either created or continued from previous optimization).
         """
 
-        # thread_safe_lock, context = context.thread_safe() ??
+        # thread_safe_lock, ..., context = context.thread_safe() ??
 
         hp_optimizer: BaseHyperparameterOptimizer = self[BaseHyperparameterOptimizer]
         hp_space: HyperparameterSpace = pipeline.get_hyperparams_space()
@@ -251,7 +252,7 @@ class BaseControllerLoop(TruncableService):
         Create a controller loop configured with zero iterations
         so as to only make the "refit_best_trial" possible.
         """
-        self_copy = copy.copy(self)
+        self_copy = copy(self)
         self_copy.n_trials = 0
         return self_copy
 
@@ -306,7 +307,6 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
         .. note::
             Usage of a multiprocess-safe hyperparams repository is recommended,
             although it is, most of the time, not necessary.
-            Beware of the behaviour of HyperparamsRepository's observers/subscribers.
             Context instances are not shared between trial but copied.
             So is the AutoML loop and the DACTs.
 
@@ -328,6 +328,7 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
         self.refit_best_trial: bool = refit_best_trial
         self.project_name: str = project_name
         self.client_name: str = client_name
+        self._round_number: Optional[int] = None
 
         self.has_model_been_retrained: bool = False
 
@@ -350,7 +351,7 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
         return self, data_container
 
     def to_force_refit_best_trial(self) -> 'ControlledAutoML':
-        self_copy = copy.copy(self)
+        self_copy = copy(self)
         self_copy.refit_best_trial = True
         self_copy.has_model_been_retrained = False
         self_copy.loop = self_copy.loop.for_refit_only()
@@ -367,8 +368,8 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
 
         :return: self
         """
-        automl_context: AutoMLContext = self.get_automl_context(context)
-        root: Root = Root.from_context(automl_context)
+        automl_context: AutoMLContext = self.get_automl_context(context, with_loc=False)
+        root: Root = Root.from_context(automl_context, is_deep=False)
 
         with root.get_project(self.project_name) as ps:
             ps: Project = ps
@@ -376,6 +377,7 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
                 cs: Client = cs
                 with cs.optim_round(self.start_new_round, self.main_metric_name) as rs:
                     rs: Round = rs
+                    self._round_number = rs.round_number
 
                     self.loop.run(self.pipeline, data_container, rs)
 
@@ -385,10 +387,28 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
 
         return self
 
-    def get_automl_context(self, context: ExecutionContext) -> AutoMLContext:
-        # if with_loc:
-        #     return AutoMLContext.from_context(context, repo=self.repo).with_loc(self.project_name, self.client_name, ???)
-        return AutoMLContext.from_context(context, repo=self.repo)
+    def get_automl_context(self, context: ExecutionContext, with_loc=True) -> AutoMLContext:
+        cx = AutoMLContext.from_context(context, repo=self.repo)
+        if self.repo is None:
+            self.repo = cx.repo
+        if with_loc and (self._round_number is not None or not self.start_new_round):
+            loc = ScopedLocation(self.project_name, self.client_name, self.round_number)
+            cx = cx.with_loc(loc)
+        return cx
+
+    @property
+    def round_number(self) -> Optional[int]:
+        if self._round_number is None:
+            if self.start_new_round:
+                raise ValueError("AutoML loop has not been run yet, cannot ask for report.")
+            else:
+                return len(self.repo.load(ScopedLocation(self.project_name, self.client_name))) - 1
+        return self._round_number
+
+    @property
+    def report(self) -> RoundReport:
+        dc: RoundDataclass = self.repo.load(ScopedLocation(self.project_name, self.client_name, self.round_number), deep=True)
+        return RoundReport(dc)
 
     def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         if not self.has_model_been_retrained:
@@ -428,6 +448,7 @@ class AutoML(ControlledAutoML):
         hyperparams_repository: HyperparamsRepository = None,
         n_trials: int = None,
         refit_best_trial: bool = True,
+        start_new_round=True,
         epochs: int = 1,
         n_jobs=1,
         continue_loop_on_error=True
@@ -441,6 +462,8 @@ class AutoML(ControlledAutoML):
             callbacks = [scoring_callback] + callbacks
         if len(callbacks) == 0:
             raise ValueError("At least one callback must be provided.")
+        if not isinstance(callbacks[0], MetricCallback):
+            raise ValueError("The first callback is the scoring callback and it must be a MetricCallback.")
 
         if n_trials is None or n_trials < 1:
             n_trials: int = GridExplorationSampler.estimate_ideal_n_trials(pipeline.get_hyperparams_space())
@@ -466,6 +489,6 @@ class AutoML(ControlledAutoML):
             loop=controller_loop,
             repo=hyperparams_repository,
             main_metric_name=callbacks[0].name,
-            start_new_round=True,
+            start_new_round=start_new_round,
             refit_best_trial=refit_best_trial,
         )

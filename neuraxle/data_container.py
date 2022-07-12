@@ -42,7 +42,7 @@ ARG_Y_EXPECTED = EOT
 ARG_Y_PREDICTD = DIT
 
 
-class AbsentValuesNullObject:
+class StripAbsentValues:
     """
     This object, when passed to the default_value_data_inputs argument of the DataContainer.batch method,
     will return the minibatched data containers such that the last batch won't have the full batch_size
@@ -84,7 +84,7 @@ class DataContainer(Generic[IDT, DIT, EOT]):
 
     .. seealso::
         :class:`~neuraxle.base.BaseStep`,
-        :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+        :class:`~neuraxle.data_container.StripAbsentValues`
     """
 
     def __init__(
@@ -308,6 +308,7 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         """
         Yields minibatches extracted from looping on the DataContainer's content with a batch_size and a certain behavior for the last batch when the batch_size is uneven with the total size.
 
+        Note that the default value for IDs is None.
 
         .. code-block:: python
 
@@ -336,7 +337,7 @@ class DataContainer(Generic[IDT, DIT, EOT]):
             for data_container_batch in data_container.minibatches(
                 batch_size=3,
                 keep_incomplete_batch=True,
-                default_value_data_inputs=AbsentValuesNullObject()
+                default_value_data_inputs=StripAbsentValues()
             ):
                 print(data_container_batch.data_inputs)
             # [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9])]
@@ -348,15 +349,15 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         `batch_size` elements; the default behavior is to keep the smaller
         batch.
         :param default_value_data_inputs: expected_outputs default fill value
-        for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+        for padding and values outside iteration range, or :class:`~neuraxle.data_container.StripAbsentValues`
         to trim absent values from the batch
         :param default_value_expected_outputs: expected_outputs default fill value
-        for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+        for padding and values outside iteration range, or :class:`~neuraxle.data_container.StripAbsentValues`
         to trim absent values from the batch
         :return: an iterator of DataContainer
 
         .. seealso::
-            :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+            :class:`~neuraxle.data_container.StripAbsentValues`
         """
         for i in range(0, len(self.data_inputs), batch_size):
             data_container: DACT[IDT, DIT, EOT] = DACT(
@@ -465,9 +466,21 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         and set the new values in self. Returns self.
         Conversion function must be able to handle None values.
         """
-        self.set_ids(conversion_function(self.ids))
-        self.set_data_inputs(conversion_function(self.data_inputs))
-        self.set_expected_outputs(conversion_function(self.expected_outputs))
+        self.set_ids(
+            conversion_function(self.ids)
+            if self.ids is not None
+            else None
+        )
+        self.set_data_inputs(
+            conversion_function(self.data_inputs)
+            if self.data_inputs is not None
+            else None
+        )
+        self.set_expected_outputs(
+            conversion_function(self.expected_outputs)
+            if self.expected_outputs is not None
+            else None
+        )
         return self
 
     def unpack(self) -> Tuple[IDT, DIT, EOT]:
@@ -625,7 +638,7 @@ class ZipDataContainer(DACT):
         self.set_data_inputs(new_data_inputs)
 
 
-class ListDataContainer(DACT):
+class ListDataContainer(DataContainer, Generic[IDT, DIT, EOT]):
     """
     Sub class of DataContainer to perform list operations.
     It allows to perform append, and concat operations on a DataContainer.
@@ -676,6 +689,10 @@ class ListDataContainer(DACT):
         :type other: DataContainer
         :return:
         """
+        if not isinstance(other, DACT):
+            raise ValueError(
+                f"Expected data container of type {DACT.__name__}, "
+                f"got {other.__class__.__name__}: {other}")
         self.data_inputs.append(other)
         self._ids.append(other.get_ids_summary())
         return self
@@ -694,19 +711,22 @@ class ListDataContainer(DACT):
 
         return self
 
-    def concat(self, data_container: DACT):
+    def extend(self, other: DACT):
         """
-        Concat the given data container to the data container.
+        Concat the given data container at the end of self so as to extend each IDs, DIs, and EOs.
 
         :param data_container: data container
         :type data_container: DataContainer
         :return:
         """
-        data_container.tolistshallow()
+        other.tolistshallow()
 
-        self._ids.extend(data_container._ids)
-        self.data_inputs.extend(data_container.data_inputs)
-        self.expected_outputs.extend(data_container.expected_outputs)
+        if self._ids is not None and other._ids is not None:
+            self._ids.extend(other._ids)
+        if self.data_inputs is not None and other.data_inputs is not None:
+            self.data_inputs.extend(other.data_inputs)
+        if self.expected_outputs is not None and other.expected_outputs is not None:
+            self.expected_outputs.extend(other.expected_outputs)
 
         return self
 
@@ -717,7 +737,10 @@ def _pad_or_keep_incomplete_batch(
         default_value_data_inputs,
         default_value_expected_outputs
 ) -> DACT:
-    should_pad_right = not isinstance(default_value_data_inputs, AbsentValuesNullObject)
+    should_pad_right = not isinstance(
+        default_value_data_inputs, StripAbsentValues
+    ) or not isinstance(
+        default_value_expected_outputs, StripAbsentValues)
 
     if should_pad_right:
         data_container = _pad_incomplete_batch(
@@ -736,22 +759,26 @@ def _pad_incomplete_batch(
         default_value_data_inputs: Any,
         default_value_expected_outputs: Any
 ) -> DACT:
+    pad_di = not isinstance(default_value_data_inputs, StripAbsentValues)
+    pad_eo = not isinstance(default_value_expected_outputs, StripAbsentValues)
+    pad_ids = pad_di and pad_eo
+
     data_container = DACT(
         ids=_pad_data(
             data_container.ids,
             default_value=None,
             batch_size=batch_size
-        ),
+        ) if pad_ids else data_container.ids,
         data_inputs=_pad_data(
             data_container.di,
             default_value=default_value_data_inputs,
             batch_size=batch_size
-        ),
+        ) if pad_di else data_container.di,
         expected_outputs=_pad_data(
             data_container.eo,
             default_value=default_value_expected_outputs,
             batch_size=batch_size
-        )
+        ) if pad_eo else data_container.eo
     )
 
     return data_container

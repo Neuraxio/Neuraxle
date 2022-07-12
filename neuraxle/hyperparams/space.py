@@ -61,10 +61,11 @@ ready to be sent to an instance of the pipeline to try and score it, for example
     project, visit https://www.umaneo.com/ for more information on Umaneo Technologies Inc.
 
 """
-from collections import OrderedDict
-from copy import deepcopy
-from typing import Any, Dict, Iterable, Union
+
 import typing
+from collections import Counter, OrderedDict, defaultdict
+from copy import copy
+from typing import Any, Dict, Iterable, List, Set, Union
 
 from neuraxle.hyperparams.distributions import (FixedHyperparameter,
                                                 HPSampledValue,
@@ -74,9 +75,10 @@ from neuraxle.hyperparams.scipy_distributions import (
 from scipy.stats import rv_continuous, rv_discrete
 from scipy.stats._distn_infrastructure import rv_generic
 
-
 FlatDict = typing.OrderedDict[str, HPSampledValue]
 RecursiveDictValue = Union[Any, 'RecursiveDict']
+
+RList = List  # reversed list.
 
 
 # class RecursiveDict(OrderedDict[str, RecursiveDictValue]):
@@ -201,7 +203,7 @@ class RecursiveDict(OrderedDict):
                 else:
                     yield (pre_key + k, v)
 
-    def to_flat_dict(self) -> FlatDict:
+    def to_flat_dict(self, use_wildcards=False) -> FlatDict:
         """
         Returns a FlatDict, that is a totally flatened OrderedDict[str, HPSampledValue],
         with no recursively nested elements, i.e.: {fully__flattened__params: value}.
@@ -209,7 +211,10 @@ class RecursiveDict(OrderedDict):
         .. info::
             The returned FlatDict is sorted in a new alphabetical order.
 
+        :param use_wildcards: If True, wildcards are used in the keys, as if calling self.to_wildcards() directly. See :func:`to_wildcards` for more info.
         """
+        if use_wildcards is True:
+            return self.to_wildcards()
         return OrderedDict(self.iter_flat())
 
     def to_nested_dict(self) -> Dict[str, RecursiveDictValue]:
@@ -222,6 +227,76 @@ class RecursiveDict(OrderedDict):
                 v = v.to_nested_dict()
             out_dict[k] = v
         return out_dict
+
+    def to_wildcards(self) -> FlatDict:
+        """
+        Returns a FlatDict with wildcards. Shorten the keys to the shortest possible while
+        mainting the same order and value, as well as the ability to differentiate each key.
+        """
+        flat: FlatDict = self.to_flat_dict()
+        rkeys: List[RList[str]] = list([
+            list(reversed(i.split(self.separator))) for i in flat.keys()
+        ])
+
+        rkeys = self._wildcards_reduce(rkeys)
+
+        # reverse the keys back to the original order:
+        rkeys = [
+            self.separator.join(list(reversed(i))).replace(
+                f"{self.separator}*", "*").replace(
+                f"*{self.separator}", "*")
+            for i in rkeys
+        ]
+        flat = OrderedDict(zip(rkeys, flat.values()))
+        return flat
+
+    def _wildcards_reduce(self, rkeys: List[RList[str]], depth=0):
+        rkeys = copy(rkeys)
+
+        glob_ctr = Counter()
+        key_attribution: Dict[str, int] = dict()
+
+        def permutations(rkey: RList[str]) -> Set[str]:
+            out: Set[str] = set()
+            out.add(self.separator.join(rkey))
+
+            for i in range(1, len(rkey)):
+                for j in range(i, len(rkey)):
+                    for k in range(j, len(rkey)):
+
+                        rk = rkey[:i] + (["*"] if i != j else []) + rkey[j:k] + (["*"] if k != len(rkey) else [])
+                        rks = self.separator.join(rk)
+                        rks = rks.replace(
+                            f"*{self.separator}*", "*").replace(
+                            f"*{self.separator}*", "*")
+
+                        out.add(rks)
+            return out
+
+        for i, rkey in enumerate(rkeys):
+            rk_perms: Set[str] = permutations(rkey)
+            glob_ctr.update(rk_perms)
+            for rk in rk_perms:
+                key_attribution[rk] = i
+
+        # remove the keys that have a count of more than 1 in the counter:
+        glob_ctr = {k: v for k, v in glob_ctr.items() if v == 1}
+        attribution_keys: Dict[int, List[str]] = defaultdict(list)
+        key_attribution = {attribution_keys[idx].append(rks)
+                           for rks, idx in key_attribution.items() if rks in glob_ctr.keys()}
+
+        # keep the shortest key:
+        attributed_key: Dict[str, str] = {
+            k: min(v, key=lambda x: len(
+                x.replace(
+                    f"{self.separator}*", "*").replace(
+                    f"*{self.separator}", "*")
+            ))
+            for k, v in attribution_keys.items()
+        }
+        attributed_key = {k: v.split(self.separator) for k, v in attributed_key.items()}
+        keys = [v for k, v in sorted(attributed_key.items())]
+        return keys
 
     def with_separator(self, separator: str):
         """

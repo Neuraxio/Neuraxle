@@ -1,7 +1,7 @@
 """
 Miscelaneous Pipeline Steps
 ====================================
-You can find here misc. pipeline steps, for example, callbacks useful for debugging, and a step cloner.
+You can find here misc. pipeline steps, for example, callbacks useful for debugging, testing, and so forth.
 
 ..
     Copyright 2019, Neuraxio Inc.
@@ -24,11 +24,13 @@ You can find here misc. pipeline steps, for example, callbacks useful for debugg
 
 """
 
+import random
 import time
 from abc import ABC
 from typing import Any, Callable, List, Optional, Tuple
+import uuid
 
-from neuraxle.base import BaseStep, BaseTransformer
+from neuraxle.base import BaseStep, BaseTransformer, NonFittableMixin
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import ForceHandleOnlyMixin, HandleOnlyMixin, MetaStep
 from neuraxle.data_container import DataContainer as DACT
@@ -406,10 +408,49 @@ class HandleCallbackStep(ForceHandleOnlyMixin, BaseStep):
 
 
 class Sleep(BaseTransformer):
-    def __init__(self, sleep_time=0.1, hyperparams=None, hyperparams_space=None):
-        BaseTransformer.__init__(self, hyperparams=hyperparams, hyperparams_space=hyperparams_space)
+    def __init__(self, sleep_time: float = 0.1, add_random_quantity: float = 0.0):
+        """
+        Sleep for a given time, given in seconds.
+        """
+        BaseTransformer.__init__(self)
         self.sleep_time = sleep_time
+        self.add_random_quantity = add_random_quantity
 
     def transform(self, data_inputs):
-        time.sleep(self.sleep_time)
+        seconds = (
+            self.sleep_time
+            if self.add_random_quantity == 0.0 else
+            self.sleep_time + random.random() * self.add_random_quantity
+        )
+        time.sleep(seconds)
         return data_inputs
+
+
+class FitTransformCounterLoggingStep(HandleOnlyMixin, BaseStep):
+    def __init__(self):
+        BaseStep.__init__(self)
+        HandleOnlyMixin.__init__(self)
+        self.logging_call_counter = 0
+
+    def _fit_data_container(self, data_container: DACT, context: CX) -> BaseStep:
+        self._log(context, "fit")
+        return self
+
+    def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
+        self._log(context, "transform")
+        return data_container
+
+    def _fit_transform_data_container(self, data_container: DACT, context: CX) -> DACT:
+        self._log(context, "fit_transform")
+        return self, data_container
+
+    def _log(self, context, func_name):
+        context.logger.info(
+            f"{self.name} - {func_name} call - logging call #{self.logging_call_counter} with UUID={uuid.uuid4()}")
+        self.logging_call_counter += 1
+
+
+class TransformOnlyCounterLoggingStep(NonFittableMixin, FitTransformCounterLoggingStep):
+    def __init__(self):
+        FitTransformCounterLoggingStep.__init__(self)
+        NonFittableMixin.__init__(self)

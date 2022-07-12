@@ -25,6 +25,7 @@ Those steps works with NumPy (np) arrays.
 """
 from typing import Iterable, Sequence, Tuple, Union
 
+import pandas as pd
 from neuraxle.base import BaseStep, BaseTransformer
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import ForceHandleMixin, NonFittableMixin
@@ -394,6 +395,29 @@ class ToNumpy(ForceHandleMixin, BaseTransformer):
         self, data_container: DACT, context: CX
     ) -> Tuple[DACT, CX]:
         return data_container.to_numpy(), context
+
+
+class ToList(BaseTransformer):
+    """
+    Convert data inputs to a list.
+    """
+
+    def __init__(self):
+        BaseTransformer.__init__(self)
+
+    def transform(self, data_inputs):
+        """
+        Transform data inputs, and expected outputs to a list.
+        :param data_inputs: data inputs to convert
+        :return: list of data inputs
+        """
+        if isinstance(data_inputs, np.ndarray):
+            return data_inputs.tolist()
+        if isinstance(data_inputs, pd.DataFrame):
+            return data_inputs.values.tolist()
+        if isinstance(data_inputs, [list, tuple, set]):
+            return [self.transform(data_inputs[i]) for i in data_inputs]
+        return list(data_inputs)
 
 
 class NumpyReshape(BaseTransformer):

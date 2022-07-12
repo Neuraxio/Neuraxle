@@ -27,12 +27,12 @@ import warnings
 from abc import ABC, abstractmethod
 from typing import Any, List, Tuple, Union
 
-from neuraxle.base import BaseStep
+from neuraxle.base import BaseStep, BaseTransformer
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import (ExecutionMode, ForceHandleMixin, Identity,
                            NamedStepsList, TruncableSteps,
                            _CustomHandlerMethods)
-from neuraxle.data_container import AbsentValuesNullObject
+from neuraxle.data_container import StripAbsentValues
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.data_container import ListDataContainer, ZipDataContainer
 from neuraxle.logging.warnings import warn_deprecated_arg
@@ -220,83 +220,82 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
 
     .. code-block:: python
 
-        data_inputs = np.array(list(range(10)))
+        data_inputs = list(range(10))
         pipeline = MiniBatchSequentialPipeline([
             SomeStep()
         ], batch_size=2)
         pipeline.transform(data_inputs)
-        # SomeStep will receive [array([0, 1]), array([2, 3]), ..., array([8, 9])]
+        # SomeStep will receive: [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
 
         pipeline = MiniBatchSequentialPipeline([
             SomeStep()
         ], batch_size=3, keep_incomplete_batch=False)
         pipeline.transform(data_inputs)
-        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8])]
+        # SomeStep will receive: [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
 
         pipeline = MiniBatchSequentialPipeline(
             [SomeStep()],
             batch_size=3,
-            keep_incomplete_batch=True,
             keep_incomplete_batch=True,
             default_value_data_inputs=None,
             default_value_expected_outputs=None
         )
         pipeline.transform(data_inputs)
-        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9, None, None])]
+        # SomeStep will receive: [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, None, None]]
 
         pipeline = MiniBatchSequentialPipeline(
             [SomeStep()],
             batch_size=3,
             keep_incomplete_batch=True,
-            default_value_data_inputs=AbsentValuesNullObject()
+            default_value_data_inputs=StripAbsentValues()
         )
         pipeline.transform(data_inputs)
-        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9])]
+        # SomeStep will receive: [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
 
 
     Or manually add one or multiple :class`Barrier` steps to the mini batch sequential pipeline :
 
     .. code-block:: python
 
-        data_inputs = np.array(list(range(10)))
+        data_inputs = list(range(10))
         pipeline = MiniBatchSequentialPipeline([
             SomeStep(),
             Joiner(batch_size=2)
         ])
         pipeline.transform(data_inputs)
-        # SomeStep will receive [array([0, 1]), array([2, 3]), ..., array([8, 9])]
+        # SomeStep will receive: [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
 
         pipeline = MiniBatchSequentialPipeline([
             SomeStep(),
             Joiner(batch_size=3, keep_incomplete_batch=False)
         ])
         pipeline.transform(data_inputs)
-        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8])]
+        # SomeStep will receive: [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
 
         pipeline = MiniBatchSequentialPipeline([
             SomeStep(),
             Joiner(
                 batch_size=3,
-                keep_incomplete_batch=True,
                 keep_incomplete_batch=True,
                 default_value_data_inputs=None,
                 default_value_expected_outputs=None
             )
         ])
         pipeline.transform(data_inputs)
-        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9, None, None])]
+        # SomeStep will receive: [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, None, None]]
 
         pipeline = MiniBatchSequentialPipeline([
             SomeStep(),
             Joiner(
                 batch_size=3,
                 keep_incomplete_batch=True,
-                default_value_data_inputs=AbsentValuesNullObject()
+                default_value_data_inputs=StripAbsentValues()
             )
         ])
         pipeline.transform(data_inputs)
-        # SomeStep will receive: [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]), array([9])]
+        # SomeStep will receive: [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
 
+    Note that the default value for non-striped ids is None if not stripping incomplete batches of data inputs or expected outputs.
 
     :param steps: pipeline steps
     :param batch_size: number of elements to combine into a single batch
@@ -305,21 +304,21 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
     `batch_size` elements; the default behavior is not to drop the smaller
     batch.
     :param default_value_data_inputs: expected_outputs default fill value
-    for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+    for padding and values outside iteration range, or :class:`~neuraxle.data_container.StripAbsentValues`
     to trim absent values from the batch
     :param default_value_expected_outputs: expected_outputs default fill value
-    for padding and values outside iteration range, or :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`
+    for padding and values outside iteration range, or :class:`~neuraxle.data_container.StripAbsentValues`
     to trim absent values from the batch
     :param cache_folder: cache_folder if its at the root of the pipeline
     :param mute_joiner_batch_size_warning: If False, will log a warning when automatically setting the joiner batch_size attribute.
 
     .. seealso::
+        :class:`~neuraxle.data_container.DataContainer`,
         :func:`~neuraxle.data_container.DataContainer.minibatches`,
-        :class:`~neuraxle.data_container.DataContainer.AbsentValuesNullObject`,
+        :class:`~neuraxle.data_container.StripAbsentValues`,
         :class:`Pipeline`,
         :class:`Barrier`,
         :class:`Joiner`,
-        :class:`~neuraxle.data_container.DataContainer`,
         :class:`~neuraxle.base.ExecutionContext`,
         :class:`~neuraxle.distributed.streaming.SequentialQueuedPipeline`
 
@@ -330,7 +329,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
             steps: NamedStepsList,
             batch_size=None,
             keep_incomplete_batch: bool = None,
-            default_value_data_inputs=AbsentValuesNullObject(),
+            default_value_data_inputs=StripAbsentValues(),
             default_value_expected_outputs=None,
             mute_joiner_batch_size_warning: bool = True
     ):
@@ -338,20 +337,20 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         ForceHandleMixin.__init__(self)
         self.default_value_data_inputs = default_value_data_inputs
         self.default_value_expected_outputs = default_value_expected_outputs
-        self.__validate_barriers_batch_size(batch_size=batch_size)
-        self.__patch_missing_barrier(
+        self._validate_barriers_batch_size(batch_size=batch_size)
+        self._patch_missing_barrier(
             batch_size=batch_size,
             keep_incomplete_batch=keep_incomplete_batch,
             default_value_data_inputs=default_value_data_inputs,
             default_value_expected_outputs=default_value_expected_outputs
         )
         self.mute_joiner_batch_size_warning = mute_joiner_batch_size_warning
-        self.__patch_barriers_batch_size(batch_size)
+        self._patch_barriers_batch_size(batch_size)
 
     def set_batch_size(self, batch_size):
-        self.__patch_barriers_batch_size(batch_size)
+        self._patch_barriers_batch_size(batch_size)
 
-    def __validate_barriers_batch_size(self, batch_size):
+    def _validate_barriers_batch_size(self, batch_size):
         if batch_size is not None:
             return
 
@@ -362,7 +361,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
                         'Invalid Joiner batch size {}[{}]. Please provide a default batch size to MiniBatchSequentialPipeline, or add a batch size to {}[{}].'.format(
                             self.name, step.name, self.name, step.name))
 
-    def __patch_barriers_batch_size(self, batch_size):
+    def _patch_barriers_batch_size(self, batch_size):
         if batch_size is None:
             return
 
@@ -373,12 +372,12 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
                         'Replacing {}[{}].batch_size by {}.batch_size.'.format(self.name, step.name, self.name))
                 step.batch_size = batch_size
 
-    def __patch_missing_barrier(
+    def _patch_missing_barrier(
             self,
             batch_size: int,
             keep_incomplete_batch: bool,
-            default_value_data_inputs: Union[Any, AbsentValuesNullObject] = None,
-            default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = None
+            default_value_data_inputs: Union[Any, StripAbsentValues] = None,
+            default_value_expected_outputs: Union[Any, StripAbsentValues] = None
     ):
         has_barrier: bool = False
 
@@ -399,6 +398,14 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
 
         self._refresh_steps()
 
+    @property
+    def joiner(self) -> 'Barrier':
+        return self[-1]
+
+    @property
+    def body(self) -> List[BaseTransformer]:
+        return list(self.values())[:-1]
+
     def transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
         Transform all sub pipelines splitted by the Barrier steps.
@@ -406,10 +413,10 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         :param context: execution context
         :return: data container
         """
-        sub_pipelines = self._create_sub_pipelines()
+        sub_pipelines: List['MiniBatchSequentialPipeline'] = self._split_on_barriers()
 
         for sub_pipeline in sub_pipelines:
-            barrier = sub_pipeline[-1]
+            barrier: Barrier = sub_pipeline[-1]
             data_container = barrier.join_transform(
                 step=sub_pipeline,
                 data_container=data_container,
@@ -436,13 +443,13 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         :param context: execution context
         :return: data container
         """
-        sub_pipelines = self._create_sub_pipelines()
+        sub_pipelines: List['MiniBatchSequentialPipeline'] = self._split_on_barriers()
         index_start = 0
 
         for sub_pipeline in sub_pipelines:
             sub_pipeline._setup(context=context)
 
-            barrier = sub_pipeline[-1]
+            barrier: Barrier = sub_pipeline.joiner
             sub_pipeline, data_container = barrier.join_fit_transform(
                 step=sub_pipeline,
                 data_container=data_container,
@@ -458,7 +465,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
 
         return self, data_container
 
-    def _create_sub_pipelines(self) -> List['MiniBatchSequentialPipeline']:
+    def _split_on_barriers(self) -> List['MiniBatchSequentialPipeline']:
         """
         Create sub pipelines by splitting the steps by the join type name.
         :return: list of sub pipelines
@@ -466,7 +473,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         sub_pipelines: List[MiniBatchSequentialPipeline] = self.split(Barrier)
         for sub_pipeline in sub_pipelines:
             if not sub_pipeline.ends_with(Barrier):
-                raise Exception('At least one Barrier step needs to be at the end of a streaming pipeline.')
+                raise Exception('At least one Barrier/Joiner step needs to be at the end of a streaming pipeline.')
 
         return sub_pipelines
 
@@ -524,7 +531,10 @@ class Barrier(Identity, ABC):
 
 class Joiner(Barrier):
     """
-    A Special Barrier step that joins the transformed mini batches together with list.extend method.
+    The Joiner step joins the transformed mini batches together with
+    mostly the DACT.minibatches and then DACT.extend method.
+    It is used in a minibatch sequential pipeline and streaming / queued pipeline
+    as a way to handle batches of previous steps in the pipeline.
 
     .. seealso::
         :class:`~neuraxle.data_container.DataContainer`,
@@ -535,14 +545,22 @@ class Joiner(Barrier):
             self,
             batch_size: int,
             keep_incomplete_batch: bool = True,
-            default_value_data_inputs=AbsentValuesNullObject(),
+            default_value_data_inputs=StripAbsentValues(),
             default_value_expected_outputs=None
     ):
+        """
+        The Joiner step joins the transformed mini batches together with DACT.minibatches and then DACT.extend method.
+        Note that the default value for IDs is None.
+
+        .. seealso::
+            :class:`~neuraxle.data_container.DataContainer`,
+            :func:`~neuraxle.data_container.DataContainer.minibatches`
+        """
         Barrier.__init__(self)
         self.batch_size: int = batch_size
         self.keep_incomplete_batch: bool = keep_incomplete_batch
-        self.default_value_data_inputs: Union[Any, AbsentValuesNullObject] = default_value_data_inputs
-        self.default_value_expected_outputs: Union[Any, AbsentValuesNullObject] = default_value_expected_outputs
+        self.default_value_data_inputs: Union[Any, StripAbsentValues] = default_value_data_inputs
+        self.default_value_expected_outputs: Union[Any, StripAbsentValues] = default_value_expected_outputs
 
     def join_transform(self, step: Pipeline, data_container: DACT, context: CX) -> DACT:
         """
@@ -556,18 +574,19 @@ class Joiner(Barrier):
         :rtype: DataContainer
         """
         context = context.push(step)
-        data_container_batches = data_container.minibatches(
+        dact_batches = data_container.minibatches(
             batch_size=self.batch_size,
             keep_incomplete_batch=self.keep_incomplete_batch,
             default_value_data_inputs=self.default_value_data_inputs,
             default_value_expected_outputs=self.default_value_expected_outputs
         )
 
-        output_data_container = ListDataContainer.empty()
-        for data_container_batch in data_container_batches:
-            output_data_container.concat(step._transform_data_container(data_container_batch, context))
+        out_dact = ListDataContainer.empty()
+        for dact_batch in dact_batches:
+            processed_dact_batch = step._transform_data_container(dact_batch, context)
+            out_dact.extend(processed_dact_batch)
 
-        return output_data_container
+        return out_dact
 
     def join_fit_transform(self, step: Pipeline, data_container: DACT, context: CX) -> \
             Tuple['Any', DACT]:
@@ -582,19 +601,19 @@ class Joiner(Barrier):
         :rtype: Tuple[Any, DataContainer]
         """
         context = context.push(step)
-        data_container_batches = data_container.minibatches(
+        dact_batches = data_container.minibatches(
             batch_size=self.batch_size,
             keep_incomplete_batch=self.keep_incomplete_batch,
             default_value_data_inputs=self.default_value_data_inputs,
             default_value_expected_outputs=self.default_value_expected_outputs
         )
 
-        output_data_container = ListDataContainer.empty()
-        for data_container_batch in data_container_batches:
-            step, data_container_batch = step._fit_transform_data_container(data_container_batch, context)
-            output_data_container.concat(data_container_batch)
+        out_dact = ListDataContainer.empty()
+        for dact_batch in dact_batches:
+            step, dact_batch = step._fit_transform_data_container(dact_batch, context)
+            out_dact.extend(dact_batch)
 
-        return step, output_data_container
+        return step, out_dact
 
 
 class ZipMinibatchJoiner(Joiner):

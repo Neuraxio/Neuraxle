@@ -1,9 +1,11 @@
 """
 Neuraxle's Base Hyperparameter Repository Classes
 =================================================
+
 Data objects and related repositories used by AutoML.
 
 Classes are splitted like this for the AutoML:
+
 - Projects
 - Clients
 - Rounds (runs)
@@ -43,13 +45,12 @@ from typing import (Any, Dict, Generic, List, Optional, Sequence, Tuple, Type,
                     TypeVar, Union)
 
 import numpy as np
-from neuraxle.base import CX, BaseService, ContextLock, TrialStatus
+from neuraxle.base import (CX, BaseService, ContextLock, NoContextLock,
+                           TrialStatus)
 from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
 from neuraxle.logging.logging import (LOGGING_DATETIME_STR_FORMAT,
                                       NeuraxleLogger)
 from neuraxle.logging.warnings import RaiseDeprecatedClass
-from neuraxle.metaopt.data import aggregates as agg
-from neuraxle.metaopt.observable import _ObservableRepo
 
 SubDataclassT = TypeVar('SubDataclassT', bound=Optional['BaseDataclass'])
 ScopedLocationAttrInt = int
@@ -72,6 +73,18 @@ NULL_TRIAL_SPLIT = -math.inf
 NULL_METRIC_NAME = "NO_METRIC"
 
 
+def to_int_if_not_float_or_none(attr) -> ScopedLocationAttrInt:
+    if isinstance(attr, float) or attr is None:
+        return attr
+    return int(attr)
+
+
+def to_str_if_not_none(attr) -> ScopedLocationAttrStr:
+    if attr is None or attr == '':
+        return None
+    return str(attr)
+
+
 @dataclass(order=True)
 class ScopedLocation(BaseService):
     """
@@ -85,6 +98,12 @@ class ScopedLocation(BaseService):
     metric_name: ScopedLocationAttrStr = None
 
     def __post_init__(self):
+        self.project_name = to_str_if_not_none(self.project_name)
+        self.client_name = to_str_if_not_none(self.client_name)
+        self.round_number = to_int_if_not_float_or_none(self.round_number)
+        self.trial_number = to_int_if_not_float_or_none(self.trial_number)
+        self.split_number = to_int_if_not_float_or_none(self.split_number)
+        self.metric_name = to_str_if_not_none(self.metric_name)
         BaseService.__init__(self)
 
     # get the field value from BaseMetadata subclass:
@@ -307,11 +326,15 @@ class ScopedLocation(BaseService):
         Creates a new :class:`BaseDataclass` of the right type with
         just the provided ID filled.
         """
+        if len(self) == 0:
+            return RootDataclass()
         dataklass = self.last_dc_type()
 
         return dataklass().set_id(self.as_list()[-1])
 
     def last_dc_type(self) -> Type['BaseDataclass']:
+        if len(self) == 0:
+            return RootDataclass
         dataklass: Type[BaseDataclass] = list(dataclass_2_id_attr.keys())[len(self) - 1]
         return dataklass
 
@@ -488,6 +511,7 @@ class BaseDataclass(Generic[SubDataclassT], ABC):
 class DataclassHasOrderedDictMixin:
 
     def _validate(self):
+        self._sort()
         super()._validate()
         if not isinstance(self.get_sublocation(), OrderedDict):
             raise ValueError(f"{self.__class__.__name__} must have an OrderedDict as sublocation.")
@@ -505,6 +529,7 @@ class DataclassHasOrderedDictMixin:
         self._validate()
 
     def set_sublocation_keys(self, keys: List[ScopedLocationAttr]) -> 'BaseDataclass':
+        # TODO: when using a JSON repo, loaded keys are simply sorted alphabetically. That may be a problem for the main metric and metrics' sorting in the future.
         _sublocation = OrderedDict([(str(k), None) for k in keys])
         setattr(self, self._sublocation_attr_name, _sublocation)
         self._validate()
@@ -540,6 +565,11 @@ class DataclassHasOrderedDictMixin:
         self_copy.set_sublocation(OrderedDict())
         return copy.deepcopy(self_copy)
 
+    def _sort(self):
+        _sublocation = self.get_sublocation()
+        _sublocation = OrderedDict(list(sorted(_sublocation.items())))
+        setattr(self, self._sublocation_attr_name, _sublocation)
+
 
 @dataclass(order=True)
 class DataclassHasListMixin:
@@ -558,8 +588,9 @@ class DataclassHasListMixin:
 
     def set_sublocation_keys(self, keys: List[ScopedLocationAttr]) -> 'BaseDataclass':
         _sublocation = [None for k in keys]
-        assert (set(range(len(_sublocation))) == set(
-            [int(k) for k in keys])), f"Bad sublocation keys are being set into DataclassHasListMixin (type {self.__class__.__name__}, id={self.get_id()}) : {keys}."
+        # assert (set(range(len(_sublocation))) == set([int(k) for k in keys])), (
+        #     f"Bad sublocation keys are being set into DataclassHasListMixin "
+        #     f"(type {self.__class__.__name__}, id={self.get_id()}) : {keys}.")
         setattr(self, self._sublocation_attr_name, _sublocation)
         self._validate()
 
@@ -596,7 +627,7 @@ class DataclassHasListMixin:
         elif _id < self.get_next_i():
             self.get_sublocation()[dc.get_id()] = dc
         else:
-            raise ValueError(f"{dc} has id {dc.get_id()} which is greater than the next id {self.get_next_i()}.")
+            raise ValueError(f"{dc.shallow()} has id {dc.get_id()} which is greater than the next id {self.get_next_i()}.")
         self._validate()
         return _id
 
@@ -630,6 +661,10 @@ class BaseTrialDataclassMixin:
     # error: str = None
     # error_traceback: str = None
     # logs: List[str] = field(default_factory=list)
+
+    def __post_init__(self):
+        self.hyperparams = HyperparameterSamples(self.hyperparams)
+        BaseDataclass.__post_init__(self)
 
     def _validate(self):
         super()._validate()
@@ -681,12 +716,22 @@ class RootDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ProjectDataclas
     def get_sublocation(self) -> 'OrderedDict[str, SubDataclassT]':
         return self.projects
 
+    # def _validate(self):
+    #     super()._validate()
+    #     if DEFAULT_PROJECT not in self.get_sublocation_keys():
+    #         raise ValueError(f"{DEFAULT_PROJECT} should be in {self.__class__.__name__}. Got {self}.")
+
 
 @dataclass(order=True)
 class ProjectDataclass(DataclassHasOrderedDictMixin, BaseDataclass['ClientDataclass']):
     project_name: str = DEFAULT_PROJECT
     clients: typing.OrderedDict[str, 'ClientDataclass'] = field(
         default_factory=lambda: OrderedDict({DEFAULT_CLIENT: ClientDataclass()}))
+
+    # def _validate(self):
+    #     super()._validate()
+    #     if DEFAULT_CLIENT not in self.get_sublocation_keys():
+    #         raise ValueError(f"{DEFAULT_CLIENT} should be in {self.__class__.__name__}. Got {self}.")
 
 
 @dataclass(order=True)
@@ -741,7 +786,11 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
             return super().__getitem__(loc)
 
     def set_sublocation_keys(self, keys: List[ScopedLocationAttr]) -> 'BaseDataclass':
-        keys = [int(k) for k in keys if int(k) != RETRAIN_TRIAL_SPLIT_ID]
+        keys = [int(k) for k in keys]
+        if RETRAIN_TRIAL_SPLIT_ID in keys:
+            # TODO: should getters take into account RETRAIN_TRIAL_SPLIT_ID as well?
+            self._set_shallow_retrained_split_id()
+            keys.remove(RETRAIN_TRIAL_SPLIT_ID)
         super().set_sublocation_keys(keys)
 
     def set_sublocation_items(self, items: List[Tuple[ScopedLocationAttr, SubDataclassT]]) -> 'BaseDataclass':
@@ -757,9 +806,13 @@ class TrialDataclass(DataclassHasListMixin, BaseTrialDataclassMixin, BaseDatacla
     def shallow(self) -> 'BaseDataclass':
         shallowed: TrialDataclass = super().shallow()
         if shallowed.retrained_split is not None and not isinstance(shallowed.retrained_split, str):
-            shallowed.retrained_split = (
-                f"ShallowedRetrainedSplitWithId({shallowed.retrained_split.get_id()})")
+            assert shallowed.retrained_split.get_id() == RETRAIN_TRIAL_SPLIT_ID, (
+                f"Retrain split has a id != -1: {shallowed.retrained_split}")
+            shallowed._set_shallow_retrained_split_id()
         return shallowed
+
+    def _set_shallow_retrained_split_id(self):
+        self.retrained_split = "ShallowedRetrainedSplitWithId(-1)"
 
     def empty(self) -> 'BaseDataclass':
         emptied: TrialDataclass = super().empty()
@@ -892,7 +945,7 @@ def from_json(_json: str) -> BaseDataclass:
     return json.loads(_json, object_pairs_hook=object_pairs_decoder, object_hook=object_decoder)
 
 
-class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseDataclass]], BaseService):
+class HyperparamsRepository(BaseService):
     """
     Hyperparams repository that saves hyperparams, and scores for every AutoML trial.
     Cache folder can be changed to do different round numbers.
@@ -906,7 +959,6 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
 
     def __init__(self):
         BaseService.__init__(self)
-        _ObservableRepo.__init__(self)
 
     @abstractmethod
     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
@@ -951,6 +1003,13 @@ class HyperparamsRepository(_ObservableRepo[Tuple['HyperparamsRepository', BaseD
 
         :param scope: scope to get log from.
         :return: log from scope.
+        """
+        raise NotImplementedError("Use a concrete class. This is an abstract class.")
+
+    @abstractmethod
+    def is_locking_required(self) -> bool:
+        """
+        Check if repository is locking required.
         """
         raise NotImplementedError("Use a concrete class. This is an abstract class.")
 
@@ -1043,8 +1102,11 @@ class VanillaHyperparamsRepository(_InMemoryRepositoryLoggerHandlerMixin, Hyperp
             self.root[scope].store(_dataclass)
         return self
 
+    def is_locking_required(self) -> bool:
+        return False
 
-class InMemoryHyperparamsRepository(RaiseDeprecatedClass, _InMemoryRepositoryLoggerHandlerMixin, HyperparamsRepository):
+
+class InMemoryHyperparamsRepository(RaiseDeprecatedClass, VanillaHyperparamsRepository):
     """
     In memory hyperparams repository that can print information about trials.
     Useful for debugging.
@@ -1056,6 +1118,7 @@ class InMemoryHyperparamsRepository(RaiseDeprecatedClass, _InMemoryRepositoryLog
             replacement_class=VanillaHyperparamsRepository,
             since_version="0.7.0",
         )
+        VanillaHyperparamsRepository.__init__(self, *kargs, **kwargs)
 
 
 class BaseHyperparameterOptimizer(ABC):
@@ -1085,7 +1148,7 @@ class AutoMLContext(CX):
 
     @property
     def logger(self) -> NeuraxleLogger:
-        self.add_scoped_logger_file_handler()
+        self.add_scoped_logger_file_handler()  # TODO: this is perhaps why logs are duplicated.
         return CX.logger.fget(self)
 
     @property
@@ -1097,6 +1160,7 @@ class AutoMLContext(CX):
         Add a file handler to the logger at the current scoped location to capture logs
         at this scope and below this scope.
         """
+        # TODO: with self.lock:
         self.repo.add_logging_handler(self.logger_at_scoped_loc, self.loc)
 
     def free_scoped_logger_file_handler(self):
@@ -1109,6 +1173,7 @@ class AutoMLContext(CX):
         """
         Read the scoped logger file.
         """
+        # TODO: with self.lock:
         return self.repo.get_log_from_logging_handler(self.logger, self.loc)
 
     def copy(self):
@@ -1122,7 +1187,8 @@ class AutoMLContext(CX):
     def from_context(
         context: CX = None,
         repo: HyperparamsRepository = None,
-        loc: ScopedLocation = None
+        loc: ScopedLocation = None,
+        disable_context_lock: bool = False,
     ) -> 'AutoMLContext':
         """
         Create a new AutoMLContext from an ExecutionContext.
@@ -1132,6 +1198,8 @@ class AutoMLContext(CX):
         new_context: AutoMLContext = AutoMLContext.copy(
             context if context is not None else AutoMLContext()
         )
+        if disable_context_lock is True:
+            new_context.disable_context_lock()
         if not new_context.has_service(HyperparamsRepository):
             new_context.register_service(
                 HyperparamsRepository,
@@ -1151,7 +1219,12 @@ class AutoMLContext(CX):
 
     @property
     def lock(self):
+        # TODO: Global locks are known to be something to get rid of, such as Python's GIL. Use service locks. Rm this.
         return self.synchroneous()
+
+    def disable_context_lock(self) -> 'AutoMLContext':
+        self.register_service(ContextLock, NoContextLock())
+        return self
 
     @property
     def loc(self) -> ScopedLocation:
@@ -1196,12 +1269,5 @@ class AutoMLContext(CX):
         """
         Load the current dc from the repo.
         """
-        return self.repo.load(self.loc, deep)
-
-    def load_agg(self, deep=True) -> 'agg.BaseAggregate':
-        """
-        Load the current agg from the repo.
-        """
-        aggregate: 'agg.BaseAggregate' = agg.BaseAggregate.from_context(
-            self, is_deep=deep)
-        return aggregate
+        with self.lock:
+            return self.repo.load(self.loc, deep)
