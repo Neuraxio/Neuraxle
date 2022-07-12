@@ -1364,7 +1364,7 @@ class ExecutionContext(TruncableService):
                 if 'ContextLock' in str(service) or 'Flow' in str(service):
                     continue
                 # TODO: mixin that cleans things.
-                pickle.dumps(service.__reduce__())
+                # pickle.dumps(service.__reduce__())
         except Exception as e:
             raise pickle.PickleError(f"Couldn't pickle service {service} to send context to other thread.") from e
         try:
