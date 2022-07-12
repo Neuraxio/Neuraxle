@@ -28,6 +28,7 @@ Classes are splitted like this for the AutoML:
 
 
 """
+import multiprocessing
 import json
 import os
 from copy import deepcopy
@@ -40,6 +41,25 @@ from neuraxle.metaopt.data.vanilla import (BaseDataclass, dataclass_2_id_attr,
                                            SubDataclassT, to_json)
 
 ON_DISK_DELIM: str = "_"
+
+
+def init_with_rlock():
+    def decorator(_init_):
+        def f(self, *args, **kwargs):
+            _init_(self, *args, **kwargs)
+            self.lock = multiprocessing.RLock()
+            return None
+        return f
+    return decorator
+
+
+def func_with_rlock():
+    def decorator(func):
+        def f(self, *args, **kwargs):
+            with self.lock:
+                return func(self, *args, **kwargs)
+        return f
+    return decorator
 
 
 class _OnDiskRepositoryLoggerHandlerMixin:
@@ -82,11 +102,13 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         :class:`Trainer`,
     """
 
+    @init_with_rlock()
     def __init__(self, cache_folder: str = None):
         HyperparamsRepository.__init__(self)
         _OnDiskRepositoryLoggerHandlerMixin.__init__(self, cache_folder=cache_folder)
         self._save_dc(RootDataclass(), scope=ScopedLocation(), deep=True)
 
+    @func_with_rlock()
     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
         """
         Get metadata from scope.
@@ -114,6 +136,7 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
             raise ValueError("Len 0 while it should be longer: " + str(loaded))
         return loaded
 
+    @func_with_rlock()
     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
         """
         Save metadata to scope.
@@ -199,7 +222,8 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         with open(tmp_save_file, 'w') as f:
             json_content = to_json(_dataclass.empty())
             if len(json_content) == 0:
-                raise ValueError(f"Can't possibly save an empty dataclass. Something went wrong with dataclass {_dataclass} at scope {scope}.")
+                raise ValueError(
+                    f"Can't possibly save an empty dataclass. Something went wrong with dataclass {_dataclass} at scope {scope}.")
             json.dump(json_content, f, indent=4)
 
         if os.path.exists(save_file):
@@ -226,22 +250,19 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         return scope
 
     def is_locking_required(self) -> bool:
+        # TODO: refacto.
         return True
 
 
-# import multiprocessing
-# def with_lock(lock: multiprocessing.Lock):
-#     def decorator(func):
-#         def f(*args, **kwargs):
-#             with lock:
-#                 return func(*args, **kwargs)
-#         return f
-#     return decorator
 # class ThreadSafeHyperparamsOnDiskRepository(HyperparamsOnDiskRepository):
-#     lock = multiprocessing.Lock()
-#     @with_lock(lock)
+#     @init_with_rlock
+#     def __init__(self, cache_folder: str = None):
+#         super().__init__(cache_folder)
+#
+#     @func_with_rlock()
 #     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
 #         return HyperparamsOnDiskRepository.load(scope, deep)
-#     @with_lock(lock)
+#
+#     @func_with_rlock()
 #     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
 #         return HyperparamsOnDiskRepository.save(_dataclass, scope, deep)
