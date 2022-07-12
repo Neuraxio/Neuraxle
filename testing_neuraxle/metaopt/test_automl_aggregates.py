@@ -23,10 +23,10 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            MetricResultsDataclass,
                                            ScopedLocation, dataclass_2_id_attr,
                                            dataclass_2_subdataclass)
-from neuraxle.metaopt.optimizer import BaseHyperparameterOptimizer
+from neuraxle.metaopt.optimizer import (BaseHyperparameterOptimizer,
+                                        GridExplorationSampler,
+                                        RandomSearchSampler)
 from neuraxle.metaopt.repositories.json import HyperparamsOnDiskRepository
-from neuraxle.metaopt.validation import (GridExplorationSampler,
-                                         RandomSearchSampler)
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import AddN, MultiplyByN
 from sklearn.metrics import median_absolute_error

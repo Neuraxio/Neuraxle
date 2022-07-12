@@ -4,14 +4,14 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 import pytest
-from neuraxle.base import (BaseService, BaseStep, BaseTransformerT,
-                           CX, ForceHandleIdentity, Identity,
-                           NonFittableMixin, StepWithContext)
+from neuraxle.base import (CX, BaseService, BaseStep, BaseTransformerT,
+                           ForceHandleIdentity, Identity, NonFittableMixin,
+                           StepWithContext)
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.metaopt.auto_ml import AutoML
 from neuraxle.metaopt.callbacks import ScoringCallback
-from neuraxle.metaopt.repositories.json import HyperparamsOnDiskRepository
-from neuraxle.metaopt.validation import GridExplorationSampler, ValidationSplitter
+from neuraxle.metaopt.optimizer import GridExplorationSampler
+from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from sklearn.metrics import mean_squared_error
 

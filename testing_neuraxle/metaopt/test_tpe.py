@@ -19,10 +19,10 @@ from neuraxle.metaopt.hyperopt.tpe import (TreeParzenEstimator,
                                            _DividedMixturesFactory,
                                            _DividedTPEPosteriors)
 from neuraxle.metaopt.optimizer import (BaseHyperparameterOptimizer,
+                                        GridExplorationSampler,
                                         HyperparameterSamplerStub)
 from neuraxle.metaopt.repositories.repo import VanillaHyperparamsRepository
-from neuraxle.metaopt.validation import (GridExplorationSampler,
-                                         ValidationSplitter)
+from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import AddN
 from sklearn.metrics import mean_squared_error

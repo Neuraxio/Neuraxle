@@ -15,8 +15,7 @@ from neuraxle.hyperparams.distributions import (
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.metaopt.data.aggregates import Round, Trial
 from neuraxle.metaopt.data.reporting import RoundReport, TrialReport
-from neuraxle.metaopt.optimizer import BaseHyperparameterOptimizer
-from neuraxle.metaopt.validation import GridExplorationSampler
+from neuraxle.metaopt.optimizer import BaseHyperparameterOptimizer, GridExplorationSampler
 
 _QUANTIZED_DISTRIBUTION = (Quantized,)
 

@@ -10,9 +10,9 @@ from neuraxle.metaopt.callbacks import MetricCallback
 from neuraxle.metaopt.context import AutoMLContext
 from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.vanilla import ScopedLocation
-from neuraxle.metaopt.validation import (GridExplorationSampler,
-                                         KFoldCrossValidationSplitter,
-                                         RandomSearchSampler,
+from neuraxle.metaopt.optimizer import (GridExplorationSampler,
+                                        RandomSearchSampler)
+from neuraxle.metaopt.validation import (KFoldCrossValidationSplitter,
                                          ValidationSplitter)
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import MultiplyByN
