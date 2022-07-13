@@ -5,7 +5,8 @@ from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import Trainer
 from neuraxle.metaopt.callbacks import MetricCallback
 from neuraxle.metaopt.data.aggregates import Round
-from neuraxle.metaopt.validation import GridExplorationSampler, ValidationSplitter
+from neuraxle.metaopt.optimizer import GridExplorationSampler
+from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.steps.misc import FitTransformCallbackStep, TapeCallbackFunction
 from sklearn.metrics import mean_squared_error
 

@@ -44,11 +44,11 @@ from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
 from neuraxle.metaopt.data.reporting import RoundReport
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            RoundDataclass, ScopedLocation)
-from neuraxle.metaopt.optimizer import BaseHyperparameterOptimizer
+from neuraxle.metaopt.optimizer import (BaseHyperparameterOptimizer,
+                                        GridExplorationSampler,
+                                        RandomSearchSampler)
 from neuraxle.metaopt.repositories.repo import HyperparamsRepository
 from neuraxle.metaopt.validation import (BaseValidationSplitter,
-                                         GridExplorationSampler,
-                                         RandomSearchSampler,
                                          ValidationSplitter)
 
 

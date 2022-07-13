@@ -572,7 +572,7 @@ class Round(RoundReport, BaseAggregate[Client, 'Trial', RoundReport, RoundDatacl
         _trial_dataclass: TrialDataclass = self.repo.load(trial_loc, deep=True)
         if new_trial is True:
             # TODO: pass self.report as arg instead in the find_next_best_hyperparams method, but for this we need space stored in report as well:
-            new_hps: HyperparameterSamples = self.hp_optimizer.find_next_best_hyperparams(self)
+            new_hps: HyperparameterSamples = self.hp_optimizer.find_next_best_hyperparams(self.report, self.hp_space)
             # assert new_hps.to_flat_dict() not in self.report.get_all_hyperparams(as_flat=True, use_wildcards=False)  # TODO: TMP.
             _trial_dataclass.hyperparams = new_hps
             self.flow.log_planned(trial_id, _trial_dataclass.hyperparams)
