@@ -19,6 +19,7 @@ from neuraxle.metaopt.auto_ml import ControlledAutoML, DefaultLoop, Trainer
 from neuraxle.metaopt.callbacks import MetricCallback
 from neuraxle.metaopt.context import AutoMLContext
 from neuraxle.metaopt.data.aggregates import Round
+from neuraxle.metaopt.data.reporting import RoundReport
 from neuraxle.metaopt.data.vanilla import (BaseDataclass, RoundDataclass,
                                            ScopedLocation)
 from neuraxle.metaopt.optimizer import GridExplorationSampler
