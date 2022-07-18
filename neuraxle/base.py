@@ -1281,6 +1281,9 @@ class ExecutionContext(TruncableService):
         Prepare the context and its services to be process safe and
         reduce the current context for parallelization.
 
+        It also does some pickling checks on the services for them to avoid deadlocking
+        the multithreading queues by having picklables (parallelizeable) services.
+
         :return: a tuple of the recursive dict to apply within thread, and the thread safe context
         """
         # TODO: eventually this and the other method above will be an apply that returns a recursive dict of managed locks/things?
