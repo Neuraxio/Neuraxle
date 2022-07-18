@@ -54,7 +54,7 @@ class AutoMLContext(CX):
         Add a file handler to the logger at the current scoped location to capture logs
         at this scope and below this scope.
         """
-        # TODO: with self.lock:
+
         self.repo.add_logging_handler(self.logger_at_scoped_loc, self.loc)
 
     def free_scoped_logger_file_handler(self):
@@ -102,12 +102,8 @@ class AutoMLContext(CX):
                 ScopedLocation,
                 loc or ScopedLocation()
             )
-
-        if not disable_repo_lock and new_context.has_service(HyperparamsRepository):
-            repo: HyperparamsRepository = new_context.get_service(HyperparamsRepository)
-            repo: SynchronizedHyperparamsRepositoryWrapper = repo.with_lock()
-            new_context.register_service(HyperparamsRepository, repo)
-
+        if not disable_repo_lock:
+            new_context = new_context.synchroneous()
         return new_context
 
     @property
@@ -154,4 +150,5 @@ class AutoMLContext(CX):
         """
         Load the current dc from the repo.
         """
-        return self.repo.load(self.loc, deep)
+        with self.repo.lock:
+            return self.repo.load(self.loc, deep)

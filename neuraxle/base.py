@@ -1240,6 +1240,13 @@ class ExecutionContext(TruncableService):
         new_self.set_execution_phase(ExecutionPhase.VALIDATION)
         return new_self
 
+    def synchroneous(self) -> 'CX':
+        if self.has_service('HyperparamsRepository'):
+            repo = self.get_service('HyperparamsRepository')
+            repo = repo.with_lock()
+            self.register_service('HyperparamsRepository', repo)
+        return self
+
     def thread_safe(self) -> 'CX':
         """
         Prepare the context and its services to be thread safe
@@ -1265,10 +1272,7 @@ class ExecutionContext(TruncableService):
                 f"From error: {e}"
             ) from e
 
-        if threaded_context.has_service('HyperparamsRepository'):
-            repo = threaded_context.get_service('HyperparamsRepository')
-            repo = repo.with_lock()
-            threaded_context.register_service('HyperparamsRepository', repo)
+        threaded_context = threaded_context.synchroneous()
 
         return threaded_context
 

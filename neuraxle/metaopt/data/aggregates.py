@@ -141,7 +141,8 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         Requirement: Have already pre-push the attr of dataclass into
         the context before calling this.
         """
-        _dataclass = context.load_dc(deep=True)
+        with context.repo.lock:
+            _dataclass = context.load_dc(deep=True)
 
         if isinstance(_dataclass, (RootDataclass, ProjectDataclass)) and len(_dataclass) == 0:
             raise ValueError("Len 0 while it should be longer:" + str(_dataclass))
@@ -280,7 +281,8 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         self._invariant()
         self._spare = copy.copy(self._dataclass).shallow()
 
-        self.repo.save(self._dataclass, self.loc, deep=deep)
+        with self.repo.lock:
+            self.repo.save(self._dataclass, self.loc, deep=deep)
         return self
 
     def save_subaggregate(self, subagg: SubAggregateT, deep=False) -> 'BaseAggregate':

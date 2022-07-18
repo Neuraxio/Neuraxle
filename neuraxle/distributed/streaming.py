@@ -328,7 +328,7 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
         """
         state = self.__dict__.copy()
         state['running_workers'] = []  # delete self.workers in the process fork's pickling.
-        state['logging_thread'] = []  # delete self.workers in the process fork's pickling.
+        state['logging_thread'] = None
         return state
 
     def start(self, context: CX, logging_queue: Optional[Queue] = None):
@@ -603,6 +603,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :return:
         """
         self._setup(context=context)
+        context = context.synchroneous()
         return data_container.copy(), context
 
     def _setup(self, context: CX = None) -> 'BaseTransformer':

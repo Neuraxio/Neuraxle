@@ -238,7 +238,7 @@ def test_divided_mixtures_factory():
     hps_names = List[str]
     divided_distributions = List['_DividedTPEPosteriors']
 
-    hps_names, divided_distributions = dmf.create_from(round_scope)
+    hps_names, divided_distributions = dmf.create_from(round_scope.report, round_scope.hp_space)
     a_good_trials = divided_distributions[0].good_trials
     a_bad_trials = divided_distributions[0].bad_trials
     b_good_trials = divided_distributions[1].good_trials
