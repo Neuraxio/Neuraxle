@@ -161,7 +161,7 @@ def test_automl_neuraxle_logger_logs_to_repo_file(tmpdir):
     cx.flow.log_status(TrialStatus.RUNNING)
     cx.flow.log_end(TrialStatus.ABORTED)
 
-    log_file_path_at_loc = cx.repo.get_scoped_logger_path(cx.loc)
+    log_file_path_at_loc = cx.repo.wrapped.get_scoped_logger_path(cx.loc)
     assert os.path.exists(log_file_path_at_loc)
     log1 = cx.read_scoped_log()
     with open(log_file_path_at_loc, 'r') as _file:
@@ -205,11 +205,11 @@ def test_auto_ml_context_services_names():
 
     names: Set[str] = set(cx.getattr("name").to_flat_dict().values())
     assert names == set([
-        'AutoMLContext',
-        'Flow',
+        'SynchronizedHyperparamsRepositoryWrapper',
         'VanillaHyperparamsRepository',
         'ScopedLocation',
-        'ContextLock'
+        'Flow',
+        'AutoMLContext'
     ])
 
 

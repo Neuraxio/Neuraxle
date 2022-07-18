@@ -881,20 +881,6 @@ class TruncableService(TruncableServiceMixin, BaseService):
         TruncableServiceMixin.__init__(self, services)
 
 
-def synchroneous_flow_method(log_any_func: Callable[..., Any]) -> Callable:
-    """
-    Locking the lock of the flow to prevent race conditions in accessing the flow.
-    """
-
-    def log_any(self, *args, **kwargs):
-        if self._lock is None:
-            return log_any_func(self, *args, **kwargs)
-        else:
-            with self._lock:
-                return log_any_func(self, *args, **kwargs)
-    return log_any
-
-
 class TrialStatus(Enum):
     """
     Enum of the possible states of a trial.
@@ -1041,46 +1027,6 @@ class Flow(BaseService):
         # repo_trial_split_number + 1,
         # len(validation_splits),
         # json.dumps(repo_trial.hyperparams, sort_keys=True, indent=4)
-
-
-class ContextLock(BaseService):
-    """
-    ContextLock is a service that is used to lock the flow and repos when doing parallel processing.
-    """
-    # TODO: move to a parallel package?
-
-    def __init__(self, lock: RLock = None):
-        BaseService.__init__(self)
-        self._lock = lock
-
-    def synchroneous(self):
-        if self._lock is None:
-            self._lock = RLock()
-        return self._lock
-
-    def copy(self):
-        return ContextLock(self._lock)
-
-    @property
-    def lock(self):
-        return self._lock
-
-
-class PassthroughNullLock:
-    def __enter__(self):
-        pass
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
-
-
-class NoContextLock(ContextLock):
-    """
-    NoContextLock is like a ContextLock but it does not lock anything.
-    """
-
-    def __init__(self):
-        ContextLock.__init__(self, PassthroughNullLock())
 
 
 class ExecutionContext(TruncableService):
@@ -1294,41 +1240,20 @@ class ExecutionContext(TruncableService):
         new_self.set_execution_phase(ExecutionPhase.VALIDATION)
         return new_self
 
-    def synchroneous(self) -> RLock:
-        """
-        Synchronous context: Create a managed reentrant lock (mutex).
-        """
-        if not self.has_service(ContextLock):
-            self.register_service(ContextLock, ContextLock())
-        if isinstance(self.get_service(ContextLock).lock, str):
-            raise RuntimeError(self.get_service(ContextLock).lock)
-        self.flow.unlink_context()
-        return self.get_service(ContextLock).synchroneous()
-
-    def thread_safe(self) -> Tuple[RLock, 'CX']:
+    def thread_safe(self) -> 'CX':
         """
         Prepare the context and its services to be thread safe
 
         :return: a tuple of the recursive dict to apply within thread, and the thread safe context
         """
-        managed_thread_safe_lock: RLock = self.synchroneous()
-
         threaded_context = self.copy()
         self.flow.unlink_context()
         threaded_context.flow.unlink_context()
 
         # Not passing parents to threads. Could be refactored.
         threaded_context.parents = []
-        # Compensate lost parents:
+        # Compensate lost parents at the root:
         threaded_context.root = self.get_path()
-
-        threaded_context.get_service(ContextLock)._lock = (
-            "The context is temporarily inconsistent: you must must call "
-            "self.restore_lock(lock) with the lock passed to the thread to "
-            "be fine again. That is the lock that has been returned by "
-            "self.thread_safe()[0] earlier before sending the context to "
-            "the thread."
-        )
 
         _cx2 = threaded_context.copy()
         try:
@@ -1340,9 +1265,14 @@ class ExecutionContext(TruncableService):
                 f"From error: {e}"
             ) from e
 
-        return managed_thread_safe_lock, threaded_context
+        if threaded_context.has_service('HyperparamsRepository'):
+            repo = threaded_context.get_service('HyperparamsRepository')
+            repo = repo.with_lock()
+            threaded_context.register_service('HyperparamsRepository', repo)
 
-    def process_safe(self) -> Tuple[ParallelLoggingConsumerThread, 'CX']:
+        return threaded_context
+
+    def process_safe(self) -> 'CX':
         """
         Prepare the context and its services to be process safe and
         reduce the current context for parallelization.
@@ -1350,7 +1280,6 @@ class ExecutionContext(TruncableService):
         :return: a tuple of the recursive dict to apply within thread, and the thread safe context
         """
         # TODO: eventually this and the other method above will be an apply that returns a recursive dict of managed locks/things?
-        assert isinstance(self.get_service(ContextLock)._lock, str), "Must first call cx.thread_safe() before calling cx.process_safe()."
 
         process_safe_context = self.copy()
         self.flow.unlink_context()
@@ -1361,10 +1290,14 @@ class ExecutionContext(TruncableService):
         _cx2 = process_safe_context.copy()
         try:
             for service in _cx2.get_services().values():
-                if 'ContextLock' in str(service) or 'Flow' in str(service):
+                # TODO: mixin that cleans things instead of ifs here.
+                if 'Flow' in str(service):
                     continue
-                # TODO: mixin that cleans things.
-                # pickle.dumps(service.__reduce__())
+                if 'HyperparamsRepository' in str(service):
+                    assert 'SynchronizedHyperparamsRepositoryWrapper' in str(
+                        service), "Repo must have a lock before being parallelized."
+                    service = service.wrapped
+                pickle.dumps(service.__reduce__())
         except Exception as e:
             raise pickle.PickleError(f"Couldn't pickle service {service} to send context to other thread.") from e
         try:
@@ -1376,19 +1309,7 @@ class ExecutionContext(TruncableService):
                 f"From error: {e}"
             ) from e
 
-        logging_thread = ParallelLoggingConsumerThread()
-        return logging_thread, process_safe_context
-
-    def restore_lock(self, managed_thread_safe_lock: RLock = None) -> 'CX':
-        """
-        Restore the lock from what was returned by self.thread_safe()[0].
-
-        :param thread_safe_lock: lock to restore
-        :return: self
-        """
-        assert managed_thread_safe_lock is not None, "You must pass the lock returned by self.thread_safe()[0] earlier."
-        self.register_service(ContextLock, ContextLock(managed_thread_safe_lock))
-        return self.synchroneous()
+        return process_safe_context
 
     def peek(self) -> 'BaseTransformer':
         """

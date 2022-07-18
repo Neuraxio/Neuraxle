@@ -2,7 +2,7 @@ import copy
 from typing import List, Type
 
 import pytest
-from neuraxle.base import TrialStatus, synchroneous_flow_method
+from neuraxle.base import TrialStatus
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            NULL_CLIENT, NULL_PROJECT,

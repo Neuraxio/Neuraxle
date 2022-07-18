@@ -556,9 +556,6 @@ class SQLLiteHyperparamsRepository(DatabaseHyperparamRepository):
         super().__init__(engine, session)
         self.create_db()
 
-    def is_locking_required(self) -> bool:
-        return True
-
 
 class PostGreSQLHyperparamsRepository(DatabaseHyperparamRepository):
 

@@ -30,13 +30,11 @@ that needs to be adapted in AutoML loops.
 
 import logging
 
-from neuraxle.base import ContextLock
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.base import NoContextLock
 from neuraxle.logging.logging import NeuraxleLogger
 from neuraxle.metaopt.data.vanilla import (BaseDataclass, ScopedLocation,
                                            SubDataclassT)
-from neuraxle.metaopt.repositories.repo import (HyperparamsRepository,
+from neuraxle.metaopt.repositories.repo import (HyperparamsRepository, SynchronizedHyperparamsRepositoryWrapper,
                                                 VanillaHyperparamsRepository)
 
 
@@ -84,7 +82,7 @@ class AutoMLContext(CX):
         context: CX = None,
         repo: HyperparamsRepository = None,
         loc: ScopedLocation = None,
-        disable_context_lock: bool = False,
+        disable_repo_lock: bool = False,
     ) -> 'AutoMLContext':
         """
         Create a new AutoMLContext from an ExecutionContext.
@@ -94,8 +92,6 @@ class AutoMLContext(CX):
         new_context: AutoMLContext = AutoMLContext.copy(
             context if context is not None else AutoMLContext()
         )
-        if disable_context_lock is True:
-            new_context.disable_context_lock()
         if not new_context.has_service(HyperparamsRepository):
             new_context.register_service(
                 HyperparamsRepository,
@@ -106,29 +102,22 @@ class AutoMLContext(CX):
                 ScopedLocation,
                 loc or ScopedLocation()
             )
-        if not new_context.has_service(ContextLock):
-            new_context.register_service(
-                ContextLock,
-                ContextLock()
-            )
+
+        if not disable_repo_lock and new_context.has_service(HyperparamsRepository):
+            repo: HyperparamsRepository = new_context.get_service(HyperparamsRepository)
+            repo: SynchronizedHyperparamsRepositoryWrapper = repo.with_lock()
+            new_context.register_service(HyperparamsRepository, repo)
+
         return new_context
-
-    @property
-    def lock(self):
-        # TODO: Global locks are known to be something to get rid of, such as Python's GIL. Use service locks. Rm this.
-        return self.synchroneous()
-
-    def disable_context_lock(self) -> 'AutoMLContext':
-        self.register_service(ContextLock, NoContextLock())
-        return self
 
     @property
     def loc(self) -> ScopedLocation:
         return self.get_service(ScopedLocation)
 
     @property
-    def repo(self) -> HyperparamsRepository:
-        return self.get_service(HyperparamsRepository)
+    def repo(self) -> SynchronizedHyperparamsRepositoryWrapper:
+        repo: HyperparamsRepository = self.get_service(HyperparamsRepository)
+        return repo.with_lock()
 
     def push_attr(self, subdataclass: SubDataclassT) -> 'AutoMLContext':
         """
@@ -165,5 +154,4 @@ class AutoMLContext(CX):
         """
         Load the current dc from the repo.
         """
-        with self.lock:
-            return self.repo.load(self.loc, deep)
+        return self.repo.load(self.loc, deep)

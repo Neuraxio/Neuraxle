@@ -49,7 +49,7 @@ class StepThatAssertsContextIsSpecifiedAtTrain(Identity):
                 f'Expected {self.expected_loc}, got {context.loc}.',
                 context)
             self._assert_equals(
-                context.loc in context.repo.root, True,
+                context.loc in context.repo.wrapped.root, True,
                 "Context should have the dataclass, but it doesn't", context)
         return data_container
 

@@ -104,12 +104,60 @@ class HyperparamsRepository(BaseService):
         """
         raise NotImplementedError("Use a concrete class. This is an abstract class.")
 
-    @abstractmethod
-    def is_locking_required(self) -> bool:
-        """
-        Check if repository is locking required.
-        """
-        raise NotImplementedError("Use a concrete class. This is an abstract class.")
+    def with_lock(self) -> 'SynchronizedHyperparamsRepositoryWrapper':
+        return SynchronizedHyperparamsRepositoryWrapper(self)
+
+
+def func_with_rlock():
+    def decorator(func):
+        def f(self, *args, **kwargs):
+            with self.lock:
+                return func(self, *args, **kwargs)
+        return f
+    return decorator
+
+
+class SynchronizedHyperparamsRepositoryWrapper(MetaServiceMixin, HyperparamsRepository):
+    """
+    A wrapper that makes any HyperparamsRepository thread-safe using locking.
+    """
+
+    def __init__(self, wrapped: HyperparamsRepository):
+        MetaServiceMixin.__init__(self, wrapped)
+        HyperparamsRepository.__init__(self)
+        self.lock = multiprocessing.RLock()
+
+    @func_with_rlock()
+    def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
+        repo: HyperparamsRepository = self.get_step()
+        return repo.load(scope, deep)
+
+    @func_with_rlock()
+    def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
+        repo: HyperparamsRepository = self.get_step()
+        return repo.save(_dataclass, scope, deep)
+
+    @func_with_rlock()
+    def add_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> 'HyperparamsRepository':
+        repo: HyperparamsRepository = self.get_step()
+        return repo.add_logging_handler(logger, scope)
+
+    @func_with_rlock()
+    def get_log_from_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> str:
+        repo: HyperparamsRepository = self.get_step()
+        return repo.get_log_from_logging_handler(logger, scope)
+
+#     def _get_thread_safe(self):
+#         pass
+#
+#     def _get_pickle_safe(self):
+#         pass
+#
+#     def set_thread_safe():
+#         pass
+
+    def with_lock(self) -> 'SynchronizedHyperparamsRepositoryWrapper':
+        return self
 
 
 class _InMemoryRepositoryLoggerHandlerMixin:
@@ -200,9 +248,6 @@ class VanillaHyperparamsRepository(_InMemoryRepositoryLoggerHandlerMixin, Hyperp
             self.root[scope].store(_dataclass)
         return self
 
-    def is_locking_required(self) -> bool:
-        return False
-
 
 class InMemoryHyperparamsRepository(RaiseDeprecatedClass, VanillaHyperparamsRepository):
     """
@@ -217,62 +262,3 @@ class InMemoryHyperparamsRepository(RaiseDeprecatedClass, VanillaHyperparamsRepo
             since_version="0.7.0",
         )
         VanillaHyperparamsRepository.__init__(self, *kargs, **kwargs)
-
-
-def init_with_rlock():
-    def decorator(_init_):
-        def f(self, *args, **kwargs):
-            _init_(self, *args, **kwargs)
-            self.lock = multiprocessing.RLock()
-            return None
-        return f
-    return decorator
-
-
-def func_with_rlock():
-    def decorator(func):
-        def f(self, *args, **kwargs):
-            with self.lock:
-                return func(self, *args, **kwargs)
-        return f
-    return decorator
-
-
-class SynchronizedHyperparamsRepositoryWrapper(MetaServiceMixin, HyperparamsRepository):
-    """
-    A wrapper that makes any HyperparamsRepository thread-safe using locking.
-    """
-
-    @init_with_rlock()
-    def __init__(self, wrapped: HyperparamsRepository):
-        MetaServiceMixin.__init__(self, wrapped)
-        HyperparamsRepository.__init__(self)
-
-    @func_with_rlock()
-    def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
-        repo: HyperparamsRepository = self.get_step()
-        return repo.load(scope, deep)
-
-    @func_with_rlock()
-    def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
-        repo: HyperparamsRepository = self.get_step()
-        return repo.save(_dataclass, scope, deep)
-
-    @func_with_rlock()
-    def add_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> 'HyperparamsRepository':
-        repo: HyperparamsRepository = self.get_step()
-        return repo.add_logging_handler(logger, scope)
-
-    @func_with_rlock()
-    def get_log_from_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> str:
-        repo: HyperparamsRepository = self.get_step()
-        return repo.get_log_from_logging_handler(logger, scope)
-
-#     def _get_thread_safe(self):
-#         pass
-#
-#     def _get_pickle_safe(self):
-#         pass
-#
-#     def set_thread_safe():
-#         pass

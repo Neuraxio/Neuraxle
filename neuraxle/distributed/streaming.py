@@ -229,7 +229,6 @@ class MinibatchError(QueuedMinibatchTask):
 
 def worker_function(
     worker: 'ParallelWorkersWrapper',
-    shared_lock: Lock,
     context: CX,
     use_savers: bool,
     logging_queue: Optional[Queue],
@@ -243,8 +242,6 @@ def worker_function(
     :return:
     """
     try:
-        context.restore_lock(shared_lock)
-
         if use_savers:
             worker.reload_post_saving(context)
         step = worker.get_step()
@@ -318,7 +315,7 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
 
         self.running_workers: List[Process] = []
         # TODO: maybe start this thread in the main instead than in every worker's main.
-        self.logging_thread: ParallelLoggingConsumerThread = None
+        self.logging_thread: Optional[ParallelLoggingConsumerThread] = None
 
     def _setup(self, context: 'CX' = None) -> Optional[RecursiveDict]:
         MetaStep._setup(self)
@@ -331,15 +328,18 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
         """
         state = self.__dict__.copy()
         state['running_workers'] = []  # delete self.workers in the process fork's pickling.
-        state["logging_thread"] = None
+        state['logging_thread'] = []  # delete self.workers in the process fork's pickling.
         return state
 
-    def start(self, context: CX):
+    def start(self, context: CX, logging_queue: Optional[Queue] = None):
         """
         Start multiple processes or threads with the worker function as a target.
         These workers will consume minibatches from the queue and produce them on the next queue(s).
         They are started as multiprocessing daemons, so that they will not block the main
         process if there is an error requiring to exit.
+
+        :param context: An execution context that will be checked to be thread_safe.
+        :param logging_queue: An optional logging_queue from the object :class:`ParallelLoggingConsumerThread` to pass and recover parallelized log records to. Not required for thread-only parallelism, only process-based parallelism.
         """
         if self.input_queue is None:
             raise ValueError("Please call self._setup before and connect queues.")
@@ -347,34 +347,31 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
             _ = self.save(context, full_dump=True)  # Cannot delete queue worker self.
             del self.wrapped  # that will be reloaded in the new thread or process.
 
-        thread_safe_lock: RLock = None
         process_safe_context: CX = context
-        thread_safe_lock, process_safe_context = process_safe_context.thread_safe()
+        process_safe_context = process_safe_context.thread_safe()
         ParallelObj = Thread
-        logging_queue: Optional[Queue] = None
         if self.use_processes:  # TODO: that was to debug pickles.
             # New process requires trimming the references to other processes
             # when we create many processes: https://stackoverflow.com/a/65749012
-            logging_thread, process_safe_context = process_safe_context.process_safe()
-            logging_queue = logging_thread.logging_queue
+            # Important check to avoid this cPython issue to cause a deadlock: https://github.com/python/cpython/issues/79423
+            process_safe_context = process_safe_context.process_safe()
             ParallelObj = Process
 
-        # Important check to avoid this cPython issue to cause a deadlock: https://github.com/python/cpython/issues/79423
+        if self.use_processes and logging_queue is None:
+            self.logging_thread = ParallelLoggingConsumerThread()
+            logging_queue = self.logging_thread.logging_queue
+            self.logging_thread.start()
 
         self.running_workers = []
         for i in range(self.n_workers):
             p = ParallelObj(
                 target=worker_function,
                 name=self.name + f"__worker_function{i}",
-                args=(self, thread_safe_lock, process_safe_context, self.use_savers, logging_queue)
+                args=(self, process_safe_context, self.use_savers, logging_queue)
             )
             p.daemon = True
             self.running_workers.append(p)
             p.start()
-
-        if self.use_processes:
-            self.logging_thread = logging_thread
-            self.logging_thread.start()
 
         if self.use_savers:
             self.reload_post_saving(context)
@@ -392,10 +389,10 @@ class ParallelWorkersWrapper(_ProducerConsumerMixin, MetaStep):
         """
         Wait for workers to finish at least their capture of the logging calls.
         """
+        _ProducerConsumerMixin.join(self)
         if self.logging_thread is not None:
             self.logging_thread.join(timeout=5.0)
             self.logging_thread = None
-        _ProducerConsumerMixin.join(self)
 
     def _teardown(self) -> Optional[RecursiveDict]:
         """
@@ -532,6 +529,8 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         )
         self._refresh_steps()
 
+        self.logging_thread: Optional[ParallelLoggingConsumerThread] = None
+
     def _parallel_wrap_all_steps_tuples(self, all_step_tuples: NamedStepsList) -> NamedStepsList:
         """
         Wrap each step by a :class:`QueueWorker` to  allow data to flow in many pipeline steps at once in parallel.
@@ -661,15 +660,20 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :type context: ExecutionContext
         :return: data container
         """
+        logging_queue: Optional[Queue] = None
+        if self.use_processes:
+            self.logging_thread = ParallelLoggingConsumerThread()
+            logging_queue = self.logging_thread.logging_queue
+            self.logging_thread.start()
+
         for step in self.values():
             if step.input_queue is None:
                 raise ValueError("Please connect queues and do the self._setup before attempting to join.")
 
         # start steps with parallelized context.
-        context.synchroneous()
         for step in self.body:
             step: ParallelWorkersWrapper = step
-            step.start(context)
+            step.start(context, logging_queue)
 
         # prepare minibatch iterator:
         minibatch_iterator: Iterable[DACT[IDT, DIT, EOT]] = data_container.minibatches(
@@ -698,6 +702,9 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         for step in self.body:
             step: ParallelWorkersWrapper = step
             step.join()
+        if self.logging_thread is not None:
+            self.logging_thread.join(timeout=5.0)
+            self.logging_thread = None
 
         return data_container
 
