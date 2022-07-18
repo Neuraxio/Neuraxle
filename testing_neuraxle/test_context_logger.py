@@ -219,10 +219,10 @@ def test_automl_context_repo_service_config():
     cx.repo.set_config({"some_key": "some_value"})
 
     assert dict(cx.get_config().to_flat_dict()) == {
-        'VanillaHyperparamsRepository__some_key': 'some_value'
+        'SynchronizedHyperparamsRepositoryWrapper__some_key': 'some_value'
     }
     assert cx.has_service("HyperparamsRepository")
-    assert cx.get_service("HyperparamsRepository").__class__.__name__ == "VanillaHyperparamsRepository"
+    assert cx.get_service("HyperparamsRepository").__class__.__name__ == "SynchronizedHyperparamsRepositoryWrapper"
 
 
 def test_logger_logs_error_stack_trace():
