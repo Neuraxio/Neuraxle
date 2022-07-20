@@ -622,7 +622,7 @@ class _CanMutate:
             # 2. delete old method
             try:
                 delattr(new_base_step, method_to_assign_to)
-            except AttributeError as e:
+            except AttributeError:
                 pass
 
             # 3. assign new method to old method
@@ -834,9 +834,14 @@ class MetaServiceMixin(_HasChildrenMixin):
 
     def _repr(self, level=0, verbose=False) -> str:
         output = self.__class__.__name__ + "("
-        output += self.wrapped._repr(level=level + 1, verbose=verbose) + ", name='" + self.name + "'"
+        output += self.wrapped._repr(level=level + 1, verbose=verbose)
+        has_name = self.__class__.__name__ != self.name
+        if has_name:
+            output += ", name='" + self.name + "'"
         if verbose:
-            output += ", hyperparameters=" + pprint.pformat(self.hyperparams)
+            conf: RecursiveDict = self._get_config()
+            if len(conf) > 0:
+                output += ", config=" + pprint.pformat(conf)
         output += ")"
         return output
 
@@ -890,7 +895,38 @@ ServiceName = Union[str, Type[BaseServiceT]]
 NamedServicesList = List[Union[Tuple[str, BaseServiceT], BaseServiceT]]
 
 
-class TruncableServiceMixin(_HasChildrenMixin):
+class _TruncableMixin:
+    # TODO: Merge common code of TruncableServiceMixin and TruncableStepsMixin into this.
+
+    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=False) -> 'BaseTransformer':
+        """
+        Call mutate on every steps the the present truncable step contains.
+
+        :param new_method: the method to replace transform with.
+        :param method_to_assign_to: the method to which the new method will be assigned to.
+        :param warn: (verbose) wheter or not to warn about the inexistence of the method.
+        :return: self, a copy of self, or even perhaps a new or different BaseStep object.
+        """
+        if self.pending_mutate[0] is None:
+            new_base_step = BaseStep.mutate(self, new_method, method_to_assign_to, warn)
+            self.pending_mutate = (new_base_step, self.pending_mutate[1], self.pending_mutate[2])
+
+            new_base_step.steps_as_tuple = [
+                (
+                    k,
+                    v.mutate(new_method, method_to_assign_to, warn)
+                )
+                for k, v in new_base_step.steps_as_tuple
+            ]
+            new_base_step._refresh_steps()
+            return new_base_step
+        else:
+            # Since we're remplacing ourselves with a new step, we don't have to call mutate on our childrens since
+            # they won't exist afterward.
+            return BaseStep.mutate(self, new_method, method_to_assign_to, warn)
+
+
+class TruncableServiceMixin(_TruncableMixin, _HasChildrenMixin):
 
     def __init__(self, services: Dict[ServiceName, 'BaseServiceT']):
         _HasChildrenMixin.__init__(self)
@@ -992,33 +1028,6 @@ class TruncableServiceMixin(_HasChildrenMixin):
         service_type: str = self._sanitize_service_name(service_type)
         self.services[service_type] = service_instance
         return self
-
-    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=False) -> 'BaseTransformer':
-        """
-        Call mutate on every steps the the present truncable step contains.
-        
-        :param new_method: the method to replace transform with.
-        :param method_to_assign_to: the method to which the new method will be assigned to.
-        :param warn: (verbose) wheter or not to warn about the inexistence of the method.
-        :return: self, a copy of self, or even perhaps a new or different BaseStep object.
-        """
-        if self.pending_mutate[0] is None:
-            new_base_step = BaseStep.mutate(self, new_method, method_to_assign_to, warn)
-            self.pending_mutate = (new_base_step, self.pending_mutate[1], self.pending_mutate[2])
-
-            new_base_step.steps_as_tuple = [
-                (
-                    k,
-                    v.mutate(new_method, method_to_assign_to, warn)
-                )
-                for k, v in new_base_step.steps_as_tuple
-            ]
-            new_base_step._refresh_steps()
-            return new_base_step
-        else:
-            # Since we're remplacing ourselves with a new step, we don't have to call mutate on our childrens since
-            # they won't exist afterward.
-            return BaseStep.mutate(self, new_method, method_to_assign_to, warn)
 
 
 class TruncableService(TruncableServiceMixin, BaseService):
@@ -2997,9 +3006,16 @@ class BaseTransformer(
         return self._repr(verbose=True)
 
     def _repr(self, level=0, verbose=False) -> str:
-        output = self.__class__.__name__ + "(name='" + self.name + "'"
+        output = self.__class__.__name__ + "("
+        has_name: bool = self.__class__.__name__ != self.name
+        if has_name:
+            output += "name='" + self.name + "'"
         if verbose:
-            output += ", hyperparameters=" + pprint.pformat(self.hyperparams)
+            hps: HyperparameterSamples = self._get_hyperparams()
+            if len(hps) > 0:
+                if has_name:
+                    output += ", "
+                output += "hyperparams=" + pprint.pformat(hps)
         output += ")"
         return output
 
@@ -3441,9 +3457,10 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         return step
 
 
-class TruncableStepsMixin(_HasChildrenMixin):
+class TruncableStepsMixin(_TruncableMixin, _HasChildrenMixin):
     """
-    A mixin for services that can be truncated.
+    A mixin for steps that can be truncated,
+    such as for instance a :class:`~neuraxle.pipeline.Pipeline`.
     """
 
     def __init__(
@@ -3848,13 +3865,30 @@ class TruncableSteps(TruncableStepsMixin, BaseStep, ABC):
         return new_self
 
     def _repr(self, level=0, verbose=False) -> str:
+        children = self.get_children()
+        is_compact: bool = len(children) < 2
+
         tab0 = "    " * level
         tab1 = "    " * (level + 1)
-        output = self.__class__.__name__ + "([\n" + ''.join(
-            [tab1 + s._repr(level=level + 1, verbose=verbose) + ",\n" for s in self.get_children()]
-        ) + tab0 + "], name='" + self.name + "'"
+        _nl = "\n"
+        _nl2 = _nl
+        if is_compact:
+            tab1 = ""
+            _nl = ""
+            _nl2 = " "
+
+        output = self.__class__.__name__ + "(["
+        output += _nl + tab1 + ("," + _nl2 + tab1).join(
+            [s._repr(level=level + 1, verbose=verbose) for s in children]
+        )
+        output += _nl + (tab1 if is_compact else tab0) + "]"
+        has_name = self.__class__.__name__ != self.name
+        if has_name:
+            output += ", name='" + self.name + "'"
         if verbose:
-            output += ", hyperparameters=" + pprint.pformat(self.hyperparams)
+            hps: HyperparameterSamples = self._get_hyperparams()
+            if len(hps) > 0:
+                output += ", hyperparams=" + pprint.pformat(hps)
         output += ")"
         return output
 

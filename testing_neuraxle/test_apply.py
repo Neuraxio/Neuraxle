@@ -1,9 +1,11 @@
 import pytest
-from neuraxle.base import BaseStep, Identity, NonFittableMixin
+from neuraxle.base import BaseStep
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import Identity, NonFittableMixin
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
-from neuraxle.steps.flow import ExpandDim
-from neuraxle.steps.loop import ForEach
+from neuraxle.steps.flow import OptionalStep
 from neuraxle.steps.numpy import MultiplyByN
 from neuraxle.steps.output_handlers import OutputTransformerWrapper
 
@@ -136,26 +138,31 @@ class Mutating2TransformsStep(NonFittableMixin, BaseStep):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
 
-    def transform(self, data_input, expected_outputs):
+    def transform(self, data_input):
         raise AssertionError("Mutate failed. Should have entered in other methods.")
 
-    def transform_a(self, data_input, expected_outputs):
+    def transform_a(self, data_input):
         return ['a']
 
-    def transform_b(self, data_input, expected_outputs):
+    def transform_b(self, data_input):
         return ['b']
 
 
 @pytest.mark.parametrize("step", [
     Mutating2TransformsStep(),
-    ExpandDim(ForEach(Mutating2TransformsStep())),
+    OptionalStep(Mutating2TransformsStep()),
     Pipeline([Mutating2TransformsStep()]),
 ])
 def test_mutate(step: BaseStep):
+    dact = DACT(di=[0])
+    cx = CX()
+    with pytest.raises(AssertionError):
+        step.handle_transform(dact, cx)
+
     step = step.mutate(new_method="transform_a", method_to_assign_to="transform")
-    _a = step.transform([0])
-    assert _a == 'a'
+    _a = step.handle_transform(dact, cx).di
+    assert _a == ['a']
 
     step = step.mutate(new_method="transform_b", method_to_assign_to="transform")
-    _b = step.transform([0])
-    assert _b == 'b'
+    _b = step.handle_transform(dact, cx).di
+    assert _b == ['b']
