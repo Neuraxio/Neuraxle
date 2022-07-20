@@ -34,7 +34,7 @@ def test_metastepmixin_set_train_should_set_train_to_true():
 
 def test_basestep_str_representation_works_correctly():
     output = str(SomeMetaStepWithHyperparams())
-    assert output == "SomeMetaStepWithHyperparams(SomeStepWithHyperparams(name='MockStep'), name='SomeMetaStepWithHyperparams')"
+    assert output == "SomeMetaStepWithHyperparams(SomeStepWithHyperparams(name='MockStep'))"
 
 
 def test_subtyping_of_metastep_works_correctly():
