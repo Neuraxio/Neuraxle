@@ -166,3 +166,19 @@ def test_mutate(step: BaseStep):
     step = step.mutate(new_method="transform_b", method_to_assign_to="transform")
     _b = step.handle_transform(dact, cx).di
     assert _b == ['b']
+
+
+@pytest.mark.parametrize("step", [
+    Mutating2TransformsStep().will_mutate_to(Identity()),
+    OptionalStep(Mutating2TransformsStep().will_mutate_to(Identity())),
+    Pipeline([Mutating2TransformsStep().will_mutate_to(Identity())]),
+])
+def test_will_mutate_to(step: BaseStep):
+    dact = DACT(di=[0])
+    cx = CX()
+    with pytest.raises(AssertionError):
+        step.handle_transform(dact, cx)
+
+    step = step.mutate()
+    preds_dact = step.handle_transform(dact, cx)
+    assert preds_dact == dact
