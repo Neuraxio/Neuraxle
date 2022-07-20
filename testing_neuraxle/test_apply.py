@@ -1,6 +1,9 @@
-from neuraxle.base import Identity
+import pytest
+from neuraxle.base import BaseStep, Identity, NonFittableMixin
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
+from neuraxle.steps.flow import ExpandDim
+from neuraxle.steps.loop import ForEach
 from neuraxle.steps.numpy import MultiplyByN
 from neuraxle.steps.output_handlers import OutputTransformerWrapper
 
@@ -125,3 +128,34 @@ def test_has_children_mixin_apply_should_return_recursive_dict_to_recursive_chil
     assert results['Pipeline__hp'] == 2
     assert results['Pipeline__c__hp'] == 3
     assert results['Pipeline__d__hp'] == 4
+
+
+class Mutating2TransformsStep(NonFittableMixin, BaseStep):
+
+    def __init__(self):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+
+    def transform(self, data_input, expected_outputs):
+        raise AssertionError("Mutate failed. Should have entered in other methods.")
+
+    def transform_a(self, data_input, expected_outputs):
+        return ['a']
+
+    def transform_b(self, data_input, expected_outputs):
+        return ['b']
+
+
+@pytest.mark.parametrize("step", [
+    Mutating2TransformsStep(),
+    ExpandDim(ForEach(Mutating2TransformsStep())),
+    Pipeline([Mutating2TransformsStep()]),
+])
+def test_mutate(step: BaseStep):
+    step = step.mutate(new_method="transform_a", method_to_assign_to="transform")
+    _a = step.transform([0])
+    assert _a == 'a'
+
+    step = step.mutate(new_method="transform_b", method_to_assign_to="transform")
+    _b = step.transform([0])
+    assert _b == 'b'

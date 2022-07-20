@@ -47,20 +47,16 @@ from copy import copy, deepcopy
 from enum import Enum
 from multiprocessing import RLock
 from operator import attrgetter
-from typing import (Any, Callable, Dict, Generic, ItemsView, Iterable,
-                    KeysView, List, Optional, Set, Tuple, Type, TypeVar, Union,
-                    ValuesView)
+from typing import (Any, Callable, Dict, Generic, ItemsView, Iterable, KeysView, List, Optional, Set, Tuple, Type,
+                    TypeVar, Union, ValuesView)
 
 from joblib import dump, load
 
-from neuraxle.data_container import (ARG_X_INPUTTED, ARG_Y_EXPECTED,
-                                     ARG_Y_PREDICTD, DIT, EOT, IDT)
+from neuraxle.data_container import ARG_X_INPUTTED, ARG_Y_EXPECTED, ARG_Y_PREDICTD, DIT, EOT, IDT
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.data_container import PredsDACT, TrainDACT
-from neuraxle.hyperparams.space import (HyperparameterSamples,
-                                        HyperparameterSpace, RecursiveDict)
-from neuraxle.logging.logging import (NEURAXLE_LOGGER_NAME, NeuraxleLogger,
-                                      ParallelLoggingConsumerThread)
+from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace, RecursiveDict
+from neuraxle.logging.logging import NEURAXLE_LOGGER_NAME, NeuraxleLogger, ParallelLoggingConsumerThread
 from neuraxle.logging.warnings import warn_deprecated_arg
 
 
@@ -582,7 +578,104 @@ class _HasConfig(ABC):
         return self.config
 
 
+class _CanMutate:
+    """
+    An internal class to represent a step that can be mutated.
+    A step can replace some of its method by others.
+    For example, you might want to reverse a step, and replace the transform method by the inverse transform method.
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`BaseTransformer`,
+        :func:`~neuraxle.base._TransformerStep.transform`,
+        :func:`~neuraxle.base._TransformerStep.inverse_transform`
+    """
+
+    def __init__(self):
+        self.pending_mutate: Tuple['BaseTransformer', str, str] = (None, None, None)
+
+    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
+        """
+        Replace the "method_to_assign_to" method by the "new_method" method, IF the present object has no pending calls to
+        ``.will_mutate_to()`` waiting to be applied. If there is a pending call, the pending call will override the
+        methods specified in the present call. If the change fails (such as if the new_method doesn't exist), then
+        a warning is printed (optional). By default, there is no pending ``will_mutate_to`` call.
+        This could for example be useful within a pipeline to apply ``inverse_transform`` to every pipeline steps, or
+        to assign ``predict_probas`` to ``predict``, or to assign "inverse_transform" to "transform" to a reversed pipeline.
+        :param new_method: the method to replace transform with, if there is no pending ``will_mutate_to`` call.
+        :param method_to_assign_to: the method to which the new method will be assigned to, if there is no pending ``will_mutate_to`` call.
+        :param warn: (verbose) wheter or not to warn about the inexistence of the method.
+        :return: self, a copy of self, or even perhaps a new or different BaseStep object.
+        """
+        self._invalidate()
+        pending_new_base_step, pending_new_method, pending_method_to_assign_to = self.pending_mutate
+
+        # Use everything that is pending if they are not none (ternaries).
+        new_base_step = pending_new_base_step if pending_new_base_step is not None else copy(self)
+        new_method = pending_new_method if pending_new_method is not None else new_method
+        method_to_assign_to = pending_method_to_assign_to if pending_method_to_assign_to is not None else method_to_assign_to
+
+        # We set "new_method" in place of "method_to_affect" to a copy of self:
+        try:
+            # 1. get new method's reference
+            new_method = getattr(new_base_step, new_method)
+
+            # 2. delete old method
+            try:
+                delattr(new_base_step, method_to_assign_to)
+            except AttributeError as e:
+                pass
+
+            # 3. assign new method to old method
+            setattr(new_base_step, method_to_assign_to, new_method)
+            self._invalidate()
+
+        except AttributeError as e:
+            if warn:
+                import warnings
+                warnings.warn(repr(e))
+
+        return new_base_step
+
+    def will_mutate_to(self, new_base_step: 'BaseTransformer' = None, new_method: str = None,
+                       method_to_assign_to: str = None) -> 'BaseTransformer':
+        """
+        This will change the behavior of ``self.mutate(<...>)`` such that when mutating, it will return the
+        presently provided new_base_step BaseStep (can be left to None for self), and the ``.mutate`` method
+        will also apply the ``new_method`` and the  ``method_to_affect``, if they are not None, and after changing
+        the object to new_base_step.
+        This can be useful if your pipeline requires unsupervised pretraining. For example:
+        .. code-block:: python
+            X_pretrain = ...
+            X_train = ...
+            p = Pipeline(
+                SomePreprocessing(),
+                SomePretrainingStep().will_mutate_to(new_base_step=SomeStepThatWillUseThePretrainingStep),
+                Identity().will_mutate_to(new_base_step=ClassifierThatWillBeUsedOnlyAfterThePretraining)
+            )
+            # Pre-train the pipeline
+            p = p.fit(X_pretrain, y=None)
+            # This will leave `SomePreprocessing()` untouched and will affect the two other steps.
+            p = p.mutate(new_method="transform", method_to_affect="transform")
+            # Pre-train the pipeline
+            p = p.fit(X_train, y_train)  # Then fit the classifier and other new things
+        :param new_base_step: if it is not None, upon calling ``mutate``, the object it will mutate to will be this provided new_base_step.
+        :param method_to_assign_to: if it is not None, upon calling ``mutate``, the method_to_affect will be the one that is used on the provided new_base_step.
+        :param new_method: if it is not None, upon calling ``mutate``, the new_method will be the one that is used on the provided new_base_step.
+        :return: self
+        """
+        self._invalidate()
+
+        if new_method is None or method_to_assign_to is None:
+            # No changes will be applied (transform will stay transform).
+            new_method = method_to_assign_to = "transform"
+
+        self.pending_mutate = (new_base_step, new_method, method_to_assign_to)
+
+        return self
+
+
 class BaseService(
+    _CanMutate,
     _HasConfig,
     _HasRecursiveMethods,
     ABC
@@ -599,6 +692,7 @@ class BaseService(
     def __init__(self, config: Union[Dict, RecursiveDict] = None, name: str = None):
         _HasRecursiveMethods.__init__(self, name=name)
         _HasConfig.__init__(self, config=config)
+        _CanMutate.__init__(self)
 
 
 BaseServiceT = TypeVar('BaseServiceT', bound=BaseService)
@@ -746,6 +840,32 @@ class MetaServiceMixin(_HasChildrenMixin):
         output += ")"
         return output
 
+    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=False) -> 'BaseTransformer':
+        """
+        Mutate self, and self.wrapped. Please refer to :func:`~neuraxle.base._CanMutate.mutate` for more information.
+        :param new_method: the method to replace transform with, if there is no pending ``will_mutate_to`` call.
+        :param method_to_assign_to: the method to which the new method will be assigned to, if there is no pending ``will_mutate_to`` call.
+        :param warn: (verbose) wheter or not to warn about the inexistence of the method.
+        :return: self, a copy of self, or even perhaps a new or different BaseStep object.
+        """
+        new_self = super().mutate(new_method, method_to_assign_to, warn)
+        new_self.wrapped = self.wrapped.mutate(new_method, method_to_assign_to, warn)
+
+        return new_self
+
+    def will_mutate_to(
+        self, new_base_step: 'BaseTransformer' = None, new_method: str = None, method_to_assign_to: str = None
+    ) -> 'BaseTransformer':
+        """
+        Add pending mutate self, self.wrapped. Please refer to :func:`~neuraxle.base._CanMutate.will_mutate_to` for more information.
+        :param new_base_step: if it is not None, upon calling ``mutate``, the object it will mutate to will be this provided new_base_step.
+        :param method_to_assign_to: if it is not None, upon calling ``mutate``, the method_to_affect will be the one that is used on the provided new_base_step.
+        :param new_method: if it is not None, upon calling ``mutate``, the new_method will be the one that is used on the provided new_base_step.
+        :return: self
+        """
+        new_self = super().will_mutate_to(new_base_step, new_method, method_to_assign_to)
+        return new_self
+
 
 class MetaService(MetaServiceMixin, BaseService):
     """
@@ -872,6 +992,33 @@ class TruncableServiceMixin(_HasChildrenMixin):
         service_type: str = self._sanitize_service_name(service_type)
         self.services[service_type] = service_instance
         return self
+
+    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=False) -> 'BaseTransformer':
+        """
+        Call mutate on every steps the the present truncable step contains.
+        
+        :param new_method: the method to replace transform with.
+        :param method_to_assign_to: the method to which the new method will be assigned to.
+        :param warn: (verbose) wheter or not to warn about the inexistence of the method.
+        :return: self, a copy of self, or even perhaps a new or different BaseStep object.
+        """
+        if self.pending_mutate[0] is None:
+            new_base_step = BaseStep.mutate(self, new_method, method_to_assign_to, warn)
+            self.pending_mutate = (new_base_step, self.pending_mutate[1], self.pending_mutate[2])
+
+            new_base_step.steps_as_tuple = [
+                (
+                    k,
+                    v.mutate(new_method, method_to_assign_to, warn)
+                )
+                for k, v in new_base_step.steps_as_tuple
+            ]
+            new_base_step._refresh_steps()
+            return new_base_step
+        else:
+            # Since we're remplacing ourselves with a new step, we don't have to call mutate on our childrens since
+            # they won't exist afterward.
+            return BaseStep.mutate(self, new_method, method_to_assign_to, warn)
 
 
 class TruncableService(TruncableServiceMixin, BaseService):

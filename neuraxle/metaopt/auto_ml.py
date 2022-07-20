@@ -29,27 +29,20 @@ import gc
 from copy import copy
 from typing import ContextManager, Iterator, List, Optional, Tuple
 
-from neuraxle.base import (CX, BaseService, BaseStep, BaseStepT,
-                           ExecutionContext, ForceHandleMixin,
-                           TruncableService, _HasChildrenMixin)
+from neuraxle.base import (CX, BaseService, BaseStep, BaseStepT, ExecutionContext, ForceHandleMixin, TruncableService,
+                           _HasChildrenMixin)
 from neuraxle.data_container import IDT
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import HyperparameterSpace
-from neuraxle.metaopt.callbacks import (ARG_Y_EXPECTED, ARG_Y_PREDICTD,
-                                        BaseCallback, CallbackList,
-                                        MetricCallback, ScoringCallback)
+from neuraxle.metaopt.callbacks import (ARG_Y_EXPECTED, ARG_Y_PREDICTD, BaseCallback, CallbackList, MetricCallback,
+                                        ScoringCallback)
 from neuraxle.metaopt.context import AutoMLContext
-from neuraxle.metaopt.data.aggregates import (Client, Project, Root, Round,
-                                              Trial, TrialSplit)
+from neuraxle.metaopt.data.aggregates import Client, Project, Root, Round, Trial, TrialSplit
 from neuraxle.metaopt.data.reporting import RoundReport
-from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
-                                           RoundDataclass, ScopedLocation)
-from neuraxle.metaopt.optimizer import (BaseHyperparameterOptimizer,
-                                        GridExplorationSampler,
-                                        RandomSearchSampler)
+from neuraxle.metaopt.data.vanilla import DEFAULT_CLIENT, DEFAULT_PROJECT, RoundDataclass, ScopedLocation
+from neuraxle.metaopt.optimizer import BaseHyperparameterOptimizer, GridExplorationSampler, RandomSearchSampler
 from neuraxle.metaopt.repositories.repo import HyperparamsRepository
-from neuraxle.metaopt.validation import (BaseValidationSplitter,
-                                         ValidationSplitter)
+from neuraxle.metaopt.validation import BaseValidationSplitter, ValidationSplitter
 
 
 class Trainer(BaseService):

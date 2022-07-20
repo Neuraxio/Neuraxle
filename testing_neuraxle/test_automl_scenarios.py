@@ -6,22 +6,18 @@ from typing import Any, Dict, List, Set, Tuple, Type
 
 import numpy as np
 import pytest
-from neuraxle.base import (CX, BaseStep, HandleOnlyMixin, Identity, MetaStep,
-                           NonFittableMixin, TrialStatus)
+from neuraxle.base import CX, BaseStep, HandleOnlyMixin, Identity, MetaStep, NonFittableMixin, TrialStatus
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.data_container import PredsDACT, TrainDACT
 from neuraxle.distributed.streaming import ParallelQueuedFeatureUnion
-from neuraxle.hyperparams.distributions import (
-    DiscreteHyperparameterDistribution, PriorityChoice, RandInt, Uniform)
-from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
-                                        HyperparameterSpace)
+from neuraxle.hyperparams.distributions import DiscreteHyperparameterDistribution, PriorityChoice, RandInt, Uniform
+from neuraxle.hyperparams.space import FlatDict, HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.auto_ml import ControlledAutoML, DefaultLoop, Trainer
 from neuraxle.metaopt.callbacks import MetricCallback
 from neuraxle.metaopt.context import AutoMLContext
 from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.reporting import RoundReport
-from neuraxle.metaopt.data.vanilla import (BaseDataclass, RoundDataclass,
-                                           ScopedLocation)
+from neuraxle.metaopt.data.vanilla import BaseDataclass, RoundDataclass, ScopedLocation
 from neuraxle.metaopt.optimizer import GridExplorationSampler
 from neuraxle.metaopt.repositories.json import HyperparamsOnDiskRepository
 from neuraxle.metaopt.repositories.repo import VanillaHyperparamsRepository
