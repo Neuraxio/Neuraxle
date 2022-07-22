@@ -48,7 +48,7 @@ from neuraxle.metaopt.data.reporting import RoundReport
 class BaseHyperparameterOptimizer(ABC):
 
     @abstractmethod
-    def find_next_best_hyperparams(self, round: RoundReport, hp_space: HyperparameterSpace) -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, _round: RoundReport, hp_space: HyperparameterSpace) -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials, that is the
         whole :class:`neuraxle.metaopt.data.aggregate.Round`.
@@ -64,7 +64,7 @@ class HyperparameterSamplerStub(BaseHyperparameterOptimizer):
     def __init__(self, preconfigured_hp_samples: HyperparameterSamples):
         self.preconfigured_hp_samples = preconfigured_hp_samples
 
-    def find_next_best_hyperparams(self, round: RoundReport, hp_space: HyperparameterSpace) -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, _round: RoundReport, hp_space: HyperparameterSpace) -> HyperparameterSamples:
         return self.preconfigured_hp_samples
 
 
@@ -81,7 +81,7 @@ class RandomSearchSampler(BaseHyperparameterOptimizer):
     def __init__(self):
         BaseHyperparameterOptimizer.__init__(self)
 
-    def find_next_best_hyperparams(self, round: RoundReport, hp_space: HyperparameterSpace) -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, _round: RoundReport, hp_space: HyperparameterSpace) -> HyperparameterSamples:
         """
         Randomly sample the next hyperparams to try.
 
@@ -144,19 +144,19 @@ class GridExplorationSampler(BaseHyperparameterOptimizer):
             vals: Tuple[int] = tuple(flat_dict_sample.values())
             self._seen_hp_grid_values.add(vals)
 
-    def find_next_best_hyperparams(self, round: RoundReport, hp_space: HyperparameterSpace) -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, _round: RoundReport, hp_space: HyperparameterSpace) -> HyperparameterSamples:
         """
         Sample the next hyperparams to try.
 
         :param round_scope: round scope
         :return: next hyperparams
         """
-        self._reinitialize_grid(hp_space, round.get_all_hyperparams())
+        self._reinitialize_grid(hp_space, _round.get_all_hyperparams())
 
         _space_max = reduce(operator.mul, self.flat_hp_grid_lens, 1)
 
         if self._n_sampled >= max(self.expected_n_trials, _space_max):
-            return RandomSearchSampler().find_next_best_hyperparams(round, hp_space)
+            return RandomSearchSampler().find_next_best_hyperparams(_round, hp_space)
         for _ in range(_space_max):
             i_grid_keys: Tuple[int] = tuple(self._gen_keys_for_grid())
             grid_values: OrderedDict[str, Any] = tuple(self[i_grid_keys].values())
