@@ -700,12 +700,9 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         workers_joiner.set_join_quantities(n_workers, n_minibatches_per_worker)
         data_container = workers_joiner.join_workers(data_container, context)
 
-        for step in self.body:
-            step: ParallelWorkersWrapper = step
-            step.join()
-        if self.logging_thread is not None:
-            self.logging_thread.join(timeout=5.0)
-            self.logging_thread = None
+        # for step in self.body:
+        #     step: ParallelWorkersWrapper = step
+        #     step.join()
 
         return data_container
 
@@ -723,6 +720,9 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         for name, step in self[:-1]:
             step: ParallelWorkersWrapper = step
             step.stop()
+        if self.logging_thread is not None:
+            self.logging_thread.join(timeout=5.0)
+            self.logging_thread = None
 
         return self.data_joiner.handle_transform(data_container, context)
 

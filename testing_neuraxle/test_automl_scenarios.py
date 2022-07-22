@@ -237,7 +237,7 @@ def test_automl_use_a_json_repo_in_parallelized_round(use_processes, repoclass):
         n_workers_per_step=n_workers_in_parallel_per_step,
         use_processes=use_processes,
         use_savers=False,
-        max_queued_minibatches=1  # TODO: why 1 here?
+        # max_queued_minibatches=1  # TODO: why 1 here?
     )
     parallel_automl.handle_fit_transform(dact, cx)
     # for i in range(n_trials):
