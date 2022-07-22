@@ -2890,7 +2890,7 @@ class _CouldHaveContext(MixinForBaseService):
             context = CX()
 
         try:
-            assert a == b, err_message
+            assert a == b, err_message.strip() + f" - raised from {context.get_identifier()}<{str(self)}>."
         except AssertionError as e:
             context.flow.log_error(e)
 

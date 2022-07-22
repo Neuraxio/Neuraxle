@@ -39,9 +39,9 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
     so that it can transform the expected outputs.
     """
 
-    def __init__(self, wrapped, cache_folder_when_no_handle=None):
+    def __init__(self, wrapped):
         MetaStep.__init__(self, wrapped)
-        ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
+        ForceHandleOnlyMixin.__init__(self)
 
     def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
@@ -157,8 +157,10 @@ class _DidProcessInputOutputHandlerMixin(MixinForBaseTransformer):
         di, eo = data_container.data_inputs
 
         self._assert(
-            len(di) == len(eo),
-            f'{self.name}: Found different len for data inputs, and expected outputs. Please return the same the same amount of data inputs, and expected outputs, or otherwise create your own handler methods to do more funky things.',
+            di is None or eo is None or (len(di) == len(eo)),
+            f'{self.name}: Found different len for non-null data inputs, and expected outputs. '
+            f'Please return the same the same amount of data inputs, and expected outputs, or '
+            f'otherwise create your own handler methods to do more funky things.',
             context
         )
 
@@ -186,9 +188,9 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         :class:`~neuraxle.base.ForceHandleOnlyMixin`
     """
 
-    def __init__(self, wrapped, cache_folder_when_no_handle=None):
+    def __init__(self, wrapped):
         MetaStep.__init__(self, wrapped)
-        ForceHandleOnlyMixin.__init__(self, cache_folder_when_no_handle)
+        ForceHandleOnlyMixin.__init__(self)
         _DidProcessInputOutputHandlerMixin.__init__(self)
 
     def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
