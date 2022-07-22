@@ -46,12 +46,11 @@ from typing import (Callable, ContextManager, Dict, Generic, Iterable, List,
                     Optional, Type, TypeVar)
 
 import numpy as np
-from neuraxle.base import BaseService
-from neuraxle.base import ExecutionContext as CX
-from neuraxle.base import (Flow, PassthroughNullLock, TrialStatus,
+from neuraxle.base import (BaseService, Flow, TrialStatus,
                            _CouldHaveContext)
 from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         HyperparameterSpace)
+from neuraxle.metaopt.context import AutoMLContext
 from neuraxle.metaopt.data.reporting import (BaseReport, ClientReport,
                                              MetricResultsReport,
                                              ProjectReport, RootReport,
@@ -60,10 +59,7 @@ from neuraxle.metaopt.data.reporting import (BaseReport, ClientReport,
                                              dataclass_2_report)
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            RETRAIN_TRIAL_SPLIT_ID,
-                                           AutoMLContext, BaseDataclass,
-                                           BaseHyperparameterOptimizer,
-                                           ClientDataclass,
-                                           HyperparamsRepository,
+                                           BaseDataclass, ClientDataclass,
                                            MetricResultsDataclass,
                                            ProjectDataclass, RootDataclass,
                                            RoundDataclass, ScopedLocation,
@@ -71,8 +67,10 @@ from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            ScopedLocationAttrInt,
                                            SubDataclassT, TrialDataclass,
                                            TrialSplitDataclass,
-                                           VanillaHyperparamsRepository,
                                            dataclass_2_id_attr)
+from neuraxle.metaopt.optimizer import BaseHyperparameterOptimizer
+from neuraxle.metaopt.repositories.repo import (HyperparamsRepository,
+                                                VanillaHyperparamsRepository)
 
 SubAggregateT = TypeVar('SubAggregateT', bound=Optional['BaseAggregate'])
 ParentAggregateT = TypeVar('ParentAggregateT', bound=Optional['BaseAggregate'])
@@ -143,8 +141,7 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         Requirement: Have already pre-push the attr of dataclass into
         the context before calling this.
         """
-        # with context.get_service('ContextLock').synchroneous():
-        with context.lock:
+        with context.repo.lock:
             _dataclass = context.load_dc(deep=True)
 
         if isinstance(_dataclass, (RootDataclass, ProjectDataclass)) and len(_dataclass) == 0:
@@ -153,7 +150,7 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         return aggregate_class(_dataclass, context.pop_attr(), is_deep=is_deep)
 
     @classmethod
-    def dummy(cls: Type['BaseAggregate'], context: CX = None) -> 'BaseAggregate':
+    def dummy(cls: Type['BaseAggregate'], context: AutoMLContext = None) -> 'BaseAggregate':
         """
         Create a dummy object of the desired type for testing purposes.
         The parent subtree will be created in a temporary repository,
@@ -177,8 +174,7 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
                 break
 
         # create the aggregate:
-        # with context.get_service('ContextLock').synchroneous():
-        with context.lock:
+        with context.repo.lock:
             context.repo.save(root_dc, ScopedLocation(), deep=True)
             return cls.from_context(context, is_deep=True)
 
@@ -247,8 +243,7 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         return aggregate_2_dataclass[aggregate_2_subaggregate[self.__class__]]
 
     def refresh(self, deep: bool = True):
-        _lock = self.context.lock if self.repo.is_locking_required() else PassthroughNullLock()
-        with _lock:
+        with self.repo.lock:
             _new_dc: SubDataclassT = self.repo.load(self.loc, deep=deep)
             if len(_new_dc) < len(self._dataclass):
                 _new_dc: SubDataclassT = self.repo.load(self.loc, deep=deep)
@@ -286,15 +281,14 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         self._invariant()
         self._spare = copy.copy(self._dataclass).shallow()
 
-        _lock = self.context.lock if self.repo.is_locking_required() else PassthroughNullLock()
-        with _lock:
+        with self.repo.lock:
             self.repo.save(self._dataclass, self.loc, deep=deep)
         return self
 
     def save_subaggregate(self, subagg: SubAggregateT, deep=False) -> 'BaseAggregate':
         self._dataclass.store(subagg._dataclass)
 
-        with self.context.lock:  # TODO: maybe? self.lock to be: = self.context.lock if self.repo.is_locking_required() else PassthroughNullLock()
+        with self.repo.lock:
             self.save(deep=False)
             subagg.save(deep=deep)
 
@@ -337,8 +331,7 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
 
     def _managed_subresource(self, *args, **kwds) -> ContextManager[SubAggregateT]:
         self._invariant()
-        # TODO: lock here and in the release func to never have to lock elsewhere again.
-        with self.context.lock:
+        with self.repo.lock:
             self.refresh(self.is_deep)
             self._managed_resource: SubAggregateT = self._acquire_managed_subresource(
                 *args, **kwds)
@@ -367,7 +360,7 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
 
         Exceptions may be handled here. If handled, return True, if not, then return False.
         """
-        with self.context.lock:
+        with self.repo.lock:
             self.refresh(self.is_deep)
             self.save(False)  # TODO: is this bad?
         handled_error = e is None
@@ -424,15 +417,15 @@ class Root(RootReport, BaseAggregate[None, 'Project', RootReport, RootDataclass]
         return list(self)
 
     @staticmethod
-    def from_repo(context: CX, repo: HyperparamsRepository) -> 'Root':
+    def from_repo(context: AutoMLContext, repo: HyperparamsRepository) -> 'Root':
         _dataclass: RootDataclass = repo.load(ScopedLocation())
         automl_context: AutoMLContext = AutoMLContext.from_context(context, repo)
         return Root(_dataclass, automl_context)
 
     @staticmethod
-    def vanilla(context: CX = None) -> 'Root':
+    def vanilla(context: AutoMLContext = None) -> 'Root':
         if context is None:
-            context = CX()
+            context = AutoMLContext.from_context()
         vanilla_repo: HyperparamsRepository = VanillaHyperparamsRepository(
             os.path.join(context.get_path(), "hyperparams"))
         return Root.from_repo(context, vanilla_repo)
@@ -572,7 +565,7 @@ class Round(RoundReport, BaseAggregate[Client, 'Trial', RoundReport, RoundDatacl
         _trial_dataclass: TrialDataclass = self.repo.load(trial_loc, deep=True)
         if new_trial is True:
             # TODO: pass self.report as arg instead in the find_next_best_hyperparams method, but for this we need space stored in report as well:
-            new_hps: HyperparameterSamples = self.hp_optimizer.find_next_best_hyperparams(self)
+            new_hps: HyperparameterSamples = self.hp_optimizer.find_next_best_hyperparams(self.report, self.hp_space)
             # assert new_hps.to_flat_dict() not in self.report.get_all_hyperparams(as_flat=True, use_wildcards=False)  # TODO: TMP.
             _trial_dataclass.hyperparams = new_hps
             self.flow.log_planned(trial_id, _trial_dataclass.hyperparams)
@@ -595,7 +588,7 @@ class Round(RoundReport, BaseAggregate[Client, 'Trial', RoundReport, RoundDatacl
         """
         resource: Trial = resource  # typing
         handled_exception = False
-        with self.context.lock:
+        with self.repo.lock:
             self.refresh(True)
 
             is_all_success: bool = resource.are_all_splits_successful()
@@ -719,7 +712,7 @@ class Trial(TrialReport, BaseAggregate[Round, 'TrialSplit', TrialReport, TrialDa
         gc.collect()
         handled_error = False
 
-        with self.context.lock:
+        with self.repo.lock:
             self.refresh(self.is_deep)
             # self.context.free_scoped_logger_handler_file()
 
@@ -812,8 +805,8 @@ class TrialSplit(TrialSplitReport, BaseAggregate[Trial, 'MetricResults', TrialSp
         """
         Start the trial split.
         """
-        self.flow.log_start()
-        with self.context.lock:
+        with self.repo.lock:
+            self.flow.log_start()
             self._dataclass.start()
             self.save(False)
         return self
@@ -860,7 +853,7 @@ class TrialSplit(TrialSplitReport, BaseAggregate[Trial, 'MetricResults', TrialSp
 
     def _release_managed_subresource(self, resource: 'MetricResults', e: Exception = None) -> bool:
         handled_error = False
-        with self.context.lock:
+        with self.repo.lock:
             if e is not None:
                 handled_error = False
                 self.flow.log_error(e)
@@ -941,7 +934,7 @@ class MetricResults(MetricResultsReport, BaseAggregate[TrialSplit, None, MetricR
         :param score: the value to be logged
         :param higher_score_is_better: wheter or not a higher score is better for this metric
         """
-        with self.context.lock:
+        with self.repo.lock:
             self._dataclass.train_values.append(score)
             self.flow.log_train_metric(self.metric_name, score)
             self.save(True)
@@ -954,7 +947,7 @@ class MetricResults(MetricResultsReport, BaseAggregate[TrialSplit, None, MetricR
         :param score: the value to be logged
         :param higher_score_is_better: wheter or not a higher score is better for this metric
         """
-        with self.context.lock:
+        with self.repo.lock:
             self._dataclass.validation_values.append(score)
             self.flow.log_valid_metric(self.metric_name, score)
             self.save(True)

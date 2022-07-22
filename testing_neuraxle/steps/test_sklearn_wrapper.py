@@ -8,7 +8,7 @@ from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
 from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler
 from neuraxle.metaopt.callbacks import ScoringCallback
-from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
+from neuraxle.metaopt.repositories.json import HyperparamsOnDiskRepository
 from neuraxle.metaopt.validation import KFoldCrossValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.data import DataShuffler

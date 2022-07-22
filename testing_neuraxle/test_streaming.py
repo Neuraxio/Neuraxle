@@ -1,7 +1,6 @@
 import copy
 import random
 import time
-from pickle import PickleError
 from typing import List, Type
 
 import numpy as np
@@ -17,7 +16,7 @@ from neuraxle.distributed.streaming import (BaseQueuedPipeline,
                                             QueuedMinibatchTask,
                                             SequentialQueuedPipeline,
                                             WorkersJoiner)
-from neuraxle.hyperparams.space import HyperparameterSamples
+from neuraxle.metaopt.context import AutoMLContext
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.loop import ForEach
 from neuraxle.steps.misc import (FitTransformCallbackStep, Sleep,
@@ -457,7 +456,6 @@ def test_parallel_workers_wrapper_for_some_batches(batches_count: int, use_proce
     n_parallel_workers = 4
     step = TransformOnlyCounterLoggingStep().set_name(f"{batches_count}BatchesLogger")
     cx = CX()
-    cx.synchroneous()
     worker = ParallelWorkersWrapper(
         step,
         n_workers=n_parallel_workers,
@@ -471,7 +469,7 @@ def test_parallel_workers_wrapper_for_some_batches(batches_count: int, use_proce
     minibatches_dacts = [DACT(di=list(range(i * 10, (i + 1) * 10))) for i in range(batches_count)]
     minibatches_tasks = [QueuedMinibatchTask(minibatch_dact=dact, step_name=step.name) for dact in minibatches_dacts]
     joiner.append_terminal_summary(worker.name, minibatches_tasks[-1])
-    worker.start(cx)
+    worker.start(cx, None)
 
     for mbt in minibatches_tasks:
         worker.put_minibatch_produced(mbt)
@@ -490,7 +488,6 @@ def test_parallel_workers_wrapper_for_no_batches():
     n_parallel_workers = 4
     step = TransformOnlyCounterLoggingStep().set_name("NoBatchLogger")
     cx = CX()
-    cx.synchroneous()
     worker = ParallelWorkersWrapper(
         step,
         n_workers=n_parallel_workers,
@@ -501,7 +498,7 @@ def test_parallel_workers_wrapper_for_no_batches():
     joiner._setup(context=cx)
     worker.register_consumer(joiner)
     whole_batch_dact = DACT(di=[])
-    worker.start(cx)
+    worker.start(cx, None)
 
     joiner.set_join_quantities(1, 0)
     _out: DACT = joiner.join_workers(whole_batch_dact, cx)
@@ -561,15 +558,13 @@ class UnpicklableContextReturnedAsTransformDact(NonFittableMixin, BaseStep):
         return context
 
     def transform(self, data_inputs: ARG_X_INPUTTED) -> ARG_Y_PREDICTD:
-        cx = CX()
-        cx.synchroneous()
+        cx = AutoMLContext.from_context()
         return cx
 
 
 @pytest.mark.timeout(10)
 def test_worker_unpicklable_data():
-    unpicklable_cx = CX()
-    unpicklable_cx.synchroneous()
+    unpicklable_cx = AutoMLContext.from_context()
     batch_size = 10
     p = SequentialQueuedPipeline([
         UnpicklableContextReturnedAsTransformDact()

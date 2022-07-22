@@ -5,9 +5,10 @@ import json
 from neuraxle.base import TrialStatus
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.logging.logging import LOGGING_DATETIME_STR_FORMAT
+from neuraxle.metaopt.context import AutoMLContext
 from neuraxle.metaopt.data.aggregates import (MetricResults, Round, Trial,
                                               TrialSplit)
-from neuraxle.metaopt.data.vanilla import (AutoMLContext, ClientDataclass,
+from neuraxle.metaopt.data.vanilla import (ClientDataclass,
                                            MetricResultsDataclass,
                                            RoundDataclass, ScopedLocation,
                                            TrialDataclass, to_json)

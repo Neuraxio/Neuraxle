@@ -12,11 +12,11 @@ from neuraxle.hyperparams.distributions import (
     Choice, DiscreteHyperparameterDistribution, DistributionMixture,
     HPSampledValue, HyperparameterDistribution, LogSpaceDistributionMixin,
     PriorityChoice, Quantized)
-from neuraxle.hyperparams.space import HyperparameterSamples
-from neuraxle.metaopt.data.aggregates import Round, Trial
+from neuraxle.hyperparams.space import (HyperparameterSamples,
+                                        HyperparameterSpace)
 from neuraxle.metaopt.data.reporting import RoundReport, TrialReport
-from neuraxle.metaopt.data.vanilla import BaseHyperparameterOptimizer
-from neuraxle.metaopt.validation import GridExplorationSampler
+from neuraxle.metaopt.optimizer import (BaseHyperparameterOptimizer,
+                                        GridExplorationSampler)
 
 _QUANTIZED_DISTRIBUTION = (Quantized,)
 
@@ -68,7 +68,7 @@ class TreeParzenEstimator(BaseHyperparameterOptimizer):
             expected_n_trials=number_of_initial_random_step
         )
 
-    def find_next_best_hyperparams(self, round_scope: Round) -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, round: RoundReport, hp_space: HyperparameterSpace) -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials.
 
@@ -77,11 +77,11 @@ class TreeParzenEstimator(BaseHyperparameterOptimizer):
         """
 
         # Perform a first pseudo-randomized search:
-        if len(round_scope) < self.number_of_initial_random_step:
-            return self.initial_auto_ml_algo.find_next_best_hyperparams(round_scope)
+        if len(round) < self.number_of_initial_random_step:
+            return self.initial_auto_ml_algo.find_next_best_hyperparams(round, hp_space)
 
         # Create gaussian mixture of good and gaussian mixture of bads. Lists here are on a per-hp basis:
-        hyperparams_keys, divided_good_and_bad_distrs = self.mixture_factory.create_from(round_scope)
+        hyperparams_keys, divided_good_and_bad_distrs = self.mixture_factory.create_from(round, hp_space)
 
         # Sample the next hyperparams finally:
         return self._sample_next_hyperparams_from_gaussians_div(
@@ -138,17 +138,18 @@ class _DividedMixturesFactory:
 
     def create_from(
         self,
-        round_scope: Round,
+        round: RoundReport,
+        hp_space: HyperparameterSpace,
     ) -> Tuple[List[str], List['_DividedTPEPosteriors']]:
         # TODO: pass a RoundReport instead. This will require the ability to save hyperparameter spaces in round reports, and update them.
 
         # Split trials into good and bad using quantile threshold.
-        good_trials: List[Trial] = []
-        bad_trials: List[Trial] = []
-        good_trials, bad_trials = self._split_good_and_bad_trials(round_scope.report)
+        good_trials: List[TrialReport] = []
+        bad_trials: List[TrialReport] = []
+        good_trials, bad_trials = self._split_good_and_bad_trials(round)
 
         flat_hp_space_tuples: List[(str, HyperparameterDistribution)] = list(
-            round_scope.hp_space.to_flat_dict().items())
+            hp_space.to_flat_dict().items())
         hyperparams_keys: List[str] = list(map(itemgetter(0), flat_hp_space_tuples))
 
         good_posteriors: List[HyperparameterDistribution] = self._create_posterior(

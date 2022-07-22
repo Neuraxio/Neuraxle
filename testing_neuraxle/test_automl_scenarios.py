@@ -17,13 +17,15 @@ from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
                                         HyperparameterSpace)
 from neuraxle.metaopt.auto_ml import ControlledAutoML, DefaultLoop, Trainer
 from neuraxle.metaopt.callbacks import MetricCallback
+from neuraxle.metaopt.context import AutoMLContext
 from neuraxle.metaopt.data.aggregates import Round
-from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
-from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, AutoMLContext,
-                                           BaseDataclass, RoundDataclass,
-                                           ScopedLocation, VanillaHyperparamsRepository)
-from neuraxle.metaopt.validation import (GridExplorationSampler,
-                                         ValidationSplitter)
+from neuraxle.metaopt.data.reporting import RoundReport
+from neuraxle.metaopt.data.vanilla import (BaseDataclass, RoundDataclass,
+                                           ScopedLocation)
+from neuraxle.metaopt.optimizer import GridExplorationSampler
+from neuraxle.metaopt.repositories.json import HyperparamsOnDiskRepository
+from neuraxle.metaopt.repositories.repo import VanillaHyperparamsRepository
+from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.data import DataShuffler
 from neuraxle.steps.flow import TrainOnlyWrapper
@@ -48,7 +50,7 @@ class StepThatAssertsContextIsSpecifiedAtTrain(Identity):
                 f'Expected {self.expected_loc}, got {context.loc}.',
                 context)
             self._assert_equals(
-                context.loc in context.repo.root, True,
+                context.loc in context.repo.wrapped.root, True,
                 "Context should have the dataclass, but it doesn't", context)
         return data_container
 
@@ -110,12 +112,12 @@ def _create_automl_test_loop(tmpdir, assertion_step: BaseStep, n_trials: int = 4
 
 @pytest.mark.parametrize('n_trials', [1, 3, 4, 8, 12, 13, 16, 17, 20])
 def test_grid_sampler_fulls_grid(n_trials):
-    round, ges = _get_optimization_scenario(n_trials)
+    _round, hp_space, ges = _get_optimization_scenario(n_trials)
 
     tried: Set[Dict[str, Any]] = set()
     for i in range(n_trials):
-        hp = ges.find_next_best_hyperparams(round).to_flat_dict()
-        round.add_testing_optim_result(hp)
+        hp = ges.find_next_best_hyperparams(_round, hp_space).to_flat_dict()
+        _round.add_testing_optim_result(hp)
         flat = frozenset(hp.items())
 
         assert flat not in tried, f"Found the same hyperparameter samples twice: `{flat}`, with {i+1} past trials."
@@ -125,14 +127,14 @@ def test_grid_sampler_fulls_grid(n_trials):
 
 @pytest.mark.parametrize('n_trials', [1, 3, 4, 12, 13, 16, 17, 20, 40, 50, 100])
 def test_grid_sampler_fulls_individual_params(n_trials):
-    round_scope, ges = _get_optimization_scenario(n_trials=n_trials)
+    _round, hp_space, ges = _get_optimization_scenario(n_trials=n_trials)
     ges: GridExplorationSampler = ges  # typing
-    round_scope: Round = round_scope  # typing
+    _round: Round = _round  # typing
 
     tried_params: Dict[str, Set[Any]] = defaultdict(set)
     for i in range(n_trials):
-        hp = ges.find_next_best_hyperparams(round_scope).to_flat_dict()
-        round_scope.add_testing_optim_result(hp)
+        hp = ges.find_next_best_hyperparams(_round, hp_space).to_flat_dict()
+        _round.add_testing_optim_result(hp)
         for hp_k, value_set in hp.items():
             tried_params[hp_k].add(value_set)
 
@@ -140,8 +142,8 @@ def test_grid_sampler_fulls_individual_params(n_trials):
         hp_k: str = hp_k  # typing
         value_set: Set[Any] = value_set  # typing
 
-        if isinstance(round_scope.hp_space[hp_k], DiscreteHyperparameterDistribution):
-            round_numbs = min(n_trials, len(round_scope.hp_space[hp_k].values()))
+        if isinstance(hp_space[hp_k], DiscreteHyperparameterDistribution):
+            round_numbs = min(n_trials, len(hp_space[hp_k].values()))
             assert len(value_set) == round_numbs
         else:
             round_numbs = min(n_trials, len(ges.flat_hp_grid_values[hp_k]))
@@ -150,8 +152,7 @@ def test_grid_sampler_fulls_individual_params(n_trials):
 
 
 @dataclass
-class RoundStub:
-    hp_space: HyperparameterSpace = field(default_factory=HyperparameterSpace)
+class RoundReportStub:
     _all_tried_hyperparams: List[FlatDict] = field(default_factory=list)
 
     def add_testing_optim_result(self, rdict: HyperparameterSamples):
@@ -160,19 +161,16 @@ class RoundStub:
     def get_all_hyperparams(self):
         return self._all_tried_hyperparams
 
-    @property
-    def report(self):
-        return self
-
 
 def _get_optimization_scenario(n_trials):
-    round_scope: Round = RoundStub(hp_space=HyperparameterSpace({
+    hp_space = HyperparameterSpace({
         'a__add_n': Uniform(0, 4),
         'b__multiply_n': RandInt(0, 4),
         'c__Pchoice': PriorityChoice(["one", "two"]),
-    }))
+    })
+    _round: RoundReport = RoundReportStub()
     ges = GridExplorationSampler(n_trials)
-    return round_scope, ges
+    return _round, hp_space, ges
 
 
 class OnlyFitAtTransformTime(NonFittableMixin, MetaStep):

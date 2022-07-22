@@ -15,11 +15,13 @@ from neuraxle.logging.logging import (NEURAXLE_LOGGER_NAME, NeuraxleLogger,
                                       ParallelLoggingConsumerThread)
 from neuraxle.metaopt.auto_ml import AutoML
 from neuraxle.metaopt.callbacks import ScoringCallback
-from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
+from neuraxle.metaopt.context import AutoMLContext
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
-                                           AutoMLContext, ProjectDataclass,
-                                           ScopedLocation, TrialSplitDataclass)
-from neuraxle.metaopt.validation import RandomSearchSampler, ValidationSplitter
+                                           ProjectDataclass, ScopedLocation,
+                                           TrialSplitDataclass)
+from neuraxle.metaopt.optimizer import RandomSearchSampler
+from neuraxle.metaopt.repositories.json import HyperparamsOnDiskRepository
+from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitTransformCounterLoggingStep
 from neuraxle.steps.numpy import MultiplyByN, NumpyReshape
@@ -159,7 +161,7 @@ def test_automl_neuraxle_logger_logs_to_repo_file(tmpdir):
     cx.flow.log_status(TrialStatus.RUNNING)
     cx.flow.log_end(TrialStatus.ABORTED)
 
-    log_file_path_at_loc = cx.repo.get_scoped_logger_path(cx.loc)
+    log_file_path_at_loc = cx.repo.wrapped.get_scoped_logger_path(cx.loc)
     assert os.path.exists(log_file_path_at_loc)
     log1 = cx.read_scoped_log()
     with open(log_file_path_at_loc, 'r') as _file:
@@ -203,11 +205,11 @@ def test_auto_ml_context_services_names():
 
     names: Set[str] = set(cx.getattr("name").to_flat_dict().values())
     assert names == set([
-        'AutoMLContext',
-        'Flow',
+        'SynchronizedHyperparamsRepositoryWrapper',
         'VanillaHyperparamsRepository',
         'ScopedLocation',
-        'ContextLock'
+        'Flow',
+        'AutoMLContext'
     ])
 
 
@@ -217,10 +219,10 @@ def test_automl_context_repo_service_config():
     cx.repo.set_config({"some_key": "some_value"})
 
     assert dict(cx.get_config().to_flat_dict()) == {
-        'VanillaHyperparamsRepository__some_key': 'some_value'
+        'SynchronizedHyperparamsRepositoryWrapper__some_key': 'some_value'
     }
     assert cx.has_service("HyperparamsRepository")
-    assert cx.get_service("HyperparamsRepository").__class__.__name__ == "VanillaHyperparamsRepository"
+    assert cx.get_service("HyperparamsRepository").__class__.__name__ == "SynchronizedHyperparamsRepositoryWrapper"
 
 
 def test_logger_logs_error_stack_trace():

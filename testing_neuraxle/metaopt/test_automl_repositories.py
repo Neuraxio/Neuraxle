@@ -3,14 +3,14 @@ from typing import Callable, List
 
 import pytest
 from neuraxle.base import CX
-from neuraxle.metaopt.data.db_repo import SQLLiteHyperparamsRepository
-from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
+from neuraxle.metaopt.context import AutoMLContext
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
-                                           AutoMLContext, BaseDataclass,
-                                           ClientDataclass,
-                                           HyperparamsRepository,
+                                           BaseDataclass, ClientDataclass,
                                            ProjectDataclass, RootDataclass,
                                            RoundDataclass, ScopedLocation)
+from neuraxle.metaopt.repositories.db import SQLLiteHyperparamsRepository
+from neuraxle.metaopt.repositories.json import HyperparamsOnDiskRepository
+from neuraxle.metaopt.repositories.repo import HyperparamsRepository
 from testing_neuraxle.metaopt.test_automl_dataclasses import (
     ALL_DATACLASSES, SOME_CLIENT_DATACLASS, SOME_FULL_SCOPED_LOCATION,
     SOME_PROJECT_DATACLASS, SOME_ROOT_DATACLASS, SOME_ROUND_DATACLASS)
@@ -31,7 +31,7 @@ def disk_repo_ctor(tmpdir: TmpDir = None) -> AutoMLContext:
 def db_repo_ctor(tmpdir: TmpDir = None) -> AutoMLContext:
     cx = CX()
     tmpdir = tmpdir or cx.get_new_cache_folder()
-    return AutoMLContext.from_context(cx, repo=SQLLiteHyperparamsRepository(tmpdir)).disable_context_lock()
+    return AutoMLContext.from_context(cx, repo=SQLLiteHyperparamsRepository(tmpdir))
 
 
 CX_WITH_REPO_CTORS: List[Callable[[TmpDir], AutoMLContext]] = [vanilla_repo_ctor, disk_repo_ctor, db_repo_ctor]

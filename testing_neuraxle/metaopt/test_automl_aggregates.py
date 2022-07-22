@@ -12,21 +12,21 @@ from neuraxle.distributed.streaming import ParallelQueuedFeatureUnion
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.callbacks import (CallbackList, EarlyStoppingCallback,
                                         MetricCallback)
+from neuraxle.metaopt.context import AutoMLContext
 from neuraxle.metaopt.data.aggregates import (BaseAggregate, Client,
                                               MetricResults, Project, Root,
                                               Round, Trial, TrialSplit,
                                               aggregate_2_dataclass,
                                               aggregate_2_subaggregate)
-from neuraxle.metaopt.data.json_repo import HyperparamsOnDiskRepository
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
-                                           DEFAULT_ROUND, AutoMLContext,
-                                           BaseDataclass,
-                                           BaseHyperparameterOptimizer,
+                                           DEFAULT_ROUND, BaseDataclass,
                                            MetricResultsDataclass,
                                            ScopedLocation, dataclass_2_id_attr,
                                            dataclass_2_subdataclass)
-from neuraxle.metaopt.validation import (GridExplorationSampler,
-                                         RandomSearchSampler)
+from neuraxle.metaopt.optimizer import (BaseHyperparameterOptimizer,
+                                        GridExplorationSampler,
+                                        RandomSearchSampler)
+from neuraxle.metaopt.repositories.json import HyperparamsOnDiskRepository
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import AddN, MultiplyByN
 from sklearn.metrics import median_absolute_error

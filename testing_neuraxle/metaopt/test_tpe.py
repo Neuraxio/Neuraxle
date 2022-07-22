@@ -11,18 +11,18 @@ from neuraxle.hyperparams.distributions import (Choice, DistributionMixture,
                                                 Quantized, RandInt, Uniform)
 from neuraxle.hyperparams.space import (HyperparameterSamples,
                                         HyperparameterSpace)
-from neuraxle.metaopt.auto_ml import (AutoML, BaseHyperparameterOptimizer,
-                                      ControlledAutoML)
+from neuraxle.metaopt.auto_ml import AutoML, ControlledAutoML
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.data.aggregates import (MetricResults, Round, Trial,
                                               TrialSplit)
-from neuraxle.metaopt.data.vanilla import (HyperparameterSamplerStub,
-                                           VanillaHyperparamsRepository)
 from neuraxle.metaopt.hyperopt.tpe import (TreeParzenEstimator,
                                            _DividedMixturesFactory,
                                            _DividedTPEPosteriors)
-from neuraxle.metaopt.validation import (GridExplorationSampler,
-                                         ValidationSplitter)
+from neuraxle.metaopt.optimizer import (BaseHyperparameterOptimizer,
+                                        GridExplorationSampler,
+                                        HyperparameterSamplerStub)
+from neuraxle.metaopt.repositories.repo import VanillaHyperparamsRepository
+from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import AddN
 from sklearn.metrics import mean_squared_error
@@ -238,7 +238,7 @@ def test_divided_mixtures_factory():
     hps_names = List[str]
     divided_distributions = List['_DividedTPEPosteriors']
 
-    hps_names, divided_distributions = dmf.create_from(round_scope)
+    hps_names, divided_distributions = dmf.create_from(round_scope.report, round_scope.hp_space)
     a_good_trials = divided_distributions[0].good_trials
     a_bad_trials = divided_distributions[0].bad_trials
     b_good_trials = divided_distributions[1].good_trials

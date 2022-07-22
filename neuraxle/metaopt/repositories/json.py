@@ -30,14 +30,17 @@ Classes are splitted like this for the AutoML:
 """
 import json
 import os
-from copy import deepcopy
 import shutil
+from copy import deepcopy
 from typing import List, Optional
 
 from neuraxle.logging.logging import NeuraxleLogger
-from neuraxle.metaopt.data.vanilla import (BaseDataclass, dataclass_2_id_attr,
-                                           DataclassHasListMixin, from_json, HyperparamsRepository, RootDataclass, ScopedLocation,
-                                           SubDataclassT, to_json)
+from neuraxle.metaopt.data.vanilla import (BaseDataclass,
+                                           DataclassHasListMixin,
+                                           RootDataclass, ScopedLocation,
+                                           SubDataclassT, dataclass_2_id_attr,
+                                           from_json, to_json)
+from neuraxle.metaopt.repositories.repo import HyperparamsRepository
 
 ON_DISK_DELIM: str = "_"
 
@@ -189,6 +192,7 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
             os.remove(save_file)
             with open(save_file, 'w') as f:
                 import threading
+
                 # import psutil
                 # process_name = psutil.Process(os.getpid()).name()
                 thread_name = threading.current_thread().name
@@ -199,7 +203,8 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
         with open(tmp_save_file, 'w') as f:
             json_content = to_json(_dataclass.empty())
             if len(json_content) == 0:
-                raise ValueError(f"Can't possibly save an empty dataclass. Something went wrong with dataclass {_dataclass} at scope {scope}.")
+                raise ValueError(
+                    f"Can't possibly save an empty dataclass. Something went wrong with dataclass {_dataclass} at scope {scope}.")
             json.dump(json_content, f, indent=4)
 
         if os.path.exists(save_file):
@@ -224,24 +229,3 @@ class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, Hyperpara
             scope = scope.at_dc(_dataclass)
             setattr(scope, dataclass_2_id_attr[_dataclass.__class__], _dataclass.get_id())
         return scope
-
-    def is_locking_required(self) -> bool:
-        return True
-
-
-# import multiprocessing
-# def with_lock(lock: multiprocessing.Lock):
-#     def decorator(func):
-#         def f(*args, **kwargs):
-#             with lock:
-#                 return func(*args, **kwargs)
-#         return f
-#     return decorator
-# class ThreadSafeHyperparamsOnDiskRepository(HyperparamsOnDiskRepository):
-#     lock = multiprocessing.Lock()
-#     @with_lock(lock)
-#     def load(self, scope: ScopedLocation, deep=False) -> SubDataclassT:
-#         return HyperparamsOnDiskRepository.load(scope, deep)
-#     @with_lock(lock)
-#     def save(self, _dataclass: SubDataclassT, scope: ScopedLocation, deep=False) -> 'HyperparamsRepository':
-#         return HyperparamsOnDiskRepository.save(_dataclass, scope, deep)

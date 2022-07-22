@@ -107,7 +107,7 @@ venv.bak/
 
 # IDEs
 .idea
-.vscode
+.vscode/settings.json
 .style.yapf
 *-py.js
 *pmap.yml
