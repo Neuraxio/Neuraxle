@@ -42,7 +42,7 @@ class AutoMLContext(CX):
 
     @property
     def logger(self) -> NeuraxleLogger:
-        self.add_scoped_logger_file_handler()  # TODO: this is perhaps why logs are duplicated.
+        # self.add_scoped_logger_file_handler()  # TODO: this is perhaps why logs are duplicated.
         return CX.logger.fget(self)
 
     @property

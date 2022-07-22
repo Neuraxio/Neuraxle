@@ -4,6 +4,7 @@ from typing import Callable, List
 import pytest
 from neuraxle.base import CX
 from neuraxle.metaopt.context import AutoMLContext
+from neuraxle.metaopt.data.aggregates import Project, Root
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            BaseDataclass, ClientDataclass,
                                            ProjectDataclass, RootDataclass,
@@ -69,25 +70,28 @@ def test_context_changes_independently_once_copied(
 def test_logger_level_works_with_multiple_levels(
     tmpdir, cx_repo_ctor: Callable[[TmpDir], AutoMLContext]
 ):
-    c0 = cx_repo_ctor(tmpdir)
+    cx = AutoMLContext.from_context(cx_repo_ctor(tmpdir))
 
-    c0.flow.log("c0.flow.log: begin")
-    c1 = c0.push_attr(ProjectDataclass(project_name=DEFAULT_PROJECT))
-    c1.flow.log("c1.flow.log: begin")
-    c1.flow.log("c1.flow.log: some work being done from within c1")
-    c1.flow.log("c1.flow.log: end")
-    c0.flow.log("c0.flow.log: end")
+    _root: Root = Root.from_context(cx)
+    with _root.get_project(DEFAULT_PROJECT) as _proj:
+        _proj: Project = _proj
 
-    l0: str = c0.read_scoped_log()
-    l1: str = c1.read_scoped_log()
+        _root.flow.log("_root.flow.log: begin")
+        _proj.flow.log("_proj.flow.log: begin")
+        _proj.flow.log("_proj.flow.log: some work being done from within _proj")
+        _proj.flow.log("_proj.flow.log: end")
+        _root.flow.log("_root.flow.log: end")
 
-    assert l0 != l1
-    assert len(l0) > len(l1)
-    assert "c0" in l0
-    assert "c0" not in l1
-    assert "c1" in l0
-    assert "c1" in l1
-    assert c1.loc != c0.loc
+        l0: str = _root.context.read_scoped_log()
+        l1: str = _proj.context.read_scoped_log()
+
+        assert l0 != l1
+        assert len(l0) > len(l1)
+        assert "_root" in l0
+        assert "_root" not in l1
+        assert "_proj" in l0
+        assert "_proj" in l1
+        assert _proj.loc != _root.loc
 
 
 @pytest.mark.parametrize('cx_repo_ctor', CX_WITH_REPO_CTORS)

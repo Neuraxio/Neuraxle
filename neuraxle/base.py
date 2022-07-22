@@ -1073,7 +1073,7 @@ class Flow(BaseService):
         Unlink the context from the flow.
         """
         del self.context
-        self.context = None
+        self.context: ExecutionContext = None
         return self
 
     @property

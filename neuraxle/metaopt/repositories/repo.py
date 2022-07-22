@@ -110,10 +110,10 @@ class HyperparamsRepository(BaseService):
 
 def func_with_rlock():
     def decorator(func):
-        def f(self, *args, **kwargs):
+        def _LOCKED_REPO(self, *args, **kwargs):
             with self.lock:
                 return func(self, *args, **kwargs)
-        return f
+        return _LOCKED_REPO
     return decorator
 
 

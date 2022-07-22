@@ -16,6 +16,7 @@ from neuraxle.logging.logging import (NEURAXLE_LOGGER_NAME, NeuraxleLogger,
 from neuraxle.metaopt.auto_ml import AutoML
 from neuraxle.metaopt.callbacks import ScoringCallback
 from neuraxle.metaopt.context import AutoMLContext
+from neuraxle.metaopt.data.aggregates import Trial
 from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
                                            ProjectDataclass, ScopedLocation,
                                            TrialSplitDataclass)
@@ -158,17 +159,19 @@ def test_root_neuraxle_logger_logs_to_string():
 def test_automl_neuraxle_logger_logs_to_repo_file(tmpdir):
     cx: AutoMLContext = AutoMLContext.from_context(repo=HyperparamsOnDiskRepository(cache_folder=tmpdir))
 
-    cx.flow.log_status(TrialStatus.RUNNING)
-    cx.flow.log_end(TrialStatus.ABORTED)
+    _trial: Trial = Trial.dummy(cx)
+    with _trial.new_validation_split() as tsc:
+        tsc.flow.log_status(TrialStatus.RUNNING)
+        tsc.flow.log_end(TrialStatus.ABORTED)
 
-    log_file_path_at_loc = cx.repo.wrapped.get_scoped_logger_path(cx.loc)
-    assert os.path.exists(log_file_path_at_loc)
-    log1 = cx.read_scoped_log()
-    with open(log_file_path_at_loc, 'r') as _file:
-        log2 = _file.read()
-    assert log1 == log2
-    assert str(TrialStatus.RUNNING) in log1
-    assert str(TrialStatus.ABORTED) in log1
+        log_file_path_at_loc = cx.repo.wrapped.get_scoped_logger_path(tsc.loc)
+        assert os.path.exists(log_file_path_at_loc)
+        log1 = tsc.context.read_scoped_log()
+        with open(log_file_path_at_loc, 'r') as _file:
+            log2 = _file.read()
+        assert log1 == log2
+        assert str(TrialStatus.RUNNING) in log1
+        assert str(TrialStatus.ABORTED) in log1
 
 
 def test_sub_root_neuraxle_loggers_logs_to_string():
