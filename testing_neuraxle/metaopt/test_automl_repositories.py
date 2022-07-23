@@ -4,17 +4,15 @@ from typing import Callable, List
 import pytest
 from neuraxle.base import CX
 from neuraxle.metaopt.context import AutoMLContext
-from neuraxle.metaopt.data.aggregates import Project, Root
-from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
-                                           BaseDataclass, ClientDataclass,
-                                           ProjectDataclass, RootDataclass,
-                                           RoundDataclass, ScopedLocation)
+from neuraxle.metaopt.data.aggregates import Client, Project, Root
+from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT, BaseDataclass, ClientDataclass,
+                                           ProjectDataclass, RootDataclass, RoundDataclass, ScopedLocation)
 from neuraxle.metaopt.repositories.db import SQLLiteHyperparamsRepository
 from neuraxle.metaopt.repositories.json import HyperparamsOnDiskRepository
 from neuraxle.metaopt.repositories.repo import HyperparamsRepository
-from testing_neuraxle.metaopt.test_automl_dataclasses import (
-    ALL_DATACLASSES, SOME_CLIENT_DATACLASS, SOME_FULL_SCOPED_LOCATION,
-    SOME_PROJECT_DATACLASS, SOME_ROOT_DATACLASS, SOME_ROUND_DATACLASS)
+from testing_neuraxle.metaopt.test_automl_dataclasses import (ALL_DATACLASSES, SOME_CLIENT_DATACLASS,
+                                                              SOME_FULL_SCOPED_LOCATION, SOME_PROJECT_DATACLASS,
+                                                              SOME_ROOT_DATACLASS, SOME_ROUND_DATACLASS)
 
 TmpDir = str
 
@@ -75,23 +73,26 @@ def test_logger_level_works_with_multiple_levels(
     _root: Root = Root.from_context(cx)
     with _root.get_project(DEFAULT_PROJECT) as _proj:
         _proj: Project = _proj
+        with _proj.get_client(DEFAULT_CLIENT) as _client:
+            _client: Client = _client
 
-        _root.flow.log("_root.flow.log: begin")
-        _proj.flow.log("_proj.flow.log: begin")
-        _proj.flow.log("_proj.flow.log: some work being done from within _proj")
-        _proj.flow.log("_proj.flow.log: end")
-        _root.flow.log("_root.flow.log: end")
+            _proj.flow.log(">_proj.flow.log: begin")
+            _client.flow.log(">_client.flow.log: begin")
+            _client.flow.log(">_client.flow.log: some work being done from within _client")
+            _client.flow.log(">_client.flow.log: end")
+            _proj.flow.log(">_proj.flow.log: end")
 
-        l0: str = _root.context.read_scoped_log()
-        l1: str = _proj.context.read_scoped_log()
+            l0: str = _proj.context.read_scoped_log()
+            l1: str = _client.context.read_scoped_log()
 
-        assert l0 != l1
-        assert len(l0) > len(l1)
-        assert "_root" in l0
-        assert "_root" not in l1
-        assert "_proj" in l0
-        assert "_proj" in l1
-        assert _proj.loc != _root.loc
+            assert l0 != l1
+            assert len(l0) > len(l1)
+            assert ">_proj" in l0
+            assert ">_proj" not in l1
+            assert ">_client" in l0
+            assert ">_client" in l1
+            assert _client.loc != _proj.loc
+            assert _client.loc != _root.loc
 
 
 @pytest.mark.parametrize('cx_repo_ctor', CX_WITH_REPO_CTORS)

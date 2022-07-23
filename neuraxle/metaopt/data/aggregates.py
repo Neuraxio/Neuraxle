@@ -304,10 +304,9 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         exc_val: Optional[BaseException],
         exc_tb: Optional[TracebackType]
     ) -> Optional[bool]:
-        with self.repo.lock:  # TODO: locking twice, not needed.
+        with self.repo.lock:  # TODO: locking twice, probably not needed.
+            handled_err: bool = self._release_managed_subresource(self._managed_resource, exc_val)
             self._managed_resource.context.free_scoped_logger_file_handler()
-
-        handled_err: bool = self._release_managed_subresource(self._managed_resource, exc_val)
         return handled_err
 
     @_with_method_as_context_manager
