@@ -113,7 +113,7 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         self._spare: SubDataclassT = copy.copy(_dataclass).shallow()
         # TODO: pre-push context to allow for dc auto-loading and easier parent auto-loading?
         self.context: AutoMLContext = context.push_attr(_dataclass)
-        self.loc: ScopedLocation = self.context.loc.copy()
+        self.loc: ScopedLocation = self.context.loc._copy()
         self.is_deep = is_deep
         self._parent: ParentAggregateT = parent
 
@@ -619,9 +619,6 @@ class Round(RoundReport, BaseAggregate[Client, 'Trial', RoundReport, RoundDatacl
         :return:
         """
         self.save_subaggregate(trial, deep=False)
-
-    def copy(self) -> 'Round':
-        return Round(copy.deepcopy(self._dataclass), self.context.copy().with_loc(self.loc.popped()))
 
     @property
     def main_metric_name(self) -> str:

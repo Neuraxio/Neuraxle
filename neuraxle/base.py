@@ -1080,7 +1080,7 @@ class Flow(BaseService):
     def logger(self) -> NeuraxleLogger:
         return self.context.logger
 
-    def copy(self) -> 'Flow':
+    def _copy(self) -> 'Flow':
         """
         Copy the flow.
         """
@@ -1360,7 +1360,7 @@ class ExecutionContext(TruncableService):
             services=self.services,
         )
 
-    def copy(self):
+    def _copy(self):
         copy_kwargs = self._get_copy_kwargs()
         return self.__class__(**copy_kwargs)
 
@@ -1371,7 +1371,7 @@ class ExecutionContext(TruncableService):
         }
         copy_kwargs = {
             'root': self.root,
-            'flow': self.flow.copy(),
+            'flow': self.flow._copy(),
             'execution_mode': self.execution_mode,
             'execution_phase': self.execution_phase,
             'parents': copy(self.parents),
@@ -1384,7 +1384,7 @@ class ExecutionContext(TruncableService):
         """
         Set the context's execution phase to train.
         """
-        new_self = self.copy()
+        new_self = self._copy()
         new_self.set_execution_phase(ExecutionPhase.TRAIN)
         return new_self
 
@@ -1392,7 +1392,7 @@ class ExecutionContext(TruncableService):
         """
         Set the context's execution phase to validation.
         """
-        new_self = self.copy()
+        new_self = self._copy()
         new_self.set_execution_phase(ExecutionPhase.VALIDATION)
         return new_self
 
@@ -1409,7 +1409,7 @@ class ExecutionContext(TruncableService):
 
         :return: a tuple of the recursive dict to apply within thread, and the thread safe context
         """
-        threaded_context = self.copy()
+        threaded_context = self._copy()
         self.flow.unlink_context()
         threaded_context.flow.unlink_context()
 
@@ -1418,7 +1418,7 @@ class ExecutionContext(TruncableService):
         # Compensate lost parents at the root:
         threaded_context.root = self.get_path()
 
-        _cx2 = threaded_context.copy()
+        _cx2 = threaded_context._copy()
         try:
             for parent in reversed(_cx2.parents):
                 pickle.dumps(parent.__reduce__())
@@ -1444,13 +1444,13 @@ class ExecutionContext(TruncableService):
         """
         # TODO: eventually this and the other method above will be an apply that returns a recursive dict of managed locks/things?
 
-        process_safe_context = self.copy()
+        process_safe_context = self._copy()
         self.flow.unlink_context()
         process_safe_context.flow.unlink_context()
 
         # TODO: code a way to serialize and deserialize such context services. Maybe use some new apply functions in context.process_safe() to pack and then un-pack within thread.
         process_safe_context.flow.unlink_context()
-        _cx2 = process_safe_context.copy()
+        _cx2 = process_safe_context._copy()
         try:
             for service in _cx2.get_services().values():
                 # TODO: mixin that cleans things instead of ifs here.
@@ -1616,9 +1616,9 @@ class _HasSetupTeardownLifecycle(MixinForBaseService):
     def __init__(self):
         self.is_initialized = False
 
-    def copy(self, context: CX = None, deep=True) -> '_HasSavers':
+    def _copy(self, context: CX = None, deep=True) -> '_HasSavers':
         """
-        Copy the step.
+        Copy the service or step.
 
         :param deep: if True, copy the savers as well
         :return: a copy of the step

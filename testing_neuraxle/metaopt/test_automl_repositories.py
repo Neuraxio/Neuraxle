@@ -57,7 +57,7 @@ def test_context_changes_independently_once_copied(
 ):
     cx = cx_repo_ctor(tmpdir)
 
-    copied_cx: AutoMLContext = cx.copy().push_attr(
+    copied_cx: AutoMLContext = cx._copy().push_attr(
         ProjectDataclass(project_name=DEFAULT_PROJECT))
 
     assert copied_cx.loc.as_list() == [DEFAULT_PROJECT]

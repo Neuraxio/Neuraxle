@@ -103,7 +103,7 @@ class Trainer(BaseService):
         If validation DACT is None, the evaluation metrics will not save validation results.
         """
         trial_split_scope: TrialSplit = trial_split_scope.with_n_epochs(self.n_epochs)
-        p: BaseStep = pipeline.copy(trial_split_scope.context, deep=True)
+        p: BaseStep = pipeline._copy(trial_split_scope.context, deep=True)
         p.set_hyperparams(trial_split_scope.get_hyperparams())
 
         for _ in range(self.n_epochs):
