@@ -63,14 +63,14 @@ def test_step_print_str_representation_works_correctly():
     output = str(TrainOnlyWrapper(SomeTruncableStep()))
     assert output == """TrainOnlyWrapper(SomeTruncableStep([
         SomeStepWithHyperparams(name='MockStep'),
-        SomeStepWithHyperparams(name='MockStep1'),
-    ], name='SomeTruncableStep'), name='TrainOnlyWrapper')"""
+        SomeStepWithHyperparams(name='MockStep1')
+    ]))"""
 
 
 def test_step_repr_representation_works_correctly():
     output = repr(TrainOnlyWrapper(SomeTruncableStep()))
     assert output == """TrainOnlyWrapper(SomeTruncableStep([
-        SomeStepWithHyperparams(name='MockStep', hyperparameters=HyperparameterSamples([('learning_rate', 0.1),
+        SomeStepWithHyperparams(name='MockStep', hyperparams=HyperparameterSamples([('learning_rate', 0.1),
                        ('l2_weight_reg', 0.001),
                        ('hidden_size', 32),
                        ('num_layers', 3),
@@ -79,7 +79,7 @@ def test_step_repr_representation_works_correctly():
                        ('use_max_pool_else_avg_pool', True),
                        ('dropout_drop_proba', 0.5),
                        ('momentum', 0.1)])),
-        SomeStepWithHyperparams(name='MockStep1', hyperparameters=HyperparameterSamples([('learning_rate', 0.1),
+        SomeStepWithHyperparams(name='MockStep1', hyperparams=HyperparameterSamples([('learning_rate', 0.1),
                        ('l2_weight_reg', 0.001),
                        ('hidden_size', 32),
                        ('num_layers', 3),
@@ -87,8 +87,8 @@ def test_step_repr_representation_works_correctly():
                        ('use_xavier_init', True),
                        ('use_max_pool_else_avg_pool', True),
                        ('dropout_drop_proba', 0.5),
-                       ('momentum', 0.1)])),
-    ], name='SomeTruncableStep', hyperparameters=HyperparameterSamples([('learning_rate', 0.1),
+                       ('momentum', 0.1)]))
+    ], hyperparams=HyperparameterSamples([('learning_rate', 0.1),
                        ('l2_weight_reg', 0.001),
                        ('hidden_size', 32),
                        ('num_layers', 3),
@@ -96,4 +96,4 @@ def test_step_repr_representation_works_correctly():
                        ('use_xavier_init', True),
                        ('use_max_pool_else_avg_pool', True),
                        ('dropout_drop_proba', 0.5),
-                       ('momentum', 0.1)])), name='TrainOnlyWrapper', hyperparameters=HyperparameterSamples())"""
+                       ('momentum', 0.1)])))"""

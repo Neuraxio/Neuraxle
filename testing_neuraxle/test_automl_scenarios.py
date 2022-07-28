@@ -6,25 +6,22 @@ from typing import Any, Dict, List, Set, Tuple, Type
 
 import numpy as np
 import pytest
-from neuraxle.base import (CX, BaseStep, HandleOnlyMixin, Identity, MetaStep,
-                           NonFittableMixin, TrialStatus)
+from neuraxle.base import CX, BaseStep, HandleOnlyMixin, Identity, MetaStep, NonFittableMixin, TrialStatus
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.data_container import PredsDACT, TrainDACT
 from neuraxle.distributed.streaming import ParallelQueuedFeatureUnion
-from neuraxle.hyperparams.distributions import (
-    DiscreteHyperparameterDistribution, PriorityChoice, RandInt, Uniform)
-from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
-                                        HyperparameterSpace)
+from neuraxle.hyperparams.distributions import DiscreteHyperparameterDistribution, PriorityChoice, RandInt, Uniform
+from neuraxle.hyperparams.space import FlatDict, HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.auto_ml import ControlledAutoML, DefaultLoop, Trainer
 from neuraxle.metaopt.callbacks import MetricCallback
 from neuraxle.metaopt.context import AutoMLContext
 from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.reporting import RoundReport
-from neuraxle.metaopt.data.vanilla import (BaseDataclass, RoundDataclass,
-                                           ScopedLocation)
+from neuraxle.metaopt.data.vanilla import BaseDataclass, RoundDataclass, ScopedLocation
 from neuraxle.metaopt.optimizer import GridExplorationSampler
+from neuraxle.metaopt.repositories.db import SQLLiteHyperparamsRepository
 from neuraxle.metaopt.repositories.json import HyperparamsOnDiskRepository
-from neuraxle.metaopt.repositories.repo import VanillaHyperparamsRepository
+from neuraxle.metaopt.repositories.repo import HyperparamsRepository, VanillaHyperparamsRepository
 from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.data import DataShuffler
@@ -212,50 +209,54 @@ def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
 
 
 @pytest.mark.parametrize("use_processes,repoclass", [
-    [False, VanillaHyperparamsRepository],  # TODO: sql repo as well.
+    [False, VanillaHyperparamsRepository],
     [False, HyperparamsOnDiskRepository],
     [True, HyperparamsOnDiskRepository],
+    # TODO: 'SQLite objects created in a thread can only be used in that same thread.' would need a pack and unpack service method upon pre and post threading.
+    # [True, SQLLiteHyperparamsRepository],
+    # [False, SQLLiteHyperparamsRepository],
 ])
-def test_automl_use_a_json_repo_in_parallelized_round(use_processes, repoclass):
-    tmpdir = CX.get_new_cache_folder()
-    len_x = 2 * 3 * 4 * 5
-    dact = DACT(di=list(range(len_x)), eo=list(range(10, 10 + len_x)))
-    repo = repoclass(tmpdir)
-    cx = AutoMLContext.from_context(repo=repo)
-    sleep_step = Sleep(0.125, add_random_quantity=0.250)
-    automl: ControlledAutoML = _create_automl_test_loop(
-        tmpdir, sleep_step, n_trials=1, start_new_round=False, refit_best_trial=False
-    )
-    n_sequential_steps = 3
-    n_workers_in_parallel_per_step = 4  # TODO: use something else, such as 2, 3 or 4.
-    n_minibatches_in_series = 5
-    n_trials = n_sequential_steps * n_workers_in_parallel_per_step * n_minibatches_in_series
-    parallel_automl = ParallelQueuedFeatureUnion(
-        # steps=[OnlyFitAtTransformTime(automl)],
-        steps=[
-            # TODO: this test seems broken because it never creates the first rounds - always wants to extend it.
-            OnlyFitAtTransformTime(copy.deepcopy(automl))
-            for _ in range(n_sequential_steps)
-        ],
-        batch_size=int(len(dact) / n_minibatches_in_series / n_workers_in_parallel_per_step),
-        n_workers_per_step=n_workers_in_parallel_per_step,
-        use_processes=use_processes,
-        use_savers=False,
-        max_queued_minibatches=1  # TODO: why 1 here?
-    )
-    parallel_automl.handle_fit_transform(dact, cx)
-    # for i in range(n_trials):
-    #     OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
+def test_automl_use_a_json_repo_in_parallelized_round(use_processes, repoclass: Type[HyperparamsRepository]):
+    for _ in range(1):  # Editable range for debugging if a flickering corner-case is rare.
+        tmpdir = CX.get_new_cache_folder()
+        len_x = 2 * 3 * 4 * 5
+        dact = DACT(di=list(range(len_x)), eo=list(range(10, 10 + len_x)))
+        repo = repoclass(tmpdir).with_lock()
+        cx = AutoMLContext.from_context(repo=repo)
+        sleep_step = Sleep(0.125, add_random_quantity=0.250)
+        automl: ControlledAutoML = _create_automl_test_loop(
+            tmpdir, sleep_step, n_trials=1, start_new_round=False, refit_best_trial=False
+        )
+        n_sequential_steps = 3
+        n_workers_in_parallel_per_step = 4  # TODO: use something else, such as 2, 3 or 4.
+        n_minibatches_in_series = 5
+        n_trials = n_sequential_steps * n_workers_in_parallel_per_step * n_minibatches_in_series
+        parallel_automl = ParallelQueuedFeatureUnion(
+            # steps=[OnlyFitAtTransformTime(automl)],
+            steps=[
+                # TODO: this test seems broken because it never creates the first rounds - always wants to extend it.
+                OnlyFitAtTransformTime(copy.deepcopy(automl))
+                for _ in range(n_sequential_steps)
+            ],
+            batch_size=int(len(dact) / n_minibatches_in_series / n_workers_in_parallel_per_step),
+            n_workers_per_step=n_workers_in_parallel_per_step,
+            use_processes=use_processes,
+            use_savers=False,
+            max_queued_minibatches=1  # TODO: why 1 here?
+        )
+        parallel_automl.handle_fit_transform(dact, cx)
+        # for i in range(n_trials):
+        #     OnlyFitAtTransformTime(copy.deepcopy(automl)).handle_fit_transform(dact, cx)
 
-    # automl_refiting_best: ControlledAutoML = _create_automl_test_loop(
-    #     tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)
-    automl_refiting_best = automl.to_force_refit_best_trial()
-    automl_refiting_best, preds = automl_refiting_best.handle_fit_transform(dact, cx)
+        # automl_refiting_best: ControlledAutoML = _create_automl_test_loop(
+        #     tmpdir, sleep_step, n_trials=0, start_new_round=False, refit_best_trial=True)
+        automl_refiting_best = automl.to_force_refit_best_trial()
+        automl_refiting_best, preds = automl_refiting_best.handle_fit_transform(dact, cx)
 
-    bests: List[Tuple[float, int, TrialStatus, FlatDict]] = automl_refiting_best.report.summary()
+        bests: List[Tuple[float, int, TrialStatus, FlatDict]] = automl_refiting_best.report.summary()
 
-    assert len(bests) == n_trials
+        assert len(bests) == n_trials
 
-    best_score = bests[0][0]
-    assert median_absolute_error(dact.eo, preds.di) == best_score
-    assert 0.0 == best_score
+        best_score = bests[0][0]
+        assert median_absolute_error(dact.eo, preds.di) == best_score
+        assert 0.0 == best_score

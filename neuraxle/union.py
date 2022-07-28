@@ -37,7 +37,10 @@ from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
     """
-    Parallelize the union of many pipeline steps.
+    Transform features in parallel as the union of many pipeline steps.
+    
+    This step is also available with true parallel processing threads or
+    processes in the streaming package of Neuraxle.
 
 
     .. code-block:: python

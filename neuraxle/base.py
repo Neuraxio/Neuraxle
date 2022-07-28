@@ -47,20 +47,16 @@ from copy import copy, deepcopy
 from enum import Enum
 from multiprocessing import RLock
 from operator import attrgetter
-from typing import (Any, Callable, Dict, Generic, ItemsView, Iterable,
-                    KeysView, List, Optional, Set, Tuple, Type, TypeVar, Union,
-                    ValuesView)
+from typing import (Any, Callable, Dict, Generic, ItemsView, Iterable, KeysView, List, Optional, Set, Tuple, Type,
+                    TypeVar, Union, ValuesView)
 
 from joblib import dump, load
 
-from neuraxle.data_container import (ARG_X_INPUTTED, ARG_Y_EXPECTED,
-                                     ARG_Y_PREDICTD, DIT, EOT, IDT)
+from neuraxle.data_container import ARG_X_INPUTTED, ARG_Y_EXPECTED, ARG_Y_PREDICTD, DIT, EOT, IDT
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.data_container import PredsDACT, TrainDACT
-from neuraxle.hyperparams.space import (HyperparameterSamples,
-                                        HyperparameterSpace, RecursiveDict)
-from neuraxle.logging.logging import (NEURAXLE_LOGGER_NAME, NeuraxleLogger,
-                                      ParallelLoggingConsumerThread)
+from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace, RecursiveDict
+from neuraxle.logging.logging import NEURAXLE_LOGGER_NAME, NeuraxleLogger, ParallelLoggingConsumerThread
 from neuraxle.logging.warnings import warn_deprecated_arg
 
 
@@ -582,7 +578,104 @@ class _HasConfig(ABC):
         return self.config
 
 
+class _CanMutate:
+    """
+    An internal class to represent a step that can be mutated.
+    A step can replace some of its method by others.
+    For example, you might want to reverse a step, and replace the transform method by the inverse transform method.
+    .. seealso::
+        :class:`BaseStep`,
+        :class:`BaseTransformer`,
+        :func:`~neuraxle.base._TransformerStep.transform`,
+        :func:`~neuraxle.base._TransformerStep.inverse_transform`
+    """
+
+    def __init__(self):
+        self.pending_mutate: Tuple['BaseTransformer', str, str] = (None, None, None)
+
+    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=True) -> 'BaseStep':
+        """
+        Replace the "method_to_assign_to" method by the "new_method" method, IF the present object has no pending calls to
+        ``.will_mutate_to()`` waiting to be applied. If there is a pending call, the pending call will override the
+        methods specified in the present call. If the change fails (such as if the new_method doesn't exist), then
+        a warning is printed (optional). By default, there is no pending ``will_mutate_to`` call.
+        This could for example be useful within a pipeline to apply ``inverse_transform`` to every pipeline steps, or
+        to assign ``predict_probas`` to ``predict``, or to assign "inverse_transform" to "transform" to a reversed pipeline.
+        :param new_method: the method to replace transform with, if there is no pending ``will_mutate_to`` call.
+        :param method_to_assign_to: the method to which the new method will be assigned to, if there is no pending ``will_mutate_to`` call.
+        :param warn: (verbose) wheter or not to warn about the inexistence of the method.
+        :return: self, a copy of self, or even perhaps a new or different BaseStep object.
+        """
+        self._invalidate()
+        pending_new_base_step, pending_new_method, pending_method_to_assign_to = self.pending_mutate
+
+        # Use everything that is pending if they are not none (ternaries).
+        new_base_step = pending_new_base_step if pending_new_base_step is not None else copy(self)
+        new_method = pending_new_method if pending_new_method is not None else new_method
+        method_to_assign_to = pending_method_to_assign_to if pending_method_to_assign_to is not None else method_to_assign_to
+
+        # We set "new_method" in place of "method_to_affect" to a copy of self:
+        try:
+            # 1. get new method's reference
+            new_method = getattr(new_base_step, new_method)
+
+            # 2. delete old method
+            try:
+                delattr(new_base_step, method_to_assign_to)
+            except AttributeError:
+                pass
+
+            # 3. assign new method to old method
+            setattr(new_base_step, method_to_assign_to, new_method)
+            self._invalidate()
+
+        except AttributeError as e:
+            if warn:
+                import warnings
+                warnings.warn(repr(e))
+
+        return new_base_step
+
+    def will_mutate_to(self, new_base_step: 'BaseTransformer' = None, new_method: str = None,
+                       method_to_assign_to: str = None) -> 'BaseTransformer':
+        """
+        This will change the behavior of ``self.mutate(<...>)`` such that when mutating, it will return the
+        presently provided new_base_step BaseStep (can be left to None for self), and the ``.mutate`` method
+        will also apply the ``new_method`` and the  ``method_to_affect``, if they are not None, and after changing
+        the object to new_base_step.
+        This can be useful if your pipeline requires unsupervised pretraining. For example:
+        .. code-block:: python
+            X_pretrain = ...
+            X_train = ...
+            p = Pipeline(
+                SomePreprocessing(),
+                SomePretrainingStep().will_mutate_to(new_base_step=SomeStepThatWillUseThePretrainingStep),
+                Identity().will_mutate_to(new_base_step=ClassifierThatWillBeUsedOnlyAfterThePretraining)
+            )
+            # Pre-train the pipeline
+            p = p.fit(X_pretrain, y=None)
+            # This will leave `SomePreprocessing()` untouched and will affect the two other steps.
+            p = p.mutate(new_method="transform", method_to_affect="transform")
+            # Pre-train the pipeline
+            p = p.fit(X_train, y_train)  # Then fit the classifier and other new things
+        :param new_base_step: if it is not None, upon calling ``mutate``, the object it will mutate to will be this provided new_base_step.
+        :param method_to_assign_to: if it is not None, upon calling ``mutate``, the method_to_affect will be the one that is used on the provided new_base_step.
+        :param new_method: if it is not None, upon calling ``mutate``, the new_method will be the one that is used on the provided new_base_step.
+        :return: self
+        """
+        self._invalidate()
+
+        if new_method is None or method_to_assign_to is None:
+            # No changes will be applied (transform will stay transform).
+            new_method = method_to_assign_to = "transform"
+
+        self.pending_mutate = (new_base_step, new_method, method_to_assign_to)
+
+        return self
+
+
 class BaseService(
+    _CanMutate,
     _HasConfig,
     _HasRecursiveMethods,
     ABC
@@ -599,6 +692,7 @@ class BaseService(
     def __init__(self, config: Union[Dict, RecursiveDict] = None, name: str = None):
         _HasRecursiveMethods.__init__(self, name=name)
         _HasConfig.__init__(self, config=config)
+        _CanMutate.__init__(self)
 
 
 BaseServiceT = TypeVar('BaseServiceT', bound=BaseService)
@@ -740,11 +834,42 @@ class MetaServiceMixin(_HasChildrenMixin):
 
     def _repr(self, level=0, verbose=False) -> str:
         output = self.__class__.__name__ + "("
-        output += self.wrapped._repr(level=level + 1, verbose=verbose) + ", name='" + self.name + "'"
+        output += self.wrapped._repr(level=level + 1, verbose=verbose)
+        has_name = self.__class__.__name__ != self.name
+        if has_name:
+            output += ", name='" + self.name + "'"
         if verbose:
-            output += ", hyperparameters=" + pprint.pformat(self.hyperparams)
+            conf: RecursiveDict = self._get_config()
+            if len(conf) > 0:
+                output += ", config=" + pprint.pformat(conf)
         output += ")"
         return output
+
+    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=False) -> 'BaseTransformer':
+        """
+        Mutate self, and self.wrapped. Please refer to :func:`~neuraxle.base._CanMutate.mutate` for more information.
+        :param new_method: the method to replace transform with, if there is no pending ``will_mutate_to`` call.
+        :param method_to_assign_to: the method to which the new method will be assigned to, if there is no pending ``will_mutate_to`` call.
+        :param warn: (verbose) wheter or not to warn about the inexistence of the method.
+        :return: self, a copy of self, or even perhaps a new or different BaseStep object.
+        """
+        new_self = super().mutate(new_method, method_to_assign_to, warn)
+        new_self.wrapped = self.wrapped.mutate(new_method, method_to_assign_to, warn)
+
+        return new_self
+
+    def will_mutate_to(
+        self, new_base_step: 'BaseTransformer' = None, new_method: str = None, method_to_assign_to: str = None
+    ) -> 'BaseTransformer':
+        """
+        Add pending mutate self, self.wrapped. Please refer to :func:`~neuraxle.base._CanMutate.will_mutate_to` for more information.
+        :param new_base_step: if it is not None, upon calling ``mutate``, the object it will mutate to will be this provided new_base_step.
+        :param method_to_assign_to: if it is not None, upon calling ``mutate``, the method_to_affect will be the one that is used on the provided new_base_step.
+        :param new_method: if it is not None, upon calling ``mutate``, the new_method will be the one that is used on the provided new_base_step.
+        :return: self
+        """
+        new_self = super().will_mutate_to(new_base_step, new_method, method_to_assign_to)
+        return new_self
 
 
 class MetaService(MetaServiceMixin, BaseService):
@@ -770,7 +895,38 @@ ServiceName = Union[str, Type[BaseServiceT]]
 NamedServicesList = List[Union[Tuple[str, BaseServiceT], BaseServiceT]]
 
 
-class TruncableServiceMixin(_HasChildrenMixin):
+class _TruncableMixin:
+    # TODO: Merge common code of TruncableServiceMixin and TruncableStepsMixin into this.
+
+    def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=False) -> 'BaseTransformer':
+        """
+        Call mutate on every steps the the present truncable step contains.
+
+        :param new_method: the method to replace transform with.
+        :param method_to_assign_to: the method to which the new method will be assigned to.
+        :param warn: (verbose) wheter or not to warn about the inexistence of the method.
+        :return: self, a copy of self, or even perhaps a new or different BaseStep object.
+        """
+        if self.pending_mutate[0] is None:
+            new_base_step = BaseStep.mutate(self, new_method, method_to_assign_to, warn)
+            self.pending_mutate = (new_base_step, self.pending_mutate[1], self.pending_mutate[2])
+
+            new_base_step.steps_as_tuple = [
+                (
+                    k,
+                    v.mutate(new_method, method_to_assign_to, warn)
+                )
+                for k, v in new_base_step.steps_as_tuple
+            ]
+            new_base_step._refresh_steps()
+            return new_base_step
+        else:
+            # Since we're remplacing ourselves with a new step, we don't have to call mutate on our childrens since
+            # they won't exist afterward.
+            return BaseStep.mutate(self, new_method, method_to_assign_to, warn)
+
+
+class TruncableServiceMixin(_TruncableMixin, _HasChildrenMixin):
 
     def __init__(self, services: Dict[ServiceName, 'BaseServiceT']):
         _HasChildrenMixin.__init__(self)
@@ -917,14 +1073,14 @@ class Flow(BaseService):
         Unlink the context from the flow.
         """
         del self.context
-        self.context = None
+        self.context: ExecutionContext = None
         return self
 
     @property
     def logger(self) -> NeuraxleLogger:
         return self.context.logger
 
-    def copy(self) -> 'Flow':
+    def _copy(self) -> 'Flow':
         """
         Copy the flow.
         """
@@ -1204,7 +1360,7 @@ class ExecutionContext(TruncableService):
             services=self.services,
         )
 
-    def copy(self):
+    def _copy(self):
         copy_kwargs = self._get_copy_kwargs()
         return self.__class__(**copy_kwargs)
 
@@ -1215,7 +1371,7 @@ class ExecutionContext(TruncableService):
         }
         copy_kwargs = {
             'root': self.root,
-            'flow': self.flow.copy(),
+            'flow': self.flow._copy(),
             'execution_mode': self.execution_mode,
             'execution_phase': self.execution_phase,
             'parents': copy(self.parents),
@@ -1228,7 +1384,7 @@ class ExecutionContext(TruncableService):
         """
         Set the context's execution phase to train.
         """
-        new_self = self.copy()
+        new_self = self._copy()
         new_self.set_execution_phase(ExecutionPhase.TRAIN)
         return new_self
 
@@ -1236,7 +1392,7 @@ class ExecutionContext(TruncableService):
         """
         Set the context's execution phase to validation.
         """
-        new_self = self.copy()
+        new_self = self._copy()
         new_self.set_execution_phase(ExecutionPhase.VALIDATION)
         return new_self
 
@@ -1253,7 +1409,7 @@ class ExecutionContext(TruncableService):
 
         :return: a tuple of the recursive dict to apply within thread, and the thread safe context
         """
-        threaded_context = self.copy()
+        threaded_context = self._copy()
         self.flow.unlink_context()
         threaded_context.flow.unlink_context()
 
@@ -1262,7 +1418,7 @@ class ExecutionContext(TruncableService):
         # Compensate lost parents at the root:
         threaded_context.root = self.get_path()
 
-        _cx2 = threaded_context.copy()
+        _cx2 = threaded_context._copy()
         try:
             for parent in reversed(_cx2.parents):
                 pickle.dumps(parent.__reduce__())
@@ -1288,13 +1444,13 @@ class ExecutionContext(TruncableService):
         """
         # TODO: eventually this and the other method above will be an apply that returns a recursive dict of managed locks/things?
 
-        process_safe_context = self.copy()
+        process_safe_context = self._copy()
         self.flow.unlink_context()
         process_safe_context.flow.unlink_context()
 
         # TODO: code a way to serialize and deserialize such context services. Maybe use some new apply functions in context.process_safe() to pack and then un-pack within thread.
         process_safe_context.flow.unlink_context()
-        _cx2 = process_safe_context.copy()
+        _cx2 = process_safe_context._copy()
         try:
             for service in _cx2.get_services().values():
                 # TODO: mixin that cleans things instead of ifs here.
@@ -1460,9 +1616,9 @@ class _HasSetupTeardownLifecycle(MixinForBaseService):
     def __init__(self):
         self.is_initialized = False
 
-    def copy(self, context: CX = None, deep=True) -> '_HasSavers':
+    def _copy(self, context: CX = None, deep=True) -> '_HasSavers':
         """
-        Copy the step.
+        Copy the service or step.
 
         :param deep: if True, copy the savers as well
         :return: a copy of the step
@@ -2734,7 +2890,7 @@ class _CouldHaveContext(MixinForBaseService):
             context = CX()
 
         try:
-            assert a == b, err_message
+            assert a == b, err_message.strip() + f" - raised from {context.get_identifier()}<{str(self)}>."
         except AssertionError as e:
             context.flow.log_error(e)
 
@@ -2850,9 +3006,16 @@ class BaseTransformer(
         return self._repr(verbose=True)
 
     def _repr(self, level=0, verbose=False) -> str:
-        output = self.__class__.__name__ + "(name='" + self.name + "'"
+        output = self.__class__.__name__ + "("
+        has_name: bool = self.__class__.__name__ != self.name
+        if has_name:
+            output += "name='" + self.name + "'"
         if verbose:
-            output += ", hyperparameters=" + pprint.pformat(self.hyperparams)
+            hps: HyperparameterSamples = self._get_hyperparams()
+            if len(hps) > 0:
+                if has_name:
+                    output += ", "
+                output += "hyperparams=" + pprint.pformat(hps)
         output += ")"
         return output
 
@@ -3294,9 +3457,10 @@ class TruncableJoblibStepSaver(JoblibStepSaver):
         return step
 
 
-class TruncableStepsMixin(_HasChildrenMixin):
+class TruncableStepsMixin(_TruncableMixin, _HasChildrenMixin):
     """
-    A mixin for services that can be truncated.
+    A mixin for steps that can be truncated,
+    such as for instance a :class:`~neuraxle.pipeline.Pipeline`.
     """
 
     def __init__(
@@ -3701,13 +3865,30 @@ class TruncableSteps(TruncableStepsMixin, BaseStep, ABC):
         return new_self
 
     def _repr(self, level=0, verbose=False) -> str:
+        children = self.get_children()
+        is_compact: bool = len(children) < 2
+
         tab0 = "    " * level
         tab1 = "    " * (level + 1)
-        output = self.__class__.__name__ + "([\n" + ''.join(
-            [tab1 + s._repr(level=level + 1, verbose=verbose) + ",\n" for s in self.get_children()]
-        ) + tab0 + "], name='" + self.name + "'"
+        _nl = "\n"
+        _nl2 = _nl
+        if is_compact:
+            tab1 = ""
+            _nl = ""
+            _nl2 = " "
+
+        output = self.__class__.__name__ + "(["
+        output += _nl + tab1 + ("," + _nl2 + tab1).join(
+            [s._repr(level=level + 1, verbose=verbose) for s in children]
+        )
+        output += _nl + (tab1 if is_compact else tab0) + "]"
+        has_name = self.__class__.__name__ != self.name
+        if has_name:
+            output += ", name='" + self.name + "'"
         if verbose:
-            output += ", hyperparameters=" + pprint.pformat(self.hyperparams)
+            hps: HyperparameterSamples = self._get_hyperparams()
+            if len(hps) > 0:
+                output += ", hyperparams=" + pprint.pformat(hps)
         output += ")"
         return output
 

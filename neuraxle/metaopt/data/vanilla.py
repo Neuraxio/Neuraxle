@@ -145,7 +145,7 @@ class ScopedLocation(BaseService):
 
         raise ValueError(f"Invalid key type {key.__class__.__name__} for key {key}.")
 
-    def copy(self) -> 'ScopedLocation':
+    def _copy(self) -> 'ScopedLocation':
         """
         Returns a copy of the :class:`ScopedLocation`.
         """
@@ -158,10 +158,10 @@ class ScopedLocation(BaseService):
         if isinstance(dc, RootDataclass):
             return ScopedLocation()
         elif dc.is_terminal_leaf():
-            cpy = self.copy()
+            cpy = self._copy()
             cpy.metric_name = dc.get_id()
             return cpy
-        self_copy = self.copy()
+        self_copy = self._copy()
         self_copy[dc.__class__] = dc.get_id()
         return self_copy
 
@@ -181,7 +181,7 @@ class ScopedLocation(BaseService):
         """
         Returns a :class:`ScopedLocation` with the missing elements filled with the default null values.
         """
-        self_copy = self.copy()
+        self_copy = self._copy()
         null_vals = [
             NULL_PROJECT,
             NULL_CLIENT,

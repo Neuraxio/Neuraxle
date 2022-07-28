@@ -42,7 +42,7 @@ class AutoMLContext(CX):
 
     @property
     def logger(self) -> NeuraxleLogger:
-        self.add_scoped_logger_file_handler()  # TODO: this is perhaps why logs are duplicated.
+        # self.add_scoped_logger_file_handler()  # TODO: this is perhaps why logs are duplicated.
         return CX.logger.fget(self)
 
     @property
@@ -70,7 +70,7 @@ class AutoMLContext(CX):
         # TODO: with self.lock:
         return self.repo.get_log_from_logging_handler(self.logger, self.loc)
 
-    def copy(self):
+    def _copy(self):
         copy_kwargs = self._get_copy_kwargs()
         return AutoMLContext(**copy_kwargs)
 
@@ -89,13 +89,13 @@ class AutoMLContext(CX):
 
         :param context: ExecutionContext
         """
-        new_context: AutoMLContext = AutoMLContext.copy(
+        new_context: AutoMLContext = AutoMLContext._copy(
             context if context is not None else AutoMLContext()
         )
         if not new_context.has_service(HyperparamsRepository):
             new_context.register_service(
                 HyperparamsRepository,
-                repo or VanillaHyperparamsRepository(new_context.get_path())
+                (repo or VanillaHyperparamsRepository(new_context.get_path())).with_lock()
             )
         if not new_context.has_service(ScopedLocation):
             new_context.register_service(
@@ -142,7 +142,7 @@ class AutoMLContext(CX):
         :param loc: ScopedLocation
         :return: an AutoMLContext copy with the new loc attribute.
         """
-        new_self: AutoMLContext = self.copy()
+        new_self: AutoMLContext = self._copy()
         new_self.register_service(ScopedLocation, loc)
         return new_self
 

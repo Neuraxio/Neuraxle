@@ -42,34 +42,20 @@ import typing
 from abc import abstractmethod
 from collections import OrderedDict
 from types import TracebackType
-from typing import (Callable, ContextManager, Dict, Generic, Iterable, List,
-                    Optional, Type, TypeVar)
+from typing import Callable, ContextManager, Dict, Generic, Iterable, List, Optional, Type, TypeVar
 
 import numpy as np
-from neuraxle.base import (BaseService, Flow, TrialStatus,
-                           _CouldHaveContext)
-from neuraxle.hyperparams.space import (FlatDict, HyperparameterSamples,
-                                        HyperparameterSpace)
+from neuraxle.base import BaseService, Flow, TrialStatus, _CouldHaveContext
+from neuraxle.hyperparams.space import FlatDict, HyperparameterSamples, HyperparameterSpace
 from neuraxle.metaopt.context import AutoMLContext
-from neuraxle.metaopt.data.reporting import (BaseReport, ClientReport,
-                                             MetricResultsReport,
-                                             ProjectReport, RootReport,
-                                             RoundReport, SubReportT,
-                                             TrialReport, TrialSplitReport,
-                                             dataclass_2_report)
-from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT,
-                                           RETRAIN_TRIAL_SPLIT_ID,
-                                           BaseDataclass, ClientDataclass,
-                                           MetricResultsDataclass,
-                                           ProjectDataclass, RootDataclass,
-                                           RoundDataclass, ScopedLocation,
-                                           ScopedLocationAttr,
-                                           ScopedLocationAttrInt,
-                                           SubDataclassT, TrialDataclass,
-                                           TrialSplitDataclass,
-                                           dataclass_2_id_attr)
+from neuraxle.metaopt.data.reporting import (BaseReport, ClientReport, MetricResultsReport, ProjectReport, RootReport,
+                                             RoundReport, SubReportT, TrialReport, TrialSplitReport, dataclass_2_report)
+from neuraxle.metaopt.data.vanilla import (DEFAULT_CLIENT, DEFAULT_PROJECT, RETRAIN_TRIAL_SPLIT_ID, BaseDataclass,
+                                           ClientDataclass, MetricResultsDataclass, ProjectDataclass, RootDataclass,
+                                           RoundDataclass, ScopedLocation, ScopedLocationAttr, ScopedLocationAttrInt,
+                                           SubDataclassT, TrialDataclass, TrialSplitDataclass, dataclass_2_id_attr)
 from neuraxle.metaopt.optimizer import BaseHyperparameterOptimizer
-from neuraxle.metaopt.repositories.repo import (HyperparamsRepository,
+from neuraxle.metaopt.repositories.repo import (HyperparamsRepository, SynchronizedHyperparamsRepositoryWrapper,
                                                 VanillaHyperparamsRepository)
 
 SubAggregateT = TypeVar('SubAggregateT', bound=Optional['BaseAggregate'])
@@ -127,7 +113,7 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         self._spare: SubDataclassT = copy.copy(_dataclass).shallow()
         # TODO: pre-push context to allow for dc auto-loading and easier parent auto-loading?
         self.context: AutoMLContext = context.push_attr(_dataclass)
-        self.loc: ScopedLocation = self.context.loc.copy()
+        self.loc: ScopedLocation = self.context.loc._copy()
         self.is_deep = is_deep
         self._parent: ParentAggregateT = parent
 
@@ -212,7 +198,7 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         return self.context.flow
 
     @property
-    def repo(self) -> HyperparamsRepository:
+    def repo(self) -> SynchronizedHyperparamsRepositoryWrapper:
         return self.context.repo
 
     def subaggregate(self, _dataclass: SubDataclassT, context: AutoMLContext, is_deep=False, parent: ParentAggregateT = None) -> SubAggregateT:
@@ -307,8 +293,8 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         # self.context.free_scoped_logger_handler_file()
         self._invariant()
         self._managed_resource._invariant()
-
-        self._managed_resource.context.add_scoped_logger_file_handler()
+        with self.repo.lock:  # TODO: locking twice, not needed.
+            self._managed_resource.context.add_scoped_logger_file_handler()
 
         return self._managed_resource
 
@@ -318,10 +304,9 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         exc_val: Optional[BaseException],
         exc_tb: Optional[TracebackType]
     ) -> Optional[bool]:
-        self._managed_resource.context.free_scoped_logger_file_handler()
-        # self.context.add_scoped_logger_file_handler()
-
-        handled_err: bool = self._release_managed_subresource(self._managed_resource, exc_val)
+        with self.repo.lock:  # TODO: locking twice, probably not needed.
+            handled_err: bool = self._release_managed_subresource(self._managed_resource, exc_val)
+            self._managed_resource.context.free_scoped_logger_file_handler()
         return handled_err
 
     @_with_method_as_context_manager
@@ -634,9 +619,6 @@ class Round(RoundReport, BaseAggregate[Client, 'Trial', RoundReport, RoundDatacl
         :return:
         """
         self.save_subaggregate(trial, deep=False)
-
-    def copy(self) -> 'Round':
-        return Round(copy.deepcopy(self._dataclass), self.context.copy().with_loc(self.loc.popped()))
 
     @property
     def main_metric_name(self) -> str:

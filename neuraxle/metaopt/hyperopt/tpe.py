@@ -68,7 +68,7 @@ class TreeParzenEstimator(BaseHyperparameterOptimizer):
             expected_n_trials=number_of_initial_random_step
         )
 
-    def find_next_best_hyperparams(self, round: RoundReport, hp_space: HyperparameterSpace) -> HyperparameterSamples:
+    def find_next_best_hyperparams(self, _round: RoundReport, hp_space: HyperparameterSpace) -> HyperparameterSamples:
         """
         Find the next best hyperparams using previous trials.
 
@@ -77,11 +77,11 @@ class TreeParzenEstimator(BaseHyperparameterOptimizer):
         """
 
         # Perform a first pseudo-randomized search:
-        if len(round) < self.number_of_initial_random_step:
-            return self.initial_auto_ml_algo.find_next_best_hyperparams(round, hp_space)
+        if len(_round) < self.number_of_initial_random_step:
+            return self.initial_auto_ml_algo.find_next_best_hyperparams(_round, hp_space)
 
         # Create gaussian mixture of good and gaussian mixture of bads. Lists here are on a per-hp basis:
-        hyperparams_keys, divided_good_and_bad_distrs = self.mixture_factory.create_from(round, hp_space)
+        hyperparams_keys, divided_good_and_bad_distrs = self.mixture_factory.create_from(_round, hp_space)
 
         # Sample the next hyperparams finally:
         return self._sample_next_hyperparams_from_gaussians_div(

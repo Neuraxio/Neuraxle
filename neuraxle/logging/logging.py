@@ -104,7 +104,10 @@ class NeuraxleLogger(logging.Logger):
         """
         if self.name in LOGGER_FILE_HANDLERS:
             LOGGER_FILE_HANDLERS[self.name].close()
-            self.removeHandler(LOGGER_FILE_HANDLERS[self.name])
+            try:
+                self.removeHandler(LOGGER_FILE_HANDLERS[self.name])
+            except KeyError as ke:
+                raise ke from ke  # Breakpoint here.
             del LOGGER_FILE_HANDLERS[self.name]
         return self
 

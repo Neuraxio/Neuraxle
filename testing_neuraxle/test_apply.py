@@ -1,6 +1,11 @@
-from neuraxle.base import Identity
+import pytest
+from neuraxle.base import BaseStep
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import Identity, NonFittableMixin
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
+from neuraxle.steps.flow import OptionalStep
 from neuraxle.steps.numpy import MultiplyByN
 from neuraxle.steps.output_handlers import OutputTransformerWrapper
 
@@ -125,3 +130,55 @@ def test_has_children_mixin_apply_should_return_recursive_dict_to_recursive_chil
     assert results['Pipeline__hp'] == 2
     assert results['Pipeline__c__hp'] == 3
     assert results['Pipeline__d__hp'] == 4
+
+
+class Mutating2TransformsStep(NonFittableMixin, BaseStep):
+
+    def __init__(self):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+
+    def transform(self, data_input):
+        raise AssertionError("Mutate failed. Should have entered in other methods.")
+
+    def transform_a(self, data_input):
+        return ['a']
+
+    def transform_b(self, data_input):
+        return ['b']
+
+
+@pytest.mark.parametrize("step", [
+    Mutating2TransformsStep(),
+    OptionalStep(Mutating2TransformsStep()),
+    Pipeline([Mutating2TransformsStep()]),
+])
+def test_mutate(step: BaseStep):
+    dact = DACT(di=[0])
+    cx = CX()
+    with pytest.raises(AssertionError):
+        step.handle_transform(dact, cx)
+
+    step = step.mutate(new_method="transform_a", method_to_assign_to="transform")
+    _a = step.handle_transform(dact, cx).di
+    assert _a == ['a']
+
+    step = step.mutate(new_method="transform_b", method_to_assign_to="transform")
+    _b = step.handle_transform(dact, cx).di
+    assert _b == ['b']
+
+
+@pytest.mark.parametrize("step", [
+    Mutating2TransformsStep().will_mutate_to(Identity()),
+    OptionalStep(Mutating2TransformsStep().will_mutate_to(Identity())),
+    Pipeline([Mutating2TransformsStep().will_mutate_to(Identity())]),
+])
+def test_will_mutate_to(step: BaseStep):
+    dact = DACT(di=[0])
+    cx = CX()
+    with pytest.raises(AssertionError):
+        step.handle_transform(dact, cx)
+
+    step = step.mutate()
+    preds_dact = step.handle_transform(dact, cx)
+    assert preds_dact == dact

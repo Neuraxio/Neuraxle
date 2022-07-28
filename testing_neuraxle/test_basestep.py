@@ -17,7 +17,7 @@ def test_basestep_print_str_representation_works_correctly():
 
 def test_basestep_repr_representation_works_correctly():
     output = repr(SomeStepWithHyperparams())
-    assert output == """SomeStepWithHyperparams(name='MockStep', hyperparameters=HyperparameterSamples([('learning_rate', 0.1),
+    assert output == """SomeStepWithHyperparams(name='MockStep', hyperparams=HyperparameterSamples([('learning_rate', 0.1),
                        ('l2_weight_reg', 0.001),
                        ('hidden_size', 32),
                        ('num_layers', 3),
