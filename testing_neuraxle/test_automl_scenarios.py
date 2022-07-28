@@ -20,7 +20,7 @@ from neuraxle.metaopt.data.reporting import RoundReport
 from neuraxle.metaopt.data.vanilla import BaseDataclass, RoundDataclass, ScopedLocation
 from neuraxle.metaopt.optimizer import GridExplorationSampler
 from neuraxle.metaopt.repositories.json import HyperparamsOnDiskRepository
-from neuraxle.metaopt.repositories.repo import VanillaHyperparamsRepository
+from neuraxle.metaopt.repositories.repo import HyperparamsRepository, VanillaHyperparamsRepository
 from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.data import DataShuffler
@@ -212,12 +212,12 @@ def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
     [False, HyperparamsOnDiskRepository],
     [True, HyperparamsOnDiskRepository],
 ])
-def test_automl_use_a_json_repo_in_parallelized_round(use_processes, repoclass):
+def test_automl_use_a_json_repo_in_parallelized_round(use_processes, repoclass: Type[HyperparamsRepository]):
     for _ in range(1):  # Editable range for debugging if a flickering corner-case is rare.
         tmpdir = CX.get_new_cache_folder()
         len_x = 2 * 3 * 4 * 5
         dact = DACT(di=list(range(len_x)), eo=list(range(10, 10 + len_x)))
-        repo = repoclass(tmpdir)
+        repo = repoclass(tmpdir).with_lock()
         cx = AutoMLContext.from_context(repo=repo)
         sleep_step = Sleep(0.125, add_random_quantity=0.250)
         automl: ControlledAutoML = _create_automl_test_loop(
