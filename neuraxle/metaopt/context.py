@@ -95,7 +95,7 @@ class AutoMLContext(CX):
         if not new_context.has_service(HyperparamsRepository):
             new_context.register_service(
                 HyperparamsRepository,
-                repo or VanillaHyperparamsRepository(new_context.get_path())
+                repo.with_lock() or VanillaHyperparamsRepository(new_context.get_path()).with_lock()
             )
         if not new_context.has_service(ScopedLocation):
             new_context.register_service(

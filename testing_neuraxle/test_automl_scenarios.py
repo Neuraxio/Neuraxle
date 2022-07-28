@@ -19,6 +19,7 @@ from neuraxle.metaopt.data.aggregates import Round
 from neuraxle.metaopt.data.reporting import RoundReport
 from neuraxle.metaopt.data.vanilla import BaseDataclass, RoundDataclass, ScopedLocation
 from neuraxle.metaopt.optimizer import GridExplorationSampler
+from neuraxle.metaopt.repositories.db import SQLLiteHyperparamsRepository
 from neuraxle.metaopt.repositories.json import HyperparamsOnDiskRepository
 from neuraxle.metaopt.repositories.repo import HyperparamsRepository, VanillaHyperparamsRepository
 from neuraxle.metaopt.validation import ValidationSplitter
@@ -208,9 +209,12 @@ def test_automl_can_resume_last_run_and_retrain_best_with_0_trials(tmpdir):
 
 
 @pytest.mark.parametrize("use_processes,repoclass", [
-    [False, VanillaHyperparamsRepository],  # TODO: sql repo as well.
+    [False, VanillaHyperparamsRepository],
     [False, HyperparamsOnDiskRepository],
     [True, HyperparamsOnDiskRepository],
+    # TODO: 'SQLite objects created in a thread can only be used in that same thread.' would need a pack and unpack service method upon pre and post threading.
+    # [True, SQLLiteHyperparamsRepository],
+    # [False, SQLLiteHyperparamsRepository],
 ])
 def test_automl_use_a_json_repo_in_parallelized_round(use_processes, repoclass: Type[HyperparamsRepository]):
     for _ in range(1):  # Editable range for debugging if a flickering corner-case is rare.
