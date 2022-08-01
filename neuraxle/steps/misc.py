@@ -26,13 +26,13 @@ You can find here misc. pipeline steps, for example, callbacks useful for debugg
 
 import random
 import time
-from abc import ABC
-from typing import Any, Callable, List, Optional, Tuple
 import uuid
+from abc import ABC
+from typing import Any, Callable, List, Optional, Tuple, Union
 
-from neuraxle.base import BaseStep, BaseTransformer, NonFittableMixin
+from neuraxle.base import BaseStep, BaseTransformer
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.base import ForceHandleOnlyMixin, HandleOnlyMixin, MetaStep
+from neuraxle.base import ForceHandleOnlyMixin, HandleOnlyMixin, MetaStep, NonFittableMixin
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import RecursiveDict
 
@@ -213,8 +213,8 @@ class FitTransformCallbackStep(BaseStep):
 
 class CallbackWrapper(HandleOnlyMixin, MetaStep):
     """
-    A step that calls a callback function for each of his methods : transform, fit, fit_transform, and even inverse_transform.
-    To be used with :class:`TapeCallbackFunction`.
+    A step that calls a callback function for each of his methods: transform, fit, fit_transform, and even inverse_transform.
+    To be used with :class:`TapeCallbackFunction` most of the time, passed in the constructor.
 
     .. code-block:: python
 
@@ -233,9 +233,9 @@ class CallbackWrapper(HandleOnlyMixin, MetaStep):
     def __init__(
             self,
             wrapped,
-            transform_callback_function,
-            fit_callback_function,
-            inverse_transform_callback_function=None,
+            transform_callback_function: Union['TapeCallbackFunction', Callable],
+            fit_callback_function: Union['TapeCallbackFunction', Callable],
+            inverse_transform_callback_function: Union['TapeCallbackFunction', Callable] = None,
             more_arguments: List = tuple(),
             hyperparams=None
     ):

@@ -330,13 +330,14 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
 
         self.then_unflatten = then_unflatten
 
-        self.len_di = []
-        self.len_eo = []
-        self.len_ids = []
+        # Lengths temporarily stored in _will_process to be able to unflatten the data container in _did_process:
+        self.len_ids: List[int] = []
+        self.len_di: List[int] = []
+        self.len_eo: List[int] = []
 
     def _will_process(
         self, data_container: DACT, context: CX
-    ) -> Tuple['BaseStep', DACT]:
+    ) -> Tuple['BaseTransformer', DACT]:
         """
         Flatten data container before any processing is done on the wrapped step.
 
@@ -351,13 +352,23 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
             expected_outputs.fill(np.nan)
             data_container.set_expected_outputs(expected_outputs)
 
-        di, self.len_di = self._flatten_list(data_container.data_inputs)
         _id, self.len_ids = self._flatten_list(data_container.ids)
+        di, self.len_di = self._flatten_list(data_container.data_inputs)
         eo, self.len_eo = self._flatten_list(data_container.expected_outputs)
 
+        if len(di) != len(eo):
+            if all(v is None for v in eo):
+                eo = [None] * len(di)
+            else:
+                raise ValueError(
+                    'FlattenForEach: Cannot flatten data properly. Expected outputs has a different len than data inputs.')
+        if len(di) != len(eo):
+            raise ValueError(
+                'FlattenForEach: Cannot flatten data properly. IDs has a different len than data inputs.')
+
         flattened_data_container = DACT(
-            data_inputs=di,
             ids=_id,
+            data_inputs=di,
             expected_outputs=eo,
             sub_data_containers=data_container.sub_data_containers
         )
@@ -371,6 +382,7 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
         :param list_to_flatten: list to flatten
         :return: flattened list, len flattened lists
         """
+
         if not isinstance(list_to_flatten, np.ndarray):
             list_to_flatten = np.array(list_to_flatten)
 
@@ -395,9 +407,10 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
         data_container = super()._did_process(data_container, context)
 
         if self.then_unflatten:
+            data_container.set_ids(self._reaugment_list(data_container.ids, self.len_ids))
             data_container.set_data_inputs(self._reaugment_list(data_container.data_inputs, self.len_di))
             data_container.set_expected_outputs(self._reaugment_list(data_container.expected_outputs, self.len_eo))
-            data_container.set_ids(self._reaugment_list(data_container.ids, self.len_ids))
+            self.len_ids = []
             self.len_di = []
             self.len_eo = []
 
