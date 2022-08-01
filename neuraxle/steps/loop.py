@@ -318,17 +318,6 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
 class FlattenForEach(ForceHandleMixin, MetaStep):
     """
     Step that reduces a dimension instead of manually looping on it.
-
-    .. seealso::
-        :class:`~neuraxle.base.BaseStep`,
-        :class:`~neuraxle.base.BaseSaver`,
-        :class:`~neuraxle.base.BaseHasher`,
-        :class:`~neuraxle.base.MetaStepMixin`,
-        :class:`~neuraxle.base.NonTransformableMixin`,
-        :class:`~neuraxle.pipeline.Pipeline`,
-        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`~neuraxle.data_container.DataContainer`
     """
 
     def __init__(
