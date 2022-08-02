@@ -506,20 +506,23 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         return str(self)
 
     def __str__(self):
-        di_rep = self._str_data(self.di)
-        eo_rep = self._str_data(self.eo)
+        di_rep = self._str_data(self.data_inputs)
+        eo_rep = self._str_data(self.expected_outputs)
         return (
             f"{self.__class__.__name__}("
-            f"ids={repr(list(self.ids))}, "
+            f"ids={repr(list(self._ids))}, "
             f"di={di_rep}, "
             f"eo={eo_rep})"
         )
 
     def _str_data(self, _idata: DACTData) -> str:
+        if _idata is None:
+            return str(None)
         if hasattr(_idata, '__len__'):
             if len(_idata) > 10:
-                _len_rep = ("<of len=" + str(len(self.di)) + ">") if hasattr(self.di, "__len__") else ""
-                _rep = f"{type(self.di)}{_len_rep}"
+                _shortrepr = repr(_idata[:10]) + "+..."
+                _len_rep = (f"<{_shortrepr} of len={len(self.di)}>") if hasattr(self.di, "__len__") else "..?"
+                _rep = f"{type(self.di)}[{_len_rep}]"
             else:
                 _rep = repr(_idata)
         return _rep
