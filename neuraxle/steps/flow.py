@@ -566,17 +566,17 @@ class SelectNonEmptyDataContainer(TransformHandlerOnlyMixin, BaseTransformer):
 
     def _transform_data_container(self, data_container: DACT, context: CX):
 
-        data_containers = list(filter(
-            lambda dc: (len(dc.di) > 0 and len(dc.eo) > 0),
+        filtered_data_containers = list(filter(
+            lambda dc: (len(dc.data_inputs) > 0 or len(dc.expected_outputs) > 0),
             data_container.data_inputs
         ))
-        if len(data_containers) == 1:
-            return data_containers[0]
+        if len(filtered_data_containers) == 1:
+            return filtered_data_containers[0]
         else:
             return DACT(
-                ids=data_container.ids,
-                di=list(map(attrgetter("di"))),
-                eo=list(map(attrgetter("eo"))),
+                ids=data_container._ids,
+                di=list(map(attrgetter("data_inputs"))),
+                eo=list(map(attrgetter("expected_outputs"))),
             )
 
 
