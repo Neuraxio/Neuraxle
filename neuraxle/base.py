@@ -1999,7 +1999,7 @@ class _FittableStep(MixinForBaseService):
         :param context: execution context
         :return: (fitted self, data container)
         """
-        return self.fit(data_container.di, data_container.eo)
+        return self.fit(data_container.data_inputs, data_container.expected_outputs)
 
     def _did_fit(self, data_container: TrainDACT, context: CX) -> TrainDACT:
         """
@@ -2072,7 +2072,7 @@ class _FittableStep(MixinForBaseService):
         :param context: execution context
         :return: (fitted self, data container)
         """
-        new_self, out = self.fit_transform(data_container.di, data_container.eo)
+        new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
         data_container.set_data_inputs(out)
 
         return new_self, data_container
@@ -4273,7 +4273,7 @@ class DidProcessAssertionMixin(AssertionMixin):
 
 class AssertExpectedOutputIsNoneMixin(WillProcessAssertionMixin):
     def _assert_at_lifecycle(self, data_container: DACT, context: CX):
-        eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.eo)
+        eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
         self._assert(
             eo_empty,
             f"Expected datacontainer.expected_outputs to be a `None` or a list of `None`. Received {data_container.expected_outputs}.",
@@ -4283,7 +4283,7 @@ class AssertExpectedOutputIsNoneMixin(WillProcessAssertionMixin):
 
 class AssertExpectedOutputIsNotNoneMixin(WillProcessAssertionMixin):
     def _assert_at_lifecycle(self, data_container: DACT, context: CX):
-        eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.eo)
+        eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
         self._assert(
             not eo_empty,
             f"Expected datacontainer.expected_outputs to not be a `None` nor a list of `None`. Received {data_container.expected_outputs}.",

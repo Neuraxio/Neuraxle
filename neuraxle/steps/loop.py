@@ -381,7 +381,7 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
         :param list_to_flatten: list to flatten
         :return: flattened list, len flattened lists
         """
-        if _data is None:
+        if _data is None or all(v is None for v in _data):
             return None, []
 
         if len(_data) != 0:
