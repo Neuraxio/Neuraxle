@@ -677,6 +677,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
             step.start(context, logging_queue)
 
         # prepare minibatch iterator:
+        data_container.set_ids(data_container.ids)
         minibatch_iterator: Iterable[DACT[IDT, DIT, EOT]] = data_container.minibatches(
             batch_size=self.batch_size,
             keep_incomplete_batch=self.keep_incomplete_batch,

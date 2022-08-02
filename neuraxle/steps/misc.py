@@ -33,6 +33,7 @@ from typing import Any, Callable, List, Optional, Tuple, Union
 from neuraxle.base import BaseStep, BaseTransformer
 from neuraxle.base import ExecutionContext as CX
 from neuraxle.base import ForceHandleOnlyMixin, HandleOnlyMixin, MetaStep, NonFittableMixin
+from neuraxle.data_container import DIT, EOT
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import RecursiveDict
 
@@ -332,13 +333,13 @@ class TapeCallbackFunction:
 
     def __init__(self):
         """Initialize the tape (cache lists)."""
-        self.data: List = []
+        self.data: List[Union[DIT, Tuple[DIT, EOT]]] = []  # at each time the callback is called, data is appened.
         self.name_tape: List[str] = []
 
     def __call__(self, *args, **kwargs):
         return self.callback(*args, **kwargs)
 
-    def callback(self, data, name: str = ""):
+    def callback(self, data: Tuple[DIT, EOT], name: str = ""):
         """
         Will stick the data and name to the tape.
 

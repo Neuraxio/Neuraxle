@@ -363,9 +363,9 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         """
         for i in range(0, len(self.data_inputs), batch_size):
             data_container: DACT[IDT, DIT, EOT] = DACT(
-                ids=self._ids[i:i + batch_size] if self._ids is not None else None,
-                data_inputs=self.data_inputs[i:i + batch_size] if self.data_inputs is not None else None,
-                expected_outputs=self.expected_outputs[i:i + batch_size] if self.expected_outputs is not None else None
+                ids=self.ids[i:i + batch_size] if self._ids is not None else None,
+                data_inputs=self.di[i:i + batch_size] if self.data_inputs is not None else None,
+                expected_outputs=self.eo[i:i + batch_size] if self.expected_outputs is not None else None
             )
 
             incomplete_batch = len(data_container.data_inputs) < batch_size

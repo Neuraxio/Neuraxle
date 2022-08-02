@@ -1,14 +1,13 @@
 import numpy as np
 import pytest
-
 from neuraxle.base import CX, BaseTransformer, ForceHandleMixin
+from neuraxle.data_container import EOT
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.space import HyperparameterSamples
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.misc import FitCallbackStep, TapeCallbackFunction
 from neuraxle.steps.numpy import MultiplyByN
-from neuraxle.steps.output_handlers import OutputTransformerWrapper, InputAndOutputTransformerWrapper, \
-    InputAndOutputTransformerMixin
+from neuraxle.steps.output_handlers import InputAndOutputTransformerWrapper, OutputTransformerWrapper
 
 
 class MultiplyByNInputAndOutput(BaseTransformer):
@@ -47,7 +46,8 @@ def test_output_transformer_wrapper_should_fit_with_data_inputs_and_expected_out
 
     assert np.array_equal(tape.data[0][0], expected_outputs)
     for i in range(10):
-        assert tape.data[0][1][i] is None
+        _first_eot_seen: EOT = tape.data[0][1]
+        assert _first_eot_seen is None
 
 
 def test_output_transformer_wrapper_should_fit_transform_with_data_inputs_and_expected_outputs():
@@ -64,7 +64,8 @@ def test_output_transformer_wrapper_should_fit_transform_with_data_inputs_and_ex
     assert np.array_equal(data_container.expected_outputs, expected_outputs * 2)
     assert np.array_equal(tape.data[0][0], expected_outputs * 2)
     for i in range(10):
-        assert tape.data[0][1][i] is None
+        _first_eot_seen: EOT = tape.data[0][1]
+        assert _first_eot_seen is None
 
 
 def test_output_transformer_wrapper_should_transform_with_data_inputs_and_expected_outputs():
