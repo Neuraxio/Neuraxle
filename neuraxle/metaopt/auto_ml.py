@@ -120,13 +120,13 @@ class Trainer(BaseService):
             eval_dact_train = p.handle_predict(
                 train_dact.without_eo(),
                 trial_split_scope.context.validation())
-            eval_dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_train.with_eo(train_dact.eo)
+            eval_dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_train.with_eo(train_dact.expected_outputs)
 
             if val_dact is not None:
                 eval_dact_valid = p.handle_predict(
                     val_dact.without_eo(),
                     trial_split_scope.context.validation())
-                eval_dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_valid.with_eo(val_dact.eo)
+                eval_dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_valid.with_eo(val_dact.expected_outputs)
             else:
                 eval_dact_valid = None
 

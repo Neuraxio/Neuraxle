@@ -361,9 +361,9 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         """
         for i in range(0, len(self.data_inputs), batch_size):
             data_container: DACT[IDT, DIT, EOT] = DACT(
-                ids=self.ids[i:i + batch_size],
-                data_inputs=self.di[i:i + batch_size],
-                expected_outputs=self.eo[i:i + batch_size]
+                ids=self.ids[i:i + batch_size] if self.ids is not None else None,
+                data_inputs=self.di[i:i + batch_size] if self.data_inputs is not None else None,
+                expected_outputs=self.eo[i:i + batch_size] if self.expected_outputs is not None else None
             )
 
             incomplete_batch = len(data_container.data_inputs) < batch_size
@@ -770,21 +770,23 @@ def _pad_incomplete_batch(
             batch_size=batch_size
         ) if pad_ids else data_container.ids,
         data_inputs=_pad_data(
-            data_container.di,
+            data_container.data_inputs,
             default_value=default_value_data_inputs,
             batch_size=batch_size
-        ) if pad_di else data_container.di,
+        ) if pad_di else data_container.data_inputs,
         expected_outputs=_pad_data(
-            data_container.eo,
+            data_container.expected_outputs,
             default_value=default_value_expected_outputs,
             batch_size=batch_size
-        ) if pad_eo else data_container.eo
+        ) if pad_eo else data_container.expected_outputs,
     )
 
     return data_container
 
 
-def _pad_data(data: Iterable, default_value: Any, batch_size: int):
+def _pad_data(data: DACTData, default_value: Any, batch_size: int):
+    if data is None:
+        return None
     data_ = []
     data_.extend(data)
     padding = copy.copy([default_value] * (batch_size - len(data)))
