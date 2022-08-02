@@ -268,7 +268,9 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         self.expected_outputs: EOT = expected_outputs
         return self
 
-    def get_ids_summary(self) -> str:
+    def get_ids_summary(self) -> Optional[str]:
+        if self._ids is None:
+            return None
         return ','.join([str(i) for i in self.ids if i is not None])
 
     def add_sub_data_container(self, name: str, data_container: 'DACT') -> 'DACT':
@@ -537,12 +539,14 @@ EvalEOTDACT = DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED]  # a merge of ValidDACT 
 class ExpandedDataContainer(DACT):
     """
     Sub class of DataContainer to expand data container dimension.
+    This is akin from passing from `shape` to `[1, *shape]`
+    when using :func:`ExpandedDataContainer.create_from`.
 
     .. seealso::
         :class:`DataContainer`
     """
 
-    def __init__(self, data_inputs, ids, expected_outputs, old_ids):
+    def __init__(self, data_inputs, ids, expected_outputs, _old_ids):
         DACT.__init__(
             self,
             ids=ids,
@@ -550,7 +554,24 @@ class ExpandedDataContainer(DACT):
             eo=expected_outputs,
         )
 
-        self.old_ids = old_ids
+        self._old_ids = _old_ids
+
+    @staticmethod
+    def create_from(data_container: DACT) -> 'ExpandedDataContainer':
+        """
+        Create ExpandedDataContainer with a summary id for the new id.
+        This is akin from passing from `shape` to `[1, *shape]`.
+
+        :param data_container: data container to transform
+        :type data_container: DataContainer
+        :return: expanded data container
+        """
+        return ExpandedDataContainer(
+            ids=[data_container.get_ids_summary()],
+            data_inputs=[data_container.data_inputs] if data_container.data_inputs is not None else None,
+            expected_outputs=[data_container.expected_outputs] if data_container.expected_outputs is not None else None,
+            _old_ids=data_container._ids
+        )
 
     def reduce_dim(self) -> 'DACT':
         """
@@ -564,27 +585,10 @@ class ExpandedDataContainer(DACT):
                 'Invalid Expanded Data Container. Please create ExpandedDataContainer with ExpandedDataContainer.create_from(data_container) method.')
 
         return DACT(
-            data_inputs=self.di[0],
-            ids=self.old_ids,
-            expected_outputs=self.eo[0],
+            ids=self._old_ids,
+            data_inputs=self.data_inputs[0] if self.data_inputs is not None else None,
+            expected_outputs=self.expected_outputs[0] if self.expected_outputs is not None else None,
             sub_data_containers=self.sub_data_containers
-        )
-
-    @staticmethod
-    def create_from(data_container: DACT) -> 'ExpandedDataContainer':
-        """
-        Create ExpandedDataContainer with a summary id for the new single id.
-
-        :param data_container: data container to transform
-        :type data_container: DataContainer
-        :return: expanded data container
-        :rtype: ExpandedDataContainer
-        """
-        return ExpandedDataContainer(
-            ids=[data_container.get_ids_summary()],
-            data_inputs=[data_container.di],
-            expected_outputs=[data_container.eo],
-            old_ids=data_container.ids
         )
 
 
@@ -616,12 +620,12 @@ class ZipDataContainer(DACT):
             expected_outputs = tuple(
                 zip(*map(attrgetter("eo"), [data_container] + list(other_data_containers))))
         else:
-            expected_outputs = data_container.eo
+            expected_outputs = data_container.expected_outputs
 
         return ZipDataContainer(
             data_inputs=new_data_inputs,
             expected_outputs=expected_outputs,
-            ids=data_container.ids,
+            ids=data_container._ids,
             sub_data_containers=data_container.sub_data_containers
         )
 

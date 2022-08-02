@@ -39,14 +39,14 @@ control logic to the flow of data into the steps:
 from operator import attrgetter
 from typing import Callable, Dict, Optional, Tuple, Union
 
-from neuraxle.base import (CX, DACT, BaseStep, BaseTransformer, ExecutionPhase,
-                           ForceHandleOnlyMixin, HandleOnlyMixin, MetaStep,
-                           NonFittableMixin, TransformHandlerOnlyMixin,
-                           TruncableSteps)
+from neuraxle.base import BaseStep, BaseTransformer
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import (ExecutionPhase, ForceHandleOnlyMixin, HandleOnlyMixin, MetaStep, NonFittableMixin,
+                           TransformHandlerOnlyMixin, TruncableSteps)
+from neuraxle.data_container import DataContainer as DACT
 from neuraxle.data_container import ExpandedDataContainer
 from neuraxle.hyperparams.distributions import Boolean, Choice
-from neuraxle.hyperparams.space import (HyperparameterSamples,
-                                        HyperparameterSpace)
+from neuraxle.hyperparams.space import HyperparameterSamples, HyperparameterSpace
 from neuraxle.steps.numpy import NumpyConcatenateOnAxisIfNotEmpty
 from neuraxle.union import FeatureUnion
 
@@ -545,7 +545,7 @@ class SelectNonEmptyDataInputs(TransformHandlerOnlyMixin, BaseTransformer):
             data_inputs = data_inputs[0]
 
         data_container = DACT(data_inputs=data_inputs, ids=data_container.ids,
-                                       expected_outputs=data_container.expected_outputs)
+                              expected_outputs=data_container.expected_outputs)
 
         return data_container
 
@@ -584,6 +584,10 @@ class ExpandDim(MetaStep):
     """
     Similar to numpys expand_dim function, ExpandDim step expands the dimension of all the data inside the data container.
     ExpandDim sends the expanded data container to the wrapped step.
+
+    This is akin from passing the dact data from `shape` to `[1, *shape]` within the wrapped step,
+    to then by default go back to the original shape (optional). The ids will now contain a summary id temporarily.
+
     ExpandDim returns the transformed expanded dim reduced to its original shape (see :func:`~neuraxle.steps.loop.ExpandedDataContainer.reduce_dim`).
 
     The wrapped step will receive a single current_id, data_input, and expected output:
@@ -592,23 +596,23 @@ class ExpandDim(MetaStep):
         - The expected_outputs is a list of one element that contains the original expected outputs list.
 
     .. seealso::
-        :class:`~neuraxle.base.ForceAlwaysHandleMixin`,
-        :class:`~neuraxle.base.MetaStepMixin`,
-        :class:`~neuraxle.base.BaseStep`
-        :class:`~neuraxle.base.BaseHasher`
         :class:`~neuraxle.data_container.ExpandedDataContainer`
     """
 
-    def __init__(self, wrapped: BaseTransformer):
+    def __init__(self, wrapped: BaseTransformer, then_unexpand: bool = True):
         MetaStep.__init__(self, wrapped)
 
-    def _will_process(self, data_container, context):
+        self.then_unexpand: bool = then_unexpand
+
+    def _will_process(self, data_container: DACT, context: CX) -> Tuple[ExpandedDataContainer, CX]:
         data_container, context = BaseStep._will_process(self, data_container, context)
         return ExpandedDataContainer.create_from(data_container), context
 
-    def _did_process(self, data_container: DACT, context: CX):
-        data_container = super()._did_process(data_container, context)
-        return data_container.reduce_dim()
+    def _did_process(self, data_container: ExpandedDataContainer, context: CX) -> DACT:
+        data_container: ExpandedDataContainer = super()._did_process(data_container, context)
+        if self.then_unexpand:
+            data_container = data_container.reduce_dim()
+        return data_container
 
 
 class ReversiblePreprocessingWrapper(HandleOnlyMixin, TruncableSteps):
