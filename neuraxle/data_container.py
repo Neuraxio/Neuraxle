@@ -500,7 +500,13 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         :return: iterator of tuples containing ids, data_inputs, and expected outputs
         :rtype: Iterator[Tuple]
         """
-        return zip(self.ids, self.di, self.eo)
+        _ids: Optional[List[DACTData]] = self.ids
+        _di: Optional[List[DACTData]] = self.di
+        _eo: Optional[List[DACTData]] = self.eo
+        if None in (_ids, _di, _eo):
+            # return empty iterator if one of the three is None
+            return iter(())
+        return zip(_ids, _di, _eo)
 
     def __repr__(self):
         return str(self)
