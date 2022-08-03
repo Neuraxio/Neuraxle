@@ -26,10 +26,10 @@ Classes for containing the data that flows throught the pipeline steps.
 import copy
 import math
 from operator import attrgetter
-from typing import (Any, Callable, Generic, Iterable, Iterator, List, Optional,
-                    Tuple, TypeVar, Union)
+from typing import Any, Callable, Generic, Iterable, Iterator, List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
+import pandas as pd
 
 NamedDACTTuple = Tuple[str, 'DataContainer']
 IDT = TypeVar('IDT', bound=Iterable)  # Ids Type that is often a list of things
@@ -235,6 +235,9 @@ class DataContainer(Generic[IDT, DIT, EOT]):
 
     def with_eo(self, eo: EOT) -> 'DACT[IDT, DIT, EOT]':
         return self.copy().set_expected_outputs(eo)
+
+    def with_ids(self, ids: DIT) -> 'DACT[IDT, DIT, EOT]':
+        return self.copy().set_ids(ids)
 
     def set_ids(self, ids: IDT) -> 'DACT':
         """
@@ -515,26 +518,39 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         return str(self)
 
     def __str__(self):
-        di_rep = self._str_data(self.data_inputs)
-        eo_rep = self._str_data(self.expected_outputs)
+        ids = self._ids
+        di = self.data_inputs
+        eo = self.expected_outputs
+        ids_rep = self._str_data(ids)
+        di_rep = self._str_data(di)
+        eo_rep = self._str_data(eo)
         return (
-            f"{self.__class__.__name__}("
-            f"ids={repr(list(self._ids))}, "
-            f"di={di_rep}, "
-            f"eo={eo_rep})"
+            f"{self.__class__.__name__}[{type(ids).__name__}, {type(di).__name__}, {type(eo).__name__}](\n"
+            f"\tids={ids_rep},\n"
+            f"\tdi={di_rep},\n"
+            f"\teo={eo_rep}\n)"
         )
 
     def _str_data(self, _idata: DACTData) -> str:
         if _idata is None:
             return str(None)
-        if hasattr(_idata, '__len__'):
-            if len(_idata) > 10:
-                _shortrepr = repr(_idata[:10]) + "+..."
-                _len_rep = (f"<{_shortrepr} of len={len(self.di)}>") if hasattr(self.di, "__len__") else "..?"
-                _rep = f"{type(self.di)}[{_len_rep}]"
-            else:
-                _rep = repr(_idata)
-        return _rep
+
+        if len(_idata) > 10 and hasattr(_idata, '__getitem__'):
+            _shortrepr = repr(_idata[:15])
+        else:
+            _shortrepr = repr(_idata)
+        _shortrepr = _shortrepr[:70] + ("" if len(_shortrepr) < 70 else "...")
+
+        _len = "len=?"
+        if isinstance(_idata, pd.DataFrame):
+            _len = f"shape={_idata.values.shape}"
+        elif isinstance(_idata, np.ndarray):
+            _len = f"shape={_idata.shape}"
+        elif hasattr(_idata, "__len__"):
+            _len = f"len={len(_idata)}"
+
+        _len_rep = f"<`{_shortrepr}` of {_len}>"
+        return _len_rep.replace("\n", " ").replace("\t", " ").replace("    ", " ")
 
     def __len__(self):
         return len(self.data_inputs)

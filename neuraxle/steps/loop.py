@@ -360,10 +360,12 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
                     eo = [None] * len(di)
                 else:
                     raise ValueError(
-                        'FlattenForEach: Cannot flatten data properly. Expected outputs has a different len than data inputs.')
+                        f"FlattenForEach: Cannot flatten data properly. Expected outputs has a different len than data "
+                        f"inputs for DACT: {data_container}.")
             if _ids is not None and len(di) != len(_ids):
                 raise ValueError(
-                    'FlattenForEach: Cannot flatten data properly. IDs has a different len than data inputs.')
+                    f"FlattenForEach: Cannot flatten data properly. IDs has a different len than data inputs "
+                    f"for DACT: {data_container}.")
 
         flattened_data_container = DACT(
             ids=_ids,
