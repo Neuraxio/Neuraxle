@@ -349,23 +349,9 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
         """
         data_container, context = super()._will_process(data_container, context)
 
-        _ids, self.len_ids = self._flatten_list(data_container._ids)
+        _ids, self.len_ids = self._flatten_list(data_container._ids)  # TODO: strings here shouldn't be iterated over.
         di, self.len_di = self._flatten_list(data_container.data_inputs)
         eo, self.len_eo = self._flatten_list(data_container.expected_outputs)
-
-        # Data consitency checks:
-        if di is not None:
-            if eo is not None and len(di) != len(eo):
-                if all(v is None for v in eo):
-                    eo = [None] * len(di)
-                else:
-                    raise ValueError(
-                        f"FlattenForEach: Cannot flatten data properly. Expected outputs has a different len than data "
-                        f"inputs for DACT: {data_container}.")
-            if _ids is not None and len(di) != len(_ids):
-                raise ValueError(
-                    f"FlattenForEach: Cannot flatten data properly. IDs has a different len than data inputs "
-                    f"for DACT: {data_container}.")
 
         flattened_data_container = DACT(
             ids=_ids,
@@ -373,6 +359,8 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
             expected_outputs=eo,
             sub_data_containers=data_container.sub_data_containers
         )
+
+        self._invariant(data_container, flattened_data_container)
 
         return flattened_data_container, context
 
@@ -402,20 +390,22 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
         """
         Reaugment the flattened data container back to its full original shape using lists.
         """
-        data_container = super()._did_process(data_container, context)
+        reaug_dact = super()._did_process(data_container, context).copy()
 
         if self.then_unflatten:
-            if data_container._ids is not None:
-                data_container.set_ids(self._reaugment_list(data_container.ids, self.len_ids))
-            if data_container.data_inputs is not None:
-                data_container.set_data_inputs(self._reaugment_list(data_container.data_inputs, self.len_di))
-            if data_container.expected_outputs is not None:
-                data_container.set_expected_outputs(self._reaugment_list(data_container.expected_outputs, self.len_eo))
+            if reaug_dact._ids is not None:
+                reaug_dact.set_ids(self._reaugment_list(reaug_dact.ids, self.len_ids))
+            if reaug_dact.data_inputs is not None:
+                reaug_dact.set_data_inputs(self._reaugment_list(reaug_dact.data_inputs, self.len_di))
+            if reaug_dact.expected_outputs is not None:
+                reaug_dact.set_expected_outputs(self._reaugment_list(reaug_dact.expected_outputs, self.len_eo))
             self.len_ids = []
             self.len_di = []
             self.len_eo = []
 
-        return data_container
+        self._invariant(reaug_dact, data_container)
+
+        return reaug_dact
 
     def _reaugment_list(self, _data: DACTData, flattened_dims_lengths: List[lens]) -> List[DACTData]:
         """
@@ -432,3 +422,23 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
             i += list_length
 
         return reaugmented_list
+
+    def _invariant(self, augmented_dact, flattened_dact):
+        """
+        Data consitency checks.
+        """
+        _raise = False
+        if flattened_dact.di is not None:
+            if flattened_dact.eo is not None and len(flattened_dact.di) != len(flattened_dact.eo):
+                if all(v is None for v in flattened_dact.eo):
+                    flattened_dact.eo = [None] * len(flattened_dact.di)
+                else:
+                    _raise = True
+            if flattened_dact._ids is not None and len(flattened_dact.di) != len(flattened_dact._ids):
+                _raise = True
+        if _raise:
+            raise ValueError(
+                f"FlattenForEach: Cannot flatten or unflatten data properly. Expected outputs has a "
+                f"different len than data inputs for flattened DACT: {flattened_dact}, and for "
+                f"augmented DACT: {augmented_dact}."
+            )
