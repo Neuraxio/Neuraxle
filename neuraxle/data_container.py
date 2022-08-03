@@ -501,7 +501,7 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         :rtype: Iterator[Tuple]
         """
         if self.data_inputs is None:
-            return iter()
+            return iter(())
 
         _ids: Optional[List[DACTData]] = self.ids
         _di: Optional[List[DACTData]] = self.di
