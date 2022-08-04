@@ -509,6 +509,8 @@ class _DatabaseLoggerHandlerMixin:
 
 class DatabaseHyperparamRepository(_DatabaseLoggerHandlerMixin, HyperparamsRepository):
     def __init__(self, engine, session):
+        HyperparamsRepository.__init__(self)
+        _DatabaseLoggerHandlerMixin.__init__(self)
         self.engine = engine
         self.session = session
 
@@ -553,7 +555,7 @@ class SQLLiteHyperparamsRepository(DatabaseHyperparamRepository):
         _Session.configure(bind=engine)
         session = _Session()
 
-        super().__init__(engine, session)
+        DatabaseHyperparamRepository.__init__(self, engine, session)
         self.create_db()
 
 

@@ -330,9 +330,7 @@ class _HasRecursiveMethods:
     An internal class to represent a step that has recursive methods.
     The apply :func:`apply` function is used to apply a method to a step and its children.
 
-
-    Example usage :
-
+    Example usage:
 
     .. code-block:: python
 
@@ -502,6 +500,38 @@ class _HasRecursiveMethods:
                 f'Method {method} of {self} must return None or a RecursiveDict, as it is applied recursively.')
         return results
 
+    def __str__(self) -> str:
+        """
+        Return a pretty representation of the step or service.
+        Use :func:`~neuraxle.base.BaseTransformer.__repr__`, for a more
+        detailed string representation if needed.
+
+        :return: return pretty representation such as ``StepName(name='StepName')``.
+        """
+        return self._repr(verbose=False)
+
+    def __repr__(self) -> str:
+        """
+        Return a detailed and pretty representation of the pipeline step.
+        Use :func:`~neuraxle.base.BaseTransformer.__str__`, for a less
+        detailed string representation if needed.
+
+        :return: return pretty representation, such as ``StepName(name='StepName', hyperparameters=HyperparameterSamples({...}))``.
+        """
+        return self._repr(verbose=True)
+
+    def _repr(self, level=0, verbose=False):
+        output = self.__class__.__name__ + '('
+        output += self._repr_params(level=level, verbose=verbose).replace(', ', '', 1)
+        return output + ')'
+
+    def _repr_params(self, level=0, verbose=False) -> str:
+        output = ''
+        has_name = self.__class__.__name__ != self.name
+        if has_name:
+            output += ", name='" + self.name + "'"
+        return output
+
 
 class _HasConfig(ABC):
     """
@@ -576,6 +606,13 @@ class _HasConfig(ABC):
 
     def _get_config(self) -> RecursiveDict:
         return self.config
+
+    def _repr_params(self, level=0, verbose=False):
+        if verbose:
+            conf: RecursiveDict = self._get_config()
+            if len(conf) > 0:
+                return ", config=" + pprint.pformat(conf)
+        return ''
 
 
 class _CanMutate:
@@ -693,6 +730,16 @@ class BaseService(
         _HasRecursiveMethods.__init__(self, name=name)
         _HasConfig.__init__(self, config=config)
         _CanMutate.__init__(self)
+
+    def _repr_params(self, level=0, verbose=False):
+        output = ""
+        _name = _HasRecursiveMethods._repr_params(self, level=level, verbose=verbose)
+        output += _name
+        _config = _HasConfig._repr_params(self, level=level, verbose=verbose)
+        if not (len(_name) > 0):
+            _config = _config.replace(', ', '', 1)
+        output += _config
+        return output
 
 
 BaseServiceT = TypeVar('BaseServiceT', bound=BaseService)
@@ -835,13 +882,7 @@ class MetaServiceMixin(_HasChildrenMixin):
     def _repr(self, level=0, verbose=False) -> str:
         output = self.__class__.__name__ + "("
         output += self.wrapped._repr(level=level + 1, verbose=verbose)
-        has_name = self.__class__.__name__ != self.name
-        if has_name:
-            output += ", name='" + self.name + "'"
-        if verbose:
-            conf: RecursiveDict = self._get_config()
-            if len(conf) > 0:
-                output += ", config=" + pprint.pformat(conf)
+        output += self._repr_params(level, verbose)
         output += ")"
         return output
 
@@ -924,6 +965,63 @@ class _TruncableMixin:
             # Since we're remplacing ourselves with a new step, we don't have to call mutate on our childrens since
             # they won't exist afterward.
             return BaseStep.mutate(self, new_method, method_to_assign_to, warn)
+
+    def _repr(self, level=0, verbose=False) -> str:
+
+        output = self.__class__.__name__ + "("
+        output += self._repr_children(level, verbose)
+        has_name = self.__class__.__name__ != self.name
+        if has_name:
+            output += ", name='" + self.name + "'"
+        if verbose:
+            hps: HyperparameterSamples = self._get_hyperparams()
+            if len(hps) > 0:
+                output += ", hyperparams=" + pprint.pformat(hps)
+        output += ")"
+        return output
+
+    def _repr_children(self, level, verbose) -> str:
+        """
+        Returns a string representation of the children of the step like this:
+
+        .. code-block:: python
+            output = '''[
+                ChildrenA,
+                ChildrenB,
+                ChildrenC
+            ]'''
+
+        """
+        output = ""
+
+        children: List[BaseService] = self.get_children()
+        is_compact: bool = len(children) < 2
+
+        tab0 = "    " * level
+        tab1 = "    " * (level + 1)
+        _nl = "\n"
+        _nl2 = _nl
+        if is_compact:
+            tab1 = ""
+            _nl = ""
+            _nl2 = " "
+
+        output += "["
+        childs_reprs = []
+        for child in children:
+            # TODO: add this line: [above line...] `if hasattr(child, '_repr') else repr(child)`, but still use the try.
+            try:
+                c_repr = child._repr(level=level + 1, verbose=verbose)
+            except Exception as e:
+                # raise Exception(f"Could not repr child `{child}` of self `{self}`:\n{e}") from e
+                # c_repr = child._repr(level=level + 1, verbose=verbose)
+                c_repr = repr(child)  # TODO: breakpoint here.
+            childs_reprs.append(c_repr)
+
+        output += _nl + tab1 + ("," + _nl2 + tab1).join(childs_reprs)
+        output += _nl + (tab1 if is_compact else tab0) + "]"
+
+        return output
 
 
 class TruncableServiceMixin(_TruncableMixin, _HasChildrenMixin):
@@ -1599,7 +1697,18 @@ class ExecutionContext(TruncableService):
         shutil.rmtree(self.get_path())
 
     def __len__(self):
+        # TODO: on services instead maybe?
         return len(self.parents)
+
+    def _repr(self, level=0, verbose=False) -> str:
+        output = self.__class__.__name__
+        output += f'<{self.get_identifier()}>('
+        output += self._repr_children(level, verbose)
+        level += 1
+        if len(self.parents) > 0 and verbose is True:
+            output += f",\n{'    ' * level}parents[0]={self.parents[0]._repr(level, verbose)}"
+        output += ')'
+        return output
 
 
 CX = ExecutionContext
@@ -1989,6 +2098,7 @@ class _FittableStep(MixinForBaseService):
         :return: (data container, execution context)
         """
         self._invalidate()
+        repr(context)  # TODO: remove this.
         return data_container, context.push(self)
 
     def _fit_data_container(self, data_container: TrainDACT, context: CX) -> '_FittableStep':
@@ -2548,6 +2658,14 @@ class _HasHyperparams(MixinForBaseService):
         results: HyperparameterSamples = self.apply(method='_get_hyperparams')
         return results.to_flat_dict()
 
+    def _repr_params(self, level: int = 0, verbose: bool = False) -> str:
+        output = ''
+        if verbose:
+            hps: HyperparameterSamples = self._get_hyperparams()
+            if len(hps) > 0:
+                output += ", hyperparams=" + pprint.pformat(hps)
+        return output
+
 
 class _HasSavers(MixinForBaseService):
     """
@@ -2985,37 +3103,16 @@ class BaseTransformer(
         self.is_train = is_train
         return RecursiveDict()
 
-    def __str__(self) -> str:
-        """
-        Return a pretty representation of the pipeline step.
-        Use :func:`~neuraxle.base.BaseTransformer.__repr__`, for a more
-        detailed string representation if needed.
-
-        :return: return pretty representation such as ``StepName(name='StepName')``.
-        """
-        return self._repr(verbose=False)
-
-    def __repr__(self) -> str:
-        """
-        Return a detailed and pretty representation of the pipeline step.
-        Use :func:`~neuraxle.base.BaseTransformer.__str__`, for a less
-        detailed string representation if needed.
-
-        :return: return pretty representation, such as ``StepName(name='StepName', hyperparameters=HyperparameterSamples({...}))``.
-        """
-        return self._repr(verbose=True)
-
     def _repr(self, level=0, verbose=False) -> str:
         output = self.__class__.__name__ + "("
-        has_name: bool = self.__class__.__name__ != self.name
-        if has_name:
-            output += "name='" + self.name + "'"
-        if verbose:
-            hps: HyperparameterSamples = self._get_hyperparams()
-            if len(hps) > 0:
-                if has_name:
-                    output += ", "
-                output += "hyperparams=" + pprint.pformat(hps)
+        _params = BaseService._repr_params(self, level=level, verbose=verbose)
+        if _params.startswith(", "):
+            _params = _params.replace(', ', '', 1)
+        output += _params
+        _hparams = _HasHyperparams._repr_params(self, level=level, verbose=verbose)
+        if _hparams.startswith(", ") and len(_params) == 0:
+            _hparams = _hparams.replace(', ', '', 1)
+        output += _hparams
         output += ")"
         return output
 
@@ -3863,34 +3960,6 @@ class TruncableSteps(TruncableStepsMixin, BaseStep, ABC):
         new_self = copy(self)
         new_self = new_self.set_steps(self.steps_as_tuple + other.steps_as_tuple)
         return new_self
-
-    def _repr(self, level=0, verbose=False) -> str:
-        children = self.get_children()
-        is_compact: bool = len(children) < 2
-
-        tab0 = "    " * level
-        tab1 = "    " * (level + 1)
-        _nl = "\n"
-        _nl2 = _nl
-        if is_compact:
-            tab1 = ""
-            _nl = ""
-            _nl2 = " "
-
-        output = self.__class__.__name__ + "(["
-        output += _nl + tab1 + ("," + _nl2 + tab1).join(
-            [s._repr(level=level + 1, verbose=verbose) for s in children]
-        )
-        output += _nl + (tab1 if is_compact else tab0) + "]"
-        has_name = self.__class__.__name__ != self.name
-        if has_name:
-            output += ", name='" + self.name + "'"
-        if verbose:
-            hps: HyperparameterSamples = self._get_hyperparams()
-            if len(hps) > 0:
-                output += ", hyperparams=" + pprint.pformat(hps)
-        output += ")"
-        return output
 
 
 class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
