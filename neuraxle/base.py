@@ -936,8 +936,10 @@ ServiceName = Union[str, Type[BaseServiceT]]
 NamedServicesList = List[Union[Tuple[str, BaseServiceT], BaseServiceT]]
 
 
-class _TruncableMixin:
+class _TruncableMixin(MixinForBaseService):
     # TODO: Merge common code of TruncableServiceMixin and TruncableStepsMixin into this.
+    def __init__(self):
+        MixinForBaseService.__init__(self)
 
     def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=False) -> 'BaseTransformer':
         """
@@ -970,13 +972,7 @@ class _TruncableMixin:
 
         output = self.__class__.__name__ + "("
         output += self._repr_children(level, verbose)
-        has_name = self.__class__.__name__ != self.name
-        if has_name:
-            output += ", name='" + self.name + "'"
-        if verbose:
-            hps: HyperparameterSamples = self._get_hyperparams()
-            if len(hps) > 0:
-                output += ", hyperparams=" + pprint.pformat(hps)
+        output += self._repr_params(level, verbose)
         output += ")"
         return output
 
@@ -1009,13 +1005,15 @@ class _TruncableMixin:
         output += "["
         childs_reprs = []
         for child in children:
-            # TODO: add this line: [above line...] `if hasattr(child, '_repr') else repr(child)`, but still use the try.
             try:
-                c_repr = child._repr(level=level + 1, verbose=verbose)
-            except Exception as e:
+                if hasattr(child, '_repr'):
+                    c_repr = child._repr(level=level + 1, verbose=verbose)
+                else:
+                    c_repr = repr(child)
+            except:
                 # raise Exception(f"Could not repr child `{child}` of self `{self}`:\n{e}") from e
                 # c_repr = child._repr(level=level + 1, verbose=verbose)
-                c_repr = repr(child)  # TODO: breakpoint here.
+                c_repr = repr(child)  # breakpoint here if needed.
             childs_reprs.append(c_repr)
 
         output += _nl + tab1 + ("," + _nl2 + tab1).join(childs_reprs)
@@ -1028,6 +1026,7 @@ class TruncableServiceMixin(_TruncableMixin, _HasChildrenMixin):
 
     def __init__(self, services: Dict[ServiceName, 'BaseServiceT']):
         _HasChildrenMixin.__init__(self)
+        _TruncableMixin.__init__(self)
         self.set_services(services)
 
     def set_services(self, services: Dict[ServiceName, 'BaseServiceT']):
@@ -2098,7 +2097,6 @@ class _FittableStep(MixinForBaseService):
         :return: (data container, execution context)
         """
         self._invalidate()
-        repr(context)  # TODO: remove this.
         return data_container, context.push(self)
 
     def _fit_data_container(self, data_container: TrainDACT, context: CX) -> '_FittableStep':
@@ -3566,6 +3564,7 @@ class TruncableStepsMixin(_TruncableMixin, _HasChildrenMixin):
         mute_step_renaming_warning: bool = True,
     ):
         _HasChildrenMixin.__init__(self)
+        _TruncableMixin.__init__(self)
         self.warn_step_renaming = not mute_step_renaming_warning
         self.set_steps(steps_as_tuple, invalidate=False)
 
