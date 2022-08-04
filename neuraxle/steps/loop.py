@@ -28,7 +28,7 @@ from typing import Callable, List, Optional, Tuple, Union
 
 from neuraxle.base import (CX, DACT, BaseStep, BaseTransformer, ForceHandleMixin, ForceHandleOnlyMixin, Identity,
                            MetaStep, NamedStepsList, TruncableJoblibStepSaver)
-from neuraxle.data_container import DACTData, ListDataContainer
+from neuraxle.data_container import DIT, EOT, IDT, DACTData, ListDataContainer
 from neuraxle.steps.flow import ExecuteIf
 
 import numpy as np
@@ -336,22 +336,38 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
 
         self.then_unflatten = then_unflatten
 
+        self.spare_ids: Optional[IDT] = None
         # Lengths temporarily stored in _will_process to be able to unflatten the data container in _did_process:
         self.len_ids: List[lens] = []
         self.len_di: List[lens] = []
         self.len_eo: List[lens] = []
 
     def _will_process(
-        self, data_container: DACT, context: CX
+        self, data_container: DACT[Optional[Union[IDT, List[IDT]]], Optional[List[DIT]], Optional[List[EOT]]], context: CX
     ) -> Tuple['BaseTransformer', DACT]:
         """
         Flatten data container before any processing is done on the wrapped step, using lists.
         """
         data_container, context = super()._will_process(data_container, context)
 
-        _ids, self.len_ids = self._flatten_list(data_container._ids)  # TODO: strings here shouldn't be iterated over.
         di, self.len_di = self._flatten_list(data_container.data_inputs)
         eo, self.len_eo = self._flatten_list(data_container.expected_outputs)
+
+        # If is ID and not iterable nested thing, treat them as a special case that replicates the DIT:
+        if data_container._ids is not None and len(self.len_di) > 0 and all(isinstance(i, (str, int)) for i in data_container._ids):
+            # TODO: this code could be put inside the _flatten_list function to avoid duplicating it,
+            #           but it would be more complicated to implement as we'd need to consider the len_di
+            #           for the ids and eo and add a spare_eo as well.
+            self.spare_ids = data_container._ids
+            _ids: List[Union[int, str]] = sum([
+                copy.deepcopy([_id] * _count)
+                for _id, _count
+                in zip(self.spare_ids, self.len_di)
+            ], [])
+            self.len_ids = copy.copy(self.len_di)
+        else:
+            self.spare_ids = None
+            _ids, self.len_ids = self._flatten_list(data_container._ids)
 
         flattened_data_container = DACT(
             ids=_ids,
@@ -393,17 +409,21 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
         reaug_dact = super()._did_process(data_container, context).copy()
 
         if self.then_unflatten:
-            if reaug_dact._ids is not None:
-                reaug_dact.set_ids(self._reaugment_list(reaug_dact.ids, self.len_ids))
+            if reaug_dact._ids is not None and self.spare_ids is None:
+                reaug_dact.set_ids(self._reaugment_list(reaug_dact._ids, self.len_ids))
+            else:
+                reaug_dact.set_ids(self.spare_ids)
             if reaug_dact.data_inputs is not None:
                 reaug_dact.set_data_inputs(self._reaugment_list(reaug_dact.data_inputs, self.len_di))
             if reaug_dact.expected_outputs is not None:
                 reaug_dact.set_expected_outputs(self._reaugment_list(reaug_dact.expected_outputs, self.len_eo))
-            self.len_ids = []
-            self.len_di = []
-            self.len_eo = []
 
         self._invariant(reaug_dact, data_container)
+
+        self.spare_ids = None
+        self.len_ids = []
+        self.len_di = []
+        self.len_eo = []
 
         return reaug_dact
 

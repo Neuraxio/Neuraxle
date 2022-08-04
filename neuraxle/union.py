@@ -28,17 +28,16 @@ from typing import Tuple
 
 from joblib import Parallel, delayed
 
-from neuraxle.base import (BaseStep, BaseTransformer, DACT,
-                           CX, ForceHandleOnlyMixin, Identity,
-                           NamedStepsList, NonFittableMixin, TruncableSteps)
+from neuraxle.base import (CX, DACT, BaseStep, BaseTransformer, ForceHandleOnlyMixin, Identity, NamedStepsList,
+                           NonFittableMixin, TruncableSteps, _TruncableServiceWithBodyMixin)
 from neuraxle.data_container import ZipDataContainer
 from neuraxle.steps.numpy import NumpyConcatenateInnerFeatures
 
 
-class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
+class FeatureUnion(_TruncableServiceWithBodyMixin, ForceHandleOnlyMixin, TruncableSteps):
     """
     Transform features in parallel as the union of many pipeline steps.
-    
+
     This step is also available with true parallel processing threads or
     processes in the streaming package of Neuraxle.
 
@@ -82,6 +81,7 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
         steps_as_tuple.append(('joiner', joiner))
         TruncableSteps.__init__(self, steps_as_tuple)
         ForceHandleOnlyMixin.__init__(self, cache_folder=cache_folder_when_no_handle)
+        _TruncableServiceWithBodyMixin.__init__(self)
         self.n_jobs = n_jobs
         self.backend = backend
 
@@ -94,17 +94,17 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
         """
         # Actually fit:
         if self.n_jobs != 1:
-            fitted_steps = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
+            fitted_body = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
                 delayed(step.handle_fit)(data_container.copy(), context)
-                for _, step in self.steps_as_tuple[:-1]
+                for step in self.body
             )
         else:
-            fitted_steps = [
+            fitted_body = [
                 step.handle_fit(data_container.copy(), context)
-                for _, step in self.steps_as_tuple[:-1]
+                for step in self.body
             ]
 
-        self._save_fitted_steps(fitted_steps)
+        self._save_fitted_body(fitted_body)
 
         return self
 
@@ -118,12 +118,12 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
         if self.n_jobs != 1:
             data_containers = Parallel(backend=self.backend, n_jobs=self.n_jobs)(
                 delayed(step.handle_transform)(data_container.copy(), context)
-                for _, step in self.steps_as_tuple[:-1]
+                for step in self.body
             )
         else:
             data_containers = [
                 step.handle_transform(data_container.copy(), context)
-                for _, step in self.steps_as_tuple[:-1]
+                for step in self.body
             ]
 
         return DACT(
@@ -149,7 +149,7 @@ class FeatureUnion(ForceHandleOnlyMixin, TruncableSteps):
 
         return new_self, data_container
 
-    def _save_fitted_steps(self, fitted_steps):
+    def _save_fitted_body(self, fitted_steps):
         # Save fitted steps
         for i, fitted_step in enumerate(fitted_steps[:-1]):
             self.steps_as_tuple[i] = (self.steps_as_tuple[i][0], fitted_step)

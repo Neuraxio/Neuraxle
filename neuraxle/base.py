@@ -1022,6 +1022,37 @@ class _TruncableMixin(MixinForBaseService):
         return output
 
 
+class _TruncableServiceWithBodyMixin(MixinForBaseService):
+    """
+    This is a mixin to enable the .joiner and .body methods to be
+    used on a truncable step that has a joiner at its end.
+    """
+
+    def __init__(self):
+        MixinForBaseService.__init__(self)
+
+    @property
+    def joiner(self) -> BaseService:
+        """
+        returns `self[-1]`
+        """
+        return self[-1]
+
+    @property
+    def body(self) -> List[BaseService]:
+        """
+        returns `list(self.values())[:-1]`, that is all the steps except the last joiner.
+        """
+        return list(self.values())[:-1]
+
+    @property
+    def named_body(self) -> List[BaseService]:
+        """
+        returns `list(self.values())[:-1]`, that is all the steps except the last joiner.
+        """
+        return self[:-1]
+
+
 class TruncableServiceMixin(_TruncableMixin, _HasChildrenMixin):
 
     def __init__(self, services: Dict[ServiceName, 'BaseServiceT']):
@@ -2229,6 +2260,9 @@ class _CustomHandlerMethods(MixinForBaseService):
         :class:`~neuraxle.pipeline.MiniBatchSequentialPipeline`,
         :class:`~neuraxle.distributed.streaming.BaseQueuedPipeline`
     """
+
+    def __init__(self):
+        MixinForBaseService.__init__(self)
 
     def handle_fit(self, data_container: TrainDACT, context: CX) -> 'BaseStep':
         """

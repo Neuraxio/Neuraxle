@@ -37,14 +37,11 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 from neuraxle.base import BaseSaver, BaseTransformer
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.base import (MetaStep, MixinForBaseTransformer, NamedStepsList,
-                           NonFittableMixin, _FittableStep)
-from neuraxle.data_container import (DACT, DIT, EOT, IDT, ListDataContainer,
-                                     PredsDACT, StripAbsentValues)
+from neuraxle.base import MetaStep, MixinForBaseTransformer, NamedStepsList, NonFittableMixin, _FittableStep
+from neuraxle.data_container import DACT, DIT, EOT, IDT, ListDataContainer, PredsDACT, StripAbsentValues
 from neuraxle.hyperparams.space import RecursiveDict
-from neuraxle.logging.logging import (
-    ParallelLoggingConsumerThread,
-    register_log_producer_for_main_logger_thread_to_consume)
+from neuraxle.logging.logging import (ParallelLoggingConsumerThread,
+                                      register_log_producer_for_main_logger_thread_to_consume)
 from neuraxle.pipeline import Joiner, MiniBatchSequentialPipeline, Pipeline
 from neuraxle.steps.numpy import NumpyConcatenateOuterBatch
 
@@ -614,7 +611,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :return: step
         :rtype: BaseStep
         """
-        workers_joiner: WorkersJoiner = self[-1]
+        workers_joiner: WorkersJoiner = self.joiner
         workers_joiner._setup(context=context)
         for step in self.body:
             step: ParallelWorkersWrapper = step
@@ -637,7 +634,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :return:
         """
         has_fittable_step: bool = False
-        for _, step in self[:-1]:
+        for step in self.body:
             if isinstance(step.get_step(), _FittableStep) and not isinstance(step.get_step(), NonFittableMixin):
                 has_fittable_step = True
 
@@ -697,7 +694,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
         # join output queues.
         n_workers = self.get_n_workers_to_join()
-        workers_joiner: WorkersJoiner = self[-1]
+        workers_joiner: WorkersJoiner = self.joiner
         workers_joiner.set_join_quantities(n_workers, n_minibatches_per_worker)
         data_container = workers_joiner.join_workers(data_container, context)
 
@@ -718,7 +715,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
         :return: data container
         :rtype: DataContainer
         """
-        for name, step in self[:-1]:
+        for step in self.body:
             step: ParallelWorkersWrapper = step
             step.stop()
         if self.logging_thread is not None:
@@ -752,7 +749,7 @@ class BaseQueuedPipeline(MiniBatchSequentialPipeline):
 
     def _disconnect_queued_pipeline(self):
         if self.is_pipeline_connected:
-            workers_joiner: WorkersJoiner = self[-1]
+            workers_joiner: WorkersJoiner = self.joiner
             workers_joiner.join()
             for step in self.body:
                 step: ParallelWorkersWrapper = step
@@ -815,7 +812,7 @@ class SequentialQueuedPipeline(BaseQueuedPipeline):
         :param data_container: data container batch
         :return:
         """
-        workers_joiner: WorkersJoiner = self[-1]
+        workers_joiner: WorkersJoiner = self.joiner
 
         # TODO: extract method.
         last_consumer_name: str = self.steps_as_tuple[-2][0]
@@ -846,8 +843,8 @@ class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
         :return:
         """
         if not self.is_pipeline_connected:
-            joiner_consumer: _ProducerConsumerMixin = self[-1]
-            for name, producer in self[:-1]:
+            joiner_consumer: _ProducerConsumerMixin = self.joiner
+            for producer in self.body:
                 producer: _ProducerConsumerMixin = producer
                 producer.register_consumer(joiner_consumer)
             self.is_pipeline_connected = True
@@ -858,10 +855,10 @@ class ParallelQueuedFeatureUnion(BaseQueuedPipeline):
         to each of the workers that will work in parallel to consume the same copy sent to all.
         """
         # TODO: task index in task.
-        workers_joiner: WorkersJoiner = self[-1]
-        for name, consumer in self[:-1]:
-            workers_joiner.append_terminal_summary(name, task)
-            consumer: _ProducerConsumerMixin = consumer
+        workers_joiner: WorkersJoiner = self.joiner
+        for consumer in self.body:
+            consumer: ParallelWorkersWrapper = consumer
+            workers_joiner.append_terminal_summary(consumer.get_name(), task)
             consumer.put_minibatch_produced(task)
 
 
