@@ -164,7 +164,8 @@ def test_automl_neuraxle_logger_logs_to_repo_file(tmpdir):
         tsc.flow.log_status(TrialStatus.RUNNING)
         tsc.flow.log_end(TrialStatus.ABORTED)
 
-        log_file_path_at_loc = cx.repo.wrapped.get_scoped_logger_path(tsc.loc)
+        _repo: HyperparamsOnDiskRepository = cx.repo.wrapped
+        log_file_path_at_loc = _repo._create_scoped_logger_path(tsc.loc)
         assert os.path.exists(log_file_path_at_loc)
         log1 = tsc.context.read_scoped_log()
         with open(log_file_path_at_loc, 'r') as _file:
