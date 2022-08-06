@@ -58,12 +58,13 @@ class _OnDiskRepositoryLoggerHandlerMixin:
         Adds an on-disk logging handler to the repository.
         The file at this scope can be retrieved with the method :func:`get_scoped_logger_path`.
         """
-        logging_file = self.get_scoped_logger_path(scope)
-        os.makedirs(os.path.dirname(logging_file), exist_ok=True)
+        logging_file = self._create_scoped_logger_path(scope)
         logger.with_file_handler(logging_file)
         return self
 
     def get_log_from_logging_handler(self, logger: NeuraxleLogger, scope: ScopedLocation) -> str:
+        logging_file = self._create_scoped_logger_path(scope)
+        logger.with_file_handler(logging_file)
         return ''.join(logger.read_log_file())
 
     def get_folder_at_scope(self, scope: ScopedLocation) -> str:
@@ -71,9 +72,11 @@ class _OnDiskRepositoryLoggerHandlerMixin:
         _scope_attrs = [ON_DISK_DELIM + s for s in _scope_attrs]
         return os.path.join(self.cache_folder, *_scope_attrs)
 
-    def get_scoped_logger_path(self, scope: ScopedLocation) -> str:
+    def _create_scoped_logger_path(self, scope: ScopedLocation) -> str:
         scoped_path: str = self.get_folder_at_scope(scope)
-        return os.path.join(scoped_path, 'log.txt')
+        logging_file = os.path.join(scoped_path, 'log.txt')
+        os.makedirs(os.path.dirname(logging_file), exist_ok=True)
+        return logging_file
 
 
 class HyperparamsOnDiskRepository(_OnDiskRepositoryLoggerHandlerMixin, HyperparamsRepository):
