@@ -1488,13 +1488,24 @@ class ExecutionContext(TruncableService):
             services=self.services,
         )
 
-    def _copy(self):
-        copy_kwargs = self._get_copy_kwargs()
+    def _copy(self, copy_func: str = '_copy'):
+        """
+        Copy the execution context, and call a copy function on its services as well.
+
+        :param copy_func: services' copy function. By default is `_copy`. Could also be: `copy`, `_copy_trial`, `_copy_trial_split`, `_copy_train`, `_copy_validation`, and more as needed.
+        :return: a copy of the execution context (self) using the given copy function on the services.
+        """
+        copy_kwargs = self._get_copy_kwargs(copy_func)
         return self.__class__(**copy_kwargs)
 
-    def _get_copy_kwargs(self):
+    def _get_copy_kwargs(self, copy_func: str):
         possibly_copied_services = {
-            k: (v.copy() if hasattr(v, "copy") else v)
+            k: (
+                getattr(v, copy_func)() if hasattr(v, copy_func) else
+                v._copy() if hasattr(v, '_copy') else
+                v.copy() if hasattr(v, 'copy') else
+                v
+            )
             for k, v in self.services.items()
         }
         copy_kwargs = {
@@ -1507,22 +1518,6 @@ class ExecutionContext(TruncableService):
         }
 
         return copy_kwargs
-
-    def train(self) -> 'CX':
-        """
-        Set the context's execution phase to train.
-        """
-        new_self = self._copy()
-        new_self.set_execution_phase(ExecutionPhase.TRAIN)
-        return new_self
-
-    def validation(self) -> 'CX':
-        """
-        Set the context's execution phase to validation.
-        """
-        new_self = self._copy()
-        new_self.set_execution_phase(ExecutionPhase.VALIDATION)
-        return new_self
 
     def synchroneous(self) -> 'CX':
         if self.has_service('HyperparamsRepository'):

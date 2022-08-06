@@ -105,27 +105,34 @@ class Trainer(BaseService):
         trial_split_scope: TrialSplit = trial_split_scope.with_n_epochs(self.n_epochs)
         p: BaseStep = pipeline._copy(trial_split_scope.context, deep=True)
         p.set_hyperparams(trial_split_scope.get_hyperparams())
+        context: AutoMLContext = trial_split_scope.context
 
         for _ in range(self.n_epochs):
             e = trial_split_scope.next_epoch()
 
             # Fit train
             p = p.set_train(True)
+            context = context.train()
             p = p.handle_fit(
                 train_dact.copy(),
-                trial_split_scope.context.train())
+                context
+            )
 
             # Predict train & val
             p = p.set_train(False)
+            context = context.validation()
             eval_dact_train = p.handle_predict(
                 train_dact.without_eo(),
-                trial_split_scope.context.validation())
+                context
+            )
             eval_dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_train.with_eo(train_dact.expected_outputs)
 
             if val_dact is not None:
+                context = context.validation()
                 eval_dact_valid = p.handle_predict(
                     val_dact.without_eo(),
-                    trial_split_scope.context.validation())
+                    context
+                )
                 eval_dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_valid.with_eo(val_dact.expected_outputs)
             else:
                 eval_dact_valid = None

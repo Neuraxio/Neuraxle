@@ -30,7 +30,7 @@ that needs to be adapted in AutoML loops.
 
 import logging
 
-from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import ExecutionContext as CX, ExecutionPhase
 from neuraxle.logging.logging import NeuraxleLogger
 from neuraxle.metaopt.data.vanilla import (BaseDataclass, ScopedLocation,
                                            SubDataclassT)
@@ -70,12 +70,44 @@ class AutoMLContext(CX):
         # TODO: with self.lock:
         return self.repo.get_log_from_logging_handler(self.logger, self.loc)
 
-    def _copy(self):
-        copy_kwargs = self._get_copy_kwargs()
+    def _copy(self, copy_func: str = '_copy'):
+        copy_kwargs = self._get_copy_kwargs(copy_func)
         return AutoMLContext(**copy_kwargs)
 
-    def _get_copy_kwargs(self):
-        return super()._get_copy_kwargs()
+    def _get_copy_kwargs(self, copy_func: str):
+        return CX._get_copy_kwargs(self, copy_func)
+
+    def new_trial(self) -> 'CX':
+        """
+        Set the context's execution phase to train.
+        """
+        new_self = self._copy(copy_func='_copy_trial')
+        new_self.set_execution_phase(ExecutionPhase.PRETRAIN)
+        return new_self
+
+    def new_trial_split(self) -> 'CX':
+        """
+        Set the context's execution phase to train.
+        """
+        new_self = self._copy(copy_func='_copy_trial_split')
+        new_self.set_execution_phase(ExecutionPhase.PRETRAIN)
+        return new_self
+
+    def train(self) -> 'CX':
+        """
+        Set the context's execution phase to train.
+        """
+        new_self = self._copy(copy_func='_copy_train')
+        new_self.set_execution_phase(ExecutionPhase.TRAIN)
+        return new_self
+
+    def validation(self) -> 'CX':
+        """
+        Set the context's execution phase to validation.
+        """
+        new_self = self._copy(copy_func='_copy_validation')
+        new_self.set_execution_phase(ExecutionPhase.VALIDATION)
+        return new_self
 
     @staticmethod
     def from_context(

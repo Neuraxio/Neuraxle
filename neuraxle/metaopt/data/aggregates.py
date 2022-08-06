@@ -559,7 +559,7 @@ class Round(RoundReport, BaseAggregate[Client, 'Trial', RoundReport, RoundDatacl
         else:
             self.flow.log_retraining(trial_id, _trial_dataclass.hyperparams)
 
-        subagg: Trial = Trial(_trial_dataclass, self.context, is_deep=True)
+        subagg: Trial = Trial(_trial_dataclass, self.context.new_trial(), is_deep=True)
         if continue_on_error:
             subagg.continue_loop_on_error()
         return subagg
@@ -687,7 +687,7 @@ class Trial(TrialReport, BaseAggregate[Round, 'TrialSplit', TrialReport, TrialDa
         _split_dataclass: TrialSplitDataclass = self.repo.load(split_loc)
         _split_dataclass.hyperparams = self.get_hyperparams()
 
-        subagg: TrialSplit = TrialSplit(_split_dataclass, self.context, is_deep=True)
+        subagg: TrialSplit = TrialSplit(_split_dataclass, self.context.new_trial_split(), is_deep=True)
         return subagg
 
     def _release_managed_subresource(self, resource: 'TrialSplit', e: Exception = None) -> bool:
