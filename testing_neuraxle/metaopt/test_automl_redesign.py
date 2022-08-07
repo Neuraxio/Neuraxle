@@ -3,13 +3,12 @@ from typing import Callable, Optional
 
 import numpy as np
 import pytest
+from neuraxle.base import BaseStep, NonFittableMixin
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.hyperparams.distributions import (Boolean, Choice, LogUniform,
-                                                RandInt)
+from neuraxle.hyperparams.distributions import Boolean, Choice, LogUniform, RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler
-from neuraxle.metaopt.callbacks import (EarlyStoppingCallback, MetricCallback,
-                                        ScoringCallback)
+from neuraxle.metaopt.callbacks import EarlyStoppingCallback, MetricCallback, ScoringCallback
 from neuraxle.metaopt.context import AutoMLContext
 from neuraxle.metaopt.repositories.repo import VanillaHyperparamsRepository
 from neuraxle.metaopt.validation import ValidationSplitter
@@ -20,14 +19,24 @@ from neuraxle.steps.sklearn import SKLearnWrapper
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, mean_squared_error
 from sklearn.preprocessing import StandardScaler
-from testing_neuraxle.metaopt.test_automl_repositories import (
-    CX_WITH_REPO_CTORS, TmpDir)
+from testing_neuraxle.metaopt.test_automl_repositories import CX_WITH_REPO_CTORS, TmpDir
 
 
 def _create_data_source():
     data_inputs = np.random.random((25, 50)).astype(np.float32)
     expected_outputs = (np.random.random((25,)) > 0.5).astype(np.int32)
     return data_inputs, expected_outputs
+
+
+class SetNoneEO(NonFittableMixin, BaseStep):
+
+    def __init__(self):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+
+    def _will_process(self, dact, cx):
+        cx = cx.with_eo(None)
+        return dact, cx
 
 
 def _create_pipeline():
@@ -42,7 +51,8 @@ def _create_pipeline():
                 'penalty': Choice(['none', 'l2']),
                 'max_iter': RandInt(20, 200)
             })
-        )
+        ),
+        SetNoneEO(),
     ])
 
 

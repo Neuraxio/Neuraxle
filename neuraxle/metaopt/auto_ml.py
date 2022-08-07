@@ -48,9 +48,15 @@ from neuraxle.metaopt.validation import BaseValidationSplitter, ValidationSplitt
 class Trainer(BaseService):
     """
     Class used to train a pipeline using various data splits and callbacks for evaluation purposes.
+    It loops on splits that the splitter yields, and on epochs as well, to train and validate the pipeline
+    with the given metrics and other callbacks.
+
+    If the predicted expected output of a pipeline's prediction dact is not empty, then it will be used
+    in the metrics instead of using the fed dacts' expected output. This is to allow for the use of
+    autoregressive models, where the expected output is not known at the time of sending it to the model at train-time, but is known for the least at validation time as per the validation splitter.
     """
     # TODO: add this `with_val_set` method that would change splitter to
-    # PresetValidationSetSplitter(self, val) and override.
+    #       PresetValidationSetSplitter(self, val) and override..?
 
     def __init__(
             self,
@@ -101,6 +107,10 @@ class Trainer(BaseService):
         """
         Train a pipeline split. You probably want to use `self.train` instead, to use the validation splitter.
         If validation DACT is None, the evaluation metrics will not save validation results.
+
+        It is to be noted that here, if the data container, after a prediction at train and validation time,
+        has an empty expected output (of .expected_outputs of length 0 or that is None), then the
+        trainer will pick the expected output of the pre-predicted data container that was fed as an input.
         """
         trial_split_scope: TrialSplit = trial_split_scope.with_n_epochs(self.n_epochs)
         p: BaseStep = pipeline._copy(trial_split_scope.context, deep=True)
@@ -125,7 +135,11 @@ class Trainer(BaseService):
                 train_dact.without_eo(),
                 context
             )
-            eval_dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_train.with_eo(train_dact.expected_outputs)
+            eval_dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_train
+            _has_empty_eo = eval_dact_train.expected_outputs is None or (hasattr(
+                eval_dact_train.expected_outputs, "__len__") and len(eval_dact_train.expected_outputs) == 0)
+            if _has_empty_eo:
+                eval_dact_train = eval_dact_train.with_eo(train_dact.expected_outputs)
 
             if val_dact is not None:
                 context = context.validation()
@@ -133,7 +147,11 @@ class Trainer(BaseService):
                     val_dact.without_eo(),
                     context
                 )
-                eval_dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_valid.with_eo(val_dact.expected_outputs)
+                eval_dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_valid
+                _has_empty_eo = eval_dact_valid.expected_outputs is None or (hasattr(
+                    eval_dact_valid.expected_outputs, "__len__") and len(eval_dact_valid.expected_outputs) == 0)
+                if _has_empty_eo:
+                    eval_dact_valid = eval_dact_valid.with_eo(val_dact.expected_outputs)
             else:
                 eval_dact_valid = None
 
@@ -283,14 +301,18 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
     automatically split the data into train and validation splits, and execute an
     hyperparameter optimization on the splits to find the best hyperparameters.
 
-    The Controller Loop is useful to possibly split the execution into multiple
-    threads, or even multiple machines.
+    The :class:`BaseControllerLoop` is useful to possibly split the execution into multiple
+    threads, or even multiple machines to decide how to execute the loop.
 
-    The Trainer is responsible for training the pipeline on the train and validation
-    splits as splitted.
+    The :class:`Trainer` is responsible for training the pipeline on the train and validation
+    splits, as per the data split provided by the splitter, and the predicted data containers.
 
-    The step with the chosen good hyperparameters will be refitted to the full
-    unsplitted data if desired.
+    It is to be noted that if the data container, after a prediction at train and validation time,
+    has an empty expected output (of .expected_outputs of length 0 or that is None), then the
+    trainer will pick the expected output of the pre-predicted data container that was fed as an input.
+
+    The step with the chosen best hyperparameters will be optionnally refitted to the full
+    unsplitted data (pre-split data) if desired, and will be useable using :func:`refit_best_trial`.
     """
 
     def __init__(
@@ -397,6 +419,16 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
             cx = cx.with_loc(loc)
         return cx
 
+    def get_best_model(self) -> BaseStep:
+        """
+        Get the best model if it has been refit, otherwise raises an assertion error.
+        """
+        self._assert(
+            self.has_model_been_retrained,
+            "The model has not been retrained, so it cannot be used to get the best model."
+        )
+        return self.pipeline
+
     @property
     def round_number(self) -> Optional[int]:
         if self._round_number is None:
@@ -408,7 +440,8 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
 
     @property
     def report(self) -> RoundReport:
-        dc: RoundDataclass = self.repo.load(ScopedLocation(self.project_name, self.client_name, self.round_number), deep=True)
+        dc: RoundDataclass = self.repo.load(ScopedLocation(
+            self.project_name, self.client_name, self.round_number), deep=True)
         return RoundReport(dc)
 
     def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
@@ -424,6 +457,10 @@ class AutoML(ControlledAutoML):
     """
     This class provides a nice interface to easily use the
     ControlledAutoML class and the metaopt module in general.
+
+    It is a wrapper around the :class:`ControlledAutoML` class, which is a wrapper around
+    the AutoML loop contained in the :class:`BaseControllerLoop` class
+    and the :class:`Trainer` class all contained in this module.
 
     :param pipeline: pipeline to copy and use for training
     :param validation_splitter: validation splitter to use
