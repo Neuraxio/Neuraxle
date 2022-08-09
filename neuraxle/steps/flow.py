@@ -393,20 +393,20 @@ class ChooseOneStepOf(FeatureUnion):
         :class:`Optional`
     """
 
-    def __init__(self, steps, hyperparams=None):
+    def __init__(self, steps, default_choice=None):
         FeatureUnion.__init__(self, steps, joiner=SelectNonEmptyDataContainer())
 
         self._make_all_steps_optional()
 
         choices = list(self.keys())[:-1]
 
-        if hyperparams is None:
+        if default_choice is None:
             self.update_hyperparams({
                 ChooseOneStepOf.CHOICE_HYPERPARAM: choices[0]
             })
         else:
             self.update_hyperparams({
-                ChooseOneStepOf.CHOICE_HYPERPARAM: hyperparams
+                ChooseOneStepOf.CHOICE_HYPERPARAM: default_choice
             })
         self.update_hyperparams_space({
             ChooseOneStepOf.CHOICE_HYPERPARAM: Choice(choices)

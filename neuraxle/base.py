@@ -2689,7 +2689,8 @@ class _HasHyperparams(MixinForBaseService):
         output = ''
         if verbose:
             hps: HyperparameterSamples = self._get_hyperparams()
-            if len(hps) > 0:
+            if not hps.is_empty():
+                # hps = hps.to_flat_dict(use_wildcards=not verbose)
                 output += ", hyperparams=" + pprint.pformat(hps)
         return output
 
