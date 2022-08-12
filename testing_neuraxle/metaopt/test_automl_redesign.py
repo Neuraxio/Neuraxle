@@ -3,7 +3,7 @@ from typing import Callable, Optional
 
 import numpy as np
 import pytest
-from neuraxle.base import BaseStep, NonFittableMixin
+from neuraxle.base import BaseStep, Identity, NonFittableMixin
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import Boolean, Choice, LogUniform, RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
@@ -35,11 +35,22 @@ class SetNoneEO(NonFittableMixin, BaseStep):
         NonFittableMixin.__init__(self)
 
     def _will_process(self, dact, cx):
-        cx = cx.with_eo(None)
+        dact = dact.with_eo(None)
         return dact, cx
 
 
-def _create_pipeline():
+class FailingStep(NonFittableMixin, BaseStep):
+
+    def __init__(self):
+        BaseStep.__init__(self)
+        NonFittableMixin.__init__(self)
+
+    def _will_process(self, dact, cx):
+        raise ValueError("This error should be found in the logs of the test.")
+        return dact, cx
+
+
+def _create_pipeline(has_failing_step=False):
     return Pipeline([
         StandardScaler(),
         OutputTransformerWrapper(NumpyRavel()),
@@ -52,15 +63,17 @@ def _create_pipeline():
                 'max_iter': RandInt(20, 200)
             })
         ),
+        FailingStep() if has_failing_step else Identity(),
         SetNoneEO(),
     ])
 
 
 @pytest.mark.parametrize('cx_repo_ctor', CX_WITH_REPO_CTORS)
-def test_automl_api_entry_point(tmpdir, cx_repo_ctor: Callable[[Optional[TmpDir]], AutoMLContext]):
+@pytest.mark.parametrize('has_failing_step', [False, True])
+def test_automl_api_entry_point(tmpdir, cx_repo_ctor: Callable[[Optional[TmpDir]], AutoMLContext], has_failing_step: bool):
     data_inputs, expected_outputs = _create_data_source()
     dact = DACT(data_inputs=data_inputs, expected_outputs=expected_outputs)
-    pipeline = _create_pipeline()
+    pipeline = _create_pipeline(has_failing_step=has_failing_step)
     # TODO: # HyperbandControllerLoop(), ClusteringParallelFor() ?
 
     a: AutoML = AutoML(
@@ -84,4 +97,7 @@ def test_automl_api_entry_point(tmpdir, cx_repo_ctor: Callable[[Optional[TmpDir]
         cx_repo_ctor()
     )
 
-    assert _out is not None
+    if has_failing_step:
+        pass
+    else:
+        assert _out is not None
