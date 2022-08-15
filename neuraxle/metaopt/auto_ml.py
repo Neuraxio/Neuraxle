@@ -29,10 +29,11 @@ import gc
 from copy import copy
 from typing import ContextManager, Iterator, List, Optional, Tuple
 
-from neuraxle.base import (CX, BaseService, BaseStep, BaseStepT, ExecutionContext, ForceHandleMixin, TruncableService,
-                           _HasChildrenMixin)
-from neuraxle.data_container import IDT
+from neuraxle.base import (CX, BaseService, BaseStep, BaseStepT, ExecutionContext, ExecutionMode, ForceHandleMixin,
+                           TruncableService, _HasChildrenMixin)
+from neuraxle.data_container import ARG_X_INPUTTED, IDT
 from neuraxle.data_container import DataContainer as DACT
+from neuraxle.data_container import TrainDACT
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.callbacks import (ARG_Y_EXPECTED, ARG_Y_PREDICTD, BaseCallback, CallbackList, MetricCallback,
                                         ScoringCallback)
@@ -377,6 +378,7 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
         self_copy = copy(self)
         self_copy.refit_best_trial = True
         self_copy.has_model_been_retrained = False
+        self_copy.start_new_round = False
         self_copy.loop = self_copy.loop.for_refit_only()
         return self_copy
 
@@ -418,6 +420,19 @@ class ControlledAutoML(ForceHandleMixin, _HasChildrenMixin[BaseStepT], BaseStep)
             loc = ScopedLocation(self.project_name, self.client_name, self.round_number)
             cx = cx.with_loc(loc)
         return cx
+
+    def _encapsulate_data(
+        self, data_inputs: ARG_X_INPUTTED, expected_outputs: ARG_Y_EXPECTED, execution_mode: ExecutionMode
+    ) -> Tuple[CX, TrainDACT]:
+        """
+        This method is overriden from :class:`ForceHandleMixin` to encapsulate
+        the repository in a AutoMLContext instead of in a regular CX in case the
+        handler methods were not called but the repository was passed at construction.
+        """
+        data_container = TrainDACT(data_inputs=data_inputs, expected_outputs=expected_outputs)
+        context = CX(execution_mode=execution_mode)
+        context = self.get_automl_context(context)
+        return context, data_container
 
     def get_best_model(self) -> BaseStep:
         """

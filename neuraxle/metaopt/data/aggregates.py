@@ -112,7 +112,7 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         self._dataclass: SubDataclassT = _dataclass
         self._spare: SubDataclassT = copy.copy(_dataclass).shallow()
         # TODO: pre-push context to allow for dc auto-loading and easier parent auto-loading?
-        self.context: AutoMLContext = context.push_attr(_dataclass)
+        self.context: AutoMLContext = context.push_attr(_dataclass).add_scoped_logger_file_handler()
         self.loc: ScopedLocation = self.context.loc._copy()
         self.is_deep = is_deep
         self._parent: ParentAggregateT = parent
@@ -293,9 +293,6 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         # self.context.free_scoped_logger_handler_file()
         self._invariant()
         self._managed_resource._invariant()
-        with self.repo.lock:  # TODO: locking twice, not needed.
-            self._managed_resource.context.add_scoped_logger_file_handler()
-
         return self._managed_resource
 
     def __exit__(
@@ -348,6 +345,7 @@ class BaseAggregate(BaseReport, _CouldHaveContext, BaseService, ContextManager[S
         with self.repo.lock:
             self.refresh(self.is_deep)
             self.save(False)  # TODO: is this bad?
+
         handled_error = e is None
         return handled_error
 

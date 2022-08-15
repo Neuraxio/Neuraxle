@@ -49,19 +49,20 @@ class AutoMLContext(CX):
     def logger_at_scoped_loc(self) -> NeuraxleLogger:
         return logging.getLogger(self.get_identifier(include_step_names=False))
 
-    def add_scoped_logger_file_handler(self) -> NeuraxleLogger:
+    def add_scoped_logger_file_handler(self) -> 'AutoMLContext':
         """
         Add a file handler to the logger at the current scoped location to capture logs
         at this scope and below this scope.
         """
-
         self.repo.add_logging_handler(self.logger_at_scoped_loc, self.loc)
+        return self
 
-    def free_scoped_logger_file_handler(self):
+    def free_scoped_logger_file_handler(self) -> 'AutoMLContext':
         """
         Remove file handlers from logger to free file lock (especially on Windows).
         """
         self.logger_at_scoped_loc.without_file_handler()
+        return self
 
     def read_scoped_log(self) -> str:
         """

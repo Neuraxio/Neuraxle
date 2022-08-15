@@ -3,14 +3,17 @@ from typing import Callable, Optional
 
 import numpy as np
 import pytest
-from neuraxle.base import BaseStep, Identity, NonFittableMixin
+from neuraxle.base import BaseStep
+from neuraxle.base import ExecutionContext as CX
+from neuraxle.base import Identity, NonFittableMixin
 from neuraxle.data_container import DataContainer as DACT
 from neuraxle.hyperparams.distributions import Boolean, Choice, LogUniform, RandInt
 from neuraxle.hyperparams.space import HyperparameterSpace
 from neuraxle.metaopt.auto_ml import AutoML, RandomSearchSampler
 from neuraxle.metaopt.callbacks import EarlyStoppingCallback, MetricCallback, ScoringCallback
 from neuraxle.metaopt.context import AutoMLContext
-from neuraxle.metaopt.repositories.repo import VanillaHyperparamsRepository
+from neuraxle.metaopt.data.vanilla import ScopedLocation
+from neuraxle.metaopt.repositories.repo import HyperparamsRepository, VanillaHyperparamsRepository
 from neuraxle.metaopt.validation import ValidationSplitter
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.numpy import NumpyRavel
@@ -28,13 +31,13 @@ def _create_data_source():
     return data_inputs, expected_outputs
 
 
-class SetNoneEO(NonFittableMixin, BaseStep):
+class SetNoneEO(Identity):
 
     def __init__(self):
-        BaseStep.__init__(self)
-        NonFittableMixin.__init__(self)
+        Identity.__init__(self)
 
-    def _will_process(self, dact, cx):
+    def _will_process(self, dact: DACT, cx: CX):
+        dact, cx = Identity._will_process(self, dact, cx)
         dact = dact.with_eo(None)
         return dact, cx
 
@@ -45,7 +48,7 @@ class FailingStep(NonFittableMixin, BaseStep):
         BaseStep.__init__(self)
         NonFittableMixin.__init__(self)
 
-    def _will_process(self, dact, cx):
+    def _will_process(self, dact: DACT, cx: CX):
         raise ValueError("This error should be found in the logs of the test.")
         return dact, cx
 
@@ -89,15 +92,16 @@ def test_automl_api_entry_point(tmpdir, cx_repo_ctor: Callable[[Optional[TmpDir]
         continue_loop_on_error=True,
         n_trials=4,
         epochs=5,
-        refit_best_trial=True,
+        refit_best_trial=False,
     )
+    cx: CX = cx_repo_ctor()
+    repo: HyperparamsRepository = cx.repo
 
-    a, _out = a.handle_fit_transform(
-        dact,
-        cx_repo_ctor()
-    )
+    a = a.handle_fit(dact, cx)
 
     if has_failing_step:
-        pass
+        assert 'ValueError("This error should be found in the logs of the test.")' in repo.get_log_from_logging_handler(
+            cx.logger, ScopedLocation())
     else:
+        a, _out = a.to_force_refit_best_trial().handle_fit_transform(dact, cx)
         assert _out is not None
