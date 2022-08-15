@@ -116,7 +116,7 @@ def main(tmpdir: str):
     auto_ml = AutoML(
         pipeline=pipeline,
         hyperparams_optimizer=RandomSearchSampler(),
-        validation_splitter=ValidationSplitter(validation_size=0.20),
+        validation_splitter=ValidationSplitter(validation_size=0.20).set_to_force_expected_outputs_for_scoring(),
         scoring_callback=ScoringCallback(accuracy_score, higher_score_is_better=True),
         n_trials=7,
         epochs=1,

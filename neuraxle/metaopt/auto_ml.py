@@ -139,7 +139,7 @@ class Trainer(BaseService):
             eval_dact_train: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_train
             _has_empty_eo = eval_dact_train.expected_outputs is None or (hasattr(
                 eval_dact_train.expected_outputs, "__len__") and len(eval_dact_train.expected_outputs) == 0)
-            if _has_empty_eo:
+            if _has_empty_eo or self.validation_splitter.force_fixed_metric_expected_outputs is True:
                 eval_dact_train = eval_dact_train.with_eo(train_dact.expected_outputs)
 
             if val_dact is not None:
@@ -151,7 +151,7 @@ class Trainer(BaseService):
                 eval_dact_valid: DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED] = eval_dact_valid
                 _has_empty_eo = eval_dact_valid.expected_outputs is None or (hasattr(
                     eval_dact_valid.expected_outputs, "__len__") and len(eval_dact_valid.expected_outputs) == 0)
-                if _has_empty_eo:
+                if _has_empty_eo or self.validation_splitter.force_fixed_metric_expected_outputs is True:
                     eval_dact_valid = eval_dact_valid.with_eo(val_dact.expected_outputs)
             else:
                 eval_dact_valid = None

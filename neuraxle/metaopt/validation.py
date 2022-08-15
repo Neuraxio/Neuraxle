@@ -38,6 +38,29 @@ FoldsList = List  # A list over folds. Can contain DACTData or even DACTs or Tup
 
 
 class BaseValidationSplitter(ABC):
+
+    def __init__(self, force_fixed_metric_expected_outputs: bool = False):
+        """
+        :param force_fixed_metric_expected_outputs: If True, the expected outputs provided at split time are used to compute the metric instead of their possibly modified version after passing through the pipeline. More info in the documentation of :func:`set_to_force_expected_outputs_for_scoring`.
+        """
+        self.force_fixed_metric_expected_outputs: bool = False
+
+    def set_to_force_expected_outputs_for_scoring(self) -> 'BaseValidationSplitter':
+        """
+        Set self.force_fixed_metric_expected_outputs to True.
+
+        Use this in case you do not want the pipeline to be able to
+        affect the Y (expected_output) value throughout the fit or transform process. This is to have a way to
+        force using the provided expected output for the calculation of metrics in the Trainer's epochs loop.
+
+        Do not use this when the pipeline can change the expected_outputs, for instance within an autoencoder
+        that would split a time series and set its own expected output inside the pipeline, such as where the
+        initial expected_output would be none at split time, and then would be computed on the fly through the
+        pipeline and would be expected to be used for the metrics after this computation.
+        """
+        self.force_fixed_metric_expected_outputs = True
+        return self
+
     def split_dact(self, data_container: DACT, context: CX) -> FoldsList[Tuple[TrainDACT, ValidDACT]]:
         """
         Wrap a validation split function with a split data container function.
@@ -107,6 +130,7 @@ class ValidationSplitter(BaseValidationSplitter):
     """
 
     def __init__(self, validation_size: float):
+        BaseValidationSplitter.__init__(self)
         self.validation_size = validation_size
 
     def split(
