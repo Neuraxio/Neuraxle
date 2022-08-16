@@ -26,10 +26,10 @@ Classes for containing the data that flows throught the pipeline steps.
 import copy
 import math
 from operator import attrgetter
-from typing import (Any, Callable, Generic, Iterable, Iterator, List, Optional,
-                    Tuple, TypeVar, Union)
+from typing import Any, Callable, Generic, Iterable, Iterator, List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
+import pandas as pd
 
 NamedDACTTuple = Tuple[str, 'DataContainer']
 IDT = TypeVar('IDT', bound=Iterable)  # Ids Type that is often a list of things
@@ -236,6 +236,9 @@ class DataContainer(Generic[IDT, DIT, EOT]):
     def with_eo(self, eo: EOT) -> 'DACT[IDT, DIT, EOT]':
         return self.copy().set_expected_outputs(eo)
 
+    def with_ids(self, ids: DIT) -> 'DACT[IDT, DIT, EOT]':
+        return self.copy().set_ids(ids)
+
     def set_ids(self, ids: IDT) -> 'DACT':
         """
         Set ids.
@@ -268,7 +271,9 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         self.expected_outputs: EOT = expected_outputs
         return self
 
-    def get_ids_summary(self) -> str:
+    def get_ids_summary(self) -> Optional[str]:
+        if self._ids is None:
+            return None
         return ','.join([str(i) for i in self.ids if i is not None])
 
     def add_sub_data_container(self, name: str, data_container: 'DACT') -> 'DACT':
@@ -361,9 +366,9 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         """
         for i in range(0, len(self.data_inputs), batch_size):
             data_container: DACT[IDT, DIT, EOT] = DACT(
-                ids=self.ids[i:i + batch_size],
-                data_inputs=self.di[i:i + batch_size],
-                expected_outputs=self.eo[i:i + batch_size]
+                ids=self.ids[i:i + batch_size] if self._ids is not None else None,
+                data_inputs=self.di[i:i + batch_size] if self.data_inputs is not None else None,
+                expected_outputs=self.eo[i:i + batch_size] if self.expected_outputs is not None else None
             )
 
             incomplete_batch = len(data_container.data_inputs) < batch_size
@@ -498,29 +503,54 @@ class DataContainer(Generic[IDT, DIT, EOT]):
         :return: iterator of tuples containing ids, data_inputs, and expected outputs
         :rtype: Iterator[Tuple]
         """
-        return zip(self.ids, self.di, self.eo)
+        if self.data_inputs is None:
+            return iter(())
+
+        _ids: Optional[List[DACTData]] = self.ids
+        _di: Optional[List[DACTData]] = self.di
+        _eo: Optional[List[DACTData]] = self.eo
+        if _ids is None or _di is None or _eo is None:
+            return iter(())
+
+        return zip(_ids, _di, _eo)
 
     def __repr__(self):
         return str(self)
 
     def __str__(self):
-        di_rep = self._str_data(self.di)
-        eo_rep = self._str_data(self.eo)
+        ids = self._ids
+        di = self.data_inputs
+        eo = self.expected_outputs
+        ids_rep = self._str_data(ids)
+        di_rep = self._str_data(di)
+        eo_rep = self._str_data(eo)
         return (
-            f"{self.__class__.__name__}("
-            f"ids={repr(list(self.ids))}, "
-            f"di={di_rep}, "
-            f"eo={eo_rep})"
+            f"{self.__class__.__name__}[{type(ids).__name__}, {type(di).__name__}, {type(eo).__name__}](\n"
+            f"\tids={ids_rep},\n"
+            f"\tdi={di_rep},\n"
+            f"\teo={eo_rep}\n)"
         )
 
     def _str_data(self, _idata: DACTData) -> str:
-        if hasattr(_idata, '__len__'):
-            if len(_idata) > 10:
-                _len_rep = ("<of len=" + str(len(self.di)) + ">") if hasattr(self.di, "__len__") else ""
-                _rep = f"{type(self.di)}{_len_rep}"
-            else:
-                _rep = repr(_idata)
-        return _rep
+        if _idata is None:
+            return str(None)
+
+        if len(_idata) > 10 and hasattr(_idata, '__getitem__'):
+            _shortrepr = repr(_idata[:15])
+        else:
+            _shortrepr = repr(_idata)
+        _shortrepr = _shortrepr[:70] + ("" if len(_shortrepr) < 70 else "...")
+
+        _len = "len=?"
+        if isinstance(_idata, pd.DataFrame):
+            _len = f"shape={_idata.values.shape}"
+        elif isinstance(_idata, np.ndarray):
+            _len = f"shape={_idata.shape}"
+        elif hasattr(_idata, "__len__"):
+            _len = f"len={len(_idata)}"
+
+        _len_rep = f"<`{_shortrepr}` of {_len}>"
+        return _len_rep.replace("\n", " ").replace("\t", " ").replace("    ", " ")
 
     def __len__(self):
         return len(self.data_inputs)
@@ -537,12 +567,14 @@ EvalEOTDACT = DACT[IDT, ARG_Y_PREDICTD, ARG_Y_EXPECTED]  # a merge of ValidDACT 
 class ExpandedDataContainer(DACT):
     """
     Sub class of DataContainer to expand data container dimension.
+    This is akin from passing from `shape` to `[1, *shape]`
+    when using :func:`ExpandedDataContainer.create_from`.
 
     .. seealso::
         :class:`DataContainer`
     """
 
-    def __init__(self, data_inputs, ids, expected_outputs, old_ids):
+    def __init__(self, data_inputs, ids, expected_outputs, _old_ids):
         DACT.__init__(
             self,
             ids=ids,
@@ -550,7 +582,24 @@ class ExpandedDataContainer(DACT):
             eo=expected_outputs,
         )
 
-        self.old_ids = old_ids
+        self._old_ids = _old_ids
+
+    @staticmethod
+    def create_from(data_container: DACT) -> 'ExpandedDataContainer':
+        """
+        Create ExpandedDataContainer with a summary id for the new id.
+        This is akin from passing from `shape` to `[1, *shape]`.
+
+        :param data_container: data container to transform
+        :type data_container: DataContainer
+        :return: expanded data container
+        """
+        return ExpandedDataContainer(
+            ids=[data_container.get_ids_summary()],
+            data_inputs=[data_container.data_inputs] if data_container.data_inputs is not None else None,
+            expected_outputs=[data_container.expected_outputs] if data_container.expected_outputs is not None else None,
+            _old_ids=data_container._ids
+        )
 
     def reduce_dim(self) -> 'DACT':
         """
@@ -564,27 +613,10 @@ class ExpandedDataContainer(DACT):
                 'Invalid Expanded Data Container. Please create ExpandedDataContainer with ExpandedDataContainer.create_from(data_container) method.')
 
         return DACT(
-            data_inputs=self.di[0],
-            ids=self.old_ids,
-            expected_outputs=self.eo[0],
+            ids=self._old_ids,
+            data_inputs=self.data_inputs[0] if self.data_inputs is not None else None,
+            expected_outputs=self.expected_outputs[0] if self.expected_outputs is not None else None,
             sub_data_containers=self.sub_data_containers
-        )
-
-    @staticmethod
-    def create_from(data_container: DACT) -> 'ExpandedDataContainer':
-        """
-        Create ExpandedDataContainer with a summary id for the new single id.
-
-        :param data_container: data container to transform
-        :type data_container: DataContainer
-        :return: expanded data container
-        :rtype: ExpandedDataContainer
-        """
-        return ExpandedDataContainer(
-            ids=[data_container.get_ids_summary()],
-            data_inputs=[data_container.di],
-            expected_outputs=[data_container.eo],
-            old_ids=data_container.ids
         )
 
 
@@ -616,12 +648,12 @@ class ZipDataContainer(DACT):
             expected_outputs = tuple(
                 zip(*map(attrgetter("eo"), [data_container] + list(other_data_containers))))
         else:
-            expected_outputs = data_container.eo
+            expected_outputs = data_container.expected_outputs
 
         return ZipDataContainer(
             data_inputs=new_data_inputs,
             expected_outputs=expected_outputs,
-            ids=data_container.ids,
+            ids=data_container._ids,
             sub_data_containers=data_container.sub_data_containers
         )
 
@@ -770,21 +802,23 @@ def _pad_incomplete_batch(
             batch_size=batch_size
         ) if pad_ids else data_container.ids,
         data_inputs=_pad_data(
-            data_container.di,
+            data_container.data_inputs,
             default_value=default_value_data_inputs,
             batch_size=batch_size
-        ) if pad_di else data_container.di,
+        ) if pad_di else data_container.data_inputs,
         expected_outputs=_pad_data(
-            data_container.eo,
+            data_container.expected_outputs,
             default_value=default_value_expected_outputs,
             batch_size=batch_size
-        ) if pad_eo else data_container.eo
+        ) if pad_eo else data_container.expected_outputs,
     )
 
     return data_container
 
 
-def _pad_data(data: Iterable, default_value: Any, batch_size: int):
+def _pad_data(data: DACTData, default_value: Any, batch_size: int):
+    if data is None:
+        return None
     data_ = []
     data_.extend(data)
     padding = copy.copy([default_value] * (batch_size - len(data)))

@@ -164,7 +164,8 @@ def test_automl_neuraxle_logger_logs_to_repo_file(tmpdir):
         tsc.flow.log_status(TrialStatus.RUNNING)
         tsc.flow.log_end(TrialStatus.ABORTED)
 
-        log_file_path_at_loc = cx.repo.wrapped.get_scoped_logger_path(tsc.loc)
+        _repo: HyperparamsOnDiskRepository = cx.repo.wrapped
+        log_file_path_at_loc = _repo._create_scoped_logger_path(tsc.loc)
         assert os.path.exists(log_file_path_at_loc)
         log1 = tsc.context.read_scoped_log()
         with open(log_file_path_at_loc, 'r') as _file:
@@ -276,30 +277,31 @@ class SomeParallelLogginWorkers:
     def start(self):
         for i in range(self.n_process):
             proc = Process(
-                target=self.logger_producer_thread,
+                target=logger_producer_thread,
                 name=f"worker_{i}",
                 args=(self.logging_queue,)
             )
             self.workers.append(proc)
             proc.start()
 
-    @staticmethod
-    def logger_producer_thread(logging_queue: Queue):
-        queue_handler = logging.handlers.QueueHandler(logging_queue)
-        root = logging.getLogger()
-        root.setLevel(logging.DEBUG)
-        root.addHandler(queue_handler)
-
-        logger = CX().logger
-        logger.log(logging.ERROR, SomeParallelLogginWorkers.FIRST_LOG_MESSAGE)
-
-        dact = DACT(di=range(10))
-        _, out = FitTransformCounterLoggingStep().set_name("Producer").handle_fit_transform(dact, CX())
-        return
-
     def join(self):
         for worker in self.workers:
             worker.join()
+
+
+def logger_producer_thread(logging_queue: Queue):
+    # TODO: isn't this duplicated from the logging module or streaming.py code?
+    queue_handler = logging.handlers.QueueHandler(logging_queue)
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    root.addHandler(queue_handler)
+
+    logger = CX().logger
+    logger.log(logging.ERROR, SomeParallelLogginWorkers.FIRST_LOG_MESSAGE)
+
+    dact = DACT(di=range(10))
+    _, out = FitTransformCounterLoggingStep().set_name("Producer").handle_fit_transform(dact, CX())
+    return
 
 
 def test_neuraxle_logger_can_operate_in_parallel():

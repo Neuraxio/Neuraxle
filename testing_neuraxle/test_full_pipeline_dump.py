@@ -30,7 +30,7 @@ def test_load_full_dump_from_pipeline_name(tmpdir):
     step_b_wrapped_step = pipeline.wrapped['step_b'].wrapped
     assert np.array_equal(step_b_wrapped_step.transform_callback_function.data[0], EXPECTED_OUTPUTS)
     assert np.array_equal(step_b_wrapped_step.fit_callback_function.data[0][0], EXPECTED_OUTPUTS)
-    assert np.array_equal(step_b_wrapped_step.fit_callback_function.data[0][1], [None] * len(EXPECTED_OUTPUTS))
+    assert np.array_equal(step_b_wrapped_step.fit_callback_function.data[0][1], None)
 
     pipeline.save(CX(tmpdir), full_dump=True)
 
@@ -44,7 +44,7 @@ def test_load_full_dump_from_pipeline_name(tmpdir):
     loaded_step_b_wrapped_step = loaded_pipeline['step_b'].wrapped
     assert np.array_equal(loaded_step_b_wrapped_step.transform_callback_function.data[0], EXPECTED_OUTPUTS)
     assert np.array_equal(loaded_step_b_wrapped_step.fit_callback_function.data[0][0], EXPECTED_OUTPUTS)
-    assert np.array_equal(loaded_step_b_wrapped_step.fit_callback_function.data[0][1], [None] * len(EXPECTED_OUTPUTS))
+    assert np.array_equal(loaded_step_b_wrapped_step.fit_callback_function.data[0][1], None)
 
 
 def test_load_full_dump_from_path(tmpdir):
@@ -69,4 +69,4 @@ def test_load_full_dump_from_path(tmpdir):
     loaded_step_b_wrapped_step = loaded_pipeline.wrapped
     assert np.array_equal(loaded_step_b_wrapped_step.transform_callback_function.data[0], EXPECTED_OUTPUTS)
     assert np.array_equal(loaded_step_b_wrapped_step.fit_callback_function.data[0][0], EXPECTED_OUTPUTS)
-    assert np.array_equal(loaded_step_b_wrapped_step.fit_callback_function.data[0][1], [None] * len(EXPECTED_OUTPUTS))
+    assert np.array_equal(loaded_step_b_wrapped_step.fit_callback_function.data[0][1], None)

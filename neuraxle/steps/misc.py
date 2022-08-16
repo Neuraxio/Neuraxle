@@ -26,15 +26,16 @@ You can find here misc. pipeline steps, for example, callbacks useful for debugg
 
 import random
 import time
-from abc import ABC
-from typing import Any, Callable, List, Optional, Tuple
 import uuid
+from abc import ABC
+from typing import Any, Callable, List, Optional, Tuple, Union
 
-from neuraxle.base import BaseStep, BaseTransformer, NonFittableMixin
+from neuraxle.base import BaseStep, BaseTransformer
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.base import ForceHandleOnlyMixin, HandleOnlyMixin, MetaStep
+from neuraxle.base import ForceHandleOnlyMixin, HandleOnlyMixin, MetaStep, NonFittableMixin
+from neuraxle.data_container import DIT, EOT, DACTData
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.hyperparams.space import RecursiveDict
+from neuraxle.hyperparams.space import HyperparameterSamples, RecursiveDict
 
 VALUE_CACHING = 'value_caching'
 
@@ -55,16 +56,25 @@ class AssertFalseStep(HandleOnlyMixin, BaseStep):
         self._assert(False, self.message, context)
 
 
+NoneType = type(None)
+
+
 class BaseCallbackStep(BaseStep, ABC):
     """Base class for callback steps."""
 
-    def __init__(self, callback_function, more_arguments: List = tuple(),
-                 hyperparams=None, fit_callback_function=None, transform_function=None):
+    def __init__(
+        self,
+        callback_function: Callable[[DACTData], NoneType],
+        more_arguments: List[Any] = tuple(),
+        hyperparams: HyperparameterSamples = None,
+        fit_callback_function: Callable[[DACTData], NoneType] = None,
+        transform_function: Callable[[DACTData], NoneType] = None
+    ):
         """
         Create the callback step with a function and extra arguments to send to the function
 
         :param callback_function: The function that will be called on events.
-        :param more_arguments: Extra arguments that will be sent to the callback after the processed data (optional).
+        :param more_arguments: Extra arguments that will be star-sent (*) to the callback after the processed data.
         """
         BaseStep.__init__(self, hyperparams=hyperparams)
         self.transform_function = transform_function
@@ -213,8 +223,8 @@ class FitTransformCallbackStep(BaseStep):
 
 class CallbackWrapper(HandleOnlyMixin, MetaStep):
     """
-    A step that calls a callback function for each of his methods : transform, fit, fit_transform, and even inverse_transform.
-    To be used with :class:`TapeCallbackFunction`.
+    A step that calls a callback function for each of his methods: transform, fit, fit_transform, and even inverse_transform.
+    To be used with :class:`TapeCallbackFunction` most of the time, passed in the constructor.
 
     .. code-block:: python
 
@@ -233,9 +243,9 @@ class CallbackWrapper(HandleOnlyMixin, MetaStep):
     def __init__(
             self,
             wrapped,
-            transform_callback_function,
-            fit_callback_function,
-            inverse_transform_callback_function=None,
+            transform_callback_function: Union['TapeCallbackFunction', Callable],
+            fit_callback_function: Union['TapeCallbackFunction', Callable],
+            inverse_transform_callback_function: Union['TapeCallbackFunction', Callable] = None,
             more_arguments: List = tuple(),
             hyperparams=None
     ):
@@ -332,13 +342,13 @@ class TapeCallbackFunction:
 
     def __init__(self):
         """Initialize the tape (cache lists)."""
-        self.data: List = []
+        self.data: List[DACTData] = []  # at each time the callback is called, data is appened.
         self.name_tape: List[str] = []
 
     def __call__(self, *args, **kwargs):
         return self.callback(*args, **kwargs)
 
-    def callback(self, data, name: str = ""):
+    def callback(self, data: Tuple[DACTData, ...], name: str = ""):
         """
         Will stick the data and name to the tape.
 

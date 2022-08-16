@@ -24,12 +24,11 @@ Pipeline Steps For Looping
 """
 import copy
 from operator import itemgetter
-from typing import Callable, List, Tuple
+from typing import Callable, List, Optional, Tuple, Union
 
-from neuraxle.base import (CX, DACT, BaseStep, BaseTransformer,
-                           ForceHandleMixin, ForceHandleOnlyMixin, Identity,
+from neuraxle.base import (CX, DACT, BaseStep, BaseTransformer, ForceHandleMixin, ForceHandleOnlyMixin, Identity,
                            MetaStep, NamedStepsList, TruncableJoblibStepSaver)
-from neuraxle.data_container import ListDataContainer
+from neuraxle.data_container import DIT, EOT, IDT, DACTData, ListDataContainer
 from neuraxle.steps.flow import ExecuteIf
 
 import numpy as np
@@ -315,20 +314,16 @@ class StepClonerForEachDataInput(ForceHandleOnlyMixin, MetaStep):
         return list(map(itemgetter(0), self.steps_as_tuple))
 
 
+lens = int  # Lengths of the dact data items that was pre-flattening
+
+
 class FlattenForEach(ForceHandleMixin, MetaStep):
     """
     Step that reduces a dimension instead of manually looping on it.
 
-    .. seealso::
-        :class:`~neuraxle.base.BaseStep`,
-        :class:`~neuraxle.base.BaseSaver`,
-        :class:`~neuraxle.base.BaseHasher`,
-        :class:`~neuraxle.base.MetaStepMixin`,
-        :class:`~neuraxle.base.NonTransformableMixin`,
-        :class:`~neuraxle.pipeline.Pipeline`,
-        :class:`~neuraxle.hyperparams.space.HyperparameterSamples`,
-        :class:`~neuraxle.hyperparams.space.HyperparameterSpace`,
-        :class:`~neuraxle.data_container.DataContainer`
+    Using this step is equivalent to doing `sum(dact_data, [])` for each dact_data
+    that might be a IDT, DIT, or EOT of a DACT (DAtaConTainer) to flatten the data,
+    then the data is by default unflattened at the end of the loop in _did_process.
     """
 
     def __init__(
@@ -341,94 +336,129 @@ class FlattenForEach(ForceHandleMixin, MetaStep):
 
         self.then_unflatten = then_unflatten
 
-        self.len_di = []
-        self.len_eo = []
-        self.len_ids = []
+        self.spare_ids: Optional[IDT] = None
+        # Lengths temporarily stored in _will_process to be able to unflatten the data container in _did_process:
+        self.len_ids: List[lens] = []
+        self.len_di: List[lens] = []
+        self.len_eo: List[lens] = []
 
     def _will_process(
-        self, data_container: DACT, context: CX
-    ) -> Tuple['BaseStep', DACT]:
+        self, data_container: DACT[Optional[Union[IDT, List[IDT]]], Optional[List[DIT]], Optional[List[EOT]]], context: CX
+    ) -> Tuple['BaseTransformer', DACT]:
         """
-        Flatten data container before any processing is done on the wrapped step.
-
-        :param data_container: data container to flatten
-        :param context: execution context
-        :return: (data container, execution context)
+        Flatten data container before any processing is done on the wrapped step, using lists.
         """
         data_container, context = super()._will_process(data_container, context)
 
-        if data_container.expected_outputs is None:
-            expected_outputs = np.empty_like(np.array(data_container.data_inputs))
-            expected_outputs.fill(np.nan)
-            data_container.set_expected_outputs(expected_outputs)
-
         di, self.len_di = self._flatten_list(data_container.data_inputs)
-        _id, self.len_ids = self._flatten_list(data_container.ids)
         eo, self.len_eo = self._flatten_list(data_container.expected_outputs)
 
+        # If is ID and not iterable nested thing, treat them as a special case that replicates the DIT:
+        if data_container._ids is not None and len(self.len_di) > 0 and all(isinstance(i, (str, int)) for i in data_container._ids):
+            # TODO: this code could be put inside the _flatten_list function to avoid duplicating it,
+            #           but it would be more complicated to implement as we'd need to consider the len_di
+            #           for the ids and eo and add a spare_eo as well.
+            self.spare_ids = data_container._ids
+            _ids: List[Union[int, str]] = sum([
+                copy.deepcopy([_id] * _count)
+                for _id, _count
+                in zip(self.spare_ids, self.len_di)
+            ], [])
+            self.len_ids = copy.copy(self.len_di)
+        else:
+            self.spare_ids = None
+            _ids, self.len_ids = self._flatten_list(data_container._ids)
+
         flattened_data_container = DACT(
+            ids=_ids,
             data_inputs=di,
-            ids=_id,
             expected_outputs=eo,
             sub_data_containers=data_container.sub_data_containers
         )
 
+        self._invariant(data_container, flattened_data_container)
+
         return flattened_data_container, context
 
-    def _flatten_list(self, list_to_flatten):
+    def _flatten_list(self, _data: Union[Optional[DACTData], List[DACTData]]) -> Tuple[Optional[DACTData], List[lens]]:
         """
         Flatten the first dimension of a list.
 
         :param list_to_flatten: list to flatten
         :return: flattened list, len flattened lists
         """
-        if not isinstance(list_to_flatten, np.ndarray):
-            list_to_flatten = np.array(list_to_flatten)
+        if _data is None or all(v is None for v in _data):
+            return None, []
 
-        if len(list_to_flatten.shape) == 1:
-            return list_to_flatten, [1 for x in list_to_flatten]
+        if len(_data) != 0:
+            try:
+                iter(_data)
+            except TypeError:
+                return _data, [1 for x in _data]
 
-        list_to_flatten = list(list_to_flatten)
-        list_to_flatten = [list(x) for x in list_to_flatten]
-        len_list_to_flatten = [len(x) for x in list_to_flatten]
-        flattened_list = sum(list_to_flatten, [])
+        _data = [list(x) for x in _data]
+        len_list_to_flatten = [len(x) for x in _data]
+        flattened_list = sum(_data, [])
 
         return flattened_list, len_list_to_flatten
 
     def _did_process(self, data_container: DACT, context: CX) -> DACT:
         """
-        Reaugment the flattened data container.
-
-        :param data_container: data container to then_unflatten
-        :param context: execution context
-        :return: data container
+        Reaugment the flattened data container back to its full original shape using lists.
         """
-        data_container = super()._did_process(data_container, context)
+        reaug_dact = super()._did_process(data_container, context).copy()
 
         if self.then_unflatten:
-            data_container.set_data_inputs(self._reaugment_list(data_container.data_inputs, self.len_di))
-            data_container.set_expected_outputs(self._reaugment_list(data_container.expected_outputs, self.len_eo))
-            data_container.set_ids(self._reaugment_list(data_container.ids, self.len_ids))
-            self.len_di = []
-            self.len_eo = []
+            if reaug_dact._ids is not None and self.spare_ids is None:
+                reaug_dact.set_ids(self._reaugment_list(reaug_dact._ids, self.len_ids))
+            else:
+                reaug_dact.set_ids(self.spare_ids)
+            if reaug_dact.data_inputs is not None:
+                reaug_dact.set_data_inputs(self._reaugment_list(reaug_dact.data_inputs, self.len_di))
+            if reaug_dact.expected_outputs is not None:
+                reaug_dact.set_expected_outputs(self._reaugment_list(reaug_dact.expected_outputs, self.len_eo))
 
-        return data_container
+        self._invariant(reaug_dact, data_container)
 
-    def _reaugment_list(self, list_to_reaugment, flattened_dimension_lengths):
+        self.spare_ids = None
+        self.len_ids = []
+        self.len_di = []
+        self.len_eo = []
+
+        return reaug_dact
+
+    def _reaugment_list(self, _data: DACTData, flattened_dims_lengths: List[lens]) -> List[DACTData]:
         """
         Reaugment list with the flattened dimension lengths.
-
-        :param list_to_reaugment: list to then_unflatten
-        :return: reaugmented numpy array
         """
-        if not self.then_unflatten or list_to_reaugment is None:
-            return list_to_reaugment
+        if not self.then_unflatten or _data is None:
+            return _data
 
-        reaugmented_list = []
+        reaugmented_list: List[DACTData] = []
         i = 0
-        for list_length in flattened_dimension_lengths:
-            sub_list = list_to_reaugment[i:i + list_length]
+        for list_length in flattened_dims_lengths:
+            sub_list: DACTData = _data[i:i + list_length]
             reaugmented_list.append(sub_list)
             i += list_length
 
         return reaugmented_list
+
+    def _invariant(self, augmented_dact, flattened_dact):
+        """
+        Data consitency checks.
+        """
+        _raise = False
+        if flattened_dact.di is not None:
+            if flattened_dact.eo is not None and len(flattened_dact.di) != len(flattened_dact.eo):
+                if all(v is None for v in flattened_dact.eo):
+                    flattened_dact.eo = [None] * len(flattened_dact.di)
+                else:
+                    _raise = True
+            if flattened_dact._ids is not None and len(flattened_dact.di) != len(flattened_dact._ids):
+                _raise = True
+        if _raise:
+            raise ValueError(
+                f"FlattenForEach: Cannot flatten or unflatten data properly. Expected outputs has a "
+                f"different len than data inputs for flattened DACT: {flattened_dact}, and for "
+                f"augmented DACT: {augmented_dact}."
+            )

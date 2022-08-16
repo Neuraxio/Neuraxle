@@ -330,9 +330,7 @@ class _HasRecursiveMethods:
     An internal class to represent a step that has recursive methods.
     The apply :func:`apply` function is used to apply a method to a step and its children.
 
-
-    Example usage :
-
+    Example usage:
 
     .. code-block:: python
 
@@ -502,6 +500,38 @@ class _HasRecursiveMethods:
                 f'Method {method} of {self} must return None or a RecursiveDict, as it is applied recursively.')
         return results
 
+    def __str__(self) -> str:
+        """
+        Return a pretty representation of the step or service.
+        Use :func:`~neuraxle.base.BaseTransformer.__repr__`, for a more
+        detailed string representation if needed.
+
+        :return: return pretty representation such as ``StepName(name='StepName')``.
+        """
+        return self._repr(verbose=False)
+
+    def __repr__(self) -> str:
+        """
+        Return a detailed and pretty representation of the pipeline step.
+        Use :func:`~neuraxle.base.BaseTransformer.__str__`, for a less
+        detailed string representation if needed.
+
+        :return: return pretty representation, such as ``StepName(name='StepName', hyperparameters=HyperparameterSamples({...}))``.
+        """
+        return self._repr(verbose=True)
+
+    def _repr(self, level=0, verbose=False):
+        output = self.__class__.__name__ + '('
+        output += self._repr_params(level=level, verbose=verbose).replace(', ', '', 1)
+        return output + ')'
+
+    def _repr_params(self, level=0, verbose=False) -> str:
+        output = ''
+        has_name = self.__class__.__name__ != self.name
+        if has_name:
+            output += ", name='" + self.name + "'"
+        return output
+
 
 class _HasConfig(ABC):
     """
@@ -576,6 +606,13 @@ class _HasConfig(ABC):
 
     def _get_config(self) -> RecursiveDict:
         return self.config
+
+    def _repr_params(self, level=0, verbose=False):
+        if verbose:
+            conf: RecursiveDict = self._get_config()
+            if len(conf) > 0:
+                return ", config=" + pprint.pformat(conf)
+        return ''
 
 
 class _CanMutate:
@@ -693,6 +730,16 @@ class BaseService(
         _HasRecursiveMethods.__init__(self, name=name)
         _HasConfig.__init__(self, config=config)
         _CanMutate.__init__(self)
+
+    def _repr_params(self, level=0, verbose=False):
+        output = ""
+        _name = _HasRecursiveMethods._repr_params(self, level=level, verbose=verbose)
+        output += _name
+        _config = _HasConfig._repr_params(self, level=level, verbose=verbose)
+        if not (len(_name) > 0):
+            _config = _config.replace(', ', '', 1)
+        output += _config
+        return output
 
 
 BaseServiceT = TypeVar('BaseServiceT', bound=BaseService)
@@ -835,13 +882,7 @@ class MetaServiceMixin(_HasChildrenMixin):
     def _repr(self, level=0, verbose=False) -> str:
         output = self.__class__.__name__ + "("
         output += self.wrapped._repr(level=level + 1, verbose=verbose)
-        has_name = self.__class__.__name__ != self.name
-        if has_name:
-            output += ", name='" + self.name + "'"
-        if verbose:
-            conf: RecursiveDict = self._get_config()
-            if len(conf) > 0:
-                output += ", config=" + pprint.pformat(conf)
+        output += self._repr_params(level, verbose)
         output += ")"
         return output
 
@@ -895,8 +936,10 @@ ServiceName = Union[str, Type[BaseServiceT]]
 NamedServicesList = List[Union[Tuple[str, BaseServiceT], BaseServiceT]]
 
 
-class _TruncableMixin:
+class _TruncableMixin(MixinForBaseService):
     # TODO: Merge common code of TruncableServiceMixin and TruncableStepsMixin into this.
+    def __init__(self):
+        MixinForBaseService.__init__(self)
 
     def mutate(self, new_method="inverse_transform", method_to_assign_to="transform", warn=False) -> 'BaseTransformer':
         """
@@ -925,11 +968,96 @@ class _TruncableMixin:
             # they won't exist afterward.
             return BaseStep.mutate(self, new_method, method_to_assign_to, warn)
 
+    def _repr(self, level=0, verbose=False) -> str:
+
+        output = self.__class__.__name__ + "("
+        output += self._repr_children(level, verbose)
+        output += self._repr_params(level, verbose)
+        output += ")"
+        return output
+
+    def _repr_children(self, level, verbose) -> str:
+        """
+        Returns a string representation of the children of the step like this:
+
+        .. code-block:: python
+            output = '''[
+                ChildrenA,
+                ChildrenB,
+                ChildrenC
+            ]'''
+
+        """
+        output = ""
+
+        children: List[BaseService] = self.get_children()
+        is_compact: bool = len(children) < 2
+
+        tab0 = "    " * level
+        tab1 = "    " * (level + 1)
+        _nl = "\n"
+        _nl2 = _nl
+        if is_compact:
+            tab1 = ""
+            _nl = ""
+            _nl2 = " "
+
+        output += "["
+        childs_reprs = []
+        for child in children:
+            try:
+                if hasattr(child, '_repr'):
+                    c_repr = child._repr(level=level + 1, verbose=verbose)
+                else:
+                    c_repr = repr(child)
+            except:
+                # raise Exception(f"Could not repr child `{child}` of self `{self}`:\n{e}") from e
+                # c_repr = child._repr(level=level + 1, verbose=verbose)
+                c_repr = repr(child)  # breakpoint here if needed.
+            childs_reprs.append(c_repr)
+
+        output += _nl + tab1 + ("," + _nl2 + tab1).join(childs_reprs)
+        output += _nl + (tab1 if is_compact else tab0) + "]"
+
+        return output
+
+
+class _TruncableServiceWithBodyMixin(MixinForBaseService):
+    """
+    This is a mixin to enable the .joiner and .body methods to be
+    used on a truncable step that has a joiner at its end.
+    """
+
+    def __init__(self):
+        MixinForBaseService.__init__(self)
+
+    @property
+    def joiner(self) -> BaseService:
+        """
+        returns `self[-1]`
+        """
+        return self[-1]
+
+    @property
+    def body(self) -> List[BaseService]:
+        """
+        returns `list(self.values())[:-1]`, that is all the steps except the last joiner.
+        """
+        return list(self.values())[:-1]
+
+    @property
+    def named_body(self) -> List[BaseService]:
+        """
+        returns `list(self.values())[:-1]`, that is all the steps except the last joiner.
+        """
+        return self[:-1]
+
 
 class TruncableServiceMixin(_TruncableMixin, _HasChildrenMixin):
 
     def __init__(self, services: Dict[ServiceName, 'BaseServiceT']):
         _HasChildrenMixin.__init__(self)
+        _TruncableMixin.__init__(self)
         self.set_services(services)
 
     def set_services(self, services: Dict[ServiceName, 'BaseServiceT']):
@@ -1360,13 +1488,24 @@ class ExecutionContext(TruncableService):
             services=self.services,
         )
 
-    def _copy(self):
-        copy_kwargs = self._get_copy_kwargs()
+    def _copy(self, copy_func: str = '_copy'):
+        """
+        Copy the execution context, and call a copy function on its services as well.
+
+        :param copy_func: services' copy function. By default is `_copy`. Could also be: `copy`, `_copy_trial`, `_copy_trial_split`, `_copy_train`, `_copy_validation`, and more as needed.
+        :return: a copy of the execution context (self) using the given copy function on the services.
+        """
+        copy_kwargs = self._get_copy_kwargs(copy_func)
         return self.__class__(**copy_kwargs)
 
-    def _get_copy_kwargs(self):
+    def _get_copy_kwargs(self, copy_func: str):
         possibly_copied_services = {
-            k: (v.copy() if hasattr(v, "copy") else v)
+            k: (
+                getattr(v, copy_func)() if hasattr(v, copy_func) else
+                v._copy() if hasattr(v, '_copy') else
+                v.copy() if hasattr(v, 'copy') else
+                v
+            )
             for k, v in self.services.items()
         }
         copy_kwargs = {
@@ -1379,22 +1518,6 @@ class ExecutionContext(TruncableService):
         }
 
         return copy_kwargs
-
-    def train(self) -> 'CX':
-        """
-        Set the context's execution phase to train.
-        """
-        new_self = self._copy()
-        new_self.set_execution_phase(ExecutionPhase.TRAIN)
-        return new_self
-
-    def validation(self) -> 'CX':
-        """
-        Set the context's execution phase to validation.
-        """
-        new_self = self._copy()
-        new_self.set_execution_phase(ExecutionPhase.VALIDATION)
-        return new_self
 
     def synchroneous(self) -> 'CX':
         if self.has_service('HyperparamsRepository'):
@@ -1599,7 +1722,18 @@ class ExecutionContext(TruncableService):
         shutil.rmtree(self.get_path())
 
     def __len__(self):
+        # TODO: on services instead maybe?
         return len(self.parents)
+
+    def _repr(self, level=0, verbose=False) -> str:
+        output = self.__class__.__name__
+        output += f'<{self.get_identifier()}>('
+        output += self._repr_children(level, verbose)
+        level += 1
+        if len(self.parents) > 0 and verbose is True:
+            output += f",\n{'    ' * level}parents[0]={self.parents[0]._repr(level, verbose)}"
+        output += ')'
+        return output
 
 
 CX = ExecutionContext
@@ -1999,7 +2133,7 @@ class _FittableStep(MixinForBaseService):
         :param context: execution context
         :return: (fitted self, data container)
         """
-        return self.fit(data_container.di, data_container.eo)
+        return self.fit(data_container.data_inputs, data_container.expected_outputs)
 
     def _did_fit(self, data_container: TrainDACT, context: CX) -> TrainDACT:
         """
@@ -2072,7 +2206,7 @@ class _FittableStep(MixinForBaseService):
         :param context: execution context
         :return: (fitted self, data container)
         """
-        new_self, out = self.fit_transform(data_container.di, data_container.eo)
+        new_self, out = self.fit_transform(data_container.data_inputs, data_container.expected_outputs)
         data_container.set_data_inputs(out)
 
         return new_self, data_container
@@ -2121,6 +2255,9 @@ class _CustomHandlerMethods(MixinForBaseService):
         :class:`~neuraxle.pipeline.MiniBatchSequentialPipeline`,
         :class:`~neuraxle.distributed.streaming.BaseQueuedPipeline`
     """
+
+    def __init__(self):
+        MixinForBaseService.__init__(self)
 
     def handle_fit(self, data_container: TrainDACT, context: CX) -> 'BaseStep':
         """
@@ -2547,6 +2684,15 @@ class _HasHyperparams(MixinForBaseService):
         """
         results: HyperparameterSamples = self.apply(method='_get_hyperparams')
         return results.to_flat_dict()
+
+    def _repr_params(self, level: int = 0, verbose: bool = False) -> str:
+        output = ''
+        if verbose:
+            hps: HyperparameterSamples = self._get_hyperparams()
+            if not hps.is_empty():
+                # hps = hps.to_flat_dict(use_wildcards=not verbose)
+                output += ", hyperparams=" + pprint.pformat(hps)
+        return output
 
 
 class _HasSavers(MixinForBaseService):
@@ -2985,37 +3131,16 @@ class BaseTransformer(
         self.is_train = is_train
         return RecursiveDict()
 
-    def __str__(self) -> str:
-        """
-        Return a pretty representation of the pipeline step.
-        Use :func:`~neuraxle.base.BaseTransformer.__repr__`, for a more
-        detailed string representation if needed.
-
-        :return: return pretty representation such as ``StepName(name='StepName')``.
-        """
-        return self._repr(verbose=False)
-
-    def __repr__(self) -> str:
-        """
-        Return a detailed and pretty representation of the pipeline step.
-        Use :func:`~neuraxle.base.BaseTransformer.__str__`, for a less
-        detailed string representation if needed.
-
-        :return: return pretty representation, such as ``StepName(name='StepName', hyperparameters=HyperparameterSamples({...}))``.
-        """
-        return self._repr(verbose=True)
-
     def _repr(self, level=0, verbose=False) -> str:
         output = self.__class__.__name__ + "("
-        has_name: bool = self.__class__.__name__ != self.name
-        if has_name:
-            output += "name='" + self.name + "'"
-        if verbose:
-            hps: HyperparameterSamples = self._get_hyperparams()
-            if len(hps) > 0:
-                if has_name:
-                    output += ", "
-                output += "hyperparams=" + pprint.pformat(hps)
+        _params = BaseService._repr_params(self, level=level, verbose=verbose)
+        if _params.startswith(", "):
+            _params = _params.replace(', ', '', 1)
+        output += _params
+        _hparams = _HasHyperparams._repr_params(self, level=level, verbose=verbose)
+        if _hparams.startswith(", ") and len(_params) == 0:
+            _hparams = _hparams.replace(', ', '', 1)
+        output += _hparams
         output += ")"
         return output
 
@@ -3469,6 +3594,7 @@ class TruncableStepsMixin(_TruncableMixin, _HasChildrenMixin):
         mute_step_renaming_warning: bool = True,
     ):
         _HasChildrenMixin.__init__(self)
+        _TruncableMixin.__init__(self)
         self.warn_step_renaming = not mute_step_renaming_warning
         self.set_steps(steps_as_tuple, invalidate=False)
 
@@ -3864,34 +3990,6 @@ class TruncableSteps(TruncableStepsMixin, BaseStep, ABC):
         new_self = new_self.set_steps(self.steps_as_tuple + other.steps_as_tuple)
         return new_self
 
-    def _repr(self, level=0, verbose=False) -> str:
-        children = self.get_children()
-        is_compact: bool = len(children) < 2
-
-        tab0 = "    " * level
-        tab1 = "    " * (level + 1)
-        _nl = "\n"
-        _nl2 = _nl
-        if is_compact:
-            tab1 = ""
-            _nl = ""
-            _nl2 = " "
-
-        output = self.__class__.__name__ + "(["
-        output += _nl + tab1 + ("," + _nl2 + tab1).join(
-            [s._repr(level=level + 1, verbose=verbose) for s in children]
-        )
-        output += _nl + (tab1 if is_compact else tab0) + "]"
-        has_name = self.__class__.__name__ != self.name
-        if has_name:
-            output += ", name='" + self.name + "'"
-        if verbose:
-            hps: HyperparameterSamples = self._get_hyperparams()
-            if len(hps) > 0:
-                output += ", hyperparams=" + pprint.pformat(hps)
-        output += ")"
-        return output
-
 
 class Identity(NonTransformableMixin, NonFittableMixin, BaseStep):
     """
@@ -4273,7 +4371,7 @@ class DidProcessAssertionMixin(AssertionMixin):
 
 class AssertExpectedOutputIsNoneMixin(WillProcessAssertionMixin):
     def _assert_at_lifecycle(self, data_container: DACT, context: CX):
-        eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.eo)
+        eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
         self._assert(
             eo_empty,
             f"Expected datacontainer.expected_outputs to be a `None` or a list of `None`. Received {data_container.expected_outputs}.",
@@ -4283,7 +4381,7 @@ class AssertExpectedOutputIsNoneMixin(WillProcessAssertionMixin):
 
 class AssertExpectedOutputIsNotNoneMixin(WillProcessAssertionMixin):
     def _assert_at_lifecycle(self, data_container: DACT, context: CX):
-        eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.eo)
+        eo_empty = (data_container.expected_outputs is None) or all(v is None for v in data_container.expected_outputs)
         self._assert(
             not eo_empty,
             f"Expected datacontainer.expected_outputs to not be a `None` nor a list of `None`. Received {data_container.expected_outputs}.",

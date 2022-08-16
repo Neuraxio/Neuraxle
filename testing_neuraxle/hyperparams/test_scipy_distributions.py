@@ -6,13 +6,11 @@ import joblib
 import numpy as np
 import pytest
 from neuraxle.base import Identity
-from neuraxle.hyperparams.distributions import (Choice, LogNormal, LogUniform,
-                                                Normal, PriorityChoice,
-                                                RandInt, Uniform,
+from neuraxle.hyperparams.distributions import (Choice, LogNormal, LogUniform, Normal, PriorityChoice, RandInt, Uniform,
                                                 get_index_in_list_with_bool)
-from neuraxle.hyperparams.scipy_distributions import (
-    Gaussian, Histogram, Poisson, ScipyContinuousDistributionWrapper,
-    ScipyDiscreteDistributionWrapper, ScipyLogUniform, StdMeanLogNormal)
+from neuraxle.hyperparams.scipy_distributions import (Gaussian, Histogram, Poisson, ScipyContinuousDistributionWrapper,
+                                                      ScipyDiscreteDistributionWrapper, ScipyLogUniform,
+                                                      StdMeanLogNormal)
 from neuraxle.hyperparams.space import HyperparameterSpace
 from scipy.stats import gamma, norm, randint, uniform
 
@@ -26,10 +24,10 @@ def get_many_samples_for(hd):
 def test_wrapped_sk_learn_distributions_should_be_able_to_use_sklearn_methods():
     wrapped_sklearn_distribution = Gaussian(min_included=0, max_included=10, null_default_value=0)
 
-    assert wrapped_sklearn_distribution.logpdf(5) == -13.418938533204672
-    assert wrapped_sklearn_distribution.logcdf(5) == -0.6931477538632531
-    assert wrapped_sklearn_distribution.sf(5) == 0.5000002866515718
-    assert wrapped_sklearn_distribution.logsf(5) == -0.693146607256966
+    assert np.isclose(wrapped_sklearn_distribution.logpdf(5), -13.418938533204672)
+    assert np.isclose(wrapped_sklearn_distribution.logcdf(5), -0.6931477538632531)
+    assert np.isclose(wrapped_sklearn_distribution.sf(5), 0.5000002866515718)
+    assert np.isclose(wrapped_sklearn_distribution.logsf(5), -0.693146607256966)
     assert np.all(wrapped_sklearn_distribution.ppf([0.0, 0.01, 0.05, 0.1, 1 - 0.10, 1 - 0.05, 1 - 0.01, 1.0], 10))
     assert 8 < wrapped_sklearn_distribution.isf(q=0.5) > 8
     assert wrapped_sklearn_distribution.moment(2) > 50
@@ -38,10 +36,10 @@ def test_wrapped_sk_learn_distributions_should_be_able_to_use_sklearn_methods():
     assert stats[1]
     assert np.array_equal(wrapped_sklearn_distribution.entropy(), np.array(0.7094692666023363))
     assert wrapped_sklearn_distribution.median()
-    assert wrapped_sklearn_distribution.mean() == 5.398942280397029
+    assert np.isclose(wrapped_sklearn_distribution.mean(), 5.398942280397029)
     assert np.isclose(wrapped_sklearn_distribution.std(), 4.620759921685375)
     assert np.isclose(wrapped_sklearn_distribution.var(), 21.351422253853833)
-    assert wrapped_sklearn_distribution.expect() == 0.39894228040143276
+    assert np.isclose(wrapped_sklearn_distribution.expect(), 0.39894228040143276)
     interval = wrapped_sklearn_distribution.interval(alpha=[0.25, 0.50])
     assert np.all(interval[0])
     assert np.all(interval[1])
@@ -103,10 +101,10 @@ def _test_discrete_poisson(poisson_distribution: Poisson):
     rvs = [poisson_distribution.rvs() for i in range(10)]
     assert not all(x == rvs[0] for x in rvs)
     assert 0.0 <= poisson_distribution.rvs() <= 10.0
-    assert poisson_distribution.pdf(10) == 0.01813278870782187
+    assert np.isclose(poisson_distribution.pdf(10), 0.01813278870782187)
     assert np.isclose(poisson_distribution.pdf(0), 0.006737946999085467)
-    assert poisson_distribution.cdf(5.0) == 0.6159606548330632
-    assert poisson_distribution.cdf(0) == 0.006737946999085467
+    assert np.isclose(poisson_distribution.cdf(5.0), 0.6159606548330632)
+    assert np.isclose(poisson_distribution.cdf(0), 0.006737946999085467)
 
 
 def test_randint():
@@ -172,7 +170,7 @@ def _test_loguniform(hd: ScipyLogUniform):
     assert min(samples) >= 0.001
     assert max(samples) <= 10.0
     assert hd.pdf(0.0001) == 0.
-    assert abs(hd.pdf(2) - 0.054286810237906484) < 2e-6
+    assert np.isclose(hd.pdf(2), 0.054286810237906484)
     assert hd.pdf(10.1) == 0.
     assert hd.cdf(0.0001) == 0.
     assert abs(hd.cdf(2) - (math.log2(2) - math.log2(0.001)) / (math.log2(10) - math.log2(0.001))) < 1e-6
@@ -197,12 +195,12 @@ def _test_normal(hd):
     assert 0.6 > samples_mean > 0.4
     samples_std = np.std(samples)
     assert 0.1 < samples_std < 0.6
-    assert (abs(hd.pdf(-1.) - 0.24) - 0.24) < 1e-10
-    assert (abs(hd.pdf(0.) - 0.40) - 0.31125636093539194) < 1e-10
-    assert (abs(hd.pdf(1.)) - 0.08874363906460808) < 1e-10
-    assert (abs(hd.cdf(-1.) - 0.15) - 0.15) < 1e-10
-    assert (abs(hd.cdf(+0.) - 0.5) - 0.5) < 1e-10
-    assert (abs(hd.cdf(+1.) - 0.85) - 0.15000000000000002) < 1e-10
+    assert np.isclose(abs(hd.pdf(-1.) - 0.24), 0.24)
+    assert np.isclose(abs(hd.pdf(0.) - 0.40), 0.31125636093539194)
+    assert np.isclose(abs(hd.pdf(1.)), 0.08874363906460808)
+    assert np.isclose(abs(hd.cdf(-1.) - 0.15), 0.15)
+    assert np.isclose(abs(hd.cdf(+0.) - 0.5), 0.5)
+    assert np.isclose(abs(hd.cdf(+1.) - 0.85), 0.15000000000000002)
 
 
 def test_lognormal():
@@ -223,12 +221,12 @@ def _test_lognormal(hd: StdMeanLogNormal):
     assert -5 < samples_median < 5
     samples_std = np.std(samples)
     assert 0 < samples_std < 4
-    assert hd.pdf(0.) == 0.
-    assert abs(hd.pdf(1.) - 0.28777602476804065) < 1e-6
-    assert abs(hd.pdf(5.) - 0.029336304593386688) < 1e-6
-    assert hd.cdf(0.) == 0.
-    assert hd.cdf(1.) == 0.49999999998280026
-    assert abs(hd.cdf(5.) - 0.8771717397015799) == 0.12282826029842009
+    assert np.isclose(hd.pdf(0.), 0.)
+    assert np.isclose(hd.pdf(1.), 0.28777602476804065)
+    assert np.isclose(hd.pdf(5.), 0.029336304593386688)
+    assert np.isclose(hd.cdf(0.), 0.)
+    assert np.isclose(hd.cdf(1.), 0.49999999998280026)
+    assert np.isclose(abs(hd.cdf(5.) - 0.8771717397015799), 0.12282826029842009)
 
 
 @pytest.mark.parametrize("hd, test_method", [

@@ -152,18 +152,18 @@ class OutputTransformerWrapper(ForceHandleOnlyMixin, MetaStep):
         return data_container
 
 
-class _DidProcessInputOutputHandlerMixin(MixinForBaseTransformer):
+class _DidProcessIdsInputOutputHandlerMixin(MixinForBaseTransformer):
     def _did_process(self, data_container: DACT, context: CX) -> DACT:
-        di, eo = data_container.data_inputs
-
+        ids, di, eo = data_container.data_inputs
         self._assert(
-            di is None or eo is None or (len(di) == len(eo)),
+            di is None or eo is None or ids is None or (len(di) == len(eo) and len(ids) == len(di)),
             f'{self.name}: Found different len for non-null data inputs, and expected outputs. '
             f'Please return the same the same amount of data inputs, and expected outputs, or '
             f'otherwise create your own handler methods to do more funky things.',
             context
         )
 
+        data_container.set_ids(ids=ids)
         data_container.set_data_inputs(data_inputs=di)
         data_container.set_expected_outputs(expected_outputs=eo)
 
@@ -178,9 +178,9 @@ class _DidProcessInputOutputHandlerMixin(MixinForBaseTransformer):
         return data_container
 
 
-class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, ForceHandleOnlyMixin, MetaStep):
+class IdsInputAndOutputTransformerWrapper(_DidProcessIdsInputOutputHandlerMixin, ForceHandleOnlyMixin, MetaStep):
     """
-    Wrapper step to transform both data inputs, and expected output at the same.
+    Wrapper step to transform both ids, data inputs, and expected output at the same time using classical fit and transform methods.
     It sends the data_inputs, and the expected_outputs to the wrapped step so that it can transform them.
 
     .. seealso::
@@ -191,7 +191,7 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
     def __init__(self, wrapped):
         MetaStep.__init__(self, wrapped)
         ForceHandleOnlyMixin.__init__(self)
-        _DidProcessInputOutputHandlerMixin.__init__(self)
+        _DidProcessIdsInputOutputHandlerMixin.__init__(self)
 
     def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
@@ -205,8 +205,8 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         """
         output_data_container = self.wrapped.handle_transform(
             DACT(
-                data_inputs=(data_container.data_inputs, data_container.expected_outputs),
-                ids=data_container.ids,
+                ids=data_container._ids,
+                data_inputs=(data_container._ids, data_container.data_inputs, data_container.expected_outputs),
                 expected_outputs=None
             ),
             context
@@ -227,15 +227,17 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         """
         self.wrapped = self.wrapped.handle_fit(
             DACT(
-                data_inputs=(copy.copy(data_container.data_inputs), copy.copy(data_container.expected_outputs)),
-                ids=data_container.ids,
+                ids=data_container._ids,
+                data_inputs=(copy.copy(data_container._ids), copy.copy(
+                    data_container.data_inputs), copy.copy(data_container.expected_outputs)),
                 expected_outputs=None
             ),
             context
         )
 
-        data_container.set_data_inputs((data_container.data_inputs, data_container.expected_outputs))
-        data_container.set_expected_outputs(expected_outputs=None)
+        data_container.set_data_inputs(
+            (data_container._ids, data_container.data_inputs, data_container.expected_outputs))
+        data_container.set_expected_outputs(expected_outputs=None)  # TODO: thy this?
 
         return self
 
@@ -253,8 +255,8 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         """
         self.wrapped, output_data_container = self.wrapped.handle_fit_transform(
             DACT(
-                data_inputs=(data_container.data_inputs, data_container.expected_outputs),
-                ids=data_container.ids,
+                ids=data_container._ids,
+                data_inputs=(data_container._ids, data_container.data_inputs, data_container.expected_outputs),
                 expected_outputs=None
             ),
             context
@@ -273,8 +275,8 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         """
         output_data_container = self.wrapped.handle_inverse_transform(
             DACT(
-                data_inputs=(data_container.data_inputs, data_container.expected_outputs),
-                ids=data_container.ids,
+                ids=data_container._ids,
+                data_inputs=(data_container._ids, data_container.data_inputs, data_container.expected_outputs),
                 expected_outputs=None
             ),
             context.push(self.wrapped)
@@ -283,9 +285,9 @@ class InputAndOutputTransformerWrapper(_DidProcessInputOutputHandlerMixin, Force
         return output_data_container
 
 
-class InputAndOutputTransformerMixin(_DidProcessInputOutputHandlerMixin):
+class IdsAndInputAndOutputTransformerMixin(_DidProcessIdsInputOutputHandlerMixin):
     """
-    Base output transformer step that can modify data inputs, and expected_outputs at the same time.
+    Base output transformer step that can modify ids, data inputs, and expected_outputs at the same time.
     """
 
     def _transform_data_container(self, data_container: DACT, context: CX) -> DACT:
@@ -296,9 +298,9 @@ class InputAndOutputTransformerMixin(_DidProcessInputOutputHandlerMixin):
         :param data_container:
         :return:
         """
-        di_eo = (data_container.data_inputs, data_container.expected_outputs)
-        new_data_inputs, new_expected_outputs = self.transform(di_eo)
-        data_container.set_data_inputs((new_data_inputs, new_expected_outputs))
+        di_eo = (data_container._ids, data_container.data_inputs, data_container.expected_outputs)
+        new_ids, new_data_inputs, new_expected_outputs = self.transform(di_eo)
+        data_container.set_data_inputs((new_ids, new_data_inputs, new_expected_outputs))
         return data_container
 
     def _fit_data_container(self, data_container: DACT, context: CX) -> 'BaseStep':
@@ -310,9 +312,10 @@ class InputAndOutputTransformerMixin(_DidProcessInputOutputHandlerMixin):
         :param data_container:
         :return:
         """
-        new_self = self.fit((data_container.data_inputs, data_container.expected_outputs), None)
-        data_container.set_data_inputs((data_container.data_inputs, data_container.expected_outputs))
-        data_container.set_expected_outputs(expected_outputs=None)
+        new_self = self.fit((data_container._ids, data_container.data_inputs, data_container.expected_outputs), None)
+        data_container.set_data_inputs(
+            (data_container._ids, data_container.data_inputs, data_container.expected_outputs))
+        data_container.set_expected_outputs(expected_outputs=None)  # TODO: check if this None eo is correct
         return new_self
 
     def _fit_transform_data_container(
@@ -326,7 +329,7 @@ class InputAndOutputTransformerMixin(_DidProcessInputOutputHandlerMixin):
         :param data_container:
         :return:
         """
-        new_self, (new_data_inputs, new_expected_outputs) = self.fit_transform(
-            (data_container.data_inputs, data_container.expected_outputs), None)
-        data_container.set_data_inputs((new_data_inputs, new_expected_outputs))
+        new_self, (new_ids, new_data_inputs, new_expected_outputs) = self.fit_transform(
+            (data_container._ids, data_container.data_inputs, data_container.expected_outputs), None)
+        data_container.set_data_inputs((new_ids, new_data_inputs, new_expected_outputs))
         return new_self, data_container

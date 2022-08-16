@@ -58,6 +58,10 @@ class _FilterSTDErr(logging.Filter):
 class NeuraxleLogger(logging.Logger):
 
     @staticmethod
+    def root() -> 'NeuraxleLogger':
+        return NeuraxleLogger(NEURAXLE_LOGGER_NAME)
+
+    @staticmethod
     def from_identifier(identifier: str) -> 'NeuraxleLogger':
         """
         Returns a logger from an identifier.

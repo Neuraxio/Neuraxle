@@ -29,10 +29,10 @@ from neuraxle.base import ForceHandleOnlyMixin, MetaStep
 from neuraxle.data_container import DACT, _inner_concatenate_np_array
 from neuraxle.pipeline import Pipeline
 from neuraxle.steps.flow import TrainOnlyWrapper
-from neuraxle.steps.output_handlers import InputAndOutputTransformerMixin
+from neuraxle.steps.output_handlers import IdsAndInputAndOutputTransformerMixin
 
 
-class DataShuffler(InputAndOutputTransformerMixin, BaseTransformer):
+class DataShuffler(IdsAndInputAndOutputTransformerMixin, BaseTransformer):
     """
     Data Shuffling step that shuffles data inputs, and expected_outputs at the same time.
 
@@ -55,7 +55,7 @@ class DataShuffler(InputAndOutputTransformerMixin, BaseTransformer):
 
     def __init__(self, seed=None, increment_seed_after_each_fit=True):
         BaseTransformer.__init__(self)
-        InputAndOutputTransformerMixin.__init__(self)
+        IdsAndInputAndOutputTransformerMixin.__init__(self)
         if seed is None:
             seed = 42
         self.seed = seed
@@ -71,13 +71,17 @@ class DataShuffler(InputAndOutputTransformerMixin, BaseTransformer):
         if self.increment_seed_after_each_fit:
             self.seed += 1
 
-        di, eo = data_inputs
-        data = list(zip(di, eo))
+        ids, di, eo = data_inputs
+
+        ids_is_none = (ids is None)
+        if ids_is_none:
+            ids = range(len(di))
+
+        data = list(zip(ids, di, eo))
         random.Random(self.seed).shuffle(data)
+        ids_shuffled, data_inputs_shuffled, expected_outputs_shuffled = list(zip(*data))
 
-        data_inputs_shuffled, expected_outputs_shuffled = list(zip(*data))
-
-        return list(data_inputs_shuffled), list(expected_outputs_shuffled)
+        return ids_shuffled, list(data_inputs_shuffled), list(expected_outputs_shuffled)
 
 
 class EpochRepeater(ForceHandleOnlyMixin, MetaStep):
@@ -398,4 +402,3 @@ class ZipBatchDataContainer(ForceHandleOnlyMixin, BaseTransformer):
         data_container.set_expected_outputs(new_expected_outputs)
 
         return data_container
-

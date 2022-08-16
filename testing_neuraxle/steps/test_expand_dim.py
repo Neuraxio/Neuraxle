@@ -10,33 +10,28 @@ from neuraxle.steps.misc import HandleCallbackStep, TapeCallbackFunction
 
 def test_expand_dim_transform():
     di = np.array(range(10))
-    eo = [None] * 10
-    handle_fit_callback = TapeCallbackFunction()
-    handle_transform_callback = TapeCallbackFunction()
-    handle_fit_transform_callback = TapeCallbackFunction()
+    eo = None
+    fit_callback, transform_callback, fit_transform_callback = (
+        TapeCallbackFunction(), TapeCallbackFunction(), TapeCallbackFunction())
     p = Pipeline([
         ExpandDim(
-            HandleCallbackStep(
-                handle_fit_callback,
-                handle_transform_callback,
-                handle_fit_transform_callback
-            )
+            HandleCallbackStep(fit_callback, transform_callback, fit_transform_callback)
         )
     ])
 
     outputs = p.transform(di)
 
     assert np.array_equal(outputs, di)
-    assert handle_fit_callback.data == []
+    assert fit_callback.data == []
     assert np.array_equal(
-        np.array(handle_transform_callback.data[0][0].di),
+        np.array(transform_callback.data[0][0].di),
         np.array([di])
     )
     assert np.array_equal(
-        np.array(handle_transform_callback.data[0][0].eo),
+        np.array(transform_callback.data[0][0].eo),
         np.array([eo])
     )
-    assert handle_fit_transform_callback.data == []
+    assert fit_transform_callback.data == []
 
 
 def test_expand_dim_fit():

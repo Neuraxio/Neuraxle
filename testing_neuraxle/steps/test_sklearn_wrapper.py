@@ -120,8 +120,6 @@ def _create_data_source(shape):
     return data_inputs, expected_outputs
 
 
-# With AutoML loop
-
 def _test_within_auto_ml_loop(tmpdir, pipeline):
     X_train = np.random.random((25, 50)).astype(np.float32)
     Y_train = np.random.random((25,)).astype(np.float32)
@@ -144,13 +142,11 @@ def _test_within_auto_ml_loop(tmpdir, pipeline):
     auto_ml.fit(X_train, Y_train)
 
 
-@pytest.mark.skip(reason="AutoML loop refactor")
 def test_automl_sklearn(tmpdir):
     grad_boost = SKLearnWrapper(GradientBoostingRegressor())
     _test_within_auto_ml_loop(tmpdir, grad_boost)
 
 
-@pytest.mark.skip(reason="AutoML loop refactor")
 def test_automl_sklearn_model_with_base_estimator(tmpdir):
     grad_boost = GradientBoostingRegressor()
     bagged_regressor = BaggingRegressor(
@@ -159,7 +155,7 @@ def test_automl_sklearn_model_with_base_estimator(tmpdir):
     wrapped_bagged_regressor = SKLearnWrapper(
         bagged_regressor,
         HyperparameterSpace({
-            "n_estimators": RandInt(10, 100),
+            "n_estimators": RandInt(2, 15),
             "max_features": Uniform(0.6, 1.0)}),
         #  return_all_sklearn_default_params_on_get=True
     )

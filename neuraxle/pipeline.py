@@ -27,14 +27,12 @@ import warnings
 from abc import ABC, abstractmethod
 from typing import Any, List, Tuple, Union
 
-from neuraxle.base import BaseStep, BaseTransformer
+from neuraxle.base import BaseStep
 from neuraxle.base import ExecutionContext as CX
-from neuraxle.base import (ExecutionMode, ForceHandleMixin, Identity,
-                           NamedStepsList, TruncableSteps,
-                           _CustomHandlerMethods)
-from neuraxle.data_container import StripAbsentValues
+from neuraxle.base import (ExecutionMode, ForceHandleMixin, Identity, NamedStepsList, TruncableSteps,
+                           _CustomHandlerMethods, _TruncableServiceWithBodyMixin)
 from neuraxle.data_container import DataContainer as DACT
-from neuraxle.data_container import ListDataContainer, ZipDataContainer
+from neuraxle.data_container import ListDataContainer, StripAbsentValues, ZipDataContainer
 from neuraxle.logging.warnings import warn_deprecated_arg
 
 
@@ -212,7 +210,7 @@ class Pipeline(BasePipeline):
         return data_container
 
 
-class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipeline):
+class MiniBatchSequentialPipeline(_TruncableServiceWithBodyMixin, _CustomHandlerMethods, ForceHandleMixin, Pipeline):
     """
     Mini Batch Sequential Pipeline class to create a pipeline processing data inputs in batch.
 
@@ -335,6 +333,9 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
     ):
         Pipeline.__init__(self, steps=steps)
         ForceHandleMixin.__init__(self)
+        _CustomHandlerMethods.__init__(self)
+        _TruncableServiceWithBodyMixin.__init__(self)
+
         self.default_value_data_inputs = default_value_data_inputs
         self.default_value_expected_outputs = default_value_expected_outputs
         self._validate_barriers_batch_size(batch_size=batch_size)
@@ -398,14 +399,6 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
 
         self._refresh_steps()
 
-    @property
-    def joiner(self) -> 'Barrier':
-        return self[-1]
-
-    @property
-    def body(self) -> List[BaseTransformer]:
-        return list(self.values())[:-1]
-
     def transform_data_container(self, data_container: DACT, context: CX) -> DACT:
         """
         Transform all sub pipelines splitted by the Barrier steps.
@@ -416,7 +409,7 @@ class MiniBatchSequentialPipeline(_CustomHandlerMethods, ForceHandleMixin, Pipel
         sub_pipelines: List['MiniBatchSequentialPipeline'] = self._split_on_barriers()
 
         for sub_pipeline in sub_pipelines:
-            barrier: Barrier = sub_pipeline[-1]
+            barrier: Barrier = sub_pipeline.joiner
             data_container = barrier.join_transform(
                 step=sub_pipeline,
                 data_container=data_container,
