@@ -28,7 +28,7 @@ This demonstrates an easy way to deploy your Neuraxle model or pipeline to a RES
 import numpy as np
 from flask import Flask
 from sklearn.cluster import KMeans
-from sklearn.datasets import load_boston
+from sklearn.datasets import fetch_california_housing
 from sklearn.decomposition import PCA, FastICA
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import r2_score
@@ -42,8 +42,8 @@ from neuraxle.union import AddFeatures
 
 
 def main():
-    boston = load_boston()
-    X, y = shuffle(boston.data, boston.target, random_state=13)
+    cali = fetch_california_housing()
+    X, y = shuffle(cali.data, cali.target, random_state=13)
     X = X.astype(np.float32)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffle=False)
 

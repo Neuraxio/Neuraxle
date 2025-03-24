@@ -24,7 +24,6 @@ Those steps works with scikit-learn (sklearn) transformers and estimators.
 
 """
 import functools
-import inspect
 from typing import Any, Tuple
 
 from neuraxle.base import BaseStep
@@ -83,7 +82,11 @@ class SKLearnWrapper(BaseStep):
 
     def fit_transform(self, data_inputs, expected_outputs=None) -> Tuple['BaseStep', Any]:
         if hasattr(self.wrapped_sklearn_predictor, 'fit_transform'):
-            if expected_outputs is None or len(inspect.getfullargspec(self.wrapped_sklearn_predictor.fit).args) < 3:
+            if expected_outputs is None:  # or len(inspect.getfullargspec(self.wrapped_sklearn_predictor.fit).args) < 3:
+                # A change from Neuraxle 0.8.1 to 0.8.2 is to do less checks here,
+                # since scikit-learn started putting "y=None" in most (?) of their objects.
+                # If you're using an old version of sklearn (likely somewhere under 1.4.2),
+                # consider using an old version of Neuraxle, such as 0.8.1
                 out = self._sklearn_fit_transform_without_expected_outputs(data_inputs)
             else:
                 out = self._sklearn_fit_transform_with_expected_outputs(data_inputs, expected_outputs)
@@ -106,7 +109,7 @@ class SKLearnWrapper(BaseStep):
         return out
 
     def fit(self, data_inputs, expected_outputs=None) -> 'SKLearnWrapper':
-        if expected_outputs is None or len(inspect.getfullargspec(self.wrapped_sklearn_predictor.fit).args) < 3:
+        if expected_outputs is None:  # or len(inspect.getfullargspec(self.wrapped_sklearn_predictor.fit).args) < 3:
             self._sklearn_fit_without_expected_outputs(data_inputs)
         else:
             self._sklearn_fit_with_expected_outputs(data_inputs, expected_outputs)

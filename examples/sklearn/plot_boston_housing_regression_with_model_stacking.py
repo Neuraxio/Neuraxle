@@ -33,7 +33,7 @@ This example also prints the shapes of the objects between the pipeline elements
 
 import numpy as np
 from sklearn.cluster import KMeans
-from sklearn.datasets import load_boston
+from sklearn.datasets import fetch_california_housing
 from sklearn.decomposition import PCA, FastICA
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import r2_score
@@ -47,8 +47,8 @@ from neuraxle.union import AddFeatures
 
 
 def main():
-    boston = load_boston()
-    X, y = shuffle(boston.data, boston.target, random_state=13)
+    cali = fetch_california_housing()
+    X, y = shuffle(cali.data, cali.target, random_state=13)
     X = X.astype(np.float32)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffle=False)
 
@@ -83,8 +83,8 @@ def main():
     score_test = r2_score(y_test_predicted, y_test)
     print('R2 regression score:', score_test)
 
-    assert y_train_predicted.shape == (379,)
-    assert y_test_predicted.shape == (127,)
+    assert y_train_predicted.shape == (15480,)
+    assert y_test_predicted.shape == (5160,)
     assert isinstance(score_train, float)
     assert isinstance(score_test, float)
 

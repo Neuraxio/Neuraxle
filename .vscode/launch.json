@@ -2,17 +2,33 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Current File with /Neuraxle workdir",
+            "name": "Python: Current File",
             "type": "python",
-            "justMyCode": false,
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}",
-            "env": {
-                "PYTHONPATH": "${cwd}"
-            },
-            "redirectOutput": true,
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Debug Unit Test",
+            "type": "python",
+            "request": "test",
+            "justMyCode": false,
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "pytest",
+            "purpose": [
+                "debug-test"
+            ],
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "internalConsole",
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

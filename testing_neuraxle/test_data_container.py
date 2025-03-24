@@ -68,11 +68,11 @@ def test_list_data_container_concat():
     ))
 
     # Then
-    assert np.array_equal(np.array(data_container.ids), np.array(list(range(0, 200))).astype(np.str))
+    assert np.array_equal(np.array(data_container.ids), list(str(i) for i in range(200)))
 
-    expected_data_inputs = np.array(list(range(0, 200))).astype(np.int)
-    actual_data_inputs = np.array(data_container.data_inputs).astype(np.int)
+    expected_data_inputs = np.array(list(range(0, 200)))
+    actual_data_inputs = np.array(data_container.data_inputs)
     assert np.array_equal(actual_data_inputs, expected_data_inputs)
 
-    expected_expected_outputs = np.array(list(range(100, 300))).astype(np.int)
-    assert np.array_equal(np.array(data_container.expected_outputs).astype(np.int), expected_expected_outputs)
+    expected_expected_outputs = np.array(list(range(100, 300)))
+    assert np.array_equal(np.array(data_container.expected_outputs), expected_expected_outputs)

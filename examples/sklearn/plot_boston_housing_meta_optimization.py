@@ -1,10 +1,12 @@
 """
-Boston Housing Regression with Meta Optimization
+California Housing Regression with Meta Optimization
 ================================================
 
 This is an automatic machine learning example. It is more sophisticated than the other simple regression example.
 Not only a pipeline is defined, but also an hyperparameter space is defined for the pipeline. Then, a random search is
 performed to find the best possible combination of hyperparameters by sampling randomly in the hyperparameter space.
+Note the URL may point to Boston housing, although the dataset isn't available anymore, so the California housing
+dataset is used instead for the time being without breaking URLs.
 
 ..
     Copyright 2022, Neuraxio Inc.
@@ -29,7 +31,7 @@ performed to find the best possible combination of hyperparameters by sampling r
 
 import numpy as np
 from sklearn.cluster import KMeans
-from sklearn.datasets import load_boston
+from sklearn.datasets import fetch_california_housing
 from sklearn.decomposition import PCA, FastICA
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.linear_model import Ridge
@@ -48,8 +50,8 @@ from neuraxle.union import AddFeatures, ModelStacking
 
 
 def main(tmpdir):
-    boston = load_boston()
-    X, y = shuffle(boston.data, boston.target, random_state=13)
+    cali = fetch_california_housing()  # The boston dataset isn't available anymore, let's take the california one.
+    X, y = shuffle(cali.data, cali.target, random_state=13)
     X = X.astype(np.float32)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffle=False)
 

@@ -1,8 +1,7 @@
 import pytest
-from py._path.local import LocalPath
 
 
-def test_auto_ml_loop_clean_kata(tmpdir: LocalPath):
+def test_auto_ml_loop_clean_kata(tmpdir):
     from examples.auto_ml.plot_automl_loop_clean_kata import main
     main(tmpdir)
 
@@ -52,12 +51,12 @@ def test_parallel_streaming():
     main()
 
 
-def test_boston_housing_meta_optimization(tmpdir: LocalPath):
+def test_housing_meta_optimization(tmpdir):
     from examples.sklearn.plot_boston_housing_meta_optimization import main
     main(tmpdir)
 
 
-def test_boston_housing_regression_with_model_stacking():
+def test_housing_regression_with_model_stacking():
     from examples.sklearn.plot_boston_housing_regression_with_model_stacking import main
     main()
 

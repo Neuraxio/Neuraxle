@@ -68,7 +68,7 @@ df = bike_sharing.frame
 
 
 fig, ax = plt.subplots(figsize=(12, 4))
-average_week_demand = df.groupby(["weekday", "hour"]).mean()["count"]
+average_week_demand = df.groupby(["weekday", "hour"])["count"].mean()
 average_week_demand.plot(ax=ax)
 _ = ax.set(
     title="Average hourly bike demand during the week",
@@ -299,7 +299,7 @@ evaluate(gbrt_pipeline, X, y, ts_cv)
 
 
 categorical_one_hot_encoders = [
-    (col_name, OneHotEncoder(handle_unknown="ignore", sparse=False))
+    (col_name, OneHotEncoder(handle_unknown="ignore", sparse_output=False))
     for col_name in categorical_columns
 ]
 alphas = np.logspace(-6, 6, 25)
@@ -347,7 +347,7 @@ hour_weekday_month = ["hour", "weekday", "month"]
 non_time_non_categorical_columns = [i for i in non_categorical_columns if i not in hour_weekday_month]
 
 time_one_hot_encoders = [
-    (col_name, OneHotEncoder(handle_unknown="ignore", sparse=False))
+    (col_name, OneHotEncoder(handle_unknown="ignore", sparse_output=False))
     for col_name in hour_weekday_month
 ]
 

@@ -2,7 +2,6 @@ import os
 
 import numpy as np
 from joblib import dump
-from py._path.local import LocalPath
 from pprint import pprint
 
 from neuraxle.hyperparams.space import RecursiveDict
@@ -45,7 +44,7 @@ def create_root_path(tmpdir, create_dir=False):
     return path2
 
 
-def test_nested_pipeline_fit_transform_should_save_some_fitted_pipeline_steps(tmpdir: LocalPath):
+def test_nested_pipeline_fit_transform_should_save_some_fitted_pipeline_steps(tmpdir):
     p: StepWithContext = create_pipeline(tmpdir)
 
     p, outputs = p.fit_transform(np.array(range(10)), np.array(range(10)))
@@ -61,7 +60,7 @@ def test_nested_pipeline_fit_transform_should_save_some_fitted_pipeline_steps(tm
         assert os.path.exists(path), path
 
 
-def test_pipeline_transform_should_not_save_steps(tmpdir: LocalPath):
+def test_pipeline_transform_should_not_save_steps(tmpdir):
     p: StepWithContext = create_pipeline(tmpdir)
 
     outputs = p.transform(np.array(range(10)))
@@ -75,7 +74,7 @@ def test_pipeline_transform_should_not_save_steps(tmpdir: LocalPath):
         assert not os.path.exists(path), path
 
 
-def test_pipeline_fit_should_save_all_fitted_pipeline_steps(tmpdir: LocalPath):
+def test_pipeline_fit_should_save_all_fitted_pipeline_steps(tmpdir):
     p: StepWithContext = create_pipeline(tmpdir)
 
     p = p.fit(np.array(range(10)), np.array(range(10)))
@@ -90,7 +89,7 @@ def test_pipeline_fit_should_save_all_fitted_pipeline_steps(tmpdir: LocalPath):
         assert os.path.exists(path), path
 
 
-def test_pipeline_fit_transform_should_load_all_pipeline_steps(tmpdir: LocalPath):
+def test_pipeline_fit_transform_should_load_all_pipeline_steps(tmpdir):
     p = given_saved_pipeline(tmpdir)
 
     p, outputs = p.fit_transform(np.array(range(10)), np.array(range(10)))
@@ -98,7 +97,7 @@ def test_pipeline_fit_transform_should_load_all_pipeline_steps(tmpdir: LocalPath
     assert np.array_equal(outputs, EXPECTED_OUTPUTS)
 
 
-def test_pipeline_transform_should_load_all_pipeline_steps(tmpdir: LocalPath):
+def test_pipeline_transform_should_load_all_pipeline_steps(tmpdir):
     p = given_saved_pipeline(tmpdir)
 
     outputs = p.transform(np.array(range(10)))
@@ -106,7 +105,7 @@ def test_pipeline_transform_should_load_all_pipeline_steps(tmpdir: LocalPath):
     assert np.array_equal(outputs, EXPECTED_OUTPUTS)
 
 
-def test_pipeline_fit_should_load_all_pipeline_steps(tmpdir: LocalPath):
+def test_pipeline_fit_should_load_all_pipeline_steps(tmpdir):
     p = given_saved_pipeline(tmpdir)
 
     p = p.fit(np.array(range(10)), np.array(range(10)))
@@ -116,7 +115,7 @@ def test_pipeline_fit_should_load_all_pipeline_steps(tmpdir: LocalPath):
     assert p.wrapped[PIPELINE_2][SOME_STEPS[2]].hyperparams['multiply_by'] == 6
 
 
-def given_saved_pipeline(tmpdir: LocalPath) -> Pipeline:
+def given_saved_pipeline(tmpdir) -> Pipeline:
     path = create_root_path(tmpdir, True)
     p = Pipeline([]).set_name(ROOT).with_context(CX(tmpdir)).with_context(CX(tmpdir))
     dump(p, path)

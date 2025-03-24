@@ -142,7 +142,7 @@ def test_model_stacking_fit_transform():
             ),
         )
     ])
-    expected_outputs_shape = (379, 1)
+    expected_outputs_shape = (379, )
     data_inputs_shape = (379, 13)
     data_inputs = _create_data(data_inputs_shape)
     expected_outputs = _create_data(expected_outputs_shape)
@@ -179,7 +179,7 @@ def test_model_stacking_transform():
             ),
         )
     ])
-    expected_outputs_shape = (379, 1)
+    expected_outputs_shape = (379, )
     data_inputs_shape = (379, 13)
     data_inputs = _create_data(data_inputs_shape)
     expected_outputs = _create_data(expected_outputs_shape)

@@ -31,7 +31,7 @@ EXPECTED_METRIC_RESULTS = {
 
 
 class TestTrials:
-    def setup(self):
+    def setup_method(self):
         self.hp: HyperparameterSamples = HyperparameterSamples({'a': 2})
         round_loc = SOME_FULL_SCOPED_LOCATION[:RoundDataclass]
         self.cx: AutoMLContext = AutoMLContext.from_context().with_loc(round_loc)

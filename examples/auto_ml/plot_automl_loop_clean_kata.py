@@ -72,7 +72,6 @@ def main(tmpdir: str):
         HyperparameterSpace({
             'alpha': Choice([0.0, 1.0, 10.0, 100.0]),
             'fit_intercept': Boolean(),
-            'normalize': Boolean()
         }))
     ]).set_name('RidgeClassifier')
 

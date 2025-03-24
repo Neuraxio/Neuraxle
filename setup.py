@@ -34,7 +34,7 @@ setup(
                 'abstractions to both ease research, development, and deployment of your ML applications.',
     long_description=_README,
     classifiers=[
-        "Development Status :: 4 - Beta",
+        "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
         "Intended Audience :: Education",
         "Intended Audience :: Financial and Insurance Industry",
@@ -64,18 +64,14 @@ setup(
         "Topic :: Scientific/Engineering :: Physics",
         "Topic :: Software Development",
         "Topic :: Software Development :: Assemblers",
-        "Topic :: Software Development :: Build Tools",
         "Topic :: Software Development :: Libraries",
         "Topic :: Software Development :: Libraries :: Python Modules",
         "Topic :: Software Development :: Object Brokering",
         "Topic :: Software Development :: Pre-processors",
-        "Topic :: Software Development :: Quality Assurance",
-        "Topic :: Software Development :: Testing",
         "Topic :: System",
         "Topic :: System :: Clustering",
         "Topic :: System :: Distributed Computing",
         "Topic :: System :: Networking",
-        # Topic :: System :: Systems Administration,
         "Topic :: Text Processing",
         "Topic :: Text Processing :: Filters",
         "Topic :: Text Processing :: Linguistic",
@@ -93,7 +89,7 @@ setup(
     install_requires=[
         'numpy>=1.16.2',
         'scipy>=1.4.1',
-        'scikit-learn>=0.24.1',
+        'scikit-learn>=1.6.1',
         'matplotlib==3.3.4',
         'joblib>=0.13.2',
         'Flask>=1.1.4',
@@ -105,7 +101,7 @@ setup(
         "pytest",
         "pytest-cov",
         "pytest-timeout>=2.1.0",
-        "scikit-learn>=0.24.1"
+        "scikit-learn>=1.6.1"
     ],
     include_package_data=True,
     license='Apache 2.0',
@@ -126,9 +122,6 @@ ____________________________________________________________________
 
  Learn more:
  - https://www.neuraxle.org/stable/index.html
-
- Contribute:
- - https://gitter.im/Neuraxle/community
 
  Open issue:
  - https://github.com/Neuraxio/Neuraxle
